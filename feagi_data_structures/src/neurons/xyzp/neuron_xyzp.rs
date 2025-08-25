@@ -31,7 +31,7 @@ impl NeuronXYZP {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::NeuronXYZP;
+    /// use feagi_data_structures::neurons::xyzp::NeuronXYZP;
     ///
     /// // Create a neuron at the origin with no activation
     /// let inactive_neuron = NeuronXYZP::new(0, 0, 0, 0.0);
@@ -58,7 +58,7 @@ impl NeuronXYZP {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::NeuronXYZP;
+    /// use feagi_data_structures::neurons::xyzp::NeuronXYZP;
     ///
     /// let neuron = NeuronXYZP::new(10, 20, 30, 0.5);
     /// let (x, y, z, potential) = neuron.as_tuple();

@@ -36,33 +36,45 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
     
-    - name: Get version from Cargo.toml
+    - name: Get workspace version
       id: version
       run: |
-        VERSION=$(grep '^version = ' Cargo.toml | sed 's/version = "\(.*\)"/\1/')
-        CRATE_NAME=$(grep '^name = ' Cargo.toml | sed 's/name = "\(.*\)"/\1/')
+        VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "crate_name=$CRATE_NAME" >> $GITHUB_OUTPUT
-        echo "Version: $VERSION"
-        echo "Crate name: $CRATE_NAME"
+        echo "Workspace Version: $VERSION"
     
-    - name: Run tests
-      run: cargo test --verbose
+    - name: Run workspace tests
+      run: cargo test --workspace --verbose
     
-    - name: Build package
-      run: cargo build --release
+    - name: Build workspace
+      run: cargo build --workspace --release
     
-    - name: Package crate
-      run: cargo package --verbose
-    
-    - name: Publish to crates.io
+    - name: Publish subcrates in dependency order
       run: |
-        echo "Publishing beta version ${{ steps.version.outputs.version }} of ${{ steps.version.outputs.crate_name }} to crates.io..."
+        echo "Publishing workspace crates in dependency order..."
         
-        # Publish to the official crates.io registry
-        cargo publish --token ${{ secrets.CARGO_PUSH_TOKEN }}
+        # Define the publishing order (dependencies first)
+        CRATES=("feagi_data_structures" "feagi_data_serialization" "feagi_connector_core")
         
-        echo "✅ Beta package published successfully to crates.io"
+        for crate in "${CRATES[@]}"; do
+          echo "📦 Publishing $crate v${{ steps.version.outputs.version }}..."
+          
+          cd "$crate"
+          
+          # Package the crate first to verify it's ready
+          cargo package --verbose
+          
+          # Publish to crates.io
+          cargo publish --token ${{ secrets.CARGO_PUSH_TOKEN }}
+          
+          echo "✅ Successfully published $crate"
+          cd ..
+          
+          # Add a small delay between publishes to allow crates.io to process
+          sleep 30
+        done
+        
+        echo "🎉 All workspace crates published successfully!"
       continue-on-error: false
     
     - name: Create prerelease tag
@@ -86,26 +98,39 @@ jobs:
         tag_name: v${{ steps.version.outputs.version }}-pre
         release_name: Prerelease v${{ steps.version.outputs.version }}
         body: |
-          🚀 Beta release of ${{ steps.version.outputs.crate_name }} v${{ steps.version.outputs.version }}
+          🚀 **Beta release of FEAGI Data Processing Workspace v${{ steps.version.outputs.version }}**
           
-          This is a beta version from the staging branch, published to crates.io.
+          This is a beta version from the staging branch. All workspace crates have been published to crates.io.
           
-          **Changes:**
-          - Version: ${{ steps.version.outputs.version }}
-          - Branch: staging
-          - Commit: ${{ github.sha }}
+          ## Published Crates
           
-          **Testing:**
-          - ✅ All tests passed
-          - ✅ Package builds successfully
-          - ✅ Published to crates.io as beta version
-          - ✅ Ready for testing
+          - 📦 [`feagi_data_structures`](https://crates.io/crates/feagi_data_structures) v${{ steps.version.outputs.version }}
+          - 📦 [`feagi_data_serialization`](https://crates.io/crates/feagi_data_serialization) v${{ steps.version.outputs.version }}
+          - 📦 [`feagi_connector_core`](https://crates.io/crates/feagi_connector_core) v${{ steps.version.outputs.version }}
           
-          **Installation:**
+          ## Installation
+          
+          Add individual crates as needed:
+          ```toml
+          [dependencies]
+          feagi_data_structures = "${{ steps.version.outputs.version }}"
+          feagi_data_serialization = "${{ steps.version.outputs.version }}"
+          feagi_connector_core = "${{ steps.version.outputs.version }}"
           ```
-          cargo add ${{ steps.version.outputs.crate_name }}@${{ steps.version.outputs.version }}
-          ```
           
-          **Note:** This beta version is available on crates.io for testing and integration.
+          ## Release Information
+          
+          - **Version:** ${{ steps.version.outputs.version }}
+          - **Branch:** staging
+          - **Commit:** ${{ github.sha }}
+          
+          ## Testing Status
+          
+          - ✅ All workspace tests passed
+          - ✅ All packages build successfully
+          - ✅ Published to crates.io as beta versions
+          - ✅ Ready for testing and integration
+          
+          **Note:** These beta versions are available on crates.io for testing.
         draft: false
         prerelease: true 

@@ -28,7 +28,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let neuron_data = CorticalMappedXYZPNeuronData::new();
     /// assert_eq!(neuron_data.len(), 0);
@@ -50,7 +50,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// // Pre-allocate for a brain with 100 cortical areas
     /// let neuron_data = CorticalMappedXYZPNeuronData::new_with_capacity(100);
@@ -78,7 +78,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let neuron_data = CorticalMappedXYZPNeuronData::new();
     /// assert!(neuron_data.is_empty());
@@ -96,7 +96,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let neuron_data = CorticalMappedXYZPNeuronData::new_with_capacity(100);
     /// assert!(neuron_data.capacity() >= 100);
@@ -117,7 +117,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
     /// neuron_data.reserve(50);
@@ -134,7 +134,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let mut neuron_data = CorticalMappedXYZPNeuronData::new_with_capacity(100);
     /// // ... add some data
@@ -214,8 +214,8 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
-    /// use Feagi_Data_Structures::genomic::CorticalID;
+    /// use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+    /// use feagi_data_structures::genomic::CorticalID;
     ///
     /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
     /// let cortical_id = CorticalID::from_string("iic400".into()).unwrap();
@@ -235,7 +235,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
     /// // ... add some data
@@ -258,7 +258,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let neuron_data = CorticalMappedXYZPNeuronData::new();
     /// for neurons in neuron_data.iter() {
@@ -282,7 +282,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
     /// for neurons in neuron_data.iter_mut() {
@@ -305,7 +305,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let neuron_data = CorticalMappedXYZPNeuronData::new();
     /// for cortical_id in neuron_data.keys() {
@@ -489,7 +489,7 @@ impl IntoIterator for CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let neuron_data = CorticalMappedXYZPNeuronData::new();
     /// for (cortical_id, neurons) in neuron_data {
@@ -510,7 +510,7 @@ impl<'a> IntoIterator for &'a CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let neuron_data = CorticalMappedXYZPNeuronData::new();
     /// for (cortical_id, neurons) in &neuron_data {
@@ -531,7 +531,7 @@ impl<'a> IntoIterator for &'a mut CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use Feagi_Data_Structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
     ///
     /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
     /// for (cortical_id, neurons) in &mut neuron_data {
