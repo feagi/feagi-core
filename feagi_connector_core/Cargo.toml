@@ -9,4 +9,4 @@ description = "Adds Caching and Processing systems that are used by Feagi Connec
 [dependencies]
 ndarray = { workspace = true }
 paste = "1.0"
-feagi_data_structures = { path = "../Feagi-Data-Structures", package = "Feagi-Data-Structures" }
+feagi_data_structures = { path = "../feagi_data_structures", package = "Feagi-Data-Structures" }
