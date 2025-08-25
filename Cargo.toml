@@ -1,4 +1,5 @@
 [workspace]
+name = "feagi_core_data_structures_and_processing"
 members = [
     "feagi_connector_core",
     "feagi_data_serialization", 
@@ -12,7 +13,7 @@ license = "Apache-2.0"
 description = "A set of core libraries intended for fast data processing for various FEAGI applications"
 repository = "https://github.com/feagi/feagi-data-processing"
 homepage = "https://feagi.org"
-documentation = "https://docs.rs/feagi_data_processing"
+documentation = "https://docs.rs/feagi_core_data_structures_and_processing"
 
 
 [workspace.dependencies]
