@@ -33,7 +33,7 @@ impl StreamCacheStage for ImageFrameSegmentatorStage {
     fn get_most_recent_output(&self) -> &WrappedIOData { &self.cached }
 
     fn process_new_input(&mut self, value: &WrappedIOData, time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-
+        // TODO use time
         let read_from: &ImageFrame = value.try_into()?;
         let write_to: &mut SegmentedImageFrame = (&mut self.cached).try_into()?;
         

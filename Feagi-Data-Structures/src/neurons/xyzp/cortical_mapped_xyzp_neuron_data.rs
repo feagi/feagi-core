@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 use std::mem::size_of;
-use crate::FeagiDataError;
 use crate::genomic::CorticalID;
-use crate::neurons::xyzp::{NeuronXYZP, NeuronXYZPArrays};
+use crate::neurons::xyzp::{ NeuronXYZPArrays};
 
 
 #[derive(Debug, Clone)]
@@ -17,9 +16,9 @@ pub struct CorticalMappedXYZPNeuronData {
 impl CorticalMappedXYZPNeuronData {
 
     /// Size in bytes of each cortical area header in binary format.
-    const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize = CorticalID::NUMBER_OF_BYTES + size_of::<u32>() + size_of::<u32>();
+    pub const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize = CorticalID::NUMBER_OF_BYTES + size_of::<u32>() + size_of::<u32>();
     /// Size in bytes of the cortical count field in binary format.
-    const NUMBER_BYTES_CORTICAL_COUNT_HEADER: usize = size_of::<u16>();
+    pub const NUMBER_BYTES_CORTICAL_COUNT_HEADER: usize = size_of::<u16>();
     
     /// Creates a new empty neuron data collection.
     ///

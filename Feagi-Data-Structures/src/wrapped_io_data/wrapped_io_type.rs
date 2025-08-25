@@ -1,4 +1,3 @@
-use crate::FeagiDataError;
 use crate::data::image_descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::wrapped_io_data::WrappedIOData;
 
@@ -34,7 +33,7 @@ impl std::fmt::Display for WrappedIOType {
                 let s: String = match segment_properties {
                     None => "No Requirements".to_string(),
                     Some(properties) => {
-                        format!("SegmentedImageFrame({})", "TODO") // TODO
+                        format!("SegmentedImageFrame({})", properties.to_string())
                     }
                 };
                 write!(f, "SegmentedImageFrame({})", s)

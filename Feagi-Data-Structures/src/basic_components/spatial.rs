@@ -85,6 +85,9 @@ impl std::fmt::Display for CoordinateI32 {
 
 
 //region 2D Dimensions
+
+/// Represents the resolution of a 2D array like object (such as an image (ignoring color channels))
+/// Cannot be 0 in any direction
 #[derive(Clone, Copy, Debug, Hash, Eq, PartialEq)]
 pub struct CartesianResolution {
     pub width: usize,

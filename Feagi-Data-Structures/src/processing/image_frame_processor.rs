@@ -77,10 +77,10 @@ impl ImageFrameProcessor {
             return Err(FeagiDataError::BadParameters("Given Color Conversion not possible!".into()).into())
         }
         if output.get_image_resolution() != input.get_image_resolution() {
-            definition.set_resizing_to(output.get_image_resolution());
+            definition.set_resizing_to(output.get_image_resolution())?;
         }
         if output.get_color_space() != output.get_color_space() {
-            definition.set_color_space_to(&output.get_color_space());
+            definition.set_color_space_to(&output.get_color_space())?;
         }
         Ok(definition)
     }
@@ -397,7 +397,7 @@ fn resize(source: &ImageFrame, destination: &mut ImageFrame, resize_xy_to: &Imag
     let source_resolution_f: (f32, f32) = (source_resolution.0 as f32, source_resolution.1 as f32);
 
     let source_data = source.get_internal_data();
-    let mut destination_data = destination.get_internal_data_mut();
+    let destination_data = destination.get_internal_data_mut();
 
     for ((y,x,c), color_val) in destination_data.indexed_iter_mut() {
         let nearest_neighbor_coordinate_y: usize = (((y as f32) / dest_resolution_f.1) * source_resolution_f.1).floor() as usize;
@@ -414,7 +414,7 @@ fn resize(source: &ImageFrame, destination: &mut ImageFrame, resize_xy_to: &Imag
 fn to_grayscale(source: &ImageFrame, destination: &mut ImageFrame, output_color_space: ColorSpace) -> Result<(), FeagiDataError> {
     // NOTE: destination should be grayscale and source should be RGB or RGBA
     let source_data = source.get_internal_data();
-    let mut destination_data = destination.get_internal_data_mut();
+    let destination_data = destination.get_internal_data_mut();
     let (r_scale, g_scale, b_scale) = match output_color_space {
         ColorSpace::Linear => {(0.2126f32, 0.7152f32, 0.072f32)} // Using formula from https://stackoverflow.com/questions/17615963/standard-rgb-to-grayscale-conversion
         ColorSpace::Gamma => {(0.299f32, 0.587f32, 0.114f32)}  // https://www.youtube.com/watch?v=uKeKuaJ4nlw (I forget)
@@ -448,7 +448,7 @@ fn crop_and_resize(source: &ImageFrame, destination: &mut ImageFrame, crop_from:
     );
 
     let source_data = source.get_internal_data();
-    let mut destination_data = destination.get_internal_data_mut();
+    let destination_data = destination.get_internal_data_mut();
 
     for ((y,x,c), color_val) in destination_data.indexed_iter_mut() {
         let nearest_neighbor_coordinate_from_source_y: usize = ((y as f32) * dist_factor_yx.0).floor() as usize;
@@ -481,7 +481,7 @@ fn crop_and_resize_and_grayscale(source: &ImageFrame, destination: &mut ImageFra
     );
 
     let source_data = source.get_internal_data();
-    let mut destination_data = destination.get_internal_data_mut();
+    let destination_data = destination.get_internal_data_mut();
     let (r_scale, g_scale, b_scale) = match output_color_space {
         ColorSpace::Linear => {(0.2126f32, 0.7152f32, 0.072f32)} // Using formula from https://stackoverflow.com/questions/17615963/standard-rgb-to-grayscale-conversion
         ColorSpace::Gamma => {(0.299f32, 0.587f32, 0.114f32)}

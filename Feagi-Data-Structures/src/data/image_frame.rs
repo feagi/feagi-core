@@ -23,7 +23,7 @@ pub struct ImageFrame {
 
 impl ImageFrame {
     /// The internal memory layout used for storing pixel data
-    const INTERNAL_MEMORY_LAYOUT: MemoryOrderLayout = MemoryOrderLayout::HeightsWidthsChannels;
+    pub const INTERNAL_MEMORY_LAYOUT: MemoryOrderLayout = MemoryOrderLayout::HeightsWidthsChannels;
 
     // region Common Constructors
 

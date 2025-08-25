@@ -415,6 +415,12 @@ impl SegmentedImageFrameProperties {
 
 }
 
+impl std::fmt::Display for SegmentedImageFrameProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "SegmentedImageFrameProperties(TODO)") // TODO
+    }
+}
+
 //endregion
 
 //region Corner Points
@@ -530,6 +536,12 @@ impl CornerPoints {
     
     pub fn enclosed_area_width_height(&self) -> ImageXYResolution {
         ImageXYResolution::new(self.upper_right.1 - self.lower_left.1, self.lower_left.0 - self.upper_right.0).unwrap()
+    }
+}
+
+impl std::fmt::Display for CornerPoints {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "CornerPoints(TODO)") // TODO
     }
 }
 
@@ -658,7 +670,12 @@ impl GazeProperties {
         )?;
         Ok(corner_points)
     }
+}
 
+impl std::fmt::Display for GazeProperties {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "GazeProperties(TODO)") // TODO
+    }
 }
 //endregion
 
