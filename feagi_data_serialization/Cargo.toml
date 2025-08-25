@@ -4,9 +4,11 @@ edition.workspace = true
 version.workspace = true
 license.workspace = true
 description = "Adds serialization and deserialization to select Feagi Data Structures."
+repository.workspace = true
+homepage.workspace = true
 
 
 [dependencies]
 serde_json = { workspace = true }
 byteorder = "1.5.0"
-feagi_data_structures = { path = "../feagi_data_structures", package = "Feagi-Data-Structures" }
+feagi_data_structures = { path = "../feagi_data_structures", package = "Feagi-Data-Structures", version = "0.0.50-beta.10" }
