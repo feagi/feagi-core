@@ -1,5 +1,6 @@
 [workspace]
 name = "feagi_core_data_structures_and_processing"
+resolver = "3"
 members = [
     "feagi_connector_core",
     "feagi_data_serialization", 
