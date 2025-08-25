@@ -1,5 +1,5 @@
 [package]
-name = "Feagi-Connector-Core"
+name = "feagi_connector_core"
 edition.workspace = true
 version.workspace = true
 license.workspace = true
@@ -11,4 +11,4 @@ homepage.workspace = true
 [dependencies]
 ndarray = { workspace = true }
 paste = "1.0"
-feagi_data_structures = { path = "../feagi_data_structures", package = "Feagi-Data-Structures", version = "0.0.50-beta.10" }
+feagi_data_structures = { path = "../feagi_data_structures", package = "feagi_data_structures"}

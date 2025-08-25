@@ -1,5 +1,5 @@
 [package]
-name = "Feagi-Data-Structures"
+name = "feagi_data_structures"
 edition.workspace = true
 version.workspace = true
 license.workspace = true

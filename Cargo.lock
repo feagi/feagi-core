@@ -3,33 +3,6 @@
 version = 4
 
 [[package]]
-name = "Feagi-Connector-Core"
-version = "0.0.50-beta.10"
-dependencies = [
- "Feagi-Data-Structures",
- "ndarray",
- "paste",
-]
-
-[[package]]
-name = "Feagi-Data-Serialization"
-version = "0.0.50-beta.10"
-dependencies = [
- "Feagi-Data-Structures",
- "byteorder",
- "serde_json",
-]
-
-[[package]]
-name = "Feagi-Data-Structures"
-version = "0.0.50-beta.10"
-dependencies = [
- "ndarray",
- "ndarray-npy",
- "serde_json",
-]
-
-[[package]]
 name = "adler2"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -148,6 +121,33 @@ name = "equivalent"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
+
+[[package]]
+name = "feagi_connector_core"
+version = "0.0.50-beta.10"
+dependencies = [
+ "feagi_data_structures",
+ "ndarray",
+ "paste",
+]
+
+[[package]]
+name = "feagi_data_serialization"
+version = "0.0.50-beta.10"
+dependencies = [
+ "byteorder",
+ "feagi_data_structures",
+ "serde_json",
+]
+
+[[package]]
+name = "feagi_data_structures"
+version = "0.0.50-beta.10"
+dependencies = [
+ "ndarray",
+ "ndarray-npy",
+ "serde_json",
+]
 
 [[package]]
 name = "flate2"
