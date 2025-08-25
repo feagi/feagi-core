@@ -16,7 +16,7 @@ use crate::caching::sensory::sensory_channel_stream_cache::SensoryChannelStreamC
 use crate::data_pipeline::stages::{ImageFrameProcessorStage, ImageFrameSegmentatorStage, LinearScaleTo0And1Stage};
 use crate::data_pipeline::StreamCacheStage;
 
-macro_rules! define_cortical_group_registration {
+macro_rules! define_cortical_group_funcs {
     (
         $cortical_io_type_enum_name:ident {
             $(
@@ -26,175 +26,15 @@ macro_rules! define_cortical_group_registration {
                     snake_case_identifier: $snake_case_identifier:expr,
                     base_ascii: $base_ascii:expr,
                     channel_dimension_range: $channel_dimension_range:expr,
-                    default_coder_type: $default_coder_type:expr,
+                    default_coder_type: $default_coder_type:ident,
                 }
             ),* $(,)?
         }
     ) => {
-        $(
-            // Generate function for each sensor type (conditionally based on default_coder_type)
-            define_cortical_group_registration!(@generate_function_if_needed 
-                $cortical_type_key_name, 
-                $snake_case_identifier, 
-                $default_coder_type
-            );
-        )*
-    };
-    
-    // Generate function with signature based on coder type
-    (@generate_function_if_needed $cortical_type:ident, $snake_case_id:expr, $default_coder_type:expr) => {
-        define_cortical_group_registration!(@generate_function_with_signature
-            $cortical_type,
-            $snake_case_id,
-            $default_coder_type
-        );
-    };
-    
-    // Generate function signature based on coder type - F32 Linear types
-    (@generate_function_with_signature $cortical_type:ident, $snake_case_id:expr, Some(NeuronCoderType::F32Normalized0To1_Linear)) => {
-        paste::paste! {
-            #[doc = "Register cortical group for " $snake_case_id " sensor type with F32 normalized 0-1 linear encoding"]
-            pub fn [<register_cortical_group_for_ $snake_case_id>](&mut self, 
-                cortical_group: CorticalGroupIndex,
-                number_of_channels: CorticalChannelCount,
-                allow_stale_data: bool,
-                neuron_resolution: usize,
-                lower_bound: f32,
-                upper_bound: f32) -> Result<(), FeagiDataError> {
-                
-                    if neuron_resolution == 0 {
-                        return Err(FeagiDataError::BadParameters("Unable to define a neuron resolution of 0!".into()))
-                    }
-                    if upper_bound <= lower_bound {
-                        return Err(FeagiDataError::BadParameters("Upper bound must not be less than lower bound!".into()))
-                    }
-                    
-                    let cortical_id = CorticalID::new_sensor_cortical_area_id(sensor_cortical_type, cortical_group)?;
-                    let neuron_encoder = Box::new(F32LinearNeuronXYZPEncoder::new(cortical_id, neuron_resolution as u32)?);
-                    let mut processors: Vec<Vec<Box<dyn StreamCacheStage + Sync + Send>>> = Vec::with_capacity(*number_of_channels as usize);
-                    for i in 0..*number_of_channels {
-                        processors.push(vec![Box::new(LinearScaleTo0And1Stage::new(lower_bound, upper_bound, 0.0)?)]);
-                    };
-                    
-                    self.register_cortical_area_and_channels(sensor_cortical_type, cortical_group, neuron_encoder, processors, allow_stale_data)?;
-                    Ok(())
-            }
-        }
-    };
-    
-    // Generate function signature for PSP Bidirectional
-    (@generate_function_with_signature $cortical_type:ident, $snake_case_id:expr, Some(NeuronCoderType::F32NormalizedM1To1_PSPBidirectional)) => {
-        paste::paste! {
-            #[doc = "Register cortical group for " $snake_case_id " sensor type with F32 normalized -1 to 1 PSP bidirectional encoding"]
-            pub fn [<register_cortical_group_for_ $snake_case_id>](&mut self, 
-                cortical_group: CorticalGroupIndex,
-                number_of_channels: CorticalChannelCount,
-                allow_stale_data: bool,
-                neuron_resolution: usize,
-                lower_bound: f32,
-                upper_bound: f32) -> Result<(), FeagiDataError> {
-                
-                    if neuron_resolution == 0 {
-                        return Err(FeagiDataError::BadParameters("Unable to define a neuron resolution of 0!".into()))
-                    }
-                    if upper_bound <= lower_bound {
-                        return Err(FeagiDataError::BadParameters("Upper bound must not be less than lower bound!".into()))
-                    }
-                    
-                    let cortical_id = CorticalID::new_sensor_cortical_area_id(sensor_cortical_type, cortical_group)?;
-                    let neuron_encoder = Box::new(F32PSPBidirectionalNeuronXYZPEncoder::new(cortical_id, neuron_resolution as u32)?);
-                    let mut processors: Vec<Vec<Box<dyn StreamCacheStage + Sync + Send>>> = Vec::with_capacity(*number_of_channels as usize);
-                    for i in 0..*number_of_channels {
-                        processors.push(vec![Box::new(LinearScaleToM1And1Stage::new(lower_bound, upper_bound, 0.0)?)]);
-                    };
-                    
-                    self.register_cortical_area_and_channels(sensor_cortical_type, cortical_group, neuron_encoder, processors, allow_stale_data)?;
-                    Ok(())
-            }
-        }
-    };
-    
-    // Generate function signature for Split Sign Divided
-    (@generate_function_with_signature $cortical_type:ident, $snake_case_id:expr, Some(NeuronCoderType::F32NormalizedM1To1_SplitSignDivided)) => {
-        paste::paste! {
-            #[doc = "Register cortical group for " $snake_case_id " sensor type with F32 normalized -1 to 1 split sign divided encoding"]
-            pub fn [<register_cortical_group_for_ $snake_case_id>](&mut self, 
-                cortical_group: CorticalGroupIndex,
-                number_of_channels: CorticalChannelCount,
-                allow_stale_data: bool,
-                neuron_resolution: usize,
-                lower_bound: f32,
-                upper_bound: f32) -> Result<(), FeagiDataError> {
-                
-                    if neuron_resolution == 0 {
-                        return Err(FeagiDataError::BadParameters("Unable to define a neuron resolution of 0!".into()))
-                    }
-                    if upper_bound <= lower_bound {
-                        return Err(FeagiDataError::BadParameters("Upper bound must not be less than lower bound!".into()))
-                    }
-                    
-                    let cortical_id = CorticalID::new_sensor_cortical_area_id(sensor_cortical_type, cortical_group)?;
-                    let neuron_encoder = Box::new(F32SplitSignDividedNeuronXYZPEncoder::new(cortical_id, neuron_resolution as u32)?);
-                    let mut processors: Vec<Vec<Box<dyn StreamCacheStage + Sync + Send>>> = Vec::with_capacity(*number_of_channels as usize);
-                    for i in 0..*number_of_channels {
-                        processors.push(vec![Box::new(LinearScaleToM1And1Stage::new(lower_bound, upper_bound, 0.0)?)]);
-                    };
-                    
-                    self.register_cortical_area_and_channels(sensor_cortical_type, cortical_group, neuron_encoder, processors, allow_stale_data)?;
-                    Ok(())
-            }
-        }
-    };
-    
-    // Generate function signature for ImageFrame - different parameters!
-    (@generate_function_with_signature $cortical_type:ident, $snake_case_id:expr, Some(NeuronCoderType::ImageFrame)) => {
-        paste::paste! {
-            #[doc = "Register cortical group for " $snake_case_id " sensor type with ImageFrame encoding"]
-            pub fn [<register_cortical_group_for_ $snake_case_id>](&mut self, 
-                cortical_group: CorticalGroupIndex,
-                number_of_channels: CorticalChannelCount,
-                allow_stale_data: bool,
-                input_image_properties: ImageFrameProperties,
-                output_image_properties: ImageFrameProperties) -> Result<(), FeagiDataError> {
-                
-                    let image_transformer_definition = ImageFrameProcessor::new_from_input_output_properties(&input_image_properties, &output_image_properties)?;
-                    
-                    let cortical_id = CorticalID::new_sensor_cortical_area_id(sensor_cortical_type, cortical_group)?;
-                    let neuron_encoder = Box::new(ImageFrameNeuronXYZPEncoder::new(cortical_id, &output_image_properties)?);
-                    let mut processors: Vec<Vec<Box<dyn StreamCacheStage + Sync + Send>>> = Vec::with_capacity(*number_of_channels as usize);
-                    for i in 0..*number_of_channels {
-                        processors.push(vec![Box::new(ImageFrameProcessorStage::new(image_transformer_definition)?)]);
-                    };
-                    
-                    self.register_cortical_area_and_channels(sensor_cortical_type, cortical_group, neuron_encoder, processors, allow_stale_data)?;
-                    Ok(())
-            }
-        }
-    };
-    
-    // Generate function signature for SegmentedImageFrame - even more different parameters!
-    (@generate_function_with_signature $cortical_type:ident, $snake_case_id:expr, Some(NeuronCoderType::SegmentedImageFrame)) => {
-        paste::paste! {
-            // None, SegmentedImageFrame does not have an default registration function!
-        }
-    };
-    
-    // Fallback for None or unhandled cases - no function generated
-    (@generate_function_with_signature $cortical_type:ident, $snake_case_id:expr, None) => {
-        // None, Skip generating function for None coder types
-    };
+        
 
-    (@generate_function_with_signature $cortical_type:ident, $snake_case_id:expr, $default_coder_type:expr) => {
-        compile_error!(concat!("Unhandled default_coder_type for function signature: ", stringify!($default_coder_type)));
-    };
-
-}
-
-/*
-    (@generate_function_with_signature $cortical_type:ident, $snake_case_id:expr, $default_coder_type:expr) => {
-        compile_error!(concat!("Unhandled default_coder_type for function signature: ", stringify!($default_coder_type)));
-    };
- */
+    }
+ }
 
 pub struct SensorCache {
     channel_caches: HashMap<FullChannelCacheKey, SensoryChannelStreamCache>, // (cortical type, grouping index, channel) -> sensory data cache, the main lookup

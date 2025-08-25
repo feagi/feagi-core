@@ -1,3 +1,8 @@
+// Note: possible coder types:
+// F32Normalized0To1_Linear, F32NormalizedM1To1_SplitSignDivided, ImageFrame, None
+
+
+
 /// Definition File for Sensors (Input Processing Units)
 #[macro_export]
 macro_rules! sensor_definition {
@@ -13,7 +18,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "infrared",
                     base_ascii: b"iinf00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Some(NeuronCoderType::F32Normalized0To1_Linear),
+                    default_coder_type: F32Normalized0To1_Linear,
                 },
                 #[doc = "Inverted infrared sensor that provides reverse object detection readings."]
                 ReverseInfrared => {
@@ -21,7 +26,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "reverse_infrared",
                     base_ascii: b"iiif00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Some(NeuronCoderType::F32Normalized0To1_Linear),
+                    default_coder_type: F32Normalized0To1_Linear,
                 },
                 #[doc = "Digital GPIO input pin for reading binary signals (high/low states)."]
                 DigitalGPIOInput => {
@@ -29,7 +34,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "gpio_digital_input",
                     base_ascii: b"idgp00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Some(NeuronCoderType::F32Normalized0To1_Linear),
+                    default_coder_type: F32Normalized0To1_Linear,
                 },
                 #[doc = "Proximity sensor for detecting nearby objects and measuring distances."]
                 Proximity => {
@@ -37,7 +42,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "proximity",
                     base_ascii: b"ipro00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: Some(NeuronCoderType::F32Normalized0To1_Linear),
+                    default_coder_type: F32Normalized0To1_Linear,
                 },
                 #[doc = "Shock sensor for sensing 'pain'"]
                 Shock => {
@@ -45,7 +50,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "shock",
                     base_ascii: b"ishk00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Some(NeuronCoderType::F32Normalized0To1_Linear),
+                    default_coder_type: F32Normalized0To1_Linear,
                 },
                 #[doc = "Battery level sensor for monitoring power remaining."]
                 Battery => {
@@ -53,7 +58,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "battery_gauge",
                     base_ascii: b"ibat00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: Some(NeuronCoderType::F32Normalized0To1_Linear),
+                    default_coder_type: F32Normalized0To1_Linear,
                 },
                 
                 //endregion
@@ -66,7 +71,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "servo_position",
                     base_ascii: b"isvp00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: Some(NeuronCoderType::F32NormalizedM1To1_SplitSignDivided),
+                    default_coder_type: F32NormalizedM1To1_SplitSignDivided,
                 },
                 
                 //endregion
@@ -79,7 +84,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "center_image_camera_input",
                     base_ascii: b"iic400",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: Some(NeuronCoderType::ImageFrame),
+                    default_coder_type: ImageFrame,
                 },
                 #[doc = "Top Left peripheral image camera input."]
                 ImageCameraTopLeft => {

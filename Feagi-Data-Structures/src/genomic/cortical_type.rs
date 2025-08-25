@@ -16,7 +16,7 @@ macro_rules! define_io_cortical_types {
                     snake_case_identifier: $snake_case_identifier:expr,
                     base_ascii: $base_ascii:expr,
                     channel_dimension_range: $channel_dimension_range:expr,
-                    default_coder_type: $default_coder_type:expr,
+                    default_coder_type: $default_coder_type:ident,
                 }
             ),* $(,)?
         }
@@ -98,15 +98,6 @@ macro_rules! define_io_cortical_types {
                 }
             }
             
-            pub(crate) fn get_coder_type(&self) -> Option<NeuronCoderType> {
-                match self {
-                    $(
-                        Self::$cortical_type_key_name => $default_coder_type
-                    ),*
-                }
-            }
-            
-
             
         }
     }
@@ -312,7 +303,7 @@ define_io_cortical_types!{
             snake_case_identifier: "rotary_motor",
             base_ascii: b"omot00",
             channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
-            default_coder_type: Some(NeuronCoderType::F32NormalizedM1To1_SplitSignDivided),
+            default_coder_type: F32NormalizedM1To1_SplitSignDivided,
         },
     }    
 }
