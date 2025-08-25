@@ -147,7 +147,7 @@ fn test_json_structure_max_bytes_consistency() {
     println!("Size check: {} == {}", size1, size2);
     assert_eq!(size1, size2);
 
-    // Create a manual byte vector and serialize to it
+    // Create a manual bytes vector and serialize to it
     let mut manual_bytes = vec![0u8; size1];
     println!("Manual bytes before serialization: {:?}", &manual_bytes[0..4.min(manual_bytes.len())]);
 

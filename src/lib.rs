@@ -1,6 +1,6 @@
 //! # FEAGI Data Processing Library
-//! 
-//! This crate provides comprehensive data structures and processing utilities for the FEAGI 
+//!
+//! This crate provides comprehensive data structures and processing utilities for the FEAGI
 //! (Framework for Evolutionary Artificial General Intelligence) system. It handles the core
 //! data processing requirements for neural simulation, including neuron data management,
 //! cortical area identification, serialization/deserialization, and brain input/output processing.

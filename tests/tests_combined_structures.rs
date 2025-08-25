@@ -133,7 +133,7 @@ fn test_multistruct_with_multiple_json_and_neuron_structures() {
     let mut neuron_mappings_2 = CorticalMappedXYZPNeuronData::new();
     neuron_mappings_2.insert(cortical_id_2, neurons_2);
 
-    // Convert to byte structures
+    // Convert to bytes structures
     let json1_bytes = json1.as_new_feagi_byte_structure().unwrap();
     let json2_bytes = json2.as_new_feagi_byte_structure().unwrap();
     let neuron1_bytes = neuron_mappings_1.as_new_feagi_byte_structure().unwrap();

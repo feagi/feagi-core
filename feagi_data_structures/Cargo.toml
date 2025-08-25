@@ -1,0 +1,13 @@
+[package]
+name = "Feagi-Data-Structures"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+description = "The most core library, defines the basic data types used by FEAGI, as well as some processors to modify them"
+
+[dependencies]
+serde_json = { workspace = true }
+ndarray = { workspace = true }
+
+[dev-dependencies]
+ndarray-npy = "0.9.1"

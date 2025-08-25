@@ -21,7 +21,7 @@ fn test_minimal_memory_corruption_debug() {
     println!("Size check: {} == {}", size1, size2);
     assert_eq!(size1, size2);
 
-    // Test 2: Create a manual byte vector and serialize to it
+    // Test 2: Create a manual bytes vector and serialize to it
     let mut manual_bytes = vec![0u8; size1];
     println!("Manual bytes before serialization: {:?}", &manual_bytes[0..4.min(manual_bytes.len())]);
 
@@ -88,7 +88,7 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     cortical_mappings.insert(cortical_id_b, neurons_b);
     cortical_mappings.insert(cortical_id_c, neurons_c);
 
-    // byte data serialization
+    // bytes data serialization
     let sending_byte_structure = cortical_mappings.as_new_feagi_byte_structure().unwrap();
     let bytes = sending_byte_structure.copy_out_as_byte_vector(); // raw bytes
     
