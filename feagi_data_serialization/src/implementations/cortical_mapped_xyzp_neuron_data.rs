@@ -13,10 +13,12 @@ impl FeagiByteStructureCompatible for CorticalMappedXYZPNeuronData {
     fn get_type(&self) -> FeagiByteStructureType { FeagiByteStructureType::NeuronCategoricalXYZP }
     fn get_version(&self) -> u8 { BYTE_STRUCT_VERSION }
     fn overwrite_feagi_byte_structure_slice(&self, slice: &mut [u8]) -> Result<usize, FeagiDataError> {
-
+        
+        /*
         if self.mappings.len() == 0 {
             return Err(FeagiDataError::DeserializationError("Cannot generate a bytes structure export with an empty cortical mappings object!".into()).into())
         }
+         */
 
         let num_bytes_needed: usize = self.max_number_bytes_needed();
         if slice.len() < num_bytes_needed {
