@@ -246,8 +246,7 @@ impl ImageFrame {
     }
 
     //endregion
-
-
+    
     //region Image Processing
 
     //region In-Place
@@ -307,7 +306,6 @@ impl ImageFrame {
 
 
     //endregion
-
 
     // region Outputting Neurons
 

@@ -375,7 +375,7 @@ pub struct SegmentedImageFrameProperties {
     color_space: ColorSpace,
 }
 impl SegmentedImageFrameProperties {
-    pub fn new(
+    pub fn new( // TODO why take references if we are going to clone anyways?
         segment_xy_resolutions: &SegmentedXYImageResolutions,
         center_color_channels: &ColorChannelLayout,
         peripheral_color_channels: &ColorChannelLayout,

@@ -1,2 +1,2 @@
-mod data_pipeline;
-mod caching;
+pub mod data_pipeline;
+pub mod caching;
