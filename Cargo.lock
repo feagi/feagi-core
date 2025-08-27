@@ -124,7 +124,7 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "feagi_connector_core"
-version = "0.0.50-beta.11"
+version = "0.0.50-beta.12"
 dependencies = [
  "feagi_data_serialization",
  "feagi_data_structures",
@@ -134,7 +134,7 @@ dependencies = [
 
 [[package]]
 name = "feagi_data_serialization"
-version = "0.0.50-beta.11"
+version = "0.0.50-beta.12"
 dependencies = [
  "byteorder",
  "feagi_data_structures",
@@ -143,7 +143,7 @@ dependencies = [
 
 [[package]]
 name = "feagi_data_structures"
-version = "0.0.50-beta.11"
+version = "0.0.50-beta.12"
 dependencies = [
  "ndarray",
  "ndarray-npy",
