@@ -8,7 +8,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::{ProcessorRunner, StreamCacheStage};
+use crate::data_pipeline::{PipelineStageRunner, StreamCacheStage};
 
 /// Per-channel cache for sensory input data streams.
 ///
@@ -25,7 +25,7 @@ use crate::data_pipeline::{ProcessorRunner, StreamCacheStage};
 /// - **Type Safety**: Tracks input and output data types through the processing chain
 #[derive(Debug)]
 pub(crate) struct SensoryChannelStreamCache {
-    processor_runner: ProcessorRunner,
+    pipeline_runner: PipelineStageRunner,
     channel: CorticalChannelIndex,
     last_updated: Instant,
     should_allow_sending_stale_data: bool,
@@ -33,36 +33,14 @@ pub(crate) struct SensoryChannelStreamCache {
 
 impl SensoryChannelStreamCache {
     
-    /// Creates a new sensory channel stream cache with specified processing chain.
-    ///
-    /// Initializes a cache for a specific I/O channel with a configurable chain
-    /// of stream processing. The processing are applied sequentially to incoming
-    /// data before it's made available to the neural system.
-    ///
-    /// # Arguments
-    ///
-    /// * `cache_processors` - Vector of processing to apply to incoming data in order
-    /// * `channel` - The cortical I/O channel index this cache represents
-    /// * `should_allow_sending_stale_data` - Whether to allow sending cached data
-    ///   when no fresh updates are available
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(SensoryChannelStreamCache)` - Successfully created cache
-    /// * `Err(FeagiDataProcessingError)` - If processor chain setup fails
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the processor runner cannot be initialized with the
-    /// provided processing (e.g., incompatible data types between processing).
-    pub fn new(cache_processors: Vec<Box<dyn StreamCacheStage + Sync + Send>>,
+    pub fn new(pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>,
                channel: CorticalChannelIndex,
                should_allow_sending_stale_data: bool
                 ) -> Result<Self, FeagiDataError> {
         
-        let processor_runner = ProcessorRunner::new(cache_processors)?;
+        let processor_runner = PipelineStageRunner::new(pipeline_stages)?;
         Ok(SensoryChannelStreamCache {
-            processor_runner,
+            pipeline_runner: processor_runner,
             channel,
             last_updated: Instant::now(),
             should_allow_sending_stale_data: should_allow_sending_stale_data
@@ -90,8 +68,12 @@ impl SensoryChannelStreamCache {
     /// typically due to data type mismatches or processing-specific failures.
     pub fn update_sensor_value(&mut self, value: WrappedIOData) -> Result<(), FeagiDataError> {
         self.last_updated = Instant::now();
-        _ = self.processor_runner.update_value(&value, Instant::now())?;
+        _ = self.pipeline_runner.update_value(&value, Instant::now())?;
         Ok(())
+    }
+    
+    pub fn attempt_replace_pipeline_stages(&mut self, pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+        self.pipeline_runner.attempt_replace_stages(pipeline_stages)
     }
     
     /// Determines whether new data should be pushed based on staleness policy.
@@ -126,7 +108,7 @@ impl SensoryChannelStreamCache {
     ///
     /// Reference to the most recent processed sensor data
     pub fn get_most_recent_sensor_value(&self) -> &WrappedIOData {
-        self.processor_runner.get_most_recent_output()
+        self.pipeline_runner.get_most_recent_output()
     }
     
     /// Encodes the cached sensor data into neural representations.
@@ -176,7 +158,7 @@ impl SensoryChannelStreamCache {
     ///
     /// The `IOTypeVariant` that represents the expected input data type
     pub fn get_input_data_type(&self) -> WrappedIOType {
-        self.processor_runner.get_input_data_type()
+        self.pipeline_runner.get_input_data_type()
     }
 
     /// Returns the output data type produced by the processor chain.
@@ -189,7 +171,7 @@ impl SensoryChannelStreamCache {
     ///
     /// The `IOTypeVariant` that represents the output data type
     pub fn get_output_data_type(&self) -> WrappedIOType {
-        self.processor_runner.get_output_data_type()
+        self.pipeline_runner.get_output_data_type()
     }
 }
 

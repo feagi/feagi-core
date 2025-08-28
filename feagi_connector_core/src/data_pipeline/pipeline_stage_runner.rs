@@ -4,26 +4,15 @@ use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
 use crate::data_pipeline::verify_stream_cache_processor_chain::verify_sensor_chain;
 
-/// Orchestrates execution of a chain of stream cache processing.
-///
-/// `ProcessorRunner` validates that a sequence of processing can be chained together
-/// (ensuring output types match subsequent input types) and provides a unified interface
-/// for processing data through the entire pipeline.
-///
-/// # Key Features
-///
-/// - **Type Validation**: Ensures processing are compatible before execution
-/// - **Pipeline Execution**: Runs data through all processing in sequence
-/// - **Error Handling**: Provides clear error messages for incompatible processing
-/// - **Performance**: Uses efficient borrowing patterns to avoid unnecessary clones
+
 #[derive(Debug)]
-pub(crate) struct ProcessorRunner {
+pub(crate) struct PipelineStageRunner {
     input_type: WrappedIOType,
     output_type: WrappedIOType,
-    cache_processors: Vec<Box<dyn StreamCacheStage + Sync + Send>>,
+    pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>,
 }
 
-impl ProcessorRunner {
+impl PipelineStageRunner {
     /// Creates a new ProcessorRunner with a validated chain of processing.
     ///
     /// This constructor performs comprehensive validation to ensure the processor chain
@@ -51,14 +40,14 @@ impl ProcessorRunner {
     /// Processor A: Input(F32) -> Output(F32Normalized0To1)
     /// Processor B: Input(F32) -> Output(Bool)              ✗ Incompatible
     /// ```
-    pub fn new(cache_processors: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
+    pub fn new(pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
 
-        verify_sensor_chain(&cache_processors)?;
+        verify_sensor_chain(&pipeline_stages)?;
         
-        Ok(ProcessorRunner {
-            input_type: cache_processors.first().unwrap().get_input_data_type(),
-            output_type: cache_processors.last().unwrap().get_output_data_type(),
-            cache_processors,
+        Ok(PipelineStageRunner {
+            input_type: pipeline_stages.first().unwrap().get_input_data_type(),
+            output_type: pipeline_stages.last().unwrap().get_output_data_type(),
+            pipeline_stages,
         })
     }
     
@@ -95,17 +84,23 @@ impl ProcessorRunner {
         //TODO There has to be a better way to do this, but I keep running into limitations with mutating self.cache_processors
         
         // Process the first processor with the input value
-        self.cache_processors[0].process_new_input(new_value, time_of_update)?;
+        self.pipeline_stages[0].process_new_input(new_value, time_of_update)?;
         
         // Process subsequent processing using split_at_mut to avoid borrowing conflicts
-        for i in 1..self.cache_processors.len() {
-            let (left, right) = self.cache_processors.split_at_mut(i);
+        for i in 1..self.pipeline_stages.len() {
+            let (left, right) = self.pipeline_stages.split_at_mut(i);
             let previous_output = left[i - 1].get_most_recent_output(); 
             right[0].process_new_input(previous_output, time_of_update)?;
         }
         
         // Return the output from the last processor
-        Ok(self.cache_processors.last().unwrap().get_most_recent_output())
+        Ok(self.pipeline_stages.last().unwrap().get_most_recent_output())
+    }
+    
+    pub fn attempt_replace_stages(&mut self, new_pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+        verify_sensor_chain(&new_pipeline_stages)?;
+        self.pipeline_stages = new_pipeline_stages;
+        Ok(())
     }
     
     /// Returns the most recent output from the final processor in the chain.
@@ -116,7 +111,7 @@ impl ProcessorRunner {
     /// # Returns
     /// Reference to the output data from the last processor in the chain.
     pub fn get_most_recent_output(&self) -> &WrappedIOData {
-        self.cache_processors.last().unwrap().get_most_recent_output()
+        self.pipeline_stages.last().unwrap().get_most_recent_output()
     }
     
     /// Returns the input data type expected by this processor chain.
@@ -134,4 +129,6 @@ impl ProcessorRunner {
     pub fn get_output_data_type(&self) -> WrappedIOType {
         self.output_type
     }
+    
+    // TODO allow copying out stages
 }
