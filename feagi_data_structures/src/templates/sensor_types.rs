@@ -22,8 +22,8 @@ macro_rules! sensor_definition {
                 },
                 #[doc = "Inverted infrared sensor that provides reverse object detection readings."]
                 ReverseInfrared => {
-                    friendly_name: "Reverse Infrared Sensor",
-                    snake_case_identifier: "reverse_infrared",
+                    friendly_name: "Infrared (Inverted) Sensor",
+                    snake_case_identifier: "infrared_inverted",
                     base_ascii: b"iiif00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
@@ -31,7 +31,7 @@ macro_rules! sensor_definition {
                 #[doc = "Digital GPIO input pin for reading binary signals (high/low states)."]
                 DigitalGPIOInput => {
                     friendly_name: "GPIO Digital Input",
-                    snake_case_identifier: "gpio_digital_input",
+                    snake_case_identifier: "gpio_digital",
                     base_ascii: b"idgp00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
@@ -81,7 +81,7 @@ macro_rules! sensor_definition {
                 #[doc = "Image camera input. Either alone or in the center of segmented/peripheral image camera setups"]
                 ImageCameraCenter => {
                     friendly_name: "Center Image Camera Input",
-                    snake_case_identifier: "center_image_camera_input",
+                    snake_case_identifier: "image_camera_center",
                     base_ascii: b"iic400",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame,
@@ -89,7 +89,7 @@ macro_rules! sensor_definition {
                 #[doc = "Top Left peripheral image camera input."]
                 ImageCameraTopLeft => {
                     friendly_name: "Top Left Image Camera Input",
-                    snake_case_identifier: "top_left_image_camera_input",
+                    snake_case_identifier: "image_camera_top_left",
                     base_ascii: b"iic600",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
@@ -97,7 +97,7 @@ macro_rules! sensor_definition {
                 #[doc = "Top Middle peripheral image camera input."]
                 ImageCameraTopMiddle => {
                     friendly_name: "Top Middle Image Camera Input",
-                    snake_case_identifier: "top_middle_image_camera_input",
+                    snake_case_identifier: "image_camera_top_middle",
                     base_ascii: b"iic700",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
@@ -105,7 +105,7 @@ macro_rules! sensor_definition {
                 #[doc = "Top Right peripheral image camera input."]
                 ImageCameraTopRight => {
                     friendly_name: "Top Right Image Camera Input",
-                    snake_case_identifier: "top_right_image_camera_input",
+                    snake_case_identifier: "image_camera_top_right",
                     base_ascii: b"iic800",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
@@ -113,7 +113,7 @@ macro_rules! sensor_definition {
                 #[doc = "Middle Left peripheral image camera input."]
                 ImageCameraMiddleLeft => {
                     friendly_name: "Middle Left Image Camera Input",
-                    snake_case_identifier: "middle_left_image_camera_input",
+                    snake_case_identifier: "image_camera_middle_left",
                     base_ascii: b"iic300",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
@@ -121,7 +121,7 @@ macro_rules! sensor_definition {
                 #[doc = "Middle Right peripheral image camera input."]
                 ImageCameraMiddleRight => {
                     friendly_name: "Middle Right Image Camera Input",
-                    snake_case_identifier: "middle_right_image_camera_input",
+                    snake_case_identifier: "image_camera_middle_right",
                     base_ascii: b"iic400",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
@@ -129,7 +129,7 @@ macro_rules! sensor_definition {
                 #[doc = "Bottom Left peripheral image camera input."]
                 ImageCameraBottomLeft => {
                     friendly_name: "Bottom Left Image Camera Input",
-                    snake_case_identifier: "bottom_left_image_camera_input",
+                    snake_case_identifier: "image_camera_bottom_left",
                     base_ascii: b"iic000",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
@@ -137,7 +137,7 @@ macro_rules! sensor_definition {
                 #[doc = "Bottom Middle peripheral image camera input."]
                 ImageCameraBottomMiddle => {
                     friendly_name: "Bottom Middle Image Camera Input",
-                    snake_case_identifier: "bottom_middle_image_camera_input",
+                    snake_case_identifier: "image_camera_bottom_middle",
                     base_ascii: b"iic100",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
@@ -145,7 +145,7 @@ macro_rules! sensor_definition {
                 #[doc = "Bottom Right peripheral image camera input."]
                 ImageCameraBottomRight => {
                     friendly_name: "Bottom Right Image Camera Input",
-                    snake_case_identifier: "bottom_right_image_camera_input",
+                    snake_case_identifier: "image_camera_bottom_right",
                     base_ascii: b"iic200",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,

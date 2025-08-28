@@ -13,10 +13,10 @@ use feagi_data_structures::sensor_definition;
 use feagi_data_serialization::{FeagiByteStructureCompatible, FeagiByteStructure};
 use crate::caching::hashmap_helpers::{AccessAgentLookupKey, CorticalAreaMetadataKey, FullChannelCacheKey};
 use crate::caching::sensory::sensory_channel_stream_cache::SensoryChannelStreamCache;
-use crate::data_pipeline::stages::{ImageFrameProcessorStage, ImageFrameSegmentatorStage, LinearScaleTo0And1Stage};
+use crate::data_pipeline::stages::{ImageFrameProcessorStage, ImageFrameSegmentatorStage, LinearScaleTo0And1Stage, IdentityImageFrameStage};
 use crate::data_pipeline::StreamCacheStage;
 
-macro_rules! define_cortical_group_funcs {
+macro_rules! define_cortical_group_functions {
     (
         $cortical_io_type_enum_name:ident {
             $(
@@ -33,7 +33,7 @@ macro_rules! define_cortical_group_funcs {
     ) => {
         $(
             // Generate function conditionally based on default_coder_type
-            define_cortical_group_funcs!(@generate_registration_function 
+            define_cortical_group_functions!(@generate_registration_function 
                 $snake_case_identifier,
                 $cortical_type_key_name,
                 $default_coder_type
@@ -71,13 +71,43 @@ macro_rules! define_cortical_group_funcs {
                     self.register_cortical_area_and_channels(sensor_cortical_type, cortical_group, neuron_encoder, processors, allow_stale_data)?;
                     Ok(())
             }
+            
+            #[doc = "Store data of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<store_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
+                device_channel: CorticalChannelIndex,
+                new_float: f32
+            ) -> Result<(), FeagiDataError> {
+                    let val = WrappedIOData::F32(new_float);
+                    let sensor_type = SensorCorticalType::$cortical_type_key_name;
+                    self.update_value_by_channel(val, sensor_type, cortical_group, device_channel);
+                    Ok(())
+            }
+            
+            #[doc = "Read most recent data of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<read_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
+                device_channel: CorticalChannelIndex
+                ) -> Result<f32, FeagiDataError> {
+                    let val = self.read_value_by_channel(SensorCorticalType::$cortical_type_key_name, cortical_group, device_channel)?;
+                    Ok(val.try_into()?)
+            }
+            
+            #[doc = "Set Pipeline Processing Stages of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<set_stages_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
+                device_channel: CorticalChannelIndex,
+                new_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+                    let sensor_type = SensorCorticalType::$cortical_type_key_name;
+                    self.set_processors_for_channel(sensor_type, cortical_group, device_channel, new_stages)
+            }
         }
     };
 
     (@generate_registration_function $snake_case_identifier:expr, $cortical_type_key_name:ident, F32NormalizedM1To1_SplitSignDivided) => {
         paste::paste! {
-            #[doc = "Register cortical group for " $snake_case_identifier " sensor"]
-            pub fn [<register_cortical_group_ $snake_case_identifier>](&mut self,
+            #[doc = "Register cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<register_ $snake_case_identifier>](&mut self,
                 cortical_group: CorticalGroupIndex,
                 number_of_channels: CorticalChannelCount,
                 allow_stale_data: bool,
@@ -103,46 +133,105 @@ macro_rules! define_cortical_group_funcs {
                     self.register_cortical_area_and_channels(sensor_cortical_type, cortical_group, neuron_encoder, processors, allow_stale_data)?;
                     Ok(())
             }
+            
+            #[doc = "Store data of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<store_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
+                device_channel: CorticalChannelIndex,
+                new_float: f32
+            ) -> Result<(), FeagiDataError> {
+                    let val = WrappedIOData::F32(new_float);
+                    let sensor_type = SensorCorticalType::$cortical_type_key_name;
+                    self.update_value_by_channel(val, sensor_type, cortical_group, device_channel);
+                    Ok(())
+            }
+            
+            #[doc = "Read most recent data of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<read_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
+                device_channel: CorticalChannelIndex
+                ) -> Result<f32, FeagiDataError> {
+                    let val = self.read_value_by_channel(SensorCorticalType::$cortical_type_key_name, cortical_group, device_channel)?;
+                    Ok(val.try_into()?)
+            }
+            
+            #[doc = "Set Pipeline Processing Stages of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<set_stages_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
+                device_channel: CorticalChannelIndex,
+                new_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+                    let sensor_type = SensorCorticalType::$cortical_type_key_name;
+                    self.set_processors_for_channel(sensor_type, cortical_group, device_channel, new_stages)
+            }
+            
+            
         }
     };
 
     (@generate_registration_function $snake_case_identifier:expr, $cortical_type_key_name:ident, ImageFrame) => {
         paste::paste! {
             #[doc = "Register cortical group for " $snake_case_identifier " sensor"]
-            pub fn [<register_cortical_group_ $snake_case_identifier>](&mut self,
+            pub fn [<register_ $snake_case_identifier>](&mut self,
                 cortical_group: CorticalGroupIndex,
                 number_of_channels: CorticalChannelCount,
                 allow_stale_data: bool,
                 input_image_properties: ImageFrameProperties,
                 output_image_properties: ImageFrameProperties) -> Result<(), FeagiDataError> {
-
-                    let image_transformer_definition = ImageFrameProcessor::new_from_input_output_properties(&input_image_properties, &output_image_properties)?;
-
+                
                     let sensor_cortical_type = SensorCorticalType::$cortical_type_key_name;
                     let cortical_id = CorticalID::new_sensor_cortical_area_id(sensor_cortical_type, cortical_group)?;
                     let neuron_encoder = Box::new(ImageFrameNeuronXYZPEncoder::new(cortical_id, &output_image_properties)?);
                     let mut processors: Vec<Vec<Box<dyn StreamCacheStage + Sync + Send>>> = Vec::with_capacity(*number_of_channels as usize);
-                    for _i in 0..*number_of_channels {
-                        processors.push(vec![Box::new(ImageFrameProcessorStage::new(image_transformer_definition)?)]);
-                    };
-
+                
+                    if input_image_properties == output_image_properties {
+                        // No changes to image, just cache it to avoid processing penalty
+                        let initial_image = ImageFrame::from_image_frame_properties(&input_image_properties)?;
+                        processors.push(vec![Box::new(IdentityImageFrameStage::new(initial_image)?)])
+                    }
+                    else {
+                        // We are changing the image, add a processor
+                        let image_transformer_definition = ImageFrameProcessor::new_from_input_output_properties(&input_image_properties, &output_image_properties)?;
+                        for _i in 0..*number_of_channels {
+                            processors.push(vec![Box::new(ImageFrameProcessorStage::new(image_transformer_definition)?)]);
+                        };
+                    }
+                    
                     self.register_cortical_area_and_channels(sensor_cortical_type, cortical_group, neuron_encoder, processors, allow_stale_data)?;
                     Ok(())
             }
 
-            #[doc = "Update data of cortical group for " $snake_case_identifier " sensor"]
-            pub fn [<write_image_for_ $snake_case_identifier>](&mut self,
-                cortical_grouping_index: CorticalGroupIndex,
+            #[doc = "Store data of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<store_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
                 device_channel: CorticalChannelIndex,
                 new_image: ImageFrame) -> Result<(), FeagiDataError> {
                     let val = WrappedIOData::ImageFrame(new_image);
                     let sensor_type = SensorCorticalType::ImageCameraCenter;
-                    self.update_value_by_channel(val, sensor_type, cortical_grouping_index, device_channel)
+                    self.update_value_by_channel(val, sensor_type, cortical_group, device_channel)
             }
+            
+            #[doc = "Read most recent data of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<read_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
+                device_channel: CorticalChannelIndex
+                ) -> Result<ImageFrame, FeagiDataError> {
+                    let val = self.read_value_by_channel(SensorCorticalType::ImageCameraCenter, cortical_group, device_channel)?;
+                    Ok(val.try_into()?)
+            }
+            
+            #[doc = "Set Pipeline Processing Stages of cortical group for the " $snake_case_identifier " sensor"]
+            pub fn [<set_stages_ $snake_case_identifier>](&mut self,
+                cortical_group: CorticalGroupIndex,
+                device_channel: CorticalChannelIndex,
+                new_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+                    let sensor_type = SensorCorticalType::ImageCameraCenter;
+                    self.set_processors_for_channel(sensor_type, cortical_group, device_channel, new_stages)
+            }
+            
         }
     };
 
-
+    // Segmented Image Frame does not get its own!
     
     // Fallback for other coder types - no function generated
     (@generate_registration_function $snake_case_identifier:expr, $cortical_type_key_name:ident, $default_coder_type:ident) => {
@@ -178,21 +267,12 @@ impl SensorCache {
     //region Specific Sensor Functions
     
     // Generate default implementations for all sensors
-    sensor_definition!(define_cortical_group_funcs);
-
-    /*
-pub fn send_data_for_proximity(&mut self, new_value: f32, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-    let val = WrappedIOData::F32(new_value);
-    let sensor_type = SensorCorticalType::Proximity;
-    self.update_value_by_channel(val, sensor_type, cortical_grouping_index, device_channel)
-}
- */
+    sensor_definition!(define_cortical_group_functions);
     
     // Manual Functions
-    
     //region Segmented Image Camera Manual Functions
 
-    pub fn register_cortical_group_for_image_camera_with_peripheral(&mut self, cortical_group: CorticalGroupIndex,
+    pub fn register_image_camera_with_peripheral(&mut self, cortical_group: CorticalGroupIndex,
                                                                     number_of_channels: CorticalChannelCount, allow_stale_data: bool,
                                                                     input_image_properties: ImageFrameProperties,
                                                                     output_image_properties: SegmentedImageFrameProperties,
@@ -220,13 +300,24 @@ pub fn send_data_for_proximity(&mut self, new_value: f32, cortical_grouping_inde
     }
 
 
-    pub fn send_data_for_segmented_image_camera(&mut self, new_value: ImageFrame, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+    pub fn store_segmented_image_camera(&mut self, new_value: ImageFrame, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         let val = WrappedIOData::ImageFrame(new_value);
         let sensor_type = SensorCorticalType::ImageCameraCenter;
-        self.update_value_by_channel(val, sensor_type, cortical_grouping_index, device_channel)// TODO ????
+        self.update_value_by_channel(val, sensor_type, cortical_grouping_index, device_channel)
+    }
+
+
+    pub fn read_segmented_image_camera(&mut self,cortical_group: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<SegmentedImageFrame, FeagiDataError> {
+        let val = self.read_value_by_channel(SensorCorticalType::ImageCameraCenter, cortical_group, device_channel)?;
+        Ok(val.try_into()?)
+    }
+
+    pub fn set_stages_segmented_image_camera(&mut self, cortical_group: CorticalGroupIndex, device_channel: CorticalChannelIndex, new_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+        let sensor_type = SensorCorticalType::ImageCameraCenter;
+        self.set_processors_for_channel(sensor_type, cortical_group, device_channel, new_stages)
     }
     
-
+    
     //endregion
     
     //endregion
@@ -287,7 +378,6 @@ pub fn send_data_for_proximity(&mut self, new_value: f32, cortical_grouping_inde
     //endregion
     
     
-    
     //region Internal Functions
     
     fn register_cortical_area_and_channels(&mut self, sensor_cortical_type: SensorCorticalType, cortical_group: CorticalGroupIndex,
@@ -332,21 +422,55 @@ pub fn send_data_for_proximity(&mut self, new_value: f32, cortical_grouping_inde
         Ok(())
     }
     
-    
-    pub fn update_value_by_channel(&mut self, value: WrappedIOData, cortical_sensor_type: SensorCorticalType, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-        let cortical_type = cortical_sensor_type.into();
-        let channel_cache = match self.channel_caches.get_mut(&FullChannelCacheKey::new(cortical_type, cortical_grouping_index, device_channel)) {
-            Some(channel_stream_cache) => channel_stream_cache,
-            None => return Err(FeagiDataError::BadParameters(format!("Unable to find Cortical Type {:?}, Group Index {:?}, Channel {:?}!", cortical_type, cortical_grouping_index, device_channel)).into())
-        };
+    fn update_value_by_channel(&mut self, value: WrappedIOData, cortical_sensor_type: SensorCorticalType, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        let mut channel_cache = self.try_get_mut_sensory_channel_stream_cache(cortical_sensor_type, cortical_grouping_index, device_channel)?;
         if channel_cache.get_input_data_type() != WrappedIOType::from(&value) {
             return Err(FeagiDataError::BadParameters(format!("Got value type {:?} when expected type {:?} for Cortical Type {:?}, Group Index {:?}, Channel {:?}!", WrappedIOType::from(&value),
-                                                              channel_cache.get_input_data_type(), cortical_type, cortical_grouping_index, device_channel)).into());
+                                                              channel_cache.get_input_data_type(), cortical_sensor_type, cortical_grouping_index, device_channel)).into());
         }
         _ = channel_cache.update_sensor_value(value);
         Ok(())
     }
 
+    fn read_value_by_channel(&self, cortical_sensor_type: SensorCorticalType, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<WrappedIOData, FeagiDataError> {
+        let channel_cache = self.try_get_sensory_channel_stream_cache(cortical_sensor_type, cortical_grouping_index, device_channel)?;
+        let value = channel_cache.get_most_recent_sensor_value();
+        Ok(value.clone())
+    }
+    
+    fn set_processors_for_channel(&mut self, cortical_sensor_type: SensorCorticalType, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex, new_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+        let channel_cache = self.try_get_mut_sensory_channel_stream_cache(cortical_sensor_type, cortical_grouping_index, device_channel)?;
+        channel_cache.attempt_replace_pipeline_stages(new_stages)?;
+        Ok(())
+    }
+    
+    /* // TODO requires being able to copy out stages!
+    fn read_processors_for_channel(&mut self, cortical_sensor_type: SensorCorticalType, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        let channel_cache = self.try_get_sensory_channel_stream_cache(cortical_sensor_type, cortical_grouping_index, device_channel)?;
+        
+    }
+    
+     */
+    
+    fn try_get_sensory_channel_stream_cache(&self, cortical_sensor_type: SensorCorticalType, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<(&SensoryChannelStreamCache), FeagiDataError> {
+        let cortical_type = cortical_sensor_type.into();
+        let channel_cache = match self.channel_caches.get(&FullChannelCacheKey::new(cortical_type, cortical_grouping_index, device_channel)) {
+            Some(channel_stream_cache) => channel_stream_cache,
+            None => return Err(FeagiDataError::BadParameters(format!("Unable to find Cortical Type {:?}, Group Index {:?}, Channel {:?}!", cortical_type, cortical_grouping_index, device_channel)).into())
+        };
+        Ok(channel_cache)
+    }
+
+    fn try_get_mut_sensory_channel_stream_cache(&mut self, cortical_sensor_type: SensorCorticalType, cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex) -> Result<(&mut SensoryChannelStreamCache), FeagiDataError> {
+        let cortical_type = cortical_sensor_type.into();
+        let channel_cache = match self.channel_caches.get_mut(&FullChannelCacheKey::new(cortical_type, cortical_grouping_index, device_channel)) {
+            Some(channel_stream_cache) => channel_stream_cache,
+            None => return Err(FeagiDataError::BadParameters(format!("Unable to find Cortical Type {:?}, Group Index {:?}, Channel {:?}!", cortical_type, cortical_grouping_index, device_channel)).into())
+        };
+        Ok(channel_cache)
+    }
+    
+    
     fn encode_to_neurons(&mut self, past_send_time: Instant) -> Result<(), FeagiDataError> {
         // TODO move to using iter(), I'm using for loops now cause im still a rust scrub
         for cortical_area_details in self.cortical_area_metadata.values() {
@@ -362,8 +486,6 @@ pub fn send_data_for_proximity(&mut self, new_value: f32, cortical_grouping_inde
     
 
     //endregion
-    
-    
     
 }
 
