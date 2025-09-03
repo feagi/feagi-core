@@ -96,8 +96,6 @@ macro_rules! define_io_cortical_types {
                     ),*
                 }
             }
-            
-            
         }
     }
 }

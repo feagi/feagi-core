@@ -9,9 +9,9 @@ macro_rules! sensor_definition {
     ($callback:ident) => {
         $callback! {
             SensorCorticalType {
-                
+
                 //region 0 - 1 Linear Float
-                
+
                 #[doc = "Infrared distance sensor for object detection"]
                 Infrared => {
                     friendly_name: "Infrared Sensor",
@@ -60,11 +60,11 @@ macro_rules! sensor_definition {
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32Normalized0To1_Linear,
                 },
-                
+
                 //endregion
-                
+
                 //region -1 -1 Split Sign Float
-                
+
                 #[doc = "Servo position feedback sensor for monitoring actuator positions."]
                 ServoPosition => {
                     friendly_name: "Servo Position",
@@ -73,11 +73,11 @@ macro_rules! sensor_definition {
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32NormalizedM1To1_SplitSignDivided,
                 },
-                
+
                 //endregion
-                
+
                 //region ImageFrame
-                
+
                 #[doc = "Image camera input. Either alone or in the center of segmented/peripheral image camera setups"]
                 ImageCameraCenter => {
                     friendly_name: "Center Image Camera Input",

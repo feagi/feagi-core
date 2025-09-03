@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::ops::Range;
 use std::time::Instant;
 use feagi_data_structures::data::image_descriptors::{GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
+use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::{CorticalID, SensorCorticalType};
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
 use feagi_data_structures::neurons::xyzp::encoders::*;
@@ -264,10 +265,59 @@ impl SensorCache {
 
     }
     
-    //region Specific Sensor Functions
+    //region Sensor Functions
     
-    // Generate default implementations for all sensors
-    sensor_definition!(define_cortical_group_functions);
+    //region Generic types
+
+    //region F32Normalized0To1_Linear
+
+    pub fn register_f32_normalized_0_to_1_linear(&mut self, sensor_cortical_type: SensorCorticalType,
+                                                 group: CorticalGroupIndex, number_channels: CorticalChannelCount,
+                                                 allow_stale_data: bool, neuron_depth: NeuronDepth,
+                                                 bounds: Range<f32>) -> Result<(), FeagiDataError> {
+
+
+        match sensor_cortical_type {
+            SensorCorticalType::Proximity => {
+                // Do Nothing TODO macro
+            }
+            _ => return Err(FeagiDataError::BadParameters(format!("Expected Sensor type with data type {:?}!", "F32NormalizedTo1Linear")));
+        };
+
+        let cortical_id = sensor_cortical_type.to_cortical_id(group);
+        let encoder =  Box::new(F32LinearNeuronXYZPEncoder::new(cortical_id, neuron_depth)?);
+        let mut processors: Vec<Vec<Box<dyn StreamCacheStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
+        for _i in 0..*number_channels {
+            processors.push(vec![Box::new(LinearScaleTo0And1Stage::new(bounds.start, bounds.end, 0.0)?)]);
+        };
+        self.register_cortical_area_and_channels(sensor_cortical_type, group, encoder, processors, allow_stale_data)?;
+        Ok(())
+    }
+
+    pub fn store_f32_normalized_0_to_1_linear(&mut self, sensor_cortical_type: SensorCorticalType,
+                                              group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                              new_float: f32) -> Result<(), FeagiDataError> {
+
+    }
+
+    pub fn read_cached_f32_normalized_0_to_1_linear(&mut self, sensor_cortical_type: SensorCorticalType,
+                                                    group: CorticalGroupIndex, channel: CorticalChannelIndex)
+        -> Result<f32, FeagiDataError> {
+
+    }
+
+    // TODO how to handle Deregistering with agent existing?
+
+
+    //endregion
+
+
+
+    //endregion
+
+
+
+
     
     // Manual Functions
     //region Segmented Image Camera Manual Functions

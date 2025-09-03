@@ -282,7 +282,7 @@ macro_rules! define_dimension_range {
 }
 //endregion
 
-//region Cortical Group Index
+//region Cortical Group
 
 define_index!(CorticalGroupIndex, u8, 
     "Index for grouping cortical areas of the same type within a genome.
@@ -306,7 +306,7 @@ The index appears as the last two characters of a cortical ID:
 
 //endregion
 
-//region Cortical Channel Index
+//region Cortical Channel
 
 define_index!(CorticalChannelIndex, u32,
     "Index for addressing specific channels within an I/O cortical area.
@@ -320,7 +320,7 @@ define_index!(AgentDeviceIndex, u32,
 "An index for a specific channel on a specific cortical group (or multiple). An alternate way to refer to channels"
 );
 
-define_nonzero_count!(CorticalChannelCount, u32, "The number of Cortical Channels. Cannot be zero."
+define_nonzero_count!(CorticalChannelCount, u32, "The number of Cortical Channels cannot be zero."
 );
 
 //endregion
@@ -358,6 +358,8 @@ and for calculating spatial relationships between different brain regions."
 //endregion
 
 //region Cortical Channel Dimensions
+
+define_nonzero_count!(NeuronDepth, u32, "The number of Neurons cannot be zero." );
 
 define_dimensions!(CorticalChannelDimensions,
     "Dimensions of a channel within a cortical area.
