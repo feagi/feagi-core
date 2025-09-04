@@ -4,6 +4,7 @@ use crate::sensor_definition;
 use crate::FeagiDataError;
 use crate::genomic::{CorticalID};
 use crate::genomic::descriptors::CorticalGroupIndex;
+use crate::wrapped_io_data::WrappedIOType;
 
 macro_rules! define_io_cortical_types {
     (
@@ -16,6 +17,7 @@ macro_rules! define_io_cortical_types {
                     base_ascii: $base_ascii:expr,
                     channel_dimension_range: $channel_dimension_range:expr,
                     default_coder_type: $default_coder_type:ident,
+                    wrapped_data_type: $wrapped_data_type:expr,
                 }
             ),* $(,)?
         }
@@ -95,6 +97,22 @@ macro_rules! define_io_cortical_types {
                         Self::$cortical_type_key_name => $channel_dimension_range.unwrap()
                     ),*
                 }
+            }
+
+            pub fn get_data_type(&self) -> WrappedIOType {
+                match self {
+                    $(
+                        Self::$cortical_type_key_name => $wrapped_data_type
+                    ),*
+                }
+            }
+
+            pub fn verify_is_data_type(&self, expected_type: WrappedIOType) -> Result<(), FeagiDataError> {
+                let self_type = self.get_data_type();
+                if WrappedIOType::is_same_variant(&self_type, &expected_type) {
+                    return Ok(());
+                }
+                Err(FeagiDataError::BadParameters(format!("Expected IO type to be of data variant {}!", expected_type)))
             }
         }
     }
@@ -301,6 +319,7 @@ define_io_cortical_types!{
             base_ascii: b"omot00",
             channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
             default_coder_type: F32NormalizedM1To1_SplitSignDivided,
+            wrapped_data_type: WrappedIOType::F32Normalized0To1,
         },
     }    
 }
