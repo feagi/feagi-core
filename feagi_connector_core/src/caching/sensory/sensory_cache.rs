@@ -210,30 +210,21 @@ impl SensorCache {
 
     fn store_value_from_device_index(&mut self, cortical_sensor_type: SensorCorticalType, agent_device_index: AgentDeviceIndex, value: WrappedIOData)-> Result<(), FeagiDataError> {
         // NOTE: Assuming the value is of the correct type
-        let channel_cache_keys = self.try_get_full_channel_keys_from_device_index(cortical_sensor_type, agent_device_index)?;
-        if channel_cache_keys.len() == 0 {
-            return Err(FeagiDataError::InternalError("Empty channel cache!".into()).into()) // Important to check this, otherwise we are going to have a bad time next
-        }
 
-        // Doing this to save one 1 clone
-        for channel_key_i in 1..channel_cache_keys.len() {
-            self.update_value_by_channel(value.clone(), cortical_sensor_type, channel_cache_keys[channel_key_i].cortical_group, channel_cache_keys[channel_key_i].channel)?;
-        }
-        self.update_value_by_channel(value.clone(), cortical_sensor_type, channel_cache_keys[0].cortical_group, channel_cache_keys[0].channel)?;
+        let agent_key = &AccessAgentLookupKey::new(cortical_sensor_type.into(), agent_device_index);
 
+        if let Some(vec) = self.agent_key_proxy.get_mut(&agent_key) {
+            for cache_key in vec.iter_mut().skip(1) {
+                let cache = self.channel_caches.get_mut(cache_key).unwrap();
+                cache.update_sensor_value(value.clone())?;
+            }
+            let cache = self.channel_caches.get_mut(vec.get_mut(0).unwrap()).unwrap();
+            cache.update_sensor_value(value)?;
+        }
         Ok(())
 
     }
 
-    fn try_get_full_channel_keys_from_device_index(&self, cortical_sensor_type: SensorCorticalType, agent_device_index: AgentDeviceIndex) -> Result<&Vec<FullChannelCacheKey>, FeagiDataError> {
-        let try_key_vector = self.agent_key_proxy.get(&AccessAgentLookupKey::new(cortical_sensor_type.into(), agent_device_index));
-        match try_key_vector {
-            Some(key_vector) => { Ok(key_vector) }
-            None => {
-                Err(FeagiDataError::BadParameters(format!("No mapping found for Agent Device Index {} of sensor type {}!", *agent_device_index, cortical_sensor_type)))
-            }
-        }
-    }
     
 
     
