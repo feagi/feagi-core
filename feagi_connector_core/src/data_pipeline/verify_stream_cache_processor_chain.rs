@@ -1,36 +1,56 @@
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::WrappedIOType;
-use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
+use crate::data_pipeline::PipelineStageIndex;
+use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
 
-pub(crate) fn verify_sensor_chain(cache_processors: &Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
-    let number_of_processors = cache_processors.len();
+pub(crate) fn verify_pipeline_stages(pipeline_stages: &Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+    let number_of_stages = pipeline_stages.len();
 
-    if number_of_processors == 0 {
-        return Err(FeagiDataError::BadParameters("Processor Runner cannot have 0 Cache Processors!".into()).into())
+    if number_of_stages == 0 {
+        return Err(FeagiDataError::BadParameters("Pipeline Stage Runner cannot have 0 Stages!".into()).into())
     }
 
     // Ensure data can pass between processing
-    for processer_index in 0..number_of_processors - 1  {
-        let first = &cache_processors[processer_index];
-        let second = &cache_processors[processer_index + 1];
+    for stage_index in 0..number_of_stages - 1  {
+        let first = &pipeline_stages[stage_index];
+        let second = &pipeline_stages[stage_index + 1];
         if first.get_output_data_type() != second.get_input_data_type() {
-            return Err(FeagiDataError::BadParameters(format!("Given cache processor at index {} has output type {}, which does not match the input type of cache processor at index {} or type {}!",
-                                                              processer_index, first.get_output_data_type(), processer_index + 1,  second.get_input_data_type()).into()).into());
+            return Err(FeagiDataError::BadParameters(format!("Given stage runner at index {} has output type {}, which does not match the input type of stage runner at index {} or type {}!",
+                                                              stage_index, first.get_output_data_type(), stage_index + 1,  second.get_input_data_type()).into()).into());
         }
     };
 
     Ok(())
 }
 
-pub(crate) fn verify_sensor_chain_and_encoder(cache_processors: &Vec<Box<dyn StreamCacheStage + Sync + Send>>, type_accepted_by_encoder: &WrappedIOType)
-                                              -> Result<(), FeagiDataError> {
-    
-    verify_sensor_chain(cache_processors)?;
+pub(crate) fn verify_replacing_stage(current_stages: &Vec<Box<dyn PipelineStage + Sync + Send>>,
+                                     new_stage: &Box<dyn PipelineStage + Sync + Send>,
+                                     input_type: &WrappedIOType, output_type: &WrappedIOType,
+                                     new_stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
 
-    if &cache_processors.last().unwrap().get_output_data_type() != type_accepted_by_encoder {
-        return Err(FeagiDataError::BadParameters(format!("Given cache processor at index {} has output type {}, which does not match the input type of the encoder taking type {}!",
-                                                          cache_processors.len() - 1, cache_processors.last().unwrap().get_output_data_type(), type_accepted_by_encoder).into()).into());
+    if *new_stage_index >= current_stages.len() as u32 {
+        return Err(FeagiDataError::BadParameters(format!("New stage index {} is out of range! Max allowed is {}!", *new_stage_index, current_stages.len()- 1)).into());
     }
 
+    let comparing_input = if *new_stage_index == 0 {
+        input_type
+    } else {
+        &current_stages[*new_stage_index as usize - 1].get_output_data_type()
+    };
+
+    let comparing_output = if *new_stage_index == (current_stages.len()- 1) as u32 {
+        output_type
+    } else {
+        &current_stages[*new_stage_index as usize + 1].get_output_data_type()
+    };
+
+    if comparing_input != &new_stage.get_input_data_type() {
+        return Err(FeagiDataError::BadParameters(format!("Precursor to stage at index {} outputs data type {} but given stage accepts {}!", *new_stage_index, comparing_input, new_stage.get_input_data_type()).into()).into());
+    }
+    if comparing_output != &new_stage.get_output_data_type() {
+        return Err(FeagiDataError::BadParameters(format!("Precursor to stage at index {} outputs data type {} but given stage accepts {}!", *new_stage_index, comparing_output, new_stage.get_output_data_type()).into()).into());
+    }
     Ok(())
+
 }
+

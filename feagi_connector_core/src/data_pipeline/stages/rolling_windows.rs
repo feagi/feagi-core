@@ -8,7 +8,7 @@ use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
+use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
 
 /// A stream processor that maintains a rolling window of float values and outputs their average.
 ///
@@ -29,7 +29,7 @@ impl Display for LinearAverageRollingWindowStage {
     }
 }
 
-impl StreamCacheStage for LinearAverageRollingWindowStage {
+impl PipelineStage for LinearAverageRollingWindowStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::F32
     }
@@ -51,6 +51,10 @@ impl StreamCacheStage for LinearAverageRollingWindowStage {
 
         self.previous_value = WrappedIOData::F32(self.window.iter().sum::<f32>() / self.window_length); // average
         Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 

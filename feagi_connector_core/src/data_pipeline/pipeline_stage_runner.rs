@@ -1,15 +1,16 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
-use crate::data_pipeline::verify_stream_cache_processor_chain::verify_sensor_chain;
+use crate::data_pipeline::PipelineStageIndex;
+use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
+use crate::data_pipeline::verify_stream_cache_processor_chain::{verify_pipeline_stages, verify_replacing_stage};
 
 
 #[derive(Debug)]
 pub(crate) struct PipelineStageRunner {
     input_type: WrappedIOType,
     output_type: WrappedIOType,
-    pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>,
+    pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>,
 }
 
 impl PipelineStageRunner {
@@ -40,9 +41,9 @@ impl PipelineStageRunner {
     /// Processor A: Input(F32) -> Output(F32Normalized0To1)
     /// Processor B: Input(F32) -> Output(Bool)              ✗ Incompatible
     /// ```
-    pub fn new(pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
+    pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
 
-        verify_sensor_chain(&pipeline_stages)?;
+        verify_pipeline_stages(&pipeline_stages)?;
         
         Ok(PipelineStageRunner {
             input_type: pipeline_stages.first().unwrap().get_input_data_type(),
@@ -97,11 +98,33 @@ impl PipelineStageRunner {
         Ok(self.pipeline_stages.last().unwrap().get_most_recent_output())
     }
     
-    pub fn attempt_replace_stages(&mut self, new_pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
-        verify_sensor_chain(&new_pipeline_stages)?;
+    pub fn attempt_replace_stages(&mut self, new_pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+        verify_pipeline_stages(&new_pipeline_stages)?;
         self.pipeline_stages = new_pipeline_stages;
         Ok(())
     }
+
+    pub fn attempt_replace_stage(&mut self, new_pipeline_stage: Box<dyn PipelineStage + Sync + Send>, replacing_at_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+        verify_replacing_stage(&self.pipeline_stages, &new_pipeline_stage, &self.input_type, &self.output_type, replacing_at_index)?;
+        self.pipeline_stages[*replacing_at_index as usize] = new_pipeline_stage;
+        Ok(())
+    }
+
+    pub fn clone_stages(&self) -> Vec<Box<dyn PipelineStage + Sync + Send>> {
+        let mut output: Vec<Box<dyn PipelineStage + Sync + Send>> = Vec::with_capacity(self.pipeline_stages.len());
+        for pipeline_stage in self.pipeline_stages.iter() {
+            output.push(pipeline_stage.clone_box())
+        }
+        output
+    }
+
+    pub fn clone_stage(&self, index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+        if *index >= self.pipeline_stages.len() as u32 {
+            return Err(FeagiDataError::BadParameters(format!("Pipeline Index {} out of bounds!", *index)).into());
+        }
+        Ok(self.pipeline_stages[*index as usize].clone_box())
+    }
+
     
     /// Returns the most recent output from the final processor in the chain.
     ///
@@ -129,6 +152,5 @@ impl PipelineStageRunner {
     pub fn get_output_data_type(&self) -> WrappedIOType {
         self.output_type
     }
-    
-    // TODO allow copying out stages
+
 }

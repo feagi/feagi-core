@@ -9,7 +9,7 @@ use std::time::Instant;
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
+use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
 
 //region Identity Float
 /// A stream processor that passes float values through unchanged.
@@ -24,7 +24,7 @@ impl Display for IdentityFloatStage {
     }
 }
 
-impl StreamCacheStage for IdentityFloatStage {
+impl PipelineStage for IdentityFloatStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::F32
     }
@@ -41,6 +41,10 @@ impl StreamCacheStage for IdentityFloatStage {
     fn process_new_input(&mut self, value: &WrappedIOData, _: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         self.previous_value = value.clone();
         Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 
@@ -78,7 +82,7 @@ impl Display for IdentityImageFrameStage {
     }
 }
 
-impl StreamCacheStage for IdentityImageFrameStage {
+impl PipelineStage for IdentityImageFrameStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         self.expected_image_variant
     }
@@ -94,6 +98,10 @@ impl StreamCacheStage for IdentityImageFrameStage {
     fn process_new_input(&mut self, value: &WrappedIOData, _: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         self.previous_value = value.clone();
         Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 
@@ -128,7 +136,7 @@ impl Display for IdentitySegmentedImageFrameStage {
     }
 }
 
-impl StreamCacheStage for IdentitySegmentedImageFrameStage {
+impl PipelineStage for IdentitySegmentedImageFrameStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         self.expected_segmented_image_variant
     }
@@ -144,6 +152,10 @@ impl StreamCacheStage for IdentitySegmentedImageFrameStage {
     fn process_new_input(&mut self, value: &WrappedIOData, _: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         self.previous_value = value.clone();
         Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 

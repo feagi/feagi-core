@@ -12,7 +12,7 @@ use feagi_data_structures::data::image_descriptors::ImageFrameProperties;
 use feagi_data_structures::data::ImageFrame;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
+use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
 
 
 /// A stream processor that computes pixel-wise differences between consecutive image frames.
@@ -56,7 +56,7 @@ impl Display for ImageFrameQuickDiffStage {
     }
 }
 
-impl StreamCacheStage for ImageFrameQuickDiffStage {
+impl PipelineStage for ImageFrameQuickDiffStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::ImageFrame(Some(self.input_definition))
     }
@@ -80,6 +80,10 @@ impl StreamCacheStage for ImageFrameQuickDiffStage {
         }
         self.is_diffing_against_b = !self.is_diffing_against_b;
         Ok(&self.diff_cache)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 

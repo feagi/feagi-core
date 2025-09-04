@@ -5,7 +5,7 @@ use feagi_data_structures::data::image_descriptors::{ImageFrameProperties, Segme
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
 use feagi_data_structures::processing::ImageFrameSegmentator;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
+use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
 
 #[derive(Debug, Clone)]
 pub struct ImageFrameSegmentatorStage {
@@ -21,7 +21,7 @@ impl Display for ImageFrameSegmentatorStage {
     }
 }
 
-impl StreamCacheStage for ImageFrameSegmentatorStage {
+impl PipelineStage for ImageFrameSegmentatorStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::ImageFrame(Some(self.input_image_properties))
     }
@@ -39,6 +39,10 @@ impl StreamCacheStage for ImageFrameSegmentatorStage {
         
         self.image_segmentator.segment_image(read_from, write_to)?;
         Ok(self.get_most_recent_output())
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 

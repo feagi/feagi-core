@@ -8,7 +8,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::{PipelineStageRunner, StreamCacheStage};
+use crate::data_pipeline::{PipelineStageIndex, PipelineStageRunner, PipelineStage};
 
 /// Per-channel cache for sensory input data streams.
 ///
@@ -33,7 +33,7 @@ pub(crate) struct SensoryChannelStreamCache {
 
 impl SensoryChannelStreamCache {
     
-    pub fn new(pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>,
+    pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>,
                channel: CorticalChannelIndex,
                should_allow_sending_stale_data: bool
                 ) -> Result<Self, FeagiDataError> {
@@ -72,8 +72,20 @@ impl SensoryChannelStreamCache {
         Ok(())
     }
     
-    pub fn attempt_replace_pipeline_stages(&mut self, pipeline_stages: Vec<Box<dyn StreamCacheStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+    pub fn attempt_replace_pipeline_stages(&mut self, pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
         self.pipeline_runner.attempt_replace_stages(pipeline_stages)
+    }
+
+    pub fn attempt_replace_pipeline_stage(&mut self, pipeline_stage: Box<dyn PipelineStage + Sync + Send>, replacing_at: PipelineStageIndex) -> Result<(), FeagiDataError> {
+        self.pipeline_runner.attempt_replace_stage(pipeline_stage, replacing_at)
+    }
+
+    pub fn clone_pipeline_stages(&self) -> Vec<Box<dyn PipelineStage + Sync + Send>> {
+        self.pipeline_runner.clone_stages()
+    }
+
+    pub fn clone_pipeline_stage(&self, pipeline_stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+        self.pipeline_runner.clone_stage(pipeline_stage_index)
     }
     
     /// Determines whether new data should be pushed based on staleness policy.

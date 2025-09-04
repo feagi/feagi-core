@@ -122,7 +122,7 @@ macro_rules! sensor_definition {
                 ImageCameraMiddleRight => {
                     friendly_name: "Middle Right Image Camera Input",
                     snake_case_identifier: "image_camera_middle_right",
-                    base_ascii: b"iic400",
+                    base_ascii: b"iic500",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
                 },
