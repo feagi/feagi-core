@@ -1,5 +1,6 @@
 use ndarray::{s, ArrayView3};
 use fast_image_resize as fir;
+use fast_image_resize::ResizeOptions;
 use crate::FeagiDataError;
 use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
 use crate::data::ImageFrame;
@@ -447,37 +448,8 @@ fn to_grayscale(source: &ImageFrame, destination: &mut ImageFrame, output_color_
     Ok(())
 }
 
-fn crop_and_resize(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints, resize_xy_to: &ImageXYResolution) -> Result<(), FeagiDataError> {
-
-    let crop_resolution: ImageXYResolution = crop_from.enclosed_area_width_height();
-    let resolution_f: (f32, f32) = (resize_xy_to.width as f32, resize_xy_to.height as f32);
-    let crop_resolution_f: (f32, f32) = (crop_resolution.width as f32, crop_resolution.height as f32);
-
-    let dist_factor_yx: (f32, f32) = (
-        crop_resolution_f.1 / resolution_f.1,
-        crop_resolution_f.0 / resolution_f.0);
-
-    let upper_left_corner_offset_yx: (usize, usize) = (
-        crop_from.upper_left_row_major().0,
-        crop_from.upper_left_row_major().1,
-    );
-
-    let source_data = source.get_internal_data();
-    let destination_data = destination.get_internal_data_mut();
-
-    for ((y,x,c), color_val) in destination_data.indexed_iter_mut() {
-        let nearest_neighbor_coordinate_from_source_y: usize = ((y as f32) * dist_factor_yx.0).floor() as usize;
-        let nearest_neighbor_coordinate_from_source_x: usize = ((x as f32) * dist_factor_yx.1).floor() as usize;
-        let nnc_y_with_offset = nearest_neighbor_coordinate_from_source_y + upper_left_corner_offset_yx.0;
-        let nnc_x_with_offset = nearest_neighbor_coordinate_from_source_x + upper_left_corner_offset_yx.1;
-
-        let nearest_neighbor_channel_value: f32 = source_data[(
-            nnc_y_with_offset,
-            nnc_x_with_offset,
-            c)];
-        *color_val = nearest_neighbor_channel_value;
-    };
-    Ok(())
+fn crop_and_resize(source: &mut ImageFrame, destination: &mut [u8], destination_resolution: ImageXYResolution, color_channel_layout: ColorChannelLayout, crop_from: &CornerPoints, resizer: &mut fir::Resizer) -> Result<(), FeagiDataError> {
+    
 }
 
 fn crop_and_resize_and_grayscale(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints, resize_xy_to: &ImageXYResolution, output_color_space: ColorSpace) -> Result<(), FeagiDataError> {
