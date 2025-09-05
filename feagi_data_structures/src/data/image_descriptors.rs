@@ -240,6 +240,19 @@ impl TryFrom<usize> for ColorChannelLayout {
     }
 }
 
+impl TryFrom<image::ColorType> for ColorChannelLayout {
+    type Error = FeagiDataError;
+    fn try_from(value: image::ColorType) -> Result<Self, Self::Error> {
+        match value {
+            image::ColorType::L8 => Ok(ColorChannelLayout::GrayScale),
+            image::ColorType::La8 => Ok(ColorChannelLayout::RG),
+            image::ColorType::Rgb8 => Ok(ColorChannelLayout::RGB),
+            image::ColorType::Rgba8 => Ok(ColorChannelLayout::RGBA),
+            _ => Err(FeagiDataError::BadParameters("Unsupported image color!".to_string()))
+        }
+    }
+}
+
 impl From<ColorChannelLayout> for usize {
     fn from(value: ColorChannelLayout) -> usize {
         value as usize

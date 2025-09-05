@@ -1,4 +1,3 @@
-extern crate ndarray;
 pub mod basic_components;
 pub mod data;
 pub mod wrapped_io_data;

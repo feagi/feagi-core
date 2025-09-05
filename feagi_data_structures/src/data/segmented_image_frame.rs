@@ -107,8 +107,8 @@ impl SegmentedImageFrame {
     }
     
     //region
-    
-    
+
+
     
     //region Static Methods
 
@@ -230,7 +230,7 @@ impl SegmentedImageFrame {
     /// # Returns
     ///
     /// An array of 9 references to Array3<f32>, one for each segment in cortical order.
-    pub fn get_image_internal_data(&self) -> [&Array3<f32>; 9] {
+    pub fn get_image_internal_data(&self) -> [&Array3<u8>; 9] {
         // return in same order as cortical IDs
         [
             self.lower_left.get_internal_data(),
@@ -257,7 +257,7 @@ impl SegmentedImageFrame {
             &mut self.lower_middle]
     }
 
-    pub(crate) fn get_image_internal_data_mut(&mut self) -> [&mut Array3<f32>; 9] {
+    pub(crate) fn get_image_internal_data_mut(&mut self) -> [&mut Array3<u8>; 9] {
         // return in same order as cortical IDs
         [
             self.lower_left.get_internal_data_mut(),
@@ -273,6 +273,8 @@ impl SegmentedImageFrame {
     }
 
     //endregion
+
+
 
     //region neuron export
     pub fn write_as_neuron_xyzp_data(&self, write_target: &mut CorticalMappedXYZPNeuronData, channel_index: CorticalChannelIndex, ordered_cortical_ids: &[CorticalID; 9]) -> Result<(), FeagiDataError> {

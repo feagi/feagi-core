@@ -8,8 +8,11 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-serde_json = { workspace = true }
-ndarray = { workspace = true }
+serde_json = { workspace = true}
+ndarray = { workspace = true}
+nshare = { workspace = true}
+image = { workspace = true}
+
 
 [dev-dependencies]
 ndarray-npy = "0.9.1"
