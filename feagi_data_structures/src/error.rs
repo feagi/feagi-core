@@ -23,4 +23,16 @@ impl Display for FeagiDataError {
 }
 impl Error for FeagiDataError {}
 
+impl From<fast_image_resize::ImageBufferError> for FeagiDataError {
+    fn from(err: fast_image_resize::ImageBufferError) -> Self {
+        FeagiDataError::InternalError(err.to_string())
+    }
+}
+
+impl From<fast_image_resize::ResizeError> for FeagiDataError {
+    fn from(err: fast_image_resize::ResizeError) -> Self {
+        FeagiDataError::InternalError(err.to_string())
+    }
+}
+
 //  TODO From<> from other error types

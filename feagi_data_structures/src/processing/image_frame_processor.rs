@@ -1,9 +1,10 @@
 use ndarray::{s, ArrayView3};
+use fast_image_resize as fir;
 use crate::FeagiDataError;
 use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
 use crate::data::ImageFrame;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ImageFrameProcessor {
     /// Properties that the input image must match (resolution, color space, channel layout)
     input_image_properties: ImageFrameProperties,
@@ -13,12 +14,13 @@ pub struct ImageFrameProcessor {
     final_resize_xy_to: Option<ImageXYResolution>,
     /// Optional target color space for conversion
     convert_color_space_to: Option<ColorSpace>,
-    /// Optional brightness multiplier factor
-    multiply_brightness_by: Option<f32>,
+    /// Optional brightness additive offset factor
+    offset_brightness_by: Option<i32>,
     /// Optional contrast adjustment factor
     change_contrast_by: Option<f32>,
     /// Whether to convert the image to grayscale (only allowed on RGB/RGBA images)
     convert_to_grayscale: bool,
+    resizer: fir::Resizer
 }
 
 impl std::fmt::Display for ImageFrameProcessor {
@@ -26,17 +28,17 @@ impl std::fmt::Display for ImageFrameProcessor {
         let initial = format!("Expecting {}.", self.input_image_properties);
         let mut steps: String = match (self.cropping_from, self.final_resize_xy_to) {
             (None, None) => format!("Keeping input size of {} (no cropping from or resizing to)", self.input_image_properties.get_image_resolution()),
-            (Some(cropping_from), None) => format!("Cropping from xy points <{}, {}> to <{}, {}> without resizing after,",
-                                                   cropping_from.lower_left_row_major().1, cropping_from.lower_left_row_major().0, cropping_from.upper_right_row_major().1, cropping_from.upper_right_row_major().0),
+            (Some(cropping_from), None) => format!("Cropping from xy points {} to {} without resizing after,",
+                                                   cropping_from.upper_left, cropping_from.lower_right),
             (None, Some(final_resize_xy_to)) => format!("resizing to resolution {} without any cropping,", final_resize_xy_to),
-            (Some(cropping_from), Some(final_resize_xy_to)) => format!("Cropping from xy points <{}, {}> to <{}, {}> then resizing to resolution {},",
-                                                                       cropping_from.lower_left_row_major().1, cropping_from.lower_left_row_major().0, cropping_from.upper_right_row_major().1, cropping_from.upper_right_row_major().0, final_resize_xy_to),
+            (Some(cropping_from), Some(final_resize_xy_to)) => format!("Cropping from xy points {} to {} then resizing to resolution {},",
+                                                                       cropping_from.upper_left, cropping_from.lower_right, final_resize_xy_to),
         };
         steps += &*(match self.convert_color_space_to {
             None => String::new(),
             Some(change_colorspace_to) => format!("Convert Colorspace to {}", change_colorspace_to.to_string()),
         });
-        steps += &*(match self.multiply_brightness_by {
+        steps += &*(match self.offset_brightness_by {
             None => String::new(),
             Some(multiply_brightness_by) => format!("Multiply brightness by {}", multiply_brightness_by),
         });
@@ -59,10 +61,11 @@ impl ImageFrameProcessor {
             input_image_properties,
             cropping_from: None,
             final_resize_xy_to: None,
-            multiply_brightness_by: None,
+            offset_brightness_by: None,
             change_contrast_by: None,
             convert_color_space_to: None,
             convert_to_grayscale: false,
+            resizer: fir::Resizer::new()
         }
     }
 
@@ -115,7 +118,7 @@ impl ImageFrameProcessor {
 
     // TODO 2 / 4 channel pipelines!
     // Due to image segmentor, I would argue the most common route is crop + resize + grayscale
-    pub fn process_image(&self, source: &ImageFrame, destination: &mut ImageFrame) -> Result<(), FeagiDataError> {
+    pub fn process_image(&mut self, source: &mut ImageFrame, destination: &mut ImageFrame) -> Result<(), FeagiDataError> {
         match self {
             // Do literally nothing, just copy the data
             ImageFrameProcessor {
@@ -123,9 +126,10 @@ impl ImageFrameProcessor {
                 cropping_from: None,
                 final_resize_xy_to: None,
                 convert_color_space_to: None,
-                multiply_brightness_by: None,
+                offset_brightness_by: None,
                 change_contrast_by: None,
-                convert_to_grayscale: false
+                convert_to_grayscale: false,
+                resizer: _
             } => {
                 *destination = source.clone();
                 Ok(())
@@ -137,9 +141,10 @@ impl ImageFrameProcessor {
                 cropping_from: Some(cropping_from),
                 final_resize_xy_to: None,
                 convert_color_space_to: None,
-                multiply_brightness_by: None,
+                offset_brightness_by: None,
                 change_contrast_by:None,
-                convert_to_grayscale: false
+                convert_to_grayscale: false,
+                resizer: _
             } => {
                 crop(source, destination, cropping_from, self.get_output_channel_count())
             }
@@ -150,11 +155,17 @@ impl ImageFrameProcessor {
                 cropping_from: None,
                 final_resize_xy_to: Some(final_resize_xy_to),
                 convert_color_space_to: None,
-                multiply_brightness_by: None,
+                offset_brightness_by: None,
                 change_contrast_by:None,
-                convert_to_grayscale: false
+                convert_to_grayscale: false,
+                resizer: resizer
             } => {
-                resize(source, destination, final_resize_xy_to)
+                let source_resolution = source.get_xy_resolution();
+                let destination_resolution = destination.get_xy_resolution();
+                let destination_color_channels = *destination.get_channel_layout();
+                let source_bytes = source.get_internal_byte_data_mut();
+                let destination_bytes = destination.get_internal_byte_data_mut();
+                resize(source_bytes, source_resolution, destination_bytes, destination_resolution, destination_color_channels, resizer)
             }
 
             // Only grayscaling
@@ -163,9 +174,10 @@ impl ImageFrameProcessor {
                 cropping_from: None,
                 final_resize_xy_to: None,
                 convert_color_space_to: None,
-                multiply_brightness_by: None,
+                offset_brightness_by: None,
                 change_contrast_by:None,
-                convert_to_grayscale: true
+                convert_to_grayscale: true,
+                resizer: _
             } => {
                 to_grayscale(source, destination, self.input_image_properties.get_color_space())
             }
@@ -176,9 +188,10 @@ impl ImageFrameProcessor {
                 cropping_from: Some(cropping_from),
                 final_resize_xy_to: Some(final_resize_xy_to),
                 convert_color_space_to: None,
-                multiply_brightness_by: None,
+                offset_brightness_by: None,
                 change_contrast_by:None,
-                convert_to_grayscale: false
+                convert_to_grayscale: false,
+                resizer: _
             } => {
                 crop_and_resize(source, destination, cropping_from, final_resize_xy_to)
             }
@@ -189,9 +202,10 @@ impl ImageFrameProcessor {
                 cropping_from: Some(cropping_from),
                 final_resize_xy_to: Some(final_resize_xy_to),
                 convert_color_space_to: None,
-                multiply_brightness_by: None,
+                offset_brightness_by: None,
                 change_contrast_by:None,
-                convert_to_grayscale: true
+                convert_to_grayscale: true,
+                resizer: _
             } => {
                 crop_and_resize_and_grayscale(source, destination, cropping_from, final_resize_xy_to, self.input_image_properties.get_color_space())
             }
@@ -210,7 +224,12 @@ impl ImageFrameProcessor {
                         crop(source, &mut processing, &cropping_from, self.get_output_channel_count())?;
                     }
                     (None, Some(final_resize_xy_to)) => {
-                        resize(source, &mut processing, &final_resize_xy_to)?;
+                        let source_resolution = source.get_xy_resolution();
+                        let destination_resolution = destination.get_xy_resolution();
+                        let destination_color_channels = *destination.get_channel_layout();
+                        let source_bytes = source.get_internal_byte_data_mut();
+                        let destination_bytes = destination.get_internal_byte_data_mut();
+                        resize(source_bytes, source_resolution, destination_bytes, destination_resolution, destination_color_channels, &mut self.resizer)?;
                     }
                     (Some(cropping_from), Some(final_resize_xy_to)) => {
                         crop_and_resize(source, &mut processing, &cropping_from, &final_resize_xy_to)?;
@@ -226,12 +245,12 @@ impl ImageFrameProcessor {
                     }
                 }
 
-                match self.multiply_brightness_by {
+                match self.offset_brightness_by {
                     None => {
                         // Do Nothing
                     }
-                    Some(brightness_multiplier) => {
-                        processing.change_brightness(brightness_multiplier)?;
+                    Some(brightness_offset) => {
+                        processing.change_brightness(brightness_offset);
                     }
                 }
 
@@ -239,8 +258,8 @@ impl ImageFrameProcessor {
                     None => {
                         // Do Nothing
                     }
-                    Some(contrast_multiplier) => {
-                        processing.change_contrast(contrast_multiplier)?;
+                    Some(contrast) => {
+                        processing.change_contrast(contrast);
                     }
                 }
 
@@ -261,8 +280,8 @@ impl ImageFrameProcessor {
     // TODO safety bound checks!
     
     
-    pub fn set_cropping_from(&mut self, lower_left_xy_point_inclusive: (usize, usize), upper_right_xy_point_exclusive: (usize, usize)) -> Result<&mut Self, FeagiDataError> {
-        let corner_points = CornerPoints::new_from_cartesian(lower_left_xy_point_inclusive, upper_right_xy_point_exclusive, self.input_image_properties.get_image_resolution())?;
+    pub fn set_cropping_from(&mut self, corner_points: CornerPoints) -> Result<&mut Self, FeagiDataError> {
+        corner_points.verify_fits_in_resolution(self.get_output_image_properties().get_image_resolution())?;
         self.cropping_from = Some(corner_points);
         Ok(self)
     }
@@ -274,12 +293,12 @@ impl ImageFrameProcessor {
     }
 
 
-    pub fn set_brightness_multiplier(&mut self, brightness_multiplier: f32) -> Result<&mut Self, FeagiDataError> {
-        if brightness_multiplier == 1.0 {
-            self.multiply_brightness_by = None;
+    pub fn set_brightness_offset(&mut self, brightness_offset: i32) -> Result<&mut Self, FeagiDataError> {
+        if brightness_offset == 0 {
+            self.offset_brightness_by = None;
         }
         else {
-            self.multiply_brightness_by = Some(brightness_multiplier);
+            self.offset_brightness_by = Some(brightness_offset);
         }
         Ok(self)
     }
@@ -321,7 +340,7 @@ impl ImageFrameProcessor {
         self.cropping_from = None;
         self.final_resize_xy_to = None;
         self.convert_color_space_to = None;
-        self.multiply_brightness_by = None;
+        self.offset_brightness_by = None;
         self.change_contrast_by = None;
         self.convert_to_grayscale = false;
         self
@@ -338,7 +357,7 @@ impl ImageFrameProcessor {
     }
     
     pub fn clear_brightness_adjustment(&mut self) -> &Self {
-        self.multiply_brightness_by = None;
+        self.offset_brightness_by = None;
         self
     }
     
@@ -381,35 +400,34 @@ impl ImageFrameProcessor {
 
 fn crop(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints, number_output_color_channels: usize) -> Result<(), FeagiDataError> {
     let mut destination_data = destination.get_internal_data_mut();
-    let sliced_array_view: ArrayView3<f32> = source.get_internal_data().slice(
-        s![crop_from.lower_left_row_major().0 .. crop_from.upper_right_row_major().0,
-                crop_from.lower_left_row_major().1 .. crop_from.upper_right_row_major().1 , 0..number_output_color_channels]
+    let sliced_array_view: ArrayView3<u8> = source.get_internal_data().slice(
+        s![crop_from.upper_left.y as usize.. crop_from.lower_right.y as usize,
+            crop_from.upper_left.x as usize.. crop_from.lower_right.x as usize,
+            0..number_output_color_channels]
     );
     destination_data = &mut sliced_array_view.into_owned();
     Ok(())
 }
 
-fn resize(source: &ImageFrame, destination: &mut ImageFrame, resize_xy_to: &ImageXYResolution) -> Result<(), FeagiDataError> {
-    // Uses Nearest Neighbor. Not pretty but fast
-    let source_resolution = source.get_xy_resolution();
-    let source_resolution: (u32, u32) = (source_resolution.height as u32, source_resolution.width as u32);
-    let dest_resolution_f: (f32, f32) = (resize_xy_to.width as f32, resize_xy_to.height as f32);
-    let source_resolution_f: (f32, f32) = (source_resolution.0 as f32, source_resolution.1 as f32);
+fn resize(source: &mut [u8], source_resolution: ImageXYResolution, destination: &mut [u8], destination_resolution: ImageXYResolution, color_channel_layout: ColorChannelLayout,  resizer: &mut fir::Resizer) -> Result<(), FeagiDataError> {
+    // Assumes everything is compatible
 
-    let source_data = source.get_internal_data();
-    let destination_data = destination.get_internal_data_mut();
 
-    for ((y,x,c), color_val) in destination_data.indexed_iter_mut() {
-        let nearest_neighbor_coordinate_y: usize = (((y as f32) / dest_resolution_f.1) * source_resolution_f.1).floor() as usize;
-        let nearest_neighbor_coordinate_x: usize = (((x as f32) / dest_resolution_f.0) * source_resolution_f.0).floor() as usize;
-        let nearest_neighbor_channel_value: f32 = source_data[(
-            nearest_neighbor_coordinate_x,
-            nearest_neighbor_coordinate_y,
-            c)];
-        *color_val = nearest_neighbor_channel_value;
+    let pixel_type: fir::PixelType = match color_channel_layout {
+        ColorChannelLayout::GrayScale => fir::PixelType::U8,
+        ColorChannelLayout::RG => fir::PixelType::U8x2,
+        ColorChannelLayout::RGB => fir::PixelType::U8x3,
+        ColorChannelLayout::RGBA => fir::PixelType::U8x4,
     };
+
+    let src_view = fir::images::Image::from_slice_u8(source_resolution.width as u32, source_resolution.height as u32, source, pixel_type)?;
+    let mut dst_view = fir::images::Image::from_slice_u8(destination_resolution.width as u32, destination_resolution.height as u32, destination, pixel_type)?;
+
+    resizer.resize(&src_view, &mut dst_view, None)?;
     Ok(())
 }
+
+
 
 fn to_grayscale(source: &ImageFrame, destination: &mut ImageFrame, output_color_space: ColorSpace) -> Result<(), FeagiDataError> {
     // NOTE: destination should be grayscale and source should be RGB or RGBA
@@ -427,9 +445,6 @@ fn to_grayscale(source: &ImageFrame, destination: &mut ImageFrame, output_color_
         *color_val = r_scale * source_data[(y, x, 0)] + b_scale * source_data[(y, x, 1)] + g_scale * source_data[(y, x, 2)];
     }
     Ok(())
-    
-
-    
 }
 
 fn crop_and_resize(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints, resize_xy_to: &ImageXYResolution) -> Result<(), FeagiDataError> {

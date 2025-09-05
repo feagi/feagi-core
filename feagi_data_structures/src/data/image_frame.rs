@@ -1,5 +1,5 @@
 
-use ndarray::{Array3, ArrayView3};
+use ndarray::{Array3, ArrayView3, ArrayViewMut3};
 use image;
 use image::GenericImageView;
 use ndarray::Zip;
@@ -182,6 +182,10 @@ impl ImageFrame {
     pub fn get_pixels_view(&self) -> ArrayView3<u8> {
         self.pixels.view()
     }
+    
+    pub fn get_pixels_view_mut(&mut self) -> ArrayViewMut3<u8> {
+        self.pixels.view_mut()
+    }
 
     /// Returns the resolution of the image in cartesian space (width, height)
     ///
@@ -227,6 +231,14 @@ impl ImageFrame {
         &mut self.pixels
     }
 
+    pub fn get_internal_byte_data(&self) -> &[u8] {
+        self.pixels.as_slice().unwrap()
+    }
+
+    pub fn get_internal_byte_data_mut(&mut self) -> &mut [u8] {
+        self.pixels.as_slice_mut().unwrap()
+    }
+    
     //endregion
 
 
