@@ -3,6 +3,7 @@
 //! This module provides data structures and enums for describing image properties
 
 use std::cmp;
+use std::fmt::Display;
 use std::ops::RangeInclusive;
 use crate::FeagiDataError;
 use crate::basic_components::{CartesianResolution, FlatCoordinateU32};
@@ -262,6 +263,19 @@ pub enum MemoryOrderLayout {
     HeightsChannelsWidths,
     ChannelsWidthsHeights,
     WidthsChannelsHeights,
+}
+
+impl Display for MemoryOrderLayout {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            MemoryOrderLayout::HeightsWidthsChannels => write!(f, "HeightsWidthsChannels"),
+            MemoryOrderLayout::ChannelsHeightsWidths => write!(f, "ChannelsHeightsWidths"),
+            MemoryOrderLayout::WidthsHeightsChannels => write!(f, "WidthsHeightsChannels"),
+            MemoryOrderLayout::HeightsChannelsWidths => write!(f, "HeightsChannelsWidths"),
+            MemoryOrderLayout::ChannelsWidthsHeights => write!(f, "ChannelsWidthsHeights"),
+            MemoryOrderLayout::WidthsChannelsHeights => write!(f, "WidthsChannelsHeights"),
+        }
+    }
 }
 //endregion
 

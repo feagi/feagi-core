@@ -1,6 +1,6 @@
 use std::fmt;
 use crate::basic_components::DimensionRange;
-use crate::sensor_definition;
+use crate::{motor_definition, sensor_definition};
 use crate::FeagiDataError;
 use crate::genomic::{CorticalID};
 use crate::genomic::descriptors::CorticalGroupIndex;
@@ -311,18 +311,7 @@ impl TryFrom<CorticalType> for SensorCorticalType {
 
 //region Motor Cortical Area types
 
-define_io_cortical_types!{
-    MotorCorticalType {
-        RotaryMotor => {
-            friendly_name: "Rotary Motor",
-            snake_case_identifier: "rotary_motor",
-            base_ascii: b"omot00",
-            channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
-            default_coder_type: F32NormalizedM1To1_SplitSignDivided,
-            wrapped_data_type: WrappedIOType::F32Normalized0To1,
-        },
-    }    
-}
+motor_definition!(define_io_cortical_types);
 
 impl From<MotorCorticalType> for CorticalType {
     fn from(input: MotorCorticalType) -> Self {
