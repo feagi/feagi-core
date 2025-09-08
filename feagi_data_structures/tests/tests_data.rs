@@ -872,12 +872,16 @@ mod test_segmented_image_frame {
         // The ordering should be: center, lower_left, middle_left, upper_left, upper_middle,
         // upper_right, middle_right, lower_right, lower_middle
         
-        // Verify center is first and has correct properties
-        assert_eq!(*frame_refs[0].get_channel_layout(), ColorChannelLayout::RGBA);
-        assert_eq!(frame_refs[0].get_xy_resolution(), center_resolution);
+        // Verify center is fourth and has correct properties
+        assert_eq!(*frame_refs[4].get_channel_layout(), ColorChannelLayout::RGBA);
+        assert_eq!(frame_refs[4].get_xy_resolution(), center_resolution);
 
         // Verify peripherals have correct properties
-        for i in 1..9 {
+        for i in 0..4 {
+            assert_eq!(*frame_refs[i].get_channel_layout(), ColorChannelLayout::RGB);
+            assert_eq!(frame_refs[i].get_xy_resolution(), peripheral_resolution);
+        }
+        for i in 5..9 {
             assert_eq!(*frame_refs[i].get_channel_layout(), ColorChannelLayout::RGB);
             assert_eq!(frame_refs[i].get_xy_resolution(), peripheral_resolution);
         }
@@ -905,8 +909,8 @@ mod test_segmented_image_frame {
             let mut_frame_refs = segmented_frame.get_mut_ordered_image_frame_references();
             assert_eq!(mut_frame_refs.len(), 9);
 
-            // Modify a pixel in the center frame (index 0)
-            let mut center_pixels = mut_frame_refs[0].get_pixels_view_mut();
+            // Modify a pixel in the center frame (index 4)
+            let mut center_pixels = mut_frame_refs[4].get_pixels_view_mut();
             center_pixels[(0, 0, 0)] = 255;
             center_pixels[(0, 0, 1)] = 128;
             center_pixels[(0, 0, 2)] = 64;
@@ -914,7 +918,7 @@ mod test_segmented_image_frame {
 
         // Verify the change was made
         let frame_refs = segmented_frame.get_ordered_image_frame_references();
-        let center_pixels = frame_refs[0].get_pixels_view();
+        let center_pixels = frame_refs[4].get_pixels_view();
         assert_eq!(center_pixels[(0, 0, 0)], 255);
         assert_eq!(center_pixels[(0, 0, 1)], 128);
         assert_eq!(center_pixels[(0, 0, 2)], 64);

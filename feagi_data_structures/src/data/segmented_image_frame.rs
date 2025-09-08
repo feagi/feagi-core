@@ -246,15 +246,15 @@ impl SegmentedImageFrame {
     }
 
     pub fn get_ordered_image_frame_references(&self) -> [&ImageFrame; 9] {
-        [&self.center, &self.lower_left, &self.middle_left, &self.upper_left, &self.upper_middle,
-            &self.upper_right, &self.middle_right, &self.lower_right,
-            &self.lower_middle]
+        [&self.lower_left, &self.lower_middle, &self.lower_right, &self.middle_left,
+            &self.center, &self.middle_right, &self.upper_left,
+            &self.upper_middle, &self.upper_right]
     }
 
     pub fn get_mut_ordered_image_frame_references(&mut self) -> [&mut ImageFrame; 9] {
-        [&mut self.center, &mut self.lower_left, &mut self.middle_left, &mut self.upper_left, &mut self.upper_middle,
-            &mut self.upper_right, &mut self.middle_right, &mut self.lower_right,
-            &mut self.lower_middle]
+        [&mut self.lower_left, &mut self.lower_middle, &mut self.lower_right, &mut self.middle_left, &mut self.center,
+            &mut self.middle_right, &mut self.upper_left, &mut self.upper_middle,
+            &mut self.upper_right]
     }
 
     pub(crate) fn get_image_internal_data_mut(&mut self) -> [&mut Array3<u8>; 9] {

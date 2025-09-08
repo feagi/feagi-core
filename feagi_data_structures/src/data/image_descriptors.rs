@@ -491,7 +491,7 @@ impl CornerPoints {
     }
 
     pub fn verify_fits_in_resolution(&self, resolution: ImageXYResolution) -> Result<(), FeagiDataError> {
-        if self.lower_right.x >= resolution.width as u32 || self.lower_right.y >= resolution.height as u32 {
+        if self.lower_right.x > resolution.width as u32 || self.lower_right.y > resolution.height as u32 {
             return Err(FeagiDataError::BadParameters(format!("Corner Points {} do not fit in given resolution {}!", self, resolution)).into())
         }
         Ok(())
@@ -500,7 +500,7 @@ impl CornerPoints {
 
 impl Display for CornerPoints {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "CornerPoints(TODO)") // TODO
+        write!(f, "CornerPoints(Upper Left: {}, Lower Right: {})", self.upper_left.to_string(), self.lower_right.to_string())
     }
 }
 
@@ -545,6 +545,7 @@ impl GazeProperties {
             return Err(FeagiDataError::BadParameters("Source frame width and height must be at least 3!".into()).into())
         }
 
+
         let center_corner_points = self.calculate_pixel_coordinates_of_center_corners(source_frame_resolution)?;
         Ok([
             CornerPoints::new(ImageXYPoint::new(0, center_corner_points.lower_right.y), ImageXYPoint::new(center_corner_points.upper_left.x, source_frame_resolution.height as u32))?,
@@ -555,7 +556,7 @@ impl GazeProperties {
             CornerPoints::new(center_corner_points.get_upper_right(), ImageXYPoint::new(source_frame_resolution.width as u32, center_corner_points.lower_right.y))?,
             CornerPoints::new(ImageXYPoint::new(0,0), center_corner_points.upper_left)?,
             CornerPoints::new(ImageXYPoint::new(center_corner_points.upper_left.x, 0), center_corner_points.get_upper_right())?,
-            CornerPoints::new(ImageXYPoint::new(center_corner_points.lower_right.x, 0), ImageXYPoint::new(source_frame_resolution.width as u32, 0))?,
+            CornerPoints::new(ImageXYPoint::new(center_corner_points.lower_right.x, 0), ImageXYPoint::new(source_frame_resolution.width as u32, center_corner_points.upper_left.y))?,
         ])
     }
 
@@ -574,7 +575,7 @@ impl GazeProperties {
                                           (( self.eccentricity_normalized_xy.0 + center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
 
         let top_left = ImageXYPoint::new(left_pixel as u32, top_pixel as u32);
-        let bottom_right = ImageXYPoint::new(right_pixel as u32, top_pixel as u32);
+        let bottom_right = ImageXYPoint::new(right_pixel as u32, bottom_pixel as u32);
 
         let corner_points: CornerPoints = CornerPoints::new(top_left, bottom_right)?;
         Ok(corner_points)

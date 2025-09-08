@@ -3,9 +3,9 @@
 //! This module contains comprehensive tests for image processing functionality including
 //! ImageFrameProcessor and related operations like cropping, resizing, and color space conversion.
 
-use feagi_data_structures::data::ImageFrame;
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, CornerPoints, ImageXYPoint};
-use feagi_data_structures::processing::ImageFrameProcessor;
+use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
+use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, CornerPoints, ImageXYPoint, SegmentedXYImageResolutions, SegmentedImageFrameProperties, GazeProperties};
+use feagi_data_structures::processing::{ImageFrameProcessor, ImageFrameSegmentator};
 
 #[cfg(test)]
 mod test_image_frame_processor {
@@ -972,5 +972,506 @@ mod test_image_frame_processor {
         
         // This test just prints the summary - the actual processing is done by other tests
         assert!(true);
+    }
+}
+
+#[cfg(test)]
+mod test_image_frame_segmentator {
+    use super::*;
+
+    fn create_test_input_properties() -> ImageFrameProperties {
+        let resolution = ImageXYResolution::new(640, 480).unwrap();
+        ImageFrameProperties::new(resolution, ColorSpace::Gamma, ColorChannelLayout::RGB).unwrap()
+    }
+
+    fn create_test_output_properties() -> SegmentedImageFrameProperties {
+        let center_resolution = ImageXYResolution::new(128, 96).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(64, 48).unwrap();
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution, 
+            peripheral_resolution
+        );
+        
+        SegmentedImageFrameProperties::new(
+            &resolutions,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::RGB,
+            &ColorSpace::Gamma
+        )
+    }
+
+    fn create_test_gaze() -> GazeProperties {
+        GazeProperties::new((0.5, 0.5), (0.4, 0.4))
+    }
+
+    fn create_test_image(width: usize, height: usize, channels: &ColorChannelLayout, color_space: &ColorSpace) -> ImageFrame {
+        let resolution = ImageXYResolution::new(width, height).unwrap();
+        ImageFrame::new(channels, color_space, &resolution).unwrap()
+    }
+
+    fn create_test_segmented_image(properties: &SegmentedImageFrameProperties) -> SegmentedImageFrame {
+        SegmentedImageFrame::from_segmented_image_frame_properties(properties).unwrap()
+    }
+
+    #[test]
+    fn test_image_frame_segmentator_new() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let gaze = create_test_gaze();
+        
+        let segmentator = ImageFrameSegmentator::new(input_props.clone(), output_props.clone(), gaze);
+        assert!(segmentator.is_ok());
+        
+        let segmentator = segmentator.unwrap();
+        
+        // Test that the segmentator was created with correct properties
+        // We can't directly access fields, but we can test functionality
+        let test_input = create_test_image(640, 480, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+        let verify_result = segmentator.verify_input_image(&test_input);
+        assert!(verify_result.is_ok());
+    }
+
+    #[test]
+    fn test_image_frame_segmentator_new_invalid_gaze() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        
+        // Test with invalid gaze that would cause segmentation issues
+        // (this may or may not fail depending on implementation - just testing it doesn't panic)
+        let extreme_gaze = GazeProperties::new((0.0, 0.0), (1.0, 1.0));
+        let segmentator = ImageFrameSegmentator::new(input_props, output_props, extreme_gaze);
+        // Should still succeed as GazeProperties clamps values
+        assert!(segmentator.is_ok());
+    }
+
+    #[test]
+    fn test_update_gaze() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let initial_gaze = create_test_gaze();
+        
+        let mut segmentator = ImageFrameSegmentator::new(input_props, output_props, initial_gaze).unwrap();
+        
+        // Update to a different gaze position
+        let new_gaze = GazeProperties::new((0.3, 0.7), (0.3, 0.3));
+        let result = segmentator.update_gaze(&new_gaze);
+        assert!(result.is_ok());
+        
+        // Update to another valid gaze
+        let another_gaze = GazeProperties::new((0.8, 0.2), (0.5, 0.5));
+        let result = segmentator.update_gaze(&another_gaze);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_update_gaze_extreme_values() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let initial_gaze = create_test_gaze();
+        
+        let mut segmentator = ImageFrameSegmentator::new(input_props, output_props, initial_gaze).unwrap();
+        
+        // Test extreme gaze values (should be clamped)
+        let extreme_gaze = GazeProperties::new((-1.0, 2.0), (1.5, 0.1));
+        let result = segmentator.update_gaze(&extreme_gaze);
+        dbg!(&result);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_verify_input_image() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let gaze = create_test_gaze();
+        
+        let segmentator = ImageFrameSegmentator::new(input_props, output_props, gaze).unwrap();
+        
+        // Test with matching image
+        let valid_input = create_test_image(640, 480, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+        let result = segmentator.verify_input_image(&valid_input);
+        assert!(result.is_ok());
+        
+        // Test with wrong resolution
+        let wrong_resolution = create_test_image(320, 240, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+        let result = segmentator.verify_input_image(&wrong_resolution);
+        assert!(result.is_err());
+        
+        // Test with wrong color channels
+        let wrong_channels = create_test_image(640, 480, &ColorChannelLayout::GrayScale, &ColorSpace::Gamma);
+        let result = segmentator.verify_input_image(&wrong_channels);
+        assert!(result.is_err());
+        
+        // Test with wrong color space
+        let wrong_color_space = create_test_image(640, 480, &ColorChannelLayout::RGB, &ColorSpace::Linear);
+        let result = segmentator.verify_input_image(&wrong_color_space);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_output_image() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let gaze = create_test_gaze();
+        
+        let segmentator = ImageFrameSegmentator::new(input_props, output_props.clone(), gaze).unwrap();
+        
+        // Test with matching segmented image
+        let valid_output = create_test_segmented_image(&output_props);
+        let result = segmentator.verify_output_image(&valid_output);
+        assert!(result.is_ok());
+        
+        // Test with wrong properties
+        let wrong_center_resolution = ImageXYResolution::new(64, 48).unwrap();
+        let wrong_peripheral_resolution = ImageXYResolution::new(32, 24).unwrap();
+        let wrong_resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            wrong_center_resolution, 
+            wrong_peripheral_resolution
+        );
+        let wrong_props = SegmentedImageFrameProperties::new(
+            &wrong_resolutions,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::RGB,
+            &ColorSpace::Gamma
+        );
+        let wrong_output = create_test_segmented_image(&wrong_props);
+        let result = segmentator.verify_output_image(&wrong_output);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_segment_image_basic() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let gaze = create_test_gaze();
+
+        let mut segmentator = ImageFrameSegmentator::new(input_props, output_props.clone(), gaze).unwrap();
+        
+        // Create test input with pattern
+        let mut input = create_test_image(640, 480, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+        {
+            let mut pixels = input.get_pixels_view_mut();
+            for y in 0..480 {
+                for x in 0..640 {
+                    for c in 0..3 {
+                        // Create a gradient pattern
+                        pixels[(y, x, c)] = ((x + y + c * 80) % 256) as u8;
+                    }
+                }
+            }
+        }
+        
+        // Create output segmented image
+        let mut output = create_test_segmented_image(&output_props);
+        
+        // Perform segmentation
+        let result = segmentator.segment_image(&input, &mut output);
+        assert!(result.is_ok());
+        
+        // Verify that output segments have been populated
+        let frame_refs = output.get_ordered_image_frame_references();
+        
+        // Check that all 9 segments have expected dimensions
+        assert_eq!(frame_refs[0].get_xy_resolution().width, 64); // peripheral
+        assert_eq!(frame_refs[0].get_xy_resolution().height, 48); // peripheral
+        assert_eq!(frame_refs[4].get_xy_resolution().width, 128); // center
+        assert_eq!(frame_refs[4].get_xy_resolution().height, 96); // center
+        assert_eq!(frame_refs[8].get_xy_resolution().width, 64); // peripheral
+        assert_eq!(frame_refs[8].get_xy_resolution().height, 48); // peripheral
+    }
+
+    #[test]
+    fn test_segment_image_with_different_gaze_positions() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        
+        // Test with different gaze positions
+        let gaze_positions = vec![
+            GazeProperties::new((0.25, 0.25), (0.3, 0.3)), // Upper left focus
+            GazeProperties::new((0.75, 0.75), (0.4, 0.4)), // Lower right focus
+            GazeProperties::new((0.5, 0.3), (0.2, 0.6)),   // Top center focus
+        ];
+        
+        for (i, gaze) in gaze_positions.iter().enumerate() {
+            let mut segmentator = ImageFrameSegmentator::new(
+                input_props.clone(), 
+                output_props.clone(), 
+                *gaze
+            ).unwrap();
+            
+            let input = create_test_image(640, 480, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+            let mut output = create_test_segmented_image(&output_props);
+            
+            let result = segmentator.segment_image(&input, &mut output);
+            assert!(result.is_ok(), "Segmentation failed for gaze position {}", i);
+        }
+    }
+
+    #[test]
+    fn test_segment_image_with_grayscale_conversion() {
+        let input_props = create_test_input_properties();
+        
+        // Create output properties with grayscale conversion
+        let center_resolution = ImageXYResolution::new(128, 96).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(64, 48).unwrap();
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution, 
+            peripheral_resolution
+        );
+        
+        let grayscale_output_props = SegmentedImageFrameProperties::new(
+            &resolutions,
+            &ColorChannelLayout::GrayScale, // Center as grayscale
+            &ColorChannelLayout::RGB,       // Peripherals stay RGB
+            &ColorSpace::Gamma
+        );
+        
+        let gaze = create_test_gaze();
+        let mut segmentator = ImageFrameSegmentator::new(input_props, grayscale_output_props.clone(), gaze).unwrap();
+        
+        let input = create_test_image(640, 480, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+        let mut output = create_test_segmented_image(&grayscale_output_props);
+        
+        let result = segmentator.segment_image(&input, &mut output);
+        assert!(result.is_ok());
+        
+        // Verify center is grayscale and peripherals are RGB
+        let frame_refs = output.get_ordered_image_frame_references();
+        assert_eq!(*frame_refs[4].get_channel_layout(), ColorChannelLayout::GrayScale); // Center
+        assert_eq!(*frame_refs[0].get_channel_layout(), ColorChannelLayout::RGB); // Peripheral
+        assert_eq!(*frame_refs[8].get_channel_layout(), ColorChannelLayout::RGB); // Peripheral
+    }
+
+    #[test]
+    fn test_segment_image_error_handling() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let gaze = create_test_gaze();
+        
+        let mut segmentator = ImageFrameSegmentator::new(input_props, output_props.clone(), gaze).unwrap();
+        
+        // Test with wrong input size
+        let wrong_input = create_test_image(320, 240, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+        let mut output = create_test_segmented_image(&output_props);
+        
+        let result = segmentator.segment_image(&wrong_input, &mut output);
+        assert!(result.is_err());
+        
+        // Test with correct input but wrong output
+        let correct_input = create_test_image(640, 480, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+        let wrong_center_resolution = ImageXYResolution::new(64, 48).unwrap();
+        let wrong_peripheral_resolution = ImageXYResolution::new(32, 24).unwrap();
+        let wrong_resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            wrong_center_resolution, 
+            wrong_peripheral_resolution
+        );
+        let wrong_props = SegmentedImageFrameProperties::new(
+            &wrong_resolutions,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::RGB,
+            &ColorSpace::Gamma
+        );
+        let mut wrong_output = create_test_segmented_image(&wrong_props);
+        
+        let result = segmentator.segment_image(&correct_input, &mut wrong_output);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_clone_trait() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let gaze = create_test_gaze();
+
+        let original = ImageFrameSegmentator::new(input_props, output_props, gaze).unwrap();
+        let cloned = original.clone();
+        
+        // Test that both can verify the same input
+        let test_input = create_test_image(640, 480, &ColorChannelLayout::RGB, &ColorSpace::Gamma);
+        
+        let original_result = original.verify_input_image(&test_input);
+        let cloned_result = cloned.verify_input_image(&test_input);
+        
+        assert!(original_result.is_ok());
+        assert!(cloned_result.is_ok());
+    }
+
+    #[test]
+    fn test_debug_trait() {
+        let input_props = create_test_input_properties();
+        let output_props = create_test_output_properties();
+        let gaze = create_test_gaze();
+        
+        let segmentator = ImageFrameSegmentator::new(input_props, output_props, gaze).unwrap();
+        let debug_string = format!("{:?}", segmentator);
+        
+        assert!(debug_string.contains("ImageFrameSegmentator"));
+        assert!(debug_string.contains("input_properties"));
+        assert!(debug_string.contains("output_properties"));
+        assert!(debug_string.contains("ordered_transformers"));
+    }
+
+    #[test]
+    fn test_gaze_properties_creation() {
+        // Test normal values
+        let gaze = GazeProperties::new((0.5, 0.5), (0.4, 0.4));
+        let display_string = format!("{}", gaze);
+        assert!(display_string.contains("GazeProperties"));
+        
+        // Test default centered
+        let default_gaze = GazeProperties::create_default_centered();
+        let display_string = format!("{}", default_gaze);
+        assert!(display_string.contains("GazeProperties"));
+        
+        // Test clamping behavior
+        let clamped_gaze = GazeProperties::new((-1.0, 2.0), (1.5, -0.5));
+        // Values should be clamped to [0.0, 1.0] range
+        // We can't directly access the fields, but we can test that it doesn't panic
+        let display_string = format!("{}", clamped_gaze);
+        assert!(display_string.contains("GazeProperties"));
+    }
+
+    #[test]
+    fn test_gaze_corner_points_calculation() {
+        let gaze = GazeProperties::new((0.5, 0.5), (0.6, 0.4));
+        let source_resolution = ImageXYResolution::new(640, 480).unwrap();
+        
+        let result = gaze.calculate_source_corner_points_for_segmented_video_frame(source_resolution);
+        assert!(result.is_ok());
+        
+        let corner_points = result.unwrap();
+        assert_eq!(corner_points.len(), 9);
+        
+        // Test that all corner points are valid (no panics)
+        for (i, corners) in corner_points.iter().enumerate() {
+            assert!(corners.get_width() > 0, "Segment {} has zero width", i);
+            assert!(corners.get_height() > 0, "Segment {} has zero height", i);
+        }
+    }
+
+    #[test]
+    fn test_gaze_corner_points_calculation_edge_cases() {
+        // Test with minimum allowed resolution
+        let gaze = GazeProperties::new((0.5, 0.5), (0.1, 0.1));
+        let min_resolution = ImageXYResolution::new(4, 4).unwrap(); // TODO shouldnt this also work with 3x3?
+        
+        let result = gaze.calculate_source_corner_points_for_segmented_video_frame(min_resolution);
+        assert!(result.is_ok());
+        
+        // Test with too small resolution (should fail)
+        let too_small_resolution = ImageXYResolution::new(2, 2).unwrap();
+        let result = gaze.calculate_source_corner_points_for_segmented_video_frame(too_small_resolution);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_segmented_xy_image_resolutions() {
+        let center_res = ImageXYResolution::new(128, 96).unwrap();
+        let peripheral_res = ImageXYResolution::new(64, 48).unwrap();
+        
+        // Test create_with_same_sized_peripheral
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_res, 
+            peripheral_res
+        );
+        
+        // Test as_ordered_array
+        let ordered = resolutions.as_ordered_array();
+        assert_eq!(ordered.len(), 9);
+        assert_eq!(*ordered[4], center_res); // Center should be at index 4
+        assert_eq!(*ordered[0], peripheral_res); // Peripherals should all be the same
+        assert_eq!(*ordered[8], peripheral_res);
+        
+        // Test Display trait
+        let display_string = format!("{}", resolutions);
+        assert!(display_string.contains("Center:"));
+        assert!(display_string.contains("LowerLeft:"));
+        assert!(display_string.contains("128"));
+        assert!(display_string.contains("96"));
+        assert!(display_string.contains("64"));
+        assert!(display_string.contains("48"));
+    }
+
+    // Visual test with bird image (if available)
+    const TEST_BIRD_IMAGE_PATH: &str = "tests/bird.jpg";
+
+    #[test]
+    fn test_segmentator_visual_with_bird_image() {
+        // Skip if bird image not available
+        if !std::path::Path::new(TEST_BIRD_IMAGE_PATH).exists() {
+            return;
+        }
+
+        let img_bytes = std::fs::read(TEST_BIRD_IMAGE_PATH).unwrap();
+        let source_frame = ImageFrame::new_from_jpeg_bytes(&img_bytes, &ColorSpace::Gamma).unwrap();
+        
+        println!("Segmenting bird image ({}x{}) into 9 regions", 
+                 source_frame.get_xy_resolution().width, 
+                 source_frame.get_xy_resolution().height);
+
+        // Create properties matching the bird image
+        let input_props = ImageFrameProperties::new(
+            source_frame.get_xy_resolution(),
+            ColorSpace::Gamma,
+            ColorChannelLayout::RGB
+        ).unwrap();
+
+        // Create segmented output properties
+        let center_resolution = ImageXYResolution::new(128, 96).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(64, 48).unwrap();
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution, 
+            peripheral_resolution
+        );
+        
+        let output_props = SegmentedImageFrameProperties::new(
+            &resolutions,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::RGB,
+            &ColorSpace::Gamma
+        );
+
+        // Test with centered gaze
+        let centered_gaze = GazeProperties::create_default_centered();
+        let mut segmentator = ImageFrameSegmentator::new(input_props.clone(), output_props.clone(), centered_gaze).unwrap();
+        
+        let mut segmented_output = create_test_segmented_image(&output_props);
+        
+        let result = segmentator.segment_image(&source_frame, &mut segmented_output);
+        assert!(result.is_ok());
+
+        // Save individual segments
+        let frame_refs = segmented_output.get_ordered_image_frame_references();
+        let segment_names = [
+            "lower_left", "lower_middle", "lower_right",
+            "middle_left", "center", "middle_right", 
+            "upper_left", "upper_middle", "upper_right"
+        ];
+
+        for (i, (frame, name)) in frame_refs.iter().zip(segment_names.iter()).enumerate() {
+            let png_bytes = frame.export_as_png_bytes().unwrap();
+            let filename = format!("tests/segmentator_{}_{}.png", name, i);
+            std::fs::write(&filename, &png_bytes).unwrap();
+        }
+
+        println!("Segmentation test completed. Saved 9 segment images:");
+        for (i, name) in segment_names.iter().enumerate() {
+            println!("  - segmentator_{}_{}.png", name, i);
+        }
+
+        // Test with off-center gaze
+        let offset_gaze = GazeProperties::new((0.3, 0.7), (0.4, 0.3));
+        let result = segmentator.update_gaze(&offset_gaze);
+        assert!(result.is_ok());
+        
+        let mut offset_segmented_output = create_test_segmented_image(&output_props);
+        let result = segmentator.segment_image(&source_frame, &mut offset_segmented_output);
+        assert!(result.is_ok());
+
+        // Save offset gaze center segment for comparison
+        let offset_frame_refs = offset_segmented_output.get_ordered_image_frame_references();
+        let center_png = offset_frame_refs[4].export_as_png_bytes().unwrap();
+        std::fs::write("tests/segmentator_offset_center.png", &center_png).unwrap();
+        
+        println!("  - segmentator_offset_center.png (off-center gaze for comparison)");
     }
 }

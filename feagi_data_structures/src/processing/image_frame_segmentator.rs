@@ -1,4 +1,4 @@
-
+use std::fmt::format;
 use crate::FeagiDataError;
 use crate::processing::image_frame_processor::ImageFrameProcessor;
 use crate::data::image_descriptors::{ColorChannelLayout, GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
@@ -40,6 +40,16 @@ impl ImageFrameSegmentator {
     }
     
     pub fn segment_image(&mut self, input: &ImageFrame, target: &mut SegmentedImageFrame) -> Result<(), FeagiDataError> {
+        if input.get_xy_resolution() != self.input_properties.get_image_resolution() {
+            return Err(FeagiDataError::BadParameters(format!("Expected Image Resolution of {}, but got {}!", self.input_properties.get_image_resolution(), input.get_xy_resolution())));
+        }
+        if *input.get_channel_layout() != self.input_properties.get_color_channel_layout() {
+            return Err(FeagiDataError::BadParameters(format!("Expected Image Color Channels of {} but got {}!", self.input_properties.get_color_channel_layout(), input.get_channel_layout())));
+        }
+        if target.get_segmented_image_frame_properties() != self.output_properties {
+            return Err(FeagiDataError::BadParameters("Write Target SegmentedImageFrame does not have expected properties!".into()));
+        }
+
         let output_image_frames = target.get_mut_ordered_image_frame_references();
         
         self.ordered_transformers[0].process_image(input, output_image_frames[0])?;
@@ -91,7 +101,7 @@ impl ImageFrameSegmentator {
                 .set_resizing_to(*output_resolutions[3])?
                 .set_color_space_to(color_space)?
                 .set_conversion_to_grayscale(peripheral_to_grayscale)?.to_owned(),
-            ImageFrameProcessor::new(*input_properties)
+            ImageFrameProcessor::new(*input_properties) // center
                 .set_cropping_from(cropping_points[4])?
                 .set_resizing_to(*output_resolutions[4])?
                 .set_color_space_to(color_space)?

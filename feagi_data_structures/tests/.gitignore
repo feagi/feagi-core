@@ -15,3 +15,4 @@ contrast_test_*.png
 # Processor test outputs
 processor_*.png
 processor_*.jpg
+segmentator_*.png
