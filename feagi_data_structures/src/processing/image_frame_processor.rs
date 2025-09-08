@@ -1,6 +1,5 @@
-use ndarray::{s, ArrayView3};
-use fast_image_resize as fir;
-use fast_image_resize::ResizeOptions;
+use ndarray::{s, ArrayView3, Zip};
+use ndarray::parallel::prelude::*;
 use crate::FeagiDataError;
 use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
 use crate::data::ImageFrame;
@@ -21,7 +20,6 @@ pub struct ImageFrameProcessor {
     change_contrast_by: Option<f32>,
     /// Whether to convert the image to grayscale (only allowed on RGB/RGBA images)
     convert_to_grayscale: bool,
-    resizer: fir::Resizer
 }
 
 impl std::fmt::Display for ImageFrameProcessor {
@@ -66,7 +64,6 @@ impl ImageFrameProcessor {
             change_contrast_by: None,
             convert_color_space_to: None,
             convert_to_grayscale: false,
-            resizer: fir::Resizer::new()
         }
     }
 
@@ -119,7 +116,7 @@ impl ImageFrameProcessor {
 
     // TODO 2 / 4 channel pipelines!
     // Due to image segmentor, I would argue the most common route is crop + resize + grayscale
-    pub fn process_image(&mut self, source: &mut ImageFrame, destination: &mut ImageFrame) -> Result<(), FeagiDataError> {
+    pub fn process_image(&self, source: &ImageFrame, destination: &mut ImageFrame) -> Result<(), FeagiDataError> {
         match self {
             // Do literally nothing, just copy the data
             ImageFrameProcessor {
@@ -130,7 +127,6 @@ impl ImageFrameProcessor {
                 offset_brightness_by: None,
                 change_contrast_by: None,
                 convert_to_grayscale: false,
-                resizer: _
             } => {
                 *destination = source.clone();
                 Ok(())
@@ -145,7 +141,6 @@ impl ImageFrameProcessor {
                 offset_brightness_by: None,
                 change_contrast_by:None,
                 convert_to_grayscale: false,
-                resizer: _
             } => {
                 crop(source, destination, cropping_from, self.get_output_channel_count())
             }
@@ -159,14 +154,8 @@ impl ImageFrameProcessor {
                 offset_brightness_by: None,
                 change_contrast_by:None,
                 convert_to_grayscale: false,
-                resizer: resizer
             } => {
-                let source_resolution = source.get_xy_resolution();
-                let destination_resolution = destination.get_xy_resolution();
-                let destination_color_channels = *destination.get_channel_layout();
-                let source_bytes = source.get_internal_byte_data_mut();
-                let destination_bytes = destination.get_internal_byte_data_mut();
-                resize(source_bytes, source_resolution, destination_bytes, destination_resolution, destination_color_channels, resizer)
+                resize(source, destination)
             }
 
             // Only grayscaling
@@ -178,7 +167,6 @@ impl ImageFrameProcessor {
                 offset_brightness_by: None,
                 change_contrast_by:None,
                 convert_to_grayscale: true,
-                resizer: _
             } => {
                 to_grayscale(source, destination, self.input_image_properties.get_color_space())
             }
@@ -192,9 +180,8 @@ impl ImageFrameProcessor {
                 offset_brightness_by: None,
                 change_contrast_by:None,
                 convert_to_grayscale: false,
-                resizer: _
             } => {
-                crop_and_resize(source, destination, cropping_from, final_resize_xy_to)
+                crop_and_resize(source, destination, cropping_from)
             }
 
             // Cropping, Resizing, Grayscaling (the most common with segmentation vision)
@@ -206,7 +193,6 @@ impl ImageFrameProcessor {
                 offset_brightness_by: None,
                 change_contrast_by:None,
                 convert_to_grayscale: true,
-                resizer: _
             } => {
                 crop_and_resize_and_grayscale(source, destination, cropping_from, final_resize_xy_to, self.input_image_properties.get_color_space())
             }
@@ -225,15 +211,10 @@ impl ImageFrameProcessor {
                         crop(source, &mut processing, &cropping_from, self.get_output_channel_count())?;
                     }
                     (None, Some(final_resize_xy_to)) => {
-                        let source_resolution = source.get_xy_resolution();
-                        let destination_resolution = destination.get_xy_resolution();
-                        let destination_color_channels = *destination.get_channel_layout();
-                        let source_bytes = source.get_internal_byte_data_mut();
-                        let destination_bytes = destination.get_internal_byte_data_mut();
-                        resize(source_bytes, source_resolution, destination_bytes, destination_resolution, destination_color_channels, &mut self.resizer)?;
+                        resize(source, destination)?;
                     }
                     (Some(cropping_from), Some(final_resize_xy_to)) => {
-                        crop_and_resize(source, &mut processing, &cropping_from, &final_resize_xy_to)?;
+                        crop_and_resize(source, &mut processing, &cropping_from)?;
                     }
                 };
 
@@ -410,21 +391,26 @@ fn crop(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoi
     Ok(())
 }
 
-fn resize(source: &mut [u8], source_resolution: ImageXYResolution, destination: &mut [u8], destination_resolution: ImageXYResolution, color_channel_layout: ColorChannelLayout,  resizer: &mut fir::Resizer) -> Result<(), FeagiDataError> {
+fn resize(source: &ImageFrame, destination: &mut ImageFrame) -> Result<(), FeagiDataError> {
     // Assumes everything is compatible
 
+    let source_arr = source.get_internal_data();
+    let destination_arr = destination.get_internal_data_mut();
 
-    let pixel_type: fir::PixelType = match color_channel_layout {
-        ColorChannelLayout::GrayScale => fir::PixelType::U8,
-        ColorChannelLayout::RG => fir::PixelType::U8x2,
-        ColorChannelLayout::RGB => fir::PixelType::U8x3,
-        ColorChannelLayout::RGBA => fir::PixelType::U8x4,
-    };
+    let (src_h, src_w, src_c) = (source_arr.shape()[0], source_arr.shape()[1], source_arr.shape()[2]);
+    let (dst_h, dst_w, dst_c) = (destination_arr.shape()[0], destination_arr.shape()[1], destination_arr.shape()[2]);
 
-    let src_view = fir::images::Image::from_slice_u8(source_resolution.width as u32, source_resolution.height as u32, source, pixel_type)?;
-    let mut dst_view = fir::images::Image::from_slice_u8(destination_resolution.width as u32, destination_resolution.height as u32, destination, pixel_type)?;
 
-    resizer.resize(&src_view, &mut dst_view, None)?;
+    let scale_y = src_h as f32 / dst_h as f32;
+    let scale_x = src_w as f32 / dst_w as f32;
+
+
+    Zip::indexed(destination.get_internal_data_mut())
+        .par_for_each(|(y, x, c), out| {
+            let src_y = (y as f32 * scale_y).floor() as usize;
+            let src_x = (x as f32 * scale_x).floor() as usize;
+            *out = source_arr[[src_y, src_x, c]];
+        });
     Ok(())
 }
 
@@ -438,65 +424,86 @@ fn to_grayscale(source: &ImageFrame, destination: &mut ImageFrame, output_color_
         ColorSpace::Linear => {(0.2126f32, 0.7152f32, 0.072f32)} // Using formula from https://stackoverflow.com/questions/17615963/standard-rgb-to-grayscale-conversion
         ColorSpace::Gamma => {(0.299f32, 0.587f32, 0.114f32)}  // https://www.youtube.com/watch?v=uKeKuaJ4nlw (I forget)
     };
+    let (r_scale, g_scale, b_scale) = ((r_scale * 255.0) as u8, (g_scale * 255.0) as u8, (b_scale * 255.0) as u8);
     // TODO look into premultiplied alpha handling!
 
-    for ((y,x,c), color_val) in destination_data.indexed_iter_mut() {
+    Zip::indexed(destination_data).par_for_each(|(y,x,c), color_val| {
         // TODO this is bad, we shouldnt be iterating over color channel and matching like this. Major target for optimization!
-        if c != 0 { continue; }
-        *color_val = r_scale * source_data[(y, x, 0)] + b_scale * source_data[(y, x, 1)] + g_scale * source_data[(y, x, 2)];
-    }
+        if c == 0 {
+            *color_val = r_scale * source_data[(y, x, 0)] + b_scale * source_data[(y, x, 1)] + g_scale * source_data[(y, x, 2)];
+        }
+    });
     Ok(())
 }
 
-fn crop_and_resize(source: &mut ImageFrame, destination: &mut [u8], destination_resolution: ImageXYResolution, color_channel_layout: ColorChannelLayout, crop_from: &CornerPoints, resizer: &mut fir::Resizer) -> Result<(), FeagiDataError> {
-    
+fn crop_and_resize(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints) -> Result<(), FeagiDataError> {
+
+    let number_output_color_channels = source.get_color_channel_count();
+
+    let mut destination_data = destination.get_internal_data_mut();
+    let sliced_array_view: ArrayView3<u8> = source.get_internal_data().slice(
+        s![crop_from.upper_left.y as usize.. crop_from.lower_right.y as usize,
+            crop_from.upper_left.x as usize.. crop_from.lower_right.x as usize,
+            0..number_output_color_channels]
+    );
+
+    let source_arr = sliced_array_view;
+    let destination_arr = destination.get_internal_data_mut();
+
+    let (src_h, src_w, src_c) = (source_arr.shape()[0], source_arr.shape()[1], source_arr.shape()[2]);
+    let (dst_h, dst_w, dst_c) = (destination_arr.shape()[0], destination_arr.shape()[1], destination_arr.shape()[2]);
+
+
+    let scale_y = src_h as f32 / dst_h as f32;
+    let scale_x = src_w as f32 / dst_w as f32;
+
+
+    Zip::indexed(destination.get_internal_data_mut())
+        .par_for_each(|(y, x, c), out| {
+            let src_y = (y as f32 * scale_y).floor() as usize;
+            let src_x = (x as f32 * scale_x).floor() as usize;
+            *out = source_arr[[src_y, src_x, c]];
+        });
+    Ok(())
 }
 
 fn crop_and_resize_and_grayscale(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints, resize_xy_to: &ImageXYResolution, output_color_space: ColorSpace) -> Result<(), FeagiDataError> {
 
-    let crop_resolution: ImageXYResolution = crop_from.enclosed_area_width_height();
-    let resolution_f: (f32, f32) = (resize_xy_to.width as f32, resize_xy_to.height as f32);
-    let crop_resolution_f: (f32, f32) = (crop_resolution.width as f32, crop_resolution.height as f32);
+    let number_output_color_channels = source.get_color_channel_count();
 
-    let dist_factor_yx: (f32, f32) = (
-        crop_resolution_f.1 / resolution_f.1,
-        crop_resolution_f.0 / resolution_f.0);
 
-    let upper_left_corner_offset_yx: (usize, usize) = (
-        crop_from.upper_left_row_major().0,
-        crop_from.upper_left_row_major().1,
-    );
-
-    let source_data = source.get_internal_data();
-    let destination_data = destination.get_internal_data_mut();
     let (r_scale, g_scale, b_scale) = match output_color_space {
         ColorSpace::Linear => {(0.2126f32, 0.7152f32, 0.072f32)} // Using formula from https://stackoverflow.com/questions/17615963/standard-rgb-to-grayscale-conversion
         ColorSpace::Gamma => {(0.299f32, 0.587f32, 0.114f32)}
     };
-    // TODO look into premultiplied alpha handling!
+    let (r_scale, g_scale, b_scale) = ((r_scale * 255.0) as u8, (g_scale * 255.0) as u8, (b_scale * 255.0) as u8);
 
-    for ((y,x,c), color_val) in destination_data.indexed_iter_mut() {
-        // TODO this is bad, we shouldnt be iterating over color channel and matching like this. Major target for optimization!
-        if c != 0 { continue; }
-        let nearest_neighbor_coordinate_from_source_y: usize = ((y as f32) * dist_factor_yx.0).floor() as usize;
-        let nearest_neighbor_coordinate_from_source_x: usize = ((x as f32) * dist_factor_yx.1).floor() as usize;
-        let nnc_y_with_offset = nearest_neighbor_coordinate_from_source_y + upper_left_corner_offset_yx.0;
-        let nnc_x_with_offset = nearest_neighbor_coordinate_from_source_x + upper_left_corner_offset_yx.1;
-        let nearest_neighbor_channel_r: f32 = source_data[(
-            nnc_y_with_offset,
-            nnc_x_with_offset,
-            0)];
-        let nearest_neighbor_channel_g: f32 = source_data[(
-            nnc_y_with_offset,
-            nnc_x_with_offset,
-            1)];
-        let nearest_neighbor_channel_b: f32 = source_data[(
-            nnc_y_with_offset,
-            nnc_x_with_offset,
-            2)];
-        
-        *color_val = r_scale * nearest_neighbor_channel_r + b_scale * nearest_neighbor_channel_g + g_scale * nearest_neighbor_channel_b;
-    }
+    // crop
+    let sliced_array_view: ArrayView3<u8> = source.get_internal_data().slice(
+        s![crop_from.upper_left.y as usize.. crop_from.lower_right.y as usize,
+            crop_from.upper_left.x as usize.. crop_from.lower_right.x as usize,
+            0..number_output_color_channels]
+    );
+
+    let source_data = sliced_array_view;
+    let destination_arr = destination.get_internal_data_mut();
+
+    let (src_h, src_w, src_c) = (source_data.shape()[0], source_data.shape()[1], source_data.shape()[2]);
+    let (dst_h, dst_w, dst_c) = (destination_arr.shape()[0], destination_arr.shape()[1], destination_arr.shape()[2]);
+
+
+    let scale_y = src_h as f32 / dst_h as f32;
+    let scale_x = src_w as f32 / dst_w as f32;
+
+
+    Zip::indexed(destination.get_internal_data_mut())
+        .par_for_each(|(y, x, c), out| {
+            if c == 0 {
+                let src_y = (y as f32 * scale_y).floor() as usize;
+                let src_x = (x as f32 * scale_x).floor() as usize;
+                *out = r_scale * source_data[(src_y, src_x, 0)] + b_scale * source_data[(src_y, src_x, 1)] + g_scale * source_data[(src_y, src_x, 2)];
+            }
+        });
     Ok(())
     
 }
