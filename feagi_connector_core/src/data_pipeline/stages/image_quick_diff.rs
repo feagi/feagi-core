@@ -26,7 +26,7 @@ use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
 ///
 /// For each pixel position (x, y, c):
 /// - If `|current_pixel - previous_pixel| > threshold`: output = current_pixel
-/// - Otherwise: output = 0.0
+/// - Otherwise: output = 0
 ///
 /// # Use Cases
 ///
@@ -47,7 +47,7 @@ pub struct ImageFrameQuickDiffStage {
     /// Flag indicating which buffer to use for the next comparison
     is_diffing_against_b: bool,
     /// Minimum difference threshold for pixel changes to be considered significant
-    threshold: f32,
+    threshold: u8,
 }
 
 impl Display for ImageFrameQuickDiffStage {
@@ -97,18 +97,15 @@ impl ImageFrameQuickDiffStage {
     /// # Arguments
     ///
     /// * `image_properties` - Properties defining the input image format (resolution, color space, channels)
-    /// * `threshold` - Minimum difference threshold for pixel changes (must be positive)
+    /// * `threshold` - Minimum difference threshold for pixel changes
     ///
     /// # Returns
     ///
     /// * `Ok(ImageFrameQuickDiffProcessor)` - Successfully created processor
     /// * `Err(FeagiDataError)` - If threshold is negative or image creation fails
-    pub fn new(image_properties: ImageFrameProperties, threshold: f32) -> Result<Self, FeagiDataError> {
-        if threshold < 0.0 {
-            return Err(FeagiDataError::BadParameters("Threshold must be positive!".into()).into());
-        }
+    pub fn new(image_properties: ImageFrameProperties, threshold: u8) -> Result<Self, FeagiDataError> {
         
-        let cache_image = ImageFrame::from_image_frame_properties(&image_properties)?;
+        let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;
         Ok(ImageFrameQuickDiffStage {
             diff_cache: WrappedIOData::ImageFrame(cache_image.clone()),
             cached_a: WrappedIOData::ImageFrame(cache_image.clone()), // Image Frame
@@ -120,47 +117,15 @@ impl ImageFrameQuickDiffStage {
     }
 }
 
-/// Computes the pixel-wise difference between two image frames with threshold filtering.
-///
-/// This function performs element-wise comparison between two source images and writes
-/// the result to the output buffer. For each pixel, if the absolute difference exceeds
-/// the threshold, the current pixel value is preserved; otherwise, the pixel is set to zero.
-///
-/// # Algorithm
-///
-/// For each pixel (x, y, channel):
-/// ```text
-/// difference = source_pixel - comparison_pixel
-/// if difference > threshold:
-///     output_pixel = source_pixel
-/// else:
-///     output_pixel = 0.0
-/// ```
-///
-/// # Arguments
-///
-/// * `source` - The current input image frame
-/// * `source_diffing` - The previous image frame to compare against  
-/// * `diff_overwriting` - The output buffer to write the difference result
-/// * `threshold` - Minimum difference required to preserve a pixel value
-///
-/// # Returns
-///
-/// * `Ok(())` - If the difference computation was successful
-/// * `Err(FeagiDataError)` - If type conversion or data access fails
-///
-/// # Performance
-///
-/// This function uses ndarray's parallel iteration capabilities for efficient
-/// pixel-wise operations across potentially large image arrays.
-fn quick_diff(source: &WrappedIOData, source_diffing: &WrappedIOData, diff_overwriting: &mut WrappedIOData, threshold: f32) -> Result<(), FeagiDataError> {
+
+fn quick_diff(source: &WrappedIOData, source_diffing: &WrappedIOData, diff_overwriting: &mut WrappedIOData, threshold: u8) -> Result<(), FeagiDataError> {
     let read_from: &ImageFrame = source.try_into()?;
     let source_diff_from: &ImageFrame = source_diffing.try_into()?;
     let write_to: &mut ImageFrame = diff_overwriting.try_into()?;
 
-    let read_from: &Array3<f32> = read_from.get_internal_data();
-    let source_diff_from: &Array3<f32> = source_diff_from.get_internal_data();
-    let write_to: &mut Array3<f32> = write_to.get_internal_data_mut();
+    let read_from: &Array3<u8> = read_from.get_internal_data();
+    let source_diff_from: &Array3<u8> = source_diff_from.get_internal_data();
+    let write_to: &mut Array3<u8> = write_to.get_internal_data_mut();
     
     Zip::from(write_to).and(read_from).and(source_diff_from).for_each(|w, &r, &s| {
         let x = r - s;
@@ -168,7 +133,7 @@ fn quick_diff(source: &WrappedIOData, source_diffing: &WrappedIOData, diff_overw
             *w = r;
         }
         else {
-            *w = 0f32;
+            *w = 0u8;
         }
     });
     

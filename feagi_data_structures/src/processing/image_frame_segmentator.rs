@@ -39,7 +39,7 @@ impl ImageFrameSegmentator {
         self.output_properties.verify_segmented_image_frame_matches_properties(output)
     }
     
-    pub fn segment_image(&mut self, input: &mut ImageFrame, target: &mut SegmentedImageFrame) -> Result<(), FeagiDataError> {
+    pub fn segment_image(&mut self, input: &ImageFrame, target: &mut SegmentedImageFrame) -> Result<(), FeagiDataError> {
         let output_image_frames = target.get_mut_ordered_image_frame_references();
         
         self.ordered_transformers[0].process_image(input, output_image_frames[0])?;

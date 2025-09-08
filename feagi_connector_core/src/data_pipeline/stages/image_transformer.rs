@@ -92,7 +92,7 @@ impl ImageFrameProcessorStage {
     /// * `Err(FeagiDataError)` - If output buffer allocation fails
     pub fn new(transformer_definition: ImageFrameProcessor) -> Result<Self, FeagiDataError> {
         Ok(ImageFrameProcessorStage{
-            cached: WrappedIOData::ImageFrame(ImageFrame::from_image_frame_properties(&transformer_definition.get_output_image_properties())?),
+            cached: WrappedIOData::ImageFrame(ImageFrame::new_from_image_frame_properties(&transformer_definition.get_output_image_properties())?),
             transformer_definition,
         })
     }

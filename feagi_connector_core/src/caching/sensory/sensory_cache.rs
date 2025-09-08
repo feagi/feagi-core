@@ -242,14 +242,14 @@ impl SensorCache {
         let mut stages: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
         if input_image_properties == output_image_properties {
             // No changes to image, just cache it to avoid processing penalty
-            let initial_image = ImageFrame::from_image_frame_properties(&input_image_properties)?;
+            let initial_image = ImageFrame::new_from_image_frame_properties(&input_image_properties)?;
             stages.push(vec![Box::new(IdentityImageFrameStage::new(initial_image)?)])
         }
         else {
             // We are changing the image, add a processor
             let image_transformer_definition = ImageFrameProcessor::new_from_input_output_properties(&input_image_properties, &output_image_properties)?;
             for _i in 0..*number_channels {
-                stages.push(vec![Box::new(ImageFrameProcessorStage::new(image_transformer_definition)?)]);
+                stages.push(vec![Box::new(ImageFrameProcessorStage::new(image_transformer_definition.clone())?)]);
             };
         }
         self.register_cortical_area_and_channels(sensor_cortical_type, group, encoder, stages, allow_stale_data)?;
