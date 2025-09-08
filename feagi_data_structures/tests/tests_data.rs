@@ -16,7 +16,7 @@ mod test_image_frame {
     use image::GenericImageView;
     use super::*;
 
-    const TEST_BIRD_IMAGE_PATH: &str = "tests/bird.jpg";
+    const TEST_BIRD_IMAGE_PATH: &str = "tests/images/bird.jpg";
 
     #[test]
     fn test_image_frame_creation_new() {
@@ -522,7 +522,7 @@ mod test_image_frame {
         // Save original for comparison
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let original_png = original_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/brightness_test_original.png", &original_png).unwrap();
+            fs::write("tests/images/brightness_test_original.png", &original_png).unwrap();
         }
 
         // Test brightness increase
@@ -530,7 +530,7 @@ mod test_image_frame {
         bright_frame.change_brightness(50);
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let bright_png = bright_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/brightness_test_increased.png", &bright_png).unwrap();
+            fs::write("tests/images/brightness_test_increased.png", &bright_png).unwrap();
         }
 
         // Test brightness decrease  
@@ -538,7 +538,7 @@ mod test_image_frame {
         dark_frame.change_brightness(-50);
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let dark_png = dark_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/brightness_test_decreased.png", &dark_png).unwrap();
+            fs::write("tests/images/brightness_test_decreased.png", &dark_png).unwrap();
         }
 
         // Test extreme brightness increase
@@ -546,7 +546,7 @@ mod test_image_frame {
         very_bright_frame.change_brightness(100);
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let very_bright_png = very_bright_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/brightness_test_very_bright.png", &very_bright_png).unwrap();
+            fs::write("tests/images/brightness_test_very_bright.png", &very_bright_png).unwrap();
         }
 
         // Test extreme brightness decrease
@@ -554,7 +554,7 @@ mod test_image_frame {
         very_dark_frame.change_brightness(-100);
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let very_dark_png = very_dark_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/brightness_test_very_dark.png", &very_dark_png).unwrap();
+            fs::write("tests/images/brightness_test_very_dark.png", &very_dark_png).unwrap();
             
             println!("Brightness test images saved:");
             println!("  - brightness_test_original.png (original)");
@@ -607,7 +607,7 @@ mod test_image_frame {
         // Save original for comparison (if not already saved by brightness test)
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let original_png = original_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/contrast_test_original.png", &original_png).unwrap();
+            fs::write("tests/images/contrast_test_original.png", &original_png).unwrap();
         }
 
         // Test contrast increase
@@ -615,7 +615,7 @@ mod test_image_frame {
         high_contrast_frame.change_contrast(2.0);
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let high_contrast_png = high_contrast_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/contrast_test_increased.png", &high_contrast_png).unwrap();
+            fs::write("tests/images/contrast_test_increased.png", &high_contrast_png).unwrap();
         }
 
         // Test contrast decrease
@@ -623,7 +623,7 @@ mod test_image_frame {
         low_contrast_frame.change_contrast(0.5);
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let low_contrast_png = low_contrast_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/contrast_test_decreased.png", &low_contrast_png).unwrap();
+            fs::write("tests/images/contrast_test_decreased.png", &low_contrast_png).unwrap();
         }
 
         // Test extreme contrast increase
@@ -631,7 +631,7 @@ mod test_image_frame {
         very_high_contrast_frame.change_contrast(3.0);
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let very_high_contrast_png = very_high_contrast_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/contrast_test_very_high.png", &very_high_contrast_png).unwrap();
+            fs::write("tests/images/contrast_test_very_high.png", &very_high_contrast_png).unwrap();
         }
 
         // Test very low contrast (almost flat)
@@ -639,7 +639,7 @@ mod test_image_frame {
         very_low_contrast_frame.change_contrast(0.1);
         if std::env::var("SAVE_TEST_IMAGES").is_ok() {
             let very_low_contrast_png = very_low_contrast_frame.export_as_png_bytes().unwrap();
-            fs::write("tests/contrast_test_very_low.png", &very_low_contrast_png).unwrap();
+            fs::write("tests/images/contrast_test_very_low.png", &very_low_contrast_png).unwrap();
             
             println!("Contrast test images saved:");
             println!("  - contrast_test_original.png (original)");

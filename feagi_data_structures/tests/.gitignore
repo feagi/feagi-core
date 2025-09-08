@@ -8,11 +8,11 @@ generated_*.jpg
 generated_*.bmp
 generated_*.tiff
 # Visual test outputs
-visual_test_*.png
-visual_test_*.jpg
-brightness_test_*.png
-contrast_test_*.png
+images/visual_test_*.png
+images/visual_test_*.jpg
+images/brightness_test_*.png
+images/contrast_test_*.png
 # Processor test outputs
-processor_*.png
-processor_*.jpg
-segmentator_*.png
+images/processor_*.png
+images/processor_*.jpg
+images/segmentator_*.png

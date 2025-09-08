@@ -529,7 +529,7 @@ mod test_image_frame_processor {
     }
 
     // Visual tests using the bird image
-    const TEST_BIRD_IMAGE_PATH: &str = "tests/bird.jpg";
+    const TEST_BIRD_IMAGE_PATH: &str = "tests/images/bird.jpg";
 
     #[test]
     fn test_processor_visual_cropping_with_bird_image() {
@@ -581,7 +581,7 @@ mod test_image_frame_processor {
 
         // Always save the result
         let cropped_png = destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_cropped_bird.png", &cropped_png).unwrap();
+        std::fs::write("tests/images/processor_cropped_bird.png", &cropped_png).unwrap();
         println!("Saved cropped bird image to processor_cropped_bird.png");
 
         // Verify dimensions
@@ -622,7 +622,7 @@ mod test_image_frame_processor {
 
         // Always save the result
         let resized_png = destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_resized_bird.png", &resized_png).unwrap();
+        std::fs::write("tests/images/processor_resized_bird.png", &resized_png).unwrap();
         println!("Saved resized bird image to processor_resized_bird.png");
 
         // Verify dimensions
@@ -665,7 +665,7 @@ mod test_image_frame_processor {
 
         // Always save the result
         let grayscale_png = destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_grayscale_bird.png", &grayscale_png).unwrap();
+        std::fs::write("tests/images/processor_grayscale_bird.png", &grayscale_png).unwrap();
         println!("Saved grayscale bird image to processor_grayscale_bird.png");
 
         // Verify channel layout
@@ -724,7 +724,7 @@ mod test_image_frame_processor {
 
         // Always save the result
         let processed_png = destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_crop_resize_grayscale_bird.png", &processed_png).unwrap();
+        std::fs::write("tests/images/processor_crop_resize_grayscale_bird.png", &processed_png).unwrap();
         
         println!("Complex processing test images saved:");
         println!("  - processor_crop_resize_grayscale_bird.png (crop + resize + grayscale)");
@@ -757,7 +757,7 @@ mod test_image_frame_processor {
 
         // Save original for comparison
         let original_png = source_frame.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_original_bird.png", &original_png).unwrap();
+        std::fs::write("tests/images/processor_original_bird.png", &original_png).unwrap();
 
         // Test brightness increase
         let mut bright_processor = ImageFrameProcessor::new(input_props.clone());
@@ -803,13 +803,13 @@ mod test_image_frame_processor {
         assert!(result.is_ok());
 
         let bright_png = bright_destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_bright_bird.png", &bright_png).unwrap();
+        std::fs::write("tests/images/processor_bright_bird.png", &bright_png).unwrap();
 
         let contrast_png = contrast_destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_contrast_bird.png", &contrast_png).unwrap();
+        std::fs::write("tests/images/processor_contrast_bird.png", &contrast_png).unwrap();
 
         let combined_png = combined_destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_combined_bird.png", &combined_png).unwrap();
+        std::fs::write("tests/images/processor_combined_bird.png", &combined_png).unwrap();
 
         println!("Brightness/contrast test images saved:");
         println!("  - processor_original_bird.png (original)");
@@ -876,7 +876,7 @@ mod test_image_frame_processor {
 
         // Always save the result
         let processed_png = destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_resize_crop_bird.png", &processed_png).unwrap();
+        std::fs::write("tests/images/processor_resize_crop_bird.png", &processed_png).unwrap();
         println!("Saved resize + crop bird image to processor_resize_crop_bird.png");
 
         // Verify final dimensions
@@ -940,7 +940,7 @@ mod test_image_frame_processor {
 
         // Always save the result
         let processed_png = destination.export_as_png_bytes().unwrap();
-        std::fs::write("tests/processor_resize_crop_grayscale_bird.png", &processed_png).unwrap();
+        std::fs::write("tests/images/processor_resize_crop_grayscale_bird.png", &processed_png).unwrap();
         println!("Saved resize + crop + grayscale bird image to processor_resize_crop_grayscale_bird.png");
 
         // Verify final properties
@@ -1392,7 +1392,7 @@ mod test_image_frame_segmentator {
     }
 
     // Visual test with bird image (if available)
-    const TEST_BIRD_IMAGE_PATH: &str = "tests/bird.jpg";
+    const TEST_BIRD_IMAGE_PATH: &str = "tests/images/bird.jpg";
 
     #[test]
     fn test_segmentator_visual_with_bird_image() {
@@ -1449,7 +1449,7 @@ mod test_image_frame_segmentator {
 
         for (i, (frame, name)) in frame_refs.iter().zip(segment_names.iter()).enumerate() {
             let png_bytes = frame.export_as_png_bytes().unwrap();
-            let filename = format!("tests/segmentator_{}_{}.png", name, i);
+            let filename = format!("tests/images/segmentator_{}_{}.png", name, i);
             std::fs::write(&filename, &png_bytes).unwrap();
         }
 
@@ -1470,7 +1470,7 @@ mod test_image_frame_segmentator {
         // Save offset gaze center segment for comparison
         let offset_frame_refs = offset_segmented_output.get_ordered_image_frame_references();
         let center_png = offset_frame_refs[4].export_as_png_bytes().unwrap();
-        std::fs::write("tests/segmentator_offset_center.png", &center_png).unwrap();
+        std::fs::write("tests/images/segmentator_offset_center.png", &center_png).unwrap();
         
         println!("  - segmentator_offset_center.png (off-center gaze for comparison)");
     }
