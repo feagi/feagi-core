@@ -50,9 +50,10 @@ impl ImageFrame {
     }
 
     pub fn from_array(input: Array3<u8>, color_space: &ColorSpace, source_memory_order: &MemoryOrderLayout) -> Result<ImageFrame, FeagiDataError> {
-        let number_color_channels: usize = input.shape()[2];
+        let pixel_data =  change_memory_order_to_row_major(input, source_memory_order);
+        let number_color_channels: usize = pixel_data.shape()[2];
         Ok(ImageFrame {
-            pixels: change_memory_order_to_row_major(input, source_memory_order),
+            pixels: pixel_data,
             color_space: *color_space,
             channel_layout: ColorChannelLayout::try_from(number_color_channels)?
         })

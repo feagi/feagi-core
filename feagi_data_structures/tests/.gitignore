@@ -1,0 +1,9 @@
+# Generated test images - don't commit these
+test_output_*.png
+test_output_*.jpg
+test_output_*.bmp
+test_output_*.tiff
+generated_*.png
+generated_*.jpg
+generated_*.bmp
+generated_*.tiff
