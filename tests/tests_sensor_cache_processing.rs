@@ -78,8 +78,6 @@ fn test_simple_sensor_neuron_encodering() -> Result<(), Box<dyn std::error::Erro
     
     let bytes = byte_structure.copy_out_as_byte_vector();
     
-    dbg!(bytes);
-    
     Ok(())
     
     

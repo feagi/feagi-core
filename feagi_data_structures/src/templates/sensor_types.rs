@@ -9,9 +9,9 @@ macro_rules! sensor_definition {
     ($callback:ident) => {
         $callback! {
             SensorCorticalType {
-                
+
                 //region 0 - 1 Linear Float
-                
+
                 #[doc = "Infrared distance sensor for object detection"]
                 Infrared => {
                     friendly_name: "Infrared Sensor",
@@ -19,6 +19,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iinf00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
+                    wrapped_data_type:WrappedIOType:: F32Normalized0To1,
                 },
                 #[doc = "Inverted infrared sensor that provides reverse object detection readings."]
                 ReverseInfrared => {
@@ -27,6 +28,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iiif00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
+                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
                 },
                 #[doc = "Digital GPIO input pin for reading binary signals (high/low states)."]
                 DigitalGPIOInput => {
@@ -35,6 +37,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"idgp00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
+                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
                 },
                 #[doc = "Proximity sensor for detecting nearby objects and measuring distances."]
                 Proximity => {
@@ -43,6 +46,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"ipro00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32Normalized0To1_Linear,
+                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
                 },
                 #[doc = "Shock sensor for sensing 'pain'"]
                 Shock => {
@@ -51,6 +55,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"ishk00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
+                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
                 },
                 #[doc = "Battery level sensor for monitoring power remaining."]
                 Battery => {
@@ -59,12 +64,13 @@ macro_rules! sensor_definition {
                     base_ascii: b"ibat00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32Normalized0To1_Linear,
+                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
                 },
-                
+
                 //endregion
-                
+
                 //region -1 -1 Split Sign Float
-                
+
                 #[doc = "Servo position feedback sensor for monitoring actuator positions."]
                 ServoPosition => {
                     friendly_name: "Servo Position",
@@ -72,12 +78,13 @@ macro_rules! sensor_definition {
                     base_ascii: b"isvp00",
                     channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32NormalizedM1To1_SplitSignDivided,
+                    wrapped_data_type: WrappedIOType::F32NormalizedM1To1,
                 },
-                
+
                 //endregion
-                
+
                 //region ImageFrame
-                
+
                 #[doc = "Image camera input. Either alone or in the center of segmented/peripheral image camera setups"]
                 ImageCameraCenter => {
                     friendly_name: "Center Image Camera Input",
@@ -85,6 +92,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iic400",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
                 #[doc = "Top Left peripheral image camera input."]
                 ImageCameraTopLeft => {
@@ -93,6 +101,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iic600",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
                 #[doc = "Top Middle peripheral image camera input."]
                 ImageCameraTopMiddle => {
@@ -101,6 +110,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iic700",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
                 #[doc = "Top Right peripheral image camera input."]
                 ImageCameraTopRight => {
@@ -109,6 +119,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iic800",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
                 #[doc = "Middle Left peripheral image camera input."]
                 ImageCameraMiddleLeft => {
@@ -117,14 +128,16 @@ macro_rules! sensor_definition {
                     base_ascii: b"iic300",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
                 #[doc = "Middle Right peripheral image camera input."]
                 ImageCameraMiddleRight => {
                     friendly_name: "Middle Right Image Camera Input",
                     snake_case_identifier: "image_camera_middle_right",
-                    base_ascii: b"iic400",
+                    base_ascii: b"iic500",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
                 #[doc = "Bottom Left peripheral image camera input."]
                 ImageCameraBottomLeft => {
@@ -133,6 +146,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iic000",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
                 #[doc = "Bottom Middle peripheral image camera input."]
                 ImageCameraBottomMiddle => {
@@ -141,6 +155,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iic100",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
                 #[doc = "Bottom Right peripheral image camera input."]
                 ImageCameraBottomRight => {
@@ -149,6 +164,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iic200",
                     channel_dimension_range: DimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: None,
+                    wrapped_data_type: WrappedIOType::ImageFrame(None),
                 }
                 //endregion
             }

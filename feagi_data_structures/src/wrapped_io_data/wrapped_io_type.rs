@@ -1,3 +1,4 @@
+use std::mem::discriminant;
 use crate::data::image_descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::wrapped_io_data::WrappedIOData;
 
@@ -11,6 +12,11 @@ pub enum WrappedIOType {
 }
 
 impl WrappedIOType {
+
+    pub fn is_same_variant(a: &WrappedIOType, b: &WrappedIOType) -> bool {
+        discriminant(a) == discriminant(b)
+    }
+
     pub fn is_of(&self, io_type: &WrappedIOData) -> bool {
         WrappedIOType::from(io_type) == *self
     }

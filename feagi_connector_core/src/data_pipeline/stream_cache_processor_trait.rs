@@ -10,7 +10,7 @@ use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub trait StreamCacheStage: fmt::Display + Debug + Sync + Send {
+pub trait PipelineStage: fmt::Display + Debug + Sync + Send {
     /// Returns the data type this processor expects as input.
     ///
     /// This is used by `ProcessorRunner` to validate that processing can be chained
@@ -46,6 +46,8 @@ pub trait StreamCacheStage: fmt::Display + Debug + Sync + Send {
     /// Type checking is not performed here - it's the responsibility of `ProcessorRunner`
     /// to ensure input types are compatible before calling this method.
     fn process_new_input(&mut self, value: &WrappedIOData, time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError>;
+
+    fn clone_box(&self) -> Box<dyn PipelineStage>;
     
 }
 

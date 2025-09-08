@@ -8,7 +8,7 @@ use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
+use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
 
 /// A stream processor that linearly scales input float values to the range [0, 1].
 ///
@@ -29,7 +29,7 @@ impl Display for LinearScaleTo0And1Stage {
     }
 }
 
-impl StreamCacheStage for LinearScaleTo0And1Stage {
+impl PipelineStage for LinearScaleTo0And1Stage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::F32
     }
@@ -49,6 +49,10 @@ impl StreamCacheStage for LinearScaleTo0And1Stage {
 
         self.previous_value = WrappedIOData::F32Normalized0To1(val_0_1);
         Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 
@@ -109,7 +113,7 @@ impl Display for LinearScaleToM1And1Stage {
     }
 }
 
-impl StreamCacheStage for LinearScaleToM1And1Stage {
+impl PipelineStage for LinearScaleToM1And1Stage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::F32
     }
@@ -129,6 +133,10 @@ impl StreamCacheStage for LinearScaleToM1And1Stage {
 
         self.previous_value = WrappedIOData::F32NormalizedM1To1(val_m1_1);
         Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 

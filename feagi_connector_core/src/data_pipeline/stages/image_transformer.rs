@@ -11,7 +11,7 @@ use feagi_data_structures::data::ImageFrame;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::processing::ImageFrameProcessor;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::StreamCacheStage;
+use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
 
 /// A stream processor that applies image transformations to incoming frames.
 ///
@@ -50,7 +50,7 @@ impl Display for ImageFrameProcessorStage {
     }
 }
 
-impl StreamCacheStage for ImageFrameProcessorStage {
+impl PipelineStage for ImageFrameProcessorStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::ImageFrame(Some(*self.transformer_definition.get_input_image_properties()))
     }
@@ -68,6 +68,10 @@ impl StreamCacheStage for ImageFrameProcessorStage {
         let write_target: &mut ImageFrame = (&mut self.cached).try_into()?;
         self.transformer_definition.process_image(read_from, write_target)?;
         Ok(&self.cached)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
     }
 }
 
@@ -88,7 +92,7 @@ impl ImageFrameProcessorStage {
     /// * `Err(FeagiDataError)` - If output buffer allocation fails
     pub fn new(transformer_definition: ImageFrameProcessor) -> Result<Self, FeagiDataError> {
         Ok(ImageFrameProcessorStage{
-            cached: WrappedIOData::ImageFrame(ImageFrame::from_image_frame_properties(&transformer_definition.get_output_image_properties())?),
+            cached: WrappedIOData::ImageFrame(ImageFrame::new_from_image_frame_properties(&transformer_definition.get_output_image_properties())?),
             transformer_definition,
         })
     }

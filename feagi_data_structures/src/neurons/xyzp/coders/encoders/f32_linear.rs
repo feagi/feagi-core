@@ -1,6 +1,6 @@
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
-use crate::genomic::descriptors::{CorticalChannelDimensions, CorticalChannelIndex};
+use crate::genomic::descriptors::{CorticalChannelDimensions, CorticalChannelIndex, NeuronDepth};
 use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZP, NeuronXYZPArrays};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use super::super::{NeuronXYZPEncoder};
@@ -43,12 +43,12 @@ impl F32LinearNeuronXYZPEncoder {
     pub const CHANNEL_X_LENGTH: u32 = 1;
     pub const CHANNEL_Y_LENGTH: u32 = 1;
     
-    pub fn new(cortical_write_target: CorticalID, z_resolution: u32) -> Result<Self, FeagiDataError> {
+    pub fn new(cortical_write_target: CorticalID, z_resolution: NeuronDepth) -> Result<Self, FeagiDataError> {
         
         Ok(F32LinearNeuronXYZPEncoder {
-            channel_dimensions: CorticalChannelDimensions::new(Self::CHANNEL_X_LENGTH, Self::CHANNEL_Y_LENGTH, z_resolution)?,
+            channel_dimensions: CorticalChannelDimensions::new(Self::CHANNEL_X_LENGTH, Self::CHANNEL_Y_LENGTH, *z_resolution)?,
             cortical_write_target,
-            z_res: z_resolution as f32,
+            z_res: *z_resolution as f32,
         })
     }
 }

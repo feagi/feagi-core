@@ -23,4 +23,5 @@ impl Display for FeagiDataError {
 }
 impl Error for FeagiDataError {}
 
+
 //  TODO From<> from other error types
