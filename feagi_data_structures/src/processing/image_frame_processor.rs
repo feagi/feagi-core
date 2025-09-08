@@ -73,8 +73,10 @@ impl ImageFrameProcessor {
                 // supported
                 definition.convert_to_grayscale = true;
             }
-            // unsupported
-            return Err(FeagiDataError::BadParameters("Given Color Conversion not possible!".into()).into())
+            else {
+                // unsupported
+                return Err(FeagiDataError::BadParameters("Given Color Conversion not possible!".into()).into())
+            }
         }
         if output.get_image_resolution() != input.get_image_resolution() {
             definition.set_resizing_to(output.get_image_resolution())?;
@@ -380,13 +382,15 @@ impl ImageFrameProcessor {
 //region source destination processing
 
 fn crop(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints, number_output_color_channels: usize) -> Result<(), FeagiDataError> {
-    let mut destination_data = destination.get_internal_data_mut();
+    let destination_data = destination.get_internal_data_mut();
     let sliced_array_view: ArrayView3<u8> = source.get_internal_data().slice(
         s![crop_from.upper_left.y as usize.. crop_from.lower_right.y as usize,
             crop_from.upper_left.x as usize.. crop_from.lower_right.x as usize,
             0..number_output_color_channels]
     );
-    destination_data = &mut sliced_array_view.into_owned();
+    
+    // Actually copy the cropped data to the destination
+    destination_data.assign(&sliced_array_view);
     Ok(())
 }
 
@@ -420,17 +424,21 @@ fn to_grayscale(source: &ImageFrame, destination: &mut ImageFrame, output_color_
     let source_data = source.get_internal_data();
     let destination_data = destination.get_internal_data_mut();
     let (r_scale, g_scale, b_scale) = match output_color_space {
-        ColorSpace::Linear => {(0.2126f32, 0.7152f32, 0.072f32)} // Using formula from https://stackoverflow.com/questions/17615963/standard-rgb-to-grayscale-conversion
-        ColorSpace::Gamma => {(0.299f32, 0.587f32, 0.114f32)}  // https://www.youtube.com/watch?v=uKeKuaJ4nlw (I forget)
+        ColorSpace::Linear => (0.2126f32, 0.7152f32, 0.0722f32), // Using formula from https://stackoverflow.com/questions/17615963/standard-rgb-to-grayscale-conversion
+        ColorSpace::Gamma => (0.299f32, 0.587f32, 0.114f32),   // https://www.youtube.com/watch?v=uKeKuaJ4nlw (I forget)
     };
-    let (r_scale, g_scale, b_scale) = ((r_scale * 255.0) as u8, (g_scale * 255.0) as u8, (b_scale * 255.0) as u8);
     // TODO look into premultiplied alpha handling!
-
-    Zip::indexed(destination_data).par_for_each(|(y,x,c), color_val| {
-        // TODO this is bad, we shouldnt be iterating over color channel and matching like this. Major target for optimization!
-        if c == 0 {
-            *color_val = r_scale * source_data[(y, x, 0)] + b_scale * source_data[(y, x, 1)] + g_scale * source_data[(y, x, 2)];
-        }
+    
+    let dest_gray_channel = destination_data.slice_mut(ndarray::s![.., .., 0]);
+    
+    Zip::indexed(dest_gray_channel).par_for_each(|(y, x), color_val| {
+        // Correct formula: weighted sum of RGB channels, properly handling f32 math
+        let r_val = source_data[(y, x, 0)] as f32;
+        let g_val = source_data[(y, x, 1)] as f32;
+        let b_val = source_data[(y, x, 2)] as f32;
+        
+        let gray_val = (r_scale * r_val + g_scale * g_val + b_scale * b_val).round() as u8; // Skipping clamping since the weights will never allow a value to exceed 255
+        *color_val = gray_val;
     });
     Ok(())
 }
@@ -466,16 +474,14 @@ fn crop_and_resize(source: &ImageFrame, destination: &mut ImageFrame, crop_from:
     Ok(())
 }
 
-fn crop_and_resize_and_grayscale(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints, resize_xy_to: &ImageXYResolution, output_color_space: ColorSpace) -> Result<(), FeagiDataError> {
+fn crop_and_resize_and_grayscale(source: &ImageFrame, destination: &mut ImageFrame, crop_from: &CornerPoints, _resize_xy_to: &ImageXYResolution, output_color_space: ColorSpace) -> Result<(), FeagiDataError> {
 
     let number_output_color_channels = source.get_color_channel_count();
 
-
     let (r_scale, g_scale, b_scale) = match output_color_space {
-        ColorSpace::Linear => {(0.2126f32, 0.7152f32, 0.072f32)} // Using formula from https://stackoverflow.com/questions/17615963/standard-rgb-to-grayscale-conversion
-        ColorSpace::Gamma => {(0.299f32, 0.587f32, 0.114f32)}
+        ColorSpace::Linear => (0.2126f32, 0.7152f32, 0.0722f32), // Using formula from https://stackoverflow.com/questions/17615963/standard-rgb-to-grayscale-conversion
+        ColorSpace::Gamma => (0.299f32, 0.587f32, 0.114f32),
     };
-    let (r_scale, g_scale, b_scale) = ((r_scale * 255.0) as u8, (g_scale * 255.0) as u8, (b_scale * 255.0) as u8);
 
     // crop
     let sliced_array_view: ArrayView3<u8> = source.get_internal_data().slice(
@@ -487,21 +493,27 @@ fn crop_and_resize_and_grayscale(source: &ImageFrame, destination: &mut ImageFra
     let source_data = sliced_array_view;
     let destination_arr = destination.get_internal_data_mut();
 
-    let (src_h, src_w, src_c) = (source_data.shape()[0], source_data.shape()[1], source_data.shape()[2]);
-    let (dst_h, dst_w, dst_c) = (destination_arr.shape()[0], destination_arr.shape()[1], destination_arr.shape()[2]);
-
+    let (src_h, src_w, _src_c) = (source_data.shape()[0], source_data.shape()[1], source_data.shape()[2]);
+    let (dst_h, dst_w, _dst_c) = (destination_arr.shape()[0], destination_arr.shape()[1], destination_arr.shape()[2]);
 
     let scale_y = src_h as f32 / dst_h as f32;
     let scale_x = src_w as f32 / dst_w as f32;
 
-
-    Zip::indexed(destination.get_internal_data_mut())
-        .par_for_each(|(y, x, c), out| {
-            if c == 0 {
-                let src_y = (y as f32 * scale_y).floor() as usize;
-                let src_x = (x as f32 * scale_x).floor() as usize;
-                *out = r_scale * source_data[(src_y, src_x, 0)] + b_scale * source_data[(src_y, src_x, 1)] + g_scale * source_data[(src_y, src_x, 2)];
-            }
+    // Only process the grayscale channel (channel 0) for better performance
+    let dest_gray_channel = destination.get_internal_data_mut().slice_mut(ndarray::s![.., .., 0]);
+    
+    Zip::indexed(dest_gray_channel)
+        .par_for_each(|(y, x), out| {
+            let src_y = (y as f32 * scale_y).floor() as usize;
+            let src_x = (x as f32 * scale_x).floor() as usize;
+            
+            // Correct formula: weighted sum of RGB channels, properly handling f32 math
+            let r_val = source_data[(src_y, src_x, 0)] as f32;
+            let g_val = source_data[(src_y, src_x, 1)] as f32;
+            let b_val = source_data[(src_y, src_x, 2)] as f32;
+            
+            let gray_val = (r_scale * r_val + g_scale * g_val + b_scale * b_val).round() as u8;
+            *out = gray_val;
         });
     Ok(())
     
