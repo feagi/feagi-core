@@ -7,3 +7,8 @@ generated_*.png
 generated_*.jpg
 generated_*.bmp
 generated_*.tiff
+# Visual test outputs
+visual_test_*.png
+visual_test_*.jpg
+brightness_test_*.png
+contrast_test_*.png

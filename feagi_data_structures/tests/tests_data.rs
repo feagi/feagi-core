@@ -3,8 +3,10 @@
 //! This module contains comprehensive tests for data structures including ImageFrame
 //! and related functionality for image processing, import, and export operations.
 
-use feagi_data_structures::data::ImageFrame;
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, MemoryOrderLayout};
+use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
+use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, MemoryOrderLayout, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+use feagi_data_structures::genomic::{CorticalType, SensorCorticalType};
+use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
 use ndarray::Array3;
 use std::fs;
 use std::path::Path;
@@ -501,5 +503,603 @@ mod test_image_frame {
         assert_eq!(pixels[(0, 0, 0)], 128);
         assert_eq!(pixels[(0, 0, 1)], 128);
         assert_eq!(pixels[(0, 0, 2)], 128);
+    }
+
+    #[test]
+    fn test_brightness_adjustment_visual_with_bird_image() {
+        // Skip if bird image not available
+        if !Path::new(TEST_BIRD_IMAGE_PATH).exists() {
+            return;
+        }
+
+        let img_bytes = fs::read(TEST_BIRD_IMAGE_PATH).unwrap();
+        let mut original_frame = ImageFrame::new_from_jpeg_bytes(&img_bytes, &ColorSpace::Gamma).unwrap();
+
+        println!("Testing brightness adjustments with bird image ({}x{})", 
+                 original_frame.get_xy_resolution().width, 
+                 original_frame.get_xy_resolution().height);
+
+        // Save original for comparison
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let original_png = original_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/brightness_test_original.png", &original_png).unwrap();
+        }
+
+        // Test brightness increase
+        let mut bright_frame = original_frame.clone();
+        bright_frame.change_brightness(50);
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let bright_png = bright_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/brightness_test_increased.png", &bright_png).unwrap();
+        }
+
+        // Test brightness decrease  
+        let mut dark_frame = original_frame.clone();
+        dark_frame.change_brightness(-50);
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let dark_png = dark_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/brightness_test_decreased.png", &dark_png).unwrap();
+        }
+
+        // Test extreme brightness increase
+        let mut very_bright_frame = original_frame.clone();
+        very_bright_frame.change_brightness(100);
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let very_bright_png = very_bright_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/brightness_test_very_bright.png", &very_bright_png).unwrap();
+        }
+
+        // Test extreme brightness decrease
+        let mut very_dark_frame = original_frame.clone();
+        very_dark_frame.change_brightness(-100);
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let very_dark_png = very_dark_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/brightness_test_very_dark.png", &very_dark_png).unwrap();
+            
+            println!("Brightness test images saved:");
+            println!("  - brightness_test_original.png (original)");
+            println!("  - brightness_test_increased.png (+50)");
+            println!("  - brightness_test_decreased.png (-50)");
+            println!("  - brightness_test_very_bright.png (+100)");
+            println!("  - brightness_test_very_dark.png (-100)");
+        }
+
+        // Verify that brightness adjustments actually changed the data
+        let original_pixels = original_frame.get_pixels_view();
+        let bright_pixels = bright_frame.get_pixels_view();
+        let dark_pixels = dark_frame.get_pixels_view();
+
+        // Find a non-black, non-white pixel to test (to avoid clamping effects)
+        let mut test_pixel_found = false;
+        for y in 0..original_frame.get_xy_resolution().height.min(10) {
+            for x in 0..original_frame.get_xy_resolution().width.min(10) {
+                let orig_val = original_pixels[(y, x, 0)] as i32;
+                if orig_val > 50 && orig_val < 205 { // Avoid clamping range
+                    let bright_val = bright_pixels[(y, x, 0)] as i32;
+                    let dark_val = dark_pixels[(y, x, 0)] as i32;
+                    
+                    assert!(bright_val > orig_val, "Brightness increase should make pixels brighter");
+                    assert!(dark_val < orig_val, "Brightness decrease should make pixels darker");
+                    test_pixel_found = true;
+                    break;
+                }
+            }
+            if test_pixel_found { break; }
+        }
+        
+        assert!(test_pixel_found, "Should find at least one testable pixel in the image");
+    }
+
+    #[test]
+    fn test_contrast_adjustment_visual_with_bird_image() {
+        // Skip if bird image not available
+        if !Path::new(TEST_BIRD_IMAGE_PATH).exists() {
+            return;
+        }
+
+        let img_bytes = fs::read(TEST_BIRD_IMAGE_PATH).unwrap();
+        let mut original_frame = ImageFrame::new_from_jpeg_bytes(&img_bytes, &ColorSpace::Gamma).unwrap();
+
+        println!("Testing contrast adjustments with bird image ({}x{})", 
+                 original_frame.get_xy_resolution().width, 
+                 original_frame.get_xy_resolution().height);
+
+        // Save original for comparison (if not already saved by brightness test)
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let original_png = original_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/contrast_test_original.png", &original_png).unwrap();
+        }
+
+        // Test contrast increase
+        let mut high_contrast_frame = original_frame.clone();
+        high_contrast_frame.change_contrast(2.0);
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let high_contrast_png = high_contrast_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/contrast_test_increased.png", &high_contrast_png).unwrap();
+        }
+
+        // Test contrast decrease
+        let mut low_contrast_frame = original_frame.clone();
+        low_contrast_frame.change_contrast(0.5);
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let low_contrast_png = low_contrast_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/contrast_test_decreased.png", &low_contrast_png).unwrap();
+        }
+
+        // Test extreme contrast increase
+        let mut very_high_contrast_frame = original_frame.clone();
+        very_high_contrast_frame.change_contrast(3.0);
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let very_high_contrast_png = very_high_contrast_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/contrast_test_very_high.png", &very_high_contrast_png).unwrap();
+        }
+
+        // Test very low contrast (almost flat)
+        let mut very_low_contrast_frame = original_frame.clone();
+        very_low_contrast_frame.change_contrast(0.1);
+        if std::env::var("SAVE_TEST_IMAGES").is_ok() {
+            let very_low_contrast_png = very_low_contrast_frame.export_as_png_bytes().unwrap();
+            fs::write("tests/contrast_test_very_low.png", &very_low_contrast_png).unwrap();
+            
+            println!("Contrast test images saved:");
+            println!("  - contrast_test_original.png (original)");
+            println!("  - contrast_test_increased.png (2.0x contrast)");
+            println!("  - contrast_test_decreased.png (0.5x contrast)");
+            println!("  - contrast_test_very_high.png (3.0x contrast)");
+            println!("  - contrast_test_very_low.png (0.1x contrast)");
+        }
+
+        // Verify that contrast adjustments actually changed the data
+        let original_pixels = original_frame.get_pixels_view();
+        let high_contrast_pixels = high_contrast_frame.get_pixels_view();
+        let low_contrast_pixels = low_contrast_frame.get_pixels_view();
+
+        // Find pixels with different brightness levels to test contrast effects
+        let mut found_dark_pixel = false;
+        let mut found_bright_pixel = false;
+        
+        for y in 0..original_frame.get_xy_resolution().height.min(20) {
+            for x in 0..original_frame.get_xy_resolution().width.min(20) {
+                let orig_val = original_pixels[(y, x, 0)] as i32;
+                let high_contrast_val = high_contrast_pixels[(y, x, 0)] as i32;
+                let low_contrast_val = low_contrast_pixels[(y, x, 0)] as i32;
+                
+                // Test dark pixels (below midpoint)
+                if orig_val < 100 && orig_val > 10 {
+                    // Higher contrast should make dark pixels darker (move away from 128)
+                    assert!(high_contrast_val <= orig_val, 
+                           "High contrast should make dark pixels darker or same, got {} -> {}", orig_val, high_contrast_val);
+                    // Lower contrast should make dark pixels closer to middle
+                    assert!(low_contrast_val >= orig_val, 
+                           "Low contrast should make dark pixels lighter, got {} -> {}", orig_val, low_contrast_val);
+                    found_dark_pixel = true;
+                }
+                
+                // Test bright pixels (above midpoint)
+                if orig_val > 156 && orig_val < 245 {
+                    // Higher contrast should make bright pixels brighter (move away from 128)
+                    assert!(high_contrast_val >= orig_val, 
+                           "High contrast should make bright pixels brighter or same, got {} -> {}", orig_val, high_contrast_val);
+                    // Lower contrast should make bright pixels closer to middle
+                    assert!(low_contrast_val <= orig_val, 
+                           "Low contrast should make bright pixels darker, got {} -> {}", orig_val, low_contrast_val);
+                    found_bright_pixel = true;
+                }
+            }
+        }
+        
+        // Note: We don't require finding both types of pixels since some images might be predominantly light or dark
+        assert!(found_dark_pixel || found_bright_pixel, 
+               "Should find at least one testable pixel (either dark or bright) in the image");
+    }
+}
+
+#[cfg(test)]
+mod test_segmented_image_frame {
+    use super::*;
+
+    #[test]
+    fn test_segmented_image_frame_creation_new() {
+        let center_resolution = ImageXYResolution::new(64, 64).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(32, 32).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        let segmented_frame = SegmentedImageFrame::new(
+            &resolutions,
+            &ColorSpace::Gamma,
+            &ColorChannelLayout::RGB,     // Center with RGB
+            &ColorChannelLayout::GrayScale // Peripherals with grayscale
+        ).unwrap();
+
+        // Verify center segment properties
+        assert_eq!(*segmented_frame.get_center_channel_layout(), ColorChannelLayout::RGB);
+        assert_eq!(*segmented_frame.get_color_space(), ColorSpace::Gamma);
+
+        // Verify peripheral segment properties
+        assert_eq!(*segmented_frame.get_peripheral_channel_layout(), ColorChannelLayout::GrayScale);
+
+        // Verify resolutions
+        let frame_resolutions = segmented_frame.get_segmented_frame_target_resolutions();
+        assert_eq!(frame_resolutions.center, center_resolution);
+        assert_eq!(frame_resolutions.lower_left, peripheral_resolution);
+        assert_eq!(frame_resolutions.upper_right, peripheral_resolution);
+    }
+
+    #[test]
+    fn test_segmented_image_frame_from_properties() {
+        let center_resolution = ImageXYResolution::new(128, 96).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(32, 24).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        let properties = SegmentedImageFrameProperties::new(
+            &resolutions,
+            &ColorChannelLayout::RGBA,
+            &ColorChannelLayout::RGB,
+            &ColorSpace::Linear
+        );
+
+        let segmented_frame = SegmentedImageFrame::from_segmented_image_frame_properties(&properties).unwrap();
+
+        // Verify properties match
+        let frame_properties = segmented_frame.get_segmented_image_frame_properties();
+        assert_eq!(*frame_properties.get_center_color_channel(), ColorChannelLayout::RGBA);
+        assert_eq!(*frame_properties.get_peripheral_color_channels(), ColorChannelLayout::RGB);
+        assert_eq!(*frame_properties.get_color_space(), ColorSpace::Linear);
+        
+        let frame_resolutions = frame_properties.get_resolutions();
+        assert_eq!(frame_resolutions.center, center_resolution);
+        assert_eq!(frame_resolutions.lower_left, peripheral_resolution);
+    }
+
+    #[test]
+    fn test_create_ordered_cortical_ids_for_segmented_vision() {
+        let camera_index = CorticalGroupIndex::from(5u8);
+        let cortical_ids = SegmentedImageFrame::create_ordered_cortical_ids_for_segmented_vision(camera_index);
+
+        // Verify we got 9 IDs
+        assert_eq!(cortical_ids.len(), 9);
+
+        // Verify the order matches the expected layout
+        // [0] Bottom-Left, [1] Bottom-Middle, [2] Bottom-Right
+        // [3] Middle-Left, [4] Center, [5] Middle-Right  
+        // [6] Top-Left, [7] Top-Middle, [8] Top-Right
+        let expected_types = [
+            SensorCorticalType::ImageCameraBottomLeft,
+            SensorCorticalType::ImageCameraBottomMiddle,
+            SensorCorticalType::ImageCameraBottomRight,
+            SensorCorticalType::ImageCameraMiddleLeft,
+            SensorCorticalType::ImageCameraCenter,
+            SensorCorticalType::ImageCameraMiddleRight,
+            SensorCorticalType::ImageCameraTopLeft,
+            SensorCorticalType::ImageCameraTopMiddle,
+            SensorCorticalType::ImageCameraTopRight,
+        ];
+
+        for (i, expected_type) in expected_types.iter().enumerate() {
+            let expected_id = expected_type.to_cortical_id(camera_index);
+            assert_eq!(cortical_ids[i], expected_id, "Cortical ID mismatch at index {}", i);
+        }
+    }
+
+    #[test]
+    fn test_create_ordered_cortical_types_for_segmented_vision() {
+        let cortical_types = SegmentedImageFrame::create_ordered_cortical_types_for_segmented_vision();
+
+        // Verify we got 9 types
+        assert_eq!(cortical_types.len(), 9);
+
+        // Verify the expected order
+        let expected_sensor_types = [
+            SensorCorticalType::ImageCameraBottomLeft,
+            SensorCorticalType::ImageCameraBottomMiddle,
+            SensorCorticalType::ImageCameraBottomRight,
+            SensorCorticalType::ImageCameraMiddleLeft,
+            SensorCorticalType::ImageCameraCenter,
+            SensorCorticalType::ImageCameraMiddleRight,
+            SensorCorticalType::ImageCameraTopLeft,
+            SensorCorticalType::ImageCameraTopMiddle,
+            SensorCorticalType::ImageCameraTopRight,
+        ];
+
+        for (i, expected_sensor_type) in expected_sensor_types.iter().enumerate() {
+            let expected_cortical_type: CorticalType = (*expected_sensor_type).into();
+            assert_eq!(cortical_types[i], expected_cortical_type, "Cortical type mismatch at index {}", i);
+        }
+    }
+
+    #[test]
+    fn test_get_image_internal_data() {
+        let center_resolution = ImageXYResolution::new(16, 16).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(8, 8).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        let segmented_frame = SegmentedImageFrame::new(
+            &resolutions,
+            &ColorSpace::Gamma,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::GrayScale
+        ).unwrap();
+
+        let internal_data = segmented_frame.get_image_internal_data();
+        
+        // Verify we got 9 arrays
+        assert_eq!(internal_data.len(), 9);
+
+        // Verify the shapes are correct
+        // Index 4 should be center (RGB, 16x16)
+        assert_eq!(internal_data[4].shape(), &[16, 16, 3]); // Center: RGB 16x16
+        
+        // Other indices should be peripheral (Grayscale, 8x8)
+        for i in [0, 1, 2, 3, 5, 6, 7, 8] {
+            assert_eq!(internal_data[i].shape(), &[8, 8, 1], "Peripheral segment {} should be 8x8x1", i); // Peripheral: Grayscale 8x8
+        }
+    }
+
+    #[test]
+    fn test_get_ordered_image_frame_references() {
+        let center_resolution = ImageXYResolution::new(32, 32).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(16, 16).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        let segmented_frame = SegmentedImageFrame::new(
+            &resolutions,
+            &ColorSpace::Linear,
+            &ColorChannelLayout::RGBA,
+            &ColorChannelLayout::RGB
+        ).unwrap();
+
+        let frame_refs = segmented_frame.get_ordered_image_frame_references();
+        
+        // Verify we got 9 references
+        assert_eq!(frame_refs.len(), 9);
+
+        // The ordering should be: center, lower_left, middle_left, upper_left, upper_middle,
+        // upper_right, middle_right, lower_right, lower_middle
+        
+        // Verify center is first and has correct properties
+        assert_eq!(*frame_refs[0].get_channel_layout(), ColorChannelLayout::RGBA);
+        assert_eq!(frame_refs[0].get_xy_resolution(), center_resolution);
+
+        // Verify peripherals have correct properties
+        for i in 1..9 {
+            assert_eq!(*frame_refs[i].get_channel_layout(), ColorChannelLayout::RGB);
+            assert_eq!(frame_refs[i].get_xy_resolution(), peripheral_resolution);
+        }
+    }
+
+    #[test]
+    fn test_get_mut_ordered_image_frame_references() {
+        let center_resolution = ImageXYResolution::new(16, 16).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(8, 8).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        let mut segmented_frame = SegmentedImageFrame::new(
+            &resolutions,
+            &ColorSpace::Gamma,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::GrayScale
+        ).unwrap();
+
+        // Test mutable access
+        {
+            let mut_frame_refs = segmented_frame.get_mut_ordered_image_frame_references();
+            assert_eq!(mut_frame_refs.len(), 9);
+
+            // Modify a pixel in the center frame (index 0)
+            let mut center_pixels = mut_frame_refs[0].get_pixels_view_mut();
+            center_pixels[(0, 0, 0)] = 255;
+            center_pixels[(0, 0, 1)] = 128;
+            center_pixels[(0, 0, 2)] = 64;
+        }
+
+        // Verify the change was made
+        let frame_refs = segmented_frame.get_ordered_image_frame_references();
+        let center_pixels = frame_refs[0].get_pixels_view();
+        assert_eq!(center_pixels[(0, 0, 0)], 255);
+        assert_eq!(center_pixels[(0, 0, 1)], 128);
+        assert_eq!(center_pixels[(0, 0, 2)], 64);
+    }
+
+    #[test]
+    fn test_segmented_xy_image_resolutions_create_with_same_sized_peripheral() {
+        let center_resolution = ImageXYResolution::new(100, 80).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(25, 20).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        // Verify center resolution
+        assert_eq!(resolutions.center, center_resolution);
+
+        // Verify all peripheral resolutions are the same
+        assert_eq!(resolutions.lower_left, peripheral_resolution);
+        assert_eq!(resolutions.lower_middle, peripheral_resolution);
+        assert_eq!(resolutions.lower_right, peripheral_resolution);
+        assert_eq!(resolutions.middle_left, peripheral_resolution);
+        assert_eq!(resolutions.middle_right, peripheral_resolution);
+        assert_eq!(resolutions.upper_left, peripheral_resolution);
+        assert_eq!(resolutions.upper_middle, peripheral_resolution);
+        assert_eq!(resolutions.upper_right, peripheral_resolution);
+    }
+
+    #[test]
+    fn test_segmented_xy_image_resolutions_new_with_different_sizes() {
+        // Create different resolutions for each segment
+        let lower_left = ImageXYResolution::new(16, 12).unwrap();
+        let lower_middle = ImageXYResolution::new(32, 24).unwrap();
+        let lower_right = ImageXYResolution::new(16, 12).unwrap();
+        let middle_left = ImageXYResolution::new(24, 32).unwrap();
+        let center = ImageXYResolution::new(64, 64).unwrap();
+        let middle_right = ImageXYResolution::new(24, 32).unwrap();
+        let upper_left = ImageXYResolution::new(16, 12).unwrap();
+        let upper_middle = ImageXYResolution::new(32, 24).unwrap();
+        let upper_right = ImageXYResolution::new(16, 12).unwrap();
+
+        let resolutions = SegmentedXYImageResolutions::new(
+            lower_left, lower_middle, lower_right,
+            middle_left, center, middle_right,
+            upper_left, upper_middle, upper_right
+        );
+
+        // Verify each resolution is set correctly
+        assert_eq!(resolutions.lower_left, lower_left);
+        assert_eq!(resolutions.lower_middle, lower_middle);
+        assert_eq!(resolutions.lower_right, lower_right);
+        assert_eq!(resolutions.middle_left, middle_left);
+        assert_eq!(resolutions.center, center);
+        assert_eq!(resolutions.middle_right, middle_right);
+        assert_eq!(resolutions.upper_left, upper_left);
+        assert_eq!(resolutions.upper_middle, upper_middle);
+        assert_eq!(resolutions.upper_right, upper_right);
+    }
+
+    #[test]
+    fn test_clone_trait() {
+        let center_resolution = ImageXYResolution::new(32, 32).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(16, 16).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        let mut original_frame = SegmentedImageFrame::new(
+            &resolutions,
+            &ColorSpace::Gamma,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::GrayScale
+        ).unwrap();
+
+        // Modify some data in the original
+        {
+            let mut frame_refs = original_frame.get_mut_ordered_image_frame_references();
+            let mut center_pixels = frame_refs[0].get_pixels_view_mut();
+            center_pixels[(0, 0, 0)] = 200;
+        }
+
+        // Clone the frame
+        let cloned_frame = original_frame.clone();
+
+        // Verify properties match
+        assert_eq!(cloned_frame.get_center_channel_layout(), original_frame.get_center_channel_layout());
+        assert_eq!(cloned_frame.get_peripheral_channel_layout(), original_frame.get_peripheral_channel_layout());
+        assert_eq!(cloned_frame.get_color_space(), original_frame.get_color_space());
+        
+        // Verify data was cloned
+        let original_refs = original_frame.get_ordered_image_frame_references();
+        let cloned_refs = cloned_frame.get_ordered_image_frame_references();
+        
+        let original_center_pixels = original_refs[0].get_pixels_view();
+        let cloned_center_pixels = cloned_refs[0].get_pixels_view();
+        assert_eq!(original_center_pixels[(0, 0, 0)], cloned_center_pixels[(0, 0, 0)]);
+
+        // Verify they are independent
+        {
+            let mut frame_refs = original_frame.get_mut_ordered_image_frame_references();
+            let mut center_pixels = frame_refs[0].get_pixels_view_mut();
+            center_pixels[(0, 0, 0)] = 100; // Change original
+        }
+
+        // Cloned should be unchanged
+        let cloned_center_pixels = cloned_refs[0].get_pixels_view();
+        assert_eq!(cloned_center_pixels[(0, 0, 0)], 200); // Still original value
+    }
+
+    #[test]
+    fn test_debug_trait() {
+        let center_resolution = ImageXYResolution::new(32, 32).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(16, 16).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        let segmented_frame = SegmentedImageFrame::new(
+            &resolutions,
+            &ColorSpace::Gamma,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::GrayScale
+        ).unwrap();
+
+        let debug_string = format!("{:?}", segmented_frame);
+        assert!(debug_string.contains("SegmentedImageFrame"));
+        // Should contain the internal structure
+        assert!(debug_string.contains("lower_left"));
+        assert!(debug_string.contains("center"));
+        assert!(debug_string.contains("upper_right"));
+    }
+
+    #[test]
+    fn test_display_trait() {
+        let center_resolution = ImageXYResolution::new(32, 32).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(16, 16).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        let segmented_frame = SegmentedImageFrame::new(
+            &resolutions,
+            &ColorSpace::Gamma,
+            &ColorChannelLayout::RGB,
+            &ColorChannelLayout::GrayScale
+        ).unwrap();
+
+        let display_string = format!("{}", segmented_frame);
+        assert_eq!(display_string, "SegmentedImageFrame()");
+    }
+
+    #[test]
+    fn test_different_color_spaces_and_channels() {
+        let center_resolution = ImageXYResolution::new(40, 40).unwrap();
+        let peripheral_resolution = ImageXYResolution::new(20, 20).unwrap();
+        
+        let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+            center_resolution,
+            peripheral_resolution
+        );
+
+        // Test Linear color space with RGBA center and RG peripherals
+        let segmented_frame = SegmentedImageFrame::new(
+            &resolutions,
+            &ColorSpace::Linear,
+            &ColorChannelLayout::RGBA,  // Center with alpha
+            &ColorChannelLayout::RG     // Peripherals with 2 channels
+        ).unwrap();
+
+        assert_eq!(*segmented_frame.get_color_space(), ColorSpace::Linear);
+        assert_eq!(*segmented_frame.get_center_channel_layout(), ColorChannelLayout::RGBA);
+        assert_eq!(*segmented_frame.get_peripheral_channel_layout(), ColorChannelLayout::RG);
+
+        // Verify internal data shapes
+        let internal_data = segmented_frame.get_image_internal_data();
+        assert_eq!(internal_data[4].shape(), &[40, 40, 4]); // Center: RGBA
+        for i in [0, 1, 2, 3, 5, 6, 7, 8] {
+            assert_eq!(internal_data[i].shape(), &[20, 20, 2]); // Peripherals: RG
+        }
     }
 }
