@@ -1,11 +1,9 @@
 
-use ndarray::{Array3, ArrayView3, ArrayViewMut3};
+use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use image;
-use image::GenericImageView;
-use ndarray::Zip;
+use image::{DynamicImage, GenericImageView};
 use crate::FeagiDataError;
 use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution};
-use crate::basic_components::Dimensions;
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::CorticalChannelIndex;
 use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
@@ -72,14 +70,14 @@ impl ImageFrame {
                 Self::from_array(array, color_space, &MemoryOrderLayout::HeightsWidthsChannels)
             },
             ColorChannelLayout::RG => {
-                let buffer = img.to_rgb8();
+                let buffer = img.to_luma_alpha8();
                 let array = Array3::from_shape_vec(
                     (height as usize, width as usize, 2),
                     buffer.into_raw()).unwrap();
                 Self::from_array(array, color_space, &MemoryOrderLayout::HeightsWidthsChannels)
             }
             ColorChannelLayout::RGB => {
-                let buffer = img.to_luma_alpha8();
+                let buffer = img.to_rgb8();
                 let array = Array3::from_shape_vec(
                     (height as usize, width as usize, 3),
                     buffer.into_raw()).unwrap();
@@ -245,6 +243,132 @@ impl ImageFrame {
 
     //region Export as Image
 
+    /// Exports the ImageFrame as a DynamicImage from the image crate.
+    ///
+    /// This converts the internal pixel data back to a format that can be
+    /// used with the image crate for further processing or saving.
+    ///
+    /// # Returns
+    ///
+    /// A DynamicImage containing the pixel data from this ImageFrame.
+    pub fn export_as_dynamic_image(&self) -> Result<DynamicImage, FeagiDataError> {
+        let (width, height) = (self.get_xy_resolution().width, self.get_xy_resolution().height);
+        
+        match self.channel_layout {
+            ColorChannelLayout::GrayScale => {
+                let mut buffer = Vec::with_capacity(width * height);
+                for y in 0..height {
+                    for x in 0..width {
+                        buffer.push(self.pixels[(y, x, 0)]);
+                    }
+                }
+                let img_buffer = image::GrayImage::from_raw(width as u32, height as u32, buffer)
+                    .ok_or_else(|| FeagiDataError::InternalError("Failed to create grayscale image".to_string()))?;
+                Ok(DynamicImage::ImageLuma8(img_buffer))
+            },
+            ColorChannelLayout::RG => {
+                let mut buffer = Vec::with_capacity(width * height * 2);
+                for y in 0..height {
+                    for x in 0..width {
+                        buffer.push(self.pixels[(y, x, 0)]); // L
+                        buffer.push(self.pixels[(y, x, 1)]); // A
+                    }
+                }
+                let img_buffer = image::GrayAlphaImage::from_raw(width as u32, height as u32, buffer)
+                    .ok_or_else(|| FeagiDataError::InternalError("Failed to create grayscale+alpha image".to_string()))?;
+                Ok(DynamicImage::ImageLumaA8(img_buffer))
+            },
+            ColorChannelLayout::RGB => {
+                let mut buffer = Vec::with_capacity(width * height * 3);
+                for y in 0..height {
+                    for x in 0..width {
+                        buffer.push(self.pixels[(y, x, 0)]); // R
+                        buffer.push(self.pixels[(y, x, 1)]); // G
+                        buffer.push(self.pixels[(y, x, 2)]); // B
+                    }
+                }
+                let img_buffer = image::RgbImage::from_raw(width as u32, height as u32, buffer)
+                    .ok_or_else(|| FeagiDataError::InternalError("Failed to create RGB image".to_string()))?;
+                Ok(DynamicImage::ImageRgb8(img_buffer))
+            },
+            ColorChannelLayout::RGBA => {
+                let mut buffer = Vec::with_capacity(width * height * 4);
+                for y in 0..height {
+                    for x in 0..width {
+                        buffer.push(self.pixels[(y, x, 0)]); // R
+                        buffer.push(self.pixels[(y, x, 1)]); // G
+                        buffer.push(self.pixels[(y, x, 2)]); // B
+                        buffer.push(self.pixels[(y, x, 3)]); // A
+                    }
+                }
+                let img_buffer = image::RgbaImage::from_raw(width as u32, height as u32, buffer)
+                    .ok_or_else(|| FeagiDataError::InternalError("Failed to create RGBA image".to_string()))?;
+                Ok(DynamicImage::ImageRgba8(img_buffer))
+            }
+        }
+    }
+
+    /// Exports the ImageFrame as PNG bytes.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the PNG-encoded image data.
+    pub fn export_as_png_bytes(&self) -> Result<Vec<u8>, FeagiDataError> {
+        let dynamic_img = self.export_as_dynamic_image()?;
+        let mut buffer = Vec::new();
+        dynamic_img.write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Png)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode PNG: {}", e)))?;
+        Ok(buffer)
+    }
+
+    /// Exports the ImageFrame as BMP bytes.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the BMP-encoded image data.
+    pub fn export_as_bmp_bytes(&self) -> Result<Vec<u8>, FeagiDataError> {
+        let dynamic_img = self.export_as_dynamic_image()?;
+        let mut buffer = Vec::new();
+        dynamic_img.write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Bmp)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode BMP: {}", e)))?;
+        Ok(buffer)
+    }
+
+    /// Exports the ImageFrame as JPEG bytes.
+    ///
+    /// Note: JPEG format does not support transparency, so RGBA images will be
+    /// converted to RGB by discarding the alpha channel.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the JPEG-encoded image data.
+    pub fn export_as_jpeg_bytes(&self) -> Result<Vec<u8>, FeagiDataError> {
+        let mut dynamic_img = self.export_as_dynamic_image()?;
+        
+        // JPEG doesn't support transparency, convert RGBA to RGB
+        if matches!(self.channel_layout, ColorChannelLayout::RGBA) {
+            dynamic_img = DynamicImage::ImageRgb8(dynamic_img.to_rgb8());
+        }
+        
+        let mut buffer = Vec::new();
+        dynamic_img.write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Jpeg)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode JPEG: {}", e)))?;
+        Ok(buffer)
+    }
+
+    /// Exports the ImageFrame as TIFF bytes.
+    ///
+    /// # Returns
+    ///
+    /// A Vec<u8> containing the TIFF-encoded image data.
+    pub fn export_as_tiff_bytes(&self) -> Result<Vec<u8>, FeagiDataError> {
+        let dynamic_img = self.export_as_dynamic_image()?;
+        let mut buffer = Vec::new();
+        dynamic_img.write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Tiff)
+            .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode TIFF: {}", e)))?;
+        Ok(buffer)
+    }
+
     //endregion
 
 
@@ -260,14 +384,17 @@ impl ImageFrame {
     pub fn change_brightness(&mut self, value: i32) {
         match self.color_space {
             ColorSpace::Gamma => {
-                Zip::from(&mut self.pixels).for_each(|px| {
-                    let v = (*px as i32 + value).clamp(0, 255);
-                    *px = v as u8;
+
+                Zip::indexed(&mut self.pixels).par_for_each(|(y,x,c), color_val| {
+                    let v = (*color_val as i32 + value).clamp(0, 255);
+                    *color_val = v as u8;
                 });
             }
             ColorSpace::Linear => {
                 // Convert to linear float, add value scaled to 0-1, clamp
                 let delta = value as f32 / 255.0;
+                
+                // TODO make parallel
                 Zip::from(&mut self.pixels).for_each(|px| {
                     let lin = Self::srgb_to_linear(*px as f32);
                     let lin = (lin + delta).clamp(0.0, 1.0);

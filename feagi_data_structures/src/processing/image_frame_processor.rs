@@ -1,5 +1,4 @@
 use ndarray::{s, ArrayView3, Zip};
-use ndarray::parallel::prelude::*;
 use crate::FeagiDataError;
 use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
 use crate::data::ImageFrame;

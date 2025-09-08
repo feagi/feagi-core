@@ -883,3 +883,4 @@ mod test_error_handling_edge_cases {
         assert_eq!(max_signed.x, i32::MAX);
     }
 }
+
