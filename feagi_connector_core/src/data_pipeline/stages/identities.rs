@@ -9,7 +9,7 @@ use std::time::Instant;
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
+use crate::data_pipeline::pipeline_stage::PipelineStage;
 
 //region Identity Float
 /// A stream processor that passes float values through unchanged.

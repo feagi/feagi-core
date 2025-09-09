@@ -1,9 +1,3 @@
-//! Quick image difference detection processor for FEAGI vision processing.
-//!
-//! This module provides the `ImageFrameQuickDiffProcessor` which computes the difference
-//! between consecutive image frames to detect motion or changes in the visual field.
-//! It implements a threshold-based difference algorithm that outputs pixels above
-//! the difference threshold, making it useful for motion detection and change analysis.
 
 use std::fmt::Display;
 use std::time::Instant;
@@ -12,40 +6,17 @@ use feagi_data_structures::data::image_descriptors::ImageFrameProperties;
 use feagi_data_structures::data::ImageFrame;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
+use crate::data_pipeline::pipeline_stage::PipelineStage;
 
 
-/// A stream processor that computes pixel-wise differences between consecutive image frames.
-///
-/// This processor maintains two internal image buffers and alternates between them to compute
-/// the difference between the current input frame and the previous frame. The difference
-/// calculation uses a threshold to filter out noise and small variations, outputting only
-/// pixels where the absolute difference exceeds the specified threshold.
-///
-/// # Algorithm
-///
-/// For each pixel position (x, y, c):
-/// - If `|current_pixel - previous_pixel| > threshold`: output = current_pixel
-/// - Otherwise: output = 0
-///
-/// # Use Cases
-///
-/// - **Motion Detection**: Identify areas of movement in video streams
-/// - **Change Detection**: Detect significant changes in static scenes  
-/// - **Noise Filtering**: Filter out small variations while preserving significant changes
-/// - **Event Triggering**: Generate events when visual changes exceed thresholds
+
 #[derive(Debug, Clone)]
 pub struct ImageFrameQuickDiffStage {
     /// The output buffer containing the computed difference image
     diff_cache: WrappedIOData, // Image Frame
-    /// First internal buffer for alternating frame storage
-    cached_a: WrappedIOData, // Image Frame
-    /// Second internal buffer for alternating frame storage
-    cached_b: WrappedIOData, // Image Frame
+    previous_frame_cache: WrappedIOData, // Image Frame
     /// Properties that input images must match (resolution, color space, channels)
     input_definition: ImageFrameProperties,
-    /// Flag indicating which buffer to use for the next comparison
-    is_diffing_against_b: bool,
     /// Minimum difference threshold for pixel changes to be considered significant
     threshold: u8,
 }
@@ -70,15 +41,8 @@ impl PipelineStage for ImageFrameQuickDiffStage {
     }
 
     fn process_new_input(&mut self, value: &WrappedIOData, _time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-        if self.is_diffing_against_b {
-            self.cached_a = value.clone();
-            quick_diff(&self.cached_a, &self.cached_b, &mut self.diff_cache, self.threshold);
-        }
-        else {
-            self.cached_b = value.clone();
-            quick_diff(&self.cached_b, &self.cached_a, &mut self.diff_cache, self.threshold);
-        }
-        self.is_diffing_against_b = !self.is_diffing_against_b;
+        quick_diff(value, &self.previous_frame_cache, &mut self.diff_cache, self.threshold)?;
+        self.previous_frame_cache = value.clone();
         Ok(&self.diff_cache)
     }
 
@@ -108,35 +72,35 @@ impl ImageFrameQuickDiffStage {
         let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;
         Ok(ImageFrameQuickDiffStage {
             diff_cache: WrappedIOData::ImageFrame(cache_image.clone()),
-            cached_a: WrappedIOData::ImageFrame(cache_image.clone()), // Image Frame
-            cached_b: WrappedIOData::ImageFrame(cache_image.clone()), // Image Frame
+            previous_frame_cache: WrappedIOData::ImageFrame(cache_image.clone()), // Image Frame
             input_definition: image_properties,
-            is_diffing_against_b: false,
             threshold,
         })
     }
 }
 
+fn quick_diff(minuend: &WrappedIOData, subtrahend: &WrappedIOData, diff_result: &mut WrappedIOData, threshold: u8) -> Result<(), FeagiDataError> {
+    let minuend: &ImageFrame = minuend.try_into()?;
+    let subtrahend: &ImageFrame = subtrahend.try_into()?;
+    let diff_result: &mut ImageFrame = diff_result.try_into()?;
 
-fn quick_diff(source: &WrappedIOData, source_diffing: &WrappedIOData, diff_overwriting: &mut WrappedIOData, threshold: u8) -> Result<(), FeagiDataError> {
-    let read_from: &ImageFrame = source.try_into()?;
-    let source_diff_from: &ImageFrame = source_diffing.try_into()?;
-    let write_to: &mut ImageFrame = diff_overwriting.try_into()?;
+    let minuend_arr: &Array3<u8> = minuend.get_internal_data();
+    let subtrahend_arr: &Array3<u8> = subtrahend.get_internal_data();
+    let diff_arr: &mut Array3<u8> = diff_result.get_internal_data_mut();
 
-    let read_from: &Array3<u8> = read_from.get_internal_data();
-    let source_diff_from: &Array3<u8> = source_diff_from.get_internal_data();
-    let write_to: &mut Array3<u8> = write_to.get_internal_data_mut();
-    
-    Zip::from(write_to).and(read_from).and(source_diff_from).for_each(|w, &r, &s| {
-        let x = r - s;
-        if x > threshold {
-            *w = r;
-        }
-        else {
-            *w = 0u8;
-        }
-    });
-    
+    Zip::from(minuend_arr)
+        .and(subtrahend_arr)
+        .and(diff_arr)
+        .par_for_each(|&minuend, &subtrahend, diff| {
+            let absolute_diff = if minuend >= subtrahend {
+                minuend - subtrahend
+            } else {
+                subtrahend - minuend
+            };
+            *diff = if absolute_diff >= threshold { subtrahend } else { 0 };
+        });
+
     Ok(())
 }
+
 

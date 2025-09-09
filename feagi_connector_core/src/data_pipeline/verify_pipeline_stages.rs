@@ -1,7 +1,7 @@
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::WrappedIOType;
 use crate::data_pipeline::PipelineStageIndex;
-use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
+use crate::data_pipeline::pipeline_stage::PipelineStage;
 
 pub(crate) fn verify_pipeline_stages(pipeline_stages: &Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
     let number_of_stages = pipeline_stages.len();

@@ -5,7 +5,7 @@ use feagi_data_structures::data::image_descriptors::{ImageFrameProperties, Segme
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
 use feagi_data_structures::processing::ImageFrameSegmentator;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
+use crate::data_pipeline::pipeline_stage::PipelineStage;
 
 #[derive(Debug, Clone)]
 pub struct ImageFrameSegmentatorStage {

@@ -8,7 +8,7 @@ use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
+use crate::data_pipeline::pipeline_stage::PipelineStage;
 
 /// A stream processor that linearly scales input float values to the range [0, 1].
 ///
@@ -152,6 +152,7 @@ impl LinearScaleToM1And1Stage {
     /// * `Ok(LinearScaleToM1And1)` - A new processor instance
     /// * `Err(FeagiDataError)` - If parameters are invalid (NaN, infinite, or out of bounds)
     pub fn new(lower_bound: f32, upper_bound: f32, initial_value: f32) -> Result<Self, FeagiDataError> {
+        // TODO why arent we using Range?
         if lower_bound.is_nan() || lower_bound.is_infinite() {
             return Err(FeagiDataError::BadParameters(format!("Given lower bound float {} is not valid!", lower_bound)));
         }
@@ -161,7 +162,7 @@ impl LinearScaleToM1And1Stage {
         if initial_value.is_nan() || initial_value.is_infinite() {
             return Err(FeagiDataError::BadParameters(format!("Given initial value float {} is not valid!", initial_value)));
         }
-        if upper_bound < lower_bound {
+        if upper_bound <= lower_bound {
             return Err(FeagiDataError::BadParameters(format!("Upper bound float {} must be greater than lower bound {}!!", upper_bound, lower_bound)));
         }
         if initial_value > upper_bound || initial_value < lower_bound {

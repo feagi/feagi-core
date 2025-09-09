@@ -2,8 +2,8 @@ use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::PipelineStageIndex;
-use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
-use crate::data_pipeline::verify_stream_cache_processor_chain::{verify_pipeline_stages, verify_replacing_stage};
+use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::data_pipeline::verify_pipeline_stages::{verify_pipeline_stages, verify_replacing_stage};
 
 
 #[derive(Debug)]
