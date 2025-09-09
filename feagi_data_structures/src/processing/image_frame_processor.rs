@@ -202,17 +202,18 @@ impl ImageFrameProcessor {
             _ => {
                 // This function is much slower, There may be some optimization work possible, but ensure the most common step combinations have an accelerated path
                 let is_cropping_is_resizing = (self.cropping_from, self.final_resize_xy_to);
+                let final_properties = self.get_output_image_properties();
+                let mut processing = ImageFrame::new_from_image_frame_properties(&final_properties)?;
 
-                let mut processing = source.clone();
                 match is_cropping_is_resizing {
                     (None, None) => {
-                        // don't do anything
+                        processing = source.clone();
                     }
                     (Some(cropping_from), None) => {
                         crop(source, &mut processing, &cropping_from, self.get_output_channel_count())?;
                     }
                     (None, Some(final_resize_xy_to)) => {
-                        resize(source, destination)?;
+                        resize(source, &mut processing)?;
                     }
                     (Some(cropping_from), Some(final_resize_xy_to)) => {
                         crop_and_resize(source, &mut processing, &cropping_from)?;

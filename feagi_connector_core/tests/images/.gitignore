@@ -1,5 +1,5 @@
 # Generated test images - don't commit these
-test_output_*.png
+pipeline_*.png
 test_output_*.jpg
 test_output_*.bmp
 test_output_*.tiff
