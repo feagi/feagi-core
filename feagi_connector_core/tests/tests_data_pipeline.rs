@@ -3,10 +3,8 @@
 //! This module contains basic tests for the data pipeline stages,
 //! focusing on stage creation and basic validation.
 
-use std::time::Instant;
 use feagi_data_structures::data::ImageFrame;
 use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution};
-// WrappedIOData and WrappedIOType are not used in these simplified tests
 use feagi_data_structures::processing::ImageFrameProcessor;
 use feagi_connector_core::data_pipeline::stages::*;
 
@@ -109,6 +107,91 @@ mod test_pipeline_stages {
         assert!(stage.is_ok());
     }
     
+    #[test]
+    fn test_image_quick_diff_stage_creation() {
+        let test_image = create_test_image();
+        let properties = test_image.get_image_frame_properties();
+        
+        // Test creation with various thresholds
+        let stage_low = ImageFrameQuickDiffStage::new(properties, 10);
+        assert!(stage_low.is_ok());
+        
+        let stage_medium = ImageFrameQuickDiffStage::new(properties, 50);
+        assert!(stage_medium.is_ok());
+        
+        let stage_high = ImageFrameQuickDiffStage::new(properties, 200);
+        assert!(stage_high.is_ok());
+        
+        // Test with zero threshold (should work)
+        let stage_zero = ImageFrameQuickDiffStage::new(properties, 0);
+        assert!(stage_zero.is_ok());
+        
+        // Test with maximum threshold
+        let stage_max = ImageFrameQuickDiffStage::new(properties, 255);
+        assert!(stage_max.is_ok());
+    }
+    
+    #[test]
+    fn test_image_quick_diff_stage_properties() {
+        let test_image = create_test_image();
+        let properties = test_image.get_image_frame_properties();
+        let stage = ImageFrameQuickDiffStage::new(properties, 30).unwrap();
+        
+        // Test that the stage was created successfully and we can access basic properties
+        println!("✓ Quick diff stage created successfully with threshold 30");
+        
+        // Test Display implementation
+        let display_string = format!("{}", stage);
+        assert!(display_string.contains("ImageFrameQuickDiffProcessor"));
+        println!("✓ Display implementation works: {}", display_string);
+    }
+    
+    #[test]
+    fn test_image_quick_diff_stage_with_different_image_sizes() {
+        // Test with different image sizes to ensure the stage can handle various inputs
+        
+        // Small image
+        let small_resolution = ImageXYResolution::new(32, 24).unwrap();
+        let small_image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, &small_resolution).unwrap();
+        let small_properties = small_image.get_image_frame_properties();
+        let small_stage = ImageFrameQuickDiffStage::new(small_properties, 20);
+        assert!(small_stage.is_ok());
+        
+        // Large image  
+        let large_resolution = ImageXYResolution::new(1024, 768).unwrap();
+        let large_image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, &large_resolution).unwrap();
+        let large_properties = large_image.get_image_frame_properties();
+        let large_stage = ImageFrameQuickDiffStage::new(large_properties, 40);
+        assert!(large_stage.is_ok());
+        
+        println!("✓ Quick diff stages created successfully for different image sizes");
+    }
+    
+    #[test]
+    fn test_image_quick_diff_stage_with_different_color_layouts() {
+        let resolution = ImageXYResolution::new(64, 48).unwrap();
+        
+        // Test with different color layouts
+        let rgb_image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, &resolution).unwrap();
+        let rgb_properties = rgb_image.get_image_frame_properties();
+        let rgb_stage = ImageFrameQuickDiffStage::new(rgb_properties, 25);
+        assert!(rgb_stage.is_ok());
+        
+        let rgba_image = ImageFrame::new(&ColorChannelLayout::RGBA, &ColorSpace::Gamma, &resolution).unwrap();
+        let rgba_properties = rgba_image.get_image_frame_properties();
+        let rgba_stage = ImageFrameQuickDiffStage::new(rgba_properties, 25);
+        assert!(rgba_stage.is_ok());
+        
+        let grayscale_image = ImageFrame::new(&ColorChannelLayout::GrayScale, &ColorSpace::Gamma, &resolution).unwrap();
+        let gray_properties = grayscale_image.get_image_frame_properties();
+        let gray_stage = ImageFrameQuickDiffStage::new(gray_properties, 25);
+        assert!(gray_stage.is_ok());
+        
+        println!("✓ Quick diff stages created successfully for different color layouts");
+    }
+
+    
+
     //endregion
     
     //region Image Processor Tests
