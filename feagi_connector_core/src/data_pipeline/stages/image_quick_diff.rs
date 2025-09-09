@@ -92,8 +92,12 @@ fn quick_diff(minuend: &WrappedIOData, subtrahend: &WrappedIOData, diff_result: 
         .and(subtrahend_arr)
         .and(diff_arr)
         .par_for_each(|&minuend, &subtrahend, diff| {
-            let sub = minuend.saturating_sub(subtrahend);
-            *diff = if sub >= threshold { sub } else { 0 };
+            let absolute_diff = if minuend >= subtrahend {
+                minuend - subtrahend
+            } else {
+                subtrahend - minuend
+            };
+            *diff = if absolute_diff >= threshold { subtrahend } else { 0 };
         });
 
     Ok(())
