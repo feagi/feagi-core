@@ -337,7 +337,7 @@ dependencies = [
 
 [[package]]
 name = "feagi_connector_core"
-version = "0.0.50-beta.14"
+version = "0.0.50-beta.15"
 dependencies = [
  "feagi_data_serialization",
  "feagi_data_structures",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "feagi_data_serialization"
-version = "0.0.50-beta.14"
+version = "0.0.50-beta.15"
 dependencies = [
  "byteorder",
  "feagi_data_structures",
@@ -356,7 +356,7 @@ dependencies = [
 
 [[package]]
 name = "feagi_data_structures"
-version = "0.0.50-beta.14"
+version = "0.0.50-beta.15"
 dependencies = [
  "image",
  "ndarray",
