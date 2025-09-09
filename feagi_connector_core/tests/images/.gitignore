@@ -16,3 +16,6 @@ images/contrast_test_*.png
 images/processor_*.png
 images/processor_*.jpg
 images/segmentator_*.png
+# Integration test patterns and outputs
+pipeline_integration_*.png
+pipeline_threshold_*.png

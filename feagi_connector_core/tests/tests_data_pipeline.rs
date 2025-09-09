@@ -3,14 +3,20 @@
 //! This module contains basic tests for the data pipeline stages,
 //! focusing on stage creation and basic validation.
 
+use std::time::Instant;
 use feagi_data_structures::data::ImageFrame;
 use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution};
 use feagi_data_structures::processing::ImageFrameProcessor;
+use feagi_data_structures::wrapped_io_data::WrappedIOData;
 use feagi_connector_core::data_pipeline::stages::*;
 
 #[cfg(test)]
 mod test_pipeline_stages {
     use super::*;
+    
+    // Import trait for direct stage testing (traits can be imported even if the module is private)
+    use feagi_connector_core::data_pipeline::stages::*;
+    use feagi_connector_core::data_pipeline::PipelineStage;
 
     //region Helper Functions
     
@@ -307,8 +313,219 @@ mod test_pipeline_stages {
     }
     
     //endregion
-
+    
     //region Integration Tests
+    
+    /// Creates a simple test pattern image with known pixel values
+    fn create_pattern_image_hard_binary(resolution: &ImageXYResolution) -> ImageFrame {
+        let mut image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, resolution).unwrap();
+        let mut pixels = image.get_pixels_view_mut();
+        
+        // Create a simple checkerboard pattern
+        for y in 0..resolution.height {
+            for x in 0..resolution.width {
+                let is_white = (x + y) % 2 == 0;
+                let color = if is_white { 255 } else { 0 };
+                pixels[(y as usize, x as usize, 0)] = color; // Red
+                pixels[(y as usize, x as usize, 1)] = color; // Green  
+                pixels[(y as usize, x as usize, 2)] = color; // Blue
+            }
+        }
+        
+        image
+    }
+    
+    /// Creates a second test pattern image with known differences from pattern A
+    fn create_pattern_image_b(resolution: &ImageXYResolution) -> ImageFrame {
+        let mut image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, resolution).unwrap();
+        let mut pixels = image.get_pixels_view_mut();
+        
+        // Create a shifted checkerboard pattern (offset by 1 pixel)
+        for y in 0..resolution.height {
+            for x in 0..resolution.width {
+                let is_white = ((x + 1) + y) % 2 == 0; // Shifted by 1 pixel
+                let color = if is_white { 255 } else { 0 };
+                pixels[(y as usize, x as usize, 0)] = color; // Red
+                pixels[(y as usize, x as usize, 1)] = color; // Green
+                pixels[(y as usize, x as usize, 2)] = color; // Blue
+            }
+        }
+        
+        image
+    }
+    
+    /// Creates a third test pattern with small differences (for threshold testing)
+    fn create_pattern_image_soft_binary(resolution: &ImageXYResolution) -> ImageFrame {
+        let mut image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, resolution).unwrap();
+        let mut pixels = image.get_pixels_view_mut();
+
+        // Create a simple checkerboard pattern
+        for y in 0..resolution.height {
+            for x in 0..resolution.width {
+                let is_white = (x + y) % 2 == 0;
+                let color = if is_white { 255 } else { 10 };
+                pixels[(y as usize, x as usize, 0)] = color; // Red
+                pixels[(y as usize, x as usize, 1)] = color; // Green
+                pixels[(y as usize, x as usize, 2)] = color; // Blue
+            }
+        }
+
+        image
+    }
+    
+    #[test]
+    fn test_pipeline_stage_runner_with_quick_diff_integration() {
+
+
+        let resolution = ImageXYResolution::new(16, 12).unwrap(); // Small test images
+        let threshold: u8 = 50; // Medium threshold
+        
+        // Create test pattern images
+        let pattern_a = create_pattern_image_hard_binary(&resolution);
+        let pattern_b = create_pattern_image_b(&resolution);
+        
+        // Save test patterns for visual inspection
+        save_test_image(&pattern_a, "pipeline_integration_pattern_a.png");
+        save_test_image(&pattern_b, "pipeline_integration_pattern_b.png");
+        
+        // Create the quick diff stage and manually simulate pipeline processing
+        let properties = pattern_a.get_image_frame_properties();
+        let mut quick_diff_stage = ImageFrameQuickDiffStage::new(properties, threshold).unwrap();
+        
+        let timestamp = Instant::now();
+        
+        // Manually call the trait methods directly (simulating what PipelineStageRunner would do)
+        // Process first image 
+        let input_a = WrappedIOData::ImageFrame(pattern_a.clone());
+        let _result_a = quick_diff_stage.process_new_input(&input_a, timestamp).unwrap();
+        
+        // Process second image (should show differences where patterns differ)
+        let input_b = WrappedIOData::ImageFrame(pattern_b);
+        let result_b = quick_diff_stage.process_new_input(&input_b, timestamp).unwrap();
+        
+        // Verify the output is an ImageFrame
+        if let WrappedIOData::ImageFrame(diff_image) = result_b {
+            // Save the difference image for visual inspection
+            save_test_image(diff_image, "pipeline_integration_diff_result.png");
+            
+            let diff_pixels = diff_image.get_pixels_view();
+            let mut significant_differences = 0;
+            let mut total_pixels = 0;
+            
+            // Count pixels with significant differences (non-zero output)
+            for y in 0..resolution.height {
+                for x in 0..resolution.width {
+                    total_pixels += 1;
+                    let r = diff_pixels[(y as usize, x as usize, 0)];
+                    let g = diff_pixels[(y as usize, x as usize, 1)];
+                    let b = diff_pixels[(y as usize, x as usize, 2)];
+                    
+                    // If any channel has a non-zero value, it means a significant difference was detected
+                    if r > 0 || g > 0 || b > 0 {
+                        significant_differences += 1;
+                    }
+                }
+            }
+            
+            // With a shifted checkerboard pattern, we should see differences in most pixels
+            // since each pixel will have a different neighbor
+            println!("Total pixels: {}, Significant differences: {}", total_pixels, significant_differences);
+            println!("Percentage with differences: {:.1}%", (significant_differences as f32 / total_pixels as f32) * 100.0);
+            
+            // Verify that we detected a reasonable number of differences
+            // (shifted checkerboard should create differences in most pixels)
+            assert!(significant_differences > total_pixels / 4, 
+                   "Expected more significant differences between shifted checkerboard patterns. Got {}/{}",
+                   significant_differences, total_pixels);
+            
+            println!("✓ Quick Diff stage integration test with known patterns completed successfully");
+        } else {
+            panic!("Expected ImageFrame output from quick diff stage");
+        }
+    }
+    
+    #[test]
+    fn test_quick_diff_stage_threshold_behavior() {
+        let resolution = ImageXYResolution::new(8, 8).unwrap(); // Very small test images
+        let low_threshold: u8 = 5;  // Should detect small differences
+        let high_threshold: u8 = 50; // Should NOT detect small differences
+        
+        // Create test images
+        let hard_binary = create_pattern_image_hard_binary(&resolution);
+        let soft_binary = create_pattern_image_soft_binary(&resolution); // Small differences only
+        
+        // Save test patterns 
+        save_test_image(&hard_binary, "pipeline_threshold_pattern_a.png");
+        save_test_image(&soft_binary, "pipeline_threshold_pattern_c.png");
+        
+        let properties = hard_binary.get_image_frame_properties();
+        let timestamp = Instant::now();
+        
+        // Test with LOW threshold (should detect small differences)
+        {
+            let mut quick_diff_stage_low = ImageFrameQuickDiffStage::new(properties, low_threshold).unwrap();
+            
+            let input_a = WrappedIOData::ImageFrame(hard_binary.clone());
+            let input_c = WrappedIOData::ImageFrame(soft_binary.clone());
+
+            _ = quick_diff_stage_low.process_new_input(&input_c, timestamp).unwrap();
+            let result_low = quick_diff_stage_low.process_new_input(&input_a, timestamp).unwrap(); // should be either 255 - 255 = 0, or 10 - 0 = 10 (threshold is 5, so 10)
+
+            let diff_image_low: &ImageFrame =  result_low.try_into().unwrap();
+            save_test_image(diff_image_low, "pipeline_threshold_diff_low.png");
+
+            let diff_pixels = diff_image_low.get_pixels_view();
+            let mut differences_low = 0;
+            dbg!(diff_image_low);
+
+            // Check the 4x4 region where we added small differences
+            for y in 0..4 {
+                for x in 0..4 {
+                    let r = diff_pixels[(y, x, 2)];
+                    if r > 0 {
+                        differences_low += 1;
+                    }
+                }
+            }
+
+            println!("Low threshold ({}): detected {} differences in 4x4 region", low_threshold, differences_low);
+            assert!(differences_low > 0, "we should see some areas over threshold");
+
+        }
+        
+        // Test with HIGH threshold (should NOT detect small differences)
+        {
+            let mut quick_diff_stage_high = ImageFrameQuickDiffStage::new(properties, high_threshold).unwrap();
+
+            let input_a = WrappedIOData::ImageFrame(hard_binary.clone());
+            let input_c = WrappedIOData::ImageFrame(soft_binary.clone());
+
+            _ = quick_diff_stage_high.process_new_input(&input_c, timestamp).unwrap();
+            let result_high = quick_diff_stage_high.process_new_input(&input_a, timestamp).unwrap(); // should be either 255 - 255 = 0, or 10 - 0 = 10 (but threshold is 50, so 0)
+            
+            if let WrappedIOData::ImageFrame(diff_image_high) = result_high {
+                save_test_image(diff_image_high, "pipeline_threshold_diff_high.png");
+                
+                let diff_pixels = diff_image_high.get_pixels_view();
+                let mut differences_high = 0;
+                
+                // Check the 4x4 region where we added small differences
+                for y in 0..4 {
+                    for x in 0..4 {
+                        let r = diff_pixels[(y, x, 0)];
+                        if r > 0 {
+                            differences_high += 1;
+                        }
+                    }
+                }
+                
+                println!("High threshold ({}): detected {} differences in 4x4 region", high_threshold, differences_high);
+                assert_eq!(differences_high, 0, "High threshold should NOT detect small differences");
+            }
+        }
+        
+        println!("✓ Pipeline threshold behavior test completed successfully");
+    }
     
     #[test]
     fn test_full_pipeline_simulation() {

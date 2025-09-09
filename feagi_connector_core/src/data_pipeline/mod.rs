@@ -5,6 +5,6 @@ pub mod stages;
 mod descriptors;
 
 pub use descriptors::PipelineStageIndex;
+pub use pipeline_stage::PipelineStage as PipelineStage;
 pub(crate) use pipeline_stage_runner::PipelineStageRunner;
-pub(crate) use pipeline_stage::PipelineStage;
 
