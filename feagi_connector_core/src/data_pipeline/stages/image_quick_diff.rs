@@ -12,7 +12,7 @@ use feagi_data_structures::data::image_descriptors::ImageFrameProperties;
 use feagi_data_structures::data::ImageFrame;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::stream_cache_processor_trait::PipelineStage;
+use crate::data_pipeline::pipeline_stage::PipelineStage;
 
 
 /// A stream processor that computes pixel-wise differences between consecutive image frames.
