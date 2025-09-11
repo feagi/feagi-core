@@ -24,6 +24,7 @@ pub struct ImageFrame {
     pixels: Array3<u8>, // MemoryOrderLayout::HeightsWidthsChannels
     channel_layout: ColorChannelLayout,
     color_space: ColorSpace,
+    skip_encoding: bool,
 }
 
 // NOTE -> (0,0) is in the top left corner!
@@ -41,6 +42,7 @@ impl ImageFrame {
             channel_layout: *channel_format,
             color_space: *color_space,
             pixels: Array3::<u8>::zeros((xy_resolution.height, xy_resolution.width, *channel_format as usize)),
+            skip_encoding: false,
         })
     }
 
@@ -55,7 +57,8 @@ impl ImageFrame {
         Ok(ImageFrame {
             pixels: pixel_data,
             color_space: *color_space,
-            channel_layout: ColorChannelLayout::try_from(number_color_channels)?
+            channel_layout: ColorChannelLayout::try_from(number_color_channels)?,
+            skip_encoding: false,
         })
     }
 
@@ -461,7 +464,7 @@ impl ImageFrame {
 
 
     // region Outputting Neurons
-    
+
     // TODO can this be parallelized?
     pub fn write_as_neuron_xyzp_data(&self, write_target: &mut CorticalMappedXYZPNeuronData, target_id: CorticalID, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals
