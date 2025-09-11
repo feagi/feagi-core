@@ -279,8 +279,15 @@ impl SegmentedImageFrame {
     //region neuron export
     pub fn write_as_neuron_xyzp_data(&self, write_target: &mut CorticalMappedXYZPNeuronData, channel_index: CorticalChannelIndex, ordered_cortical_ids: &[CorticalID; 9]) -> Result<(), FeagiDataError> {
         let ordered_refs: [&ImageFrame; 9] = self.get_ordered_image_frame_references();
+        
         for index in 0..9 {
-            ordered_refs[index].write_as_neuron_xyzp_data(write_target,ordered_cortical_ids[index], channel_index)?;
+            if ordered_refs[index].skip_encoding{
+                _ = write_target.ensure_clear_and_borrow_mut(&ordered_cortical_ids[index], ordered_refs[index].get_number_elements());
+            }
+            else {
+                ordered_refs[index].write_as_neuron_xyzp_data(write_target,ordered_cortical_ids[index], channel_index)?;
+            }
+
         }
         Ok(())
     }
