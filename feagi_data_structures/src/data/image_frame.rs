@@ -470,7 +470,7 @@ impl ImageFrame {
         let mapped_neuron_data = write_target.ensure_clear_and_borrow_mut(&target_id, self.get_number_elements());
 
         mapped_neuron_data.update_vectors_from_external(|x_vec, y_vec, c_vec, p_vec| {
-            for ((y, x, c), color_val) in self.pixels.indexed_iter() { // going from row major to cartesian
+            for ((x, y, c), color_val) in self.pixels.indexed_iter() { // going from row major to cartesian
                 if color_val > &EPSILON {
                     x_vec.push(x as u32 + x_offset);
                     y_vec.push( y as u32);  // flip y
