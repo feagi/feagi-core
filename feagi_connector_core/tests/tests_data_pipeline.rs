@@ -429,6 +429,69 @@ mod test_pipeline_stages {
         }
 
     }
+
+    #[test]
+    fn test_image_quickdiff() {
+        let resolution = ImageXYResolution::new(4, 5).unwrap();
+        let color_layout = ColorChannelLayout::RGB;
+        let color_space = ColorSpace::Gamma;
+
+        // Create test image using the correct constructor pattern
+        let mut test_image = ImageFrame::new(&color_layout, &color_space, &resolution).unwrap();
+
+        // Set all pixels to white (255 for all RGB channels)
+        let mut pixels_mut = test_image.get_pixels_view_mut();
+        for y in 0..5 {
+            for x in 0..4 {
+                for c in 0..3 {
+                    pixels_mut[(y, x, c)] = 0;
+                }
+            }
+        }
+
+        // Set top-left corner, R channel to black (5) (not full black otherwise encoder drops it
+        pixels_mut[(0, 0, 0)] = 5; // R
+        pixels_mut[(1, 3, 2)] = 10; // B
+
+
+        let image_properties  = (&test_image).get_image_frame_properties();
+
+        let mut sensor_cache: SensorCache = SensorCache::new();
+        let group_index: CorticalGroupIndex = 0.into();
+        let channel_index: CorticalChannelIndex = 0.into();
+        let cortical_channel_count: CorticalChannelCount = 1.into();
+        let cortical_id = CorticalID::new_sensor_cortical_area_id(ImageCameraCenter, group_index).unwrap();
+
+        sensor_cache.register_image_frame(ImageCameraCenter, group_index, cortical_channel_count, true, image_properties, image_properties);
+        sensor_cache.store_image_frame(ImageCameraCenter, group_index, channel_index, test_image).unwrap();
+
+        sensor_cache.encode_cached_data_into_bytes(Instant::now());
+        let bytes = sensor_cache.retrieve_latest_bytes().unwrap();
+
+        // check the neuron coord directly
+        assert_eq!(bytes[22], 1);
+        assert_eq!(bytes[30], 3);
+        assert_eq!(bytes[38], 2);
+        assert_eq!(bytes[46], 161);
+
+        let feagi_byte_structure: FeagiByteStructure = FeagiByteStructure::create_from_bytes(bytes.to_vec()).unwrap();
+        let cortical_mapped_data: CorticalMappedXYZPNeuronData =  CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&feagi_byte_structure).unwrap();
+
+        let neuron_array: &NeuronXYZPArrays = cortical_mapped_data.get_neurons_of(&cortical_id).unwrap();
+
+        for neuron in neuron_array.iter() {
+            if neuron.cortical_coordinate == CorticalCoordinate::new(0, 0, 0) {
+                assert_eq!(neuron.potential, 0.019607844)
+            }
+            else if neuron.cortical_coordinate == CorticalCoordinate::new(1, 3, 2)  {
+                assert_eq!(neuron.potential, 0.039215688)
+            }
+            else {
+                assert_eq!(neuron.potential, 1.0)
+            }
+        }
+
+    }
     
     //endregion
 }
