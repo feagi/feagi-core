@@ -143,6 +143,7 @@ impl ImageFrameProcessor {
                 change_contrast_by:None,
                 convert_to_grayscale: false,
             } => {
+                destination.skip_encoding = source.skip_encoding;
                 crop(source, destination, cropping_from, self.get_output_channel_count())
             }
 
@@ -156,6 +157,7 @@ impl ImageFrameProcessor {
                 change_contrast_by:None,
                 convert_to_grayscale: false,
             } => {
+                destination.skip_encoding = source.skip_encoding;
                 resize(source, destination)
             }
 
@@ -169,6 +171,7 @@ impl ImageFrameProcessor {
                 change_contrast_by:None,
                 convert_to_grayscale: true,
             } => {
+                destination.skip_encoding = source.skip_encoding;
                 to_grayscale(source, destination, self.input_image_properties.get_color_space())
             }
 
@@ -182,6 +185,7 @@ impl ImageFrameProcessor {
                 change_contrast_by:None,
                 convert_to_grayscale: false,
             } => {
+                destination.skip_encoding = source.skip_encoding;
                 crop_and_resize(source, destination, cropping_from)
             }
 
@@ -195,6 +199,7 @@ impl ImageFrameProcessor {
                 change_contrast_by:None,
                 convert_to_grayscale: true,
             } => {
+                destination.skip_encoding = source.skip_encoding;
                 crop_and_resize_and_grayscale(source, destination, cropping_from, final_resize_xy_to, self.input_image_properties.get_color_space())
             }
 
@@ -252,6 +257,7 @@ impl ImageFrameProcessor {
                 }
 
                 *destination = processing;
+                destination.skip_encoding = source.skip_encoding;
                 Ok(())
             }
 
