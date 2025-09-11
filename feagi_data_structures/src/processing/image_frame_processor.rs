@@ -203,7 +203,7 @@ impl ImageFrameProcessor {
                 // This function is much slower, There may be some optimization work possible, but ensure the most common step combinations have an accelerated path
                 let is_cropping_is_resizing = (self.cropping_from, self.final_resize_xy_to);
                 let final_properties = self.get_output_image_properties();
-                let mut processing = ImageFrame::new_from_image_frame_properties(&final_properties)?;
+                let mut processing = ImageFrame::new_from_image_frame_properties(&final_properties)?; // TODO we can optimize this
 
                 match is_cropping_is_resizing {
                     (None, None) => {

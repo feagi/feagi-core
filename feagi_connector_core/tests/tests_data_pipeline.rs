@@ -12,11 +12,18 @@ use feagi_connector_core::data_pipeline::stages::*;
 
 #[cfg(test)]
 mod test_pipeline_stages {
+    use feagi_connector_core::caching::SensorCache;
     use super::*;
     
     // Import trait for direct stage testing (traits can be imported even if the module is private)
     use feagi_connector_core::data_pipeline::stages::*;
     use feagi_connector_core::data_pipeline::PipelineStage;
+    use feagi_data_serialization::{FeagiByteStructure, FeagiByteStructureCompatible};
+    use feagi_data_structures::genomic::{CorticalID, CorticalType, SensorCorticalType};
+    use feagi_data_structures::genomic::CorticalType::Sensory;
+    use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalCoordinate, CorticalGroupIndex};
+    use feagi_data_structures::genomic::SensorCorticalType::ImageCameraCenter;
+    use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
 
     //region Helper Functions
     
@@ -673,6 +680,59 @@ mod test_pipeline_stages {
         println!("✓ Image processing stage created successfully");
         
         println!("All stage combinations validated");
+    }
+
+    #[test]
+    fn test_image_rotation() {
+        let resolution = ImageXYResolution::new(4, 5).unwrap();
+        let color_layout = ColorChannelLayout::RGB;
+        let color_space = ColorSpace::Gamma;
+
+        // Create test image using the correct constructor pattern
+        let mut test_image = ImageFrame::new(&color_layout, &color_space, &resolution).unwrap();
+
+        // Set all pixels to white (255 for all RGB channels)
+        let mut pixels_mut = test_image.get_pixels_view_mut();
+        for y in 0..5 {
+            for x in 0..4 {
+                for c in 0..3 {
+                    pixels_mut[(y, x, c)] = 255;
+                }
+            }
+        }
+
+        // Set top-left corner, R channel to black (5) (not full black otherwise encoder drops it
+        pixels_mut[(0, 0, 0)] = 5; // R
+
+
+        let image_properties  = (&test_image).get_image_frame_properties();
+
+        let mut sensor_cache: SensorCache = SensorCache::new();
+        let group_index: CorticalGroupIndex = 0.into();
+        let channel_index: CorticalChannelIndex = 0.into();
+        let cortical_channel_count: CorticalChannelCount = 1.into();
+        let cortical_id = CorticalID::new_sensor_cortical_area_id(ImageCameraCenter, group_index).unwrap();
+
+        sensor_cache.register_image_frame(ImageCameraCenter, group_index, cortical_channel_count, true, image_properties, image_properties);
+        sensor_cache.store_image_frame(ImageCameraCenter, group_index, channel_index, test_image).unwrap();
+
+        sensor_cache.encode_cached_data_into_bytes(Instant::now());
+        let bytes = sensor_cache.retrieve_latest_bytes().unwrap();
+
+        let feagi_byte_structure: FeagiByteStructure = FeagiByteStructure::create_from_bytes(bytes.to_vec()).unwrap();
+        let cortical_mapped_data: CorticalMappedXYZPNeuronData =  CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&feagi_byte_structure).unwrap();
+
+        let neuron_array: &NeuronXYZPArrays = cortical_mapped_data.get_neurons_of(&cortical_id).unwrap();
+        dbg!(&neuron_array);
+        for neuron in neuron_array.iter() {
+            if neuron.cortical_coordinate == CorticalCoordinate::new(0, 0, 0) {
+                assert_eq!(neuron.potential, 0.019607844)
+            }
+            else {
+                assert_eq!(neuron.potential, 1.0)
+            }
+        }
+
     }
     
     //endregion
