@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::mem::size_of;
+use crate::FeagiDataError;
 use crate::genomic::CorticalID;
 use crate::neurons::xyzp::{ NeuronXYZPArrays};
 

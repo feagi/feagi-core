@@ -217,7 +217,7 @@ pub enum ColorChannelLayout {
     RGBA = 4,
 }
 
-impl std::fmt::Display for ColorChannelLayout {
+impl Display for ColorChannelLayout {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ColorChannelLayout::GrayScale => write!(f, "ChannelLayout(GrayScale)"),
@@ -382,9 +382,17 @@ impl ImageFrameProperties {
     pub fn get_color_channel_layout(&self) -> ColorChannelLayout {
         self.color_channel_layout
     }
+
+    pub fn get_number_of_channels(&self) -> usize {
+        self.color_channel_layout.into()
+    }
+
+    pub fn get_number_of_samples(&self) -> usize {
+        self.image_resolution.width * self.image_resolution.height * self.get_number_of_channels()
+    }
 }
 
-impl std::fmt::Display for ImageFrameProperties {
+impl Display for ImageFrameProperties {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!("ImageFrameProperties({}, {}, {})", self.image_resolution, self.color_space.to_string(), self.color_channel_layout.to_string());
         write!(f, "{}", s)

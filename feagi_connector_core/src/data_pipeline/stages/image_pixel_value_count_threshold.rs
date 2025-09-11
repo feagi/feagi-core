@@ -1,9 +1,7 @@
-
 use std::fmt::Display;
 use std::ops::RangeInclusive;
 use std::time::Instant;
 use ndarray::{Array3, Zip};
-use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
 use feagi_data_structures::basic_components::Percentage;
 use feagi_data_structures::data::image_descriptors::ImageFrameProperties;
@@ -13,11 +11,8 @@ use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 
 #[derive(Debug, Clone)]
-pub struct ImageFrameQuickDiffStage {
-    /// The output buffer containing the computed difference image
-    diff_cache: WrappedIOData, // Image Frame
-    previous_frame_cache: WrappedIOData, // Image Frame
-    /// Properties that input images must match (resolution, color space, channels)
+pub struct ImagePixelValueCountThresholdStage {
+    cache: WrappedIOData, // Image Frame
     input_definition: ImageFrameProperties,
     /// Minimum difference threshold for pixel changes to be considered significant
     inclusive_pixel_range: RangeInclusive<u8>,
@@ -25,13 +20,13 @@ pub struct ImageFrameQuickDiffStage {
     samples_count_upper_bound: usize,
 }
 
-impl Display for ImageFrameQuickDiffStage {
+impl Display for ImagePixelValueCountThresholdStage {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "ImageFrameQuickDiffProcessor()")
+        write!(f, "ImagePixelValueCountThresholdStage()")
     }
 }
 
-impl PipelineStage for ImageFrameQuickDiffStage {
+impl PipelineStage for ImagePixelValueCountThresholdStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::ImageFrame(Some(self.input_definition))
     }
@@ -41,13 +36,12 @@ impl PipelineStage for ImageFrameQuickDiffStage {
     }
 
     fn get_most_recent_output(&self) -> &WrappedIOData {
-        &self.diff_cache
+        &self.cache
     }
 
     fn process_new_input(&mut self, value: &WrappedIOData, _time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-        quick_diff_and_check_if_pass(value, &self.previous_frame_cache, &mut self.diff_cache, &self.inclusive_pixel_range, self.samples_count_lower_bound, self.samples_count_upper_bound)?;
-        self.previous_frame_cache = value.clone();
-        Ok(&self.diff_cache)
+        filter_and_set_if_pass(value, &mut self.cache, &self.inclusive_pixel_range, self.samples_count_lower_bound, self.samples_count_upper_bound)?;
+        Ok(&self.cache)
     }
 
     fn clone_box(&self) -> Box<dyn PipelineStage> {
@@ -55,15 +49,13 @@ impl PipelineStage for ImageFrameQuickDiffStage {
     }
 }
 
-impl ImageFrameQuickDiffStage {
+impl ImagePixelValueCountThresholdStage {
 
     pub fn new(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Self, FeagiDataError> {
-        
-        let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;
+
         let number_of_samples = image_properties.get_number_of_channels();
-        Ok(ImageFrameQuickDiffStage {
-            diff_cache: WrappedIOData::ImageFrame(cache_image.clone()),
-            previous_frame_cache: WrappedIOData::ImageFrame(cache_image.clone()), // Image Frame
+        Ok(ImagePixelValueCountThresholdStage {
+            cache: WrappedIOData::ImageFrame(ImageFrame::new_from_image_frame_properties(&image_properties)?),
             input_definition: image_properties,
             inclusive_pixel_range: per_pixel_allowed_range,
             samples_count_lower_bound: (acceptable_amount_of_activity_in_image.start().get_as_0_1() * number_of_samples as f32) as usize,
@@ -72,36 +64,27 @@ impl ImageFrameQuickDiffStage {
     }
 }
 
-fn quick_diff_and_check_if_pass(minuend: &WrappedIOData, subtrahend: &WrappedIOData, diff_result: &mut WrappedIOData, pixel_bounds: &RangeInclusive<u8>, samples_count_lower_bound: usize, samples_count_upper_bound: usize) -> Result<(), FeagiDataError> {
-    let minuend: &ImageFrame = minuend.try_into()?;
-    let subtrahend: &ImageFrame = subtrahend.try_into()?;
-    let diff_result: &mut ImageFrame = diff_result.try_into()?;
-
+fn filter_and_set_if_pass(source: &WrappedIOData, filter_result: &mut WrappedIOData, pixel_bounds: &RangeInclusive<u8>, samples_count_lower_bound: usize, samples_count_upper_bound: usize) -> Result<(), FeagiDataError> {
+    let source: &ImageFrame = source.try_into()?;
+    let filter_result: &mut ImageFrame = filter_result.try_into()?;
     let pixel_val_lower_bound = *pixel_bounds.start();
     let pixel_val_upper_bound = *pixel_bounds.end();
 
-    let minuend_arr: &Array3<u8> = minuend.get_internal_data();
-    let subtrahend_arr: &Array3<u8> = subtrahend.get_internal_data();
-    let diff_arr: &mut Array3<u8> = diff_result.get_internal_data_mut();
 
-    let total_pass_count: usize = Zip::from(minuend_arr)
-        .and(subtrahend_arr)
-        .and(diff_arr)
-        .par_map_collect(|&minuend, &subtrahend, diff| {
-            let absolute_diff = if minuend >= subtrahend {
-                minuend - subtrahend
-            } else {
-                subtrahend - minuend
-            };
-            let passed = absolute_diff >= pixel_val_lower_bound && absolute_diff <= pixel_val_upper_bound;
-            *diff = if passed { subtrahend } else { 0 };
+    let source_arr: &Array3<u8> = source.get_internal_data();
+    let filter_arr: &mut Array3<u8> = filter_result.get_internal_data_mut();
+
+    let total_pass_count: usize = Zip::from(source_arr)
+        .and(filter_arr)
+        .par_map_collect(|&source, filter| {
+            let passed = source >= pixel_val_lower_bound && source <= pixel_val_upper_bound;
+            *filter = if (source >= pixel_val_lower_bound && source <= pixel_val_upper_bound) {source} else {0};
             passed as usize
         })
         .into_par_iter()
         .sum();
-
     let should_pass = total_pass_count >= samples_count_lower_bound && total_pass_count<= samples_count_upper_bound;
-    diff_result.skip_encoding = !should_pass;
+    filter_result.skip_encoding = !should_pass;
     Ok(())
 }
 
