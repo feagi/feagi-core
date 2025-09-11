@@ -696,13 +696,12 @@ mod test_pipeline_stages {
         for y in 0..5 {
             for x in 0..4 {
                 for c in 0..3 {
-                    pixels_mut[(y, x, c)] = 255;
+                    pixels_mut[(y, x, c)] = 0;
                 }
             }
         }
 
         // Set top-left corner, R channel to black (5) (not full black otherwise encoder drops it
-        // y, x, c
         pixels_mut[(0, 0, 0)] = 5; // R
         pixels_mut[(1, 3, 2)] = 10; // B
 
@@ -721,6 +720,12 @@ mod test_pipeline_stages {
         sensor_cache.encode_cached_data_into_bytes(Instant::now());
         let bytes = sensor_cache.retrieve_latest_bytes().unwrap();
 
+        // check the neuron coord directly
+        assert_eq!(bytes[22], 1);
+        assert_eq!(bytes[30], 3);
+        assert_eq!(bytes[38], 2);
+        assert_eq!(bytes[46], 161);
+
         let feagi_byte_structure: FeagiByteStructure = FeagiByteStructure::create_from_bytes(bytes.to_vec()).unwrap();
         let cortical_mapped_data: CorticalMappedXYZPNeuronData =  CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&feagi_byte_structure).unwrap();
 
@@ -730,8 +735,8 @@ mod test_pipeline_stages {
             if neuron.cortical_coordinate == CorticalCoordinate::new(0, 0, 0) {
                 assert_eq!(neuron.potential, 0.019607844)
             }
-            else if neuron.cortical_coordinate == CorticalCoordinate::new(3, 1, 2) {
-                assert_eq!(neuron.potential , 0.039215688);
+            else if neuron.cortical_coordinate == CorticalCoordinate::new(1, 3, 2)  {
+                assert_eq!(neuron.potential, 0.039215688)
             }
             else {
                 assert_eq!(neuron.potential, 1.0)

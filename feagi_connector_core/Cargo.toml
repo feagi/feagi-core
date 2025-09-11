@@ -13,3 +13,4 @@ ndarray = { workspace = true }
 paste = "1.0"
 feagi_data_structures = { workspace = true }
 feagi_data_serialization = { workspace = true }
+rayon = "1.11.0"
