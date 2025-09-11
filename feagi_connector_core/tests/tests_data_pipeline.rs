@@ -702,7 +702,9 @@ mod test_pipeline_stages {
         }
 
         // Set top-left corner, R channel to black (5) (not full black otherwise encoder drops it
+        // y, x, c
         pixels_mut[(0, 0, 0)] = 5; // R
+        pixels_mut[(1, 3, 2)] = 10; // B
 
 
         let image_properties  = (&test_image).get_image_frame_properties();
@@ -723,10 +725,13 @@ mod test_pipeline_stages {
         let cortical_mapped_data: CorticalMappedXYZPNeuronData =  CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&feagi_byte_structure).unwrap();
 
         let neuron_array: &NeuronXYZPArrays = cortical_mapped_data.get_neurons_of(&cortical_id).unwrap();
-        dbg!(&neuron_array);
+
         for neuron in neuron_array.iter() {
             if neuron.cortical_coordinate == CorticalCoordinate::new(0, 0, 0) {
                 assert_eq!(neuron.potential, 0.019607844)
+            }
+            else if neuron.cortical_coordinate == CorticalCoordinate::new(3, 1, 2) {
+                assert_eq!(neuron.potential , 0.039215688);
             }
             else {
                 assert_eq!(neuron.potential, 1.0)
