@@ -20,6 +20,10 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
     fn write_neuron_data_single_channel(&self, wrapped_value: &WrappedIOData, cortical_channel: CorticalChannelIndex, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
         // We are not doing any sort of verification checks here, other than ensuring data types
         let image: &ImageFrame = wrapped_value.try_into()?;
+        if image.skip_encoding {
+            _ = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target, image.get_number_elements());
+            return Ok(());
+        }
         image.write_as_neuron_xyzp_data(write_target, self.cortical_write_target, cortical_channel)?;
         Ok(())
     }

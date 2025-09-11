@@ -24,7 +24,8 @@ pub struct ImageFrame {
     pixels: Array3<u8>, // MemoryOrderLayout::HeightsWidthsChannels
     channel_layout: ColorChannelLayout,
     color_space: ColorSpace,
-    skip_encoding: bool,
+    /// If true, tells encoders to not encode this image, to instead send "blank"
+    pub skip_encoding: bool,
 }
 
 // NOTE -> (0,0) is in the top left corner!
