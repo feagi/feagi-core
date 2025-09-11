@@ -47,7 +47,7 @@ impl PipelineStage for ImageFrameSegmentatorStage {
 }
 
 impl ImageFrameSegmentatorStage {
-    pub fn new(input_image_properties: ImageFrameProperties, output_image_properties: SegmentedImageFrameProperties, image_segmentator: ImageFrameSegmentator) -> Self {
+    pub fn new(input_image_properties: ImageFrameProperties, output_image_properties: SegmentedImageFrameProperties, image_segmentator: ImageFrameSegmentator) -> Self { // TODO why do we need input and output?
         let cached: SegmentedImageFrame = SegmentedImageFrame::from_segmented_image_frame_properties(&output_image_properties).unwrap();
 
         ImageFrameSegmentatorStage {

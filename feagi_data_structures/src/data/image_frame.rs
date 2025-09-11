@@ -461,11 +461,11 @@ impl ImageFrame {
 
 
     // region Outputting Neurons
-
+    
+    // TODO can this be parallelized?
     pub fn write_as_neuron_xyzp_data(&self, write_target: &mut CorticalMappedXYZPNeuronData, target_id: CorticalID, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
-        let y_flip_distance: u32 = self.get_xy_resolution().height as u32;
         let x_offset: u32 = *x_channel_offset * self.get_xy_resolution().width as u32;
         let mapped_neuron_data = write_target.ensure_clear_and_borrow_mut(&target_id, self.get_number_elements());
 
@@ -473,7 +473,7 @@ impl ImageFrame {
             for ((y, x, c), color_val) in self.pixels.indexed_iter() { // going from row major to cartesian
                 if color_val > &EPSILON {
                     x_vec.push(x as u32 + x_offset);
-                    y_vec.push( y_flip_distance - y as u32);  // flip y
+                    y_vec.push( y as u32);  // flip y
                     c_vec.push(c as u32);
                     p_vec.push(*color_val as f32 / 255.0);
                 }
