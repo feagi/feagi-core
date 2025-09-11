@@ -101,7 +101,7 @@ fn quick_diff_and_check_if_pass(minuend: &WrappedIOData, subtrahend: &WrappedIOD
         .sum();
 
     let should_pass = total_pass_count >= samples_count_lower_bound && total_pass_count<= samples_count_upper_bound;
-    diff_result.skip_encoding = !should_pass;
+    diff_result.skip_encoding = !should_pass ||  diff_result.skip_encoding;
     Ok(())
 }
 

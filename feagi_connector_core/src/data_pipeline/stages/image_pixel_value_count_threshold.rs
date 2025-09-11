@@ -84,7 +84,7 @@ fn filter_and_set_if_pass(source: &WrappedIOData, filter_result: &mut WrappedIOD
         .into_par_iter()
         .sum();
     let should_pass = total_pass_count >= samples_count_lower_bound && total_pass_count<= samples_count_upper_bound;
-    filter_result.skip_encoding = !should_pass;
+    filter_result.skip_encoding = !should_pass || filter_result.skip_encoding;
     Ok(())
 }
 

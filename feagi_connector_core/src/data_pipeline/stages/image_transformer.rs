@@ -67,6 +67,7 @@ impl PipelineStage for ImageFrameProcessorStage {
         let read_from: &ImageFrame = value.try_into()?;
         let write_target: &mut ImageFrame = (&mut self.cached).try_into()?;
         self.transformer_definition.process_image(read_from, write_target)?;
+        write_target.skip_encoding = read_from.skip_encoding;
         Ok(&self.cached)
     }
 
