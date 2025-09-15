@@ -1,5 +1,7 @@
 mod spatial;
-mod numerical;
+mod flat;
+mod point;
 
-pub(crate) use spatial::*;
-pub use numerical::*;
+pub use spatial::*;
+pub use flat::*;
+pub use point::*;

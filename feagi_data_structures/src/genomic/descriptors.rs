@@ -1,5 +1,5 @@
 use crate::FeagiDataError;
-use crate::basic_components::{Dimensions, DimensionRange, CoordinateU32, CoordinateI32};
+use crate::basic_components::{U32XYZDimensions, DimensionRange, U32XYZCoordinate, I32XYZCoordinate};
 
 //region Macros
 /// Defines the index of something as an integer of a certain type
@@ -85,30 +85,30 @@ macro_rules! define_coordinate_u32 {
         #[doc = $doc]
         #[repr(transparent)]
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        pub struct $name(CoordinateU32);
+        pub struct $name(U32XYZCoordinate);
         
         impl $name {
             /// Creates a new coordinate instance.
             pub fn new(x: u32, y: u32, z: u32) -> Self {
-                $name(CoordinateU32::new(x, y, z))
+                $name(U32XYZCoordinate::new(x, y, z))
             }
         }
         
         impl std::ops::Deref for $name {
-            type Target = CoordinateU32;
+            type Target = U32XYZCoordinate;
             
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
         
-        impl From<CoordinateU32> for $name {
-            fn from(coord: CoordinateU32) -> Self {
+        impl From<U32XYZCoordinate> for $name {
+            fn from(coord: U32XYZCoordinate) -> Self {
                 $name(coord)
             }
         }
         
-        impl From<$name> for CoordinateU32 {
+        impl From<$name> for U32XYZCoordinate {
             fn from(coord: $name) -> Self {
                 coord.0
             }
@@ -128,30 +128,30 @@ macro_rules! define_coordinate_i32 {
         #[doc = $doc]
         #[repr(transparent)]
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        pub struct $name(CoordinateI32);
+        pub struct $name(I32XYZCoordinate);
         
         impl $name {
             /// Creates a new coordinate instance.
             pub fn new(x: i32, y: i32, z: i32) -> Self {
-                $name(CoordinateI32::new(x, y, z))
+                $name(I32XYZCoordinate::new(x, y, z))
             }
         }
         
         impl std::ops::Deref for $name {
-            type Target = CoordinateI32;
+            type Target = I32XYZCoordinate;
             
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
         
-        impl From<CoordinateI32> for $name {
-            fn from(coord: CoordinateI32) -> Self {
+        impl From<I32XYZCoordinate> for $name {
+            fn from(coord: I32XYZCoordinate) -> Self {
                 $name(coord)
             }
         }
         
-        impl From<$name> for CoordinateI32 {
+        impl From<$name> for I32XYZCoordinate {
             fn from(coord: $name) -> Self {
                 coord.0
             }
@@ -171,16 +171,16 @@ macro_rules! define_dimensions {
         #[doc = $doc]
         #[repr(transparent)]
         #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-        pub struct $name(Dimensions);
+        pub struct $name(U32XYZDimensions);
         
         impl $name {
             /// Creates new dimensions, ensuring all values are non-zero.
             pub fn new(x: u32, y: u32, z: u32) -> Result<Self, FeagiDataError> {
-                Ok($name(Dimensions::new(x, y, z)?))
+                Ok($name(U32XYZDimensions::new(x, y, z)?))
             }
             
             /// Verifies that a coordinate falls within these dimensional bounds.
-            pub fn verify_coordinate_in_bounds(&self, coordinate: &CoordinateU32) -> Result<(), FeagiDataError> {
+            pub fn verify_coordinate_in_bounds(&self, coordinate: &U32XYZCoordinate) -> Result<(), FeagiDataError> {
                 self.0.verify_coordinate_in_bounds(coordinate)
             }
             
@@ -201,20 +201,20 @@ macro_rules! define_dimensions {
         }
         
         impl std::ops::Deref for $name {
-            type Target = Dimensions;
+            type Target = U32XYZDimensions;
             
             fn deref(&self) -> &Self::Target {
                 &self.0
             }
         }
         
-        impl From<Dimensions> for $name {
-            fn from(dims: Dimensions) -> Self {
+        impl From<U32XYZDimensions> for $name {
+            fn from(dims: U32XYZDimensions) -> Self {
                 $name(dims)
             }
         }
         
-        impl From<$name> for Dimensions {
+        impl From<$name> for U32XYZDimensions {
             fn from(dims: $name) -> Self {
                 dims.0
             }
@@ -248,7 +248,7 @@ macro_rules! define_dimension_range {
             }
             
             /// Verifies that a coordinate falls within all axis ranges.
-            pub fn verify_coordinate_u32_within_range(&self, coordinate: &CoordinateU32) -> Result<(), FeagiDataError> {
+            pub fn verify_coordinate_u32_within_range(&self, coordinate: &U32XYZCoordinate) -> Result<(), FeagiDataError> {
                 self.0.verify_coordinate_u32_within_range(coordinate)
             }
         }

@@ -6,7 +6,7 @@ use std::cmp;
 use std::fmt::Display;
 use std::ops::RangeInclusive;
 use crate::FeagiDataError;
-use crate::basic_components::{CartesianResolution, FlatCoordinateU32};
+use crate::basic_components::{U32XYDimensions, U32XY};
 use crate::data::{ImageFrame, SegmentedImageFrame};
 
 //region Image XY
@@ -14,28 +14,28 @@ use crate::data::{ImageFrame, SegmentedImageFrame};
 /// Represents a coordinate on an image. +x goes tot he right, +y goes downward. (0,0) is in the top_left
 #[repr(transparent)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub struct ImageXYPoint(FlatCoordinateU32);
+pub struct ImageXYPoint(U32XY);
 
 impl ImageXYPoint {
     pub fn new(x: u32, y: u32) -> Self {
-        ImageXYPoint(FlatCoordinateU32::new(x, y))
+        ImageXYPoint(U32XY::new(x, y))
     }
 }
 
 impl std::ops::Deref for ImageXYPoint {
-    type Target = FlatCoordinateU32;
+    type Target = U32XY;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl From<FlatCoordinateU32> for ImageXYPoint {
-    fn from(x: FlatCoordinateU32) -> Self {
+impl From<U32XY> for ImageXYPoint {
+    fn from(x: U32XY) -> Self {
         ImageXYPoint(x)
     }
 }
 
-impl From<ImageXYPoint> for FlatCoordinateU32 {
+impl From<ImageXYPoint> for U32XY {
     fn from(x: ImageXYPoint) -> Self {
         x.0
     }
@@ -52,28 +52,28 @@ impl Display for ImageXYPoint {
 /// Describes the resolution of the image (width and height)
 #[repr(transparent)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub struct ImageXYResolution(CartesianResolution);
+pub struct ImageXYResolution(U32XYDimensions);
 
 impl ImageXYResolution {
     pub fn new(x_width: usize, y_height: usize,) -> Result<Self,FeagiDataError> {
-        Ok(ImageXYResolution(CartesianResolution::new(x_width, y_height)?))
+        Ok(ImageXYResolution(U32XYDimensions::new(x_width, y_height)?))
     }
 }
 
 impl std::ops::Deref for ImageXYResolution {
-    type Target = CartesianResolution;
+    type Target = U32XYDimensions;
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
-impl From<CartesianResolution> for ImageXYResolution {
-    fn from(coord: CartesianResolution) -> Self {
+impl From<U32XYDimensions> for ImageXYResolution {
+    fn from(coord: U32XYDimensions) -> Self {
         ImageXYResolution(coord)
     }
 }
 
-impl From<ImageXYResolution> for CartesianResolution {
+impl From<ImageXYResolution> for U32XYDimensions {
     fn from(coord: ImageXYResolution) -> Self {
         coord.0
     }

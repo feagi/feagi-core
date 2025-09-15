@@ -2,7 +2,7 @@
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use image;
 use image::{DynamicImage, GenericImageView};
-use crate::basic_components::Dimensions;
+use crate::basic_components::U32XYZDimensions;
 use crate::FeagiDataError;
 use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution};
 use crate::genomic::CorticalID;
@@ -205,8 +205,8 @@ impl ImageFrame {
         self.pixels.shape()[0] * self.pixels.shape()[1] * self.pixels.shape()[2]
     }
 
-    pub fn get_dimensions(&self) -> Dimensions {
-        Dimensions::new(
+    pub fn get_dimensions(&self) -> U32XYZDimensions {
+        U32XYZDimensions::new(
             self.pixels.shape()[0] as u32,
             self.pixels.shape()[1] as u32,
             self.channel_layout.into()
