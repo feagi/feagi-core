@@ -260,6 +260,12 @@ impl From<ColorChannelLayout> for usize {
     }
 }
 
+impl From<ColorChannelLayout> for u32 {
+    fn from(value: ColorChannelLayout) -> u32 {
+        value as u32
+    }
+}
+
 /// Represents the memory layout of an image array.
 ///
 /// This enum defines the possible memory layouts for image data:
