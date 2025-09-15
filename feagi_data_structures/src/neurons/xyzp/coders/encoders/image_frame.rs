@@ -1,4 +1,4 @@
-use crate::data::image_descriptors::ImageFrameProperties;
+use crate::data::descriptors::ImageFrameProperties;
 use crate::data::ImageFrame;
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;

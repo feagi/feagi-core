@@ -9,9 +9,11 @@ use crate::FeagiDataError;
 use crate::basic_components::{U32XYDimensions, U32XY};
 use crate::data::{ImageFrame, SegmentedImageFrame};
 
+//region Images
+
 //region Image XY
 
-/// Represents a coordinate on an image. +x goes tot he right, +y goes downward. (0,0) is in the top_left
+/// Represents a coordinate on an image. +x goes to the right, +y goes downward. (0,0) is in the top_left
 #[repr(transparent)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
 pub struct ImageXYPoint(U32XY);
@@ -55,7 +57,7 @@ impl Display for ImageXYPoint {
 pub struct ImageXYResolution(U32XYDimensions);
 
 impl ImageXYResolution {
-    pub fn new(x_width: usize, y_height: usize,) -> Result<Self,FeagiDataError> {
+    pub fn new(x_width: u32, y_height: u32,) -> Result<Self,FeagiDataError> {
         Ok(ImageXYResolution(U32XYDimensions::new(x_width, y_height)?))
     }
 }
@@ -394,7 +396,7 @@ impl ImageFrameProperties {
     }
 
     pub fn get_number_of_samples(&self) -> usize {
-        self.image_resolution.width * self.image_resolution.height * self.get_number_of_channels()
+        self.image_resolution.width as usize * self.image_resolution.height as usize * self.get_number_of_channels()
     }
 }
 
@@ -501,11 +503,11 @@ impl CornerPoints {
     }
     
     pub fn enclosed_area_width_height(&self) -> ImageXYResolution {
-        ImageXYResolution::new(self.get_width() as usize, self.get_height() as usize).unwrap()
+        ImageXYResolution::new(self.get_width(), self.get_height()).unwrap()
     }
 
     pub fn verify_fits_in_resolution(&self, resolution: ImageXYResolution) -> Result<(), FeagiDataError> {
-        if self.lower_right.x > resolution.width as u32 || self.lower_right.y > resolution.height as u32 {
+        if self.lower_right.x > resolution.width || self.lower_right.y > resolution.height {
             return Err(FeagiDataError::BadParameters(format!("Corner Points {} do not fit in given resolution {}!", self, resolution)).into())
         }
         Ok(())
@@ -562,15 +564,15 @@ impl GazeProperties {
 
         let center_corner_points = self.calculate_pixel_coordinates_of_center_corners(source_frame_resolution)?;
         Ok([
-            CornerPoints::new(ImageXYPoint::new(0, center_corner_points.lower_right.y), ImageXYPoint::new(center_corner_points.upper_left.x, source_frame_resolution.height as u32))?,
-            CornerPoints::new(center_corner_points.get_lower_left(), ImageXYPoint::new(center_corner_points.lower_right.x, source_frame_resolution.height as u32))?,
-            CornerPoints::new(center_corner_points.lower_right, ImageXYPoint::new(source_frame_resolution.width as u32, source_frame_resolution.height as u32))?,
+            CornerPoints::new(ImageXYPoint::new(0, center_corner_points.lower_right.y), ImageXYPoint::new(center_corner_points.upper_left.x, source_frame_resolution.height))?,
+            CornerPoints::new(center_corner_points.get_lower_left(), ImageXYPoint::new(center_corner_points.lower_right.x, source_frame_resolution.height))?,
+            CornerPoints::new(center_corner_points.lower_right, ImageXYPoint::new(source_frame_resolution.width, source_frame_resolution.height))?,
             CornerPoints::new(ImageXYPoint::new(0, center_corner_points.upper_left.y), center_corner_points.get_lower_left())?,
             center_corner_points,
-            CornerPoints::new(center_corner_points.get_upper_right(), ImageXYPoint::new(source_frame_resolution.width as u32, center_corner_points.lower_right.y))?,
+            CornerPoints::new(center_corner_points.get_upper_right(), ImageXYPoint::new(source_frame_resolution.width, center_corner_points.lower_right.y))?,
             CornerPoints::new(ImageXYPoint::new(0,0), center_corner_points.upper_left)?,
             CornerPoints::new(ImageXYPoint::new(center_corner_points.upper_left.x, 0), center_corner_points.get_upper_right())?,
-            CornerPoints::new(ImageXYPoint::new(center_corner_points.lower_right.x, 0), ImageXYPoint::new(source_frame_resolution.width as u32, center_corner_points.upper_left.y))?,
+            CornerPoints::new(ImageXYPoint::new(center_corner_points.lower_right.x, 0), ImageXYPoint::new(source_frame_resolution.width, center_corner_points.upper_left.y))?,
         ])
     }
 
@@ -579,13 +581,13 @@ impl GazeProperties {
         let center_size_normalized_half_xy: (f32, f32) = (self.modularity_normalized_xy.0 / 2.0, self.modularity_normalized_xy.1 / 2.0);
 
         // We use max / min to ensure that there is always a 1 pixel buffer along all edges for use in peripheral vision (since we cannot use a resolution of 0)
-        let bottom_pixel: usize = cmp::min(source_frame_resolution.height - 1,
+        let bottom_pixel: usize = cmp::min(source_frame_resolution.height as usize - 1,
                                            ((self.eccentricity_normalized_xy.1 + center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
         let top_pixel: usize = cmp::max(1,
                                         (( self.eccentricity_normalized_xy.1 - center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
         let left_pixel: usize = cmp::max(1,
                                          ((self.eccentricity_normalized_xy.0 - center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
-        let right_pixel: usize = cmp::min(source_frame_resolution.width - 1,
+        let right_pixel: usize = cmp::min(source_frame_resolution.width as usize - 1,
                                           (( self.eccentricity_normalized_xy.0 + center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
 
         let top_left = ImageXYPoint::new(left_pixel as u32, top_pixel as u32);
@@ -603,4 +605,4 @@ impl std::fmt::Display for GazeProperties {
 }
 //endregion
 
-
+//endregion

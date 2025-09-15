@@ -4,7 +4,7 @@
 //! ImageFrameProcessor and related operations like cropping, resizing, and color space conversion.
 
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, CornerPoints, ImageXYPoint, SegmentedXYImageResolutions, SegmentedImageFrameProperties, GazeProperties};
+use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, CornerPoints, ImageXYPoint, SegmentedXYImageResolutions, SegmentedImageFrameProperties, GazeProperties};
 use feagi_data_structures::processing::{ImageFrameProcessor, ImageFrameSegmentator};
 
 #[cfg(test)]

@@ -6,7 +6,7 @@ macro_rules! define_xy_coordinates {
     ($name:ident, $var_type:ty, $friendly_name:expr, $doc_string:expr) => {
 
         /// $doc_string
-        #[derive(Clone, Debug, PartialEq)]
+        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
         pub struct $name {
             pub x: $var_type,
             pub y: $var_type,
@@ -33,10 +33,10 @@ macro_rules! define_xy_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
 
         /// $doc_string
-        #[derive(Clone, Debug, PartialEq)]
+        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
         pub struct $name {
-            pub x: $var_type,
-            pub y: $var_type,
+            pub width: $var_type,
+            pub height: $var_type,
         }
 
         impl $name {
@@ -44,13 +44,13 @@ macro_rules! define_xy_dimensions {
                 if x == $invalid_zero_value || y == $invalid_zero_value {
                     return Err(FeagiDataError::BadParameters(format!("Value cannot be {:?} in a {:?}!", $invalid_zero_value, $friendly_name)));
                 }
-                Ok(Self { x, y })
+                Ok(Self { width: x, height: y })
             }
         }
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}<{}, {}>", $friendly_name, self.x, self.y)
+                write!(f, "{}<{}, {}>", $friendly_name, self.width, self.height)
             }
         }
 

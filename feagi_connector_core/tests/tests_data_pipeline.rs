@@ -5,7 +5,7 @@
 
 use std::time::Instant;
 use feagi_data_structures::data::ImageFrame;
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution};
+use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution};
 use feagi_data_structures::processing::ImageFrameProcessor;
 use feagi_data_structures::wrapped_io_data::WrappedIOData;
 use feagi_connector_core::data_pipeline::stages::*;

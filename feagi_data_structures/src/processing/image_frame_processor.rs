@@ -1,6 +1,6 @@
 use ndarray::{s, ArrayView3, Zip};
 use crate::FeagiDataError;
-use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
+use crate::data::descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
 use crate::data::ImageFrame;
 
 #[derive(Debug, Clone)]

@@ -4,7 +4,7 @@
 //! and related functionality for image processing, import, and export operations.
 
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, MemoryOrderLayout, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, MemoryOrderLayout, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 use feagi_data_structures::genomic::{CorticalType, SensorCorticalType};
 use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
 use ndarray::Array3;

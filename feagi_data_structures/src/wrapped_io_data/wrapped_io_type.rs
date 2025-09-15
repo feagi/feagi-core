@@ -1,5 +1,5 @@
 use std::mem::discriminant;
-use crate::data::image_descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
+use crate::data::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::wrapped_io_data::WrappedIOData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

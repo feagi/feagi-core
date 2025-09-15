@@ -6,7 +6,7 @@ use ndarray::{Array3, Zip};
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
 use feagi_data_structures::basic_components::Percentage;
-use feagi_data_structures::data::image_descriptors::ImageFrameProperties;
+use feagi_data_structures::data::descriptors::ImageFrameProperties;
 use feagi_data_structures::data::ImageFrame;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};

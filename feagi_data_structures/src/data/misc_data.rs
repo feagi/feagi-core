@@ -15,7 +15,7 @@ impl MiscData {
 
     pub fn new(resolution: &U32XYZDimensions) -> Result<MiscData, FeagiDataError> {
         Ok(MiscData {
-            data: Array3::zeros([resolution.x as usize, resolution.y as usize, resolution.z as usize])
+            data: Array3::zeros([resolution.width as usize, resolution.height as usize, resolution.depth as usize])
         })
     }
 

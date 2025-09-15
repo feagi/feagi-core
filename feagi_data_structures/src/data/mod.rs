@@ -1,7 +1,7 @@
 mod feagi_json;
 mod image_frame;
 mod segmented_image_frame;
-pub mod image_descriptors;
+pub mod descriptors;
 mod misc_data;
 
 pub use image_frame::ImageFrame;

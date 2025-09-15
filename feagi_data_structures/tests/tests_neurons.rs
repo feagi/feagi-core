@@ -9,7 +9,7 @@ use feagi_data_structures::neurons::xyzp::{
     NeuronXYZPEncoder
 };
 use feagi_data_structures::genomic::{CorticalID, descriptors::NeuronDepth};
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties};
+use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
