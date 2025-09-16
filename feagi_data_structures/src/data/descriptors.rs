@@ -5,7 +5,7 @@
 use std::cmp;
 use std::fmt::Display;
 use std::ops::RangeInclusive;
-use crate::{define_percentage, define_xyz_mapping, FeagiDataError};
+use crate::{define_signed_percentage, define_unsigned_percentage, define_xyz_mapping, FeagiDataError};
 use crate::data::{ImageFrame, SegmentedImageFrame};
 use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
 
@@ -457,25 +457,33 @@ impl Display for CornerPoints {
 
 //endregion
 
+//region Gaze Eccentricity (Location)
+
+define_signed_percentage!(GazeEccentricity, "A positive or negative percentage referring to the offset from the center along an axis on which the central vision will center its segmentation from the source image");
+
+//endregion
+
+//region Gaze Modularity (Size)
+define_unsigned_percentage!(GazeModulation, "The percentage size along an axis that the central vision will occupy from the source image ");
+
 //region Gaze Properties
+
 /// Properties defining the center region of a segmented vision frame
 ///
 /// This structure defines the coordinates and size of the central region
 /// in a normalized coordinate space (0.0 to 1.0).
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub struct GazeProperties {
-    /// Center point coordinates in normalized space (0.0-1.0), from the top left
-    pub(crate) eccentricity_normalized_xy: (f32, f32), // Scaled from 0 to 1
-    /// Size of the center region in normalized space (0.0-1.0)
-    pub(crate) modularity_normalized_xy: (f32, f32), // Scaled from 0 to 1
+    pub(crate) eccentricity_location_xy: (GazeEccentricity, GazeEccentricity),
+    pub(crate) modulation_size_xy: (GazeModulation, GazeModulation),
 }
 
 impl GazeProperties {
 
-    pub fn new(eccentricity_center_xy: (f32, f32), modularity_size_xy: (f32, f32)) -> Self {
+    pub fn new(eccentricity_center_xy: (GazeEccentricity, GazeEccentricity), modularity_size_xy: (GazeModulation, GazeModulation)) -> Self {
         GazeProperties {
-            eccentricity_normalized_xy: (eccentricity_center_xy.0.clamp(0.0, 1.0), eccentricity_center_xy.1.clamp(0.0, 1.0)),
-            modularity_normalized_xy: (modularity_size_xy.0.clamp(0.0, 1.0), modularity_size_xy.1.clamp(0.0, 1.0)),
+            eccentricity_location_xy: eccentricity_center_xy,
+            modulation_size_xy: modularity_size_xy,
         }
     }
 
@@ -488,7 +496,7 @@ impl GazeProperties {
     ///
     /// A SegmentedFrameCenterProperties with default centered configuration.
     pub fn create_default_centered() -> GazeProperties {
-        GazeProperties::new((0.5, 0.5), (0.5, 0.5))
+        GazeProperties::new((GazeEccentricity::new_unchecked(0.5), GazeEccentricity::new_unchecked(0.5)), (GazeModulation::new_unchecked(0.0), GazeModulation::new_unchecked(0.0)))
     }
 
     pub fn calculate_source_corner_points_for_segmented_video_frame(&self, source_frame_resolution: ImageXYResolution) -> Result<[CornerPoints; 9], FeagiDataError> {
@@ -513,17 +521,17 @@ impl GazeProperties {
 
     fn calculate_pixel_coordinates_of_center_corners(&self, source_frame_resolution: ImageXYResolution) -> Result<CornerPoints, FeagiDataError> {
         let source_frame_width_height_f: (f32, f32) = (source_frame_resolution.width as f32, source_frame_resolution.height as f32);
-        let center_size_normalized_half_xy: (f32, f32) = (self.modularity_normalized_xy.0 / 2.0, self.modularity_normalized_xy.1 / 2.0);
+        let center_size_normalized_half_xy: (f32, f32) = (self.modulation_size_xy.0.into(), self.modulation_size_xy.1.into());
 
         // We use max / min to ensure that there is always a 1 pixel buffer along all edges for use in peripheral vision (since we cannot use a resolution of 0)
         let bottom_pixel: usize = cmp::min(source_frame_resolution.height as usize - 1,
-                                           ((self.eccentricity_normalized_xy.1 + center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
+                                           ((self.eccentricity_location_xy.1.value + center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
         let top_pixel: usize = cmp::max(1,
-                                        (( self.eccentricity_normalized_xy.1 - center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
+                                        (( self.eccentricity_location_xy.1.value - center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
         let left_pixel: usize = cmp::max(1,
-                                         ((self.eccentricity_normalized_xy.0 - center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
+                                         ((self.eccentricity_location_xy.0.value - center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
         let right_pixel: usize = cmp::min(source_frame_resolution.width as usize - 1,
-                                          (( self.eccentricity_normalized_xy.0 + center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
+                                          (( self.eccentricity_location_xy.0.value + center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
 
         let top_left = ImageXYPoint::new(left_pixel as u32, top_pixel as u32);
         let bottom_right = ImageXYPoint::new(right_pixel as u32, bottom_pixel as u32);
@@ -540,7 +548,9 @@ impl std::fmt::Display for GazeProperties {
 }
 //endregion
 
-define_percentage!(WholeImageActivity, "Percentage of an image frame that is non-zero");
+define_unsigned_percentage!(WholeImageActivity, "Percentage of an image frame that is non-zero");
+
+//endregion
 
 //endregion
 

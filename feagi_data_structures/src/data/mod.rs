@@ -7,3 +7,4 @@ mod misc_data;
 pub use image_frame::ImageFrame;
 pub use segmented_image_frame::SegmentedImageFrame;
 pub use feagi_json::FeagiJSON;
+pub use misc_data::MiscData;

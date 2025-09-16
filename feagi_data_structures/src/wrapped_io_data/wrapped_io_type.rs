@@ -1,5 +1,5 @@
 use std::mem::discriminant;
-use crate::data::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
+use crate::data::descriptors::{ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
 use crate::wrapped_io_data::WrappedIOData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -9,6 +9,7 @@ pub enum WrappedIOType {
     F32NormalizedM1To1,
     ImageFrame(Option<ImageFrameProperties>),
     SegmentedImageFrame(Option<SegmentedImageFrameProperties>),
+    MiscData(Option<MiscDataDimensions>)
 }
 
 impl WrappedIOType {
@@ -30,7 +31,7 @@ impl std::fmt::Display for WrappedIOType {
             WrappedIOType::F32NormalizedM1To1 => write!(f, "IOTypeVariant(F32 [Normalized -1<->1])"),
             WrappedIOType::ImageFrame(image_properties) => {
                 let s: String = match image_properties {
-                    Some(properties) => format!("ImageFrame({})", properties.to_string()),
+                    Some(properties) => properties.to_string(),
                     None => "ImageFrame(No Requirements)".to_string(),
                 };
                 write!(f, "{}", s)
@@ -39,10 +40,17 @@ impl std::fmt::Display for WrappedIOType {
                 let s: String = match segment_properties {
                     None => "No Requirements".to_string(),
                     Some(properties) => {
-                        format!("SegmentedImageFrame({})", properties.to_string())
+                        properties.to_string()
                     }
                 };
                 write!(f, "SegmentedImageFrame({})", s)
+            }
+            WrappedIOType::MiscData(dimensions) => {
+                let s: String = match dimensions {
+                    Some(dimensions) => dimensions.to_string(),
+                    None => "No Requirements".to_string(),
+                };
+                write!(f, "Misc({})", s)
             }
         }
     }
@@ -56,6 +64,7 @@ impl From<WrappedIOData> for WrappedIOType {
             WrappedIOData::F32NormalizedM1To1(_) => WrappedIOType::F32NormalizedM1To1,
             WrappedIOData::ImageFrame(image) => WrappedIOType::ImageFrame(Some(image.get_image_frame_properties())),
             WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(Some(segments.get_segmented_image_frame_properties())),
+            WrappedIOData::MiscData(dimensions) => {WrappedIOType::MiscData(Some(dimensions.get_dimensions()))}
         }
     }
 }
@@ -68,6 +77,7 @@ impl From<&WrappedIOData> for WrappedIOType {
             WrappedIOData::F32NormalizedM1To1(_) => WrappedIOType::F32NormalizedM1To1,
             WrappedIOData::ImageFrame(image) => WrappedIOType::ImageFrame(Some(image.get_image_frame_properties())),
             WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(Some(segments.get_segmented_image_frame_properties())),
+            WrappedIOData::MiscData(dimensions) => {WrappedIOType::MiscData(Some(dimensions.get_dimensions()))}
         }
     }
 }

@@ -83,6 +83,10 @@ macro_rules! sensor_definition {
 
                 //endregion
 
+                //region Misc
+
+                //endregion
+
                 //region ImageFrame
 
                 #[doc = "Image camera input. Either alone or in the center of segmented/peripheral image camera setups"]

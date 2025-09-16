@@ -31,7 +31,7 @@ macro_rules! define_xy_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
 
         #[doc = $doc_string]
-        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
+        #[derive(Clone, Debug, PartialEq, Copy, Hash, Eq)]
         pub struct $name {
             pub width: $var_type,
             pub height: $var_type,

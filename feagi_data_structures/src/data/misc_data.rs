@@ -1,3 +1,4 @@
+use std::fmt::write;
 use ndarray::{Array3, Zip};
 use ndarray::parallel::prelude::*;
 use crate::data::descriptors::MiscDataDimensions;
@@ -68,9 +69,10 @@ impl MiscData {
     pub fn get_internal_data_mut(&mut self) -> &mut Array3<f32> {
         &mut self.data
     }
+}
 
-
-
-
-
+impl std::fmt::Display for MiscData {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "MiscData({:?})", self.get_dimensions())
+    }
 }
