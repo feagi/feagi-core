@@ -19,7 +19,7 @@ macro_rules! motor_definition {
                     friendly_name: "Rotary Motor",
                     snake_case_identifier: "rotary_motor",
                     base_ascii: b"omot00",
-                    channel_dimension_range: DimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32NormalizedM1To1_SplitSignDivided,
                     wrapped_data_type: WrappedIOType::F32Normalized0To1,
                 },

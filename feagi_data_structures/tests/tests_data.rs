@@ -571,8 +571,8 @@ mod test_image_frame {
 
         // Find a non-black, non-white pixel to test (to avoid clamping effects)
         let mut test_pixel_found = false;
-        for y in 0..original_frame.get_xy_resolution().height.min(10) {
-            for x in 0..original_frame.get_xy_resolution().width.min(10) {
+        for y in 0..original_frame.get_xy_resolution().height.min(10) as usize {
+            for x in 0..original_frame.get_xy_resolution().width.min(10) as usize {
                 let orig_val = original_pixels[(y, x, 0)] as i32;
                 if orig_val > 50 && orig_val < 205 { // Avoid clamping range
                     let bright_val = bright_pixels[(y, x, 0)] as i32;
@@ -658,8 +658,8 @@ mod test_image_frame {
         let mut found_dark_pixel = false;
         let mut found_bright_pixel = false;
         
-        for y in 0..original_frame.get_xy_resolution().height.min(20) {
-            for x in 0..original_frame.get_xy_resolution().width.min(20) {
+        for y in 0..original_frame.get_xy_resolution().height.min(20) as usize {
+            for x in 0..original_frame.get_xy_resolution().width.min(20) as usize {
                 let orig_val = original_pixels[(y, x, 0)] as i32;
                 let high_contrast_val = high_contrast_pixels[(y, x, 0)] as i32;
                 let low_contrast_val = low_contrast_pixels[(y, x, 0)] as i32;

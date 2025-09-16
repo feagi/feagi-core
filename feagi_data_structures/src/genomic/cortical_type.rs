@@ -1,9 +1,8 @@
 use std::fmt;
-use crate::basic_components::DimensionRange;
 use crate::{motor_definition, sensor_definition};
 use crate::FeagiDataError;
 use crate::genomic::{CorticalID};
-use crate::genomic::descriptors::CorticalGroupIndex;
+use crate::genomic::descriptors::{CorticalChannelDimensionRange, CorticalGroupIndex};
 use crate::wrapped_io_data::WrappedIOType;
 
 macro_rules! define_io_cortical_types {
@@ -91,7 +90,7 @@ macro_rules! define_io_cortical_types {
                 }
             }
 
-            pub fn get_channel_dimension_range(&self) -> DimensionRange {
+            pub fn get_cortical_channel_dimension_range(&self) -> CorticalChannelDimensionRange {
                 match self {
                     $(
                         Self::$cortical_type_key_name => $channel_dimension_range.unwrap()
@@ -166,13 +165,13 @@ impl CorticalType {
 
     }
     
-    pub fn try_get_channel_size_boundaries(&self) -> Result<DimensionRange, FeagiDataError> {
+    pub fn try_get_channel_size_boundaries(&self) -> Result<CorticalChannelDimensionRange, FeagiDataError> {
         match self {
             Self::Custom => Err(FeagiDataError::BadParameters("Custom Cortical Areas do not have channels!".into())),
             Self::Memory => Err(FeagiDataError::BadParameters("Memory Cortical Areas do not have channels!".into())),
             Self::Core(_) => Err(FeagiDataError::BadParameters("Core Cortical Areas do not have channels!".into())),
-            Self::Sensory(s) => Ok(s.get_channel_dimension_range()),
-            Self::Motor(m) => Ok(m.get_channel_dimension_range()),
+            Self::Sensory(s) => Ok(s.get_cortical_channel_dimension_range()),
+            Self::Motor(m) => Ok(m.get_cortical_channel_dimension_range()),
         }
     }
     

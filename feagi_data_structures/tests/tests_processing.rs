@@ -12,7 +12,7 @@ mod test_image_frame_processor {
     use super::*;
 
     fn create_test_image(width: usize, height: usize, channels: &ColorChannelLayout, color_space: &ColorSpace) -> ImageFrame {
-        let resolution = ImageXYResolution::new(width, height).unwrap();
+        let resolution = ImageXYResolution::new(width as u32, height as u32).unwrap();
         ImageFrame::new(channels, color_space, &resolution).unwrap()
     }
 
@@ -570,8 +570,8 @@ mod test_image_frame_processor {
         
         let output_resolution = corner_points.enclosed_area_width_height();
         let mut destination = create_test_image(
-            output_resolution.width,
-            output_resolution.height,
+            output_resolution.width as usize,
+            output_resolution.height as usize,
             &ColorChannelLayout::RGB,
             &ColorSpace::Gamma
         );
@@ -654,8 +654,8 @@ mod test_image_frame_processor {
         processor.set_conversion_to_grayscale(true).unwrap();
         
         let mut destination = create_test_image(
-            source_frame.get_xy_resolution().width,
-            source_frame.get_xy_resolution().height,
+            source_frame.get_xy_resolution().width as usize,
+            source_frame.get_xy_resolution().height as usize,
             &ColorChannelLayout::GrayScale,
             &ColorSpace::Gamma
         );
@@ -764,8 +764,8 @@ mod test_image_frame_processor {
         bright_processor.set_brightness_offset(50).unwrap();
         
         let mut bright_destination = create_test_image(
-            source_frame.get_xy_resolution().width,
-            source_frame.get_xy_resolution().height,
+            source_frame.get_xy_resolution().width as usize,
+            source_frame.get_xy_resolution().height as usize,
             &ColorChannelLayout::RGB,
             &ColorSpace::Gamma
         );
@@ -778,8 +778,8 @@ mod test_image_frame_processor {
         contrast_processor.set_contrast_change(2.0).unwrap();
         
         let mut contrast_destination = create_test_image(
-            source_frame.get_xy_resolution().width,
-            source_frame.get_xy_resolution().height,
+            source_frame.get_xy_resolution().width as usize,
+            source_frame.get_xy_resolution().height as usize,
             &ColorChannelLayout::RGB,
             &ColorSpace::Gamma
         );
@@ -793,8 +793,8 @@ mod test_image_frame_processor {
         combined_processor.set_contrast_change(1.5).unwrap();
         
         let mut combined_destination = create_test_image(
-            source_frame.get_xy_resolution().width,
-            source_frame.get_xy_resolution().height,
+            source_frame.get_xy_resolution().width as usize,
+            source_frame.get_xy_resolution().height as usize,
             &ColorChannelLayout::RGB,
             &ColorSpace::Gamma
         );
@@ -865,8 +865,8 @@ mod test_image_frame_processor {
         
         let output_resolution = corner_points.enclosed_area_width_height();
         let mut destination = create_test_image(
-            output_resolution.width,
-            output_resolution.height,
+            output_resolution.width as usize,
+            output_resolution.height as usize,
             &ColorChannelLayout::RGB,
             &ColorSpace::Gamma
         );
@@ -880,8 +880,8 @@ mod test_image_frame_processor {
         println!("Saved resize + crop bird image to processor_resize_crop_bird.png");
 
         // Verify final dimensions
-        assert_eq!(destination.get_xy_resolution().width, (crop_right - crop_left) as usize);
-        assert_eq!(destination.get_xy_resolution().height, (crop_bottom - crop_top) as usize);
+        assert_eq!(destination.get_xy_resolution().width, (crop_right - crop_left));
+        assert_eq!(destination.get_xy_resolution().height, (crop_bottom - crop_top));
     }
 
     #[test]
@@ -929,8 +929,8 @@ mod test_image_frame_processor {
         
         let output_resolution = corner_points.enclosed_area_width_height();
         let mut destination = create_test_image(
-            output_resolution.width,
-            output_resolution.height,
+            output_resolution.width as usize,
+            output_resolution.height as usize,
             &ColorChannelLayout::GrayScale,
             &ColorSpace::Gamma
         );
@@ -1005,7 +1005,7 @@ mod test_image_frame_segmentator {
     }
 
     fn create_test_image(width: usize, height: usize, channels: &ColorChannelLayout, color_space: &ColorSpace) -> ImageFrame {
-        let resolution = ImageXYResolution::new(width, height).unwrap();
+        let resolution = ImageXYResolution::new(width as  u32, height as u32).unwrap();
         ImageFrame::new(channels, color_space, &resolution).unwrap()
     }
 

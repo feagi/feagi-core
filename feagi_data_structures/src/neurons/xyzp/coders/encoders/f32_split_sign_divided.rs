@@ -23,7 +23,7 @@ impl NeuronXYZPEncoder for F32SplitSignDividedNeuronXYZPEncoder {
         const NUMBER_NEURONS_IN_STRUCTURE: usize = 1;
 
         let generated_neuron_data: &mut NeuronXYZPArrays = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target, NUMBER_NEURONS_IN_STRUCTURE);
-        let channel_offset: u32 = self.channel_dimensions.x * *cortical_channel + { if value.is_sign_positive() { 1 } else { 0 } };
+        let channel_offset: u32 = self.channel_dimensions.width * *cortical_channel + { if value.is_sign_positive() { 1 } else { 0 } };
         let p_val: f32 = value.into();
         let neuron: NeuronXYZP = NeuronXYZP::new(
             channel_offset,

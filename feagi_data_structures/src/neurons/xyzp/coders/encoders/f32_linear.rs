@@ -22,7 +22,7 @@ impl NeuronXYZPEncoder for F32LinearNeuronXYZPEncoder {
         let value: f32 = wrapped_value.try_into()?;
         
         let z_dist: f32 = value * self.z_res;
-        let channel_offset: u32 = self.channel_dimensions.x * *cortical_channel;
+        let channel_offset: u32 = self.channel_dimensions.width * *cortical_channel;
         let z_index: u32 = z_dist.floor() as u32;
         let neuron: NeuronXYZP = NeuronXYZP::new(
             channel_offset,

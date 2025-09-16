@@ -2,9 +2,8 @@
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use image;
 use image::{DynamicImage, GenericImageView};
-use crate::basic_components::U32XYZDimensions;
 use crate::FeagiDataError;
-use crate::data::descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution};
+use crate::data::descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions};
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::CorticalChannelIndex;
 use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
@@ -205,8 +204,8 @@ impl ImageFrame {
         self.pixels.shape()[0] * self.pixels.shape()[1] * self.pixels.shape()[2]
     }
 
-    pub fn get_dimensions(&self) -> U32XYZDimensions {
-        U32XYZDimensions::new(
+    pub fn get_dimensions(&self) -> ImageXYZDimensions {
+        ImageXYZDimensions::new(
             self.pixels.shape()[0] as u32,
             self.pixels.shape()[1] as u32,
             self.channel_layout.into()

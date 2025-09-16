@@ -6,10 +6,11 @@
 use std::ops::Range;
 use crate::FeagiDataError;
 
+#[macro_export]
 macro_rules! define_xyz_coordinates {
     ($name:ident, $var_type:ty, $friendly_name:expr, $doc_string:expr) => {
 
-        /// $doc_string
+        #[doc = $doc_string]
         #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
         pub struct $name {
             pub x: $var_type,
@@ -32,10 +33,11 @@ macro_rules! define_xyz_coordinates {
     };
 }
 
+#[macro_export]
 macro_rules! define_xyz_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
 
-        /// $doc_string
+        #[doc = $doc_string]
         #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
         pub struct $name {
             pub width: $var_type,
@@ -57,54 +59,59 @@ macro_rules! define_xyz_dimensions {
                 write!(f, "{}<{}, {}, {}>", $friendly_name, self.width, self.height, self.depth)
             }
         }
-
     }
 }
 
-define_xyz_coordinates!(U32XYZCoordinate, u32, "U32XYZCoordinate", "3D u32 coordinate");
-define_xyz_coordinates!(I32XYZCoordinate, i32, "I32XYZCoordinate", "3D i32 coordinate");
-
-define_xyz_dimensions!(U32XYZDimensions, u32, "U32XYZDimensions", 0, "3D u32 dimensions");
-
-
-
-/// A 3D range defining acceptable coordinate bounds.
-/// Each axis has its own range for flexible boundary definition.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DimensionRange{
-    pub x: Range<u32>,
-    pub y: Range<u32>,
-    pub z: Range<u32>,
-}
-
-impl DimensionRange {
-    /// Creates a new dimension range, ensuring no ranges are empty.
-    pub fn new(x: Range<u32>, y: Range<u32>, z: Range<u32>) -> Result<DimensionRange, FeagiDataError> {
-        if x.is_empty() || y.is_empty() || z.is_empty() {
-            return Err(FeagiDataError::BadParameters("A given range has some empty or invalid ranges!".into()))
+#[macro_export]
+macro_rules! define_xyz_mapping{
+    ($XYZ_a:ident, $XYZ_b:ident) => {
+        impl From<$XYZ_a> for $XYZ_b {
+            fn from(a: $XYZ_a) -> Self {
+                $XYZ_b::new(a.width, a.height, a.depth).unwrap()
+            }
         }
-        Ok(DimensionRange { x, y, z })
-    }
-    
-    /// Returns true if any axis spans more than one value (i.e., not a single point).
-    pub fn is_ambiguous(&self) -> bool {
-        self.x.len() != 1 || self.y.len() != 1 || self.z.len() != 1
-    }
-    
-    /// Verifies that a coordinate falls within all axis ranges.
-    pub fn verify_coordinate_u32_within_range(&self, checking: &U32XYZCoordinate) -> Result<(), FeagiDataError> {
-        if !self.x.contains(&checking.x) || !self.y.contains(&checking.y) || !self.z.contains(&checking.z){
-            return Err(FeagiDataError::BadParameters(format!("Point {} is not within the acceptable range of {}!", checking, self)));
+        impl From<$XYZ_b> for $XYZ_a {
+            fn from(b: $XYZ_b) -> Self {
+                $XYZ_a::new(b.width, b.height, b.depth).unwrap()
+            }
         }
-        Ok(())
-
     }
 }
 
-impl std::fmt::Display for DimensionRange{
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "<{} - {}, {} - {}, {} - {}>", self.x.start, self.x.end, self.y.start, self.y.end, self.z.start, self.z.end)
-    }
+/// Define a dimension range wrapper type with specific semantic meaning
+#[macro_export]
+macro_rules! define_xyz_dimension_range {
+    ($name:ident, $var_type:ty, $coordinate_type:ty, $friendly_name:expr, $doc:expr) => {
+        #[doc = $doc]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        pub struct $name {
+            pub width: std::ops::Range<$var_type>,
+            pub height: std::ops::Range<$var_type>,
+            pub depth: std::ops::Range<$var_type>
+        }
+
+        impl $name {
+            /// Creates a new dimension range, ensuring no ranges are empty.
+            pub fn new(x: std::ops::Range<$var_type>, y: std::ops::Range<$var_type>, z: std::ops::Range<$var_type>) -> Result<Self, FeagiDataError> {
+                Ok($name {width: x, height: y, depth: z})
+            }
+
+            /// Verifies that a coordinate falls within all axis ranges.
+            pub fn verify_coordinate_within_range(&self, coordinate: &$coordinate_type) -> Result<(), FeagiDataError> {
+                if self.width.contains(&coordinate.width) && self.height.contains(&coordinate.height) && self.depth.contains(&coordinate.depth) {
+                    return Ok(());
+                }
+                Err(FeagiDataError::BadParameters(format!("Coordinate {:?} is not contained by this given range of {:?}!", coordinate, self)))
+
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}<{:?}, {:?}, {:?}>", $friendly_name, self.width, self.height, self.depth)
+            }
+        }
+    };
 }
 
 

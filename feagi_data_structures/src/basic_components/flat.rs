@@ -1,11 +1,10 @@
 // 2D data
 
-use crate::FeagiDataError;
-
+#[macro_export]
 macro_rules! define_xy_coordinates {
     ($name:ident, $var_type:ty, $friendly_name:expr, $doc_string:expr) => {
 
-        /// $doc_string
+        #[doc = $doc_string]
         #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
         pub struct $name {
             pub x: $var_type,
@@ -27,12 +26,11 @@ macro_rules! define_xy_coordinates {
     };
 }
 
-
-
+#[macro_export]
 macro_rules! define_xy_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
 
-        /// $doc_string
+        #[doc = $doc_string]
         #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
         pub struct $name {
             pub width: $var_type,
@@ -40,9 +38,9 @@ macro_rules! define_xy_dimensions {
         }
 
         impl $name {
-            pub fn new(x: $var_type, y: $var_type) -> Result<Self, FeagiDataError> {
+            pub fn new(x: $var_type, y: $var_type) -> Result<Self, crate::FeagiDataError> {
                 if x == $invalid_zero_value || y == $invalid_zero_value {
-                    return Err(FeagiDataError::BadParameters(format!("Value cannot be {:?} in a {:?}!", $invalid_zero_value, $friendly_name)));
+                    return Err(crate::FeagiDataError::BadParameters(format!("Value cannot be {:?} in a {:?}!", $invalid_zero_value, $friendly_name)));
                 }
                 Ok(Self { width: x, height: y })
             }
@@ -56,8 +54,3 @@ macro_rules! define_xy_dimensions {
 
     }
 }
-
-
-define_xy_coordinates!(U32XY, u32, "U32XY", "2D u32 coordinate");
-
-define_xy_dimensions!(U32XYDimensions, u32, "U32XYDimensions", 0, "2D Dimensions");

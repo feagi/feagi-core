@@ -1,6 +1,6 @@
 use ndarray::{Array3, Zip};
 use ndarray::parallel::prelude::*;
-use crate::basic_components::U32XYZDimensions;
+use crate::data::descriptors::MiscDataDimensions;
 use crate::data::ImageFrame;
 use crate::FeagiDataError;
 
@@ -13,7 +13,7 @@ impl MiscData {
 
     //region Common Constructors
 
-    pub fn new(resolution: &U32XYZDimensions) -> Result<MiscData, FeagiDataError> {
+    pub fn new(resolution: &MiscDataDimensions) -> Result<MiscData, FeagiDataError> {
         Ok(MiscData {
             data: Array3::zeros([resolution.width as usize, resolution.height as usize, resolution.depth as usize])
         })
@@ -28,7 +28,7 @@ impl MiscData {
     }
 
     pub fn new_from_image_frame(image: &ImageFrame) -> Result<MiscData, FeagiDataError> {
-        let mut output  = MiscData::new(&image.get_dimensions())?;
+        let mut output  = MiscData::new(&image.get_dimensions().into())?;
         let output_data = output.get_internal_data_mut();
         Zip::from(image.get_internal_data())
             .and(output_data)
@@ -39,7 +39,7 @@ impl MiscData {
     }
 
     pub fn new_from_f32(value: f32) -> Result<MiscData, FeagiDataError> {
-        let mut output = MiscData::new(&U32XYZDimensions::new(1, 1, 1)?)?;
+        let mut output = MiscData::new(&MiscDataDimensions::new(1, 1, 1)?)?;
         let output_data = output.get_internal_data_mut();
         output_data[(0, 0, 0)] = value;
         Ok(output)
@@ -51,8 +51,8 @@ impl MiscData {
 
     //region Get Properties
 
-    pub fn get_dimensions(&self) -> U32XYZDimensions {
-        U32XYZDimensions::new(
+    pub fn get_dimensions(&self) -> MiscDataDimensions {
+        MiscDataDimensions::new(
             self.data.shape()[0] as u32,
             self.data.shape()[1] as u32,
             self.data.shape()[2] as u32,

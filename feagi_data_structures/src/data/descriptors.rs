@@ -5,88 +5,23 @@
 use std::cmp;
 use std::fmt::Display;
 use std::ops::RangeInclusive;
-use crate::FeagiDataError;
-use crate::basic_components::{U32XYDimensions, U32XY};
+use crate::{define_percentage, define_xyz_mapping, FeagiDataError};
 use crate::data::{ImageFrame, SegmentedImageFrame};
+use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
 
 //region Images
 
 //region Image XY
 
-/// Represents a coordinate on an image. +x goes to the right, +y goes downward. (0,0) is in the top_left
-#[repr(transparent)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub struct ImageXYPoint(U32XY);
+define_xy_coordinates!(ImageXYPoint, u32, "ImageXYPoint", "Represents a coordinate on an image. +x goes to the right, +y goes downward. (0,0) is in the top_left");
 
-impl ImageXYPoint {
-    pub fn new(x: u32, y: u32) -> Self {
-        ImageXYPoint(U32XY::new(x, y))
-    }
-}
+define_xy_dimensions!(ImageXYResolution, u32, "ImageXYResolution", 0, "Describes the resolution of the image (width and height)");
 
-impl std::ops::Deref for ImageXYPoint {
-    type Target = U32XY;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+//endregion
 
-impl From<U32XY> for ImageXYPoint {
-    fn from(x: U32XY) -> Self {
-        ImageXYPoint(x)
-    }
-}
+//region Image XYZ
 
-impl From<ImageXYPoint> for U32XY {
-    fn from(x: ImageXYPoint) -> Self {
-        x.0
-    }
-}
-
-impl Display for ImageXYPoint {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "[{}, {}]", self.0, self.0)
-    }
-}
-
-
-
-/// Describes the resolution of the image (width and height)
-#[repr(transparent)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub struct ImageXYResolution(U32XYDimensions);
-
-impl ImageXYResolution {
-    pub fn new(x_width: u32, y_height: u32,) -> Result<Self,FeagiDataError> {
-        Ok(ImageXYResolution(U32XYDimensions::new(x_width, y_height)?))
-    }
-}
-
-impl std::ops::Deref for ImageXYResolution {
-    type Target = U32XYDimensions;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<U32XYDimensions> for ImageXYResolution {
-    fn from(coord: U32XYDimensions) -> Self {
-        ImageXYResolution(coord)
-    }
-}
-
-impl From<ImageXYResolution> for U32XYDimensions {
-    fn from(coord: ImageXYResolution) -> Self {
-        coord.0
-    }
-}
-
-impl Display for ImageXYResolution {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "<{}w by {}h>", self.0, self.0)
-    }
-}
-
+define_xyz_dimensions!(ImageXYZDimensions, u32, "ImageXYZDimensions", 0, "Describes the 3D dimensions of an image, with the 3rd dimension being the number of color channels");
 
 //endregion
 
@@ -604,5 +539,14 @@ impl std::fmt::Display for GazeProperties {
     }
 }
 //endregion
+
+define_percentage!(WholeImageActivity, "Percentage of an image frame that is non-zero");
+
+//endregion
+
+//region Misc
+
+define_xyz_dimensions!(MiscDataDimensions, u32, "MiscDataDimensions", 0, "The dimensions of the internal 3D array of a Misc Data Struct. Coordinates align with the position of neuron coordinates in FEAGI");
+define_xyz_mapping!(MiscDataDimensions, ImageXYZDimensions);
 
 //endregion
