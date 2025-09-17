@@ -22,7 +22,7 @@ pub trait NeuronXYZPEncoder {
     }
 }
 
-pub trait NeuronXZPDecoder {
+pub trait NeuronXYZPDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType;
 
     fn read_neuron_data_single_channel(&self, cortical_channel: CorticalChannelIndex, read_target: &CorticalMappedXYZPNeuronData) -> Result<&WrappedIOData, FeagiDataError>;

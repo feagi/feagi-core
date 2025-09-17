@@ -3,17 +3,18 @@ use crate::data::MiscData;
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::{CorticalChannelIndex};
-use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays, NeuronXYZPEncoder};
+use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use crate::neurons::xyzp::coders::NeuronXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub struct MiscDataNeuronXYZPEncoder {
+pub struct MiscDataNeuronXYZPDecoder {
     misc_data_dimensions: MiscDataDimensions,
-    cortical_write_target: CorticalID,
+    cortical_read_target: CorticalID,
     number_elements: usize
 }
 
-impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
-    fn get_encodable_data_type(&self) -> WrappedIOType {
+impl NeuronXYZPDecoder for MiscDataNeuronXYZPDecoder {
+    fn get_decoded_data_type(&self) -> WrappedIOType {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
@@ -31,11 +32,19 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
         }
         Ok(())
     }
+
+    fn read_neuron_data_single_channel(&self, cortical_channel: CorticalChannelIndex, read_target: &CorticalMappedXYZPNeuronData) -> Result<&WrappedIOData, FeagiDataError> {
+        const Y_OFFSET: u32 = 0;
+
+
+
+
+    }
 }
 
-impl MiscDataNeuronXYZPEncoder {
+impl MiscDataNeuronXYZPDecoder {
     pub fn new(cortical_write_target: CorticalID, misc_data_dimensions: MiscDataDimensions) -> Result<Self, FeagiDataError> {
-        Ok(MiscDataNeuronXYZPEncoder{
+        Ok(MiscDataNeuronXYZPDecoder{
             misc_data_dimensions,
             cortical_write_target,
             number_elements: misc_data_dimensions.number_elements() as usize

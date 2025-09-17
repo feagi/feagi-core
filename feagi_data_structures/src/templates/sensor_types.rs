@@ -1,8 +1,3 @@
-// Note: possible coder types:
-// F32Normalized0To1_Linear, F32NormalizedM1To1_SplitSignDivided, ImageFrame, None
-
-
-
 /// Definition File for Sensors (Input Processing Units)
 #[macro_export]
 macro_rules! sensor_definition {
@@ -19,7 +14,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iinf00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
-                    wrapped_data_type:WrappedIOType:: F32Normalized0To1,
+                    wrapped_data_type:WrappedIOType:: Percentage,
                 },
                 #[doc = "Inverted infrared sensor that provides reverse object detection readings."]
                 ReverseInfrared => {
@@ -85,15 +80,15 @@ macro_rules! sensor_definition {
 
                 //region Misc
 
-                #[doc = "Miscellaneous area for all types of data FEAGI has no specific implementation for"]
+                #[doc = "Miscellaneous area for all types of data FEAGI has no specific implementation for."]
                 ServoPosition => {
                     friendly_name: "Miscellaneous",
                     snake_case_identifier: "miscellaneous",
                     base_ascii: b"imis00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
                     default_coder_type: F32NormalizedM1To1_SplitSignDivided,
-                    wrapped_data_type: WrappedIOType::MiscData,
-                }
+                    wrapped_data_type: WrappedIOType::MiscData(None),
+                },
 
                 //endregion
 

@@ -40,9 +40,9 @@ macro_rules! define_wrapped_io_data_enum {
         impl TryFrom<&WrappedIOData> for $data_type {
             type Error = FeagiDataError;
 
-            fn try_from(value: WrappedIOData) -> Result<Self, Self::Error> {
+            fn try_from(value: &WrappedIOData) -> Result<Self, Self::Error> {
                 match value {
-                    WrappedIOData::$enum_type(data) => Ok(data),
+                    WrappedIOData::$enum_type(data) => Ok(data.clone()),
                     _ => Err(FeagiDataError::BadParameters(format!("This variable is not a {}!", $friendly_name)).into()),
                 }
             }
