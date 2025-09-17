@@ -1,5 +1,5 @@
 use crate::FeagiDataError;
-use crate::data::{ImageFrame, MiscData, SegmentedImageFrame};
+use crate::data::{ImageFrame, MiscData, Percentage, SegmentedImageFrame, SignedPercentage};
 
 macro_rules! implement_data_conversions {
     ($data_type:ident, $enum_type:ident, $friendly_name:expr) => {
@@ -48,49 +48,20 @@ macro_rules! implement_data_conversions {
 pub enum WrappedIOData
 {
     F32(f32),
-    F32Normalized0To1(f32),
-    F32NormalizedM1To1(f32),
+    Percentage(Percentage),
+    SignedPercentage(SignedPercentage),
     ImageFrame(ImageFrame),
     SegmentedImageFrame(SegmentedImageFrame),
     MiscData(MiscData)
 }
 
 
-impl WrappedIOData {
-    pub fn new_f32(value: f32) -> Result<Self, FeagiDataError> {
-        if value.is_nan() || value.is_infinite() {
-            return Err(FeagiDataError::BadParameters("Input value cannot be NaN or Infinite!".into()).into());
-        }
-        Ok(Self::F32(value))
-    }
-    pub fn new_0_1_f32(value: f32) -> Result<Self, FeagiDataError> {
-        if value.is_nan() || value.is_infinite() {
-            return Err(FeagiDataError::BadParameters("Input value cannot be NaN or Infinite!".into()).into());
-        }
-        if value < 0.0 || value > 1.0 {
-            return Err(FeagiDataError::BadParameters("Input value must be between 0 and 1!".into()).into());
-        }
-        Ok(Self::F32Normalized0To1(value))
-    }
-
-
-    pub fn new_m1_1_f32(value: f32) -> Result<Self, FeagiDataError> {
-        if value.is_nan() || value.is_infinite() {
-            return Err(FeagiDataError::BadParameters("Input value cannot be NaN or Infinite!".into()).into());
-        }
-        if value < -1.0 || value > 1.0 {
-            return Err(FeagiDataError::BadParameters("Input value must be between -1 and 1!".into()).into());
-        }
-        Ok(Self::F32NormalizedM1To1(value))
-    }
-}
-
 impl std::fmt::Display for WrappedIOData {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             WrappedIOData::F32(float) => write!(f, "IOTypeData(f32({}))", float),
-            WrappedIOData::F32Normalized0To1(float) => write!(f, "IOTypeData(f32[Normalized 0<->1]({}))", float),
-            WrappedIOData::F32NormalizedM1To1(float) => write!(f, "IOTypeData(f32[Normalized -1<->1]({}))", float),
+            WrappedIOData::Percentage(percentage) => write!(f, "Percentage({})", percentage),
+            WrappedIOData::SignedPercentage(signed_percentage) => write!(f, "SignedPercentage({})", signed_percentage),
             WrappedIOData::ImageFrame(frame) => write!(f, "IOTypeData({})", frame),
             WrappedIOData::SegmentedImageFrame(frame) => write!(f, "IOTypeData({})", frame),
             WrappedIOData::MiscData(misc_data) => write!(f, "IOTypeData({})", misc_data),
@@ -100,10 +71,11 @@ impl std::fmt::Display for WrappedIOData {
 
 //region Try Conversions
 
+implement_data_conversions!(Percentage, Percentage, "percentage");
+implement_data_conversions!(SignedPercentage, SignedPercentage, "signed_percentage");
 implement_data_conversions!(ImageFrame, ImageFrame, "image_frame");
 implement_data_conversions!(SegmentedImageFrame, SegmentedImageFrame, "segmented_image_frame");
 implement_data_conversions!(MiscData, MiscData, "misc_data");
-
 
 
 impl TryFrom<WrappedIOData> for f32 {
@@ -111,8 +83,8 @@ impl TryFrom<WrappedIOData> for f32 {
     fn try_from(value: WrappedIOData) -> Result<Self, Self::Error> {
         match value {
             WrappedIOData::F32(float) => Ok(float),
-            WrappedIOData::F32Normalized0To1(float) => Ok(float),
-            WrappedIOData::F32NormalizedM1To1(float) => Ok(float),
+            WrappedIOData::Percentage(float) => Ok(float.into()),
+            WrappedIOData::SignedPercentage(float) => Ok(float.into()),
             _ => Err(FeagiDataError::BadParameters("This variable is not a f32 type value!".into()).into()),
         }
     }
@@ -123,8 +95,8 @@ impl TryFrom<&WrappedIOData> for f32 {
     fn try_from(value: &WrappedIOData) -> Result<Self, Self::Error> {
         match value {
             WrappedIOData::F32(float) => Ok(*float),
-            WrappedIOData::F32Normalized0To1(float) => Ok(*float),
-            WrappedIOData::F32NormalizedM1To1(float) => Ok(*float),
+            WrappedIOData::Percentage(float) => Ok(float.into()),
+            WrappedIOData::SignedPercentage(float) => Ok(float.into()),
             _ => Err(FeagiDataError::BadParameters("This variable is not a f32 type value!".into()).into()),
         }
     }

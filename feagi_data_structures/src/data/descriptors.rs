@@ -4,9 +4,8 @@
 
 use std::cmp;
 use std::fmt::Display;
-use std::ops::RangeInclusive;
-use crate::{define_signed_percentage, define_unsigned_percentage, define_xyz_mapping, FeagiDataError};
-use crate::data::{ImageFrame, SegmentedImageFrame};
+use crate::{define_signed_percentage, define_unsigned_percentage, define_xy_percentage_coordinates, define_xy_percentage_dimensions, define_xyz_mapping, map_signed_percentages, map_unsigned_percentages, FeagiDataError};
+use crate::data::{ImageFrame, Percentage, SegmentedImageFrame, SignedPercentage};
 use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
 
 //region Images
@@ -460,11 +459,15 @@ impl Display for CornerPoints {
 //region Gaze Eccentricity (Location)
 
 define_signed_percentage!(GazeEccentricity, "A positive or negative percentage referring to the offset from the center along an axis on which the central vision will center its segmentation from the source image");
+define_xy_percentage_coordinates!(GazeEccentricityCoordinate, GazeEccentricity, "GazeEccentricityCoordinate", "The offset from the center along x and y, with 0,0 being the center");
+map_signed_percentages!(GazeEccentricity, SignedPercentage);
 
 //endregion
 
 //region Gaze Modularity (Size)
 define_unsigned_percentage!(GazeModulation, "The percentage size along an axis that the central vision will occupy from the source image ");
+define_xy_percentage_dimensions!(GazeModulationSize, GazeModulation, "GazeModulationSize", "The normalized size along x and y of the central vision ins respect to its source image" );
+map_unsigned_percentages!(GazeModulation, Percentage);
 
 //region Gaze Properties
 
@@ -496,7 +499,7 @@ impl GazeProperties {
     ///
     /// A SegmentedFrameCenterProperties with default centered configuration.
     pub fn create_default_centered() -> GazeProperties {
-        GazeProperties::new((GazeEccentricity::new_unchecked(0.5), GazeEccentricity::new_unchecked(0.5)), (GazeModulation::new_unchecked(0.0), GazeModulation::new_unchecked(0.0)))
+        GazeProperties::new((GazeEccentricity::new_from_m1_1_unchecked(0.0), GazeEccentricity::new_from_m1_1_unchecked(0.0)), (GazeModulation::new_from_0_1_unchecked(0.0), GazeModulation::new_from_0_1_unchecked(0.0)))
     }
 
     pub fn calculate_source_corner_points_for_segmented_video_frame(&self, source_frame_resolution: ImageXYResolution) -> Result<[CornerPoints; 9], FeagiDataError> {

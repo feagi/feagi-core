@@ -27,6 +27,33 @@ macro_rules! define_xy_coordinates {
 }
 
 #[macro_export]
+macro_rules! define_xy_percentage_coordinates {
+    ($name:ident, $percentage_type:ty, $friendly_name:expr, $doc_string:expr) => {
+
+        #[doc = $doc_string]
+        #[derive(Clone, Debug, PartialEq, Copy)]
+        pub struct $name {
+            pub x: $percentage_type,
+            pub y: $percentage_type,
+        }
+
+        impl $name {
+            pub fn new(x: $percentage_type, y: $percentage_type) -> Self {
+                Self { x, y }
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}({}, {})", $friendly_name, self.x, self.y)
+            }
+        }
+
+    };
+}
+
+
+#[macro_export]
 macro_rules! define_xy_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
 
@@ -52,5 +79,30 @@ macro_rules! define_xy_dimensions {
             }
         }
 
+    }
+}
+
+#[macro_export]
+macro_rules! define_xy_percentage_dimensions {
+    ($name:ident, $percentage_type:ty, $friendly_name:expr, $doc_string:expr) => {
+
+        #[doc = $doc_string]
+        #[derive(Clone, Debug, PartialEq, Copy)]
+        pub struct $name {
+            pub width: $percentage_type,
+            pub height: $percentage_type,
+        }
+
+        impl $name {
+            pub fn new(x: $percentage_type, y: $percentage_type) -> Result<Self, crate::FeagiDataError> {
+                Ok(Self { width: x, height: y })
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}<{}, {}>", $friendly_name, self.width, self.height)
+            }
+        }
     }
 }

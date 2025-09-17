@@ -28,7 +28,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"iiif00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
-                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
+                    wrapped_data_type: WrappedIOType::Percentage,
                 },
                 #[doc = "Digital GPIO input pin for reading binary signals (high/low states)."]
                 DigitalGPIOInput => {
@@ -37,7 +37,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"idgp00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
-                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
+                    wrapped_data_type: WrappedIOType::Percentage,
                 },
                 #[doc = "Proximity sensor for detecting nearby objects and measuring distances."]
                 Proximity => {
@@ -46,7 +46,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"ipro00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32Normalized0To1_Linear,
-                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
+                    wrapped_data_type: WrappedIOType::Percentage,
                 },
                 #[doc = "Shock sensor for sensing 'pain'"]
                 Shock => {
@@ -55,7 +55,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"ishk00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: F32Normalized0To1_Linear,
-                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
+                    wrapped_data_type: WrappedIOType::Percentage,
                 },
                 #[doc = "Battery level sensor for monitoring power remaining."]
                 Battery => {
@@ -64,7 +64,7 @@ macro_rules! sensor_definition {
                     base_ascii: b"ibat00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32Normalized0To1_Linear,
-                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
+                    wrapped_data_type: WrappedIOType::Percentage,
                 },
 
                 //endregion
@@ -78,12 +78,21 @@ macro_rules! sensor_definition {
                     base_ascii: b"isvp00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32NormalizedM1To1_SplitSignDivided,
-                    wrapped_data_type: WrappedIOType::F32NormalizedM1To1,
+                    wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
                 //endregion
 
                 //region Misc
+
+                #[doc = "Miscellaneous area for all types of data FEAGI has no specific implementation for"]
+                ServoPosition => {
+                    friendly_name: "Miscellaneous",
+                    snake_case_identifier: "miscellaneous",
+                    base_ascii: b"imis00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
+                    default_coder_type: F32NormalizedM1To1_SplitSignDivided,
+                    wrapped_data_type: WrappedIOType::MiscData,
 
                 //endregion
 
