@@ -93,6 +93,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
                     default_coder_type: F32NormalizedM1To1_SplitSignDivided,
                     wrapped_data_type: WrappedIOType::MiscData,
+                }
 
                 //endregion
 

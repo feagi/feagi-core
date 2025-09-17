@@ -4,7 +4,7 @@
 
 use std::cmp;
 use std::fmt::Display;
-use crate::{define_signed_percentage, define_unsigned_percentage, define_xy_percentage_coordinates, define_xy_percentage_dimensions, define_xyz_mapping, map_signed_percentages, map_unsigned_percentages, FeagiDataError};
+use crate::{define_signed_percentage, define_unsigned_percentage, define_2d_signed_or_unsigned_percentages, define_xy_percentage_dimensions, define_xyz_mapping, map_signed_percentages, map_unsigned_percentages, FeagiDataError};
 use crate::data::{ImageFrame, Percentage, SegmentedImageFrame, SignedPercentage};
 use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
 
@@ -459,7 +459,7 @@ impl Display for CornerPoints {
 //region Gaze Eccentricity (Location)
 
 define_signed_percentage!(GazeEccentricity, "A positive or negative percentage referring to the offset from the center along an axis on which the central vision will center its segmentation from the source image");
-define_xy_percentage_coordinates!(GazeEccentricityCoordinate, GazeEccentricity, "GazeEccentricityCoordinate", "The offset from the center along x and y, with 0,0 being the center");
+define_2d_signed_or_unsigned_percentages!(GazeEccentricityCoordinate, GazeEccentricity, "GazeEccentricityCoordinate", "The offset from the center along x and y, with 0,0 being the center");
 map_signed_percentages!(GazeEccentricity, SignedPercentage);
 
 //endregion

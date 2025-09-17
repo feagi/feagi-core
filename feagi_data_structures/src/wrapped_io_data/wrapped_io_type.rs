@@ -7,10 +7,13 @@ pub enum WrappedIOType {
     F32,
     Percentage,
     SignedPercentage,
+    Percentage4D,
     ImageFrame(Option<ImageFrameProperties>),
     SegmentedImageFrame(Option<SegmentedImageFrameProperties>),
     MiscData(Option<MiscDataDimensions>)
 }
+
+
 
 impl WrappedIOType {
 
@@ -29,6 +32,7 @@ impl std::fmt::Display for WrappedIOType {
             WrappedIOType::F32 => write!(f, "IOTypeVariant(F32)"),
             WrappedIOType::Percentage => write!(f, "IOTypeVariant(Percentage)"),
             WrappedIOType::SignedPercentage => write!(f, "IOTypeVariant(SignedPercentage)"),
+            WrappedIOType::Percentage4D => write!(f, "IOTypeVariant(Percentage4D)"),
             WrappedIOType::ImageFrame(image_properties) => {
                 let s: String = match image_properties {
                     Some(properties) => properties.to_string(),
@@ -62,6 +66,7 @@ impl From<WrappedIOData> for WrappedIOType {
             WrappedIOData::F32(_) => WrappedIOType::F32,
             WrappedIOData::Percentage(_) => WrappedIOType::Percentage,
             WrappedIOData::SignedPercentage(_) => WrappedIOType::SignedPercentage,
+            WrappedIOData::Percentage4D(_) => WrappedIOType::Percentage4D,
             WrappedIOData::ImageFrame(image) => WrappedIOType::ImageFrame(Some(image.get_image_frame_properties())),
             WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(Some(segments.get_segmented_image_frame_properties())),
             WrappedIOData::MiscData(dimensions) => {WrappedIOType::MiscData(Some(dimensions.get_dimensions()))}
@@ -75,6 +80,7 @@ impl From<&WrappedIOData> for WrappedIOType {
             WrappedIOData::F32(_) => WrappedIOType::F32,
             WrappedIOData::Percentage(_) => WrappedIOType::Percentage,
             WrappedIOData::SignedPercentage(_) => WrappedIOType::SignedPercentage,
+            WrappedIOData::Percentage4D(_) => WrappedIOType::Percentage4D,
             WrappedIOData::ImageFrame(image) => WrappedIOType::ImageFrame(Some(image.get_image_frame_properties())),
             WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(Some(segments.get_segmented_image_frame_properties())),
             WrappedIOData::MiscData(dimensions) => {WrappedIOType::MiscData(Some(dimensions.get_dimensions()))}

@@ -1,5 +1,5 @@
 use crate::FeagiDataError;
-use crate::data::{ImageFrame, MiscData, Percentage, SegmentedImageFrame, SignedPercentage};
+use crate::data::{ImageFrame, MiscData, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
 
 macro_rules! implement_data_conversions {
     ($data_type:ident, $enum_type:ident, $friendly_name:expr) => {
@@ -50,6 +50,7 @@ pub enum WrappedIOData
     F32(f32),
     Percentage(Percentage),
     SignedPercentage(SignedPercentage),
+    Percentage4D(Percentage4D),
     ImageFrame(ImageFrame),
     SegmentedImageFrame(SegmentedImageFrame),
     MiscData(MiscData)
@@ -60,8 +61,9 @@ impl std::fmt::Display for WrappedIOData {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             WrappedIOData::F32(float) => write!(f, "IOTypeData(f32({}))", float),
-            WrappedIOData::Percentage(percentage) => write!(f, "Percentage({})", percentage),
-            WrappedIOData::SignedPercentage(signed_percentage) => write!(f, "SignedPercentage({})", signed_percentage),
+            WrappedIOData::Percentage(percentage) => write!(f, "IOTypeData({})", percentage),
+            WrappedIOData::SignedPercentage(signed_percentage) => write!(f, "IOTypeData({})", signed_percentage),
+            WrappedIOData::Percentage4D(percentage4_d) => write!(f, "IOTypeData({})", percentage4_d),
             WrappedIOData::ImageFrame(frame) => write!(f, "IOTypeData({})", frame),
             WrappedIOData::SegmentedImageFrame(frame) => write!(f, "IOTypeData({})", frame),
             WrappedIOData::MiscData(misc_data) => write!(f, "IOTypeData({})", misc_data),
@@ -73,6 +75,7 @@ impl std::fmt::Display for WrappedIOData {
 
 implement_data_conversions!(Percentage, Percentage, "percentage");
 implement_data_conversions!(SignedPercentage, SignedPercentage, "signed_percentage");
+implement_data_conversions!(Percentage4D, Percentage4D, "percentage_4d");
 implement_data_conversions!(ImageFrame, ImageFrame, "image_frame");
 implement_data_conversions!(SegmentedImageFrame, SegmentedImageFrame, "segmented_image_frame");
 implement_data_conversions!(MiscData, MiscData, "misc_data");
