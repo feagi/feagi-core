@@ -12,7 +12,7 @@ pub struct F32PSPBidirectionalNeuronXYZPEncoder {
 impl NeuronXYZPEncoder for F32PSPBidirectionalNeuronXYZPEncoder {
 
     fn get_encodable_data_type(&self) -> WrappedIOType {
-        WrappedIOType::F32NormalizedM1To1
+        WrappedIOType::SignedPercentage
     }
 
     fn write_neuron_data_single_channel(&self, wrapped_value: &WrappedIOData, cortical_channel: CorticalChannelIndex, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {

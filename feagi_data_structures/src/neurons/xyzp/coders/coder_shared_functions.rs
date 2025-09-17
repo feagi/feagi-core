@@ -1,5 +1,3 @@
-use std::iter::Rev;
-use std::ops::RangeInclusive;
 use crate::data::Percentage;
 use crate::neurons::xyzp::{NeuronXYZP, NeuronXYZPArrays};
 

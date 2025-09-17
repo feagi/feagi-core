@@ -41,13 +41,14 @@
 //! in multi-threaded neural simulation environments.
 
 mod image_frame;
-mod percentage_split_sign_divided;
+mod signed_percentage_split_sign_divided;
 mod signed_percentage_psp_bidirectional;
 mod percentage_linear;
 mod segmented_image_frame;
+mod misc_data;
 
 pub use image_frame::{ImageFrameNeuronXYZPEncoder};
-pub use percentage_split_sign_divided::{F32SplitSignDividedNeuronXYZPEncoder};
+pub use signed_percentage_split_sign_divided::{F32SplitSignDividedNeuronXYZPEncoder};
 pub use signed_percentage_psp_bidirectional::{F32PSPBidirectionalNeuronXYZPEncoder};
 pub use percentage_linear::{F32LinearNeuronXYZPEncoder};
 pub use segmented_image_frame::{SegmentedImageFrameNeuronXYZPEncoder};

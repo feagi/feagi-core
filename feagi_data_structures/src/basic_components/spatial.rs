@@ -52,6 +52,10 @@ macro_rules! define_xyz_dimensions {
                 }
                 Ok(Self { width: x, height: y, depth: z })
             }
+
+            pub fn number_elements(&self) -> $var_type {
+                self.width * self.height * self.depth
+            }
         }
 
         impl std::fmt::Display for $name {

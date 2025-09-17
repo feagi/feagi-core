@@ -7,7 +7,7 @@ use std::fmt::Display;
 use crate::{define_signed_percentage, define_unsigned_percentage, define_2d_signed_or_unsigned_percentages, define_xy_percentage_dimensions, define_xyz_mapping, map_signed_percentages, map_unsigned_percentages, FeagiDataError};
 use crate::data::{ImageFrame, Percentage, SegmentedImageFrame, SignedPercentage};
 use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
-
+use crate::genomic::descriptors::CorticalChannelDimensions;
 //region Images
 
 //region Image XY
@@ -561,5 +561,6 @@ define_unsigned_percentage!(WholeImageActivity, "Percentage of an image frame th
 
 define_xyz_dimensions!(MiscDataDimensions, u32, "MiscDataDimensions", 0, "The dimensions of the internal 3D array of a Misc Data Struct. Coordinates align with the position of neuron coordinates in FEAGI");
 define_xyz_mapping!(MiscDataDimensions, ImageXYZDimensions);
+define_xyz_mapping!(MiscDataDimensions, CorticalChannelDimensions);
 
 //endregion
