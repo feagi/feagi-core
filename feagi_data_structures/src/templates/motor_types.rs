@@ -21,7 +21,7 @@ macro_rules! motor_definition {
                     base_ascii: b"omot00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: F32NormalizedM1To1_SplitSignDivided,
-                    wrapped_data_type: WrappedIOType::F32Normalized0To1,
+                    wrapped_data_type: WrappedIOType::Percentage,
                 },
 
                 //endregion

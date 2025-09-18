@@ -46,6 +46,8 @@ mod signed_percentage_psp_bidirectional;
 mod percentage_linear;
 mod segmented_image_frame;
 mod misc_data;
+mod percentage_fractional_exponential;
+mod signed_percentage_fractional_exponential;
 
 pub use image_frame::{ImageFrameNeuronXYZPEncoder};
 pub use signed_percentage_split_sign_divided::{F32SplitSignDividedNeuronXYZPEncoder};

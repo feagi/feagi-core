@@ -81,7 +81,7 @@ macro_rules! sensor_definition {
                 //region Misc
 
                 #[doc = "Miscellaneous area for all types of data FEAGI has no specific implementation for."]
-                ServoPosition => {
+                Miscellaneous => {
                     friendly_name: "Miscellaneous",
                     snake_case_identifier: "miscellaneous",
                     base_ascii: b"imis00",

@@ -27,6 +27,17 @@ macro_rules! define_unsigned_percentage {
                 Ok($name { value })
             }
 
+            pub fn new_from_interp_m1_1(value: f32) -> Result<$name, crate::FeagiDataError> {
+                if value > 1.0 || value < -1.0 {
+                    return Err(crate::FeagiDataError::BadParameters("Percentage Value to interp from must be between -1 and 1!".into()));
+                }
+                Ok($name { value: (value + 1.0) / 2.0 })
+            }
+
+            pub(crate) fn new_from_interp_m1_1_unchecked(value: f32) -> Self {
+                $name { value: (value + 1.0) / 2.0 }
+            }
+
             pub fn new_from_u8_0_255(value: u8) -> Result<$name, crate::FeagiDataError> {
                 $name::new_from_0_1(value as f32 / u8::MAX as f32)
             }
