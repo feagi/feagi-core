@@ -88,27 +88,6 @@ impl SensoryChannelStreamCache {
         self.pipeline_runner.clone_stage(pipeline_stage_index)
     }
     
-    /// Determines whether new data should be pushed based on staleness policy.
-    ///
-    /// Evaluates whether the cache should provide data for neural processing
-    /// based on the configured staleness policy and data freshness. This enables
-    /// both real-time (fresh-only) and cached (always-available) data strategies.
-    ///
-    /// # Arguments
-    ///
-    /// * `past_push_time` - Timestamp of when data was last pushed to neural system
-    ///
-    /// # Returns
-    ///
-    /// `true` if data should be pushed, `false` if it should be skipped
-    ///
-    /// # Behavior
-    ///
-    /// - **Stale data allowed**: Always returns `true`
-    /// - **Fresh data only**: Returns `true` only if data was updated after `past_push_time`
-    pub fn should_push_new_value(&self, past_push_time: Instant) -> bool {
-        self.should_allow_sending_stale_data || past_push_time < self.last_updated
-    }
     
     /// Returns the most recently processed sensor value.
     ///
@@ -187,65 +166,4 @@ impl SensoryChannelStreamCache {
     }
 }
 
-
-/*
-// TODO add callback for only on change
-
-pub struct MotorChannelStreamCache {
-    stream_cache_processor: Box<dyn StreamCacheProcessor>,
-    neuron_xyzp_decoder: Box<dyn NeuronXYZPDecoder>,
-    channel: CorticalIOChannelIndex,
-    last_updated: Instant,
-    callbacks_all_bursts: CallBackManager
-}
-
-impl MotorChannelStreamCache {
-    
-    pub fn new(stream_cache_processor: Box<dyn StreamCacheProcessor>, 
-               neuron_xyzp_decoder: Box<dyn NeuronXYZPDecoder>,
-               channel: CorticalIOChannelIndex) -> Result<Self, FeagiDataProcessingError> {
-
-        if stream_cache_processor.get_data_type() != neuron_xyzp_decoder.get_data_type() {
-            return Err(FeagiDataProcessingError::InternalError("Stream Cache Processor and Neuron Decoder do not have matching data types!".into()));
-        }
-        
-        Ok(MotorChannelStreamCache{
-            stream_cache_processor,
-            neuron_xyzp_decoder,
-            channel,
-            last_updated: Instant::now(),
-            callbacks_all_bursts: CallBackManager::new()
-        })
-        
-    }
-    
-    pub fn decode_from_neurons(&mut self, neuron_data: &NeuronXYZPArrays) -> Result<&IOTypeData, FeagiDataProcessingError> {
-        let decoded_value: IOTypeData = self.neuron_xyzp_decoder.read_neuron_data_single_channel(
-            neuron_data,
-            self.channel
-        )?;
-        self.last_updated = Instant::now();
-        self.stream_cache_processor.process_new_input(&decoded_value)
-    }
-    
-    pub fn is_more_recent_than_given(&self, time: Instant) -> bool {
-        time < self.last_updated
-    }
-    
-    pub fn get_most_recent_motor_value(&self) -> &IOTypeData {
-        self.stream_cache_processor.get_most_recent_output()
-    }
-
-    pub fn get_input_data_type(&self) -> IOTypeVariant {
-        self.stream_cache_processor.get_input_data_type()
-    }
-
-    pub fn get_output_data_type(&self) -> IOTypeVariant {
-        self.stream_cache_processor.get_output_data_type()
-    }
-    
-    // TODO allow registering callbacks
-}
-
- */
 
