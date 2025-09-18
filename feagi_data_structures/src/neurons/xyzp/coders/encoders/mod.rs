@@ -54,3 +54,6 @@ pub use signed_percentage_split_sign_divided::{F32SplitSignDividedNeuronXYZPEnco
 pub use signed_percentage_psp_bidirectional::{F32PSPBidirectionalNeuronXYZPEncoder};
 pub use percentage_linear::{F32LinearNeuronXYZPEncoder};
 pub use segmented_image_frame::{SegmentedImageFrameNeuronXYZPEncoder};
+pub use misc_data::MiscDataNeuronXYZPEncoder;
+pub use percentage_fractional_exponential::PercentageFractionalExponentialNeuronXYZPEncoder;
+pub use signed_percentage_fractional_exponential::SignedPercentageFractionalExponentialNeuronXYZPEncoder;

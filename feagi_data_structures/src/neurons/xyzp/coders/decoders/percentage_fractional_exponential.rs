@@ -1,0 +1,48 @@
+use std::ops::Range;
+use crate::data::Percentage;
+use crate::FeagiDataError;
+use crate::genomic::CorticalID;
+use crate::genomic::descriptors::{CorticalChannelDimensions, CorticalChannelIndex};
+use crate::neurons::xyzp::coders::coder_shared_functions::decode_unsigned_binary_fractional;
+use crate::neurons::xyzp::coders::NeuronXYZPDecoder;
+use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+
+pub struct PercentageFractionalExponentialNeuronXYZPDecoder {
+    channel_dimensions: CorticalChannelDimensions,
+    cortical_read_target: CorticalID
+}
+
+impl NeuronXYZPDecoder for PercentageFractionalExponentialNeuronXYZPDecoder {
+    fn get_decoded_data_type(&self) -> WrappedIOType {
+        WrappedIOType::Percentage
+    }
+
+    fn read_neuron_data_single_channel(&self, read_target: &CorticalMappedXYZPNeuronData, cortical_channel: CorticalChannelIndex, write_target: &mut WrappedIOData) -> Result<bool, FeagiDataError> {
+
+        let target: &mut Percentage = write_target.try_into()?;
+
+        let reading_neuron_data = read_target.get_neurons_of(&self.cortical_read_target);
+        if reading_neuron_data.is_none() {
+            return Ok(false); // No neuron data found, returning false to state that no update was made
+        }
+        let reading_neuron_data = reading_neuron_data.unwrap();
+        const Y_OFFSET: u32 = 0;
+        const Z_OFFSET: u32 = 0;
+        *target = decode_unsigned_binary_fractional(*cortical_channel, Y_OFFSET, Z_OFFSET, reading_neuron_data);
+        Ok(true)
+    }
+}
+
+impl PercentageFractionalExponentialNeuronXYZPDecoder {
+
+    pub fn new(cortical_read_target: CorticalID, z_resolution: u32) -> Result<Self, FeagiDataError> {
+        const CHANNEL_X_LENGTH: u32 = 1;
+        const CHANNEL_Y_LENGTH: u32 = 1;
+
+        Ok(PercentageFractionalExponentialNeuronXYZPDecoder {
+            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_X_LENGTH, CHANNEL_Y_LENGTH, z_resolution)?,
+            cortical_read_target
+        })
+    }
+}

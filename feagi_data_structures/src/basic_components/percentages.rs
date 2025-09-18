@@ -29,7 +29,7 @@ macro_rules! define_unsigned_percentage {
 
             pub fn new_from_interp_m1_1(value: f32) -> Result<$name, crate::FeagiDataError> {
                 if value > 1.0 || value < -1.0 {
-                    return Err(crate::FeagiDataError::BadParameters("Percentage Value to interp from must be between -1 and 1!".into()));
+                    return Err(crate::FeagiDataError::BadParameters("Signed Percentage Value to interp from must be between -1 and 1!".into()));
                 }
                 Ok($name { value: (value + 1.0) / 2.0 })
             }
@@ -197,6 +197,17 @@ macro_rules! define_signed_percentage {
                     return Err(crate::FeagiDataError::BadParameters("Signed Percentage Value must be between -1 and 1!".into()));
                 }
                 Ok($name { value })
+            }
+
+            pub fn new_from_0_1(value: f32) -> Result<$name, crate::FeagiDataError> {
+                if value > 1.0 || value < 0.0 {
+                    return Err(crate::FeagiDataError::BadParameters("Percentage Value to interp from must be between 0 and 1!".into()));
+                }
+                Ok($name { value: (value - 0.5) * 2.0})
+            }
+
+            pub(crate) fn new_from_0_1_unchecked(value: f32) -> Self {
+                $name { value: (value - 0.5) * 2.0}
             }
 
 
