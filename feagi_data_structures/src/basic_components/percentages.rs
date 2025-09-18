@@ -188,7 +188,7 @@ macro_rules! define_signed_percentage {
 
             //region Constructors
 
-            pub(crate) fn new_from_m1_1_unchecked(value: f32) -> Self {
+            pub fn new_from_m1_1_unchecked(value: f32) -> Self {
                 $name { value }
             }
 
@@ -206,7 +206,7 @@ macro_rules! define_signed_percentage {
                 Ok($name { value: (value - 0.5) * 2.0})
             }
 
-            pub(crate) fn new_from_0_1_unchecked(value: f32) -> Self {
+            pub fn new_from_0_1_unchecked(value: f32) -> Self {
                 $name { value: (value - 0.5) * 2.0}
             }
 

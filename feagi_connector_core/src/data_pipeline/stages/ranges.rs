@@ -6,6 +6,7 @@
 
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
+use feagi_data_structures::data::{Percentage, SignedPercentage};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
@@ -16,26 +17,26 @@ use crate::data_pipeline::pipeline_stage::PipelineStage;
 /// and maps them linearly to the normalized range [0, 1]. Values outside the given bounds
 /// are clamped to the bounds before scaling.
 #[derive(Debug, Clone)]
-pub struct LinearScaleTo0And1Stage {
+pub struct LinearScaleToPercentageStage {
     previous_value: WrappedIOData,
     lower: f32,
     upper: f32,
     upper_minus_lower: f32
 }
 
-impl Display for LinearScaleTo0And1Stage {
+impl Display for LinearScaleToPercentageStage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "LinearScaleTo0And1(lower_bound={:?},upper_bound={:?},prev_val={:?})", self.lower, self.upper,  self.previous_value)
     }
 }
 
-impl PipelineStage for LinearScaleTo0And1Stage {
+impl PipelineStage for LinearScaleToPercentageStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::F32
     }
 
     fn get_output_data_type(&self) -> WrappedIOType {
-        WrappedIOType::F32Normalized0To1
+        WrappedIOType::Percentage
     }
 
     fn get_most_recent_output(&self) -> &WrappedIOData {
@@ -44,10 +45,8 @@ impl PipelineStage for LinearScaleTo0And1Stage {
 
     fn process_new_input(&mut self, value: &WrappedIOData, _: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         let float_result = f32::try_from(value)?;
-        let clamped = float_result.clamp(self.lower, self.upper);
-        let val_0_1 = (clamped - self.lower) / self.upper_minus_lower;
-
-        self.previous_value = WrappedIOData::F32Normalized0To1(val_0_1);
+        let percentage = Percentage::new_from_linear_interp(float_result, &(self.lower..self.upper))?;
+        self.previous_value = WrappedIOData::Percentage(percentage);
         Ok(&self.previous_value)
     }
 
@@ -56,7 +55,7 @@ impl PipelineStage for LinearScaleTo0And1Stage {
     }
 }
 
-impl LinearScaleTo0And1Stage {
+impl LinearScaleToPercentageStage {
     /// Creates a new LinearScaleTo0And1 processor.
     ///
     /// # Arguments
@@ -67,25 +66,16 @@ impl LinearScaleTo0And1Stage {
     /// # Returns
     /// * `Ok(LinearScaleTo0And1)` - A new processor instance
     /// * `Err(FeagiDataError)` - If parameters are invalid (NaN, infinite, or out of bounds)
-    pub fn new(lower_bound: f32, upper_bound: f32, initial_value: f32) -> Result<Self, FeagiDataError> {
+    pub fn new(lower_bound: f32, upper_bound: f32, initial_value: Percentage) -> Result<Self, FeagiDataError> {
         if lower_bound.is_nan() || lower_bound.is_infinite() {
             return Err(FeagiDataError::BadParameters(format!("Given lower bound float {} is not valid!", lower_bound)));
         }
         if upper_bound.is_nan() || upper_bound.is_infinite() {
             return Err(FeagiDataError::BadParameters(format!("Given upper bound float {} is not valid!", upper_bound)));
         }
-        if initial_value.is_nan() || initial_value.is_infinite() {
-            return Err(FeagiDataError::BadParameters(format!("Given initial value float {} is not valid!", initial_value)));
-        }
-        if upper_bound < lower_bound {
-            return Err(FeagiDataError::BadParameters(format!("Upper bound float {} must be greater than lower bound {}!!", upper_bound, lower_bound)));
-        }
-        if initial_value > upper_bound || initial_value < lower_bound {
-            return Err(FeagiDataError::BadParameters(format!("Initial value float {} must be between bounds {} and {}!", initial_value, lower_bound, upper_bound)));
-        }
 
-        Ok(LinearScaleTo0And1Stage {
-            previous_value: WrappedIOData::F32Normalized0To1(initial_value),
+        Ok(LinearScaleToPercentageStage {
+            previous_value: WrappedIOData::Percentage(initial_value),
             lower: lower_bound,
             upper: upper_bound,
             upper_minus_lower: upper_bound - lower_bound,
@@ -100,26 +90,26 @@ impl LinearScaleTo0And1Stage {
 /// and maps them linearly to the normalized range [-1, 1]. Values outside the given bounds
 /// are clamped to the bounds before scaling.
 #[derive(Debug, Clone)]
-pub struct LinearScaleToM1And1Stage {
+pub struct LinearScaleToSignedPercentageStage {
     previous_value: WrappedIOData,
     lower: f32,
     upper: f32,
     upper_minus_lower_halved: f32
 }
 
-impl Display for LinearScaleToM1And1Stage {
+impl Display for LinearScaleToSignedPercentageStage {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "LinearScaleToM1And1(lower_bound={:?},upper_bound={:?},prev_val={:?})", self.lower, self.upper,  self.previous_value)
     }
 }
 
-impl PipelineStage for LinearScaleToM1And1Stage {
+impl PipelineStage for LinearScaleToSignedPercentageStage {
     fn get_input_data_type(&self) -> WrappedIOType {
         WrappedIOType::F32
     }
 
     fn get_output_data_type(&self) -> WrappedIOType {
-        WrappedIOType::F32NormalizedM1To1
+        WrappedIOType::SignedPercentage
     }
 
     fn get_most_recent_output(&self) -> &WrappedIOData {
@@ -128,10 +118,9 @@ impl PipelineStage for LinearScaleToM1And1Stage {
 
     fn process_new_input(&mut self, value: &WrappedIOData, _: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         let float_result = f32::try_from(value)?;
-        let clamped = float_result.clamp(self.lower, self.upper);
-        let val_m1_1 = ((clamped - self.lower) / self.upper_minus_lower_halved) - 1.0;
 
-        self.previous_value = WrappedIOData::F32NormalizedM1To1(val_m1_1);
+        let percentage = SignedPercentage::new_from_linear_interp(float_result, &(self.lower..self.upper))?;
+        self.previous_value = WrappedIOData::SignedPercentage(percentage);
         Ok(&self.previous_value)
     }
 
@@ -140,7 +129,7 @@ impl PipelineStage for LinearScaleToM1And1Stage {
     }
 }
 
-impl LinearScaleToM1And1Stage {
+impl LinearScaleToSignedPercentageStage {
     /// Creates a new LinearScaleToM1And1 processor.
     ///
     /// # Arguments
@@ -151,7 +140,7 @@ impl LinearScaleToM1And1Stage {
     /// # Returns
     /// * `Ok(LinearScaleToM1And1)` - A new processor instance
     /// * `Err(FeagiDataError)` - If parameters are invalid (NaN, infinite, or out of bounds)
-    pub fn new(lower_bound: f32, upper_bound: f32, initial_value: f32) -> Result<Self, FeagiDataError> {
+    pub fn new(lower_bound: f32, upper_bound: f32, initial_value: SignedPercentage) -> Result<Self, FeagiDataError> {
         // TODO why arent we using Range?
         if lower_bound.is_nan() || lower_bound.is_infinite() {
             return Err(FeagiDataError::BadParameters(format!("Given lower bound float {} is not valid!", lower_bound)));
@@ -159,18 +148,11 @@ impl LinearScaleToM1And1Stage {
         if upper_bound.is_nan() || upper_bound.is_infinite() {
             return Err(FeagiDataError::BadParameters(format!("Given upper bound float {} is not valid!", upper_bound)));
         }
-        if initial_value.is_nan() || initial_value.is_infinite() {
-            return Err(FeagiDataError::BadParameters(format!("Given initial value float {} is not valid!", initial_value)));
-        }
         if upper_bound <= lower_bound {
             return Err(FeagiDataError::BadParameters(format!("Upper bound float {} must be greater than lower bound {}!!", upper_bound, lower_bound)));
         }
-        if initial_value > upper_bound || initial_value < lower_bound {
-            return Err(FeagiDataError::BadParameters(format!("Initial value float {} must be between bounds {} and {}!", initial_value, lower_bound, upper_bound)));
-        }
-
-        Ok(LinearScaleToM1And1Stage {
-            previous_value: WrappedIOData::F32NormalizedM1To1(initial_value),
+        Ok(LinearScaleToSignedPercentageStage {
+            previous_value: WrappedIOData::SignedPercentage(initial_value),
             lower: lower_bound,
             upper: upper_bound,
             upper_minus_lower_halved: (upper_bound - lower_bound) * 0.5,

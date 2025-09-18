@@ -7,8 +7,8 @@ use crate::wrapped_io_data::WrappedIOData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WrappedIOType {
-    F32,
-    Percentage,
+    F32, // Used for neither sensors or motors
+    Percentage, // used for both
     SignedPercentage,
     Percentage4D,
     ImageFrame(Option<ImageFrameProperties>),
