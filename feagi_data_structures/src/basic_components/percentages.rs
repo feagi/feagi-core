@@ -16,7 +16,7 @@ macro_rules! define_unsigned_percentage {
 
             //region Constructors
 
-            pub(crate) fn new_from_0_1_unchecked(value: f32) -> Self {
+            pub fn new_from_0_1_unchecked(value: f32) -> Self {
                 $name { value }
             }
 
@@ -34,7 +34,7 @@ macro_rules! define_unsigned_percentage {
                 Ok($name { value: (value + 1.0) / 2.0 })
             }
 
-            pub(crate) fn new_from_interp_m1_1_unchecked(value: f32) -> Self {
+            pub fn new_from_interp_m1_1_unchecked(value: f32) -> Self {
                 $name { value: (value + 1.0) / 2.0 }
             }
 

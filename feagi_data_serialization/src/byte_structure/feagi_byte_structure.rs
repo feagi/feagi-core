@@ -5,7 +5,7 @@
 //! wrapped_io_data, providing comprehensive validation, parsing, and manipulation capabilities.
 
 use byteorder::{ByteOrder, LittleEndian};
-use feagi_data_structures::data::FeagiJSON;
+use feagi_data_structures::data::{FeagiJSON, Percentage};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use super::FeagiByteStructureType;
@@ -62,17 +62,15 @@ impl FeagiByteStructure {
     /// Size of each structure's header entry in multi-structure wrapped_io_data (start position + length).
     pub const MULTISTRUCT_PER_STRUCT_HEADER_SIZE_IN_BYTES: usize = 8;
 
-    /// Currently supported version for JSON format structures.
-    pub const SUPPORTED_VERSION_JSON: u8 = 1;
-    
     /// Currently supported version for multi-structure wrapped_io_data.
     pub const SUPPORTED_VERSION_MULTI_STRUCT: u8 = 1;
     
-    /// Currently supported version for neuron XYZP format structures.
-    pub const SUPPORTED_VERSION_NEURON_XYZP: u8 = 1;
-    
     //region Constructors
-    
+
+    pub fn new() -> FeagiByteStructure {
+        FeagiByteStructure { bytes: vec![] }
+    }
+
     /// Creates a new FeagiByteStructure from raw bytes data with full validation.
     ///
     /// This is the primary constructor that validates the provided bytes data against
@@ -477,12 +475,18 @@ impl FeagiByteStructure {
     
     //region Interactions with Internal Vector
 
+    pub fn clear_with_set_capacity_for_writing(&mut self, required_capacity: usize) -> Result< &mut [u8], FeagiDataError> {
+        self.ensure_capacity_of_at_least(required_capacity)?;
+        self.bytes.clear();
+        Ok(&mut self.bytes)
+    }
+
     pub fn get_wasted_capacity_count(&self) -> usize {
         self.bytes.capacity() - self.bytes.len()
     }
 
-    pub fn get_utilized_capacity_percentage(&self) -> f32 {
-        (self.bytes.len() as f32 / self.bytes.capacity() as f32) * 100.0
+    pub fn get_utilized_capacity_percentage(&self) -> Percentage {
+        Percentage::new_from_0_1_unchecked(self.bytes.len() as f32 / self.bytes.capacity() as f32)
     }
 
     pub fn ensure_capacity_of_at_least(&mut self, size: usize) -> Result<(), FeagiDataError> {
@@ -501,7 +505,7 @@ impl FeagiByteStructure {
     }
 
     pub fn reset_write_index(&mut self) {
-        self.bytes.truncate(0);
+        self.bytes.clear();
     }
     
     //endregion

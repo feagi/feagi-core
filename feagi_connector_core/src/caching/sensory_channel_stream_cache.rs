@@ -28,14 +28,12 @@ pub(crate) struct SensoryChannelStreamCache {
     pipeline_runner: PipelineStageRunner,
     channel: CorticalChannelIndex,
     last_updated: Instant,
-    should_allow_sending_stale_data: bool,
 }
 
 impl SensoryChannelStreamCache {
     
     pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>,
                channel: CorticalChannelIndex,
-               should_allow_sending_stale_data: bool
                 ) -> Result<Self, FeagiDataError> {
         
         let processor_runner = PipelineStageRunner::new(pipeline_stages)?;
@@ -43,29 +41,9 @@ impl SensoryChannelStreamCache {
             pipeline_runner: processor_runner,
             channel,
             last_updated: Instant::now(),
-            should_allow_sending_stale_data: should_allow_sending_stale_data
         })
     }
-    
-    /// Updates the cache with a new sensor value and processes it through the chain.
-    ///
-    /// Takes raw sensor data, applies all configured processing in sequence,
-    /// and updates the internal timestamp to mark when fresh data was received.
-    /// The processed result becomes available through `get_most_recent_sensor_value()`.
-    ///
-    /// # Arguments
-    ///
-    /// * `value` - Raw sensor data to process and cache
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Data successfully processed and cached
-    /// * `Err(FeagiDataProcessingError)` - If processing fails
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if any processor in the chain fails to handle the data,
-    /// typically due to data type mismatches or processing-specific failures.
+
     pub fn update_sensor_value(&mut self, value: WrappedIOData) -> Result<(), FeagiDataError> {
         self.last_updated = Instant::now();
         _ = self.pipeline_runner.update_value(&value, Instant::now())?;
@@ -87,7 +65,7 @@ impl SensoryChannelStreamCache {
     pub fn clone_pipeline_stage(&self, pipeline_stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
         self.pipeline_runner.clone_stage(pipeline_stage_index)
     }
-    
+
     
     /// Returns the most recently processed sensor value.
     ///

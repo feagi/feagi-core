@@ -596,23 +596,3 @@ impl SensorCache {
 }
 
 
-//region Cortical Area Details
-
-struct CorticalAreaCacheDetails {
-    relevant_channel_lookups: Vec<FullChannelCacheKey>,
-    number_channels: u32,
-    neuron_encoder: Box<dyn NeuronXYZPEncoder + Sync + Send>
-}
-
-impl  CorticalAreaCacheDetails {
-    pub(crate) fn new(relevant_channel_lookups: Vec<FullChannelCacheKey>, number_channels: u32, neuron_encoder: Box<dyn NeuronXYZPEncoder + Sync + Send>) -> Self {
-        CorticalAreaCacheDetails{
-            relevant_channel_lookups,
-            number_channels,
-            neuron_encoder
-        }
-
-    }
-}
-
-//endregion

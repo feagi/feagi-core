@@ -7,27 +7,22 @@ use crate::data_pipeline::{PipelineStage, PipelineStageIndex, PipelineStageRunne
 
 #[derive(Debug)]
 pub(crate) struct MotorChannelStreamCache {
+    most_recent_directly_decoded_output: WrappedIOData,
     pipeline_runner: PipelineStageRunner,
     channel: CorticalChannelIndex,
-    last_updated: Instant,
-    should_emit_stale_data: bool,
-    most_recent_direct_decoded_output: WrappedIOData,
 }
 
 impl MotorChannelStreamCache {
 
     pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>,
                channel: CorticalChannelIndex,
-               should_emit_stale_data: bool
     ) -> Result<Self, FeagiDataError> {
 
         let processor_runner = PipelineStageRunner::new(pipeline_stages)?;
         Ok(MotorChannelStreamCache {
+            most_recent_directly_decoded_output: processor_runner.get_input_data_type().create_blank_data_of_type()?,
             pipeline_runner: processor_runner,
             channel,
-            last_updated: Instant::now(),
-            should_emit_stale_data,
-            most_recent_direct_decoded_output: WrappedIOData::F32(0.0), // Placeholder
         })
     }
 
@@ -62,10 +57,8 @@ impl MotorChannelStreamCache {
 
     pub fn decode_from_neurons(&mut self, cortical_mapped_neuron_data: &CorticalMappedXYZPNeuronData, decoder: &Box<dyn NeuronXYZPDecoder + Sync + Send>) -> Result<(), FeagiDataError> {
 
-        let is_updated = decoder.read_neuron_data_single_channel(cortical_mapped_neuron_data, self.channel, self.pipeline_runner.get_current_input_mut())?;
-        if is_updated {
-            self.last_updated = Instant::now();
-        }
+        let is_updated = decoder.read_neuron_data_single_channel(cortical_mapped_neuron_data, self.channel, &mut self.most_recent_directly_decoded_output)?;
+        self.pipeline_runner.update_value(&self.most_recent_directly_decoded_output, Instant::now())?;
         Ok(())
     }
 
