@@ -3,7 +3,7 @@ use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 use image;
 use image::{DynamicImage, GenericImageView};
 use crate::FeagiDataError;
-use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution};
+use crate::data::descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions};
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::CorticalChannelIndex;
 use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
@@ -42,7 +42,7 @@ impl ImageFrame {
         Ok(ImageFrame {
             channel_layout: *channel_format,
             color_space: *color_space,
-            pixels: Array3::<u8>::zeros((xy_resolution.height, xy_resolution.width, *channel_format as usize)),
+            pixels: Array3::<u8>::zeros((xy_resolution.height as usize, xy_resolution.width as usize, *channel_format as usize)),
             skip_encoding: false,
         })
     }
@@ -197,11 +197,19 @@ impl ImageFrame {
     /// A tuple of (width, height) representing the image dimensions in pixels.
     pub fn get_xy_resolution(&self) -> ImageXYResolution {
         let shape: &[usize] = self.pixels.shape();
-        ImageXYResolution::new(shape[1], shape[0]).unwrap() // because nd array is row major, where coords are yx
+        ImageXYResolution::new(shape[1] as u32, shape[0] as u32).unwrap() // because nd array is row major, where coords are yx
     }
 
     pub fn get_number_elements(&self) -> usize {
         self.pixels.shape()[0] * self.pixels.shape()[1] * self.pixels.shape()[2]
+    }
+
+    pub fn get_dimensions(&self) -> ImageXYZDimensions {
+        ImageXYZDimensions::new(
+            self.pixels.shape()[0] as u32,
+            self.pixels.shape()[1] as u32,
+            self.channel_layout.into()
+        ).unwrap()
     }
 
     /// Returns a reference to the internal pixel data array.
@@ -257,7 +265,7 @@ impl ImageFrame {
     ///
     /// A DynamicImage containing the pixel data from this ImageFrame.
     pub fn export_as_dynamic_image(&self) -> Result<DynamicImage, FeagiDataError> {
-        let (width, height) = (self.get_xy_resolution().width, self.get_xy_resolution().height);
+        let (width, height) = (self.get_xy_resolution().width as usize, self.get_xy_resolution().height as usize);
         
         match self.channel_layout {
             ColorChannelLayout::GrayScale => {

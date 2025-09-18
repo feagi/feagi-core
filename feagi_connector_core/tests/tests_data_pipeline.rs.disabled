@@ -5,7 +5,7 @@
 
 use std::time::Instant;
 use feagi_data_structures::data::ImageFrame;
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution};
+use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution};
 use feagi_data_structures::processing::ImageFrameProcessor;
 use feagi_data_structures::wrapped_io_data::WrappedIOData;
 use feagi_connector_core::data_pipeline::stages::*;
@@ -75,25 +75,25 @@ mod test_pipeline_stages {
     
     #[test]
     fn test_linear_scale_to_0_1_creation() {
-        let stage = LinearScaleTo0And1Stage::new(0.0, 100.0, 50.0);
+        let stage = LinearScaleToPercentageStage::new(0.0, 100.0, 50.0);
         assert!(stage.is_ok());
         
         // Test invalid range (upper <= lower)
-        let stage = LinearScaleTo0And1Stage::new(100.0, 50.0, 75.0);
+        let stage = LinearScaleToPercentageStage::new(100.0, 50.0, 75.0);
         assert!(stage.is_err());
         
         // Test initial value out of bounds
-        let stage = LinearScaleTo0And1Stage::new(0.0, 100.0, 150.0);
+        let stage = LinearScaleToPercentageStage::new(0.0, 100.0, 150.0);
         assert!(stage.is_err());
         
-        let stage = LinearScaleTo0And1Stage::new(0.0, 100.0, -10.0);
+        let stage = LinearScaleToPercentageStage::new(0.0, 100.0, -10.0);
         assert!(stage.is_err());
         
         // Test NaN/infinite values
-        let stage = LinearScaleTo0And1Stage::new(f32::NAN, 100.0, 50.0);
+        let stage = LinearScaleToPercentageStage::new(f32::NAN, 100.0, 50.0);
         assert!(stage.is_err());
         
-        let stage = LinearScaleTo0And1Stage::new(0.0, f32::INFINITY, 50.0);
+        let stage = LinearScaleToPercentageStage::new(0.0, f32::INFINITY, 50.0);
         assert!(stage.is_err());
     }
     
@@ -346,7 +346,7 @@ mod test_pipeline_stages {
         
         // Float processing chain simulation
         let identity_stage = IdentityFloatStage::new(0.0);
-        let scale_0_1 = LinearScaleTo0And1Stage::new(0.0, 100.0, 50.0);
+        let scale_0_1 = LinearScaleToPercentageStage::new(0.0, 100.0, 50.0);
         let scale_m1_1 = LinearScaleToM1And1Stage::new(-50.0, 50.0, 0.0);
         
         assert!(identity_stage.is_ok());

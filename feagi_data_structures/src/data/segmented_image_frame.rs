@@ -7,7 +7,7 @@
 //! the periphery.
 
 use ndarray::Array3;
-use crate::data::image_descriptors::{ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+use crate::data::descriptors::{ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 use crate::FeagiDataError;
 use crate::data::ImageFrame;
 use crate::genomic::{CorticalID, CorticalType, SensorCorticalType};

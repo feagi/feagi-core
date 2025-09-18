@@ -4,87 +4,23 @@
 
 use std::cmp;
 use std::fmt::Display;
-use std::ops::RangeInclusive;
-use crate::FeagiDataError;
-use crate::basic_components::{CartesianResolution, FlatCoordinateU32};
-use crate::data::{ImageFrame, SegmentedImageFrame};
+use crate::{define_signed_percentage, define_unsigned_percentage, define_2d_signed_or_unsigned_percentages, define_xy_percentage_dimensions, define_xyz_mapping, map_signed_percentages, map_unsigned_percentages, FeagiDataError};
+use crate::data::{ImageFrame, Percentage, SegmentedImageFrame, SignedPercentage};
+use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
+use crate::genomic::descriptors::CorticalChannelDimensions;
+//region Images
 
 //region Image XY
 
-/// Represents a coordinate on an image. +x goes tot he right, +y goes downward. (0,0) is in the top_left
-#[repr(transparent)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub struct ImageXYPoint(FlatCoordinateU32);
+define_xy_coordinates!(ImageXYPoint, u32, "ImageXYPoint", "Represents a coordinate on an image. +x goes to the right, +y goes downward. (0,0) is in the top_left");
 
-impl ImageXYPoint {
-    pub fn new(x: u32, y: u32) -> Self {
-        ImageXYPoint(FlatCoordinateU32::new(x, y))
-    }
-}
+define_xy_dimensions!(ImageXYResolution, u32, "ImageXYResolution", 0, "Describes the resolution of the image (width and height)");
 
-impl std::ops::Deref for ImageXYPoint {
-    type Target = FlatCoordinateU32;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+//endregion
 
-impl From<FlatCoordinateU32> for ImageXYPoint {
-    fn from(x: FlatCoordinateU32) -> Self {
-        ImageXYPoint(x)
-    }
-}
+//region Image XYZ
 
-impl From<ImageXYPoint> for FlatCoordinateU32 {
-    fn from(x: ImageXYPoint) -> Self {
-        x.0
-    }
-}
-
-impl Display for ImageXYPoint {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "[{}, {}]", self.0, self.0)
-    }
-}
-
-
-
-/// Describes the resolution of the image (width and height)
-#[repr(transparent)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
-pub struct ImageXYResolution(CartesianResolution);
-
-impl ImageXYResolution {
-    pub fn new(x_width: usize, y_height: usize,) -> Result<Self,FeagiDataError> {
-        Ok(ImageXYResolution(CartesianResolution::new(x_width, y_height)?))
-    }
-}
-
-impl std::ops::Deref for ImageXYResolution {
-    type Target = CartesianResolution;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl From<CartesianResolution> for ImageXYResolution {
-    fn from(coord: CartesianResolution) -> Self {
-        ImageXYResolution(coord)
-    }
-}
-
-impl From<ImageXYResolution> for CartesianResolution {
-    fn from(coord: ImageXYResolution) -> Self {
-        coord.0
-    }
-}
-
-impl Display for ImageXYResolution {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "<{}w by {}h>", self.0, self.0)
-    }
-}
-
+define_xyz_dimensions!(ImageXYZDimensions, u32, "ImageXYZDimensions", 0, "Describes the 3D dimensions of an image, with the 3rd dimension being the number of color channels");
 
 //endregion
 
@@ -260,6 +196,12 @@ impl From<ColorChannelLayout> for usize {
     }
 }
 
+impl From<ColorChannelLayout> for u32 {
+    fn from(value: ColorChannelLayout) -> u32 {
+        value as u32
+    }
+}
+
 /// Represents the memory layout of an image array.
 ///
 /// This enum defines the possible memory layouts for image data:
@@ -388,7 +330,7 @@ impl ImageFrameProperties {
     }
 
     pub fn get_number_of_samples(&self) -> usize {
-        self.image_resolution.width * self.image_resolution.height * self.get_number_of_channels()
+        self.image_resolution.width as usize * self.image_resolution.height as usize * self.get_number_of_channels()
     }
 }
 
@@ -495,11 +437,11 @@ impl CornerPoints {
     }
     
     pub fn enclosed_area_width_height(&self) -> ImageXYResolution {
-        ImageXYResolution::new(self.get_width() as usize, self.get_height() as usize).unwrap()
+        ImageXYResolution::new(self.get_width(), self.get_height()).unwrap()
     }
 
     pub fn verify_fits_in_resolution(&self, resolution: ImageXYResolution) -> Result<(), FeagiDataError> {
-        if self.lower_right.x > resolution.width as u32 || self.lower_right.y > resolution.height as u32 {
+        if self.lower_right.x > resolution.width || self.lower_right.y > resolution.height {
             return Err(FeagiDataError::BadParameters(format!("Corner Points {} do not fit in given resolution {}!", self, resolution)).into())
         }
         Ok(())
@@ -514,25 +456,37 @@ impl Display for CornerPoints {
 
 //endregion
 
+//region Gaze Eccentricity (Location)
+
+define_signed_percentage!(GazeEccentricity, "A positive or negative percentage referring to the offset from the center along an axis on which the central vision will center its segmentation from the source image");
+define_2d_signed_or_unsigned_percentages!(GazeEccentricityCoordinate, GazeEccentricity, "GazeEccentricityCoordinate", "The offset from the center along x and y, with 0,0 being the center");
+map_signed_percentages!(GazeEccentricity, SignedPercentage);
+
+//endregion
+
+//region Gaze Modularity (Size)
+define_unsigned_percentage!(GazeModulation, "The percentage size along an axis that the central vision will occupy from the source image ");
+define_xy_percentage_dimensions!(GazeModulationSize, GazeModulation, "GazeModulationSize", "The normalized size along x and y of the central vision ins respect to its source image" );
+map_unsigned_percentages!(GazeModulation, Percentage);
+
 //region Gaze Properties
+
 /// Properties defining the center region of a segmented vision frame
 ///
 /// This structure defines the coordinates and size of the central region
 /// in a normalized coordinate space (0.0 to 1.0).
 #[derive(PartialEq, Clone, Copy, Debug)]
 pub struct GazeProperties {
-    /// Center point coordinates in normalized space (0.0-1.0), from the top left
-    pub(crate) eccentricity_normalized_xy: (f32, f32), // Scaled from 0 to 1
-    /// Size of the center region in normalized space (0.0-1.0)
-    pub(crate) modularity_normalized_xy: (f32, f32), // Scaled from 0 to 1
+    pub(crate) eccentricity_location_xy: (GazeEccentricity, GazeEccentricity),
+    pub(crate) modulation_size_xy: (GazeModulation, GazeModulation),
 }
 
 impl GazeProperties {
 
-    pub fn new(eccentricity_center_xy: (f32, f32), modularity_size_xy: (f32, f32)) -> Self {
+    pub fn new(eccentricity_center_xy: (GazeEccentricity, GazeEccentricity), modularity_size_xy: (GazeModulation, GazeModulation)) -> Self {
         GazeProperties {
-            eccentricity_normalized_xy: (eccentricity_center_xy.0.clamp(0.0, 1.0), eccentricity_center_xy.1.clamp(0.0, 1.0)),
-            modularity_normalized_xy: (modularity_size_xy.0.clamp(0.0, 1.0), modularity_size_xy.1.clamp(0.0, 1.0)),
+            eccentricity_location_xy: eccentricity_center_xy,
+            modulation_size_xy: modularity_size_xy,
         }
     }
 
@@ -545,7 +499,7 @@ impl GazeProperties {
     ///
     /// A SegmentedFrameCenterProperties with default centered configuration.
     pub fn create_default_centered() -> GazeProperties {
-        GazeProperties::new((0.5, 0.5), (0.5, 0.5))
+        GazeProperties::new((GazeEccentricity::new_from_m1_1_unchecked(0.0), GazeEccentricity::new_from_m1_1_unchecked(0.0)), (GazeModulation::new_from_0_1_unchecked(0.0), GazeModulation::new_from_0_1_unchecked(0.0)))
     }
 
     pub fn calculate_source_corner_points_for_segmented_video_frame(&self, source_frame_resolution: ImageXYResolution) -> Result<[CornerPoints; 9], FeagiDataError> {
@@ -556,31 +510,31 @@ impl GazeProperties {
 
         let center_corner_points = self.calculate_pixel_coordinates_of_center_corners(source_frame_resolution)?;
         Ok([
-            CornerPoints::new(ImageXYPoint::new(0, center_corner_points.lower_right.y), ImageXYPoint::new(center_corner_points.upper_left.x, source_frame_resolution.height as u32))?,
-            CornerPoints::new(center_corner_points.get_lower_left(), ImageXYPoint::new(center_corner_points.lower_right.x, source_frame_resolution.height as u32))?,
-            CornerPoints::new(center_corner_points.lower_right, ImageXYPoint::new(source_frame_resolution.width as u32, source_frame_resolution.height as u32))?,
+            CornerPoints::new(ImageXYPoint::new(0, center_corner_points.lower_right.y), ImageXYPoint::new(center_corner_points.upper_left.x, source_frame_resolution.height))?,
+            CornerPoints::new(center_corner_points.get_lower_left(), ImageXYPoint::new(center_corner_points.lower_right.x, source_frame_resolution.height))?,
+            CornerPoints::new(center_corner_points.lower_right, ImageXYPoint::new(source_frame_resolution.width, source_frame_resolution.height))?,
             CornerPoints::new(ImageXYPoint::new(0, center_corner_points.upper_left.y), center_corner_points.get_lower_left())?,
             center_corner_points,
-            CornerPoints::new(center_corner_points.get_upper_right(), ImageXYPoint::new(source_frame_resolution.width as u32, center_corner_points.lower_right.y))?,
+            CornerPoints::new(center_corner_points.get_upper_right(), ImageXYPoint::new(source_frame_resolution.width, center_corner_points.lower_right.y))?,
             CornerPoints::new(ImageXYPoint::new(0,0), center_corner_points.upper_left)?,
             CornerPoints::new(ImageXYPoint::new(center_corner_points.upper_left.x, 0), center_corner_points.get_upper_right())?,
-            CornerPoints::new(ImageXYPoint::new(center_corner_points.lower_right.x, 0), ImageXYPoint::new(source_frame_resolution.width as u32, center_corner_points.upper_left.y))?,
+            CornerPoints::new(ImageXYPoint::new(center_corner_points.lower_right.x, 0), ImageXYPoint::new(source_frame_resolution.width, center_corner_points.upper_left.y))?,
         ])
     }
 
     fn calculate_pixel_coordinates_of_center_corners(&self, source_frame_resolution: ImageXYResolution) -> Result<CornerPoints, FeagiDataError> {
         let source_frame_width_height_f: (f32, f32) = (source_frame_resolution.width as f32, source_frame_resolution.height as f32);
-        let center_size_normalized_half_xy: (f32, f32) = (self.modularity_normalized_xy.0 / 2.0, self.modularity_normalized_xy.1 / 2.0);
+        let center_size_normalized_half_xy: (f32, f32) = (self.modulation_size_xy.0.into(), self.modulation_size_xy.1.into());
 
         // We use max / min to ensure that there is always a 1 pixel buffer along all edges for use in peripheral vision (since we cannot use a resolution of 0)
-        let bottom_pixel: usize = cmp::min(source_frame_resolution.height - 1,
-                                           ((self.eccentricity_normalized_xy.1 + center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
+        let bottom_pixel: usize = cmp::min(source_frame_resolution.height as usize - 1,
+                                           ((self.eccentricity_location_xy.1.value + center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
         let top_pixel: usize = cmp::max(1,
-                                        (( self.eccentricity_normalized_xy.1 - center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
+                                        (( self.eccentricity_location_xy.1.value - center_size_normalized_half_xy.1) * source_frame_width_height_f.1).floor() as usize);
         let left_pixel: usize = cmp::max(1,
-                                         ((self.eccentricity_normalized_xy.0 - center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
-        let right_pixel: usize = cmp::min(source_frame_resolution.width - 1,
-                                          (( self.eccentricity_normalized_xy.0 + center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
+                                         ((self.eccentricity_location_xy.0.value - center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
+        let right_pixel: usize = cmp::min(source_frame_resolution.width as usize - 1,
+                                          (( self.eccentricity_location_xy.0.value + center_size_normalized_half_xy.0) * source_frame_width_height_f.0).floor() as usize);
 
         let top_left = ImageXYPoint::new(left_pixel as u32, top_pixel as u32);
         let bottom_right = ImageXYPoint::new(right_pixel as u32, bottom_pixel as u32);
@@ -597,4 +551,16 @@ impl std::fmt::Display for GazeProperties {
 }
 //endregion
 
+define_unsigned_percentage!(WholeImageActivity, "Percentage of an image frame that is non-zero");
 
+//endregion
+
+//endregion
+
+//region Misc
+
+define_xyz_dimensions!(MiscDataDimensions, u32, "MiscDataDimensions", 0, "The dimensions of the internal 3D array of a Misc Data Struct. Coordinates align with the position of neuron coordinates in FEAGI");
+define_xyz_mapping!(MiscDataDimensions, ImageXYZDimensions);
+define_xyz_mapping!(MiscDataDimensions, CorticalChannelDimensions);
+
+//endregion

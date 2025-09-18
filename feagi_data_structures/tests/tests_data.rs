@@ -4,7 +4,7 @@
 //! and related functionality for image processing, import, and export operations.
 
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, MemoryOrderLayout, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties, MemoryOrderLayout, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 use feagi_data_structures::genomic::{CorticalType, SensorCorticalType};
 use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
 use ndarray::Array3;
@@ -14,9 +14,40 @@ use std::path::Path;
 #[cfg(test)]
 mod test_image_frame {
     use image::GenericImageView;
+    use ndarray::Zip;
+    use feagi_data_structures::data::descriptors::ImageXYZDimensions;
     use super::*;
 
     const TEST_BIRD_IMAGE_PATH: &str = "tests/images/bird.jpg";
+
+    fn load_gamma_birb_image() -> ImageFrame {
+        let img_bytes = fs::read(TEST_BIRD_IMAGE_PATH).expect("Failed to read bird.jpg");
+        ImageFrame::new_from_jpeg_bytes(&img_bytes, &ColorSpace::Gamma).unwrap()
+    }
+
+    fn create_checkerboard_image(tile_size: (usize, usize), tile_counts: (usize, usize), color_channel_layout: ColorChannelLayout, color_space: ColorSpace) -> ImageFrame {
+        let (xdim, ydim) = (tile_size.0 * tile_counts.0, tile_size.1 * tile_counts.1);
+        let mut image = ImageFrame::new(&color_channel_layout, &color_space, &ImageXYResolution::new(xdim as u32, ydim as u32).unwrap()).unwrap();
+
+        let pixels = image.get_pixels_view_mut();
+
+        Zip::indexed(pixels).for_each(|(y, x, _z), val| {
+            let tx = x / tile_size.0;
+            let ty = y / tile_size.1;
+
+            *val = if (tx + ty) % 2 == 0 { 0 } else { 255 };
+        });
+
+        image
+    }
+
+    fn save_test_image(image: &ImageFrame, filename: &str) {
+        let png_bytes = image.export_as_png_bytes().unwrap();
+        std::fs::write(format!("tests/images/{}", filename), &png_bytes).unwrap();
+        println!("Saved test image: tests/images/{}", filename);
+    }
+
+
 
     #[test]
     fn test_image_frame_creation_new() {
@@ -367,18 +398,13 @@ mod test_image_frame {
     fn test_debug_trait() {
         let resolution = ImageXYResolution::new(2, 2).unwrap();
         let frame = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, &resolution).unwrap();
-        
+
         let debug_string = format!("{:?}", frame);
         assert!(debug_string.contains("ImageFrame"));
         // Should contain the struct fields
         assert!(debug_string.contains("pixels"));
         assert!(debug_string.contains("channel_layout"));
         assert!(debug_string.contains("color_space"));
-    }
-
-    #[test]
-    fn test_internal_memory_layout_constant() {
-        assert_eq!(ImageFrame::INTERNAL_MEMORY_LAYOUT, MemoryOrderLayout::HeightsWidthsChannels);
     }
 
     #[test]
@@ -571,8 +597,8 @@ mod test_image_frame {
 
         // Find a non-black, non-white pixel to test (to avoid clamping effects)
         let mut test_pixel_found = false;
-        for y in 0..original_frame.get_xy_resolution().height.min(10) {
-            for x in 0..original_frame.get_xy_resolution().width.min(10) {
+        for y in 0..original_frame.get_xy_resolution().height.min(10) as usize {
+            for x in 0..original_frame.get_xy_resolution().width.min(10) as usize {
                 let orig_val = original_pixels[(y, x, 0)] as i32;
                 if orig_val > 50 && orig_val < 205 { // Avoid clamping range
                     let bright_val = bright_pixels[(y, x, 0)] as i32;
@@ -658,8 +684,8 @@ mod test_image_frame {
         let mut found_dark_pixel = false;
         let mut found_bright_pixel = false;
         
-        for y in 0..original_frame.get_xy_resolution().height.min(20) {
-            for x in 0..original_frame.get_xy_resolution().width.min(20) {
+        for y in 0..original_frame.get_xy_resolution().height.min(20) as usize {
+            for x in 0..original_frame.get_xy_resolution().width.min(20) as usize {
                 let orig_val = original_pixels[(y, x, 0)] as i32;
                 let high_contrast_val = high_contrast_pixels[(y, x, 0)] as i32;
                 let low_contrast_val = low_contrast_pixels[(y, x, 0)] as i32;

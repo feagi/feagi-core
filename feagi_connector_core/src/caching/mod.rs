@@ -1,5 +1,4 @@
 mod hashmap_helpers;
-mod sensory;
-mod motor;
-
-pub use sensory::SensorCache;
+mod io_cache;
+mod motor_channel_stream_cache;
+mod sensory_channel_stream_cache;

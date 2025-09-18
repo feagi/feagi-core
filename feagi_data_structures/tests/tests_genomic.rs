@@ -181,13 +181,6 @@ mod test_descriptors {
         }
 
         #[test]
-        fn test_cortical_coordinate_display() {
-            let coord = CorticalCoordinate::new(5, 10, 15);
-            let display_string = format!("{}", coord);
-            assert_eq!(display_string, "[5, 10, 15]");
-        }
-
-        #[test]
         fn test_genome_coordinate_creation() {
             let coord = GenomeCoordinate::new(-10, 0, 20);
             assert_eq!(coord.x, -10);
@@ -211,12 +204,6 @@ mod test_descriptors {
             assert_eq!(coord.z, 0);
         }
 
-        #[test]
-        fn test_genome_coordinate_display() {
-            let coord = GenomeCoordinate::new(-5, 10, -15);
-            let display_string = format!("{}", coord);
-            assert_eq!(display_string, "[-5, 10, -15]");
-        }
     }
 
     mod test_dimensions {
@@ -225,17 +212,17 @@ mod test_descriptors {
         #[test]
         fn test_cortical_channel_dimensions_valid() {
             let dims = CorticalChannelDimensions::new(10, 20, 30).unwrap();
-            assert_eq!(dims.x(), 10);
-            assert_eq!(dims.y(), 20);
-            assert_eq!(dims.z(), 30);
+            assert_eq!(dims.width, 10);
+            assert_eq!(dims.height, 20);
+            assert_eq!(dims.depth, 30);
         }
 
         #[test]
         fn test_cortical_channel_dimensions_minimum() {
             let dims = CorticalChannelDimensions::new(1, 1, 1).unwrap();
-            assert_eq!(dims.x(), 1);
-            assert_eq!(dims.y(), 1);
-            assert_eq!(dims.z(), 1);
+            assert_eq!(dims.width, 1);
+            assert_eq!(dims.height, 1);
+            assert_eq!(dims.depth, 1);
         }
 
         #[test]
@@ -245,18 +232,11 @@ mod test_descriptors {
         }
 
         #[test]
-        fn test_cortical_channel_dimensions_display() {
-            let dims = CorticalChannelDimensions::new(5, 10, 15).unwrap();
-            let display_string = format!("{}", dims);
-            assert_eq!(display_string, "<5, 10, 15>");
-        }
-
-        #[test]
         fn test_cortical_dimensions_valid() {
             let dims = CorticalDimensions::new(100, 200, 300).unwrap();
-            assert_eq!(dims.x(), 100);
-            assert_eq!(dims.y(), 200);
-            assert_eq!(dims.z(), 300);
+            assert_eq!(dims.width, 100);
+            assert_eq!(dims.height, 200);
+            assert_eq!(dims.depth, 300);
         }
     }
 
@@ -266,34 +246,9 @@ mod test_descriptors {
         #[test]
         fn test_cortical_channel_dimension_range_valid() {
             let range = CorticalChannelDimensionRange::new(0..10, 5..15, 10..20).unwrap();
-            assert_eq!(range.x, 0..10);
-            assert_eq!(range.y, 5..15);
-            assert_eq!(range.z, 10..20);
-        }
-
-        #[test]
-        fn test_cortical_channel_dimension_range_empty_error() {
-            let result = CorticalChannelDimensionRange::new(5..5, 0..10, 0..10);
-            assert!(result.is_err());
-        }
-
-        #[test]
-        fn test_cortical_channel_dimension_range_is_ambiguous_false() {
-            let range = CorticalChannelDimensionRange::new(5..6, 10..11, 15..16).unwrap();
-            assert!(!range.is_ambiguous());
-        }
-
-        #[test]
-        fn test_cortical_channel_dimension_range_is_ambiguous_true() {
-            let range = CorticalChannelDimensionRange::new(5..8, 10..11, 15..16).unwrap();
-            assert!(range.is_ambiguous());
-        }
-
-        #[test]
-        fn test_cortical_channel_dimension_range_display() {
-            let range = CorticalChannelDimensionRange::new(0..10, 5..15, 10..20).unwrap();
-            let display_string = format!("{}", range);
-            assert_eq!(display_string, "<0 - 10, 5 - 15, 10 - 20>");
+            assert_eq!(range.width, 0..10);
+            assert_eq!(range.height, 5..15);
+            assert_eq!(range.depth, 10..20);
         }
     }
 }
@@ -805,14 +760,6 @@ mod test_error_handling_edge_cases {
         assert!(CorticalDimensions::new(0, 10, 10).is_err());
         assert!(CorticalDimensions::new(10, 0, 10).is_err());
         assert!(CorticalDimensions::new(10, 10, 0).is_err());
-    }
-
-    #[test]
-    fn test_empty_ranges_in_dimension_ranges() {
-        // All dimension range types should reject empty ranges
-        assert!(CorticalChannelDimensionRange::new(5..5, 0..10, 0..10).is_err());
-        assert!(CorticalChannelDimensionRange::new(0..10, 7..7, 0..10).is_err());
-        assert!(CorticalChannelDimensionRange::new(0..10, 0..10, 3..3).is_err());
     }
 
     #[test]

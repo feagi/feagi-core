@@ -1,7 +1,7 @@
 use std::fmt::Display;
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::data::image_descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
+use feagi_data_structures::data::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
 use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
 use feagi_data_structures::processing::ImageFrameSegmentator;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};

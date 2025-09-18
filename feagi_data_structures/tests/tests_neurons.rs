@@ -9,7 +9,7 @@ use feagi_data_structures::neurons::xyzp::{
     NeuronXYZPEncoder
 };
 use feagi_data_structures::genomic::{CorticalID, descriptors::NeuronDepth};
-use feagi_data_structures::data::image_descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties};
+use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
@@ -19,6 +19,7 @@ use std::collections::HashMap;
 
 #[cfg(test)]
 mod test_xyzp_neurons {
+    use feagi_data_structures::data::{Percentage, SignedPercentage};
     use super::*;
 
     //region Helper Functions
@@ -677,7 +678,7 @@ mod test_xyzp_neurons {
         // Test that encoder reports correct data type
         let data_type = encoder.get_encodable_data_type();
         // Just verify it's a float type (exact type depends on implementation)
-        assert!(matches!(data_type, WrappedIOType::F32 | WrappedIOType::F32Normalized0To1 | WrappedIOType::F32NormalizedM1To1));
+        assert!(matches!(data_type, WrappedIOType::F32 | WrappedIOType::Percentage | WrappedIOType::SignedPercentage));
     }
     
     #[test]
@@ -698,7 +699,7 @@ mod test_xyzp_neurons {
         
         // Test that encoder reports correct data type
         let data_type = encoder.get_encodable_data_type();
-        assert!(matches!(data_type, WrappedIOType::F32 | WrappedIOType::F32Normalized0To1 | WrappedIOType::F32NormalizedM1To1));
+        assert!(matches!(data_type, WrappedIOType::F32 | WrappedIOType::Percentage | WrappedIOType::SignedPercentage));
     }
     
     #[test]
@@ -710,7 +711,7 @@ mod test_xyzp_neurons {
         
         // Test that encoder reports correct data type
         let data_type = encoder.get_encodable_data_type();
-        assert!(matches!(data_type, WrappedIOType::F32 | WrappedIOType::F32Normalized0To1 | WrappedIOType::F32NormalizedM1To1));
+        assert!(matches!(data_type, WrappedIOType::F32 | WrappedIOType::Percentage | WrappedIOType::SignedPercentage));
     }
     
     #[test]
@@ -736,7 +737,7 @@ mod test_xyzp_neurons {
         let mut cortical_data = CorticalMappedXYZPNeuronData::new();
         
         // Create some test data (single float value for testing)
-        let test_data = WrappedIOData::new_m1_1_f32(0.5).unwrap();
+        let test_data = WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1(0.5).unwrap());
         let channel_index = CorticalChannelIndex::from(0);
         
         // Test single channel encoding
@@ -755,8 +756,8 @@ mod test_xyzp_neurons {
         let mut cortical_data = CorticalMappedXYZPNeuronData::new();
         
         // Create test data for multiple channels
-        let test_data1 = WrappedIOData::new_0_1_f32(0.3).unwrap();
-        let test_data2 = WrappedIOData::new_0_1_f32(0.6).unwrap();
+        let test_data1 = WrappedIOData::Percentage(Percentage::new_from_0_1_unchecked(0.3));
+        let test_data2 = WrappedIOData::Percentage(Percentage::new_from_0_1_unchecked(0.6));
         
         let mut channels_and_values = HashMap::new();
         channels_and_values.insert(CorticalChannelIndex::from(0), &test_data1);
@@ -784,9 +785,9 @@ mod test_xyzp_neurons {
         
         // All float encoders should handle float types (but could be different)
         // This is more about testing the interface consistency
-        assert!(matches!(linear_type, WrappedIOType::F32 | WrappedIOType::F32Normalized0To1 | WrappedIOType::F32NormalizedM1To1));
-        assert!(matches!(split_type, WrappedIOType::F32 | WrappedIOType::F32Normalized0To1 | WrappedIOType::F32NormalizedM1To1));
-        assert!(matches!(psp_type, WrappedIOType::F32 | WrappedIOType::F32Normalized0To1 | WrappedIOType::F32NormalizedM1To1));
+        assert!(matches!(linear_type, WrappedIOType::F32 | WrappedIOType::Percentage | WrappedIOType::SignedPercentage));
+        assert!(matches!(split_type, WrappedIOType::F32 | WrappedIOType::Percentage | WrappedIOType::SignedPercentage));
+        assert!(matches!(psp_type, WrappedIOType::F32 | WrappedIOType::Percentage | WrappedIOType::SignedPercentage));
     }
     
     //endregion

@@ -1,7 +1,7 @@
 use std::fmt::format;
 use crate::FeagiDataError;
 use crate::processing::image_frame_processor::ImageFrameProcessor;
-use crate::data::image_descriptors::{ColorChannelLayout, GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
+use crate::data::descriptors::{ColorChannelLayout, GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::data::{ImageFrame, SegmentedImageFrame};
 
 #[derive(Debug, Clone)]

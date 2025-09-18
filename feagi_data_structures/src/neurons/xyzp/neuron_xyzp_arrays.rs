@@ -269,6 +269,13 @@ impl NeuronXYZPArrays {
         self.p.push(neuron.potential);
     }
 
+    pub fn push_raw(&mut self, x: u32, y: u32, z: u32, p: f32) {
+        self.x.push(x);
+        self.y.push(y);
+        self.z.push(z);
+        self.p.push(p);
+    }
+
     /// Gets a neuron at the specified index.
     ///
     /// # Arguments

@@ -13,7 +13,7 @@ pub struct F32LinearNeuronXYZPEncoder {
 
 impl NeuronXYZPEncoder for F32LinearNeuronXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
-        WrappedIOType::F32Normalized0To1
+        WrappedIOType::Percentage
     }
 
     fn write_neuron_data_single_channel(&self, wrapped_value: &WrappedIOData, cortical_channel: CorticalChannelIndex, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
@@ -22,7 +22,7 @@ impl NeuronXYZPEncoder for F32LinearNeuronXYZPEncoder {
         let value: f32 = wrapped_value.try_into()?;
         
         let z_dist: f32 = value * self.z_res;
-        let channel_offset: u32 = self.channel_dimensions.x * *cortical_channel;
+        let channel_offset: u32 = self.channel_dimensions.width * *cortical_channel;
         let z_index: u32 = z_dist.floor() as u32;
         let neuron: NeuronXYZP = NeuronXYZP::new(
             channel_offset,

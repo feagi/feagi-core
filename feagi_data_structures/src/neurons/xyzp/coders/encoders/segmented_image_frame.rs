@@ -1,4 +1,4 @@
-use crate::data::image_descriptors::SegmentedImageFrameProperties;
+use crate::data::descriptors::SegmentedImageFrameProperties;
 use crate::data::SegmentedImageFrame;
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
