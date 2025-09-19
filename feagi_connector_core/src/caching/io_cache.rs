@@ -586,6 +586,17 @@ impl IOCache {
 
     //region Sensory
 
+    pub fn sensor_encode_cached_data_into_bytes(&mut self, time_send_started: Instant) -> Result<(), FeagiDataError> {
+        self.sensor_encode_to_neurons(time_send_started)?;
+        // TODO for now we will recreate the FBS every time
+        self.sensor_byte_data = self.sensor_neuron_data.as_new_feagi_byte_structure().unwrap();
+        Ok(())
+    }
+
+    pub fn sensor_retrieve_latest_bytes(&self) -> Result<&[u8], FeagiDataError> {
+        Ok(self.sensor_byte_data.borrow_data_as_slice())
+    }
+
     //region Agent Functions
 
 
