@@ -3,12 +3,12 @@ use std::ops::Range;
 use std::time::Instant;
 use feagi_data_serialization::{FeagiByteStructure, FeagiByteStructureCompatible};
 use feagi_data_structures::data::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
-use feagi_data_structures::data::{ImageFrame, MiscData, Percentage, SegmentedImageFrame, SignedPercentage};
+use feagi_data_structures::data::{ImageFrame, MiscData, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder, NeuronXYZPEncoder};
-use feagi_data_structures::neurons::xyzp::decoders::MiscDataNeuronXYZPDecoder;
+use feagi_data_structures::neurons::xyzp::decoders::{MiscDataNeuronXYZPDecoder, Percentage4DFractionalExponentialNeuronXYZPDecoder};
 use feagi_data_structures::neurons::xyzp::encoders::{F32LinearNeuronXYZPEncoder, F32SplitSignDividedNeuronXYZPEncoder, ImageFrameNeuronXYZPEncoder, MiscDataNeuronXYZPEncoder, SegmentedImageFrameNeuronXYZPEncoder};
 use feagi_data_structures::processing::{ImageFrameProcessor, ImageFrameSegmentator};
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -16,7 +16,7 @@ use crate::caching::hashmap_helpers::{AccessAgentLookupKey, CorticalAreaMetadata
 use crate::caching::motor_channel_stream_cache::MotorChannelStreamCache;
 use crate::caching::sensory_channel_stream_cache::SensoryChannelStreamCache;
 use crate::data_pipeline::{PipelineStage, PipelineStageIndex};
-use crate::data_pipeline::stages::{IdentityImageFrameStage, ImageFrameProcessorStage, ImageFrameSegmentatorStage, LinearScaleToPercentageStage, LinearScaleToSignedPercentageStage};
+use crate::data_pipeline::stages::{IdentityImageFrameStage, IdentityPercentage4DStage, ImageFrameProcessorStage, ImageFrameSegmentatorStage, LinearScaleToPercentageStage, LinearScaleToSignedPercentageStage};
 
 pub struct IOCache {
 
@@ -501,10 +501,76 @@ impl IOCache {
 
     pub fn process_motor_byte_structure_data(&mut self) -> Result<(), FeagiDataError> {
         self.motor_neuron_data = CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&self.motor_byte_data)?; // TODO this is HORRIBLY slow
+
+        if self.motor_neuron_data.contains_cortical_id(&MotorCorticalType::Gaze.to_cortical_id(CorticalGroupIndex::from(0))) && self.sensor_neuron_data.contains_cortical_id(&SensorCorticalType::ImageCameraCenter.to_cortical_id(CorticalGroupIndex::from(0))) {
+            let wrapped = self.read_cache_percentage_4d_data_motor(MotorCorticalType::Gaze, 0.into(), 0.into())?;
+            self.set_pipeline_stage_segmented_image_frame_sensor(
+                CorticalGroupIndex::from(0),
+                CorticalChannelIndex::from(0),
+                Box::new(IdentityPercentage4DStage::new(wrapped.into())?),
+                PipelineStageIndex::from(0),
+            )?;
+        }
+
         Ok(())
     }
 
     //region Common
+
+    //region Percentage4D
+
+    pub fn register_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType, group: CorticalGroupIndex, number_channels: CorticalChannelCount, neuron_depth: u32) -> Result<(), FeagiDataError> {
+
+        let cortical_id = motor_cortical_type.to_cortical_id(group);
+        let decoder =  Box::new(Percentage4DFractionalExponentialNeuronXYZPDecoder::new(cortical_id, neuron_depth)?);
+        let mut stages: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
+        // TODO add stage
+        self.motor_register_cortical_area_and_channels(motor_cortical_type, group, decoder, stages)?;
+        Ok(())
+    }
+
+    pub fn read_cache_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType,group: CorticalGroupIndex, channel: CorticalChannelIndex)
+                                      -> Result<Percentage4D, FeagiDataError> {
+
+        let val = self.motor_read_value_by_channel(motor_cortical_type, group, channel)?;
+        Ok(val.try_into()?)
+    }
+
+    pub fn set_pipeline_stages_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType,group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                               new_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
+
+        self.motor_set_pipeline_stages_for_channel(motor_cortical_type, group, channel, new_stages)?;
+        Ok(())
+    }
+
+    pub fn set_pipeline_stage_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType,group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                              new_stage: Box<dyn PipelineStage + Sync + Send>,
+                                              stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+
+        self.motor_set_pipeline_stage_for_channel(motor_cortical_type, group, channel, new_stage, stage_index)
+    }
+
+    pub fn clone_pipeline_stages_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType,group: CorticalGroupIndex, channel: CorticalChannelIndex)
+                                                 -> Result<Vec<Box<dyn PipelineStage + Sync + Send>>, FeagiDataError> {
+
+        self.motor_clone_pipeline_stages_for_channel(motor_cortical_type, group, channel)
+    }
+
+    pub fn clone_pipeline_stage_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType,group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+
+        self.motor_clone_pipeline_stage_for_channel(motor_cortical_type, group, channel, stage_index)
+    }
+
+    pub fn register_device_agent_index_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType,group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                       agent_device_index: AgentDeviceIndex) -> Result<(), FeagiDataError> {
+
+
+        self.motor_register_agent_device_index(motor_cortical_type, group, channel, agent_device_index)
+    }
+
+
+    //endregion
 
     //region MiscData
 
@@ -532,8 +598,8 @@ impl IOCache {
     pub fn set_pipeline_stages_misc_data_motor(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,
                                                 new_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
 
-        let sensor_cortical_type = SensorCorticalType::Miscellaneous;
-        self.sensor_set_pipeline_stages_for_channel(sensor_cortical_type, group, channel, new_stages)?;
+        let motor_cortical_type = MotorCorticalType::Miscellaneous;
+        self.motor_set_pipeline_stages_for_channel(motor_cortical_type, group, channel, new_stages)?;
         Ok(())
     }
 
@@ -541,38 +607,32 @@ impl IOCache {
                                                new_stage: Box<dyn PipelineStage + Sync + Send>,
                                                stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
 
-        let sensor_cortical_type = SensorCorticalType::Miscellaneous;
-        self.sensor_set_pipeline_stage_for_channel(sensor_cortical_type, group, channel, new_stage, stage_index)
+        let motor_cortical_type = MotorCorticalType::Miscellaneous;
+        self.motor_set_pipeline_stage_for_channel(motor_cortical_type, group, channel, new_stage, stage_index)
     }
 
     pub fn clone_pipeline_stages_misc_data_motor(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex)
                                                   -> Result<Vec<Box<dyn PipelineStage + Sync + Send>>, FeagiDataError> {
 
-        let sensor_cortical_type = SensorCorticalType::Miscellaneous;
-        self.sensor_clone_pipeline_stages_for_channel(sensor_cortical_type, group, channel)
+        let motor_cortical_type = MotorCorticalType::Miscellaneous;
+        self.motor_clone_pipeline_stages_for_channel(motor_cortical_type, group, channel)
     }
 
     pub fn clone_pipeline_stage_misc_data_motor(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,
                                                  stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
 
-        let sensor_cortical_type = SensorCorticalType::Miscellaneous;
-        self.sensor_clone_pipeline_stage_for_channel(sensor_cortical_type, group, channel, stage_index)
+        let motor_cortical_type = MotorCorticalType::Miscellaneous;
+        self.motor_clone_pipeline_stage_for_channel(motor_cortical_type, group, channel, stage_index)
     }
 
     pub fn register_device_agent_index_misc_data_motor(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,
                                                         agent_device_index: AgentDeviceIndex) -> Result<(), FeagiDataError> {
 
-        let sensor_cortical_type = SensorCorticalType::Miscellaneous;
+        let motor_cortical_type = MotorCorticalType::Miscellaneous;
 
-        self.sensor_register_agent_device_index(sensor_cortical_type, group, channel, agent_device_index)
+        self.motor_register_agent_device_index(motor_cortical_type, group, channel, agent_device_index)
     }
 
-    pub fn store_device_agent_index_misc_data_motor(&mut self,  agent_device_index: AgentDeviceIndex,
-                                                     value: ImageFrame) -> Result<(), FeagiDataError> {
-
-        let sensor_cortical_type = SensorCorticalType::Miscellaneous;
-        self.sensor_store_value_from_device_index(sensor_cortical_type, agent_device_index, WrappedIOData::ImageFrame(value))
-    }
 
     //endregion
 

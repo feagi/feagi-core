@@ -6,7 +6,7 @@
 
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
-use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
+use feagi_data_structures::data::{ImageFrame, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
@@ -66,6 +66,171 @@ impl IdentityFloatStage {
         })
     }
 }
+//endregion
+
+//region Identity Percentage
+
+#[derive(Debug, Clone)]
+pub struct IdentityPercentageStage {
+    previous_value: WrappedIOData,
+}
+
+impl Display for IdentityPercentageStage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IdentityPercentageStage({:?})", self.previous_value)
+    }
+}
+
+impl PipelineStage for IdentityPercentageStage {
+    fn get_input_data_type(&self) -> WrappedIOType {
+        WrappedIOType::Percentage
+    }
+
+    fn get_output_data_type(&self) -> WrappedIOType {
+        WrappedIOType::Percentage
+    }
+
+    fn get_most_recent_output(&self) -> &WrappedIOData {
+        &self.previous_value
+    }
+
+    /// Process new input and store it unchanged.
+    fn process_new_input(&mut self, value: &WrappedIOData, _: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+        self.previous_value = value.clone();
+        Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
+    }
+}
+
+impl IdentityPercentageStage {
+    /// Creates a new IdentityFloatProcessor.
+    ///
+    /// # Arguments
+    /// * `initial_value` - The initial float value to store (must be finite)
+    ///
+    /// # Returns
+    /// * `Ok(IdentityFloatProcessor)` - A new processor instance
+    /// * `Err(FeagiDataError)` - If initial_value is invalid (NaN/infinite)
+    pub fn new(initial_value: Percentage) -> Result<Self, FeagiDataError> {
+        Ok(IdentityPercentageStage {
+            previous_value: WrappedIOData::Percentage(initial_value),
+        })
+    }
+}
+
+//endregion
+
+//region Identity Signed Percentage
+
+#[derive(Debug, Clone)]
+pub struct IdentitySignedPercentageStage {
+    previous_value: WrappedIOData,
+}
+
+impl Display for IdentitySignedPercentageStage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IdentitySignedPercentageStage({:?})", self.previous_value)
+    }
+}
+
+impl PipelineStage for IdentitySignedPercentageStage {
+    fn get_input_data_type(&self) -> WrappedIOType {
+        WrappedIOType::SignedPercentage
+    }
+
+    fn get_output_data_type(&self) -> WrappedIOType {
+        WrappedIOType::SignedPercentage
+    }
+
+    fn get_most_recent_output(&self) -> &WrappedIOData {
+        &self.previous_value
+    }
+
+    /// Process new input and store it unchanged.
+    fn process_new_input(&mut self, value: &WrappedIOData, _: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+        self.previous_value = value.clone();
+        Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
+    }
+}
+
+impl IdentitySignedPercentageStage {
+    /// Creates a new IdentityFloatProcessor.
+    ///
+    /// # Arguments
+    /// * `initial_value` - The initial float value to store (must be finite)
+    ///
+    /// # Returns
+    /// * `Ok(IdentityFloatProcessor)` - A new processor instance
+    /// * `Err(FeagiDataError)` - If initial_value is invalid (NaN/infinite)
+    pub fn new(initial_value: SignedPercentage) -> Result<Self, FeagiDataError> {
+        Ok(IdentitySignedPercentageStage {
+            previous_value: WrappedIOData::SignedPercentage(initial_value),
+        })
+    }
+}
+
+//endregion
+
+//region Identity Percentage4D
+
+#[derive(Debug, Clone)]
+pub struct IdentityPercentage4DStage {
+    previous_value: WrappedIOData,
+}
+
+impl Display for IdentityPercentage4DStage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IdentityPercentage4DStage({:?})", self.previous_value)
+    }
+}
+
+impl PipelineStage for IdentityPercentage4DStage {
+    fn get_input_data_type(&self) -> WrappedIOType {
+        WrappedIOType::Percentage4D
+    }
+
+    fn get_output_data_type(&self) -> WrappedIOType {
+        WrappedIOType::Percentage4D
+    }
+
+    fn get_most_recent_output(&self) -> &WrappedIOData {
+        &self.previous_value
+    }
+
+    /// Process new input and store it unchanged.
+    fn process_new_input(&mut self, value: &WrappedIOData, _: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+        self.previous_value = value.clone();
+        Ok(&self.previous_value)
+    }
+
+    fn clone_box(&self) -> Box<dyn PipelineStage> {
+        Box::new(self.clone())
+    }
+}
+
+impl IdentityPercentage4DStage {
+    /// Creates a new IdentityFloatProcessor.
+    ///
+    /// # Arguments
+    /// * `initial_value` - The initial float value to store (must be finite)
+    ///
+    /// # Returns
+    /// * `Ok(IdentityFloatProcessor)` - A new processor instance
+    /// * `Err(FeagiDataError)` - If initial_value is invalid (NaN/infinite)
+    pub fn new(initial_value: Percentage4D) -> Result<Self, FeagiDataError> {
+        Ok(IdentityPercentage4DStage {
+            previous_value: WrappedIOData::Percentage4D(initial_value),
+        })
+    }
+}
+
 //endregion
 
 //region Identity Image Frame
