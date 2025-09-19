@@ -524,7 +524,10 @@ impl IOCache {
         let cortical_id = motor_cortical_type.to_cortical_id(group);
         let decoder =  Box::new(Percentage4DFractionalExponentialNeuronXYZPDecoder::new(cortical_id, neuron_depth)?);
         let mut stages: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
-        // TODO add stage
+        let per4d = Percentage4D::new(Percentage::new_from_0_1_unchecked(0.0), Percentage::new_from_0_1_unchecked(0.0), Percentage::new_from_0_1_unchecked(0.0), Percentage::new_from_0_1_unchecked(0.0));
+        for _i in 0..*number_channels {
+            stages.push(vec![Box::new(IdentityPercentage4DStage::new(per4d)?)]);
+        };
         self.motor_register_cortical_area_and_channels(motor_cortical_type, group, decoder, stages)?;
         Ok(())
     }
