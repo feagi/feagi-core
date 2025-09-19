@@ -79,7 +79,7 @@ pub trait FeagiByteStructureCompatible {
     /// # Returns
     /// Maximum bytes count needed for complete serialization (including header)
     fn max_number_bytes_needed(&self) -> usize;
-
+    
     /// Creates a new instance of this type from a FEAGI bytes structure.
     ///
     /// Deserializes a complete object from the provided bytes structure,

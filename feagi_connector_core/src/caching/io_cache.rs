@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 use std::time::Instant;
-use feagi_data_serialization::FeagiByteStructure;
+use feagi_data_serialization::{FeagiByteStructure, FeagiByteStructureCompatible};
 use feagi_data_structures::data::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
 use feagi_data_structures::data::{ImageFrame, MiscData, Percentage, SegmentedImageFrame, SignedPercentage};
 use feagi_data_structures::FeagiDataError;
@@ -494,6 +494,15 @@ impl IOCache {
 
 
     //region Motor Interfaces
+
+    pub fn get_motor_byte_structure_mut(&mut self) -> &mut FeagiByteStructure {
+        &mut self.motor_byte_data
+    }
+
+    pub fn process_motor_byte_structure_data(&mut self) -> Result<(), FeagiDataError> {
+        self.motor_neuron_data = CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&self.motor_byte_data)?; // TODO this is HORRIBLY slow
+        Ok(())
+    }
 
     //region Common
 
