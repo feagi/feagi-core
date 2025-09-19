@@ -458,9 +458,9 @@ impl Display for CornerPoints {
 
 //region Gaze Eccentricity (Location)
 
-define_signed_percentage!(GazeEccentricity, "A positive or negative percentage referring to the offset from the center along an axis on which the central vision will center its segmentation from the source image");
-define_2d_signed_or_unsigned_percentages!(GazeEccentricityCoordinate, GazeEccentricity, "GazeEccentricityCoordinate", "The offset from the center along x and y, with 0,0 being the center");
-map_signed_percentages!(GazeEccentricity, SignedPercentage);
+define_unsigned_percentage!(GazeEccentricity, "A positive percentage referring to the offset from the center along an axis on which the central vision will center its segmentation from the source image");
+define_2d_signed_or_unsigned_percentages!(GazeEccentricityCoordinate, GazeEccentricity, "GazeEccentricityCoordinate", "The offset from the center along x and y, with 0.5,0.5 being the center");
+map_unsigned_percentages!(GazeEccentricity, Percentage);
 
 //endregion
 
@@ -499,7 +499,7 @@ impl GazeProperties {
     ///
     /// A SegmentedFrameCenterProperties with default centered configuration.
     pub fn create_default_centered() -> GazeProperties {
-        GazeProperties::new((GazeEccentricity::new_from_m1_1_unchecked(0.0), GazeEccentricity::new_from_m1_1_unchecked(0.0)), (GazeModulation::new_from_0_1_unchecked(0.0), GazeModulation::new_from_0_1_unchecked(0.0)))
+        GazeProperties::new((GazeEccentricity::new_from_0_1_unchecked(0.5), GazeEccentricity::new_from_0_1_unchecked(0.5)), (GazeModulation::new_from_0_1_unchecked(0.0), GazeModulation::new_from_0_1_unchecked(0.0)))
     }
 
     pub fn calculate_source_corner_points_for_segmented_video_frame(&self, source_frame_resolution: ImageXYResolution) -> Result<[CornerPoints; 9], FeagiDataError> {
