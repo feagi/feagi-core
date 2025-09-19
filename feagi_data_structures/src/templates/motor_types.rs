@@ -12,6 +12,20 @@ macro_rules! motor_definition {
 
                 //endregion
 
+                //region Percentage4D
+
+                #[doc = "Controls size and positioning of the central vision in a segmented frame."]
+                Gaze => {
+                    friendly_name: "Gaze",
+                    snake_case_identifier: "gaze",
+                    base_ascii: b"ogaz00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 4..5),
+                    default_coder_type: TODO,
+                    wrapped_data_type: WrappedIOType::Percentage4D,
+                },
+
+                //endregion
+
                 //region SignedPercentage
 
                 #[doc = "Free spinning motor."]
