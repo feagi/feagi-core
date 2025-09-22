@@ -290,7 +290,7 @@ macro_rules! define_xyz_dimensions {
 /// 
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_xyz_dimensions, define_xyz_mapping};
+/// use feagi_data_structures::{define_xyz_dimensions, define_xyz_mapping, FeagiDataError};
 /// 
 /// define_xyz_dimensions!(VolumeA, u32, "VolumeA", 0, "Volume type A");
 /// define_xyz_dimensions!(VolumeB, u32, "VolumeB", 0, "Volume type B");

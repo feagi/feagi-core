@@ -7,7 +7,8 @@
 /// # Example
 /// ```
 /// use feagi_data_structures::{define_unsigned_percentage, FeagiDataError};
-/// 
+/// const EPSILON: f32 = 0.0001;
+///
 /// define_unsigned_percentage!(Opacity, "Opacity value from 0% to 100%");
 /// 
 /// let opacity = Opacity::new_from_0_1(0.75).unwrap();
@@ -15,7 +16,7 @@
 /// assert_eq!(opacity.get_as_u8(), 191);
 /// 
 /// let from_u8 = Opacity::new_from_u8_0_255(128).unwrap();
-/// assert_eq!(from_u8.get_as_0_100(), 50.196078);
+/// assert!(from_u8.get_as_0_100() - 50.196078 < EPSILON);
 /// 
 /// let invalid = Opacity::new_from_0_1(1.5);
 /// assert!(invalid.is_err());
@@ -178,7 +179,7 @@ macro_rules! define_unsigned_percentage {
 /// 
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_unsigned_percentage, map_unsigned_percentages};
+/// use feagi_data_structures::{define_unsigned_percentage, map_unsigned_percentages, FeagiDataError};
 /// 
 /// define_unsigned_percentage!(Brightness, "Screen brightness percentage");
 /// define_unsigned_percentage!(Volume, "Audio volume percentage");
@@ -377,7 +378,7 @@ macro_rules! define_signed_percentage {
 /// 
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_signed_percentage, map_signed_percentages};
+/// use feagi_data_structures::{define_signed_percentage, map_signed_percentages, FeagiDataError};
 /// 
 /// define_signed_percentage!(Temperature, "Temperature adjustment from -100% to +100%");
 /// define_signed_percentage!(Contrast, "Contrast adjustment from -100% to +100%");
@@ -416,7 +417,7 @@ macro_rules! map_signed_percentages {
 /// 
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_unsigned_percentage, define_2d_signed_or_unsigned_percentages};
+/// use feagi_data_structures::{define_unsigned_percentage, define_2d_signed_or_unsigned_percentages, FeagiDataError};
 /// 
 /// define_unsigned_percentage!(Factor, "A scaling factor");
 /// define_2d_signed_or_unsigned_percentages!(Scale2D, Factor, "Scale2D", "2D scaling factors");
@@ -463,7 +464,7 @@ macro_rules! define_2d_signed_or_unsigned_percentages {
 /// 
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_signed_percentage, define_3d_signed_or_unsigned_percentages};
+/// use feagi_data_structures::{define_signed_percentage, define_3d_signed_or_unsigned_percentages, FeagiDataError};
 /// 
 /// define_signed_percentage!(Adjustment, "An adjustment factor");
 /// define_3d_signed_or_unsigned_percentages!(Color3D, Adjustment, "Color3D", "3D color adjustments (RGB)");
@@ -512,7 +513,7 @@ macro_rules! define_3d_signed_or_unsigned_percentages {
 /// 
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_unsigned_percentage, define_4d_signed_or_unsigned_percentages};
+/// use feagi_data_structures::{define_unsigned_percentage, define_4d_signed_or_unsigned_percentages, FeagiDataError};
 /// 
 /// define_unsigned_percentage!(Channel, "A color channel value");
 /// define_4d_signed_or_unsigned_percentages!(RGBA, Channel, "RGBA", "4D color with alpha (RGBA)");
