@@ -4,6 +4,7 @@
 //! input range to normalized output ranges. These processing are commonly used to normalize
 //! sensor data or other continuous values for FEAGI processing.
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_structures::data::{Percentage, SignedPercentage};
@@ -21,7 +22,6 @@ pub struct LinearScaleToPercentageStage {
     previous_value: WrappedIOData,
     lower: f32,
     upper: f32,
-    upper_minus_lower: f32
 }
 
 impl Display for LinearScaleToPercentageStage {
@@ -53,6 +53,10 @@ impl PipelineStage for LinearScaleToPercentageStage {
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl LinearScaleToPercentageStage {
@@ -78,7 +82,6 @@ impl LinearScaleToPercentageStage {
             previous_value: WrappedIOData::Percentage(initial_value),
             lower: lower_bound,
             upper: upper_bound,
-            upper_minus_lower: upper_bound - lower_bound,
         })
     }
 }
@@ -94,7 +97,6 @@ pub struct LinearScaleToSignedPercentageStage {
     previous_value: WrappedIOData,
     lower: f32,
     upper: f32,
-    upper_minus_lower_halved: f32
 }
 
 impl Display for LinearScaleToSignedPercentageStage {
@@ -127,6 +129,10 @@ impl PipelineStage for LinearScaleToSignedPercentageStage {
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl LinearScaleToSignedPercentageStage {
@@ -155,7 +161,6 @@ impl LinearScaleToSignedPercentageStage {
             previous_value: WrappedIOData::SignedPercentage(initial_value),
             lower: lower_bound,
             upper: upper_bound,
-            upper_minus_lower_halved: (upper_bound - lower_bound) * 0.5,
         })
     }
 }

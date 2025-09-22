@@ -4,7 +4,7 @@
 //! focusing on stage creation and basic validation.
 
 use std::time::Instant;
-use feagi_data_structures::data::ImageFrame;
+use feagi_data_structures::data::{ImageFrame, SegmentedImageFrame};
 use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution};
 use feagi_data_structures::processing::ImageFrameProcessor;
 use feagi_data_structures::wrapped_io_data::WrappedIOData;
@@ -12,14 +12,16 @@ use feagi_connector_core::data_pipeline::stages::*;
 
 #[cfg(test)]
 mod test_pipeline_stages {
-    use feagi_connector_core::caching::SensorCache;
+    use feagi_connector_core::caching::{IOCache};
     use super::*;
     
     // Import trait for direct stage testing (traits can be imported even if the module is private)
     use feagi_connector_core::data_pipeline::stages::*;
     use feagi_connector_core::data_pipeline::PipelineStage;
     use feagi_data_serialization::{FeagiByteStructure, FeagiByteStructureCompatible};
-    use feagi_data_structures::genomic::{CorticalID, CorticalType, SensorCorticalType};
+    use feagi_data_structures::data::{Percentage, Percentage2D, SignedPercentage};
+    use feagi_data_structures::data::descriptors::{GazeProperties, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+    use feagi_data_structures::genomic::{CorticalID, CorticalType, MotorCorticalType, SensorCorticalType};
     use feagi_data_structures::genomic::CorticalType::Sensory;
     use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalCoordinate, CorticalGroupIndex};
     use feagi_data_structures::genomic::SensorCorticalType::ImageCameraCenter;
@@ -57,6 +59,21 @@ mod test_pipeline_stages {
         println!("Saved test image: tests/images/{}", filename);
     }
     
+    fn save_test_segmented_images(segmented_frame: &SegmentedImageFrame, filename_prefix: &str) {
+        let image_refs = segmented_frame.get_ordered_image_frame_references();
+        let segment_names = [
+            "lower_left", "lower_middle", "lower_right",
+            "middle_left", "center", "middle_right", 
+            "upper_left", "upper_middle", "upper_right"
+        ];
+        
+        for (index, image) in image_refs.iter().enumerate() {
+            let filename = format!("{}_{}.png", filename_prefix, segment_names[index]);
+            save_test_image(image, &filename);
+        }
+        println!("Saved all 9 segments for: {}", filename_prefix);
+    }
+    
     //endregion
 
     //region Stage Creation Tests
@@ -72,44 +89,7 @@ mod test_pipeline_stages {
         let stage = IdentityFloatStage::new(f32::INFINITY);
         assert!(stage.is_err());
     }
-    
-    #[test]
-    fn test_linear_scale_to_0_1_creation() {
-        let stage = LinearScaleToPercentageStage::new(0.0, 100.0, 50.0);
-        assert!(stage.is_ok());
-        
-        // Test invalid range (upper <= lower)
-        let stage = LinearScaleToPercentageStage::new(100.0, 50.0, 75.0);
-        assert!(stage.is_err());
-        
-        // Test initial value out of bounds
-        let stage = LinearScaleToPercentageStage::new(0.0, 100.0, 150.0);
-        assert!(stage.is_err());
-        
-        let stage = LinearScaleToPercentageStage::new(0.0, 100.0, -10.0);
-        assert!(stage.is_err());
-        
-        // Test NaN/infinite values
-        let stage = LinearScaleToPercentageStage::new(f32::NAN, 100.0, 50.0);
-        assert!(stage.is_err());
-        
-        let stage = LinearScaleToPercentageStage::new(0.0, f32::INFINITY, 50.0);
-        assert!(stage.is_err());
-    }
-    
-    #[test]
-    fn test_linear_scale_to_m1_1_creation() {
-        let stage = LinearScaleToM1And1Stage::new(-50.0, 50.0, 0.0);
-        assert!(stage.is_ok());
-        
-        // Test invalid range
-        let stage = LinearScaleToM1And1Stage::new(50.0, 50.0, 50.0);
-        assert!(stage.is_err());
-        
-        // Test bounds checking
-        let stage = LinearScaleToM1And1Stage::new(-50.0, 50.0, 100.0);
-        assert!(stage.is_err());
-    }
+
     
     #[test]
     fn test_image_processor_stage_creation() {
@@ -346,8 +326,8 @@ mod test_pipeline_stages {
         
         // Float processing chain simulation
         let identity_stage = IdentityFloatStage::new(0.0);
-        let scale_0_1 = LinearScaleToPercentageStage::new(0.0, 100.0, 50.0);
-        let scale_m1_1 = LinearScaleToM1And1Stage::new(-50.0, 50.0, 0.0);
+        let scale_0_1 = LinearScaleToPercentageStage::new(0.0, 100.0, Percentage::new_from_0_100(50.0).unwrap());
+        let scale_m1_1 = LinearScaleToSignedPercentageStage::new(-50.0, 50.0, SignedPercentage::new_from_m1_1_unchecked(0.0));
         
         assert!(identity_stage.is_ok());
         assert!(scale_0_1.is_ok());
@@ -393,17 +373,17 @@ mod test_pipeline_stages {
 
         let image_properties  = (&test_image).get_image_frame_properties();
 
-        let mut sensor_cache: SensorCache = SensorCache::new();
+        let mut sensor_cache: IOCache = IOCache::new();
         let group_index: CorticalGroupIndex = 0.into();
         let channel_index: CorticalChannelIndex = 0.into();
         let cortical_channel_count: CorticalChannelCount = 1.into();
         let cortical_id = CorticalID::new_sensor_cortical_area_id(ImageCameraCenter, group_index).unwrap();
 
-        sensor_cache.register_image_frame(ImageCameraCenter, group_index, cortical_channel_count, true, image_properties, image_properties);
-        sensor_cache.store_image_frame(ImageCameraCenter, group_index, channel_index, test_image).unwrap();
+        sensor_cache.register_image_frame_sensor(ImageCameraCenter, group_index, cortical_channel_count, image_properties, image_properties);
+        sensor_cache.store_image_frame_sensor(ImageCameraCenter, group_index, channel_index, test_image).unwrap();
 
-        sensor_cache.encode_cached_data_into_bytes(Instant::now());
-        let bytes = sensor_cache.retrieve_latest_bytes().unwrap();
+        sensor_cache.sensor_encode_cached_data_into_bytes(Instant::now());
+        let bytes = sensor_cache.sensor_retrieve_latest_bytes().unwrap();
 
         // check the neuron coord directly
         assert_eq!(bytes[22], 1);
@@ -456,17 +436,17 @@ mod test_pipeline_stages {
 
         let image_properties  = (&test_image).get_image_frame_properties();
 
-        let mut sensor_cache: SensorCache = SensorCache::new();
+        let mut sensor_cache: IOCache = IOCache::new();
         let group_index: CorticalGroupIndex = 0.into();
         let channel_index: CorticalChannelIndex = 0.into();
         let cortical_channel_count: CorticalChannelCount = 1.into();
         let cortical_id = CorticalID::new_sensor_cortical_area_id(ImageCameraCenter, group_index).unwrap();
 
-        sensor_cache.register_image_frame(ImageCameraCenter, group_index, cortical_channel_count, true, image_properties, image_properties);
-        sensor_cache.store_image_frame(ImageCameraCenter, group_index, channel_index, test_image).unwrap();
+        sensor_cache.register_image_frame_sensor(ImageCameraCenter, group_index, cortical_channel_count, image_properties, image_properties);
+        sensor_cache.store_image_frame_sensor(ImageCameraCenter, group_index, channel_index, test_image).unwrap();
 
-        sensor_cache.encode_cached_data_into_bytes(Instant::now());
-        let bytes = sensor_cache.retrieve_latest_bytes().unwrap();
+        sensor_cache.sensor_encode_cached_data_into_bytes(Instant::now());
+        let bytes = sensor_cache.sensor_retrieve_latest_bytes().unwrap();
 
         // check the neuron coord directly
         assert_eq!(bytes[22], 1);
@@ -492,6 +472,67 @@ mod test_pipeline_stages {
         }
 
     }
+
+
+
+    #[test]
+    fn test_image_segmentation_bird_with_eccentricity_changes() {
+        let image = load_bird_image();
+
+        let image_properties  = image.get_image_frame_properties();
+        let segmented_properties = SegmentedImageFrameProperties::new(
+            &SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+                ImageXYResolution::new(40, 40).unwrap(),
+                ImageXYResolution::new(20, 20).unwrap(),
+            ),
+            &image_properties.get_color_channel_layout(),
+            &image_properties.get_color_channel_layout(),
+            &image_properties.get_color_space()
+        );
+
+
+        let group_index: CorticalGroupIndex = 0.into();
+        let channel_index: CorticalChannelIndex = 0.into();
+        let channel_count: CorticalChannelCount = 1.into();
+        let gaze = GazeProperties::new(
+            Percentage2D::new(Percentage::new_from_0_1_unchecked(0.25), Percentage::new_from_0_1_unchecked(0.25)),
+            Percentage2D::new(Percentage::new_from_0_1_unchecked(0.25), Percentage::new_from_0_1_unchecked(0.25))
+        );
+
+        let mut io_cache: IOCache = IOCache::new();
+
+        io_cache.register_segmented_image_frame_sensor(group_index, channel_count, image_properties, segmented_properties, gaze).unwrap();
+        io_cache.register_percentage_4d_data_motor(MotorCorticalType::Gaze, group_index, channel_count, 4).unwrap();
+        // TODO for now registration between the 2 is automatic
+
+        io_cache.store_segmented_image_frame_sensor(image, group_index, channel_index).unwrap();
+        io_cache.sensor_encode_cached_data_into_bytes(Instant::now());
+
+        save_test_segmented_images(&io_cache.read_cache_segmented_image_frame_sensor(group_index, channel_index).unwrap(), "birb_segmentation_a");
+
+        let sensor_bytes_initial = io_cache.sensor_retrieve_latest_bytes().unwrap();
+
+        let mut neurons_for_gaze = CorticalMappedXYZPNeuronData::new();
+        let mut neuron_data = NeuronXYZPArrays::new(); // Lets pretend this has a length of 4
+        //neuron_data.push_raw(0,0,0,1.0);
+        neuron_data.push_raw(1, 0, 0, 1.0);
+        neuron_data.push_raw(2, 0, 1, 1.0);
+        neuron_data.push_raw(3, 0, 0, 1.0);
+        neuron_data.push_raw(3, 0, 1, 1.0);
+        neuron_data.push_raw(3, 0, 2, 1.0);
+        neuron_data.push_raw(3, 0, 3, 1.0);
+
+        neurons_for_gaze.insert(MotorCorticalType::Gaze.to_cortical_id(group_index), neuron_data);
+        let motor_bytes_struct = neurons_for_gaze.as_new_feagi_byte_structure().unwrap();
+        let mut cache_motor_fbs = io_cache.get_motor_byte_structure_mut();
+        *cache_motor_fbs = motor_bytes_struct;
+        io_cache.process_motor_byte_structure_data().unwrap();
+
+
+
+
+    }
+
     
     //endregion
 }

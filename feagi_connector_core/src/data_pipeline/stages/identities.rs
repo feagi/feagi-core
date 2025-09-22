@@ -4,6 +4,7 @@
 //! interface but don't modify the data in any way. As at least 1 processor is required when
 //! adding channels, these are useful if the user does not wish to transform the data
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_structures::data::{ImageFrame, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
@@ -45,6 +46,10 @@ impl PipelineStage for IdentityFloatStage {
 
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -103,6 +108,10 @@ impl PipelineStage for IdentityPercentageStage {
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl IdentityPercentageStage {
@@ -157,6 +166,10 @@ impl PipelineStage for IdentitySignedPercentageStage {
 
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
@@ -213,6 +226,10 @@ impl PipelineStage for IdentityPercentage4DStage {
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl IdentityPercentage4DStage {
@@ -268,6 +285,10 @@ impl PipelineStage for IdentityImageFrameStage {
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 impl IdentityImageFrameStage {
@@ -321,6 +342,10 @@ impl PipelineStage for IdentitySegmentedImageFrameStage {
 
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

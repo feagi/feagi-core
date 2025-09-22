@@ -1,9 +1,3 @@
-mod spatial;
-mod flat;
-mod point;
-mod percentages;
+//! Macros for defining base data types. Also includes mapping functions to convert between various implementations if needed
 
-pub use spatial::*;
-pub use flat::*;
-pub use point::*;
-pub use percentages::*;
+mod cartesian;

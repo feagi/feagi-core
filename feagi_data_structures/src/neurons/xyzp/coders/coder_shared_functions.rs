@@ -33,9 +33,8 @@ pub(crate) fn decode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, z_
         if y_vec[i] != y_offset {
             continue;
         }
-
         // Note: We don't care for the P value, just that neuron firing exists
-        processing += 0.5f32.powi((z_offset - z_vec[i]) as i32);
+        processing += 0.5f32.powi(z_vec[i] as i32 + 1);
     }
     Percentage::new_from_0_1_unchecked(processing)
 }

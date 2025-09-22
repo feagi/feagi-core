@@ -1,5 +1,6 @@
+use std::any::Any;
 use std::collections::HashMap;
-use std::ops::Range;
+use std::ops::{Deref, Range};
 use std::time::Instant;
 use feagi_data_serialization::{FeagiByteStructure, FeagiByteStructureCompatible};
 use feagi_data_structures::data::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
@@ -501,15 +502,34 @@ impl IOCache {
 
     pub fn process_motor_byte_structure_data(&mut self) -> Result<(), FeagiDataError> {
         self.motor_neuron_data = CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&self.motor_byte_data)?; // TODO this is HORRIBLY slow
+        for motor_stream_cache_metadatas in self.motor_cortical_area_metadata.iter_mut() {
+            let decoder = &motor_stream_cache_metadatas.1.neuron_decoder;
+            let mut full_channel_cache_keys = &motor_stream_cache_metadatas.1.relevant_channel_lookups;
+            for full_channel_cache_key in full_channel_cache_keys.iter() {
+                let motor_stream_cache = self.motor_channel_caches.get_mut(full_channel_cache_key).unwrap();
+                motor_stream_cache.decode_from_neurons(&mut self.motor_neuron_data, decoder)?
+            }
+        }
 
         if self.motor_neuron_data.contains_cortical_id(&MotorCorticalType::Gaze.to_cortical_id(CorticalGroupIndex::from(0))) && self.sensor_neuron_data.contains_cortical_id(&SensorCorticalType::ImageCameraCenter.to_cortical_id(CorticalGroupIndex::from(0))) {
             let wrapped = self.read_cache_percentage_4d_data_motor(MotorCorticalType::Gaze, 0.into(), 0.into())?;
-            self.set_pipeline_stage_segmented_image_frame_sensor(
-                CorticalGroupIndex::from(0),
-                CorticalChannelIndex::from(0),
-                Box::new(IdentityPercentage4DStage::new(wrapped.into())?),
-                PipelineStageIndex::from(0),
-            )?;
+            dbg!(&wrapped);
+            let copy_segmentation_stage = self.clone_pipeline_stage_segmented_image_frame_sensor(0.into(), 0.into(), 0.into())?;
+            
+            // Downcast using Any trait since PipelineStage extends Any
+            if let Some(segmentation_stage) = copy_segmentation_stage.as_any().downcast_ref::<ImageFrameSegmentatorStage>() {
+                let new_stage = segmentation_stage.clone();
+                let boxed = Box::new(new_stage);
+                dbg!(&boxed);
+                self.set_pipeline_stage_segmented_image_frame_sensor(
+                    CorticalGroupIndex::from(0),
+                    CorticalChannelIndex::from(0),
+                    boxed,
+                    PipelineStageIndex::from(0),
+                )?;
+            } else {
+                return Err(FeagiDataError::InternalError("Failed to downcast to ImageFrameSegmentatorStage".into()));
+            }
         }
 
         Ok(())
