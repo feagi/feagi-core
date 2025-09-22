@@ -1,4 +1,5 @@
 use crate::{define_signed_percentage, define_unsigned_percentage, define_2d_signed_or_unsigned_percentages, define_3d_signed_or_unsigned_percentages, define_4d_signed_or_unsigned_percentages};
+use crate::FeagiDataError;
 
 
 define_unsigned_percentage!(Percentage, "A percentage value, from 0 to 100%");

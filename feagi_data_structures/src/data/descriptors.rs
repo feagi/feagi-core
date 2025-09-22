@@ -4,7 +4,7 @@
 
 use std::cmp;
 use std::fmt::Display;
-use crate::{define_signed_percentage, define_unsigned_percentage, define_2d_signed_or_unsigned_percentages, define_xy_percentage_dimensions, define_xyz_mapping, map_signed_percentages, map_unsigned_percentages, FeagiDataError};
+use crate::{define_signed_percentage, define_unsigned_percentage, define_2d_signed_or_unsigned_percentages, define_xyz_mapping, map_unsigned_percentages, FeagiDataError};
 use crate::data::{ImageFrame, Percentage, SegmentedImageFrame, SignedPercentage};
 use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
 use crate::genomic::descriptors::CorticalChannelDimensions;
@@ -466,7 +466,7 @@ map_unsigned_percentages!(GazeEccentricity, Percentage);
 
 //region Gaze Modularity (Size)
 define_unsigned_percentage!(GazeModulation, "The percentage size along an axis that the central vision will occupy from the source image ");
-define_xy_percentage_dimensions!(GazeModulationSize, GazeModulation, "GazeModulationSize", "The normalized size along x and y of the central vision ins respect to its source image" );
+define_2d_signed_or_unsigned_percentages!(GazeModulationSize, GazeModulation, "GazeModulationSize", "The normalized size along x and y of the central vision ins respect to its source image" );
 map_unsigned_percentages!(GazeModulation, Percentage);
 
 //region Gaze Properties
