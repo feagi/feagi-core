@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::fmt::Display;
 use std::ops::RangeInclusive;
 use std::time::Instant;
@@ -45,6 +46,10 @@ impl PipelineStage for ImagePixelValueCountThresholdStage {
 
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

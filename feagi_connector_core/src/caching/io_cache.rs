@@ -515,16 +515,21 @@ impl IOCache {
             let wrapped = self.read_cache_percentage_4d_data_motor(MotorCorticalType::Gaze, 0.into(), 0.into())?;
             dbg!(&wrapped);
             let copy_segmentation_stage = self.clone_pipeline_stage_segmented_image_frame_sensor(0.into(), 0.into(), 0.into())?;
-            let copy_segmentation_stage: ImageFrameSegmentatorStage = copy_segmentation_stage.downcast::<ImageFrameSegmentatorStage>();
-
-            let boxed = Box::new(copy_segmentation_stage);
-            dbg!(&boxed);
-            self.set_pipeline_stage_segmented_image_frame_sensor(
-                CorticalGroupIndex::from(0),
-                CorticalChannelIndex::from(0),
-                boxed,
-                PipelineStageIndex::from(0),
-            )?;
+            
+            // Downcast using Any trait since PipelineStage extends Any
+            if let Some(segmentation_stage) = copy_segmentation_stage.as_any().downcast_ref::<ImageFrameSegmentatorStage>() {
+                let new_stage = segmentation_stage.clone();
+                let boxed = Box::new(new_stage);
+                dbg!(&boxed);
+                self.set_pipeline_stage_segmented_image_frame_sensor(
+                    CorticalGroupIndex::from(0),
+                    CorticalChannelIndex::from(0),
+                    boxed,
+                    PipelineStageIndex::from(0),
+                )?;
+            } else {
+                return Err(FeagiDataError::InternalError("Failed to downcast to ImageFrameSegmentatorStage".into()));
+            }
         }
 
         Ok(())

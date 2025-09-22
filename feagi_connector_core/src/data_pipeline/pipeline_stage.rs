@@ -50,6 +50,9 @@ pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
 
     fn clone_box(&self) -> Box<dyn PipelineStage>;
     
+    /// Provide access to `Any` trait for downcasting
+    fn as_any(&self) -> &dyn Any;
+    
 }
 
 // TODO JSON descriptors and parameter updates

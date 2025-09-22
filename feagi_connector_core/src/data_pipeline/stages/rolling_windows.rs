@@ -4,6 +4,7 @@
 //! and compute statistics (like averages) over that window. These processing are
 //! useful for smoothing noisy sensor data or computing temporal aggregations.
 
+use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
@@ -55,6 +56,10 @@ impl PipelineStage for LinearAverageRollingWindowStage {
 
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

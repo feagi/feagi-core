@@ -5,6 +5,7 @@
 //! It wraps an `ImageFrameTransformerDefinition` to provide streaming functionality
 //! with caching and efficient processing.
 
+use std::any::Any;
 use std::fmt::Display;
 use std::time::Instant;
 use feagi_data_structures::data::ImageFrame;
@@ -73,6 +74,10 @@ impl PipelineStage for ImageFrameProcessorStage {
 
     fn clone_box(&self) -> Box<dyn PipelineStage> {
         Box::new(self.clone())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 
