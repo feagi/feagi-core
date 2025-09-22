@@ -56,8 +56,7 @@ impl MotorChannelStreamCache {
     }
 
     pub fn decode_from_neurons(&mut self, cortical_mapped_neuron_data: &CorticalMappedXYZPNeuronData, decoder: &Box<dyn NeuronXYZPDecoder + Sync + Send>) -> Result<(), FeagiDataError> {
-
-        let is_updated = decoder.read_neuron_data_single_channel(cortical_mapped_neuron_data, self.channel, &mut self.most_recent_directly_decoded_output)?;
+        let is_decoded = decoder.read_neuron_data_single_channel(cortical_mapped_neuron_data, self.channel, &mut self.most_recent_directly_decoded_output);
         self.pipeline_runner.update_value(&self.most_recent_directly_decoded_output, Instant::now())?;
         Ok(())
     }

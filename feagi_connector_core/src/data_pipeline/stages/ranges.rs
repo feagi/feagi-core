@@ -21,7 +21,6 @@ pub struct LinearScaleToPercentageStage {
     previous_value: WrappedIOData,
     lower: f32,
     upper: f32,
-    upper_minus_lower: f32
 }
 
 impl Display for LinearScaleToPercentageStage {
@@ -78,7 +77,6 @@ impl LinearScaleToPercentageStage {
             previous_value: WrappedIOData::Percentage(initial_value),
             lower: lower_bound,
             upper: upper_bound,
-            upper_minus_lower: upper_bound - lower_bound,
         })
     }
 }
@@ -94,7 +92,6 @@ pub struct LinearScaleToSignedPercentageStage {
     previous_value: WrappedIOData,
     lower: f32,
     upper: f32,
-    upper_minus_lower_halved: f32
 }
 
 impl Display for LinearScaleToSignedPercentageStage {
@@ -155,7 +152,6 @@ impl LinearScaleToSignedPercentageStage {
             previous_value: WrappedIOData::SignedPercentage(initial_value),
             lower: lower_bound,
             upper: upper_bound,
-            upper_minus_lower_halved: (upper_bound - lower_bound) * 0.5,
         })
     }
 }

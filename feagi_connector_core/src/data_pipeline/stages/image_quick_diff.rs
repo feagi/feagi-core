@@ -5,8 +5,8 @@ use std::time::Instant;
 use ndarray::{Array3, Zip};
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
-use feagi_data_structures::data::descriptors::{ImageFrameProperties, WholeImageActivity};
-use feagi_data_structures::data::ImageFrame;
+use feagi_data_structures::data::descriptors::{ImageFrameProperties};
+use feagi_data_structures::data::{ImageFrame, Percentage};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
@@ -56,7 +56,7 @@ impl PipelineStage for ImageFrameQuickDiffStage {
 
 impl ImageFrameQuickDiffStage {
 
-    pub fn new(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<WholeImageActivity>) -> Result<Self, FeagiDataError> {
+    pub fn new(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Self, FeagiDataError> {
         
         let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;
         let number_of_samples = image_properties.get_number_of_channels();

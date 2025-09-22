@@ -171,14 +171,14 @@ impl SignedPercentage {
         Ok(SignedPercentage { value })
     }
 
-    pub fn new_from_0_1(value: f32) -> Result<SignedPercentage, FeagiDataError> {
+    pub fn new_scaled_from_0_1(value: f32) -> Result<SignedPercentage, FeagiDataError> {
         if value > 1.0 || value < 0.0 {
             return Err(FeagiDataError::BadParameters("Percentage Value to interp from must be between 0 and 1!".into()));
         }
         Ok(SignedPercentage { value: (value - 0.5) * 2.0})
     }
 
-    pub fn new_from_0_1_unchecked(value: f32) -> Self {
+    pub fn new_scaled_from_0_1_unchecked(value: f32) -> Self {
         SignedPercentage { value: (value - 0.5) * 2.0}
     }
 

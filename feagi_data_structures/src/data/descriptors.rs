@@ -513,7 +513,7 @@ impl GazeProperties {
 
     fn calculate_pixel_coordinates_of_center_corners(&self, source_frame_resolution: ImageXYResolution) -> Result<CornerPoints, FeagiDataError> {
         let source_frame_width_height_f: (f32, f32) = (source_frame_resolution.width as f32, source_frame_resolution.height as f32);
-        let center_size_normalized_half_xy: (f32, f32) = (self.modulation_size_xy.a.into(), self.modulation_size_xy.b.into());
+        let center_size_normalized_half_xy: (f32, f32) = (self.modulation_size_xy.a.get_as_0_1() / 2.0, self.modulation_size_xy.b.get_as_0_1() / 2.0);
 
         // We use max / min to ensure that there is always a 1 pixel buffer along all edges for use in peripheral vision (since we cannot use a resolution of 0)
         let bottom_pixel: usize = cmp::min(source_frame_resolution.height as usize - 1,

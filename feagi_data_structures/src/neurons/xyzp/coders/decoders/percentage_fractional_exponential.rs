@@ -28,8 +28,7 @@ impl NeuronXYZPDecoder for PercentageFractionalExponentialNeuronXYZPDecoder {
         }
         let reading_neuron_data = reading_neuron_data.unwrap();
         const Y_OFFSET: u32 = 0;
-        const Z_OFFSET: u32 = 0;
-        *target = decode_unsigned_binary_fractional(*cortical_channel, Y_OFFSET, Z_OFFSET, reading_neuron_data);
+        *target = decode_unsigned_binary_fractional(*cortical_channel, Y_OFFSET, self.channel_dimensions.depth, reading_neuron_data);
         Ok(true)
     }
 }
