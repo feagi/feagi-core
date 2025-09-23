@@ -3,6 +3,8 @@ use crate::{FeagiByteStructureType};
 
 pub trait FeagiSerializable {
 
+    // NOTE: None of these methods should be exposed outside this crate! THey should remain private!
+
     fn get_type(&self) -> FeagiByteStructureType;
 
     fn get_version(&self) -> u8;

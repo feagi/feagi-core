@@ -1,5 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian};
 use feagi_data_structures::FeagiDataError;
+use crate::byte_structure::feagi_serializable::FeagiSerializable;
 use crate::FeagiByteStructureType;
 
 
@@ -57,6 +58,19 @@ impl FeagiByteContainer{
 
     //endregion
 
+    //region Structures
+
+    pub fn try_create_new_struct_from_index(&self, index: StructureIndex) -> Result<Box<dyn FeagiSerializable>, FeagiDataError> {
+        self.verify_structure_index_valid(index)?;
+        let relevant_slice = self.contained_struct_references[index].get_as_byte_slice(&self.bytes);
+        let boxxed_struct: Box<dyn FeagiSerializable> = FeagiSerializable::try_make_from_byte_slice(relevant_slice)?;
+        Ok(boxxed_struct)
+    }
+
+    //endregion
+
+    //region
+
     //region Internal
 
     /// Verifies the bytes loaded in create a valid FBS container, with indexing that doesn't leave bounds,
@@ -112,7 +126,15 @@ impl FeagiByteContainer{
         Ok(())
     }
 
-    fn try_get_first_structure_slice_of_type<'a>(&self, structure_type: FeagiByteStructureType) -> Option<&'a[u8]> {
+    fn verify_structure_index_valid(&self, structure_index: StructureIndex) -> Result<(), FeagiDataError> {
+        if structure_index >= self.contained_struct_references.len() {
+            return Err(FeagiDataError::BadParameters(format!("Structure index {} out of bounds! Feagi Byte Container only contains {} structures!", structure_index, self.contained_struct_references.len())));
+        }
+        Ok(())
+    }
+
+    /// Tries to the get the first structure in the contained structure list that is of the requested type. If none are found, returns None.
+    fn try_get_first_structure_slice_of_type(&self, structure_type: FeagiByteStructureType) -> Option<&[u8]> {
         for index in 0..self.contained_struct_references.len() {
             if self.contained_struct_references[index].structure_type == structure_type {
                 return Some(self.contained_struct_references[index].get_as_byte_slice(&self.bytes));
@@ -120,6 +142,7 @@ impl FeagiByteContainer{
         };
         None
     }
+
 
     //endregion
 
