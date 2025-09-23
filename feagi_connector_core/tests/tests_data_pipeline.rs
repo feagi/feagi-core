@@ -482,8 +482,8 @@ mod test_pipeline_stages {
         let image_properties  = image.get_image_frame_properties();
         let segmented_properties = SegmentedImageFrameProperties::new(
             &SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+                ImageXYResolution::new(80, 80).unwrap(),
                 ImageXYResolution::new(40, 40).unwrap(),
-                ImageXYResolution::new(20, 20).unwrap(),
             ),
             &image_properties.get_color_channel_layout(),
             &image_properties.get_color_channel_layout(),

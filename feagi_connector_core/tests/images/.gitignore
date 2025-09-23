@@ -19,3 +19,4 @@ images/segmentator_*.png
 # Integration test patterns and outputs
 pipeline_integration_*.png
 pipeline_threshold_*.png
+birb_segmentation_*.png
