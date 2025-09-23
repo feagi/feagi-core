@@ -1,6 +1,6 @@
-//! Neural encoder implementations for converting I/O data to XYZP activations.
+//! Neural encoder implementations-old for converting I/O data to XYZP activations.
 //!
-//! This module contains concrete implementations of the `NeuronXYZPEncoder` trait,
+//! This module contains concrete implementations-old of the `NeuronXYZPEncoder` trait,
 //! each specialized for different types of input data and neural encoding strategies.
 //! These encoders convert external sensor data into spatial patterns of neural
 //! activation within cortical areas.
@@ -37,7 +37,7 @@
 //! - **Visual encoders**: Higher computational cost but maintains spatial structure
 //!
 //! # Thread Safety
-//! All encoder implementations are designed to be `Sync + Send` for safe use
+//! All encoder implementations-old are designed to be `Sync + Send` for safe use
 //! in multi-threaded neural simulation environments.
 
 mod image_frame;

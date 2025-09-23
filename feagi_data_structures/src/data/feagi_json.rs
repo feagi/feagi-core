@@ -8,6 +8,12 @@ pub struct FeagiJSON {
 }
 
 impl FeagiJSON {
+    pub fn new_empty() -> FeagiJSON {
+        FeagiJSON {
+            json: serde_json::json!({}),
+        }
+    }
+
     pub fn from_json_string(string: String) -> Result<FeagiJSON, FeagiDataError> {
         match serde_json::from_str(&string) {
             Ok(json_value) => Ok(FeagiJSON { json: json_value }),

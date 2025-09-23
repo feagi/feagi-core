@@ -1,8 +1,9 @@
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
+use feagi_data_structures::data::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::byte_structure::feagi_serializable::FeagiSerializable;
-use crate::FeagiByteStructureType;
-
+use crate::byte_structure::FeagiByteStructureType;
 
 type StructureIndex = usize;
 type ByteIndexReadingStart = usize;
@@ -56,20 +57,126 @@ impl FeagiByteContainer{
         Err(FeagiDataError::DeserializationError("Given Byte Container is invalid and thus cannot be read!".into()))
     }
 
-    //endregion
+    pub fn get_number_of_bytes_used(&self) -> usize {
+        self.bytes.len()
+    }
 
-    //region Structures
-
-    pub fn try_create_new_struct_from_index(&self, index: StructureIndex) -> Result<Box<dyn FeagiSerializable>, FeagiDataError> {
-        self.verify_structure_index_valid(index)?;
-        let relevant_slice = self.contained_struct_references[index].get_as_byte_slice(&self.bytes);
-        let boxxed_struct: Box<dyn FeagiSerializable> = FeagiSerializable::try_make_from_byte_slice(relevant_slice)?;
-        Ok(boxxed_struct)
+    pub fn get_number_of_bytes_allocated(&self) -> usize {
+        self.bytes.capacity()
     }
 
     //endregion
 
-    //region
+    //region Extracting Struct Data
+
+    pub fn try_create_new_struct_from_index(&self, index: StructureIndex) -> Result<Box<dyn FeagiSerializable>, FeagiDataError> {
+        self.verify_structure_index_valid(index)?;
+        let relevant_slice = self.contained_struct_references[index].get_as_byte_slice(&self.bytes);
+        let mut boxed_struct: Box<dyn FeagiSerializable> = self.try_create_new_serializable_struct_from_type(
+            self.contained_struct_references[index].structure_type
+        );
+        boxed_struct.try_update_from_byte_slice(relevant_slice)?;
+        Ok(boxed_struct)
+    }
+
+    pub fn try_create_struct_from_first_found_struct_of_type(&self, structure_type: FeagiByteStructureType) -> Result<Option<Box<dyn FeagiSerializable>>, FeagiDataError> {
+        let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
+        if getting_slice.is_none() {
+            return Ok(None);
+        }
+        let mut boxed_struct: Box<dyn FeagiSerializable> = self.try_create_new_serializable_struct_from_type(structure_type);
+        boxed_struct.try_update_from_byte_slice(getting_slice.unwrap())?;
+        Ok(Some(boxed_struct))
+    }
+
+    pub fn try_update_struct_from_index(&self, index: StructureIndex, updating_boxed_struct: &mut Box<dyn FeagiSerializable>) -> Result<(), FeagiDataError> {
+        self.verify_structure_index_valid(index)?;
+        let relevant_slice = self.contained_struct_references[index].get_as_byte_slice(&self.bytes);
+        updating_boxed_struct.verify_byte_slice_is_of_type(relevant_slice)?;
+        updating_boxed_struct.try_update_from_byte_slice(relevant_slice)?;
+        Ok(())
+    }
+
+    pub fn try_update_struct_from_first_found_struct_of_type(&self, updating_boxed_struct: &mut Box<dyn FeagiSerializable>) -> Result<bool, FeagiDataError> {
+        let structure_type: FeagiByteStructureType = updating_boxed_struct.get_type();
+        let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
+        if getting_slice.is_none() {
+            return Ok(false);
+        }
+        updating_boxed_struct.try_update_from_byte_slice(getting_slice.unwrap())?;
+        Ok(true)
+    }
+
+    //endregion
+
+    //region Overwriting with Struct Data
+
+    pub fn overwrite_byte_data_with_struct_data(&mut self, incoming_structs: Vec<Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
+        self.bytes.truncate(4); // keep the global header
+        self.contained_struct_references.clear();
+        self.is_data_valid = false;
+
+
+        // First byte is version and does not change
+        LittleEndian::write_u16(&mut self.bytes[1..3], new_increment_value); // Next 2 bytes is increment counter
+        self.bytes[3] = incoming_structs.len() as u8; // Struct count
+
+
+
+        // Ensure data is allocated for vector, allocate in all one go
+        {
+            let mut total_amount_bytes_needed: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + (Self::PER_STRUCT_HEADER_BYTE_COUNT * incoming_structs.len()); // Start with bytes used in header
+            for incoming_struct in &incoming_structs {
+                total_amount_bytes_needed += incoming_struct.get_number_of_bytes_needed()
+            }
+            if total_amount_bytes_needed > self.bytes.capacity() {
+                self.bytes.reserve((total_amount_bytes_needed) - self.bytes.capacity());
+            }
+        }
+
+
+        // Write Headers and contained_struct_references
+        {
+            let mut number_bytes_needed_per_struct: usize;
+            let mut data_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + (Self::PER_STRUCT_HEADER_BYTE_COUNT * incoming_structs.len());
+            for incoming_struct in &incoming_structs {
+                number_bytes_needed_per_struct = incoming_struct.get_number_of_bytes_needed();
+                self.contained_struct_references.push(
+                    ContainedStructReference {
+                        structure_type: incoming_struct.get_type(),
+                        byte_start_index: data_byte_index,
+                        number_bytes_to_read: number_bytes_needed_per_struct,
+                    }
+                );
+
+                self.bytes.extend_from_slice(&(number_bytes_needed_per_struct as u32).to_le_bytes()); // write size to header
+                data_byte_index += number_bytes_needed_per_struct;
+            }
+        }
+
+        // Write Data
+
+        for incoming_struct in &incoming_structs {
+            incoming_struct.
+        }
+
+
+
+
+
+
+
+
+
+        self.push_global_header_to_bytes(new_increment_value, incoming_structs.len() as u8);
+
+
+
+
+
+    }
+
+    //endregion
 
     //region Internal
 
@@ -141,6 +248,23 @@ impl FeagiByteContainer{
             }
         };
         None
+    }
+
+    fn try_create_new_serializable_struct_from_type(&self, structure_type: FeagiByteStructureType) -> Box<dyn FeagiSerializable> {
+        match structure_type {
+            FeagiByteStructureType::NeuronCategoricalXYZP => Box::new(CorticalMappedXYZPNeuronData::new()),
+            FeagiByteStructureType::JSON => Box::new(FeagiJSON::new_empty())
+        }
+    }
+
+    fn push_global_header_to_bytes(&mut self, increment_counter: u16, number_structs: u8) {
+        let mut header: Vec<u8> = vec![
+            Self::CURRENT_SUPPORTED_VERSION,
+            0, 0,
+            number_structs
+        ];
+        self.bytes.append(&mut header);
+        LittleEndian::write_u16(&mut self.bytes[1..3], increment_counter);
     }
 
 

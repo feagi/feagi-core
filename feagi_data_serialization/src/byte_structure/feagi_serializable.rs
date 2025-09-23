@@ -1,24 +1,25 @@
 use feagi_data_structures::FeagiDataError;
-use crate::{FeagiByteStructureType};
+use crate::byte_structure::FeagiByteStructureType;
 
 pub trait FeagiSerializable {
 
     // NOTE: None of these methods should be exposed outside this crate! THey should remain private!
-
+    /// Returns type of structure this is, as defined in the FEAGI Data Serialization Docs
     fn get_type(&self) -> FeagiByteStructureType;
 
+    /// Returns the specific version of the structure supported by the current code base
     fn get_version(&self) -> u8;
 
-    fn get_maximum_number_of_bytes_needed(&self) -> usize;
+    /// Returns the number of bytes needed by be allocated by the FeagiByteContainer when storing the data
+    fn get_number_of_bytes_needed(&self) -> usize;
 
+    /// When given a mutable slice of bytes size specified by "get_number_of_bytes_needed", serialized the struct into it
     fn try_write_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError>;
 
+    /// Given a slice of data of this structure, Deserialize the slice and update (replace) the data of the structure
     fn try_update_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError>;
 
-    fn try_make_from_byte_slice(byte_source: &[u8]) -> Result<Box<dyn FeagiSerializable>, FeagiDataError>
-    where
-        Self: Sized;
-
+    /// Verifies that the data slice is of the type expected of the struct
     fn verify_byte_slice_is_of_type(&self, byte_source: &[u8]) -> Result<(), FeagiDataError> {
         const MIN_SLICE_SIZE: usize = 2;
         if byte_source.len() < MIN_SLICE_SIZE {
