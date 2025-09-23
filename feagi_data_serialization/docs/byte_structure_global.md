@@ -14,8 +14,7 @@ All byte transmissions are held in this global container, which can hold 1 or mo
 </td><td>1</td><td>u8</td><td>Number of contained structures</td></tr><tr><td>Per structure header</td><td>  
 </td><td>  
 </td><td>  
-</td></tr><tr><td>  
-</td><td>4</td><td>u32</td><td>Index of structure start (relative to this entire array of bytes)</td></tr><tr><td>  
+</td></tr><tr><td>
 </td><td>4</td><td>u32</td><td>Number of bytes to read for the structure</td></tr><tr><td>Per Structure header</td><td>  
 </td><td>  
 </td><td>  

@@ -34,22 +34,16 @@ use feagi_data_structures::FeagiDataError;
 /// Byte 2+: Format-specific data
 /// ```
 #[repr(u8)]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq)]
 pub enum FeagiByteStructureType {
     /// JSON serialization format (human-readable text)
-    JSON = 1,
-    
-    /// Multi-structure container format.
-    /// 
-    /// A container format that can hold multiple different FEAGI structures
-    /// in a single serialized bytes stream.
-    MultiStructHolder = 9,
-    
+    JSON = 1u8,
+
     /// Binary format for neuron categorical XYZP data.
     /// 
-    /// Binary format specifically designed for neuron data
+    /// Binary format specifically designed for neuron dataW
     /// with X, Y, Z coordinates and potential (P) values.
-    NeuronCategoricalXYZP = 11
+    NeuronCategoricalXYZP = 11u8
 }
 
 impl FeagiByteStructureType {
@@ -79,12 +73,17 @@ impl FeagiByteStructureType {
 
 }
 
+impl From<FeagiByteStructureType> for u8 {
+    fn from(value: FeagiByteStructureType) -> u8 {
+        value as u8
+    }
+}
+
 impl TryFrom<u8> for FeagiByteStructureType {
     type Error = FeagiDataError;
     fn try_from(value: u8) -> Result<Self, FeagiDataError> {
         match value {
             1 => Ok(FeagiByteStructureType::JSON),
-            9 => Ok(FeagiByteStructureType::MultiStructHolder),
             11 => Ok(FeagiByteStructureType::NeuronCategoricalXYZP),
             _ => Err(FeagiDataError::DeserializationError(format!("Unknown FeagiByteStructure type {}", value)).into())
         }
@@ -95,7 +94,6 @@ impl Display for FeagiByteStructureType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let name = match self {
             FeagiByteStructureType::JSON => "JSON",
-            FeagiByteStructureType::MultiStructHolder => "MultiStructHolder",
             FeagiByteStructureType::NeuronCategoricalXYZP => "NeuronCategoricalXYZP",
         };
         write!(f, "{name}")
