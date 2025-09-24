@@ -25,7 +25,7 @@ impl FeagiByteContainer{
     //region Constructors
 
     pub fn new_empty() -> Self {
-        Self { bytes: Vec::new(), is_data_valid: false, contained_struct_references: Vec::new() }
+        Self { bytes: vec![Self::CURRENT_SUPPORTED_VERSION, 0, 0, 0], is_data_valid: false, contained_struct_references: Vec::new() }
     }
 
     //endregion
@@ -112,67 +112,61 @@ impl FeagiByteContainer{
     //region Overwriting with Struct Data
 
     pub fn overwrite_byte_data_with_struct_data(&mut self, incoming_structs: Vec<Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
-        self.bytes.truncate(4); // keep the global header
-        self.contained_struct_references.clear();
+
+        self.bytes.clear();
+        self.contained_struct_references.clear(); // Technically this causes a memory leak. Too Bad!
         self.is_data_valid = false;
 
+        let mut number_needed_bytes_total: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT +
+            Self::PER_STRUCT_HEADER_BYTE_COUNT * incoming_structs.len();
 
-        // First byte is version and does not change
+        // Fill out contained_struct_references, collect data needed for memory allocation
+        {
+            let mut data_start_index = number_needed_bytes_total;
+            let mut per_struct_number_bytes: usize;
+            for incoming_struct in &incoming_structs {
+                per_struct_number_bytes = incoming_struct.get_number_of_bytes_needed();
+                self.contained_struct_references.push(
+                    ContainedStructReference{
+                        structure_type: incoming_struct.get_type(),
+                        byte_start_index: data_start_index,
+                        number_bytes_to_read: per_struct_number_bytes,
+                    }
+                );
+                data_start_index += per_struct_number_bytes;
+            }
+            number_needed_bytes_total += data_start_index;
+        }
+
+        if number_needed_bytes_total > self.bytes.capacity() {
+            self.bytes.reserve(number_needed_bytes_total - self.bytes.capacity());
+        }
+
+        // Every single byte will be overridden, don't worry
+        unsafe {
+            self.bytes.set_len(number_needed_bytes_total); // Fun!
+        }
+
+
+        // Setup global header
+        self.bytes[0] = Self::CURRENT_SUPPORTED_VERSION;
         LittleEndian::write_u16(&mut self.bytes[1..3], new_increment_value); // Next 2 bytes is increment counter
         self.bytes[3] = incoming_structs.len() as u8; // Struct count
 
+        // Write Header and Data bytes at the same time
+        let mut header_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
+        for struct_index in 0..incoming_structs.len() {
+            let incoming_struct = &incoming_structs[struct_index];
+            let contained_struct_reference = &self.contained_struct_references[struct_index];
 
+            LittleEndian::write_u32(&mut self.bytes[header_byte_index..header_byte_index + 4], contained_struct_reference.number_bytes_to_read as u32);
+            incoming_struct.try_write_to_byte_slice(contained_struct_reference.get_as_byte_slice_mut(&mut self.bytes))?;
 
-        // Ensure data is allocated for vector, allocate in all one go
-        {
-            let mut total_amount_bytes_needed: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + (Self::PER_STRUCT_HEADER_BYTE_COUNT * incoming_structs.len()); // Start with bytes used in header
-            for incoming_struct in &incoming_structs {
-                total_amount_bytes_needed += incoming_struct.get_number_of_bytes_needed()
-            }
-            if total_amount_bytes_needed > self.bytes.capacity() {
-                self.bytes.reserve((total_amount_bytes_needed) - self.bytes.capacity());
-            }
-        }
+            header_byte_index += Self::PER_STRUCT_HEADER_BYTE_COUNT;
+        };
 
-
-        // Write Headers and contained_struct_references
-        {
-            let mut number_bytes_needed_per_struct: usize;
-            let mut data_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + (Self::PER_STRUCT_HEADER_BYTE_COUNT * incoming_structs.len());
-            for incoming_struct in &incoming_structs {
-                number_bytes_needed_per_struct = incoming_struct.get_number_of_bytes_needed();
-                self.contained_struct_references.push(
-                    ContainedStructReference {
-                        structure_type: incoming_struct.get_type(),
-                        byte_start_index: data_byte_index,
-                        number_bytes_to_read: number_bytes_needed_per_struct,
-                    }
-                );
-
-                self.bytes.extend_from_slice(&(number_bytes_needed_per_struct as u32).to_le_bytes()); // write size to header
-                data_byte_index += number_bytes_needed_per_struct;
-            }
-        }
-
-        // Write Data
-
-        for incoming_struct in &incoming_structs {
-            incoming_struct.
-        }
-
-
-
-
-
-
-
-
-
-        self.push_global_header_to_bytes(new_increment_value, incoming_structs.len() as u8);
-
-
-
-
+        self.is_data_valid = true;
+        Ok(())
 
     }
 
@@ -281,5 +275,9 @@ struct ContainedStructReference {
 impl ContainedStructReference {
     pub fn get_as_byte_slice<'a>(&self, byte_source: &'a Vec<u8>) -> &'a [u8] {
         &byte_source[self.byte_start_index ..self.byte_start_index + self.number_bytes_to_read]
+    }
+
+    pub fn get_as_byte_slice_mut<'a>(&self, byte_source: &'a mut Vec<u8>) -> &'a mut [u8] {
+        &mut byte_source[self.byte_start_index ..self.byte_start_index + self.number_bytes_to_read]
     }
 }
