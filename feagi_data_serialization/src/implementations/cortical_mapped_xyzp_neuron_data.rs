@@ -2,7 +2,7 @@ use byteorder::{ByteOrder, LittleEndian};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZP, NeuronXYZPArrays};
-use crate::byte_structure::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
+use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 
 const BYTE_STRUCT_VERSION: u8 = 1;
 

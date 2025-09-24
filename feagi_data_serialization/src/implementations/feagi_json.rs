@@ -1,6 +1,6 @@
 use feagi_data_structures::data::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
-use crate::byte_structure::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
+use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 
 const BYTE_STRUCT_VERSION: u8 = 1;
 

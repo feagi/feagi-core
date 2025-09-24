@@ -1,5 +1,5 @@
 use feagi_data_structures::FeagiDataError;
-use crate::byte_structure::{FeagiByteContainer, FeagiByteStructureType};
+use crate::{FeagiByteContainer, FeagiByteStructureType};
 
 pub trait FeagiSerializable {
 

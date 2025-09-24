@@ -334,7 +334,7 @@ impl CorticalMappedXYZPNeuronData {
     /// This method ensures that the cortical ID exists and has cleared neuron data.
     /// If the cortical area doesn't exist, it creates new neuron arrays with the
     /// specified capacity. If it exists, it clears the existing data before returning a mutable
-    /// reference.
+    /// reference. Note that in clearing, it does not free allocated capacity.
     ///
     /// # Arguments
     ///

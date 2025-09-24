@@ -1,6 +1,8 @@
 use std::fmt::{Display, Formatter};
+use feagi_data_structures::data::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
-
+use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use crate::FeagiSerializable;
 
 #[repr(u8)]
 #[derive(Debug, PartialEq, Clone, Copy, Eq)]
@@ -21,6 +23,13 @@ impl FeagiByteStructureType {
             return Err(FeagiDataError::DeserializationError("Cannot ascertain type of empty bytes array!".into()).into())
         }
         FeagiByteStructureType::try_from(bytes[0])
+    }
+    
+    pub fn create_new_struct_of_type(&self) -> Box<dyn FeagiSerializable> {
+        match self {
+            FeagiByteStructureType::NeuronCategoricalXYZP => Box::new(CorticalMappedXYZPNeuronData::new()),
+            FeagiByteStructureType::JSON => Box::new(FeagiJSON::new_empty())
+        }
     }
 
 }

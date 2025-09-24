@@ -2,12 +2,14 @@ use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
 use feagi_data_structures::data::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
-use crate::byte_structure::feagi_serializable::FeagiSerializable;
-use crate::byte_structure::FeagiByteStructureType;
+use crate::feagi_serializable::FeagiSerializable;
+use crate::FeagiByteStructureType;
 
 type StructureIndex = usize;
 type ByteIndexReadingStart = usize;
 type NumberBytesToRead = usize;
+
+//region Feagi Byte Container
 
 pub struct FeagiByteContainer {
     bytes: Vec<u8>,
@@ -67,7 +69,7 @@ impl FeagiByteContainer{
         self.bytes.capacity()
     }
 
-    pub fn get_increment_counter_state(&self) -> Result<u16, FeagiDataError> {
+    pub fn get_increment_counter(&self) -> Result<u16, FeagiDataError> {
         if self.is_data_valid {
             return Ok(LittleEndian::read_u16(&self.bytes[1..3]))
         }
@@ -81,9 +83,7 @@ impl FeagiByteContainer{
     pub fn try_create_new_struct_from_index(&self, index: StructureIndex) -> Result<Box<dyn FeagiSerializable>, FeagiDataError> {
         self.verify_structure_index_valid(index)?;
         let relevant_slice = self.contained_struct_references[index].get_as_byte_slice(&self.bytes);
-        let mut boxed_struct: Box<dyn FeagiSerializable> = self.try_create_new_serializable_struct_from_type(
-            self.contained_struct_references[index].structure_type
-        );
+        let mut boxed_struct: Box<dyn FeagiSerializable> = self.contained_struct_references[index].structure_type.create_new_struct_of_type();
         boxed_struct.try_update_from_byte_slice(relevant_slice)?;
         Ok(boxed_struct)
     }
@@ -93,7 +93,7 @@ impl FeagiByteContainer{
         if getting_slice.is_none() {
             return Ok(None);
         }
-        let mut boxed_struct: Box<dyn FeagiSerializable> = self.try_create_new_serializable_struct_from_type(structure_type);
+        let mut boxed_struct: Box<dyn FeagiSerializable> = structure_type.create_new_struct_of_type();
         boxed_struct.try_update_from_byte_slice(getting_slice.unwrap())?;
         Ok(Some(boxed_struct))
     }
@@ -273,13 +273,6 @@ impl FeagiByteContainer{
         None
     }
 
-    fn try_create_new_serializable_struct_from_type(&self, structure_type: FeagiByteStructureType) -> Box<dyn FeagiSerializable> {
-        match structure_type {
-            FeagiByteStructureType::NeuronCategoricalXYZP => Box::new(CorticalMappedXYZPNeuronData::new()),
-            FeagiByteStructureType::JSON => Box::new(FeagiJSON::new_empty())
-        }
-    }
-
     fn push_global_header_to_bytes(&mut self, increment_counter: u16, number_structs: u8) {
         let mut header: Vec<u8> = vec![
             Self::CURRENT_SUPPORTED_VERSION,
@@ -295,6 +288,9 @@ impl FeagiByteContainer{
 
 }
 
+//endregion
+
+//region Contained Struct Reference
 struct ContainedStructReference {
     structure_type: FeagiByteStructureType,
     byte_start_index: ByteIndexReadingStart,
@@ -310,3 +306,5 @@ impl ContainedStructReference {
         &mut byte_source[self.byte_start_index ..self.byte_start_index + self.number_bytes_to_read]
     }
 }
+
+//endregion

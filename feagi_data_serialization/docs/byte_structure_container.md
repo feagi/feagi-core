@@ -5,7 +5,7 @@ All byte transmissions are held in this global container, which can hold 1 or mo
 ### Overall Structure (Uncompressed)
 
 
-<table border="1" id="bkmrk-section-description-" style="border-collapse: collapse; width: 100%;"><colgroup><col style="width: 16.6832%;"></col><col style="width: 16.6832%;"></col><col style="width: 33.3664%;"></col><col style="width: 33.3664%;"></col></colgroup><thead><tr><td>Section Description</td><td>Number of Bytes</td><td>Data Type</td><td>Description</td></tr></thead><tbody><tr><td>Global Header</td><td>  
+<table border="1" id="section-description-" style="border-collapse: collapse; width: 100%;"><colgroup><col style="width: 16.6832%;"></col><col style="width: 16.6832%;"></col><col style="width: 33.3664%;"></col><col style="width: 33.3664%;"></col></colgroup><thead><tr><td>Section Description</td><td>Number of Bytes</td><td>Data Type</td><td>Description</td></tr></thead><tbody><tr><td>Global Header</td><td>  
 </td><td>  
 </td><td>  
 </td></tr><tr><td>  
@@ -26,6 +26,6 @@ All byte transmissions are held in this global container, which can hold 1 or mo
 #### Version
 As of time of writing, the current version is "2"
 
-#### Compression
+#### Note on Compression
 
-We use the [Deflate](https://en.wikipedia.org/wiki/Deflate) compression before sending / reading this data over the network to cut down bandwidth costs, and because this is a fast and built in method for many languages and interfaces
+We use the [Deflate](https://en.wikipedia.org/wiki/Deflate) compression before sending / reading this data over the network to cut down bandwidth costs, and because this is a fast and built in method for many languages and interfaces.
