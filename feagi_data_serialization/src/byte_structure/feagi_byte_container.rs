@@ -65,6 +65,13 @@ impl FeagiByteContainer{
         self.bytes.capacity()
     }
 
+    pub fn get_increment_counter_state(&self) -> Result<u16, FeagiDataError> {
+        if self.is_data_valid {
+            return Ok(LittleEndian::read_u16(&self.bytes[1..3]))
+        }
+        Err(FeagiDataError::DeserializationError("Given Byte Container is invalid and thus cannot be read!".into()))
+    }
+
     //endregion
 
     //region Extracting Struct Data
@@ -109,7 +116,7 @@ impl FeagiByteContainer{
 
     //endregion
 
-    //region Overwriting with Struct Data
+    //region Overwriting Data
 
     pub fn overwrite_byte_data_with_struct_data(&mut self, incoming_structs: Vec<Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
@@ -168,6 +175,14 @@ impl FeagiByteContainer{
         self.is_data_valid = true;
         Ok(())
 
+    }
+
+    pub fn set_increment_counter_state(&mut self, new_increment_value: u16) -> Result<(), FeagiDataError> {
+        if !self.is_data_valid {
+            return Err(FeagiDataError::DeserializationError("Given Byte Container is invalid and thus cannot have its increment counter changed!".into()))
+        };
+        LittleEndian::write_u16(&mut self.bytes[1..3], new_increment_value);
+        Ok(())
     }
 
     //endregion
