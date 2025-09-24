@@ -1,7 +1,5 @@
-use byteorder::{ByteOrder, LittleEndian, WriteBytesExt};
-use feagi_data_structures::data::FeagiJSON;
+use byteorder::{ByteOrder, LittleEndian};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::feagi_serializable::FeagiSerializable;
 use crate::FeagiByteStructureType;
 
@@ -134,15 +132,14 @@ impl FeagiByteContainer{
         self.contained_struct_references.clear(); // Technically this causes a memory leak. Too Bad!
         self.is_data_valid = false;
 
-        let mut number_needed_bytes_total: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT +
+        let header_total_number_of_bytes: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT +
             Self::PER_STRUCT_HEADER_BYTE_COUNT * incoming_structs.len();
 
-        // Fill out contained_struct_references, collect data needed for memory allocation
-        {
-            let mut data_start_index = number_needed_bytes_total;
-            let mut per_struct_number_bytes: usize;
+        // Fill out contained_struct_references, calculate total number of bytes used for the data section
+        let data_total_number_of_bytes = {
+            let mut data_start_index = header_total_number_of_bytes;
             for incoming_struct in &incoming_structs {
-                per_struct_number_bytes = incoming_struct.get_number_of_bytes_needed();
+                let per_struct_number_bytes = incoming_struct.get_number_of_bytes_needed();
                 self.contained_struct_references.push(
                     ContainedStructReference{
                         structure_type: incoming_struct.get_type(),
@@ -152,8 +149,10 @@ impl FeagiByteContainer{
                 );
                 data_start_index += per_struct_number_bytes;
             }
-            number_needed_bytes_total += data_start_index;
-        }
+            data_start_index
+        };
+
+        let number_needed_bytes_total = header_total_number_of_bytes + data_total_number_of_bytes;
 
         if number_needed_bytes_total > self.bytes.capacity() {
             self.bytes.reserve(number_needed_bytes_total - self.bytes.capacity());
@@ -163,7 +162,6 @@ impl FeagiByteContainer{
         unsafe {
             self.bytes.set_len(number_needed_bytes_total); // Fun!
         }
-
 
         // Setup global header
         self.bytes[0] = Self::CURRENT_SUPPORTED_VERSION;
@@ -203,7 +201,7 @@ impl FeagiByteContainer{
 
     //region Internal
 
-    /// Verifies the bytes loaded in create a valid FBS container, with indexing that doesn't leave bounds,
+    /// Verifies the bytes loaded in create a valid FBC container, with indexing that doesn't leave bounds,
     /// and also configures contained_struct_references.
     /// WARNING: Does not verify the contained structures themselves!
     fn verify_container_valid_and_populate(&mut self) -> Result<(), FeagiDataError> {
@@ -222,7 +220,7 @@ impl FeagiByteContainer{
         if number_contained_structs == 0 {
             self.is_data_valid = true; // This is technically valid, even though no meaningful data was sent
             return Ok(())
-            // NOTE: It is possible due to an error, that there is data sent after this point. However, we are going to treat this FBS as empty and report it as such.
+            // NOTE: It is possible due to an error, that there is data sent after this point. However, we are going to treat this FBC as empty and report it as such.
         }
 
         let minimum_count_header_size = Self::PER_STRUCT_HEADER_BYTE_COUNT * number_contained_structs;
@@ -233,17 +231,15 @@ impl FeagiByteContainer{
 
         let mut structure_header_byte_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
         let mut structure_data_byte_index: usize = total_header_size;
-        let mut structure_length: u32 = 0;
-        let mut structure_type: FeagiByteStructureType;
         for contained_structure_index in 0..number_contained_structs {
-            structure_length = LittleEndian::read_u32(&self.bytes[structure_header_byte_index..structure_header_byte_index + 4]);
+            let structure_length = LittleEndian::read_u32(&self.bytes[structure_header_byte_index..structure_header_byte_index + 4]);
 
             if structure_data_byte_index + structure_length as usize > byte_length {
                 return Err(FeagiDataError::DeserializationError(
                     format!("Structure of index {} goes out of bound reaching position {} when given byte length is only {} long!", contained_structure_index, structure_data_byte_index + structure_length as usize, byte_length)));
             }
 
-            structure_type = FeagiByteStructureType::try_from(self.bytes[structure_data_byte_index])?;
+            let structure_type = FeagiByteStructureType::try_from(self.bytes[structure_data_byte_index])?;
             self.contained_struct_references.push( ContainedStructReference {
                 structure_type,
                 byte_start_index: structure_data_byte_index,
@@ -256,6 +252,7 @@ impl FeagiByteContainer{
         Ok(())
     }
 
+    /// Makes sure the given index is valid (not out of range given number of contained structs)
     fn verify_structure_index_valid(&self, structure_index: StructureIndex) -> Result<(), FeagiDataError> {
         if structure_index >= self.contained_struct_references.len() {
             return Err(FeagiDataError::BadParameters(format!("Structure index {} out of bounds! Feagi Byte Container only contains {} structures!", structure_index, self.contained_struct_references.len())));
@@ -272,17 +269,6 @@ impl FeagiByteContainer{
         };
         None
     }
-
-    fn push_global_header_to_bytes(&mut self, increment_counter: u16, number_structs: u8) {
-        let mut header: Vec<u8> = vec![
-            Self::CURRENT_SUPPORTED_VERSION,
-            0, 0,
-            number_structs
-        ];
-        self.bytes.append(&mut header);
-        LittleEndian::write_u16(&mut self.bytes[1..3], increment_counter);
-    }
-
 
     //endregion
 
