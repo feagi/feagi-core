@@ -23,6 +23,12 @@ All byte transmissions are held in this global container, which can hold 1 or mo
 </td><td>1</td><td>u8</td><td>Structure Version identifier</td></tr><tr><td>  
 </td><td>?</td><td>any</td><td>the data of the struct</td></tr></tbody></table>
 
+#### Specific Implementations
+The following types of data are possible serializable types that can be contained by the Feagi Byte Container:
+- [JSON](specific_structures/001%20-%20JSON.md)
+- [Neuron Potential Data (XYZP)](specific_structures/011%20-%20Neuron%20Potential%20Data%20(XYZP).md)
+
+
 #### Version
 As of time of writing, the current version is "2"
 
