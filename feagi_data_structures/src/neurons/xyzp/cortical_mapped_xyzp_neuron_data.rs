@@ -246,6 +246,15 @@ impl CorticalMappedXYZPNeuronData {
     pub fn clear(&mut self) {
         self.mappings.clear();
     }
+
+    /// Removes all neurons from the neuron arrays of this CorticalMappedXYZPNeuronData without
+    /// clearing allocated capacity on them. Better to use over clear() if you are writing to
+    /// similar cortical areas repeatedly.
+    pub fn clear_neurons_only(&mut self) {
+        for neuron_arrays in self.mappings.values_mut() {
+            neuron_arrays.clear();
+        }
+    }
     
     /// Returns an iterator over the neuron data collections.
     ///
@@ -330,7 +339,7 @@ impl CorticalMappedXYZPNeuronData {
     /// # Arguments
     ///
     /// * `cortical_id` - Cortical area identifier
-    /// * `estimated_neuron_count` - Capacity for new neuron arrays if creation is needed
+    /// * `estimated_neuron_count` - Capacity for new neuron arrays
     ///
     /// # Returns
     ///
@@ -339,6 +348,7 @@ impl CorticalMappedXYZPNeuronData {
         if self.mappings.contains_key(cortical_id) { // If already contains neuron array, clear it and return it
             let neurons = self.mappings.get_mut(cortical_id).unwrap();
             neurons.clear();
+            neurons.ensure_capacity(estimated_neuron_count);
             return neurons;
         }
         _ = self.mappings.insert(cortical_id.clone(), NeuronXYZPArrays::with_capacity(estimated_neuron_count));

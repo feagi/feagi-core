@@ -110,6 +110,15 @@ impl CorticalID {
         CorticalType::try_get_type_from_bytes(&self.bytes).unwrap() // will never error
     }
     //endregion
+    
+    pub fn write_id_to_bytes(&self, bytes: &mut [u8; CorticalID::CORTICAL_ID_LENGTH]) {
+        bytes[0] = self.bytes[0];
+        bytes[1] = self.bytes[1];
+        bytes[2] = self.bytes[2];
+        bytes[3] = self.bytes[3];
+        bytes[4] = self.bytes[4];
+        bytes[5] = self.bytes[5];
+    }
 
 }
 

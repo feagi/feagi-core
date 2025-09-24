@@ -29,8 +29,11 @@ impl FeagiSerializable for FeagiJSON {
         Ok(())
     }
 
-    fn try_update_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError> {
-        let json_bytes = &byte_reading[FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT..];
+    fn try_update_from_byte_slice(&mut self, byte_structure_slice: &[u8]) -> Result<(), FeagiDataError> {
+        // Assuming type is correct
+        self.verify_byte_slice_is_of_correct_version(byte_structure_slice)?;
+        
+        let json_bytes = &byte_structure_slice[FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT..];
 
         // Parse JSON string
         let json_value = match serde_json::from_slice(json_bytes) {
@@ -40,6 +43,7 @@ impl FeagiSerializable for FeagiJSON {
         self.update_json_value(json_value);
 
         Ok(())
-
     }
+
+
 }

@@ -38,11 +38,14 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
         let mut subheader_write_index: usize = FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT;
         let mut neuron_data_write_index: u32 = subheader_write_index as u32 + (number_cortical_areas as u32 * NUMBER_BYTES_PER_CORTICAL_ID_HEADER as u32);
 
-        for (cortical_id, neuron_data) in &self.mappings { // TODO Cortical ID writing could be sped up
+        for (cortical_id, neuron_data) in &self.mappings {
+
             // Write cortical subheader
-            let write_target = &mut byte_destination[subheader_write_index .. subheader_write_index + CorticalID::CORTICAL_ID_LENGTH];
-            let write_target: &mut[u8; 6] = write_target.try_into().unwrap();
-            write_target.copy_from_slice(cortical_id.as_bytes());
+            let write_target = &mut byte_destination[subheader_write_index .. subheader_write_index + CorticalID::NUMBER_OF_BYTES];
+            let write_target: &mut[u8; CorticalID::NUMBER_OF_BYTES] = write_target.try_into().unwrap();
+            cortical_id.write_id_to_bytes(write_target);
+
+
             let reading_start: u32 = neuron_data_write_index;
             let reading_length: u32 = neuron_data.get_size_in_number_of_bytes() as u32;
             LittleEndian::write_u32(&mut byte_destination[subheader_write_index + 6 .. subheader_write_index + 10], reading_start);
@@ -60,19 +63,19 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
     }
 
     fn try_update_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError> {
-
-        // TODO think of how we can clear elegantly
-
+        // Assuming type is correct
+        self.verify_byte_slice_is_of_correct_version(byte_reading)?;
+        self.clear_neurons_only(); // This causes a memory leak. Too Bad!
 
         let number_cortical_areas: usize = LittleEndian::read_u16(&byte_reading[2..4]) as usize;
-        let mut reading_header_index: usize = FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT + NUMBER_BYTES_CORTICAL_COUNT_HEADER;
+        let mut reading_header_byte_index: usize = FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT + NUMBER_BYTES_CORTICAL_COUNT_HEADER;
 
         for _cortical_index in 0..number_cortical_areas {
             let cortical_id = CorticalID::from_bytes(
-                <&[u8; 6]>::try_from(&byte_reading[reading_header_index..reading_header_index + 6]).unwrap()
+                <&[u8; 6]>::try_from(&byte_reading[reading_header_byte_index..reading_header_byte_index + 6]).unwrap()
             )?;
-            let data_start_reading: usize = LittleEndian::read_u32(&byte_reading[reading_header_index + 6..reading_header_index + 10]) as usize;
-            let number_bytes_to_read: usize = LittleEndian::read_u32(&byte_reading[reading_header_index + 10..reading_header_index + 14]) as usize;
+            let data_start_reading: usize = LittleEndian::read_u32(&byte_reading[reading_header_byte_index + 6..reading_header_byte_index + 10]) as usize;
+            let number_bytes_to_read: usize = LittleEndian::read_u32(&byte_reading[reading_header_byte_index + 10..reading_header_byte_index + 14]) as usize;
 
             if byte_reading.len() < data_start_reading + number_bytes_to_read {
                 return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZP is too short to fit the data the header says it contains!".into()).into());
@@ -80,51 +83,41 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
 
             let neuron_bytes = &byte_reading[data_start_reading..data_start_reading + number_bytes_to_read];
             let bytes_length = neuron_bytes.len();
-            if bytes_length % NeuronXYZP::NUMBER_BYTES_PER_NEURON != 0 {
-                return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZP seems invalid! Size is nonsensical given neuron data size!".into()).into());
-            }
 
             if bytes_length % NeuronXYZP::NUMBER_BYTES_PER_NEURON != 0 {
                 return Err(FeagiDataError::SerializationError("As NeuronXYCPArrays contains 4 internal arrays of equal length, each of elements of 4 bytes each (uint32 and float), the input bytes array must be divisible by 16!".into()).into());
             }
+
             let x_end = bytes_length / 4; // q1
             let y_end = bytes_length / 2; // q2
             let z_end = x_end * 3; // q3
 
-            // Create vectors using bytes order to avoid alignment issues
             let num_neurons = bytes_length / NeuronXYZP::NUMBER_BYTES_PER_NEURON;
-            let mut x_coords: Vec<u32> = Vec::with_capacity(num_neurons);
-            let mut y_coords: Vec<u32> = Vec::with_capacity(num_neurons);
-            let mut z_coords: Vec<u32> = Vec::with_capacity(num_neurons);
-            let mut potentials: Vec<f32> = Vec::with_capacity(num_neurons);
+            let neuron_array = self.ensure_clear_and_borrow_mut(&cortical_id, num_neurons);
 
+            // TODO this could potentially be parallelized
             for i in 0..num_neurons {
                 let x_start = i * 4;
                 let y_start = x_end + x_start;
                 let z_start = y_end + x_start;
                 let p_start = z_end + x_start;
 
-                x_coords.push(LittleEndian::read_u32(&neuron_bytes[x_start..x_start + 4]));
-                y_coords.push(LittleEndian::read_u32(&neuron_bytes[y_start..y_start + 4]));
-                z_coords.push(LittleEndian::read_u32(&neuron_bytes[z_start..z_start + 4]));
-                potentials.push(LittleEndian::read_f32(&neuron_bytes[p_start..p_start + 4]));
+                neuron_array.push_raw(
+                    LittleEndian::read_u32(&neuron_bytes[x_start..x_start + 4]),
+                    LittleEndian::read_u32(&neuron_bytes[y_start..y_start + 4]),
+                    LittleEndian::read_u32(&neuron_bytes[z_start..z_start + 4]),
+                    LittleEndian::read_f32(&neuron_bytes[p_start..p_start + 4])
+                )
+
             }
-
-            let neurons = NeuronXYZPArrays::new_from_vectors(
-                x_coords,
-                y_coords,
-                z_coords,
-                potentials,
-            )?;
-
-            output.insert(cortical_id, neurons);
-            reading_header_index += NUMBER_BYTES_PER_CORTICAL_ID_HEADER;
+            reading_header_byte_index += NUMBER_BYTES_PER_CORTICAL_ID_HEADER;
         };
 
         Ok(())
     }
 }
 
+#[inline]
 fn write_neuron_array_to_bytes(neuron_array: &NeuronXYZPArrays, bytes_to_write_to: &mut [u8]) -> Result<(), FeagiDataError> {
     const U32_F32_LENGTH: usize = 4;
     let number_of_neurons_to_write: usize = neuron_array.len();

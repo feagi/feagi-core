@@ -222,7 +222,7 @@ impl NeuronXYZPArrays {
         if self.capacity() >= number_of_neurons_total {
             return;
         }
-        self.reserve(number_of_neurons_total);
+        self.reserve(number_of_neurons_total - self.capacity());
     }
     
     /// Reserves capacity for at least the specified number of additional neurons.

@@ -101,7 +101,7 @@ impl FeagiByteContainer{
     pub fn try_update_struct_from_index(&self, index: StructureIndex, updating_boxed_struct: &mut Box<dyn FeagiSerializable>) -> Result<(), FeagiDataError> {
         self.verify_structure_index_valid(index)?;
         let relevant_slice = self.contained_struct_references[index].get_as_byte_slice(&self.bytes);
-        updating_boxed_struct.verify_byte_slice_is_of_type(relevant_slice)?;
+        updating_boxed_struct.verify_byte_slice_is_of_correct_type(relevant_slice)?;
         updating_boxed_struct.try_update_from_byte_slice(relevant_slice)?;
         Ok(())
     }

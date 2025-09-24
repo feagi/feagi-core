@@ -1,5 +1,5 @@
 use feagi_data_structures::FeagiDataError;
-use crate::byte_structure::FeagiByteStructureType;
+use crate::byte_structure::{FeagiByteContainer, FeagiByteStructureType};
 
 pub trait FeagiSerializable {
 
@@ -16,19 +16,30 @@ pub trait FeagiSerializable {
     /// When given a mutable slice of bytes size specified by "get_number_of_bytes_needed", serialized the struct into it
     fn try_write_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError>;
 
-    /// Given a slice of data of this structure, Deserialize the slice and update (replace) the data of the structure
+    /// Given a slice of data of this structure of correct size, Deserialize the slice and update (replace) the data of the structure
     fn try_update_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError>;
 
     /// Verifies that the data slice is of the type expected of the struct
-    fn verify_byte_slice_is_of_type(&self, byte_source: &[u8]) -> Result<(), FeagiDataError> {
-        const MIN_SLICE_SIZE: usize = 2;
-        if byte_source.len() < MIN_SLICE_SIZE {
+    fn verify_byte_slice_is_of_correct_type(&self, byte_source: &[u8]) -> Result<(), FeagiDataError> {
+
+        if byte_source.len() <= FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT {
             return Err(FeagiDataError::DeserializationError(
-                format!("Byte slice needs to be at least {} bytes long to be considered valid! Given slice is {} elements long!", MIN_SLICE_SIZE, byte_source.len())
+                format!("Byte slice needs to be at least {} bytes long to be considered valid! Given slice is {} elements long!", FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT, byte_source.len())
             ))
         }
         if byte_source[0] != self.get_type() as u8 {
             return Err(FeagiDataError::DeserializationError(format!("Attempted to process byte slice as structure type {} when given slice seems to be type {}!", self.get_type(), byte_source[0])))
+        }
+        Ok(())
+    }
+
+    /// Verifies that the data slice is of the version expected of the struct
+    fn verify_byte_slice_is_of_correct_version(&self, byte_source: &[u8]) -> Result<(), FeagiDataError> {
+
+        if byte_source.len() < FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT {
+            return Err(FeagiDataError::DeserializationError(
+                format!("Byte slice needs to be at least {} bytes long to be considered valid! Given slice is {} elements long!", FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT, byte_source.len())
+            ))
         }
         if byte_source[1] != self.get_version() {
             return Err(FeagiDataError::DeserializationError(format!("Current implementation of Feagi Data Serialization supports structure ID {} of version {}, however version {} was given!!", self.get_type(), self.get_version(), byte_source[1])))
