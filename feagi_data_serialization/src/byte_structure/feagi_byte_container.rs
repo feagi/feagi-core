@@ -22,6 +22,8 @@ impl FeagiByteContainer{
 
     pub const PER_STRUCT_HEADER_BYTE_COUNT: usize = 4; // 1 u32
 
+    pub const STRUCT_HEADER_BYTE_COUNT: usize = 2; // 1 u8, 1 u8
+
     //region Constructors
 
     pub fn new_empty() -> Self {
@@ -191,6 +193,10 @@ impl FeagiByteContainer{
         };
         LittleEndian::write_u16(&mut self.bytes[1..3], new_increment_value);
         Ok(())
+    }
+
+    pub fn free_unused_allocation(&mut self) {
+        self.bytes.shrink_to_fit()
     }
 
     //endregion

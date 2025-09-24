@@ -1,2 +1,0 @@
-mod feagi_json;
-mod cortical_mapped_xyzp_neuron_data;

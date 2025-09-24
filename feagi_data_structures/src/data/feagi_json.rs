@@ -4,7 +4,7 @@ use crate::FeagiDataError;
 
 #[derive(Clone)]
 pub struct FeagiJSON {
-    json: serde_json::Value,
+    json : serde_json::Value,
 }
 
 impl FeagiJSON {
@@ -29,6 +29,10 @@ impl FeagiJSON {
 
     pub fn borrow_json_value(&self) -> &serde_json::Value {
         &self.json
+    }
+
+    pub fn update_json_value(&mut self, new_value: serde_json::Value) {
+        self.json = new_value;
     }
 }
 
