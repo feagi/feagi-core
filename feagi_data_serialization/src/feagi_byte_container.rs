@@ -9,9 +9,31 @@ type NumberBytesToRead = usize;
 
 //region Feagi Byte Container
 
+/// A container for serialized FEAGI data structures with efficient binary format.
+/// 
+/// `FeagiByteContainer` manages multiple serializable structures in a single byte array,
+/// providing methods to read, write, and validate the contained data. The container uses
+/// a header-based format with version control and structure indexing.
+/// 
+/// # Format
+/// - Global header: version (1 byte) + increment counter (2 bytes) + struct count (1 byte)
+/// - Per-structure headers: data length (4 bytes each)
+/// - Structure data: serialized structure bytes
+/// 
+/// # Example
+/// ```
+/// use feagi_data_serialization::FeagiByteContainer;
+/// 
+/// let mut container = FeagiByteContainer::new_empty();
+/// assert!(container.is_valid());
+/// assert_eq!(container.get_number_of_bytes_used(), 4); // Just the header
+/// ```
 pub struct FeagiByteContainer {
+    /// The actual contained byte data
     bytes: Vec<u8>,
+    /// If the data inside the array is considered valid. If not, most functionality is disabled
     is_data_valid: bool,
+    /// A vector of references to where in the bytes to get the slices of specific structs, and what type of Feagi data they are
     contained_struct_references: Vec<ContainedStructReference>,
 }
 
@@ -26,18 +48,64 @@ impl FeagiByteContainer{
 
     //region Constructors
 
+    /// Creates a new empty container with default header.
+    /// 
+    /// The container starts with a 4-byte header containing version, zero increment counter,
+    /// and zero structure count. The container is initially valid with just a 4 byte header
+    /// stating 0 contained structures
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let container = FeagiByteContainer::new_empty();
+    /// assert!(container.is_valid());
+    /// assert_eq!(container.get_number_of_bytes_used(), 4);
+    /// ```
     pub fn new_empty() -> Self {
-        Self { bytes: vec![Self::CURRENT_SUPPORTED_VERSION, 0, 0, 0], is_data_valid: false, contained_struct_references: Vec::new() }
+        Self { bytes: vec![Self::CURRENT_SUPPORTED_VERSION, 0, 0, 0], is_data_valid: true, contained_struct_references: Vec::new() }
     }
 
     //endregion
 
     // region Direct Data Access
 
+    /// Returns a reference to the internal byte array.
+    /// 
+    /// Provides direct read access to the raw bytes of the container,
+    /// including headers and all serialized structure data.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let container = FeagiByteContainer::new_empty();
+    /// let bytes = container.get_byte_ref();
+    /// assert_eq!(bytes.len(), 4);
+    /// assert_eq!(bytes[0], 2); // Current version
+    /// ```
     pub fn get_byte_ref(&self) -> &[u8] {
         &self.bytes
     }
 
+    /// Writes data using a callback function and validates the container.
+    /// 
+    /// Allows external code to write directly to the byte array, then validates
+    /// that the resulting data forms a valid container structure.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::{FeagiByteContainer};
+    ///
+    /// // NOTE: This function is just here as an example, but this specific implementation is invalid
+    /// let mut container = FeagiByteContainer::new_empty();
+    /// let result = container.try_write_data_to_container_and_verify(&mut |bytes| {
+    ///     *bytes = vec![20u8, 2u8, 3u8]; // This is an invalid byte sequence
+    ///     Ok(())
+    /// });
+    /// // This will fail validation since we're setting invalid data
+    /// assert!(result.is_err());
+    /// ```
     pub fn try_write_data_to_container_and_verify<F>(&mut self, byte_writer: &mut F) -> Result<(), FeagiDataError>
     where F: FnMut(&mut Vec<u8>) -> Result<(), FeagiDataError> {
         byte_writer(&mut self.bytes)?;
@@ -48,10 +116,34 @@ impl FeagiByteContainer{
 
     //region Get Properties
 
+    /// Checks if the container has valid data structure.
+    /// 
+    /// Returns true if the container has been validated and contains properly
+    /// formatted header and structure data.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let container = FeagiByteContainer::new_empty();
+    /// assert!(container.is_valid());
+    /// ```
     pub fn is_valid(&self) -> bool {
         self.is_data_valid
     }
 
+    /// Returns the number of structures contained in this container.
+    /// 
+    /// Only works if the container is valid. Returns an error if the container
+    /// has not been validated or contains invalid data.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    ///
+    /// let container = FeagiByteContainer::new_empty();
+    /// assert_eq!(container.try_get_number_contained_structures().unwrap(), 0);
+    /// ```
     pub fn try_get_number_contained_structures(&self) -> Result<usize, FeagiDataError> {
         if self.is_data_valid {
             return Ok(self.contained_struct_references.len())
@@ -59,14 +151,48 @@ impl FeagiByteContainer{
         Err(FeagiDataError::DeserializationError("Given Byte Container is invalid and thus cannot be read!".into()))
     }
 
+    /// Returns the total number of bytes currently used by the container.
+    /// 
+    /// This includes headers and all structure data.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let container = FeagiByteContainer::new_empty();
+    /// assert_eq!(container.get_number_of_bytes_used(), 4); // Header only
+    /// ```
     pub fn get_number_of_bytes_used(&self) -> usize {
         self.bytes.len()
     }
 
+    /// Returns the total memory allocated for the byte array.
+    /// 
+    /// This may be larger than the number of bytes used due to Vec capacity.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let container = FeagiByteContainer::new_empty();
+    /// assert!(container.get_number_of_bytes_allocated() >= 4);
+    /// ```
     pub fn get_number_of_bytes_allocated(&self) -> usize {
         self.bytes.capacity()
     }
 
+    /// Returns the increment counter value from the header.
+    /// 
+    /// The increment counter is a 16-bit value stored in bytes 1-2 of the header.
+    /// Only works if the container is valid.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    ///
+    /// let container = FeagiByteContainer::new_empty();
+    /// assert_eq!(container.get_increment_counter().unwrap(), 0u16);
+    /// ```
     pub fn get_increment_counter(&self) -> Result<u16, FeagiDataError> {
         if self.is_data_valid {
             return Ok(LittleEndian::read_u16(&self.bytes[1..3]))
@@ -78,6 +204,19 @@ impl FeagiByteContainer{
 
     //region Extracting Struct Data
 
+    /// Creates a new structure instance from the data at the specified index.
+    /// 
+    /// Deserializes the structure data at the given index and returns a boxed
+    /// trait object. The structure type is determined from the stored metadata.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let container = FeagiByteContainer::new_empty();
+    /// // This will fail since there are no structures
+    /// assert!(container.try_create_new_struct_from_index(0).is_err());
+    /// ```
     pub fn try_create_new_struct_from_index(&self, index: StructureIndex) -> Result<Box<dyn FeagiSerializable>, FeagiDataError> {
         self.verify_structure_index_valid(index)?;
         let relevant_slice = self.contained_struct_references[index].get_as_byte_slice(&self.bytes);
@@ -114,6 +253,19 @@ impl FeagiByteContainer{
         Ok(true)
     }
 
+    /// Returns a list of all structure types contained in this container.
+    /// 
+    /// Provides a quick way to see what types of structures are available
+    /// without deserializing them.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let container = FeagiByteContainer::new_empty();
+    /// let types = container.get_contained_struct_types();
+    /// assert_eq!(types.len(), 0); // Empty container
+    /// ```
     pub fn get_contained_struct_types(&self) -> Vec<FeagiByteStructureType> {
         let mut output: Vec<FeagiByteStructureType> = Vec::with_capacity(self.contained_struct_references.len());
         for contained_struct_reference in &self.contained_struct_references {
@@ -126,6 +278,22 @@ impl FeagiByteContainer{
 
     //region Overwriting Data
 
+    /// Overwrites the entire container with new structure data.
+    /// 
+    /// Clears all existing data and replaces it with the provided structures.
+    /// This method handles header generation, structure serialization, and validation.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::{FeagiByteContainer, FeagiSerializable};
+    /// use feagi_data_structures::data::FeagiJSON;
+    /// 
+    /// let mut container = FeagiByteContainer::new_empty();
+    /// let json_struct: Box<dyn FeagiSerializable> = Box::new(FeagiJSON::new_empty());
+    /// 
+    /// let result = container.overwrite_byte_data_with_struct_data(vec![json_struct], 1);
+    /// // This should succeed and make the container valid
+    /// ```
     pub fn overwrite_byte_data_with_struct_data(&mut self, incoming_structs: Vec<Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         self.bytes.clear();
@@ -185,6 +353,18 @@ impl FeagiByteContainer{
 
     }
 
+    /// Updates the increment counter in the header.
+    /// 
+    /// Modifies the 16-bit increment counter stored in bytes 1-2 of the header.
+    /// The container must be valid for this operation to succeed.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let mut container = FeagiByteContainer::new_empty();
+    /// container.set_increment_counter_state(42);
+    /// ```
     pub fn set_increment_counter_state(&mut self, new_increment_value: u16) -> Result<(), FeagiDataError> {
         if !self.is_data_valid {
             return Err(FeagiDataError::DeserializationError("Given Byte Container is invalid and thus cannot have its increment counter changed!".into()))
@@ -193,6 +373,19 @@ impl FeagiByteContainer{
         Ok(())
     }
 
+    /// Frees any unused memory allocation in the byte vector.
+    /// 
+    /// Shrinks the capacity of the internal byte vector to match its length,
+    /// potentially reducing memory usage.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteContainer;
+    /// 
+    /// let mut container = FeagiByteContainer::new_empty();
+    /// container.free_unused_allocation();
+    /// assert_eq!(container.get_number_of_bytes_allocated(), container.get_number_of_bytes_used());
+    /// ```
     pub fn free_unused_allocation(&mut self) {
         self.bytes.shrink_to_fit()
     }

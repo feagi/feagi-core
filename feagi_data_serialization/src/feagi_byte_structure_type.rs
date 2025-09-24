@@ -4,6 +4,21 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::FeagiSerializable;
 
+/// Represents different types of serializable data structures in the FEAGI system.
+/// 
+/// Each variant corresponds to a specific binary format with a unique byte identifier.
+/// The enum values are used as the first byte in serialized data to identify the structure type.
+/// 
+/// # Example
+/// ```
+/// use feagi_data_serialization::FeagiByteStructureType;
+/// 
+/// let json_type = FeagiByteStructureType::JSON;
+/// assert_eq!(json_type as u8, 1);
+/// 
+/// let neuron_type = FeagiByteStructureType::NeuronCategoricalXYZP;
+/// assert_eq!(neuron_type as u8, 11);
+/// ```
 #[repr(u8)]
 #[derive(Debug, PartialEq, Clone, Copy, Eq)]
 pub enum FeagiByteStructureType {
@@ -18,6 +33,19 @@ pub enum FeagiByteStructureType {
 }
 
 impl FeagiByteStructureType {
+    /// Determines the structure type from the first byte of a byte array.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteStructureType;
+    /// 
+    /// let bytes = [1u8, 2, 3, 4];
+    /// let structure_type = FeagiByteStructureType::try_get_type_from_bytes(&bytes).unwrap();
+    /// assert_eq!(structure_type, FeagiByteStructureType::JSON);
+    /// 
+    /// let empty_bytes = [];
+    /// assert!(FeagiByteStructureType::try_get_type_from_bytes(&empty_bytes).is_err());
+    /// ```
     pub fn try_get_type_from_bytes(bytes: &[u8]) -> Result<FeagiByteStructureType, FeagiDataError> {
         if bytes.len() < 1 {
             return Err(FeagiDataError::DeserializationError("Cannot ascertain type of empty bytes array!".into()).into())
@@ -25,6 +53,20 @@ impl FeagiByteStructureType {
         FeagiByteStructureType::try_from(bytes[0])
     }
     
+    /// Creates a new empty instance of the serializable structure for this type.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::FeagiByteStructureType;
+    /// 
+    /// let json_type = FeagiByteStructureType::JSON;
+    /// let json_struct = json_type.create_new_struct_of_type();
+    /// assert_eq!(json_struct.get_type(), FeagiByteStructureType::JSON);
+    /// 
+    /// let neuron_type = FeagiByteStructureType::NeuronCategoricalXYZP;
+    /// let neuron_struct = neuron_type.create_new_struct_of_type();
+    /// assert_eq!(neuron_struct.get_type(), FeagiByteStructureType::NeuronCategoricalXYZP);
+    /// ```
     pub fn create_new_struct_of_type(&self) -> Box<dyn FeagiSerializable> {
         match self {
             FeagiByteStructureType::NeuronCategoricalXYZP => Box::new(CorticalMappedXYZPNeuronData::new()),
@@ -32,12 +74,6 @@ impl FeagiByteStructureType {
         }
     }
 
-}
-
-impl From<FeagiByteStructureType> for u8 {
-    fn from(value: FeagiByteStructureType) -> u8 {
-        value as u8
-    }
 }
 
 impl TryFrom<u8> for FeagiByteStructureType {
