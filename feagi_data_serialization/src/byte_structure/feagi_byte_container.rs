@@ -114,6 +114,14 @@ impl FeagiByteContainer{
         Ok(true)
     }
 
+    pub fn get_contained_struct_types(&self) -> Vec<FeagiByteStructureType> {
+        let mut output: Vec<FeagiByteStructureType> = Vec::with_capacity(self.contained_struct_references.len());
+        for contained_struct_reference in &self.contained_struct_references {
+            output.push(contained_struct_reference.structure_type);
+        };
+        output
+    }
+
     //endregion
 
     //region Overwriting Data
