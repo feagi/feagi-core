@@ -136,6 +136,7 @@ impl SegmentedImageFrame {
     ///
     /// # Arguments
     /// * `camera_index` - The grouping index for this camera system (0-255)
+    /// * `is_incremental` - If the encoder / decoder is incremental instead of instant change
     ///
     /// # Returns
     /// Array of 9 CorticalID values arranged as:
@@ -148,41 +149,73 @@ impl SegmentedImageFrame {
     /// # ImageCamera Segmentation
     /// - **Center**: Primary focus area for detailed processing
     /// - **Surrounding segments**: Peripheral vision areas for context and motion detection
-    pub fn create_ordered_cortical_ids_for_segmented_vision(camera_index: CorticalGroupIndex) -> [CorticalID; 9] {
+    pub fn create_ordered_cortical_ids_for_segmented_vision(camera_index: CorticalGroupIndex, is_incremental: bool) -> [CorticalID; 9] {
+        if is_incremental {
+            return         [
+                SensorCorticalType::ImageCameraBottomLeftIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraBottomMiddleIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraBottomRightIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraMiddleLeftIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraMiddleRightIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraTopLeftIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraTopMiddleIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraTopRightIncremental.to_cortical_id(camera_index),
+            ]
+        }
+
         [
-            SensorCorticalType::ImageCameraBottomLeft.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraBottomMiddle.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraBottomRight.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraMiddleLeft.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraCenter.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraMiddleRight.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopLeft.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopMiddle.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopRight.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomLeftInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomMiddleInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomRightInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraMiddleLeftInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraCenterInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraMiddleRightInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopLeftInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopMiddleInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopRightInstant.to_cortical_id(camera_index),
         ]
     }
 
     /// Returns cortical types for each segment in order.
-    /// 
+    ///
+    /// # Arguments
+    /// * `is_incremental` - If the encoder / decoder is incremental instead of instant change
+    ///
     /// # Example
     /// ```
     /// use feagi_data_structures::data::SegmentedImageFrame;
     /// use feagi_data_structures::genomic::{CorticalType, SensorCorticalType};
     /// 
-    /// let types = SegmentedImageFrame::create_ordered_cortical_types_for_segmented_vision();
-    /// assert_eq!(types[4], CorticalType::Sensory(SensorCorticalType::ImageCameraCenter));
+    /// let types = SegmentedImageFrame::create_ordered_cortical_types_for_segmented_vision(false);
+    /// assert_eq!(types[4], CorticalType::Sensory(SensorCorticalType::ImageCameraCenterInstant));
     /// ```
-    pub fn create_ordered_cortical_types_for_segmented_vision() -> [CorticalType; 9] {
+    pub fn create_ordered_cortical_types_for_segmented_vision(is_incremental: bool) -> [CorticalType; 9] {
+
+        if is_incremental {
+            return         [
+                SensorCorticalType::ImageCameraBottomLeftIncremental.into(),
+                SensorCorticalType::ImageCameraBottomMiddleIncremental.into(),
+                SensorCorticalType::ImageCameraBottomRightIncremental.into(),
+                SensorCorticalType::ImageCameraMiddleLeftIncremental.into(),
+                SensorCorticalType::ImageCameraCenterIncremental.into(),
+                SensorCorticalType::ImageCameraMiddleRightIncremental.into(),
+                SensorCorticalType::ImageCameraTopLeftIncremental.into(),
+                SensorCorticalType::ImageCameraTopMiddleIncremental.into(),
+                SensorCorticalType::ImageCameraTopRightIncremental.into(),
+            ]
+        }
+
         [
-            SensorCorticalType::ImageCameraBottomLeft.into(),
-            SensorCorticalType::ImageCameraBottomMiddle.into(),
-            SensorCorticalType::ImageCameraBottomRight.into(),
-            SensorCorticalType::ImageCameraMiddleLeft.into(),
-            SensorCorticalType::ImageCameraCenter.into(),
-            SensorCorticalType::ImageCameraMiddleRight.into(),
-            SensorCorticalType::ImageCameraTopLeft.into(),
-            SensorCorticalType::ImageCameraTopMiddle.into(),
-            SensorCorticalType::ImageCameraTopRight.into(),
+            SensorCorticalType::ImageCameraBottomLeftInstant.into(),
+            SensorCorticalType::ImageCameraBottomMiddleInstant.into(),
+            SensorCorticalType::ImageCameraBottomRightInstant.into(),
+            SensorCorticalType::ImageCameraMiddleLeftInstant.into(),
+            SensorCorticalType::ImageCameraCenterInstant.into(),
+            SensorCorticalType::ImageCameraMiddleRightInstant.into(),
+            SensorCorticalType::ImageCameraTopLeftInstant.into(),
+            SensorCorticalType::ImageCameraTopMiddleInstant.into(),
+            SensorCorticalType::ImageCameraTopRightInstant.into(),
         ]
     }
     
