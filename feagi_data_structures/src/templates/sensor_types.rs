@@ -7,15 +7,48 @@ macro_rules! sensor_definition {
 
                 //region 0 - 1 Linear Float
 
-                #[doc = "Infrared distance sensor for object detection"]
-                Infrared => {
-                    friendly_name: "Infrared Sensor",
-                    snake_case_identifier: "infrared",
+                #[doc = "Infrared distance sensor for object detection. Instantaneous change. Neurons encoded linearly"]
+                InfraredInstantLinear => {
+                    friendly_name: "Infrared Sensor (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_instant_linear",
                     base_ascii: b"iinf00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: TODO,
+                    default_coder_type: Percentage_Instant_Linear,
                     wrapped_data_type:WrappedIOType:: Percentage,
                 },
+
+                #[doc = "Infrared distance sensor for object detection. Instantaneous change. Neurons encoded fractionally exponentially"]
+                InfraredInstantFractional => {
+                    friendly_name: "Infrared Sensor (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_instant_fractional",
+                    base_ascii: b"iINF00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Instant_FractionalExponential,
+                    wrapped_data_type:WrappedIOType:: Percentage,
+                },
+
+                #[doc = "Infrared distance sensor for object detection. Incremental change. Neurons encoded linearly"]
+                InfraredIncrementalLinear => {
+                    friendly_name: "Infrared Sensor (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_incremental_linear",
+                    base_ascii: b"Iinf00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Linear,
+                    wrapped_data_type:WrappedIOType:: Percentage,
+                },
+
+                #[doc = "Infrared distance sensor for object detection. Incremental change. Neurons encoded fractionally exponentially"]
+                InfraredIncrementalFractional => {
+                    friendly_name: "Infrared Sensor (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_incremental_fractional",
+                    base_ascii: b"IINF00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_FractionalExponential,
+                    wrapped_data_type:WrappedIOType:: Percentage,
+                },
+
+
+
                 #[doc = "Inverted infrared sensor that provides reverse object detection readings."]
                 ReverseInfrared => {
                     friendly_name: "Infrared (Inverted) Sensor",
@@ -34,6 +67,7 @@ macro_rules! sensor_definition {
                     default_coder_type: TODO,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
+
                 #[doc = "Proximity sensor for detecting nearby objects and measuring distances."]
                 Proximity => {
                     friendly_name: "Proximity",
