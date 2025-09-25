@@ -16,7 +16,7 @@ macro_rules! define_wrapped_io_data_enum {
         impl WrappedIOData {
             pub fn set_data_to_default(&mut self) {
                 match self {
-                    $( WrappedIOData::$enum_type(data) => $zero_function, )*
+                    $( WrappedIOData::$enum_type(enum_data) => $zero_function, )*
                 }
             }
         }
@@ -84,21 +84,21 @@ macro_rules! define_wrapped_io_data_enum {
 }
 
 define_wrapped_io_data_enum!(
-    F32: f32 => "f32({})", data = 0.0,
-    F32_2D: (f32, f32) => "f32_2d({:?})", data = (0.0, 0.0),
-    F32_3D: (f32, f32, f32) => "f32_3d({:?})", data = (0.0, 0.0, 0.0),
-    F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})", data = (0.0, 0.0, 0.0, 0.0),
-    Percentage: Percentage => "{}", data.inplace_update(0.0),
-    Percentage_2D: Percentage2D => "{}", data.a.inplace_update_all(0.0),
-    Percentage_3D: Percentage3D => "{}", data.a.inplace_update_all(0.0),
-    Percentage_4D: Percentage4D => "{}", data.a.inplace_update_all(0.0),
-    SignedPercentage: SignedPercentage => "{}", data.a.inplace_update_all(0.0),
-    SignedPercentage_2D: SignedPercentage2D => "{}", data.a.inplace_update_all(0.0),
-    SignedPercentage_3D: SignedPercentage3D => "{}", data.a.inplace_update_all(0.0),
-    SignedPercentage_4D: SignedPercentage4D => "{}", data.a.inplace_update_all(0.0),
-    ImageFrame: ImageFrame => "{}", data.blink_image(),
-    SegmentedImageFrame: SegmentedImageFrame => "{}", data.blink_segments(),
-    MiscData: MiscData => "{}", data.blank_data(),
+    F32: f32 => "f32({})", {*enum_data = 0.0},
+    F32_2D: (f32, f32) => "f32_2d({:?})", {*enum_data = (0.0, 0.0)},
+    F32_3D: (f32, f32, f32) => "f32_3d({:?})", {*enum_data = (0.0, 0.0, 0.0)},
+    F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})", {*enum_data = (0.0, 0.0, 0.0, 0.0)},
+    Percentage: Percentage => "{}", enum_data.inplace_update(0.0),
+    Percentage_2D: Percentage2D => "{}", enum_data.a.inplace_update_all(0.0),
+    Percentage_3D: Percentage3D => "{}", enum_data.a.inplace_update_all(0.0),
+    Percentage_4D: Percentage4D => "{}", enum_data.a.inplace_update_all(0.0),
+    SignedPercentage: SignedPercentage => "{}", enum_data.a.inplace_update_all(0.0),
+    SignedPercentage_2D: SignedPercentage2D => "{}", enum_data.a.inplace_update_all(0.0),
+    SignedPercentage_3D: SignedPercentage3D => "{}", enum_data.a.inplace_update_all(0.0),
+    SignedPercentage_4D: SignedPercentage4D => "{}", enum_data.a.inplace_update_all(0.0),
+    ImageFrame: ImageFrame => "{}", enum_data.blink_image(),
+    SegmentedImageFrame: SegmentedImageFrame => "{}", enum_data.blink_segments(),
+    MiscData: MiscData => "{}", enum_data.blank_data(),
 );
 
 
