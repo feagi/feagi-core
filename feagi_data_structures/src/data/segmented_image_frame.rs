@@ -241,8 +241,8 @@ impl SegmentedImageFrame {
     /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
     /// 
     /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(64, 64).unwrap(),  // center
     ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
-    ///     ImageXYResolution::new(64, 64).unwrap()  // center
     /// );
     /// let props = SegmentedImageFrameProperties::new(
     ///     &resolutions, &ColorChannelLayout::RGB,

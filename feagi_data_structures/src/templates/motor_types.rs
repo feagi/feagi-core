@@ -21,7 +21,7 @@ macro_rules! motor_definition {
                     base_ascii: b"ogaz00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..33),
                     default_coder_type: TODO,
-                    wrapped_data_type: WrappedIOType::Percentage4D,
+                    wrapped_data_type: WrappedIOType::Percentage_4D,
                 },
 
                 //endregion
