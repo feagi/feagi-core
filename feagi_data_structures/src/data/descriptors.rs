@@ -5,7 +5,7 @@
 use std::cmp;
 use std::fmt::Display;
 use crate::{define_xyz_mapping, FeagiDataError};
-use crate::data::{ImageFrame, Percentage, Percentage2D, SegmentedImageFrame, SignedPercentage};
+use crate::data::{ImageFrame, Percentage, Percentage2D, SegmentedImageFrame};
 use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
 use crate::genomic::descriptors::CorticalChannelDimensions;
 
@@ -130,7 +130,7 @@ pub enum ColorSpace {
     Gamma
 }
 
-impl std::fmt::Display for ColorSpace {
+impl Display for ColorSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
             ColorSpace::Linear => write!(f, "Linear"),

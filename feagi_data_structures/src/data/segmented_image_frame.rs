@@ -124,7 +124,7 @@ impl SegmentedImageFrame {
     /// # Returns
     /// Array of 9 CorticalID values arranged as:
     /// ```text
-    /// [6] Top-Left     [7] Top-Middle     [8] Top-Togjt
+    /// [6] Top-Left     [7] Top-Middle     [8] Top-Right
     /// [3] Middle-Left  [4] Center         [5] Middle-Right
     /// [0] Bottom-Left  [1] Bottom-Middle  [2] Bottom-Right
     /// ```

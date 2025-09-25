@@ -63,7 +63,7 @@ impl ImageFrame {
         })
     }
 
-    pub fn new_from_dynamic_image(img: image::DynamicImage, color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
+    pub fn new_from_dynamic_image(img: DynamicImage, color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
         let (width, height) = img.dimensions();
         let color_layout = ColorChannelLayout::try_from(img.color())?;
         match color_layout {
@@ -398,7 +398,7 @@ impl ImageFrame {
         match self.color_space {
             ColorSpace::Gamma => {
 
-                Zip::indexed(&mut self.pixels).par_for_each(|(y,x,c), color_val| {
+                Zip::indexed(&mut self.pixels).par_for_each(|(_y,_x,_c), color_val| {
                     let v = (*color_val as i32 + value).clamp(0, 255);
                     *color_val = v as u8;
                 });
@@ -478,7 +478,7 @@ impl ImageFrame {
     pub fn write_as_neuron_xyzp_data(&self, write_target: &mut CorticalMappedXYZPNeuronData, target_id: CorticalID, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
-        let x_offset: u32 = *x_channel_offset * self.get_xy_resolution().width as u32;
+        let x_offset: u32 = *x_channel_offset * self.get_xy_resolution().width;
         let mapped_neuron_data = write_target.ensure_clear_and_borrow_mut(&target_id, self.get_number_elements());
 
         mapped_neuron_data.update_vectors_from_external(|x_vec, y_vec, c_vec, p_vec| {
