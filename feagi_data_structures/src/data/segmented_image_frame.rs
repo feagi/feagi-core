@@ -407,7 +407,19 @@ impl SegmentedImageFrame {
     }
 
     //endregion
-    
+
+
+    pub fn blink_segments(&mut self)  {
+        self.lower_left.blink_image();
+        self.lower_middle.blink_image();
+        self.lower_right.blink_image();
+        self.middle_left.blink_image();
+        self.center.blink_image();
+        self.middle_right.blink_image();
+        self.upper_left.blink_image();
+        self.upper_middle.blink_image();
+        self.upper_right.blink_image();
+    }
 }
 
 impl std::fmt::Display for SegmentedImageFrame {

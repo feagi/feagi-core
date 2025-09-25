@@ -1,4 +1,4 @@
-use ndarray::{Array3, Zip};
+use ndarray::{s, Array3, Zip};
 use crate::data::descriptors::MiscDataDimensions;
 use crate::data::ImageFrame;
 use crate::FeagiDataError;
@@ -159,6 +159,10 @@ impl MiscData {
     /// ```
     pub fn get_internal_data_mut(&mut self) -> &mut Array3<f32> {
         &mut self.data
+    }
+    
+    pub fn blank_data(&mut self) {
+        self.data.fill(0.0);
     }
 }
 

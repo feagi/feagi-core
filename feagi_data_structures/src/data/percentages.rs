@@ -351,6 +351,11 @@ impl SignedPercentage2D {
             b: percentage,
         }
     }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
+    }
 }
 
 impl std::fmt::Display for SignedPercentage2D {
@@ -391,6 +396,12 @@ impl Percentage3D {
             c: percentage,
         }
     }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update(value);
+        self.b.inplace_update(value);
+        self.c.inplace_update(value);
+    }
 }
 
 impl std::fmt::Display for Percentage3D {
@@ -426,6 +437,12 @@ impl SignedPercentage3D {
             b: percentage,
             c: percentage,
         }
+    }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
+        self.c.inplace_update_unchecked(value);
     }
 }
 
@@ -470,6 +487,13 @@ impl Percentage4D {
             d: percentage,
         }
     }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update(value);
+        self.b.inplace_update(value);
+        self.c.inplace_update(value);
+        self.d.inplace_update(value);
+    }
 }
 
 impl std::fmt::Display for Percentage4D {
@@ -508,6 +532,13 @@ impl SignedPercentage4D {
             c: percentage,
             d: percentage,
         }
+    }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
+        self.c.inplace_update_unchecked(value);
+        self.d.inplace_update_unchecked(value);
     }
 }
 

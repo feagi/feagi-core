@@ -535,6 +535,10 @@ impl ImageFrame {
         }
     }
 
+   pub fn blink_image(&mut self) {
+       self.pixels.fill(0);
+   }
+
     //endregion
 
 
