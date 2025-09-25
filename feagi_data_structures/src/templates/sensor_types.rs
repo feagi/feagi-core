@@ -23,7 +23,7 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "infrared_instant_fractional",
                     base_ascii: b"iINF00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_FractionalExponential,
+                    default_coder_type: Percentage_Instant_Fractional,
                     wrapped_data_type:WrappedIOType:: Percentage,
                 },
 
@@ -43,56 +43,206 @@ macro_rules! sensor_definition {
                     snake_case_identifier: "infrared_incremental_fractional",
                     base_ascii: b"IINF00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Incremental_FractionalExponential,
+                    default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type:WrappedIOType:: Percentage,
                 },
 
 
 
-                #[doc = "Inverted infrared sensor that provides reverse object detection readings."]
-                ReverseInfrared => {
-                    friendly_name: "Infrared (Inverted) Sensor",
-                    snake_case_identifier: "infrared_inverted",
+                #[doc = "Inverted infrared sensor that provides reverse object detection readings. Instantaneous change. Neurons encoded linearly"]
+                ReverseInfraredInstantLinear => {
+                    friendly_name: "Infrared (Inverted) Sensor (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_inverted_instant_linear",
                     base_ascii: b"iiif00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: TODO,
-                    wrapped_data_type: WrappedIOType::Percentage,
-                },
-                #[doc = "Digital GPIO input pin for reading binary signals (high/low states)."]
-                DigitalGPIOInput => {
-                    friendly_name: "GPIO Digital Input",
-                    snake_case_identifier: "gpio_digital",
-                    base_ascii: b"idgp00",
-                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: TODO,
+                    default_coder_type: Percentage_Instant_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
-                #[doc = "Proximity sensor for detecting nearby objects and measuring distances."]
-                Proximity => {
-                    friendly_name: "Proximity",
-                    snake_case_identifier: "proximity",
+                #[doc = "Inverted infrared sensor that provides reverse object detection readings. Instantaneous change. Neurons encoded fractionally exponentially"]
+                ReverseInfraredInstantFractional => {
+                    friendly_name: "Infrared (Inverted) Sensor (Instant Change, Fractional Encoding)",
+                    snake_case_identifier: "infrared_inverted_instant_fractional",
+                    base_ascii: b"iIIF00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Instant_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Inverted infrared sensor that provides reverse object detection readings. Incremental change. Neurons encoded linearly"]
+                ReverseInfraredIncrementalLinear => {
+                    friendly_name: "Infrared (Inverted) Sensor (Incremental Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_inverted_incremental_linear",
+                    base_ascii: b"Iiif00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Inverted infrared sensor that provides reverse object detection readings. Incremental change. Neurons encoded fractionally exponentially"]
+                ReverseInfraredIncrementalFractional => {
+                    friendly_name: "Infrared (Inverted) Sensor (Incremental Change, Fractional Encoding)",
+                    snake_case_identifier: "infrared_inverted_incremental_fractional",
+                    base_ascii: b"IIIF00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+                #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded linearly"]
+                DigitalGPIOInputInstantLinear => {
+                    friendly_name: "GPIO Digital Input (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "gpio_digital_instant_linear",
+                    base_ascii: b"idgp00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Instant_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded fractionally exponentially"]
+                DigitalGPIOInputInstantFractional => {
+                    friendly_name: "GPIO Digital Input (Instant Change, Fractional Encoding)",
+                    snake_case_identifier: "gpio_digital_instant_fractional",
+                    base_ascii: b"iDGP00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Instant_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Incremental change. Neurons encoded linearly"]
+                DigitalGPIOInputIncrementalLinear => {
+                    friendly_name: "GPIO Digital Input (Incremental Change, Linear Encoding)",
+                    snake_case_identifier: "gpio_digital_incremental_linear",
+                    base_ascii: b"Idgp00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Incremental change. Neurons encoded fractionally exponentially"]
+                DigitalGPIOInputIncrementalFractional => {
+                    friendly_name: "GPIO Digital Input (Incremental Change, Fractional Encoding)",
+                    snake_case_identifier: "gpio_digital_incremental_fractional",
+                    base_ascii: b"IDGP00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Instantaneous change. Neurons encoded linearly"]
+                ProximityInstantLinear => {
+                    friendly_name: "Proximity (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "proximity_instant_linear",
                     base_ascii: b"ipro00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: TODO,
+                    default_coder_type: Percentage_Instant_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
-                #[doc = "Shock sensor for sensing 'pain'"]
-                Shock => {
-                    friendly_name: "Shock",
-                    snake_case_identifier: "shock",
+
+                #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Instantaneous change. Neurons encoded fractionally exponentially"]
+                ProximityInstantFractional => {
+                    friendly_name: "Proximity (Instant Change, Fractional Encoding)",
+                    snake_case_identifier: "proximity_instant_fractional",
+                    base_ascii: b"iPRO00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: Percentage_Instant_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Incremental change. Neurons encoded linearly"]
+                ProximityIncrementalLinear => {
+                    friendly_name: "Proximity (Incremental Change, Linear Encoding)",
+                    snake_case_identifier: "proximity_incremental_linear",
+                    base_ascii: b"Ipro00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: Percentage_Incremental_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Incremental change. Neurons encoded fractionally exponentially"]
+                ProximityIncrementalFractional => {
+                    friendly_name: "Proximity (Incremental Change, Fractional Encoding)",
+                    snake_case_identifier: "proximity_incremental_fractional",
+                    base_ascii: b"IPRO00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: Percentage_Incremental_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+                #[doc = "Shock sensor for sensing 'pain'. Instantaneous change. Neurons encoded linearly"]
+                ShockInstantLinear => {
+                    friendly_name: "Shock (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "shock_instant_linear",
                     base_ascii: b"ishk00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: TODO,
+                    default_coder_type: Percentage_Instant_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
-                #[doc = "Battery level sensor for monitoring power remaining."]
-                Battery => {
-                    friendly_name: "Battery Gauge",
-                    snake_case_identifier: "battery_gauge",
+
+                #[doc = "Shock sensor for sensing 'pain'. Instantaneous change. Neurons encoded fractionally exponentially"]
+                ShockInstantFractional => {
+                    friendly_name: "Shock (Instant Change, Fractional Encoding)",
+                    snake_case_identifier: "shock_instant_fractional",
+                    base_ascii: b"iSHK00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Instant_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Shock sensor for sensing 'pain'. Incremental change. Neurons encoded linearly"]
+                ShockIncrementalLinear => {
+                    friendly_name: "Shock (Incremental Change, Linear Encoding)",
+                    snake_case_identifier: "shock_incremental_linear",
+                    base_ascii: b"Ishk00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Shock sensor for sensing 'pain'. Incremental change. Neurons encoded fractionally exponentially"]
+                ShockIncrementalFractional => {
+                    friendly_name: "Shock (Incremental Change, Fractional Encoding)",
+                    snake_case_identifier: "shock_incremental_fractional",
+                    base_ascii: b"ISHK00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+                #[doc = "Battery level sensor for monitoring power remaining. Instantaneous change. Neurons encoded linearly"]
+                BatteryInstantLinear => {
+                    friendly_name: "Battery Gauge (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "battery_gauge_instant_linear",
                     base_ascii: b"ibat00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: TODO,
+                    default_coder_type: Percentage_Instant_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Battery level sensor for monitoring power remaining. Instantaneous change. Neurons encoded fractionally exponentially"]
+                BatteryInstantFractional => {
+                    friendly_name: "Battery Gauge (Instant Change, Fractional Encoding)",
+                    snake_case_identifier: "battery_gauge_instant_fractional",
+                    base_ascii: b"iBAT00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: Percentage_Instant_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Battery level sensor for monitoring power remaining. Incremental change. Neurons encoded linearly"]
+                BatteryIncrementalLinear => {
+                    friendly_name: "Battery Gauge (Incremental Change, Linear Encoding)",
+                    snake_case_identifier: "battery_gauge_incremental_linear",
+                    base_ascii: b"Ibat00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: Percentage_Incremental_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Battery level sensor for monitoring power remaining. Incremental change. Neurons encoded fractionally exponentially"]
+                BatteryIncrementalFractional => {
+                    friendly_name: "Battery Gauge (Incremental Change, Fractional Encoding)",
+                    snake_case_identifier: "battery_gauge_incremental_fractional",
+                    base_ascii: b"IBAT00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
