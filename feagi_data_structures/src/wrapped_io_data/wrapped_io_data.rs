@@ -4,13 +4,21 @@ use crate::data::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, 
 
 // Macro to define the WrappedIOData enum
 macro_rules! define_wrapped_io_data_enum {
-    ( $( $enum_type:ident : $data_type:ty => $friendly_name:expr ),+ $(,)? ) => {
+    ( $( $enum_type:ident : $data_type:ty => $friendly_name:expr, $zero_function:expr ),+ $(,)? ) => {
         #[derive(Debug, Clone)]
         #[allow(non_camel_case_types)]
         /// Due to Rust's memory management, WrappedIOData is used to pass around various data structures around.
         pub enum WrappedIOData
         {
             $( $enum_type($data_type), )*
+        }
+
+        impl WrappedIOData {
+            pub fn set_data_to_default(&mut self) {
+                match self {
+                    $( WrappedIOData::$enum_type(data) => $zero_function, )*
+                }
+            }
         }
 
         impl std::fmt::Display for WrappedIOData {
@@ -76,12 +84,12 @@ macro_rules! define_wrapped_io_data_enum {
 }
 
 define_wrapped_io_data_enum!(
-    F32: f32 => "f32({})",
-    F32_2D: (f32, f32) => "f32_2d({:?})",
-    F32_3D: (f32, f32, f32) => "f32_3d({:?})",
-    F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})",
-    Percentage: Percentage => "{}",
-    Percentage_2D: Percentage2D => "{}",
+    F32: f32 => "f32({})", data = 0.0,
+    F32_2D: (f32, f32) => "f32_2d({:?})", data = (0.0, 0.0),
+    F32_3D: (f32, f32, f32) => "f32_3d({:?})", data = (0.0, 0.0, 0.0),
+    F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})", data = (0.0, 0.0, 0.0, 0.0),
+    Percentage: Percentage => "{}", data.inplace_update(0.0),
+    Percentage_2D: Percentage2D => "{}", data.a.inplace_update(0.0); data.b.inplace_update(0.0);,
     Percentage_3D: Percentage3D => "{}",
     Percentage_4D: Percentage4D => "{}",
     SignedPercentage: SignedPercentage => "{}",

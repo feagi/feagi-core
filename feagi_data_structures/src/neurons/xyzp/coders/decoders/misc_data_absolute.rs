@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::data::descriptors::MiscDataDimensions;
 use crate::data::MiscData;
 use crate::FeagiDataError;
@@ -11,7 +10,7 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 pub struct MiscDataNeuronXYZPAbsoluteDecoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_read_target: CorticalID,
-    number_channels: usize,
+    number_of_channels: CorticalChannelCount,
 }
 
 impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
@@ -34,7 +33,6 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
         }
         let reading_neuron_data = reading_neuron_data.unwrap();
         let (x_arr, y_arr, z_arr, p_arr) = reading_neuron_data.borrow_xyzp_vectors();
-        // TODO parallelize as soon as FEAGI has tests for this to avoid these errors
         for i in 0..x_arr.len() {
             let x_val = x_arr[i];
             if !x_bound.contains(&x_val) {
@@ -57,12 +55,52 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
         Ok(true)
     }
 
-    fn read_neuron_data_multi_channel(&self, channel_value_target: &mut Vec<&WrappedIOData>, read_target: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
-        todo!()
+    fn fn read_neuron_data_multi_channel(&self, channel_value_target: &mut Vec<&WrappedIOData>, did_channel_change: &mut Vec<bool>, read_target: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
+        did_channel_change.fill(false);
+
+        let neuron_array = read_target.get_neurons_of(&self.cortical_read_target);
+        if neuron_array.is_none() {
+            return Ok(()); // Cortical Area not in data. Nothing was changed
+        }
+        
+
+
+        let neuron_array = neuron_array.unwrap();
+        let (x_arr, y_arr, z_arr, p_arr) = neuron_array.borrow_xyzp_vectors();
+
+        for neuron_index in 0..neuron_array.len() {
+            if y_arr[neuron_index] >= self.misc_data_dimensions.height || z_arr[neuron_index] >= self.misc_data_dimensions.depth {
+                return Err(FeagiDataError::NeuronError(format!("Feagi sent neuron {} which is out of bounds for corticalID {} with dimensions {}!",
+                                                               neuron_array[neuron_index], self.cortical_read_target, self.misc_data_dimensions)))
+            }
+
+            let channel_index: CorticalChannelIndex = (x_arr[neuron_index] / self.misc_data_dimensions.width).into();
+            if *channel_index >= *self.number_of_channels {
+                return Err(FeagiDataError::NeuronError(format!("Feagi sent neuron {} which is out of bounds for corticalID {} with dimensions {}!",
+                                                               neuron_array[neuron_index], self.cortical_read_target, self.misc_data_dimensions)))
+            }
+            if !did_channel_change[*channel_index] {
+                
+            }
+
+
+            did_channel_change[*channel_index] = true;
+
+
+
+
+        }
+
+
+
+
+
+        Ok(())
+
     }
 
     fn get_number_of_channels(&self) -> usize {
-        self.number_channels
+        self.has_channel_changed.len()
     }
 }
 
@@ -71,7 +109,7 @@ impl MiscDataNeuronXYZPAbsoluteDecoder {
         Ok(MiscDataNeuronXYZPAbsoluteDecoder{
             misc_data_dimensions,
             cortical_read_target,
-            number_channels: *number_of_channels as usize,
+            number_of_channels,
         })
     }
 }

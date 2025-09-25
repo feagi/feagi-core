@@ -25,7 +25,7 @@ macro_rules! motor_definition {
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
-                #[doc = "Free spinning motor. Instantaneous change. Neurons encoded fractionally exponentially"]
+                #[doc = "Free spinning motor. Instantaneous change. Neurons encoded fractionally"]
                 RotaryMotorInstantFractional => {
                     friendly_name: "Rotary Motor (Instant Change, Fractional Encoding)",
                     snake_case_identifier: "rotary_motor_instant_fractional",
@@ -45,7 +45,7 @@ macro_rules! motor_definition {
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
-                #[doc = "Free spinning motor. Incremental change. Neurons encoded fractionally exponentially"]
+                #[doc = "Free spinning motor. Incremental change. Neurons encoded fractionally"]
                 RotaryMotorIncrementalFractional => {
                     friendly_name: "Rotary Motor (Incremental Change, Fractional Encoding)",
                     snake_case_identifier: "rotary_motor_incremental_fractional",
@@ -54,6 +54,11 @@ macro_rules! motor_definition {
                     default_coder_type: SignedPercentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
+
+
+
+
+
 
                 #[doc = "Servo with max / min rotation distances. Instantaneous change. Neurons encoded linearly"]
                 PositionalServoInstantLinear => {
@@ -65,7 +70,7 @@ macro_rules! motor_definition {
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
-                #[doc = "Servo with max / min rotation distances. Instantaneous change. Neurons encoded fractionally exponentially"]
+                #[doc = "Servo with max / min rotation distances. Instantaneous change. Neurons encoded fractionally"]
                 PositionalServoInstantFractional => {
                     friendly_name: "Positional Servo (Instant Change, Fractional Encoding)",
                     snake_case_identifier: "positional_servo_instant_fractional",
@@ -85,7 +90,7 @@ macro_rules! motor_definition {
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
-                #[doc = "Servo with max / min rotation distances. Incremental change. Neurons encoded fractionally exponentially"]
+                #[doc = "Servo with max / min rotation distances. Incremental change. Neurons encoded fractionally"]
                 PositionalServoIncrementalFractional => {
                     friendly_name: "Positional Servo (Incremental Change, Fractional Encoding)",
                     snake_case_identifier: "positional_servo_incremental_fractional",
@@ -109,7 +114,7 @@ macro_rules! motor_definition {
                     wrapped_data_type: WrappedIOType::Percentage_4D,
                 },
 
-                #[doc = "Controls size and positioning of the central vision in a segmented frame. Instantaneous change. Neurons encoded fractionally exponentially"]
+                #[doc = "Controls size and positioning of the central vision in a segmented frame. Instantaneous change. Neurons encoded fractionally"]
                 GazeInstantFractional => {
                     friendly_name: "Gaze (Instant Change, Fractional Encoding)",
                     snake_case_identifier: "gaze_instant_fractional",
@@ -129,7 +134,7 @@ macro_rules! motor_definition {
                     wrapped_data_type: WrappedIOType::Percentage_4D,
                 },
 
-                #[doc = "Controls size and positioning of the central vision in a segmented frame. Incremental change. Neurons encoded fractionally exponentially"]
+                #[doc = "Controls size and positioning of the central vision in a segmented frame. Incremental change. Neurons encoded fractionally"]
                 GazeIncrementalFractional => {
                     friendly_name: "Gaze (Incremental Change, Fractional Encoding)",
                     snake_case_identifier: "gaze_incremental_fractional",

@@ -313,6 +313,11 @@ impl Percentage2D {
             b: percentage,
         }
     }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update(value);
+        self.b.inplace_update(value);
+    }
 }
 
 impl std::fmt::Display for Percentage2D {

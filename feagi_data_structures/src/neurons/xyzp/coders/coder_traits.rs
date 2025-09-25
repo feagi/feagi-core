@@ -22,6 +22,5 @@ pub trait NeuronXYZPDecoder {
     fn get_number_of_channels(&self) -> usize;
 
     /// Reads neuron data (if available in received neuron data) and updates all channel relevant WrappedIOData with it
-    fn read_neuron_data_multi_channel(&self, channel_value_target: &mut Vec<&WrappedIOData>, read_target: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>;
+    fn read_neuron_data_multi_channel(&self, channel_value_target: &mut Vec<&WrappedIOData>, did_channel_change: &mut Vec<bool>, read_target: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>;
 }
-

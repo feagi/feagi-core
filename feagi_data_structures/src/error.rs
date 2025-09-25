@@ -6,6 +6,7 @@ pub enum FeagiDataError {
     DeserializationError(String),
     SerializationError(String),
     BadParameters(String),
+    NeuronError(String),
     InternalError(String),
     NotImplemented,
 }
@@ -16,6 +17,7 @@ impl Display for FeagiDataError {
             FeagiDataError::DeserializationError(msg) => write!(f, "Failed to Deserialize Bytes: {}", msg),
             FeagiDataError::SerializationError(msg) => write!(f, "Failed to Serialize Bytes: {}", msg),
             FeagiDataError::BadParameters(msg) => write!(f, "Bad Parameters: {}", msg),
+            FeagiDataError::NeuronError(msg) => write!(f, "NeuronError: {}", msg),
             FeagiDataError::InternalError(msg) => write!(f, "Internal Error, please raise an issue on Github: {}", msg),
             FeagiDataError::NotImplemented => write!(f, "This function is not yet implemented! Please raise an issue on Github!")
         }
