@@ -97,6 +97,22 @@ impl SegmentedImageFrame {
         })
     }
 
+    /// Creates a SegmentedImageFrame from SegmentedImageFrameProperties.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
+    ///
+    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(64, 64).unwrap(), // center
+    ///     ImageXYResolution::new(32, 32).unwrap()  // peripherals
+    /// );
+    /// let props = SegmentedImageFrameProperties::new(
+    ///     &resolutions, &ColorChannelLayout::RGB,
+    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
+    /// );
+    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
+    /// ```
     pub fn from_segmented_image_frame_properties(properties: &SegmentedImageFrameProperties) -> Result<SegmentedImageFrame, FeagiDataError> {
         Self::new(
             properties.get_resolutions(),
@@ -146,6 +162,16 @@ impl SegmentedImageFrame {
         ]
     }
 
+    /// Returns cortical types for each segment in order.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::SegmentedImageFrame;
+    /// use feagi_data_structures::genomic::{CorticalType, SensorCorticalType};
+    /// 
+    /// let types = SegmentedImageFrame::create_ordered_cortical_types_for_segmented_vision();
+    /// assert_eq!(types[4], CorticalType::Sensory(SensorCorticalType::ImageCameraCenter));
+    /// ```
     pub fn create_ordered_cortical_types_for_segmented_vision() -> [CorticalType; 9] {
         [
             SensorCorticalType::ImageCameraBottomLeft.into(),
@@ -208,6 +234,24 @@ impl SegmentedImageFrame {
         self.lower_left.get_channel_layout() // All peripherals should be the same
     }
 
+    /// Returns the resolution configuration for all segments.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
+    /// 
+    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
+    ///     ImageXYResolution::new(64, 64).unwrap()  // center
+    /// );
+    /// let props = SegmentedImageFrameProperties::new(
+    ///     &resolutions, &ColorChannelLayout::RGB,
+    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
+    /// );
+    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
+    /// let res = frame.get_segmented_frame_target_resolutions();
+    /// assert_eq!(res.center.width, 64);
+    /// ```
     pub fn get_segmented_frame_target_resolutions(&self) -> SegmentedXYImageResolutions {
         SegmentedXYImageResolutions::new(
             self.lower_left.get_xy_resolution(),
@@ -245,12 +289,49 @@ impl SegmentedImageFrame {
         ]
     }
 
+    /// Returns references to all image frames in cortical order.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
+    ///
+    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
+    ///     ImageXYResolution::new(64, 64).unwrap()  // center
+    /// );
+    /// let props = SegmentedImageFrameProperties::new(
+    ///     &resolutions, &ColorChannelLayout::RGB,
+    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
+    /// );
+    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
+    /// let refs = frame.get_ordered_image_frame_references();
+    /// assert_eq!(refs.len(), 9);
+    /// assert_eq!(refs[4].get_xy_resolution().width, 32); // center segment
+    /// ```
     pub fn get_ordered_image_frame_references(&self) -> [&ImageFrame; 9] {
         [&self.lower_left, &self.lower_middle, &self.lower_right, &self.middle_left,
             &self.center, &self.middle_right, &self.upper_left,
             &self.upper_middle, &self.upper_right]
     }
 
+    /// Returns mutable references to all image frames in cortical order.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
+    ///
+    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
+    ///     ImageXYResolution::new(64, 64).unwrap()  // center
+    /// );
+    /// let props = SegmentedImageFrameProperties::new(
+    ///     &resolutions, &ColorChannelLayout::RGB,
+    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
+    /// );
+    /// let mut frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
+    /// let mut_refs = frame.get_mut_ordered_image_frame_references();
+    /// mut_refs[0].skip_encoding = true; // Modify first segment
+    /// ```
     pub fn get_mut_ordered_image_frame_references(&mut self) -> [&mut ImageFrame; 9] {
         [&mut self.lower_left, &mut self.lower_middle, &mut self.lower_right, &mut self.middle_left, &mut self.center,
             &mut self.middle_right, &mut self.upper_left, &mut self.upper_middle,
