@@ -1,12 +1,14 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
 use crate::{define_index, FeagiDataError};
 
 define_index!(FeagiSignalIndex, u32, "A unique identifier for a subscription to a FeagiSignal");
 
-pub struct FeagiSignal<T> { // Totally not stolen concept form Godot
+pub struct FeagiSignal<T> { // Totally not stolen concept from Godot
     listeners: HashMap<FeagiSignalIndex, Box<dyn Fn(&T) + Send + Sync>>,
     next_index: u32,
 }
+
 
 impl<T> FeagiSignal<T> {
     pub fn new() -> Self {
@@ -33,5 +35,15 @@ impl<T> FeagiSignal<T> {
         for f in &self.listeners {
             f.1(&value);
         }
+    }
+}
+
+impl<T> Debug for FeagiSignal<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FeagiSignal")
+            .field("listener_count", &self.listeners.len())
+            .field("next_index", &self.next_index)
+            .field("listener_indices", &self.listeners.keys().collect::<Vec<_>>())
+            .finish()
     }
 }

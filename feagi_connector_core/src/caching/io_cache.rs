@@ -1,15 +1,14 @@
-use std::any::Any;
 use std::collections::HashMap;
-use std::ops::{Deref, Range};
+use std::ops::{Range};
 use std::time::Instant;
-use feagi_data_serialization::{FeagiByteStructure, FeagiByteStructureCompatible};
+use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::data::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
 use feagi_data_structures::data::{ImageFrame, MiscData, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
-use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::{FeagiDataError, FeagiSignal};
 use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder, NeuronXYZPEncoder};
-use feagi_data_structures::neurons::xyzp::decoders::{MiscDataNeuronXYZPDecoder, Percentage4DFractionalExponentialNeuronXYZPDecoder};
+use feagi_data_structures::neurons::xyzp::decoders::{Percentage4DFractionalExponentialNeuronXYZPDecoder};
 use feagi_data_structures::neurons::xyzp::encoders::{F32LinearNeuronXYZPEncoder, F32SplitSignDividedNeuronXYZPEncoder, ImageFrameNeuronXYZPEncoder, MiscDataNeuronXYZPEncoder, SegmentedImageFrameNeuronXYZPEncoder};
 use feagi_data_structures::processing::{ImageFrameProcessor, ImageFrameSegmentator};
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -27,7 +26,8 @@ pub struct IOCache {
     sensor_cortical_area_metadata: HashMap<CorticalAreaMetadataKey, SensoryCorticalAreaCacheDetails>, // (cortical type, grouping index) -> (Vec<FullChannelCacheKey>, number_channels, neuron_encoder), defines all channel caches for a cortical area, and its neuron encoder
     sensor_agent_key_proxy: HashMap<AccessAgentLookupKey, Vec<FullChannelCacheKey>>, // (CorticalType, AgentDeviceIndex) -> Vec<FullChannelCacheKey>, allows users to map any channel of a cortical type to an agent device ID
     sensor_neuron_data: CorticalMappedXYZPNeuronData, // cached sensor neuron data
-    sensor_byte_data: FeagiByteStructure, // cached byte data for sensor
+    sensor_byte_data: FeagiByteContainer, // cached byte data for sensor
+    sensor_signal_bytes_encoded: FeagiSignal<()>,
 
     // Motor Stuff
     
@@ -35,7 +35,7 @@ pub struct IOCache {
     motor_cortical_area_metadata: HashMap<CorticalAreaMetadataKey, MotorCorticalAreaCacheDetails>, // (cortical type, grouping index) -> (Vec<FullChannelCacheKey>, number_channels, neuron_decoder), defines all channel caches for a cortical area, and its neuron decoder
     motor_agent_key_proxy: HashMap<AccessAgentLookupKey, Vec<FullChannelCacheKey>>, // (CorticalType, AgentDeviceIndex) -> Vec<FullChannelCacheKey>, allows users to map any channel of a cortical type to an agent device ID
     motor_neuron_data: CorticalMappedXYZPNeuronData, // cached motor neuron data
-    motor_byte_data: FeagiByteStructure, // cached byte data for motor
+    motor_byte_data: FeagiByteContainer, // cached byte data for motor
 
 }
 
@@ -48,17 +48,34 @@ impl IOCache {
             sensor_cortical_area_metadata: HashMap::new(),
             sensor_agent_key_proxy: HashMap::new(),
             sensor_neuron_data: CorticalMappedXYZPNeuronData::new(),
-            sensor_byte_data: FeagiByteStructure::new(),
+            sensor_byte_data: FeagiByteContainer::new_empty(),
+            sensor_signal_bytes_encoded: FeagiSignal::new(),
+
             motor_channel_caches: HashMap::new(),
             motor_cortical_area_metadata: HashMap::new(),
             motor_agent_key_proxy: HashMap::new(),
             motor_neuron_data: CorticalMappedXYZPNeuronData::new(),
-            motor_byte_data: FeagiByteStructure::new(),
+            motor_byte_data: FeagiByteContainer::new_empty(),
         }
     }
 
 
     //region Sensor Interfaces
+
+    //region Interfaces
+
+    pub fn sensor_encode_cached_data_to_byte_container_and_signal(&mut self) -> Result<(), FeagiDataError> {
+        self.sensor_encode_to_neurons(Instant::now())?;
+        self.sensor_byte_data.overwrite_byte_data_with_struct_data(vec![Box::new(&self.sensor_neuron_data)], 0)?;
+        self.sensor_signal_bytes_encoded.emit(());
+        Ok(())
+    }
+
+    pub fn sensor_retrieve_cached_bytes(&self) -> &[u8] {
+        self.sensor_byte_data.get_byte_ref()
+    }
+
+    //endregion
 
     //region Common
 
@@ -667,16 +684,6 @@ impl IOCache {
 
     //region Sensory
 
-    pub fn sensor_encode_cached_data_into_bytes(&mut self, time_send_started: Instant) -> Result<(), FeagiDataError> {
-        self.sensor_encode_to_neurons(time_send_started)?;
-        // TODO for now we will recreate the FBS every time
-        self.sensor_byte_data = self.sensor_neuron_data.as_new_feagi_byte_structure().unwrap();
-        Ok(())
-    }
-
-    pub fn sensor_retrieve_latest_bytes(&self) -> Result<&[u8], FeagiDataError> {
-        Ok(self.sensor_byte_data.borrow_data_as_slice())
-    }
 
     //region Agent Functions
 

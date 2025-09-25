@@ -1,5 +1,5 @@
 use std::time::Instant;
-use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder};
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -10,6 +10,7 @@ pub(crate) struct MotorChannelStreamCache {
     most_recent_directly_decoded_output: WrappedIOData,
     pipeline_runner: PipelineStageRunner,
     channel: CorticalChannelIndex,
+    value_updated: FeagiSignal<()>
 }
 
 impl MotorChannelStreamCache {
@@ -23,6 +24,7 @@ impl MotorChannelStreamCache {
             most_recent_directly_decoded_output: processor_runner.get_input_data_type().create_blank_data_of_type()?,
             pipeline_runner: processor_runner,
             channel,
+            value_updated: FeagiSignal::new()
         })
     }
 
@@ -58,6 +60,7 @@ impl MotorChannelStreamCache {
     pub fn decode_from_neurons(&mut self, cortical_mapped_neuron_data: &CorticalMappedXYZPNeuronData, decoder: &Box<dyn NeuronXYZPDecoder + Sync + Send>) -> Result<(), FeagiDataError> {
         let is_decoded = decoder.read_neuron_data_single_channel(cortical_mapped_neuron_data, self.channel, &mut self.most_recent_directly_decoded_output);
         self.pipeline_runner.update_value(&self.most_recent_directly_decoded_output, Instant::now())?;
+        self.value_updated.emit(());
         Ok(())
     }
 
@@ -99,4 +102,17 @@ impl MotorChannelStreamCache {
     pub fn get_output_data_type(&self) -> WrappedIOType {
         self.pipeline_runner.get_output_data_type()
     }
+
+    pub fn connect_to_data_processed_signal<F>(&mut self, callback: F) -> FeagiSignalIndex 
+    where
+        F: Fn(&()) + Send + Sync + 'static,
+    {
+        self.value_updated.connect(callback)
+    }
+
+    pub fn disconnect_to_data_processed_signal(&mut self, index: FeagiSignalIndex) -> Result<(), FeagiDataError> {
+        self.value_updated.disconnect(index)
+    }
+
+
 }
