@@ -1,6 +1,6 @@
 
 use crate::FeagiDataError;
-use crate::data::{ImageFrame, MiscData, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
+use crate::data::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
 use crate::wrapped_io_data::WrappedIOType;
 use crate::wrapped_io_data::WrappedIOType::F32;
 
@@ -77,11 +77,19 @@ macro_rules! define_wrapped_io_data_enum {
 
 define_wrapped_io_data_enum!(
     F32: f32 => "f32({})",
+    F32_2D: (f32, f32) => "f32_2d({:?})",
+    F32_3D: (f32, f32, f32) => "f32_3d({:?})",
+    F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})",
     Percentage: Percentage => "{}",
+    Percentage_2D: Percentage2D => "{}",
+    Percentage_3D: Percentage3D => "{}",
+    Percentage_4D: Percentage4D => "{}",
     SignedPercentage: SignedPercentage => "{}",
-    Percentage4D: Percentage4D => "{}",
+    SignedPercentage_2D: SignedPercentage2D => "{}",
+    SignedPercentage_3D: SignedPercentage3D => "{}",
+    SignedPercentage_4D: SignedPercentage4D => "{}",
     ImageFrame: ImageFrame => "{}",
-    SegmentedImageFrame: SegmentedImageFrame =>   "{}",
+    SegmentedImageFrame: SegmentedImageFrame => "{}",
     MiscData: MiscData => "{}",
 );
 

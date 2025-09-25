@@ -206,11 +206,11 @@ impl Display for IdentityPercentage4DStage {
 
 impl PipelineStage for IdentityPercentage4DStage {
     fn get_input_data_type(&self) -> WrappedIOType {
-        WrappedIOType::Percentage4D
+        WrappedIOType::Percentage_4D
     }
 
     fn get_output_data_type(&self) -> WrappedIOType {
-        WrappedIOType::Percentage4D
+        WrappedIOType::Percentage_4D
     }
 
     fn get_most_recent_output(&self) -> &WrappedIOData {
@@ -243,7 +243,7 @@ impl IdentityPercentage4DStage {
     /// * `Err(FeagiDataError)` - If initial_value is invalid (NaN/infinite)
     pub fn new(initial_value: Percentage4D) -> Result<Self, FeagiDataError> {
         Ok(IdentityPercentage4DStage {
-            previous_value: WrappedIOData::Percentage4D(initial_value),
+            previous_value: WrappedIOData::Percentage_4D(initial_value),
         })
     }
 }

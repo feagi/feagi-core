@@ -4,6 +4,7 @@ mod segmented_image_frame;
 pub mod descriptors;
 mod misc_data;
 mod percentages;
+mod dimensional_floats;
 
 pub use image_frame::ImageFrame;
 pub use segmented_image_frame::SegmentedImageFrame;

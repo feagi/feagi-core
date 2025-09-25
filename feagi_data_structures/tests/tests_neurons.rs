@@ -293,7 +293,7 @@ mod test_xyzp_neurons {
         
         arrays.reserve(50);
         assert!(arrays.capacity() >= 50);
-        
+
         arrays.ensure_capacity(75);
         assert!(arrays.capacity() >= 75);
         

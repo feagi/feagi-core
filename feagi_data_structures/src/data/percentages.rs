@@ -1,7 +1,7 @@
 use crate::FeagiDataError;
 
 
-//region Percentage (0 - 1)
+//region 1D Percentage Types
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Percentage {
     value: f32,
@@ -147,9 +147,7 @@ impl From<&Percentage> for f32 {
         value.value
     }
 }
-//endregion
 
-//region SignedPercentage (-1 to 1)
 /// A signed percentage value, from -100 to 100%
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct SignedPercentage {
