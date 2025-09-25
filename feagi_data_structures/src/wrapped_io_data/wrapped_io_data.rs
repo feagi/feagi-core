@@ -4,21 +4,13 @@ use crate::data::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, 
 
 // Macro to define the WrappedIOData enum
 macro_rules! define_wrapped_io_data_enum {
-    ( $( $enum_type:ident : $data_type:ty => $friendly_name:expr, $zero_function:expr ),+ $(,)? ) => {
+    ( $( $enum_type:ident : $data_type:ty => $friendly_name:expr),+ $(,)? ) => {
         #[derive(Debug, Clone)]
         #[allow(non_camel_case_types)]
         /// Due to Rust's memory management, WrappedIOData is used to pass around various data structures around.
         pub enum WrappedIOData
         {
             $( $enum_type($data_type), )*
-        }
-
-        impl WrappedIOData {
-            pub fn set_data_to_default(&mut self) {
-                match self {
-                    $( WrappedIOData::$enum_type(enum_data) => $zero_function, )*
-                }
-            }
         }
 
         impl std::fmt::Display for WrappedIOData {
@@ -84,21 +76,21 @@ macro_rules! define_wrapped_io_data_enum {
 }
 
 define_wrapped_io_data_enum!(
-    F32: f32 => "f32({})", {*enum_data = 0.0},
-    F32_2D: (f32, f32) => "f32_2d({:?})", {*enum_data = (0.0, 0.0)},
-    F32_3D: (f32, f32, f32) => "f32_3d({:?})", {*enum_data = (0.0, 0.0, 0.0)},
-    F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})", {*enum_data = (0.0, 0.0, 0.0, 0.0)},
-    Percentage: Percentage => "{}", enum_data.inplace_update(0.0),
-    Percentage_2D: Percentage2D => "{}", enum_data.a.inplace_update_all(0.0),
-    Percentage_3D: Percentage3D => "{}", enum_data.a.inplace_update_all(0.0),
-    Percentage_4D: Percentage4D => "{}", enum_data.a.inplace_update_all(0.0),
-    SignedPercentage: SignedPercentage => "{}", enum_data.a.inplace_update_all(0.0),
-    SignedPercentage_2D: SignedPercentage2D => "{}", enum_data.a.inplace_update_all(0.0),
-    SignedPercentage_3D: SignedPercentage3D => "{}", enum_data.a.inplace_update_all(0.0),
-    SignedPercentage_4D: SignedPercentage4D => "{}", enum_data.a.inplace_update_all(0.0),
-    ImageFrame: ImageFrame => "{}", enum_data.blink_image(),
-    SegmentedImageFrame: SegmentedImageFrame => "{}", enum_data.blink_segments(),
-    MiscData: MiscData => "{}", enum_data.blank_data(),
+    F32: f32 => "f32({})",
+    F32_2D: (f32, f32) => "f32_2d({:?})",
+    F32_3D: (f32, f32, f32) => "f32_3d({:?})",
+    F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})",
+    Percentage: Percentage => "{}",
+    Percentage_2D: Percentage2D => "{}",
+    Percentage_3D: Percentage3D => "{}",
+    Percentage_4D: Percentage4D => "{}",
+    SignedPercentage: SignedPercentage => "{}",
+    SignedPercentage_2D: SignedPercentage2D => "{}",
+    SignedPercentage_3D: SignedPercentage3D => "{}",
+    SignedPercentage_4D: SignedPercentage4D => "{}",
+    ImageFrame: ImageFrame => "{}",
+    SegmentedImageFrame: SegmentedImageFrame => "{}",
+    MiscData: MiscData => "{}",
 );
 
 
