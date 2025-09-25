@@ -1,19 +1,20 @@
+use std::collections::HashMap;
 use crate::data::descriptors::MiscDataDimensions;
 use crate::data::MiscData;
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
-use crate::genomic::descriptors::{CorticalChannelIndex};
+use crate::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::neurons::xyzp::coders::NeuronXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub struct MiscDataNeuronXYZPDecoder {
+pub struct MiscDataNeuronXYZPAbsoluteDecoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_read_target: CorticalID,
-    number_elements: usize
+    number_channels: usize,
 }
 
-impl NeuronXYZPDecoder for MiscDataNeuronXYZPDecoder {
+impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
@@ -55,14 +56,22 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPDecoder {
 
         Ok(true)
     }
+
+    fn read_neuron_data_multi_channel(&self, channel_value_target: &mut Vec<&WrappedIOData>, read_target: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
+        todo!()
+    }
+
+    fn get_number_of_channels(&self) -> usize {
+        self.number_channels
+    }
 }
 
-impl MiscDataNeuronXYZPDecoder {
-    pub fn new(cortical_read_target: CorticalID, misc_data_dimensions: MiscDataDimensions) -> Result<Self, FeagiDataError> {
-        Ok(MiscDataNeuronXYZPDecoder{
+impl MiscDataNeuronXYZPAbsoluteDecoder {
+    pub fn new(cortical_read_target: CorticalID, misc_data_dimensions: MiscDataDimensions, number_of_channels: CorticalChannelCount) -> Result<Self, FeagiDataError> {
+        Ok(MiscDataNeuronXYZPAbsoluteDecoder{
             misc_data_dimensions,
             cortical_read_target,
-            number_elements: misc_data_dimensions.number_elements() as usize
+            number_channels: *number_of_channels as usize,
         })
     }
 }

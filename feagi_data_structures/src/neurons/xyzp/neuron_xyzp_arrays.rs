@@ -303,6 +303,38 @@ impl NeuronXYZPArrays {
         let potential = self.p[index];
         Ok(NeuronXYZP{cortical_coordinate: CorticalCoordinate::new(x, y, z), potential})
     }
+
+    /// Gets the X component of the neuron at the specified index
+    pub fn get_x(&self, index: usize) -> Result<u32, FeagiDataError> {
+        if index >= self.len()  {
+            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronXYZPArray length of {}!", index, self.len())).into())
+        }
+        Ok(self.x[index])
+    }
+
+    /// Gets the Y component of the neuron at the specified index
+    pub fn get_y(&self, index: usize) -> Result<u32, FeagiDataError> {
+        if index >= self.len()  {
+            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronXYZPArray length of {}!", index, self.len())).into())
+        }
+        Ok(self.y[index])
+    }
+
+    /// Gets the Z component of the neuron at the specified index
+    pub fn get_z(&self, index: usize) -> Result<u32, FeagiDataError> {
+        if index >= self.len()  {
+            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronXYZPArray length of {}!", index, self.len())).into())
+        }
+        Ok(self.z[index])
+    }
+
+    /// Gets the P component of the neuron at the specified index
+    pub fn get_p(&self, index: usize) -> Result<f32, FeagiDataError> {
+        if index >= self.len()  {
+            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronXYZPArray length of {}!", index, self.len())).into())
+        }
+        Ok(self.p[index])
+    }
     
     /// Removes and returns the last neuron from the arrays.
     ///
