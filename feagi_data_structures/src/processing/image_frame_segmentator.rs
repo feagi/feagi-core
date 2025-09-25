@@ -1,4 +1,3 @@
-use std::fmt::format;
 use crate::FeagiDataError;
 use crate::processing::image_frame_processor::ImageFrameProcessor;
 use crate::data::descriptors::{ColorChannelLayout, GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};

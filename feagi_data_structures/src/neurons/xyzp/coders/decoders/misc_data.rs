@@ -3,7 +3,7 @@ use crate::data::MiscData;
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::{CorticalChannelIndex};
-use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::neurons::xyzp::coders::NeuronXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 

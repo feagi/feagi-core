@@ -151,9 +151,7 @@ mod test_pipeline_stages {
         
         // Test that we can process the image
         let mut output_image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, &target_resolution).unwrap();
-        dbg!(&output_image.get_image_frame_properties());
         let result = processor.process_image(&bird_image, &mut output_image);
-        dbg!(&output_image.get_image_frame_properties());
         
         if result.is_ok() {
             // Verify the transformations were applied

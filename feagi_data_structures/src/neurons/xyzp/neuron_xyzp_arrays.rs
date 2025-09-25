@@ -242,7 +242,6 @@ impl NeuronXYZPArrays {
     /// assert!(arrays.capacity() >= 100);
     /// ```
     pub fn reserve(&mut self, additional_neuron_count: usize) {
-        dbg!(additional_neuron_count);
         self.x.reserve(additional_neuron_count);
         self.y.reserve(additional_neuron_count);
         self.z.reserve(additional_neuron_count);

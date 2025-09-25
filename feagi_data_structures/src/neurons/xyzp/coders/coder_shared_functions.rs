@@ -1,12 +1,11 @@
 use crate::data::Percentage;
 use crate::neurons::xyzp::{NeuronXYZP, NeuronXYZPArrays};
 
+//region Percentage Binary Fractional
 #[inline]
 pub(crate) fn encode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, z_length: u32, value: Percentage, neuron_targets: &mut NeuronXYZPArrays) {
-
-    neuron_targets.clear();
-    let mut processing = value.get_as_0_1();
-    let mut cache_neuron = NeuronXYZP::new(x_offset,y_offset,0,1.0);;
+    let processing = value.get_as_0_1();
+    let mut cache_neuron = NeuronXYZP::new(x_offset,y_offset,0,1.0);
 
     for i in (0..(z_length as i32)).rev().into_iter() {
         let weight = 0.5f32.powi(i);
@@ -19,9 +18,9 @@ pub(crate) fn encode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, z_
 
 
 #[inline]
-pub(crate) fn decode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, z_offset: u32, neuron_targets: &NeuronXYZPArrays) -> Percentage {
+pub(crate) fn decode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, neuron_targets: &NeuronXYZPArrays) -> Percentage {
     let mut processing: f32 = 0.0;
-    let (x_vec, y_vec, z_vec, p_vec) = neuron_targets.borrow_xyzp_vectors();
+    let (x_vec, y_vec, z_vec, _p_vec) = neuron_targets.borrow_xyzp_vectors();
     let length = x_vec.len();
 
     // TODO we should be able to multistream this across multiple elements, this is very slow
@@ -38,3 +37,21 @@ pub(crate) fn decode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, z_
     }
     Percentage::new_from_0_1_unchecked(processing)
 }
+
+
+
+
+//endregion
+
+//region Percentage Linear
+
+#[inline]
+pub(crate) fn encode_unsigned_linear(x_offset: u32, y_offset: u32, z_length: u32, value: Percentage, neuron_xyzparrays: &mut NeuronXYZPArrays) {
+    const POTENTIAL: f32 = 1.0;
+    let processing = value.get_as_0_1();
+    let z_neuron_index: u32 = (processing * (z_length as f32)) as u32;
+    neuron_xyzparrays.push_raw(x_offset, y_offset, z_neuron_index, POTENTIAL);
+}
+
+
+//region
