@@ -88,6 +88,9 @@ macro_rules! sensor_definition {
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
+
+
+
                 #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded linearly"]
                 DigitalGPIOInputInstantLinear => {
                     friendly_name: "GPIO Digital Input (Instant Change, Linear Encoding)",
@@ -128,6 +131,8 @@ macro_rules! sensor_definition {
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
+
+
                 #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Instantaneous change. Neurons encoded linearly"]
                 ProximityInstantLinear => {
                     friendly_name: "Proximity (Instant Change, Linear Encoding)",
@@ -167,6 +172,9 @@ macro_rules! sensor_definition {
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
+
+
+
                 #[doc = "Shock sensor for sensing 'pain'. Instantaneous change. Neurons encoded linearly"]
                 ShockInstantLinear => {
                     friendly_name: "Shock (Instant Change, Linear Encoding)",
@@ -206,6 +214,9 @@ macro_rules! sensor_definition {
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
+
+
+
                 #[doc = "Battery level sensor for monitoring power remaining. Instantaneous change. Neurons encoded linearly"]
                 BatteryInstantLinear => {
                     friendly_name: "Battery Gauge (Instant Change, Linear Encoding)",
@@ -246,17 +257,132 @@ macro_rules! sensor_definition {
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
+
+
+                #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded linearly"]
+                AnalogGPIOInputInstantLinear => {
+                    friendly_name: "GPIO Analog Input (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "gpio_analog_instant_linear",
+                    base_ascii: b"iagp00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Instant_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded fractionally exponentially"]
+                AnalogGPIOInputInstantFractional => {
+                    friendly_name: "GPIO Analog Input (Instant Change, Fractional Encoding)",
+                    snake_case_identifier: "gpio_analog_instant_fractional",
+                    base_ascii: b"iAGP00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Instant_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Incremental change. Neurons encoded linearly"]
+                AnalogGPIOInputIncrementalLinear => {
+                    friendly_name: "GPIO Analog Input (Incremental Change, Linear Encoding)",
+                    snake_case_identifier: "gpio_analog_incremental_linear",
+                    base_ascii: b"Iagp00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Linear,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
+                #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Incremental change. Neurons encoded fractionally exponentially"]
+                AnalogGPIOInputIncrementalFractional => {
+                    friendly_name: "GPIO Analog Input (Incremental Change, Fractional Encoding)",
+                    snake_case_identifier: "gpio_analog_incremental_fractional",
+                    base_ascii: b"IAGP00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
+                    default_coder_type: Percentage_Incremental_Fractional,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                },
+
                 //endregion
 
                 //region -1 -1 Split Sign Float
 
-                #[doc = "Servo position feedback sensor for monitoring actuator positions."]
-                ServoPosition => {
-                    friendly_name: "Servo Position",
-                    snake_case_identifier: "servo_position",
+                #[doc = "Servo position feedback sensor for monitoring actuator positions. Instantaneous change. Neurons encoded linearly"]
+                ServoPositionInstantLinear => {
+                    friendly_name: "Servo Position (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "servo_position_instant_linear",
                     base_ascii: b"isvp00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: TODO,
+                    default_coder_type: SignedPercentage_Instant_Linear,
+                    wrapped_data_type: WrappedIOType::SignedPercentage,
+                },
+
+                #[doc = "Servo position feedback sensor for monitoring actuator positions. Instantaneous change. Neurons encoded fractionally exponentially"]
+                ServoPositionInstantFractional => {
+                    friendly_name: "Servo Position (Instant Change, Fractional Encoding)",
+                    snake_case_identifier: "servo_position_instant_fractional",
+                    base_ascii: b"iSVP00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: SignedPercentage_Instant_Fractional,
+                    wrapped_data_type: WrappedIOType::SignedPercentage,
+                },
+
+                #[doc = "Servo position feedback sensor for monitoring actuator positions. Incremental change. Neurons encoded linearly"]
+                ServoPositionIncrementalLinear => {
+                    friendly_name: "Servo Position (Incremental Change, Linear Encoding)",
+                    snake_case_identifier: "servo_position_incremental_linear",
+                    base_ascii: b"Isvp00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: SignedPercentage_Incremental_Linear,
+                    wrapped_data_type: WrappedIOType::SignedPercentage,
+                },
+
+                #[doc = "Servo position feedback sensor for monitoring actuator positions. Incremental change. Neurons encoded fractionally exponentially"]
+                ServoPositionIncrementalFractional => {
+                    friendly_name: "Servo Position (Incremental Change, Fractional Encoding)",
+                    snake_case_identifier: "servo_position_incremental_fractional",
+                    base_ascii: b"ISVP00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: SignedPercentage_Incremental_Fractional,
+                    wrapped_data_type: WrappedIOType::SignedPercentage,
+                },
+
+
+
+
+                #[doc = "Servo motion feedback sensor for monitoring actuator positions. Instantaneous change. Neurons encoded linearly"]
+                ServoMotionInstantLinear => {
+                    friendly_name: "Servo Motion (Instant Change, Linear Encoding)",
+                    snake_case_identifier: "servo_motion_instant_linear",
+                    base_ascii: b"isvm00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: SignedPercentage_Instant_Linear,
+                    wrapped_data_type: WrappedIOType::SignedPercentage,
+                },
+
+                #[doc = "Servo motion feedback sensor for monitoring actuator positions. Instantaneous change. Neurons encoded fractionally exponentially"]
+                ServoMotionInstantFractional => {
+                    friendly_name: "Servo Motion (Instant Change, Fractional Encoding)",
+                    snake_case_identifier: "servo_motion_instant_fractional",
+                    base_ascii: b"iSVM00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: SignedPercentage_Instant_Fractional,
+                    wrapped_data_type: WrappedIOType::SignedPercentage,
+                },
+
+                #[doc = "Servo motion feedback sensor for monitoring actuator positions. Incremental change. Neurons encoded linearly"]
+                ServoMotionIncrementalLinear => {
+                    friendly_name: "Servo Motion (Incremental Change, Linear Encoding)",
+                    snake_case_identifier: "servo_motion_incremental_linear",
+                    base_ascii: b"Isvm00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: SignedPercentage_Incremental_Linear,
+                    wrapped_data_type: WrappedIOType::SignedPercentage,
+                },
+
+                #[doc = "Servo motion feedback sensor for monitoring actuator positions. Incremental change. Neurons encoded fractionally exponentially"]
+                ServoMotionIncrementalFractional => {
+                    friendly_name: "Servo Motion (Incremental Change, Fractional Encoding)",
+                    snake_case_identifier: "servo_motion_incremental_fractional",
+                    base_ascii: b"ISVM00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
+                    default_coder_type: SignedPercentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
