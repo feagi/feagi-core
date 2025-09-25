@@ -1024,6 +1024,8 @@ impl MotorCorticalAreaCacheDetails {
         }
 
     }
+
+    pub fn decode_channels_from_bytes(&self, )
 }
 
 //endregion

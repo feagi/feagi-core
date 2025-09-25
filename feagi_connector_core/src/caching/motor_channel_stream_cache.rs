@@ -56,12 +56,9 @@ impl MotorChannelStreamCache {
     pub fn get_most_recent_motor_value(&self) -> &WrappedIOData {
         self.pipeline_runner.get_most_recent_output()
     }
-
-    pub fn decode_from_neurons(&mut self, cortical_mapped_neuron_data: &CorticalMappedXYZPNeuronData, decoder: &Box<dyn NeuronXYZPDecoder + Sync + Send>) -> Result<(), FeagiDataError> {
-        let is_decoded = decoder.read_neuron_data_single_channel(cortical_mapped_neuron_data, self.channel, &mut self.most_recent_directly_decoded_output);
-        self.pipeline_runner.update_value(&self.most_recent_directly_decoded_output, Instant::now())?;
-        self.value_updated.emit(());
-        Ok(())
+    
+    pub fn get_neuron_decode_data_location_ref_mut(&mut self) -> &mut WrappedIOData {
+        &mut self.most_recent_directly_decoded_output
     }
 
     /// Returns the cortical I/O channel index for this cache.

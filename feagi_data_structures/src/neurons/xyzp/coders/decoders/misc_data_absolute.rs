@@ -18,6 +18,10 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
+    fn get_number_of_channels(&self) -> CorticalChannelCount {
+        self.number_of_channels
+    }
+
     fn read_neuron_data_multi_channel(&self, channel_value_target: &mut Vec<&mut WrappedIOData>, did_channel_change: &mut Vec<bool>, read_target: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
         did_channel_change.fill(false);
 
@@ -55,10 +59,6 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
         }
         Ok(())
 
-    }
-
-    fn get_number_of_channels(&self) -> CorticalChannelCount {
-        self.number_of_channels
     }
 }
 
