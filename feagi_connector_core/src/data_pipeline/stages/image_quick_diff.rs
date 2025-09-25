@@ -11,6 +11,8 @@ use feagi_data_structures::data::{ImageFrame, Percentage};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
+use crate::data_pipeline::stage_properties::ImageQuickDiffStageProperties;
 
 #[derive(Debug, Clone)]
 pub struct ImageFrameQuickDiffStage {
@@ -56,6 +58,19 @@ impl PipelineStage for ImageFrameQuickDiffStage {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+
+        let number_of_samples = self.input_definition.get_number_of_channels();
+        Box::new(ImageQuickDiffStageProperties {
+            per_pixel_allowed_range: self.inclusive_pixel_range.clone(),
+            acceptable_amount_of_activity_in_image: (),
+        })
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+        todo!()
     }
 }
 
