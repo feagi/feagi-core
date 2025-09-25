@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::define_index;
+use crate::{define_index, FeagiDataError};
 
 define_index!(FeagiSignalIndex, u32, "A unique identifier for a subscription to a FeagiSignal");
 
@@ -12,13 +12,21 @@ impl<T> FeagiSignal<T> {
     pub fn new() -> Self {
         Self { listeners: HashMap::new(), next_index: 0 }
     }
-    
-    pub fn connect<F>(&mut self, f: F)
+
+    pub fn connect<F>(&mut self, f: F) -> FeagiSignalIndex // Will overflow after 4 billion subscriptions. Too bad!
     where
         F: Fn(&T) + Send + Sync + 'static,
     {
         self.listeners.insert(self.next_index.into(), Box::new(f));
         self.next_index += 1;
+        (self.next_index - 1).into()
+    }
+
+    pub fn disconnect(&mut self, index: FeagiSignalIndex) -> Result<(), FeagiDataError> {
+        if self.listeners.remove(&index).is_some() {
+            return Ok(())
+        }
+        Err(FeagiDataError::BadParameters(format!("No subscription found with identifier {}!", index)))
     }
 
     pub fn emit(&self, value: T) {
