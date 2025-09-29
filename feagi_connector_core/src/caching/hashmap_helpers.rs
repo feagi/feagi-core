@@ -20,6 +20,10 @@ impl FullChannelCacheKey {
 }
 
 
+#[derive(Debug, Hash, PartialEq, Eq, Clone)]
+pub(crate) struct 
+
+
 
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub(crate) struct CorticalAreaMetadataKey {

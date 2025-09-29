@@ -15,10 +15,48 @@ use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::caching::hashmap_helpers::{AccessAgentLookupKey, CorticalAreaMetadataKey, FullChannelCacheKey};
 use crate::caching::motor_channel_stream_cache::MotorChannelStreamCache;
 use crate::caching::sensory_channel_stream_cache::SensoryChannelStreamCache;
-use crate::data_pipeline::{PipelineStage, PipelineStageIndex};
+use crate::data_pipeline::{PipelineStage, PipelineStagePropertyIndex};
 use crate::data_pipeline::stages::{IdentityImageFrameStage, IdentityPercentage4DStage, ImageFrameProcessorStage, ImageFrameSegmentatorStage, LinearScaleToPercentageStage, LinearScaleToSignedPercentageStage};
 
 pub struct IOCache {
+    
+    //region Sensory
+    
+    
+    
+    
+    
+    
+    //endregion
+    
+    
+    //region Motor
+    
+    
+    
+    
+    
+    //endregion
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 
     // Sensor stuff
 
@@ -121,9 +159,9 @@ impl IOCache {
         Ok(())
     }
     pub fn set_pipeline_stage_percentage_sensor(&mut self, sensor_cortical_type: SensorCorticalType,
-                                         group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                         new_stage: Box<dyn PipelineStage + Sync + Send>,
-                                         stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+                                                group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                new_stage: Box<dyn PipelineStage + Sync + Send>,
+                                                stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
         sensor_cortical_type.verify_is_data_type(WrappedIOType::Percentage)?;
         self.sensor_set_pipeline_stage_for_channel(sensor_cortical_type, group, channel, new_stage, stage_index)
     }
@@ -136,8 +174,8 @@ impl IOCache {
     }
 
     pub fn clone_pipeline_stage_percentage_sensor(&mut self, sensor_cortical_type: SensorCorticalType,
-                                           group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                           stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+                                                  group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                  stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
         sensor_cortical_type.verify_is_data_type(WrappedIOType::Percentage)?;
         self.sensor_clone_pipeline_stage_for_channel(sensor_cortical_type, group, channel, stage_index)
     }
@@ -206,9 +244,9 @@ impl IOCache {
         Ok(())
     }
     pub fn set_pipeline_stage_signed_percentage_sensor(&mut self, sensor_cortical_type: SensorCorticalType,
-                                          group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                          new_stage: Box<dyn PipelineStage + Sync + Send>,
-                                          stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+                                                       group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                       new_stage: Box<dyn PipelineStage + Sync + Send>,
+                                                       stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
 
         sensor_cortical_type.verify_is_data_type(WrappedIOType::SignedPercentage)?;
         self.sensor_set_pipeline_stage_for_channel(sensor_cortical_type, group, channel, new_stage, stage_index)
@@ -225,7 +263,7 @@ impl IOCache {
 
     pub fn clone_pipeline_stage_signed_percentage_sensor(&mut self, sensor_cortical_type: SensorCorticalType,
                                             group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                            stage_index: PipelineStageIndex)
+                                            stage_index: PipelineStagePropertyIndex)
                                             -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
 
         sensor_cortical_type.verify_is_data_type(WrappedIOType::SignedPercentage)?;
@@ -308,9 +346,9 @@ impl IOCache {
         Ok(())
     }
     pub fn set_pipeline_stage_image_frame_sensor(&mut self, sensor_cortical_type: SensorCorticalType,
-                                          group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                          new_stage: Box<dyn PipelineStage + Sync + Send>,
-                                          stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+                                                 group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                 new_stage: Box<dyn PipelineStage + Sync + Send>,
+                                                 stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
         sensor_cortical_type.verify_is_data_type(WrappedIOType::ImageFrame(None))?;
         self.sensor_set_pipeline_stage_for_channel(sensor_cortical_type, group, channel, new_stage, stage_index)
     }
@@ -323,8 +361,8 @@ impl IOCache {
     }
 
     pub fn clone_pipeline_stage_image_frame_sensor(&mut self, sensor_cortical_type: SensorCorticalType,
-                                            group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                            stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+                                                   group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                   stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
         sensor_cortical_type.verify_is_data_type(WrappedIOType::ImageFrame(None))?;
         self.sensor_clone_pipeline_stage_for_channel(sensor_cortical_type, group, channel, stage_index)
     }
@@ -387,8 +425,8 @@ impl IOCache {
         Ok(())
     }
     pub fn set_pipeline_stage_misc_data_sensor(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                          new_stage: Box<dyn PipelineStage + Sync + Send>,
-                                          stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+                                               new_stage: Box<dyn PipelineStage + Sync + Send>,
+                                               stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
 
         let sensor_cortical_type = SensorCorticalType::Miscellaneous;
         self.sensor_set_pipeline_stage_for_channel(sensor_cortical_type, group, channel, new_stage, stage_index)
@@ -402,7 +440,7 @@ impl IOCache {
     }
 
     pub fn clone_pipeline_stage_misc_data_sensor(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                            stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+                                                 stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
 
         let sensor_cortical_type = SensorCorticalType::Miscellaneous;
         self.sensor_clone_pipeline_stage_for_channel(sensor_cortical_type, group, channel, stage_index)
@@ -476,7 +514,7 @@ impl IOCache {
         self.sensor_set_pipeline_stages_for_channel(sensor_type, cortical_group, device_channel, new_stages)
     }
 
-    pub fn set_pipeline_stage_segmented_image_frame_sensor(&mut self, cortical_group: CorticalGroupIndex, device_channel: CorticalChannelIndex, new_stage: Box<dyn PipelineStage + Sync + Send>, stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+    pub fn set_pipeline_stage_segmented_image_frame_sensor(&mut self, cortical_group: CorticalGroupIndex, device_channel: CorticalChannelIndex, new_stage: Box<dyn PipelineStage + Sync + Send>, stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
         let sensor_type = SensorCorticalType::ImageCameraCenter;
         self.sensor_set_pipeline_stage_for_channel(sensor_type, cortical_group, device_channel, new_stage, stage_index)
     }
@@ -486,7 +524,7 @@ impl IOCache {
         self.sensor_clone_pipeline_stages_for_channel(sensor_type, cortical_group, device_channel)
     }
 
-    pub fn clone_pipeline_stage_segmented_image_frame_sensor(&mut self, cortical_group: CorticalGroupIndex, device_channel: CorticalChannelIndex, stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+    pub fn clone_pipeline_stage_segmented_image_frame_sensor(&mut self, cortical_group: CorticalGroupIndex, device_channel: CorticalChannelIndex, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
         let sensor_type = SensorCorticalType::ImageCameraCenter;
         self.sensor_clone_pipeline_stage_for_channel(sensor_type, cortical_group, device_channel, stage_index)
     }
@@ -540,7 +578,7 @@ impl IOCache {
                     CorticalGroupIndex::from(0),
                     CorticalChannelIndex::from(0),
                     boxed,
-                    PipelineStageIndex::from(0),
+                    PipelineStagePropertyIndex::from(0),
                 )?;
             } else {
                 return Err(FeagiDataError::InternalError("Failed to downcast to ImageFrameSegmentatorStage".into()));
@@ -581,9 +619,9 @@ impl IOCache {
         Ok(())
     }
 
-    pub fn set_pipeline_stage_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType,group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                              new_stage: Box<dyn PipelineStage + Sync + Send>,
-                                              stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+    pub fn set_pipeline_stage_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType, group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                       new_stage: Box<dyn PipelineStage + Sync + Send>,
+                                                       stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
 
         self.motor_set_pipeline_stage_for_channel(motor_cortical_type, group, channel, new_stage, stage_index)
     }
@@ -594,8 +632,8 @@ impl IOCache {
         self.motor_clone_pipeline_stages_for_channel(motor_cortical_type, group, channel)
     }
 
-    pub fn clone_pipeline_stage_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType,group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                                stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+    pub fn clone_pipeline_stage_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType, group: CorticalGroupIndex, channel: CorticalChannelIndex,
+                                                         stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
 
         self.motor_clone_pipeline_stage_for_channel(motor_cortical_type, group, channel, stage_index)
     }
@@ -642,8 +680,8 @@ impl IOCache {
     }
 
     pub fn set_pipeline_stage_misc_data_motor(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                               new_stage: Box<dyn PipelineStage + Sync + Send>,
-                                               stage_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+                                              new_stage: Box<dyn PipelineStage + Sync + Send>,
+                                              stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
 
         let motor_cortical_type = MotorCorticalType::Miscellaneous;
         self.motor_set_pipeline_stage_for_channel(motor_cortical_type, group, channel, new_stage, stage_index)
@@ -657,7 +695,7 @@ impl IOCache {
     }
 
     pub fn clone_pipeline_stage_misc_data_motor(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,
-                                                 stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+                                                stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
 
         let motor_cortical_type = MotorCorticalType::Miscellaneous;
         self.motor_clone_pipeline_stage_for_channel(motor_cortical_type, group, channel, stage_index)
@@ -798,9 +836,9 @@ impl IOCache {
     }
 
     fn sensor_set_pipeline_stage_for_channel(&mut self, cortical_sensor_type: SensorCorticalType,
-                                      cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex,
-                                      overwriting_stage: Box<dyn PipelineStage + Sync + Send>,
-                                      overwriting_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+                                             cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex,
+                                             overwriting_stage: Box<dyn PipelineStage + Sync + Send>,
+                                             overwriting_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
         let cache = self.sensor_try_get_mut_sensory_channel_stream_cache(cortical_sensor_type, cortical_grouping_index, device_channel)?;
         cache.attempt_replace_pipeline_stage(overwriting_stage, overwriting_index)?;
         Ok(())
@@ -814,8 +852,8 @@ impl IOCache {
     }
 
     fn sensor_clone_pipeline_stage_for_channel(&mut self, cortical_sensor_type: SensorCorticalType,
-                                        cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex,
-                                        reading_index: PipelineStageIndex) -> Result<(Box<dyn PipelineStage + Sync + Send>), FeagiDataError> {
+                                               cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex,
+                                               reading_index: PipelineStagePropertyIndex) -> Result<(Box<dyn PipelineStage + Sync + Send>), FeagiDataError> {
         let cache = self.sensor_try_get_mut_sensory_channel_stream_cache(cortical_sensor_type, cortical_grouping_index, device_channel)?;
         cache.clone_pipeline_stage(reading_index)
     }
@@ -942,9 +980,9 @@ impl IOCache {
     }
 
     fn motor_set_pipeline_stage_for_channel(&mut self, cortical_motor_type: MotorCorticalType,
-                                             cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex,
-                                             overwriting_stage: Box<dyn PipelineStage + Sync + Send>,
-                                             overwriting_index: PipelineStageIndex) -> Result<(), FeagiDataError> {
+                                            cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex,
+                                            overwriting_stage: Box<dyn PipelineStage + Sync + Send>,
+                                            overwriting_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
         let cache = self.motor_try_get_mut_motory_channel_stream_cache(cortical_motor_type, cortical_grouping_index, device_channel)?;
         cache.attempt_replace_pipeline_stage(overwriting_stage, overwriting_index)?;
         Ok(())
@@ -958,8 +996,8 @@ impl IOCache {
     }
 
     fn motor_clone_pipeline_stage_for_channel(&mut self, cortical_motor_type: MotorCorticalType,
-                                               cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex,
-                                               reading_index: PipelineStageIndex) -> Result<(Box<dyn PipelineStage + Sync + Send>), FeagiDataError> {
+                                              cortical_grouping_index: CorticalGroupIndex, device_channel: CorticalChannelIndex,
+                                              reading_index: PipelineStagePropertyIndex) -> Result<(Box<dyn PipelineStage + Sync + Send>), FeagiDataError> {
         let cache = self.motor_try_get_mut_motory_channel_stream_cache(cortical_motor_type, cortical_grouping_index, device_channel)?;
         cache.clone_pipeline_stage(reading_index)
     }

@@ -32,4 +32,4 @@ macro_rules! define_index {
     };
 }
 
-define_index!(PipelineStageIndex, u32, "Index for a stage within a pipeline");
+define_index!(PipelineStagePropertyIndex, u32, "Index for a stage / stage property within a pipeline.");

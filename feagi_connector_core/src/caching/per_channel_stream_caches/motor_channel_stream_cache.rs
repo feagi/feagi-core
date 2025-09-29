@@ -3,7 +3,7 @@ use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder};
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::{PipelineStage, PipelineStageIndex, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStage, PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
 
 #[derive(Debug)]
 pub(crate) struct MotorChannelStreamCache {
@@ -28,11 +28,12 @@ impl MotorChannelStreamCache {
         })
     }
 
+    /*
     pub fn attempt_replace_pipeline_stages(&mut self, pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
         self.pipeline_runner.attempt_replace_stages(pipeline_stages)
     }
 
-    pub fn attempt_replace_pipeline_stage(&mut self, pipeline_stage: Box<dyn PipelineStage + Sync + Send>, replacing_at: PipelineStageIndex) -> Result<(), FeagiDataError> {
+    pub fn attempt_replace_pipeline_stage(&mut self, pipeline_stage: Box<dyn PipelineStage + Sync + Send>, replacing_at: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
         self.pipeline_runner.attempt_replace_stage(pipeline_stage, replacing_at)
     }
 
@@ -40,9 +41,28 @@ impl MotorChannelStreamCache {
         self.pipeline_runner.clone_stages()
     }
 
-    pub fn clone_pipeline_stage(&self, pipeline_stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
+    pub fn clone_pipeline_stage(&self, pipeline_stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
         self.pipeline_runner.clone_stage(pipeline_stage_index)
     }
+
+     */
+
+    pub fn try_replace_pipeline_stage_properties(&mut self, pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+
+    }
+
+    pub fn try_replace_pipeline_stage_property(&mut self, pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>, replacing_at: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
+
+    }
+
+    pub fn get_pipeline_stage_properties(&self) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+
+    }
+
+    pub fn get_pipeline_stage_property(&self) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+
+    }
+
 
     /// Returns the most recently processed sensor value.
     ///

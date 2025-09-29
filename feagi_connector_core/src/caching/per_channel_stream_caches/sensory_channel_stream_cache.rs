@@ -8,7 +8,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::{PipelineStageIndex, PipelineStageRunner, PipelineStage};
+use crate::data_pipeline::{PipelineStagePropertyIndex, PipelineStageRunner, PipelineStage, PipelineStageProperties};
 
 /// Per-channel cache for sensory input data streams.
 ///
@@ -50,6 +50,8 @@ impl SensoryChannelStreamCache {
         Ok(())
     }
     
+    /*
+    
     pub fn attempt_replace_pipeline_stages(&mut self, pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
         self.pipeline_runner.attempt_replace_stages(pipeline_stages)
     }
@@ -57,13 +59,31 @@ impl SensoryChannelStreamCache {
     pub fn attempt_replace_pipeline_stage(&mut self, pipeline_stage: Box<dyn PipelineStage + Sync + Send>, replacing_at: PipelineStageIndex) -> Result<(), FeagiDataError> {
         self.pipeline_runner.attempt_replace_stage(pipeline_stage, replacing_at)
     }
-
+    
     pub fn clone_pipeline_stages(&self) -> Vec<Box<dyn PipelineStage + Sync + Send>> {
         self.pipeline_runner.clone_stages()
     }
 
     pub fn clone_pipeline_stage(&self, pipeline_stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
         self.pipeline_runner.clone_stage(pipeline_stage_index)
+    }
+    
+     */
+    
+    pub fn try_replace_pipeline_stage_properties(&mut self, pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+        
+    }
+
+    pub fn try_replace_pipeline_stage_property(&mut self, pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>, replacing_at: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
+
+    }
+
+    pub fn get_pipeline_stage_properties(&self) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+
+    }
+
+    pub fn get_pipeline_stage_property(&self) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+
     }
 
     
