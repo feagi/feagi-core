@@ -11,7 +11,7 @@ pub(crate) fn stage_properties_to_stages(pipeline_stage_properties: &Vec<Box<dyn
 }
 
 pub(crate) fn stages_to_stage_properties(pipeline_stages: &Vec<Box<dyn PipelineStage>>) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
-    let mut output: Vec<Box<dyn PipelineStageProperties>> = Vec::with_capacity(pipeline_stages.len());
+    let mut output: Vec<Box<dyn PipelineStageProperties + Sync + Send>> = Vec::with_capacity(pipeline_stages.len());
     for pipeline_stage in pipeline_stages.iter() {
         output.push(pipeline_stage.create_properties())
     }

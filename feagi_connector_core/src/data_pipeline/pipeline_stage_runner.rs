@@ -9,7 +9,7 @@ use crate::data_pipeline::pipeline_stage::PipelineStage;
 pub(crate) struct PipelineStageRunner {
     input_type: WrappedIOType,
     output_type: WrappedIOType,
-    pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>,
+    pipeline_stages: Vec<Box<dyn PipelineStage>>,
 }
 
 impl PipelineStageRunner {
@@ -220,7 +220,7 @@ fn verify_pipeline_stage_properties(pipeline_stage_properties: &Vec<Box<dyn Pipe
     Ok(())
 }
 
-fn verify_replacing_stage_properties(current_stages: &Vec<Box<dyn PipelineStage + Sync + Send>>,
+fn verify_replacing_stage_properties(current_stages: &Vec<Box<dyn PipelineStage>>,
                                      new_stage_properties: &Box<dyn PipelineStageProperties + Sync + Send>,
                                      pipeline_input_type: &WrappedIOType, pipeline_output_type: &WrappedIOType,
                                      new_stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {

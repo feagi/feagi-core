@@ -1,3 +1,4 @@
+use std::time::Instant;
 use crate::data::descriptors::MiscDataDimensions;
 use crate::data::MiscData;
 use crate::FeagiDataError;
@@ -17,6 +18,7 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
+    /*
     fn write_neuron_data_single_channel(&self, wrapped_value: &WrappedIOData, cortical_channel: CorticalChannelIndex, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
         const Y_OFFSET: u32 = 0;
 
@@ -30,6 +32,12 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
             generated_neuron_data.push_raw(x as u32 + channel_offset, y as u32, z as u32, *value);
         }
         Ok(())
+    }
+
+     */
+
+    fn write_neuron_data_multi_channel<'a>(&self, data_and_update_time_iterator: impl Iterator<Item=(&'a WrappedIOData, &'a Instant)>, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
+        todo!()
     }
 }
 
