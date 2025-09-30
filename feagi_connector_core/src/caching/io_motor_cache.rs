@@ -1,14 +1,17 @@
 use std::collections::HashMap;
+use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::MotorCorticalType;
-use feagi_data_structures::neurons::xyzp::NeuronXYZPDecoder;
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder};
 use feagi_data_structures::wrapped_io_data::WrappedIOData;
 use crate::caching::per_channel_stream_caches::MotorChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
 
 pub(crate) struct IOMotorCache {
-    stream_caches: HashMap<(MotorCorticalType, CorticalGroupIndex), MotorChannelStreamCaches>
+    stream_caches: HashMap<(MotorCorticalType, CorticalGroupIndex), MotorChannelStreamCaches>,
+    neuron_data: CorticalMappedXYZPNeuronData,
+    byte_data: FeagiByteContainer,
 }
 
 impl IOMotorCache {
@@ -16,6 +19,8 @@ impl IOMotorCache {
     pub fn new() -> Self {
         IOMotorCache {
             stream_caches: HashMap::new(),
+            neuron_data: CorticalMappedXYZPNeuronData::new(),
+            byte_data: FeagiByteContainer::new_empty()
         }
     }
 
@@ -63,6 +68,28 @@ impl IOMotorCache {
         Ok(motor_stream_cache.get_pipeline_runner_mut())
     }
     
+    //endregion
+
+    //region Decoding
+
+    pub fn try_import_bytes<F>(&mut self, byte_writing_function: &mut F) -> Result<(), FeagiDataError>
+    where F: FnMut(&mut Vec<u8>) -> Result<(), FeagiDataError> {
+        self.byte_data.try_write_data_to_container_and_verify(byte_writing_function)?;
+        Ok(())
+    }
+
+    // Returns true if data was retrieved
+    pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
+        self.byte_data.try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)
+    }
+
+    /*
+    pub fn try_decode_neural_data_into_cache(&mut self) -> Result<(), FeagiDataError> {
+
+    }
+
+     */
+
     //endregion
 
 

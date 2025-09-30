@@ -10,3 +10,10 @@ pub struct IOCache {
 // cache_ -> cache encoding / decoding / alteration related function
 // sensor_ -> sensor device specific function
 // motor_ -> motor device specific function
+
+impl IOCache {
+    
+    
+    
+    
+}

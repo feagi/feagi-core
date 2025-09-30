@@ -235,7 +235,7 @@ impl FeagiByteContainer{
         Ok(Some(boxed_struct))
     }
 
-    pub fn try_update_struct_from_index(&self, index: StructureIndex, updating_boxed_struct: &mut Box<dyn FeagiSerializable>) -> Result<(), FeagiDataError> {
+    pub fn try_update_struct_from_index(&self, index: StructureIndex, updating_boxed_struct: &mut dyn FeagiSerializable) -> Result<(), FeagiDataError> {
         self.verify_structure_index_valid(index)?;
         let relevant_slice = self.contained_struct_references[index].get_as_byte_slice(&self.bytes);
         updating_boxed_struct.verify_byte_slice_is_of_correct_type(relevant_slice)?;
@@ -243,7 +243,7 @@ impl FeagiByteContainer{
         Ok(())
     }
 
-    pub fn try_update_struct_from_first_found_struct_of_type(&self, updating_boxed_struct: &mut Box<dyn FeagiSerializable>) -> Result<bool, FeagiDataError> {
+    pub fn try_update_struct_from_first_found_struct_of_type(&self, updating_boxed_struct: &mut dyn FeagiSerializable) -> Result<bool, FeagiDataError> {
         let structure_type: FeagiByteStructureType = updating_boxed_struct.get_type();
         let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
         if getting_slice.is_none() {
@@ -278,7 +278,7 @@ impl FeagiByteContainer{
 
     //region Overwriting Data
 
-    pub fn overwrite_byte_data_with_multiple_struct_data(&mut self, incoming_structs: Vec<&Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
+    pub fn overwrite_byte_data_with_multiple_struct_data(&mut self, incoming_structs: Vec<&dyn FeagiSerializable>, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         self.bytes.clear();
         self.contained_struct_references.clear();
@@ -335,7 +335,7 @@ impl FeagiByteContainer{
 
     }
 
-    pub fn overwrite_byte_data_with_single_struct_data(&mut self, incoming_struct: &Box<dyn FeagiSerializable>, new_increment_value: u16) -> Result<(), FeagiDataError> {
+    pub fn overwrite_byte_data_with_single_struct_data(&mut self, incoming_struct: &dyn FeagiSerializable, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         self.bytes.clear();
         self.contained_struct_references.clear();

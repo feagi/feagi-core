@@ -85,11 +85,10 @@ impl IOSensorCache {
     }
 
     pub fn try_encode_updated_neuron_data_to_feagi_byte_container(&mut self, data_increment_value: u16) -> Result<(), FeagiDataError> {
-        let a: Box<dyn FeagiSerializable> = Box::new(self.neuron_data.clone());
-        self.byte_data.overwrite_byte_data_with_multiple_struct_data(vec![&a], data_increment_value)
+        self.byte_data.overwrite_byte_data_with_single_struct_data(&self.neuron_data, data_increment_value)
     }
 
-    pub fn get_encoded_bytes(&self) -> &[u8] {
+    pub fn export_encoded_bytes(&self) -> &[u8] {
         self.byte_data.get_byte_ref()
     }
 
