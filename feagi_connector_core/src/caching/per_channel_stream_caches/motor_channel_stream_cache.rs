@@ -9,10 +9,10 @@ use crate::data_pipeline::{PipelineStage, PipelineStageProperties, PipelineStage
 pub(crate) struct MotorChannelStreamCache {
     most_recent_directly_decoded_output: WrappedIOData,
     pipeline_runner: PipelineStageRunner,
-    value_updated: FeagiSignal<()>
+    value_updated_callback: FeagiSignal<()>
 }
 
-// NOTE: We aim to generally abstract away [PipelineStageRunner] from here onward
+// NOTE: We aim to generally abstract away [PipelineStageRunner] data operations from here onward
 
 impl MotorChannelStreamCache {
 
@@ -22,7 +22,7 @@ impl MotorChannelStreamCache {
         Ok(MotorChannelStreamCache {
             most_recent_directly_decoded_output: processor_runner.get_input_data_type().create_blank_data_of_type()?,
             pipeline_runner: processor_runner,
-            value_updated: FeagiSignal::new()
+            value_updated_callback: FeagiSignal::new()
         })
     }
 
@@ -66,16 +66,12 @@ impl MotorChannelStreamCache {
 
     //region Data
 
-    /// Returns the most recently processed sensor value.
-    ///
-    /// Provides access to the latest data that has been processed through
-    /// the entire processor chain. This data is ready for neural encoding
-    /// or external consumption.
-    ///
-    /// # Returns
-    ///
-    /// Reference to the most recent processed sensor data
-    pub fn get_most_recent_motor_value(&self) -> &WrappedIOData {
+
+    pub fn get_most_recent_preprocessed_motor_value(&self) -> &WrappedIOData {
+        &self.most_recent_directly_decoded_output
+    }
+
+    pub fn get_most_recent_postprocessed_motor_value(&self) -> &WrappedIOData {
         self.pipeline_runner.get_most_recent_output()
     }
 
@@ -92,11 +88,11 @@ impl MotorChannelStreamCache {
     where
         F: Fn(&()) + Send + Sync + 'static,
     {
-        self.value_updated.connect(callback)
+        self.value_updated_callback.connect(callback)
     }
 
     pub fn disconnect_to_data_processed_signal(&mut self, index: FeagiSignalIndex) -> Result<(), FeagiDataError> {
-        self.value_updated.disconnect(index)
+        self.value_updated_callback.disconnect(index)
     }
 
     //endregion

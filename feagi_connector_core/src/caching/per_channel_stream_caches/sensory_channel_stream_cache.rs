@@ -29,7 +29,7 @@ pub(crate) struct SensoryChannelStreamCache {
     last_updated: Instant,
 }
 
-// NOTE: We aim to generally abstract away [PipelineStageRunner] from here onward
+// NOTE: We aim to generally abstract away [PipelineStageRunner] data operations from here onward
 
 impl SensoryChannelStreamCache {
     
@@ -88,8 +88,7 @@ impl SensoryChannelStreamCache {
         Ok(())
     }
 
-
-    pub fn get_most_recent_sensor_value(&self) -> &WrappedIOData {
+    pub fn get_most_recent_postprocessed_sensor_value(&self) -> &WrappedIOData {
         self.pipeline_runner.get_most_recent_output()
     }
 

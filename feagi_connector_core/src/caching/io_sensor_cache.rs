@@ -4,14 +4,22 @@ use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, Cortical
 use feagi_data_structures::genomic::SensorCorticalType;
 use feagi_data_structures::neurons::xyzp::NeuronXYZPEncoder;
 use feagi_data_structures::wrapped_io_data::WrappedIOData;
-use crate::caching::per_channel_stream_caches::{SensoryChannelStreamCache, SensoryChannelStreamCaches};
-use crate::data_pipeline::PipelineStageProperties;
+use crate::caching::per_channel_stream_caches::{SensoryChannelStreamCaches};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
 
 pub(crate) struct IOSensorCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
 }
 
 impl IOSensorCache {
+
+    pub fn new() -> Self {
+        IOSensorCache {
+            stream_caches: HashMap::new(),
+        }
+    }
+
+    //region Sensor Interactions
 
     pub fn register(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex,
                            neuron_encoder: Box<dyn NeuronXYZPEncoder>,
@@ -38,16 +46,30 @@ impl IOSensorCache {
         Ok(())
     }
 
-    pub fn try_read_previously_cached_value_pre_preprocessing(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_read_postprocessed_cached_value(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
-        let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache(channel_index)?; // Handles checking index validity
+        let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache(channel_index)?;
+        Ok(sensor_stream_cache.get_most_recent_postprocessed_sensor_value())
     }
 
+    pub fn try_get_pipeline_stage_runner(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
+        let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache(channel_index)?;
+        Ok(sensor_stream_cache.get_pipeline_runner())
+    }
+
+    pub fn try_get_pipeline_stage_runner_mut(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&mut PipelineStageRunner, FeagiDataError> {
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache_mut(channel_index)?;
+        Ok(sensor_stream_cache.get_pipeline_runner_mut())
+    }
+
+    //endregion
+
+    
 
 
-
-
-
+    //region Internal
     fn try_get_sensory_channel_stream_caches(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex) -> Result<&SensoryChannelStreamCaches, FeagiDataError> {
         let check = self.stream_caches.get(&(sensor_type, group_index));
         if check.is_none() {
@@ -65,6 +87,7 @@ impl IOSensorCache {
         let check = check.unwrap();
         Ok(check)
     }
+    //endregion
 
 }
 
