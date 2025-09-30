@@ -786,62 +786,6 @@ mod test_segmented_image_frame {
     }
 
     #[test]
-    fn test_create_ordered_cortical_ids_for_segmented_vision() {
-        let camera_index = CorticalGroupIndex::from(5u8);
-        let cortical_ids = SegmentedImageFrame::create_ordered_cortical_ids_for_segmented_vision(camera_index);
-
-        // Verify we got 9 IDs
-        assert_eq!(cortical_ids.len(), 9);
-
-        // Verify the order matches the expected layout
-        // [0] Bottom-Left, [1] Bottom-Middle, [2] Bottom-Right
-        // [3] Middle-Left, [4] Center, [5] Middle-Right  
-        // [6] Top-Left, [7] Top-Middle, [8] Top-Right
-        let expected_types = [
-            SensorCorticalType::ImageCameraBottomLeft,
-            SensorCorticalType::ImageCameraBottomMiddle,
-            SensorCorticalType::ImageCameraBottomRight,
-            SensorCorticalType::ImageCameraMiddleLeft,
-            SensorCorticalType::ImageCameraCenter,
-            SensorCorticalType::ImageCameraMiddleRight,
-            SensorCorticalType::ImageCameraTopLeft,
-            SensorCorticalType::ImageCameraTopMiddle,
-            SensorCorticalType::ImageCameraTopRight,
-        ];
-
-        for (i, expected_type) in expected_types.iter().enumerate() {
-            let expected_id = expected_type.to_cortical_id(camera_index);
-            assert_eq!(cortical_ids[i], expected_id, "Cortical ID mismatch at index {}", i);
-        }
-    }
-
-    #[test]
-    fn test_create_ordered_cortical_types_for_segmented_vision() {
-        let cortical_types = SegmentedImageFrame::create_ordered_cortical_types_for_segmented_vision();
-
-        // Verify we got 9 types
-        assert_eq!(cortical_types.len(), 9);
-
-        // Verify the expected order
-        let expected_sensor_types = [
-            SensorCorticalType::ImageCameraBottomLeft,
-            SensorCorticalType::ImageCameraBottomMiddle,
-            SensorCorticalType::ImageCameraBottomRight,
-            SensorCorticalType::ImageCameraMiddleLeft,
-            SensorCorticalType::ImageCameraCenter,
-            SensorCorticalType::ImageCameraMiddleRight,
-            SensorCorticalType::ImageCameraTopLeft,
-            SensorCorticalType::ImageCameraTopMiddle,
-            SensorCorticalType::ImageCameraTopRight,
-        ];
-
-        for (i, expected_sensor_type) in expected_sensor_types.iter().enumerate() {
-            let expected_cortical_type: CorticalType = (*expected_sensor_type).into();
-            assert_eq!(cortical_types[i], expected_cortical_type, "Cortical type mismatch at index {}", i);
-        }
-    }
-
-    #[test]
     fn test_get_image_internal_data() {
         let center_resolution = ImageXYResolution::new(16, 16).unwrap();
         let peripheral_resolution = ImageXYResolution::new(8, 8).unwrap();

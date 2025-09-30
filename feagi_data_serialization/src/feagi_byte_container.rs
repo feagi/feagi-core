@@ -281,7 +281,64 @@ impl FeagiByteContainer{
     pub fn overwrite_byte_data_with_multiple_struct_data(&mut self, incoming_structs: Vec<&Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         self.bytes.clear();
-        self.contained_struct_references.clear(); // Technically this causes a memory leak. Too Bad!
+        self.contained_struct_references.clear();
+        self.is_data_valid = false;
+
+        let header_total_number_of_bytes: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT +
+            Self::PER_STRUCT_HEADER_BYTE_COUNT * incoming_structs.len();
+
+        // Fill out contained_struct_references, calculate total number of bytes used for the data section
+        let data_total_number_of_bytes = {
+            let mut data_start_index = header_total_number_of_bytes;
+            for incoming_struct in &incoming_structs {
+                let per_struct_number_bytes = incoming_struct.get_number_of_bytes_needed();
+                self.contained_struct_references.push(
+                    ContainedStructReference{
+                        structure_type: incoming_struct.get_type(),
+                        byte_start_index: data_start_index,
+                        number_bytes_to_read: per_struct_number_bytes,
+                    }
+                );
+                data_start_index += per_struct_number_bytes;
+            }
+            data_start_index
+        };
+
+        if data_total_number_of_bytes > self.bytes.capacity() {
+            self.bytes.reserve(data_total_number_of_bytes - self.bytes.capacity());
+        }
+
+        // Every single byte will be overridden, don't worry
+        unsafe {
+            self.bytes.set_len(data_total_number_of_bytes); // Fun!
+        }
+
+        // Setup global header
+        self.bytes[0] = Self::CURRENT_SUPPORTED_VERSION;
+        LittleEndian::write_u16(&mut self.bytes[1..3], new_increment_value); // Next 2 bytes is increment counter
+        self.bytes[3] = incoming_structs.len() as u8; // Struct count
+
+        // Write Header and Data bytes at the same time
+        let mut header_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
+        for struct_index in 0..incoming_structs.len() {
+            let incoming_struct = &incoming_structs[struct_index];
+            let contained_struct_reference = &self.contained_struct_references[struct_index];
+
+            LittleEndian::write_u32(&mut self.bytes[header_byte_index..header_byte_index + 4], contained_struct_reference.number_bytes_to_read as u32);
+            incoming_struct.try_write_to_byte_slice(contained_struct_reference.get_as_byte_slice_mut(&mut self.bytes))?;
+
+            header_byte_index += Self::PER_STRUCT_HEADER_BYTE_COUNT;
+        };
+
+        self.is_data_valid = true;
+        Ok(())
+
+    }
+
+    pub fn overwrite_byte_data_with_single_struct_data(&mut self, incoming_struct: &Box<dyn FeagiSerializable>, new_increment_value: u16) -> Result<(), FeagiDataError> {
+
+        self.bytes.clear();
+        self.contained_struct_references.clear();
         self.is_data_valid = false;
 
         let header_total_number_of_bytes: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT +
