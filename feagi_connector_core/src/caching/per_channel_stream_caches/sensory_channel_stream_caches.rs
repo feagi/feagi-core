@@ -59,7 +59,7 @@ impl SensoryChannelStreamCaches {
 
 
     pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&self, neuron_data: &mut CorticalMappedXYZPNeuronData, time_of_burst: Instant) -> Result<(), FeagiDataError> {
-        let iterator = self.get_data_and_dat_update_time_iterator();
+        let iterator = self.get_data_and_update_time_iterator();
         self.neuron_encoder.write_neuron_data_multi_channel(iterator, time_of_burst, neuron_data)?;
         Ok(())
     }
