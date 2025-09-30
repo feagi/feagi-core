@@ -19,25 +19,25 @@ use crate::data_pipeline::{PipelineStage, PipelineStagePropertyIndex};
 use crate::data_pipeline::stages::{IdentityImageFrameStage, IdentityPercentage4DStage, ImageFrameProcessorStage, ImageFrameSegmentatorStage, LinearScaleToPercentageStage, LinearScaleToSignedPercentageStage};
 
 pub struct IOCache {
-    
+
     //region Sensory
-    
-    
-    
-    
-    
-    
+
+
+
+
+
+
     //endregion
-    
-    
+
+
     //region Motor
-    
-    
-    
-    
-    
+
+
+
+
+
     //endregion
-    
+
 
 
     // Sensor stuff

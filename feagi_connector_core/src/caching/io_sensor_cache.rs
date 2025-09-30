@@ -1,14 +1,18 @@
 use std::collections::HashMap;
+use std::time::Instant;
+use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::SensorCorticalType;
-use feagi_data_structures::neurons::xyzp::NeuronXYZPEncoder;
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
 use feagi_data_structures::wrapped_io_data::WrappedIOData;
 use crate::caching::per_channel_stream_caches::{SensoryChannelStreamCaches};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
 
 pub(crate) struct IOSensorCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
+    neuron_data: CorticalMappedXYZPNeuronData,
+    byte_data: FeagiByteContainer,
 }
 
 impl IOSensorCache {
@@ -16,6 +20,8 @@ impl IOSensorCache {
     pub fn new() -> Self {
         IOSensorCache {
             stream_caches: HashMap::new(),
+            neuron_data: CorticalMappedXYZPNeuronData::new(),
+            byte_data: FeagiByteContainer::new_empty()
         }
     }
 
@@ -66,7 +72,21 @@ impl IOSensorCache {
 
     //endregion
 
-    
+    //region Encoding
+
+    pub fn try_encode_updated_sensor_data_to_neurons(&mut self, encode_instant: Instant) -> Result<(), FeagiDataError> {
+        self.neuron_data.clear_neurons_only();
+        for sensory_channel_steam_cache in self.stream_caches.values() {
+            sensory_channel_steam_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, encode_instant)?;
+        }
+        Ok(())
+    }
+
+    pub fn try_encode_updated_neuron_data_to_feagi_byte_container(&mut self, data_increment_value: u16) -> Result<(), FeagiDataError> {
+        self.byte_data.overwrite_byte_data_with_struct_data(&mut self.neuron_data)
+    }
+
+    //endregion
 
 
     //region Internal
