@@ -6,6 +6,7 @@ use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, Cortical
 use feagi_data_structures::genomic::SensorCorticalType;
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
 use feagi_data_structures::wrapped_io_data::WrappedIOData;
+use feagi_data_serialization::FeagiSerializable;
 use crate::caching::per_channel_stream_caches::{SensoryChannelStreamCaches};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
 
@@ -22,6 +23,7 @@ impl IOSensorCache {
             stream_caches: HashMap::new(),
             neuron_data: CorticalMappedXYZPNeuronData::new(),
             byte_data: FeagiByteContainer::new_empty()
+
         }
     }
 
@@ -29,7 +31,7 @@ impl IOSensorCache {
 
     pub fn register(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex,
                            neuron_encoder: Box<dyn NeuronXYZPEncoder>,
-                           pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties>>>)
+                           pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>)
         -> Result<(), FeagiDataError> {
 
         // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
@@ -83,7 +85,8 @@ impl IOSensorCache {
     }
 
     pub fn try_encode_updated_neuron_data_to_feagi_byte_container(&mut self, data_increment_value: u16) -> Result<(), FeagiDataError> {
-        self.byte_data.overwrite_byte_data_with_struct_data(vec![&Box::new(&self.neuron_data)], data_increment_value)
+        let a: Box<dyn FeagiSerializable> = Box::new(self.neuron_data.clone());
+        self.byte_data.overwrite_byte_data_with_multiple_struct_data(vec![&a], data_increment_value)
     }
 
     pub fn get_encoded_bytes(&self) -> &[u8] {

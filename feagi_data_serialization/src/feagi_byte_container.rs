@@ -278,7 +278,7 @@ impl FeagiByteContainer{
 
     //region Overwriting Data
 
-    pub fn overwrite_byte_data_with_struct_data(&mut self, incoming_structs: Vec<&Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
+    pub fn overwrite_byte_data_with_multiple_struct_data(&mut self, incoming_structs: Vec<&Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         self.bytes.clear();
         self.contained_struct_references.clear(); // Technically this causes a memory leak. Too Bad!

@@ -22,7 +22,7 @@ impl IOMotorCache {
     //region Interactions
     pub fn register(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
                     neuron_decoder: Box<dyn NeuronXYZPDecoder>,
-                    pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties>>>)
+                    pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>)
                     -> Result<(), FeagiDataError> {
 
         // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
@@ -42,7 +42,13 @@ impl IOMotorCache {
     pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
-        Ok(motor_stream_cache.get_most_recent_postprocessed_sensor_value())
+        Ok(motor_stream_cache.get_most_recent_postprocessed_motor_value())
+    }
+
+    pub fn try_read_preprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+        let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
+        Ok(motor_stream_cache.get_most_recent_preprocessed_motor_value())
     }
 
     pub fn try_get_pipeline_stage_runner(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {

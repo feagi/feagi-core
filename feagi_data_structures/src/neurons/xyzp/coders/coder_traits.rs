@@ -14,7 +14,7 @@ pub trait NeuronXYZPEncoder: Debug {
     fn get_encodable_data_type(&self) -> WrappedIOType;
     
 
-    fn write_neuron_data_multi_channel(&self, data_iterator: &mut dyn Iterator<Item = &WrappedIOData>, update_time_iterator: &mut dyn Iterator<Item = Instant>, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>;
+    fn write_neuron_data_multi_channel(&self, data_iterator: &dyn Iterator<Item = &WrappedIOData>, update_time_iterator: &dyn Iterator<Item = Instant>, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>;
 }
 
 pub trait NeuronXYZPDecoder: Debug {
