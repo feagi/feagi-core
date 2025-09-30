@@ -1,6 +1,6 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
 use feagi_data_structures::wrapped_io_data::WrappedIOData;
 use crate::data_pipeline::{stage_properties_to_stages, PipelineStage, PipelineStageProperties};
@@ -30,21 +30,33 @@ impl SensoryChannelStreamCaches {
         })
     }
 
-    //region Data
-    pub fn get_most_recently_cached_sensor_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
-        self.verify_channel_index(cortical_channel_index)?;
-        Ok(self.stream_caches[*cortical_channel_index as usize].get_most_recent_sensor_value())
+    //region Properties
+
+    pub fn number_of_channels(&self) -> CorticalChannelCount {
+        self.stream_caches.len().into()
     }
 
-    pub fn update_cached_sensor_value(&mut self, cortical_channel_index: CorticalChannelIndex, updated_value: WrappedIOData) -> Result<(), FeagiDataError> {
-        self.verify_channel_index(cortical_channel_index)?;
-        Ok(self.stream_caches[*cortical_channel_index as usize].update_sensor_value(updated_value)?)
+    pub fn try_get_sensory_channel_stream_cache(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&SensoryChannelStreamCache, FeagiDataError> {
+        let result = self.stream_caches.get(*cortical_channel_index as usize);
+        match result {
+            Some(stream_cache) => Ok(stream_cache),
+            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} out is out of bounds for SensoryChannelStreamCaches with {} channels!", cortical_channel_index, self.stream_caches.len())))
+
+        }
     }
 
+    pub fn try_get_sensory_channel_stream_cache_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut SensoryChannelStreamCache, FeagiDataError> {
+        let result = self.stream_caches.get_mut(*cortical_channel_index as usize);
+        match result {
+            Some(stream_cache) => Ok(stream_cache),
+            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} out is out of bounds for SensoryChannelStreamCaches with {} channels!", cortical_channel_index, self.stream_caches.len())))
 
-
+        }
+    }
 
     //endregion
+
+
 
     pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&self, neuron_data: &mut CorticalMappedXYZPNeuronData, time_of_burst: Instant) -> Result<(), FeagiDataError> {
         let iterator = self.get_data_and_dat_update_time_iterator();
@@ -53,14 +65,7 @@ impl SensoryChannelStreamCaches {
     }
 
 
-    fn verify_channel_index(&self, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-        if *channel_index >= self.stream_caches.len() as u32 {
-            return Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of range for this cortical area of channel count {}!", channel_index, self.stream_caches.len())))
-        }
-        Ok(())
-    }
-
-    fn get_data_and_dat_update_time_iterator(&self) -> impl Iterator<Item = (&WrappedIOData, &Instant)> {
+    fn get_data_and_update_time_iterator(&self) -> impl Iterator<Item = (&WrappedIOData, &Instant)> {
         self.stream_caches.iter().map(|stream_cache| stream_cache.get_most_recent_sensor_value_and_time())
     }
 

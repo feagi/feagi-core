@@ -9,39 +9,24 @@ use crate::data_pipeline::{PipelineStage, PipelineStageProperties, PipelineStage
 pub(crate) struct MotorChannelStreamCache {
     most_recent_directly_decoded_output: WrappedIOData,
     pipeline_runner: PipelineStageRunner,
-    channel: CorticalChannelIndex,
     value_updated: FeagiSignal<()>
 }
 
+// NOTE: We aim to generally abstract away [PipelineStageRunner] from here onward
+
 impl MotorChannelStreamCache {
 
-    pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>,
-               channel: CorticalChannelIndex,
-    ) -> Result<Self, FeagiDataError> {
+    pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
 
         let processor_runner = PipelineStageRunner::new(pipeline_stages)?;
         Ok(MotorChannelStreamCache {
             most_recent_directly_decoded_output: processor_runner.get_input_data_type().create_blank_data_of_type()?,
             pipeline_runner: processor_runner,
-            channel,
             value_updated: FeagiSignal::new()
         })
     }
 
     //region Properties
-
-    /// Returns the cortical I/O channel index for this cache.
-    ///
-    /// Provides the channel identifier that this cache is responsible for.
-    /// This is useful for mapping between cached data and specific channels
-    /// in the cortical area configuration.
-    ///
-    /// # Returns
-    ///
-    /// The `CorticalIOChannelIndex` for this cache
-    pub fn get_cortical_io_channel_index(&self) -> CorticalChannelIndex {
-        self.channel
-    }
 
     /// Returns the input data type expected by the processor chain.
     ///
@@ -69,6 +54,14 @@ impl MotorChannelStreamCache {
         self.pipeline_runner.get_output_data_type()
     }
 
+    pub(crate) fn get_pipeline_runner(&self) -> &PipelineStageRunner {
+        &self.pipeline_runner
+    }
+
+    pub(crate) fn get_pipeline_runner_mut(&mut self) -> &mut PipelineStageRunner {
+        &mut self.pipeline_runner
+    }
+
     //endregion
 
     //region Data
@@ -86,36 +79,12 @@ impl MotorChannelStreamCache {
         self.pipeline_runner.get_most_recent_output()
     }
 
-    pub fn get_neuron_decode_data_location_ref_mut(&mut self) -> &mut WrappedIOData {
+    pub(crate) fn get_neuron_decode_data_location_ref_mut(&mut self) -> &mut WrappedIOData {
         &mut self.most_recent_directly_decoded_output
     }
 
     //endregion
 
-    //region Stages
-    // This region is essentially just a proxy to a private structure for public access
-
-    pub fn get_all_stage_properties(&self) -> Vec<Box<dyn PipelineStageProperties + Sync + Send>> {
-        self.pipeline_runner.get_all_stage_properties()
-    }
-
-    pub fn get_single_stage_property(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
-        self.pipeline_runner.get_single_stage_property(stage_index)
-    }
-
-    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.try_update_single_stage_properties(updating_stage_index, updated_properties)
-    }
-
-    pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
-    }
-
-    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.try_replace_single_stage(replacing_at_index, new_pipeline_stage_properties)
-    }
-
-    //endregion
 
     //region Callbacks
 

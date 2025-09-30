@@ -29,13 +29,11 @@ pub(crate) struct SensoryChannelStreamCache {
     last_updated: Instant,
 }
 
+// NOTE: We aim to generally abstract away [PipelineStageRunner] from here onward
+
 impl SensoryChannelStreamCache {
     
     pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
-
-        if pipeline_stages.is_empty() {
-            return Err(FeagiDataError::InternalError("SensoryChannelStreamCache Cannot have 0 pipeline stages!".into()))
-        }
 
         let processor_runner = PipelineStageRunner::new(pipeline_stages)?;
         Ok(SensoryChannelStreamCache {
@@ -72,25 +70,25 @@ impl SensoryChannelStreamCache {
         self.pipeline_runner.get_output_data_type()
     }
 
+    pub(crate) fn get_pipeline_runner(&self) -> &PipelineStageRunner {
+        &self.pipeline_runner
+    }
+
+    pub(crate) fn get_pipeline_runner_mut(&mut self) -> &mut PipelineStageRunner {
+        &mut self.pipeline_runner
+    }
+
     //endregion
 
     //region Data
 
-    pub fn update_sensor_value(&mut self, value: WrappedIOData) -> Result<(), FeagiDataError> {
+    pub fn try_update_sensor_value(&mut self, value: WrappedIOData) -> Result<(), FeagiDataError> {
+        _ = self.pipeline_runner.update_value(&value, Instant::now())?; // Checks data type first
         self.last_updated = Instant::now();
-        _ = self.pipeline_runner.update_value(&value, Instant::now())?;
         Ok(())
     }
 
-    /// Returns the most recently processed sensor value.
-    ///
-    /// Provides access to the latest data that has been processed through
-    /// the entire processor chain. This data is ready for neural encoding
-    /// or external consumption.
-    ///
-    /// # Returns
-    ///
-    /// Reference to the most recent processed sensor data
+
     pub fn get_most_recent_sensor_value(&self) -> &WrappedIOData {
         self.pipeline_runner.get_most_recent_output()
     }
@@ -129,32 +127,6 @@ impl SensoryChannelStreamCache {
      */
 
     //endregion
-
-    //region Stages
-    // This region is essentially just a proxy to a private structure for public access
-
-    pub fn get_all_stage_properties(&self) -> Vec<Box<dyn PipelineStageProperties + Sync + Send>> {
-        self.pipeline_runner.get_all_stage_properties()
-    }
-
-    pub fn get_single_stage_property(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
-        self.pipeline_runner.get_single_stage_property(stage_index)
-    }
-
-    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.try_update_single_stage_properties(updating_stage_index, updated_properties)
-    }
-
-    pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
-    }
-
-    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.try_replace_single_stage(replacing_at_index, new_pipeline_stage_properties)
-    }
-
-    //endregion
-
 }
 
 
