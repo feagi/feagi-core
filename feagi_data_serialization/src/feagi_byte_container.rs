@@ -278,23 +278,7 @@ impl FeagiByteContainer{
 
     //region Overwriting Data
 
-    /// Overwrites the entire container with new structure data.
-    /// 
-    /// Clears all existing data and replaces it with the provided structures.
-    /// This method handles header generation, structure serialization, and validation.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_serialization::{FeagiByteContainer, FeagiSerializable};
-    /// use feagi_data_structures::data::FeagiJSON;
-    /// 
-    /// let mut container = FeagiByteContainer::new_empty();
-    /// let json_struct: Box<dyn FeagiSerializable> = Box::new(FeagiJSON::new_empty());
-    /// 
-    /// let result = container.overwrite_byte_data_with_struct_data(vec![json_struct], 1);
-    /// // This should succeed and make the container valid
-    /// ```
-    pub fn overwrite_byte_data_with_struct_data(&mut self, incoming_structs: Vec<Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
+    pub fn overwrite_byte_data_with_struct_data(&mut self, incoming_structs: Vec<&Box<dyn FeagiSerializable>>, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         self.bytes.clear();
         self.contained_struct_references.clear(); // Technically this causes a memory leak. Too Bad!
@@ -320,15 +304,13 @@ impl FeagiByteContainer{
             data_start_index
         };
 
-        let number_needed_bytes_total = header_total_number_of_bytes + data_total_number_of_bytes;
-
-        if number_needed_bytes_total > self.bytes.capacity() {
-            self.bytes.reserve(number_needed_bytes_total - self.bytes.capacity());
+        if data_total_number_of_bytes > self.bytes.capacity() {
+            self.bytes.reserve(data_total_number_of_bytes - self.bytes.capacity());
         }
 
         // Every single byte will be overridden, don't worry
         unsafe {
-            self.bytes.set_len(number_needed_bytes_total); // Fun!
+            self.bytes.set_len(data_total_number_of_bytes); // Fun!
         }
 
         // Setup global header
