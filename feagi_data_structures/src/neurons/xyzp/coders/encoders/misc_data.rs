@@ -7,6 +7,7 @@ use crate::genomic::descriptors::{CorticalChannelIndex};
 use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays, NeuronXYZPEncoder};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
+#[derive(Debug)]
 pub struct MiscDataNeuronXYZPEncoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_write_target: CorticalID,

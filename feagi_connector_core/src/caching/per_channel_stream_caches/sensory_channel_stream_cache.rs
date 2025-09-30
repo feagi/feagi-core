@@ -33,9 +33,9 @@ pub(crate) struct SensoryChannelStreamCache {
 
 impl SensoryChannelStreamCache {
     
-    pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
+    pub fn new(pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<Self, FeagiDataError> {
 
-        let processor_runner = PipelineStageRunner::new(pipeline_stages)?;
+        let processor_runner = PipelineStageRunner::new(pipeline_stage_properties)?;
         Ok(SensoryChannelStreamCache {
             pipeline_runner: processor_runner,
             last_updated: Instant::now(),

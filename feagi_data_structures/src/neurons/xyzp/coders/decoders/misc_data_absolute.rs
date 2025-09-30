@@ -7,6 +7,7 @@ use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::neurons::xyzp::coders::NeuronXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
+#[derive(Debug)]
 pub struct MiscDataNeuronXYZPAbsoluteDecoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_read_target: CorticalID,

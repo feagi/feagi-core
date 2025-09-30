@@ -1,14 +1,15 @@
 
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::time::Instant;
 use crate::FeagiDataError;
-use crate::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
+use crate::genomic::descriptors::{CorticalChannelCount};
 use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::wrapped_io_data::{WrappedIOType, WrappedIOData};
 
 
-pub trait NeuronXYZPEncoder {
+pub trait NeuronXYZPEncoder: Debug {
 
     fn get_encodable_data_type(&self) -> WrappedIOType;
     
@@ -16,7 +17,7 @@ pub trait NeuronXYZPEncoder {
     fn write_neuron_data_multi_channel<'a>(&self, data_and_update_time_iterator: impl Iterator<Item = (&'a WrappedIOData, &'a Instant)>, time_of_burst: Instant,  write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> ;
 }
 
-pub trait NeuronXYZPDecoder {
+pub trait NeuronXYZPDecoder: Debug {
     fn get_decoded_data_type(&self) -> WrappedIOType;
 
     /// Reads neuron data (if available in received neuron data) and updates all channel relevant WrappedIOData with it

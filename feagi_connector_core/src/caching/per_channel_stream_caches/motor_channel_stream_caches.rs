@@ -13,15 +13,14 @@ pub(crate) struct MotorChannelStreamCaches {
 }
 
 impl MotorChannelStreamCaches {
-    pub fn new(neuron_decoder: Box<dyn NeuronXYZPDecoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties>>>) -> Result<Self, FeagiDataError> {
+    pub fn new(neuron_decoder: Box<dyn NeuronXYZPDecoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
         if stage_properties_per_channels.is_empty() {
             return Err(FeagiDataError::InternalError("MotorChannelStreamCaches Cannot be initialized with 0 channels!".into()))
         }
 
         let mut motor_channel_stream_caches: Vec<MotorChannelStreamCache> = Vec::with_capacity(stage_properties_per_channels.len());
-        for stage_properties_per_channel in &stage_properties_per_channels {
-            let stages = stage_properties_to_stages(&stage_properties_per_channel)?;
-            motor_channel_stream_caches.push(MotorChannelStreamCache::new(stages)?);
+        for stage_properties_per_channel in stage_properties_per_channels {
+            motor_channel_stream_caches.push(MotorChannelStreamCache::new(stage_properties_per_channel)?);
         }
 
         Ok(Self {
@@ -33,7 +32,7 @@ impl MotorChannelStreamCaches {
     //region Properties
 
     pub fn number_of_channels(&self) -> CorticalChannelCount {
-        self.stream_caches.len().into()
+        (self.stream_caches.len() as u32).into()
     }
 
     pub fn try_get_motor_channel_stream_cache(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&MotorChannelStreamCache, FeagiDataError> {
@@ -46,10 +45,11 @@ impl MotorChannelStreamCaches {
     }
 
     pub fn try_get_motor_channel_stream_cache_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut MotorChannelStreamCache, FeagiDataError> {
+        let count = self.stream_caches.len();
         let result = self.stream_caches.get_mut(*cortical_channel_index as usize);
         match result {
             Some(stream_cache) => Ok(stream_cache),
-            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} out is out of bounds for MotorChannelStreamCaches with {} channels!", cortical_channel_index, self.stream_caches.len())))
+            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} out is out of bounds for MotorChannelStreamCaches with {} channels!", cortical_channel_index, count)))
 
         }
     }

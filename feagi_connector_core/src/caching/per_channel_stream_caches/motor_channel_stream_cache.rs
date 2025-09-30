@@ -16,9 +16,9 @@ pub(crate) struct MotorChannelStreamCache {
 
 impl MotorChannelStreamCache {
 
-    pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
+    pub fn new(pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<Self, FeagiDataError> {
 
-        let processor_runner = PipelineStageRunner::new(pipeline_stages)?;
+        let processor_runner = PipelineStageRunner::new(pipeline_stage_properties)?;
         Ok(MotorChannelStreamCache {
             most_recent_directly_decoded_output: processor_runner.get_input_data_type().create_blank_data_of_type()?,
             pipeline_runner: processor_runner,
