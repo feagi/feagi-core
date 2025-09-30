@@ -1,7 +1,7 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_pipeline::{stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 
 
@@ -164,8 +164,6 @@ impl PipelineStageRunner {
         Ok(())
     }
 
-
-
     /*
     // TODO we may not need these
 
@@ -201,7 +199,6 @@ impl PipelineStageRunner {
     //endregion
 
 }
-
 
 
 fn verify_pipeline_stage_properties(pipeline_stage_properties: &Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
@@ -251,19 +248,3 @@ fn verify_replacing_stage_properties(current_stages: &Vec<Box<dyn PipelineStage 
     Ok(())
 }
 
-fn stage_properties_to_stages(pipeline_stage_properties: &Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<Vec<Box<dyn PipelineStage>>, FeagiDataError> {
-    let mut output: Vec<Box<dyn PipelineStage>> = Vec::with_capacity(pipeline_stage_properties.len());
-    for pipeline_stage_properties in pipeline_stage_properties.iter() {
-        output.push(pipeline_stage_properties.create_stage());
-    }
-    Ok(output)
-}
-
-fn stages_to_stage_properties(pipeline_stages: &Vec<Box<dyn PipelineStage>>) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
-    let mut output: Vec<Box<dyn PipelineStageProperties>> = Vec::with_capacity(pipeline_stages.len());
-    for pipeline_stage in pipeline_stages.iter() {
-        output.push(pipeline_stage.create_properties())
-    }
-    Ok(output)
-
-}

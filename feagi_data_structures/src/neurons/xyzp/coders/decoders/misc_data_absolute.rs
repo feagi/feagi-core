@@ -10,7 +10,6 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 pub struct MiscDataNeuronXYZPAbsoluteDecoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_read_target: CorticalID,
-    number_of_channels: CorticalChannelCount,
 }
 
 impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
@@ -18,11 +17,7 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
-    fn get_number_of_channels(&self) -> CorticalChannelCount {
-        self.number_of_channels
-    }
-
-    fn read_neuron_data_multi_channel(&self, channel_value_target: &mut Vec<&mut WrappedIOData>, did_channel_change: &mut Vec<bool>, read_target: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
+    fn read_neuron_data_multi_channel(&self, channel_value_target: &mut Vec<&mut WrappedIOData>, did_channel_change: &mut Vec<bool>, read_target: &CorticalMappedXYZPNeuronData, number_channels: CorticalChannelCount) -> Result<(), FeagiDataError> {
         did_channel_change.fill(false);
 
         let neuron_array = read_target.get_neurons_of(&self.cortical_read_target);
@@ -40,7 +35,7 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
             }
 
             let channel_index: CorticalChannelIndex = (x_arr[neuron_index] / self.misc_data_dimensions.width).into();
-            if *channel_index >= *self.number_of_channels {
+            if *channel_index >= *number_channels {
                 return Err(FeagiDataError::NeuronError(format!("Feagi sent neuron {} which is out of bounds for corticalID {} with dimensions {}!",
                                                                neuron_array.get(neuron_index)?, self.cortical_read_target, self.misc_data_dimensions)))
             }
@@ -63,11 +58,10 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
 }
 
 impl MiscDataNeuronXYZPAbsoluteDecoder {
-    pub fn new(cortical_read_target: CorticalID, misc_data_dimensions: MiscDataDimensions, number_of_channels: CorticalChannelCount) -> Result<Self, FeagiDataError> {
+    pub fn new(cortical_read_target: CorticalID, misc_data_dimensions: MiscDataDimensions) -> Result<Self, FeagiDataError> {
         Ok(MiscDataNeuronXYZPAbsoluteDecoder{
             misc_data_dimensions,
             cortical_read_target,
-            number_of_channels,
         })
     }
 }

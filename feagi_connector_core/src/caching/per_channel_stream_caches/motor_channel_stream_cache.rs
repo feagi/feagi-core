@@ -28,58 +28,7 @@ impl MotorChannelStreamCache {
         })
     }
 
-    /*
-    pub fn attempt_replace_pipeline_stages(&mut self, pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.attempt_replace_stages(pipeline_stages)
-    }
-
-    pub fn attempt_replace_pipeline_stage(&mut self, pipeline_stage: Box<dyn PipelineStage + Sync + Send>, replacing_at: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.attempt_replace_stage(pipeline_stage, replacing_at)
-    }
-
-    pub fn clone_pipeline_stages(&self) -> Vec<Box<dyn PipelineStage + Sync + Send>> {
-        self.pipeline_runner.clone_stages()
-    }
-
-    pub fn clone_pipeline_stage(&self, pipeline_stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
-        self.pipeline_runner.clone_stage(pipeline_stage_index)
-    }
-
-     */
-
-    pub fn try_replace_pipeline_stage_properties(&mut self, pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
-
-    }
-
-    pub fn try_replace_pipeline_stage_property(&mut self, pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>, replacing_at: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
-
-    }
-
-    pub fn get_pipeline_stage_properties(&self) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
-
-    }
-
-    pub fn get_pipeline_stage_property(&self) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
-
-    }
-
-
-    /// Returns the most recently processed sensor value.
-    ///
-    /// Provides access to the latest data that has been processed through
-    /// the entire processor chain. This data is ready for neural encoding
-    /// or external consumption.
-    ///
-    /// # Returns
-    ///
-    /// Reference to the most recent processed sensor data
-    pub fn get_most_recent_motor_value(&self) -> &WrappedIOData {
-        self.pipeline_runner.get_most_recent_output()
-    }
-    
-    pub fn get_neuron_decode_data_location_ref_mut(&mut self) -> &mut WrappedIOData {
-        &mut self.most_recent_directly_decoded_output
-    }
+    //region Properties
 
     /// Returns the cortical I/O channel index for this cache.
     ///
@@ -120,6 +69,56 @@ impl MotorChannelStreamCache {
         self.pipeline_runner.get_output_data_type()
     }
 
+    //endregion
+
+    //region Data
+
+    /// Returns the most recently processed sensor value.
+    ///
+    /// Provides access to the latest data that has been processed through
+    /// the entire processor chain. This data is ready for neural encoding
+    /// or external consumption.
+    ///
+    /// # Returns
+    ///
+    /// Reference to the most recent processed sensor data
+    pub fn get_most_recent_motor_value(&self) -> &WrappedIOData {
+        self.pipeline_runner.get_most_recent_output()
+    }
+
+    pub fn get_neuron_decode_data_location_ref_mut(&mut self) -> &mut WrappedIOData {
+        &mut self.most_recent_directly_decoded_output
+    }
+
+    //endregion
+
+    //region Stages
+    // This region is essentially just a proxy to a private structure for public access
+
+    pub fn get_all_stage_properties(&self) -> Vec<Box<dyn PipelineStageProperties + Sync + Send>> {
+        self.pipeline_runner.get_all_stage_properties()
+    }
+
+    pub fn get_single_stage_property(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+        self.pipeline_runner.get_single_stage_property(stage_index)
+    }
+
+    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        self.pipeline_runner.try_update_single_stage_properties(updating_stage_index, updated_properties)
+    }
+
+    pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+        self.pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
+    }
+
+    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        self.pipeline_runner.try_replace_single_stage(replacing_at_index, new_pipeline_stage_properties)
+    }
+
+    //endregion
+
+    //region Callbacks
+
     pub fn connect_to_data_processed_signal<F>(&mut self, callback: F) -> FeagiSignalIndex 
     where
         F: Fn(&()) + Send + Sync + 'static,
@@ -130,6 +129,8 @@ impl MotorChannelStreamCache {
     pub fn disconnect_to_data_processed_signal(&mut self, index: FeagiSignalIndex) -> Result<(), FeagiDataError> {
         self.value_updated.disconnect(index)
     }
+
+    //endregion
 
 
 }

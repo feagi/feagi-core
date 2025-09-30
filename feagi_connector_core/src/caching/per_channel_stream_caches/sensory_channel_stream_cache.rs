@@ -26,116 +26,25 @@ use crate::data_pipeline::{PipelineStagePropertyIndex, PipelineStageRunner, Pipe
 #[derive(Debug)]
 pub(crate) struct SensoryChannelStreamCache {
     pipeline_runner: PipelineStageRunner,
-    channel: CorticalChannelIndex,
     last_updated: Instant,
 }
 
 impl SensoryChannelStreamCache {
     
-    pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>,
-               channel: CorticalChannelIndex,
-                ) -> Result<Self, FeagiDataError> {
-        
+    pub fn new(pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<Self, FeagiDataError> {
+
+        if pipeline_stages.is_empty() {
+            return Err(FeagiDataError::InternalError("SensoryChannelStreamCache Cannot have 0 pipeline stages!".into()))
+        }
+
         let processor_runner = PipelineStageRunner::new(pipeline_stages)?;
         Ok(SensoryChannelStreamCache {
             pipeline_runner: processor_runner,
-            channel,
             last_updated: Instant::now(),
         })
     }
 
-    pub fn update_sensor_value(&mut self, value: WrappedIOData) -> Result<(), FeagiDataError> {
-        self.last_updated = Instant::now();
-        _ = self.pipeline_runner.update_value(&value, Instant::now())?;
-        Ok(())
-    }
-    
-    /*
-    
-    pub fn attempt_replace_pipeline_stages(&mut self, pipeline_stages: Vec<Box<dyn PipelineStage + Sync + Send>>) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.attempt_replace_stages(pipeline_stages)
-    }
-
-    pub fn attempt_replace_pipeline_stage(&mut self, pipeline_stage: Box<dyn PipelineStage + Sync + Send>, replacing_at: PipelineStageIndex) -> Result<(), FeagiDataError> {
-        self.pipeline_runner.attempt_replace_stage(pipeline_stage, replacing_at)
-    }
-    
-    pub fn clone_pipeline_stages(&self) -> Vec<Box<dyn PipelineStage + Sync + Send>> {
-        self.pipeline_runner.clone_stages()
-    }
-
-    pub fn clone_pipeline_stage(&self, pipeline_stage_index: PipelineStageIndex) -> Result<Box<dyn PipelineStage + Sync + Send>, FeagiDataError> {
-        self.pipeline_runner.clone_stage(pipeline_stage_index)
-    }
-    
-     */
-    
-    pub fn try_replace_pipeline_stage_properties(&mut self, pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
-        
-    }
-
-    pub fn try_replace_pipeline_stage_property(&mut self, pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>, replacing_at: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
-
-    }
-
-    pub fn get_pipeline_stage_properties(&self) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
-
-    }
-
-    pub fn get_pipeline_stage_property(&self) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
-
-    }
-
-    
-    /// Returns the most recently processed sensor value.
-    ///
-    /// Provides access to the latest data that has been processed through
-    /// the entire processor chain. This data is ready for neural encoding
-    /// or external consumption.
-    ///
-    /// # Returns
-    ///
-    /// Reference to the most recent processed sensor data
-    pub fn get_most_recent_sensor_value(&self) -> &WrappedIOData {
-        self.pipeline_runner.get_most_recent_output()
-    }
-    
-    /// Encodes the cached sensor data into neural representations.
-    ///
-    /// Converts the most recent processed sensor value into neural activity
-    /// patterns using the provided encoder. The encoded data is written
-    /// directly into the cortical mapped neuron data structure for this channel.
-    ///
-    /// # Arguments
-    ///
-    /// * `cortical_mapped_neuron_data` - Target neuron data structure to write to
-    /// * `encoder` - Encoder that converts I/O data to neural patterns
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(())` - Successfully encoded data into neural representation
-    /// * `Err(FeagiDataProcessingError)` - If encoding fails
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the encoder cannot handle the data type or if
-    /// the neural data structure cannot accommodate the encoded patterns.
-    pub fn encode_to_neurons(&self, cortical_mapped_neuron_data: &mut CorticalMappedXYZPNeuronData, encoder: &Box<dyn NeuronXYZPEncoder + Sync + Send>) -> Result<(), FeagiDataError> {
-        encoder.write_neuron_data_single_channel(self.get_most_recent_sensor_value(), self.channel, cortical_mapped_neuron_data)
-    }
-    
-    /// Returns the cortical I/O channel index for this cache.
-    ///
-    /// Provides the channel identifier that this cache is responsible for.
-    /// This is useful for mapping between cached data and specific channels
-    /// in the cortical area configuration.
-    ///
-    /// # Returns
-    ///
-    /// The `CorticalIOChannelIndex` for this cache
-    pub fn get_cortical_io_channel_index(&self) -> CorticalChannelIndex {
-        self.channel
-    }
+    //region Properties
 
     /// Returns the input data type expected by the processor chain.
     ///
@@ -162,6 +71,90 @@ impl SensoryChannelStreamCache {
     pub fn get_output_data_type(&self) -> WrappedIOType {
         self.pipeline_runner.get_output_data_type()
     }
+
+    //endregion
+
+    //region Data
+
+    pub fn update_sensor_value(&mut self, value: WrappedIOData) -> Result<(), FeagiDataError> {
+        self.last_updated = Instant::now();
+        _ = self.pipeline_runner.update_value(&value, Instant::now())?;
+        Ok(())
+    }
+
+    /// Returns the most recently processed sensor value.
+    ///
+    /// Provides access to the latest data that has been processed through
+    /// the entire processor chain. This data is ready for neural encoding
+    /// or external consumption.
+    ///
+    /// # Returns
+    ///
+    /// Reference to the most recent processed sensor data
+    pub fn get_most_recent_sensor_value(&self) -> &WrappedIOData {
+        self.pipeline_runner.get_most_recent_output()
+    }
+
+    pub(crate) fn get_most_recent_sensor_value_and_time(&self) -> (&WrappedIOData, &Instant) {
+        (self.pipeline_runner.get_most_recent_output(), &self.last_updated)
+    }
+
+
+
+    /*
+    /// Encodes the cached sensor data into neural representations.
+    ///
+    /// Converts the most recent processed sensor value into neural activity
+    /// patterns using the provided encoder. The encoded data is written
+    /// directly into the cortical mapped neuron data structure for this channel.
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_mapped_neuron_data` - Target neuron data structure to write to
+    /// * `encoder` - Encoder that converts I/O data to neural patterns
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` - Successfully encoded data into neural representation
+    /// * `Err(FeagiDataProcessingError)` - If encoding fails
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the encoder cannot handle the data type or if
+    /// the neural data structure cannot accommodate the encoded patterns.
+    pub fn encode_to_neurons(&self, cortical_mapped_neuron_data: &mut CorticalMappedXYZPNeuronData, encoder: &Box<dyn NeuronXYZPEncoder + Sync + Send>) -> Result<(), FeagiDataError> {
+        encoder.write_neuron_data_single_channel(self.get_most_recent_sensor_value(), self.channel, cortical_mapped_neuron_data)
+    }
+
+     */
+
+    //endregion
+
+    //region Stages
+    // This region is essentially just a proxy to a private structure for public access
+
+    pub fn get_all_stage_properties(&self) -> Vec<Box<dyn PipelineStageProperties + Sync + Send>> {
+        self.pipeline_runner.get_all_stage_properties()
+    }
+
+    pub fn get_single_stage_property(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+        self.pipeline_runner.get_single_stage_property(stage_index)
+    }
+
+    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        self.pipeline_runner.try_update_single_stage_properties(updating_stage_index, updated_properties)
+    }
+
+    pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+        self.pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
+    }
+
+    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        self.pipeline_runner.try_replace_single_stage(replacing_at_index, new_pipeline_stage_properties)
+    }
+
+    //endregion
+
 }
 
 
