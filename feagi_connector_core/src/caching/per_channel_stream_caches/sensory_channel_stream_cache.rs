@@ -91,9 +91,9 @@ impl SensoryChannelStreamCache {
     pub fn get_most_recent_postprocessed_sensor_value(&self) -> &WrappedIOData {
         self.pipeline_runner.get_most_recent_output()
     }
-
-    pub(crate) fn get_most_recent_sensor_value_and_time(&self) -> (&WrappedIOData, &Instant) {
-        (self.pipeline_runner.get_most_recent_output(), &self.last_updated)
+    
+    pub fn get_update_time(&self) -> Instant {
+        self.last_updated
     }
 
 

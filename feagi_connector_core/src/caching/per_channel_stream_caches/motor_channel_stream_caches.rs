@@ -14,7 +14,7 @@ pub(crate) struct MotorChannelStreamCaches {
 
 impl MotorChannelStreamCaches {
     pub fn new(neuron_decoder: Box<dyn NeuronXYZPDecoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
-        if stage_properties_per_channels.is_empty() {
+        if stage_properties_per_channels.is_empty() { // Yes checks exist below, but this error has more context
             return Err(FeagiDataError::InternalError("MotorChannelStreamCaches Cannot be initialized with 0 channels!".into()))
         }
 
