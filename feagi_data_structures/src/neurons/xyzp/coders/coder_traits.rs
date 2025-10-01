@@ -13,10 +13,10 @@ pub trait NeuronXYZPEncoder: Debug {
     fn get_encodable_data_type(&self) -> WrappedIOType;
 
 
-    fn write_neuron_data_multi_channel<'a, D, T>(&self, data_iterator: D, update_time_iterator: T, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>
+    fn write_neuron_data_multi_channel<'a, D, T>(&self, data_iterator: D, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>
     where
-        D: IntoParallelIterator<Item = &'a WrappedIOData>,
-        T: IntoParallelIterator<Item = Instant>;
+        D: IntoParallelIterator<Item = &'a WrappedIOData>;
+
     }
 
 pub trait NeuronXYZPDecoder: Debug {

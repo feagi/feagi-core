@@ -19,8 +19,15 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
-    fn write_neuron_data_multi_channel(&self, data_iterator: &dyn Iterator<Item=&WrappedIOData>, update_time_iterator: &dyn Iterator<Item=Instant>, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
-        todo!()
+    fn write_neuron_data_multi_channel<'a, D, T>(&self, data_iterator: D, update_time_iterator: T, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>
+    where
+        D: IntoParallelIterator<Item = &'a WrappedIOData>,
+        <D as IntoParallelIterator>::Iter: IndexedParallelIterator,
+        T: IntoParallelIterator<Item = Instant>,
+        <T as IntoParallelIterator>::Iter: IndexedParallelIterator,
+    {
+        
+        Ok(())
     }
 
     /*
