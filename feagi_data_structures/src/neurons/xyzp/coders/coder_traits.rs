@@ -1,8 +1,7 @@
-
-
 use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::Instant;
+use ndarray::parallel::prelude::IntoParallelIterator;
 use crate::FeagiDataError;
 use crate::genomic::descriptors::{CorticalChannelCount};
 use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
@@ -14,7 +13,10 @@ pub trait NeuronXYZPEncoder: Debug {
     fn get_encodable_data_type(&self) -> WrappedIOType;
     
 
-    fn write_neuron_data_multi_channel(&self, data_iterator: &dyn Iterator<Item = &WrappedIOData>, update_time_iterator: &dyn Iterator<Item = Instant>, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>;
+    fn write_neuron_data_multi_channel<D, T>(&self, data_iterator: D, update_time_iterator: T, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData)
+        where
+        D: for<'a> IntoParallelIterator<Item = &'a WrappedIOType>,
+        T: Into<Instant> -> Result<(), FeagiDataError>;
 }
 
 pub trait NeuronXYZPDecoder: Debug {
