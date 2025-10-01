@@ -11,13 +11,13 @@ use crate::wrapped_io_data::{WrappedIOType, WrappedIOData};
 pub trait NeuronXYZPEncoder: Debug {
 
     fn get_encodable_data_type(&self) -> WrappedIOType;
-    
 
-    fn write_neuron_data_multi_channel<D, T>(&self, data_iterator: D, update_time_iterator: T, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData)
-        where
-        D: for<'a> IntoParallelIterator<Item = &'a WrappedIOType>,
-        T: Into<Instant> -> Result<(), FeagiDataError>;
-}
+
+    fn write_neuron_data_multi_channel<'a, D, T>(&self, data_iterator: D, update_time_iterator: T, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>
+    where
+        D: IntoParallelIterator<Item = &'a WrappedIOData>,
+        T: IntoParallelIterator<Item = Instant>;
+    }
 
 pub trait NeuronXYZPDecoder: Debug {
     fn get_decoded_data_type(&self) -> WrappedIOType;
