@@ -32,7 +32,7 @@ impl PipelineStageProperties for IdentityStageProperties {
 }
 
 impl IdentityStageProperties {
-    pub fn new(identity_type: WrappedIOType) -> IdentityStageProperties {
+    pub fn new(identity_type: WrappedIOType) -> IdentityStageProperties { // TODO this should be a result, as it can fail
         IdentityStageProperties {
             identity_type
         }

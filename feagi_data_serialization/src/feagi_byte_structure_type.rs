@@ -20,7 +20,7 @@ use crate::FeagiSerializable;
 /// assert_eq!(neuron_type as u8, 11);
 /// ```
 #[repr(u8)]
-#[derive(Debug, PartialEq, Clone, Copy, Eq)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
 pub enum FeagiByteStructureType {
     /// JSON serialization format (human-readable text)
     JSON = 1u8,
