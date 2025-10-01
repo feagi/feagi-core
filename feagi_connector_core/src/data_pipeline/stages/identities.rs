@@ -11,6 +11,7 @@ use feagi_data_structures::data::{ImageFrame, Percentage, Percentage4D, Segmente
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 
 //region Identity Float
 /// A stream processor that passes float values through unchanged.
@@ -50,6 +51,14 @@ impl PipelineStage for IdentityFloatStage {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+        todo!()
     }
 }
 
@@ -112,6 +121,14 @@ impl PipelineStage for IdentityPercentageStage {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+        todo!()
+    }
 }
 
 impl IdentityPercentageStage {
@@ -171,6 +188,14 @@ impl PipelineStage for IdentitySignedPercentageStage {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+        todo!()
+    }
 }
 
 impl IdentitySignedPercentageStage {
@@ -206,11 +231,11 @@ impl Display for IdentityPercentage4DStage {
 
 impl PipelineStage for IdentityPercentage4DStage {
     fn get_input_data_type(&self) -> WrappedIOType {
-        WrappedIOType::Percentage4D
+        WrappedIOType::Percentage_4D
     }
 
     fn get_output_data_type(&self) -> WrappedIOType {
-        WrappedIOType::Percentage4D
+        WrappedIOType::Percentage_4D
     }
 
     fn get_most_recent_output(&self) -> &WrappedIOData {
@@ -230,6 +255,14 @@ impl PipelineStage for IdentityPercentage4DStage {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+        todo!()
+    }
 }
 
 impl IdentityPercentage4DStage {
@@ -243,7 +276,7 @@ impl IdentityPercentage4DStage {
     /// * `Err(FeagiDataError)` - If initial_value is invalid (NaN/infinite)
     pub fn new(initial_value: Percentage4D) -> Result<Self, FeagiDataError> {
         Ok(IdentityPercentage4DStage {
-            previous_value: WrappedIOData::Percentage4D(initial_value),
+            previous_value: WrappedIOData::Percentage_4D(initial_value),
         })
     }
 }
@@ -288,6 +321,14 @@ impl PipelineStage for IdentityImageFrameStage {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+        todo!()
     }
 }
 
@@ -346,6 +387,14 @@ impl PipelineStage for IdentitySegmentedImageFrameStage {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+        todo!()
     }
 }
 

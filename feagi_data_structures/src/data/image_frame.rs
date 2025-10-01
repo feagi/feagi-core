@@ -19,6 +19,24 @@ const LINEAR_SCALE: f32 = 12.92;
 const GAMMA_MIDPOINT: f32 = 128.0;
 const LINEAR_MIDPOINT: f32 = 0.5;
 
+/// A container for image data with support for various color formats and spaces.
+/// 
+/// Stores pixel data as a 3D array with height, width, and channel dimensions.
+/// Supports RGB/RGBA formats and different color spaces (sRGB, Linear, Gamma).
+/// Can import/export various image formats and convert between color spaces.
+/// 
+/// # Example
+/// ```
+/// use feagi_data_structures::data::{ImageFrame, descriptors::*};
+/// 
+/// let props = ImageFrameProperties::new(
+///     ImageXYResolution::new(64, 64).unwrap(),
+///     ColorSpace::Gamma,
+///     ColorChannelLayout::RGB
+/// ).unwrap();
+/// let image = ImageFrame::new_from_image_frame_properties(&props).unwrap();
+/// assert_eq!(image.get_xy_resolution().width, 64);
+/// ```
 #[derive(Clone, Debug)]
 pub struct ImageFrame {
     pixels: Array3<u8>, // MemoryOrderLayout::HeightsWidthsChannels
@@ -38,6 +56,16 @@ impl ImageFrame {
 
     //region Common Constructors
 
+    /// Creates a new ImageFrame with zero-filled pixel data.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{ImageFrame, descriptors::*};
+    /// 
+    /// let resolution = ImageXYResolution::new(32, 24).unwrap();
+    /// let image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, &resolution).unwrap();
+    /// assert_eq!(image.get_color_channel_count(), 3);
+    /// ```
     pub fn new(channel_format: &ColorChannelLayout, color_space: &ColorSpace, xy_resolution: &ImageXYResolution) -> Result<ImageFrame, FeagiDataError> {
         Ok(ImageFrame {
             channel_layout: *channel_format,
@@ -47,11 +75,36 @@ impl ImageFrame {
         })
     }
 
+    /// Creates a new ImageFrame from ImageFrameProperties.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{ImageFrame, descriptors::*};
+    /// 
+    /// let props = ImageFrameProperties::new(
+    ///     ImageXYResolution::new(16, 16).unwrap(),
+    ///     ColorSpace::Linear,
+    ///     ColorChannelLayout::RGBA
+    /// ).unwrap();
+    /// let image = ImageFrame::new_from_image_frame_properties(&props).unwrap();
+    /// assert_eq!(image.get_color_channel_count(), 4);
+    /// ```
     pub fn new_from_image_frame_properties(image_frame_properties: &ImageFrameProperties) -> Result<ImageFrame, FeagiDataError>
     {
         ImageFrame::new(&image_frame_properties.get_color_channel_layout(), &image_frame_properties.get_color_space(), &image_frame_properties.get_image_resolution())
     }
 
+    /// Creates an ImageFrame from a 3D array with specified memory layout.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{ImageFrame, descriptors::*};
+    /// use ndarray::Array3;
+    /// 
+    /// let data = Array3::zeros((8, 8, 3)); // Height, Width, Channels
+    /// let image = ImageFrame::from_array(data, &ColorSpace::Linear, &MemoryOrderLayout::HeightsWidthsChannels).unwrap();
+    /// assert_eq!(image.get_xy_resolution().height, 8);
+    /// ```
     pub fn from_array(input: Array3<u8>, color_space: &ColorSpace, source_memory_order: &MemoryOrderLayout) -> Result<ImageFrame, FeagiDataError> {
         let pixel_data =  change_memory_order_to_row_major(input, source_memory_order);
         let number_color_channels: usize = pixel_data.shape()[2];
@@ -63,7 +116,7 @@ impl ImageFrame {
         })
     }
 
-    pub fn new_from_dynamic_image(img: image::DynamicImage, color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
+    pub fn new_from_dynamic_image(img: DynamicImage, color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
         let (width, height) = img.dimensions();
         let color_layout = ColorChannelLayout::try_from(img.color())?;
         match color_layout {
@@ -186,6 +239,21 @@ impl ImageFrame {
         self.pixels.view()
     }
     
+    /// Returns a mutable view of the pixel data as a 3D array.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{ImageFrame, descriptors::*};
+    /// 
+    /// let props = ImageFrameProperties::new(
+    ///     ImageXYResolution::new(4, 4).unwrap(),
+    ///     ColorSpace::Gamma,
+    ///     ColorChannelLayout::RGB
+    /// ).unwrap();
+    /// let mut image = ImageFrame::new_from_image_frame_properties(&props).unwrap();
+    /// let mut view = image.get_pixels_view_mut();
+    /// view[(0, 0, 0)] = 255; // Set red channel of top-left pixel
+    /// ```
     pub fn get_pixels_view_mut(&mut self) -> ArrayViewMut3<u8> {
         self.pixels.view_mut()
     }
@@ -200,10 +268,38 @@ impl ImageFrame {
         ImageXYResolution::new(shape[1] as u32, shape[0] as u32).unwrap() // because nd array is row major, where coords are yx
     }
 
+    /// Returns the total number of elements (height × width × channels).
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{ImageFrame, descriptors::*};
+    /// 
+    /// let props = ImageFrameProperties::new(
+    ///     ImageXYResolution::new(10, 5).unwrap(),
+    ///     ColorSpace::Gamma,
+    ///     ColorChannelLayout::RGB
+    /// ).unwrap();
+    /// let image = ImageFrame::new_from_image_frame_properties(&props).unwrap();
+    /// assert_eq!(image.get_number_elements(), 10 * 5 * 3); // 150
+    /// ```
     pub fn get_number_elements(&self) -> usize {
         self.pixels.shape()[0] * self.pixels.shape()[1] * self.pixels.shape()[2]
     }
 
+    /// Returns the 3D dimensions (height, width, channels) of the image.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{ImageFrame, descriptors::*};
+    /// 
+    /// let props = ImageFrameProperties::new(
+    ///     ImageXYResolution::new(8, 6).unwrap(),
+    ///     ColorSpace::Linear,
+    ///     ColorChannelLayout::RGBA
+    /// ).unwrap();
+    /// let image = ImageFrame::new_from_image_frame_properties(&props).unwrap();
+    /// let dims = image.get_dimensions();
+    /// ```
     pub fn get_dimensions(&self) -> ImageXYZDimensions {
         ImageXYZDimensions::new(
             self.pixels.shape()[0] as u32,
@@ -398,7 +494,7 @@ impl ImageFrame {
         match self.color_space {
             ColorSpace::Gamma => {
 
-                Zip::indexed(&mut self.pixels).par_for_each(|(y,x,c), color_val| {
+                Zip::indexed(&mut self.pixels).par_for_each(|(_y,_x,_c), color_val| {
                     let v = (*color_val as i32 + value).clamp(0, 255);
                     *color_val = v as u8;
                 });
@@ -439,6 +535,10 @@ impl ImageFrame {
         }
     }
 
+   pub fn blink_image(&mut self) {
+       self.pixels.fill(0);
+   }
+
     //endregion
 
 
@@ -478,7 +578,7 @@ impl ImageFrame {
     pub fn write_as_neuron_xyzp_data(&self, write_target: &mut CorticalMappedXYZPNeuronData, target_id: CorticalID, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
-        let x_offset: u32 = *x_channel_offset * self.get_xy_resolution().width as u32;
+        let x_offset: u32 = *x_channel_offset * self.get_xy_resolution().width;
         let mapped_neuron_data = write_target.ensure_clear_and_borrow_mut(&target_id, self.get_number_elements());
 
         mapped_neuron_data.update_vectors_from_external(|x_vec, y_vec, c_vec, p_vec| {

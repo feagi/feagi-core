@@ -6,7 +6,9 @@ pub mod neurons;
 pub mod processing;
 mod templates;
 mod error;
+mod feagi_signal;
 
 pub use templates::*;
 pub use error::FeagiDataError as FeagiDataError;
+pub use feagi_signal::{FeagiSignal, FeagiSignalIndex};
 

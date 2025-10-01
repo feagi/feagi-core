@@ -136,7 +136,9 @@ impl CorticalType {
             b'm' => Ok(CorticalType::Memory),
             b'_' => CoreCorticalType::get_type_from_bytes(bytes),
             b'i' => SensorCorticalType::get_type_from_bytes(bytes),
+            b'I' => SensorCorticalType::get_type_from_bytes(bytes),
             b'o' => MotorCorticalType::get_type_from_bytes(bytes),
+            b'O' => MotorCorticalType::get_type_from_bytes(bytes),
             _ => {
                 let as_string = String::from_utf8(bytes.to_vec());
                 if as_string.is_err() {

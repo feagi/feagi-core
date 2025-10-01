@@ -2,7 +2,7 @@ use crate::data::{Percentage, SignedPercentage};
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::{CorticalChannelDimensions, CorticalChannelIndex};
-use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZP, NeuronXYZPArrays, NeuronXYZPEncoder};
+use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays, NeuronXYZPEncoder};
 use crate::neurons::xyzp::coders::coder_shared_functions::encode_unsigned_binary_fractional;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 

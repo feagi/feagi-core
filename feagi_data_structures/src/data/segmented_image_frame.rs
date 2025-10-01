@@ -97,6 +97,22 @@ impl SegmentedImageFrame {
         })
     }
 
+    /// Creates a SegmentedImageFrame from SegmentedImageFrameProperties.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
+    ///
+    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(64, 64).unwrap(), // center
+    ///     ImageXYResolution::new(32, 32).unwrap()  // peripherals
+    /// );
+    /// let props = SegmentedImageFrameProperties::new(
+    ///     &resolutions, &ColorChannelLayout::RGB,
+    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
+    /// );
+    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
+    /// ```
     pub fn from_segmented_image_frame_properties(properties: &SegmentedImageFrameProperties) -> Result<SegmentedImageFrame, FeagiDataError> {
         Self::new(
             properties.get_resolutions(),
@@ -120,11 +136,12 @@ impl SegmentedImageFrame {
     ///
     /// # Arguments
     /// * `camera_index` - The grouping index for this camera system (0-255)
+    /// * `is_incremental` - If the encoder / decoder is incremental instead of instant change
     ///
     /// # Returns
     /// Array of 9 CorticalID values arranged as:
     /// ```text
-    /// [6] Top-Left     [7] Top-Middle     [8] Top-Togjt
+    /// [6] Top-Left     [7] Top-Middle     [8] Top-Right
     /// [3] Middle-Left  [4] Center         [5] Middle-Right
     /// [0] Bottom-Left  [1] Bottom-Middle  [2] Bottom-Right
     /// ```
@@ -132,31 +149,73 @@ impl SegmentedImageFrame {
     /// # ImageCamera Segmentation
     /// - **Center**: Primary focus area for detailed processing
     /// - **Surrounding segments**: Peripheral vision areas for context and motion detection
-    pub fn create_ordered_cortical_ids_for_segmented_vision(camera_index: CorticalGroupIndex) -> [CorticalID; 9] {
+    pub fn create_ordered_cortical_ids_for_segmented_vision(camera_index: CorticalGroupIndex, is_incremental: bool) -> [CorticalID; 9] {
+        if is_incremental {
+            return         [
+                SensorCorticalType::ImageCameraBottomLeftIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraBottomMiddleIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraBottomRightIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraMiddleLeftIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraMiddleRightIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraTopLeftIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraTopMiddleIncremental.to_cortical_id(camera_index),
+                SensorCorticalType::ImageCameraTopRightIncremental.to_cortical_id(camera_index),
+            ]
+        }
+
         [
-            SensorCorticalType::ImageCameraBottomLeft.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraBottomMiddle.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraBottomRight.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraMiddleLeft.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraCenter.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraMiddleRight.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopLeft.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopMiddle.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopRight.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomLeftInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomMiddleInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomRightInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraMiddleLeftInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraCenterInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraMiddleRightInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopLeftInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopMiddleInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopRightInstant.to_cortical_id(camera_index),
         ]
     }
 
-    pub fn create_ordered_cortical_types_for_segmented_vision() -> [CorticalType; 9] {
+    /// Returns cortical types for each segment in order.
+    ///
+    /// # Arguments
+    /// * `is_incremental` - If the encoder / decoder is incremental instead of instant change
+    ///
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::SegmentedImageFrame;
+    /// use feagi_data_structures::genomic::{CorticalType, SensorCorticalType};
+    /// 
+    /// let types = SegmentedImageFrame::create_ordered_cortical_types_for_segmented_vision(false);
+    /// assert_eq!(types[4], CorticalType::Sensory(SensorCorticalType::ImageCameraCenterInstant));
+    /// ```
+    pub fn create_ordered_cortical_types_for_segmented_vision(is_incremental: bool) -> [CorticalType; 9] {
+
+        if is_incremental {
+            return         [
+                SensorCorticalType::ImageCameraBottomLeftIncremental.into(),
+                SensorCorticalType::ImageCameraBottomMiddleIncremental.into(),
+                SensorCorticalType::ImageCameraBottomRightIncremental.into(),
+                SensorCorticalType::ImageCameraMiddleLeftIncremental.into(),
+                SensorCorticalType::ImageCameraCenterIncremental.into(),
+                SensorCorticalType::ImageCameraMiddleRightIncremental.into(),
+                SensorCorticalType::ImageCameraTopLeftIncremental.into(),
+                SensorCorticalType::ImageCameraTopMiddleIncremental.into(),
+                SensorCorticalType::ImageCameraTopRightIncremental.into(),
+            ]
+        }
+
         [
-            SensorCorticalType::ImageCameraBottomLeft.into(),
-            SensorCorticalType::ImageCameraBottomMiddle.into(),
-            SensorCorticalType::ImageCameraBottomRight.into(),
-            SensorCorticalType::ImageCameraMiddleLeft.into(),
-            SensorCorticalType::ImageCameraCenter.into(),
-            SensorCorticalType::ImageCameraMiddleRight.into(),
-            SensorCorticalType::ImageCameraTopLeft.into(),
-            SensorCorticalType::ImageCameraTopMiddle.into(),
-            SensorCorticalType::ImageCameraTopRight.into(),
+            SensorCorticalType::ImageCameraBottomLeftInstant.into(),
+            SensorCorticalType::ImageCameraBottomMiddleInstant.into(),
+            SensorCorticalType::ImageCameraBottomRightInstant.into(),
+            SensorCorticalType::ImageCameraMiddleLeftInstant.into(),
+            SensorCorticalType::ImageCameraCenterInstant.into(),
+            SensorCorticalType::ImageCameraMiddleRightInstant.into(),
+            SensorCorticalType::ImageCameraTopLeftInstant.into(),
+            SensorCorticalType::ImageCameraTopMiddleInstant.into(),
+            SensorCorticalType::ImageCameraTopRightInstant.into(),
         ]
     }
     
@@ -208,6 +267,24 @@ impl SegmentedImageFrame {
         self.lower_left.get_channel_layout() // All peripherals should be the same
     }
 
+    /// Returns the resolution configuration for all segments.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
+    /// 
+    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(64, 64).unwrap(),  // center
+    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
+    /// );
+    /// let props = SegmentedImageFrameProperties::new(
+    ///     &resolutions, &ColorChannelLayout::RGB,
+    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
+    /// );
+    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
+    /// let res = frame.get_segmented_frame_target_resolutions();
+    /// assert_eq!(res.center.width, 64);
+    /// ```
     pub fn get_segmented_frame_target_resolutions(&self) -> SegmentedXYImageResolutions {
         SegmentedXYImageResolutions::new(
             self.lower_left.get_xy_resolution(),
@@ -245,12 +322,49 @@ impl SegmentedImageFrame {
         ]
     }
 
+    /// Returns references to all image frames in cortical order.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
+    ///
+    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
+    ///     ImageXYResolution::new(64, 64).unwrap()  // center
+    /// );
+    /// let props = SegmentedImageFrameProperties::new(
+    ///     &resolutions, &ColorChannelLayout::RGB,
+    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
+    /// );
+    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
+    /// let refs = frame.get_ordered_image_frame_references();
+    /// assert_eq!(refs.len(), 9);
+    /// assert_eq!(refs[4].get_xy_resolution().width, 32); // center segment
+    /// ```
     pub fn get_ordered_image_frame_references(&self) -> [&ImageFrame; 9] {
         [&self.lower_left, &self.lower_middle, &self.lower_right, &self.middle_left,
             &self.center, &self.middle_right, &self.upper_left,
             &self.upper_middle, &self.upper_right]
     }
 
+    /// Returns mutable references to all image frames in cortical order.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
+    ///
+    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
+    ///     ImageXYResolution::new(64, 64).unwrap()  // center
+    /// );
+    /// let props = SegmentedImageFrameProperties::new(
+    ///     &resolutions, &ColorChannelLayout::RGB,
+    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
+    /// );
+    /// let mut frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
+    /// let mut_refs = frame.get_mut_ordered_image_frame_references();
+    /// mut_refs[0].skip_encoding = true; // Modify first segment
+    /// ```
     pub fn get_mut_ordered_image_frame_references(&mut self) -> [&mut ImageFrame; 9] {
         [&mut self.lower_left, &mut self.lower_middle, &mut self.lower_right, &mut self.middle_left, &mut self.center,
             &mut self.middle_right, &mut self.upper_left, &mut self.upper_middle,
@@ -293,7 +407,19 @@ impl SegmentedImageFrame {
     }
 
     //endregion
-    
+
+
+    pub fn blink_segments(&mut self)  {
+        self.lower_left.blink_image();
+        self.lower_middle.blink_image();
+        self.lower_right.blink_image();
+        self.middle_left.blink_image();
+        self.center.blink_image();
+        self.middle_right.blink_image();
+        self.upper_left.blink_image();
+        self.upper_middle.blink_image();
+        self.upper_right.blink_image();
+    }
 }
 
 impl std::fmt::Display for SegmentedImageFrame {

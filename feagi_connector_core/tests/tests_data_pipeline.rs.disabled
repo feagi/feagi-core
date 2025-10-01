@@ -151,9 +151,7 @@ mod test_pipeline_stages {
         
         // Test that we can process the image
         let mut output_image = ImageFrame::new(&ColorChannelLayout::RGB, &ColorSpace::Gamma, &target_resolution).unwrap();
-        dbg!(&output_image.get_image_frame_properties());
         let result = processor.process_image(&bird_image, &mut output_image);
-        dbg!(&output_image.get_image_frame_properties());
         
         if result.is_ok() {
             // Verify the transformations were applied
@@ -482,8 +480,8 @@ mod test_pipeline_stages {
         let image_properties  = image.get_image_frame_properties();
         let segmented_properties = SegmentedImageFrameProperties::new(
             &SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+                ImageXYResolution::new(80, 80).unwrap(),
                 ImageXYResolution::new(40, 40).unwrap(),
-                ImageXYResolution::new(20, 20).unwrap(),
             ),
             &image_properties.get_color_channel_layout(),
             &image_properties.get_color_channel_layout(),

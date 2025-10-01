@@ -979,10 +979,12 @@ mod test_image_frame_processor {
 mod test_image_frame_segmentator {
     use super::*;
 
+
     fn create_test_input_properties() -> ImageFrameProperties {
         let resolution = ImageXYResolution::new(640, 480).unwrap();
         ImageFrameProperties::new(resolution, ColorSpace::Gamma, ColorChannelLayout::RGB).unwrap()
     }
+
 
     fn create_test_output_properties() -> SegmentedImageFrameProperties {
         let center_resolution = ImageXYResolution::new(128, 96).unwrap();

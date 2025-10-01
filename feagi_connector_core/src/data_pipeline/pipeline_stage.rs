@@ -10,6 +10,7 @@ use std::time::Instant;
 use std::any::Any;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 
 pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// Returns the data type this processor expects as input.
@@ -52,7 +53,9 @@ pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     
     /// Provide access to `Any` trait for downcasting
     fn as_any(&self) -> &dyn Any;
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties>;
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> ;
     
 }
-
-// TODO JSON descriptors and parameter updates

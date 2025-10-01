@@ -1,13 +1,13 @@
 
 use crate::FeagiDataError;
-use crate::data::{ImageFrame, MiscData, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
-use crate::wrapped_io_data::WrappedIOType;
-use crate::wrapped_io_data::WrappedIOType::F32;
+use crate::data::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
 
 // Macro to define the WrappedIOData enum
 macro_rules! define_wrapped_io_data_enum {
-    ( $( $enum_type:ident : $data_type:ty => $friendly_name:expr ),+ $(,)? ) => {
+    ( $( $enum_type:ident : $data_type:ty => $friendly_name:expr),+ $(,)? ) => {
         #[derive(Debug, Clone)]
+        #[allow(non_camel_case_types)]
+        /// Due to Rust's memory management, WrappedIOData is used to pass around various data structures around.
         pub enum WrappedIOData
         {
             $( $enum_type($data_type), )*
@@ -77,11 +77,19 @@ macro_rules! define_wrapped_io_data_enum {
 
 define_wrapped_io_data_enum!(
     F32: f32 => "f32({})",
+    F32_2D: (f32, f32) => "f32_2d({:?})",
+    F32_3D: (f32, f32, f32) => "f32_3d({:?})",
+    F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})",
     Percentage: Percentage => "{}",
+    Percentage_2D: Percentage2D => "{}",
+    Percentage_3D: Percentage3D => "{}",
+    Percentage_4D: Percentage4D => "{}",
     SignedPercentage: SignedPercentage => "{}",
-    Percentage4D: Percentage4D => "{}",
+    SignedPercentage_2D: SignedPercentage2D => "{}",
+    SignedPercentage_3D: SignedPercentage3D => "{}",
+    SignedPercentage_4D: SignedPercentage4D => "{}",
     ImageFrame: ImageFrame => "{}",
-    SegmentedImageFrame: SegmentedImageFrame =>   "{}",
+    SegmentedImageFrame: SegmentedImageFrame => "{}",
     MiscData: MiscData => "{}",
 );
 

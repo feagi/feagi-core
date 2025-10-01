@@ -1,5 +1,5 @@
 /// Enums that describe or wrap values for use in IO operations.
-/// These must be in this crate due to the encoders / decoders
+/// These must be in this crate due to the Neurons encoders / decoders
 
 mod wrapped_io_type;
 mod wrapped_io_data;

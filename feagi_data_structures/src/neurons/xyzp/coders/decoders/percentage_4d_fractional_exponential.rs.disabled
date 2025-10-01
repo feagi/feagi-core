@@ -1,5 +1,4 @@
-use std::ops::Range;
-use crate::data::{Percentage, Percentage4D};
+use crate::data::{Percentage4D};
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::{CorticalChannelDimensions, CorticalChannelIndex};
@@ -30,10 +29,10 @@ impl NeuronXYZPDecoder for Percentage4DFractionalExponentialNeuronXYZPDecoder {
         let reading_neuron_data = reading_neuron_data.unwrap();
         const Y_OFFSET: u32 = 0;
 
-        target.a = decode_unsigned_binary_fractional(*cortical_channel, Y_OFFSET, self.channel_dimensions.depth, reading_neuron_data);
-        target.b = decode_unsigned_binary_fractional(*cortical_channel * CHANNEL_X_LENGTH + 1, Y_OFFSET, self.channel_dimensions.depth, reading_neuron_data);
-        target.c = decode_unsigned_binary_fractional(*cortical_channel * CHANNEL_X_LENGTH + 2, Y_OFFSET, self.channel_dimensions.depth, reading_neuron_data);
-        target.d = decode_unsigned_binary_fractional(*cortical_channel * CHANNEL_X_LENGTH + 3, Y_OFFSET, self.channel_dimensions.depth, reading_neuron_data);
+        target.a = decode_unsigned_binary_fractional(*cortical_channel, Y_OFFSET, reading_neuron_data);
+        target.b = decode_unsigned_binary_fractional(*cortical_channel * CHANNEL_X_LENGTH + 1, Y_OFFSET, reading_neuron_data);
+        target.c = decode_unsigned_binary_fractional(*cortical_channel * CHANNEL_X_LENGTH + 2, Y_OFFSET, reading_neuron_data);
+        target.d = decode_unsigned_binary_fractional(*cortical_channel * CHANNEL_X_LENGTH + 3, Y_OFFSET, reading_neuron_data);
         Ok(true)
     }
 }

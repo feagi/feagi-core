@@ -217,10 +217,10 @@ impl ImageFrameProcessor {
                     (Some(cropping_from), None) => {
                         crop(source, &mut processing, &cropping_from, self.get_output_channel_count())?;
                     }
-                    (None, Some(final_resize_xy_to)) => {
+                    (None, Some(_final_resize_xy_to)) => {
                         resize(source, &mut processing)?;
                     }
-                    (Some(cropping_from), Some(final_resize_xy_to)) => {
+                    (Some(cropping_from), Some(_final_resize_xy_to)) => {
                         crop_and_resize(source, &mut processing, &cropping_from)?;
                     }
                 };
@@ -229,7 +229,7 @@ impl ImageFrameProcessor {
                     None => {
                         // Do Nothing
                     }
-                    Some(color_space) => {
+                    Some(_color_space) => {
                         return Err(FeagiDataError::NotImplemented)
                     }
                 }
@@ -454,7 +454,6 @@ fn crop_and_resize(source: &ImageFrame, destination: &mut ImageFrame, crop_from:
 
     let number_output_color_channels = source.get_color_channel_count();
 
-    let mut destination_data = destination.get_internal_data_mut();
     let sliced_array_view: ArrayView3<u8> = source.get_internal_data().slice(
         s![crop_from.upper_left.y as usize.. crop_from.lower_right.y as usize,
             crop_from.upper_left.x as usize.. crop_from.lower_right.x as usize,
@@ -464,8 +463,8 @@ fn crop_and_resize(source: &ImageFrame, destination: &mut ImageFrame, crop_from:
     let source_arr = sliced_array_view;
     let destination_arr = destination.get_internal_data_mut();
 
-    let (src_h, src_w, src_c) = (source_arr.shape()[0], source_arr.shape()[1], source_arr.shape()[2]);
-    let (dst_h, dst_w, dst_c) = (destination_arr.shape()[0], destination_arr.shape()[1], destination_arr.shape()[2]);
+    let (src_h, src_w, _src_c) = (source_arr.shape()[0], source_arr.shape()[1], source_arr.shape()[2]);
+    let (dst_h, dst_w, _dst_c) = (destination_arr.shape()[0], destination_arr.shape()[1], destination_arr.shape()[2]);
 
 
     let scale_y = src_h as f32 / dst_h as f32;

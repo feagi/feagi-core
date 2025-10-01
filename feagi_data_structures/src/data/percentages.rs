@@ -1,7 +1,7 @@
 use crate::FeagiDataError;
 
 
-//region Percentage (0 - 1)
+//region 1D Percentage Types
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Percentage {
     value: f32,
@@ -147,9 +147,7 @@ impl From<&Percentage> for f32 {
         value.value
     }
 }
-//endregion
 
-//region SignedPercentage (-1 to 1)
 /// A signed percentage value, from -100 to 100%
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct SignedPercentage {
@@ -315,6 +313,11 @@ impl Percentage2D {
             b: percentage,
         }
     }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update(value);
+        self.b.inplace_update(value);
+    }
 }
 
 impl std::fmt::Display for Percentage2D {
@@ -347,6 +350,11 @@ impl SignedPercentage2D {
             a: percentage,
             b: percentage,
         }
+    }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
     }
 }
 
@@ -388,6 +396,12 @@ impl Percentage3D {
             c: percentage,
         }
     }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update(value);
+        self.b.inplace_update(value);
+        self.c.inplace_update(value);
+    }
 }
 
 impl std::fmt::Display for Percentage3D {
@@ -423,6 +437,12 @@ impl SignedPercentage3D {
             b: percentage,
             c: percentage,
         }
+    }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
+        self.c.inplace_update_unchecked(value);
     }
 }
 
@@ -467,6 +487,13 @@ impl Percentage4D {
             d: percentage,
         }
     }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update(value);
+        self.b.inplace_update(value);
+        self.c.inplace_update(value);
+        self.d.inplace_update(value);
+    }
 }
 
 impl std::fmt::Display for Percentage4D {
@@ -505,6 +532,13 @@ impl SignedPercentage4D {
             c: percentage,
             d: percentage,
         }
+    }
+    
+    pub(crate) fn inplace_update_all(&mut self, value: f32) {
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
+        self.c.inplace_update_unchecked(value);
+        self.d.inplace_update_unchecked(value);
     }
 }
 

@@ -3,6 +3,24 @@ use crate::FeagiDataError;
 use crate::genomic::{CorticalType, CoreCorticalType, SensorCorticalType, MotorCorticalType};
 use crate::genomic::descriptors::CorticalGroupIndex;
 
+/// A 6-byte identifier for cortical areas in FEAGI.
+/// 
+/// Represents unique identifiers for different types of cortical areas including
+/// custom, memory, core, sensor, and motor cortical areas. Uses ASCII-only alphanumeric
+/// characters and underscores.
+/// 
+/// # Example
+/// ```
+/// use feagi_data_structures::genomic::{CorticalID, CoreCorticalType};
+/// 
+/// // Create a custom cortical area ID
+/// let custom_id = CorticalID::new_custom_cortical_area_id("c_lmao".to_string()).unwrap();
+/// 
+/// // Create a core cortical area ID
+/// let core_id = CorticalID::new_core_cortical_area_id(CoreCorticalType::Power).unwrap();
+/// 
+/// assert_eq!(custom_id.as_ascii_string(), "c_lmao");
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CorticalID {
     pub(crate) bytes: [u8; CorticalID::CORTICAL_ID_LENGTH],
@@ -17,6 +35,15 @@ impl CorticalID {
     
     //region Constructors
 
+    /// Creates a custom cortical area ID starting with 'c'.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::CorticalID;
+    /// 
+    /// let id = CorticalID::new_custom_cortical_area_id("c_lmao".to_string()).unwrap();
+    /// assert_eq!(id.as_ascii_string(), "c_lmao");
+    /// ```
     pub fn new_custom_cortical_area_id(desired_id_string: String) -> Result<Self, FeagiDataError> {
         verify_input_length(&desired_id_string)?;
         verify_input_ascii(&desired_id_string)?;
@@ -30,6 +57,15 @@ impl CorticalID {
         Ok(CorticalID { bytes: *bytes })
     }
     
+    /// Creates a memory cortical area ID starting with 'm'.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::CorticalID;
+    /// 
+    /// let id = CorticalID::new_memory_cortical_area_id("m_cats".to_string()).unwrap();
+    /// assert_eq!(id.as_ascii_string(), "m_cats");
+    /// ```
     pub fn new_memory_cortical_area_id(desired_id_string: String) -> Result<Self, FeagiDataError> {
 
         verify_input_length(&desired_id_string)?;
@@ -44,18 +80,59 @@ impl CorticalID {
         Ok(CorticalID { bytes: *bytes })
     }
     
+    /// Creates a core cortical area ID from a CoreCorticalType.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::{CorticalID, CoreCorticalType};
+    /// 
+    /// let id = CorticalID::new_core_cortical_area_id(CoreCorticalType::Power).unwrap();
+    /// assert!(id.as_ascii_string().len() == 6);
+    /// ```
     pub fn new_core_cortical_area_id(core_type: CoreCorticalType) -> Result<Self, FeagiDataError> {
         Ok(core_type.to_cortical_id())
     }
     
+    /// Creates a sensor cortical area ID from type and index.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::{CorticalID, SensorCorticalType};
+    /// use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
+    /// 
+    /// let index: CorticalGroupIndex = 0.into();
+    /// let id = CorticalID::new_sensor_cortical_area_id(SensorCorticalType::ImageCameraCenterInstant, index).unwrap();
+    /// assert!(id.as_ascii_string().len() == 6);
+    /// ```
     pub fn new_sensor_cortical_area_id(input_type: SensorCorticalType, input_index: CorticalGroupIndex) -> Result<Self, FeagiDataError> {
         Ok(input_type.to_cortical_id(input_index))
     }
     
+    /// Creates a motor cortical area ID from type and index.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::{CorticalID, MotorCorticalType};
+    /// use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
+    /// 
+    /// let index: CorticalGroupIndex = 0.into();
+    /// let id = CorticalID::new_motor_cortical_area_id(MotorCorticalType::PositionalServoIncrementalFractional, index).unwrap();
+    /// assert!(id.as_ascii_string().len() == 6);
+    /// ```
     pub fn new_motor_cortical_area_id(output_type: MotorCorticalType, output_index: CorticalGroupIndex) -> Result<Self, FeagiDataError> {
         Ok(output_type.to_cortical_id(output_index))
     }
     
+    /// Creates a CorticalID from a byte array.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::CorticalID;
+    /// 
+    /// let bytes = b"c_lmao";
+    /// let id = CorticalID::from_bytes(bytes).unwrap();
+    /// assert_eq!(id.as_ascii_string(), "c_lmao");
+    /// ```
     pub fn from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<Self, FeagiDataError> {
         
         // Note: we didn't remove this function to avoid having to generate the string twice
@@ -72,6 +149,15 @@ impl CorticalID {
         Ok(CorticalID {bytes: *bytes})
     }
     
+    /// Creates a CorticalID from a string.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::CorticalID;
+    /// 
+    /// let id = CorticalID::from_string("c_lmao".to_string()).unwrap();
+    /// assert_eq!(id.as_ascii_string(), "c_lmao");
+    /// ```
     pub fn from_string(string: String) -> Result<Self, FeagiDataError> {
 
         verify_input_length(&string)?;
@@ -83,6 +169,18 @@ impl CorticalID {
         Ok(CorticalID {bytes })
     }
     
+    /// Creates a CorticalID from a CorticalType and index.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::{CorticalID, CorticalType, CoreCorticalType};
+    /// use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
+    /// 
+    /// let cortical_type = CorticalType::Core(CoreCorticalType::Power);
+    /// let index: CorticalGroupIndex = 0.into();
+    /// let id = CorticalID::try_from_cortical_type(&cortical_type, index).unwrap();
+    /// assert!(id.as_ascii_string().len() == 6);
+    /// ```
     pub fn try_from_cortical_type(cortical_type: &CorticalType, io_cortical_index: CorticalGroupIndex) -> Result<Self, FeagiDataError> {
         CorticalType::to_cortical_id(cortical_type, io_cortical_index)
     }
@@ -102,14 +200,55 @@ impl CorticalID {
         &self.bytes
     }
 
+    /// Returns the cortical ID as an ASCII string.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::CorticalID;
+    /// 
+    /// let id = CorticalID::new_custom_cortical_area_id("c_lmao".to_string()).unwrap();
+    /// assert_eq!(id.as_ascii_string(), "c_lmao");
+    /// ```
     pub fn as_ascii_string(&self) -> String {
         risky_bytes_to_string(&self.bytes)
     }
     
+    /// Returns the cortical type of this ID.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::{CorticalID, CorticalType};
+    /// 
+    /// let id = CorticalID::new_custom_cortical_area_id("c_lmao".to_string()).unwrap();
+    /// match id.get_cortical_type() {
+    ///     CorticalType::Custom => (),
+    ///     _ => panic!("Expected custom type"),
+    /// }
+    /// ```
     pub fn get_cortical_type(&self) -> CorticalType {
         CorticalType::try_get_type_from_bytes(&self.bytes).unwrap() // will never error
     }
     //endregion
+    
+    /// Writes the ID bytes to a provided byte array.
+    /// 
+    /// # Example
+    /// ```
+    /// use feagi_data_structures::genomic::CorticalID;
+    /// 
+    /// let id = CorticalID::new_custom_cortical_area_id("c_lmao".to_string()).unwrap();
+    /// let mut bytes = [0u8; 6];
+    /// id.write_id_to_bytes(&mut bytes);
+    /// assert_eq!(&bytes, b"c_lmao");
+    /// ```
+    pub fn write_id_to_bytes(&self, bytes: &mut [u8; CorticalID::CORTICAL_ID_LENGTH]) {
+        bytes[0] = self.bytes[0];
+        bytes[1] = self.bytes[1];
+        bytes[2] = self.bytes[2];
+        bytes[3] = self.bytes[3];
+        bytes[4] = self.bytes[4];
+        bytes[5] = self.bytes[5];
+    }
 
 }
 
