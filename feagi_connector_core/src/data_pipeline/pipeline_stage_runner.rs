@@ -8,6 +8,7 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 pub(crate) struct PipelineStageRunner {
     input_type: WrappedIOType,
     output_type: WrappedIOType,
+    last_instant_data_processed: Instant,
     pipeline_stages: Vec<Box<dyn PipelineStage>>,
 }
 
@@ -45,6 +46,7 @@ impl PipelineStageRunner {
         
         Ok(PipelineStageRunner {
             input_type: pipeline_stages.first().unwrap().get_input_data_type(),
+            last_instant_data_processed: Instant::now(),
             output_type: pipeline_stages.last().unwrap().get_output_data_type(),
             pipeline_stages,
         })
@@ -93,7 +95,7 @@ impl PipelineStageRunner {
     /// # Performance Notes
     /// Uses `split_at_mut` to avoid borrowing conflicts when accessing processor outputs
     /// while mutating subsequent processing in the chain.
-    pub fn update_value(&mut self, new_value: &WrappedIOData, time_of_update: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_update_value(&mut self, new_value: &WrappedIOData, time_of_update: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         if WrappedIOType::from(new_value) != self.input_type {
             return Err(FeagiDataError::BadParameters(format!("Expected Input data type of {} but received {}!", self.input_type.to_string(), new_value.to_string())).into());
         }
@@ -110,8 +112,8 @@ impl PipelineStageRunner {
             right[0].process_new_input(previous_output, time_of_update)?;
         }
 
-        // Return the output from the last processor
-        Ok(self.pipeline_stages.last().unwrap().get_most_recent_output())
+        self.last_instant_data_processed = time_of_update;
+        Ok(self.pipeline_stages.last().unwrap().get_most_recent_output()) // Return the output from the last processor
     }
 
     /// Returns the most recent output from the final processor in the chain.
@@ -123,6 +125,10 @@ impl PipelineStageRunner {
     /// Reference to the output data from the last processor in the chain.
     pub fn get_most_recent_output(&self) -> &WrappedIOData {
         self.pipeline_stages.last().unwrap().get_most_recent_output()
+    }
+
+    pub fn get_last_processed_instant(&self) -> Instant {
+        self.last_instant_data_processed
     }
 
     //endregion
@@ -137,7 +143,7 @@ impl PipelineStageRunner {
         output
     }
 
-    pub fn get_single_stage_property(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+    pub fn try_get_single_stage_property(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
         self.verify_pipeline_stage_index(stage_index)?;
         Ok(self.pipeline_stages[*stage_index as usize].create_properties())
     }
