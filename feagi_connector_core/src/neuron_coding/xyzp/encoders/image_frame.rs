@@ -24,16 +24,16 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
         // If this is called, then at least one channel has had something updated
         pipelines.par_iter()
             .zip(scratch_space.par_iter_mut())
-            .try_for_each(|(pipeline, scratch)| -> Result<(), FeagiDataError> {
+            .enumerate()
+            .try_for_each(|(index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                 let channel_updated = pipeline.get_last_processed_instant();
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
                 let updated_data = pipeline.get_most_recent_output();
                 let updated_image: &ImageFrame = updated_data.into();
-                updated_image.overwrite_neuron_data(scratch, ())?
-
-
+                let x_offset = index as u32 * self.image_properties.get_image_resolution().width;
+                updated_image.overwrite_neuron_data(scratch, x_offset.into())?;
                 Ok(())
             })?;
         
