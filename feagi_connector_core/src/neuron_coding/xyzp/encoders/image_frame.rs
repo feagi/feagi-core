@@ -22,6 +22,8 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
 
     fn write_neuron_data_multi_channel(&self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut NeuronXYZPArrays, scratch_space: &mut Vec<NeuronXYZPArrays>) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
+
+        write_target.clear();
         pipelines.par_iter()
             .zip(scratch_space.par_iter_mut())
             .enumerate()
@@ -37,9 +39,25 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
                 Ok(())
             })?;
         
-        // After parallel processing, combine results into write_target if needed
-        // TODO: Implement final aggregation
+        // After parallel processing, combine all scratch spaces into write_target
+        // First, calculate total neurons needed and ensure capacity
+        let total_neurons: usize = scratch_space.iter()
+            .map(|scratch| scratch.len())
+            .sum();
         
+        write_target.ensure_capacity(total_neurons);
+        
+        // Collect all scratch data into write_target using direct vector access
+        write_target.update_vectors_from_external(|target_x, target_y, target_z, target_p| {
+            for scratch in scratch_space.iter() {
+                let (scratch_x, scratch_y, scratch_z, scratch_p) = scratch.borrow_xyzp_vectors();
+                target_x.extend_from_slice(scratch_x);
+                target_y.extend_from_slice(scratch_y);
+                target_z.extend_from_slice(scratch_z);
+                target_p.extend_from_slice(scratch_p);
+            }
+            Ok(())
+        })?;
         Ok(())
     }
 }
