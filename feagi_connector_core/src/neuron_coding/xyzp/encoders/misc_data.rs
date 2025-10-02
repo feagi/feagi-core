@@ -1,11 +1,11 @@
 use std::time::Instant;
 use ndarray::parallel::prelude::IntoParallelIterator;
-use crate::data::descriptors::MiscDataDimensions;
-use crate::data::MiscData;
-use crate::FeagiDataError;
-use crate::genomic::CorticalID;
-use crate::genomic::descriptors::{CorticalChannelIndex};
-use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays, NeuronXYZPEncoder};
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex};
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use crate::data_types::descriptors::MiscDataDimensions;
+use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]

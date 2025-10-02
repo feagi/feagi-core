@@ -5,10 +5,8 @@
 
 use std::time::{Instant};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::{PipelineStagePropertyIndex, PipelineStageRunner, PipelineStage, PipelineStageProperties};
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 /// Per-channel cache for sensory input data streams.
 ///

@@ -1,9 +1,7 @@
 use std::time::Instant;
 use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
-use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder};
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::data_pipeline::{PipelineStage, PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]
 pub(crate) struct MotorChannelStreamCache {

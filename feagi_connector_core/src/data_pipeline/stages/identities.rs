@@ -7,11 +7,11 @@
 use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
-use feagi_data_structures::data::{ImageFrame, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
+use crate::data_types::{ImageFrame, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 //region Identity Float
 /// A stream processor that passes float values through unchanged.

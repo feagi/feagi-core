@@ -1,10 +1,10 @@
-use crate::data::descriptors::MiscDataDimensions;
-use crate::data::MiscData;
-use crate::FeagiDataError;
-use crate::genomic::CorticalID;
-use crate::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
-use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData};
-use crate::neurons::xyzp::coders::NeuronXYZPDecoder;
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
+use crate::data_types::descriptors::MiscDataDimensions;
+use crate::data_types::MiscData;
+use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]

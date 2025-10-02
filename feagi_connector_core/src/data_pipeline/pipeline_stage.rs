@@ -9,10 +9,10 @@ use std::fmt::Debug;
 use std::time::Instant;
 use std::any::Any;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
+pub(crate) trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// Returns the data type this processor expects as input.
     ///
     /// This is used by `ProcessorRunner` to validate that processing can be chained

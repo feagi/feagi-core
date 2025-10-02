@@ -1,6 +1,6 @@
 use std::ops::Range;
-use crate::data::Percentage;
-use crate::neurons::xyzp::{NeuronXYZP, NeuronXYZPArrays};
+use feagi_data_structures::neurons::xyzp::{NeuronXYZP, NeuronXYZPArrays};
+use crate::data_types::Percentage;
 
 //region Percentage Binary Fractional
 #[inline]

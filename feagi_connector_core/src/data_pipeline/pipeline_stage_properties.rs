@@ -1,8 +1,8 @@
 use std::any::Any;
 use std::fmt;
 use std::fmt::Debug;
-use feagi_data_structures::wrapped_io_data::WrappedIOType;
 use crate::data_pipeline::PipelineStage;
+use crate::wrapped_io_data::WrappedIOType;
 
 /// Used by PipelineStage implemented structs to copy out and in only the configuration parameters without needing to copy the data
 pub trait PipelineStageProperties: fmt::Display + Debug + Sync + Send + Any {

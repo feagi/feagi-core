@@ -1,10 +1,8 @@
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::time::Instant;
-use ndarray::parallel::prelude::IntoParallelIterator;
-use crate::FeagiDataError;
-use crate::genomic::descriptors::{CorticalChannelCount};
-use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount};
+use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::wrapped_io_data::{WrappedIOType, WrappedIOData};
 
 

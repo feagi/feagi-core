@@ -1,7 +1,7 @@
 use std::any::Any;
-use feagi_data_structures::wrapped_io_data::WrappedIOType;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_pipeline::PipelineStage;
+use crate::wrapped_io_data::WrappedIOType;
 
 /// Identity Stages have no parameters, so this structure is essentially blank
 #[derive(Debug, Clone)]
