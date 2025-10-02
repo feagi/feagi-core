@@ -10,4 +10,5 @@ homepage.workspace = true
 [dependencies]
 serde_json = { workspace = true}
 ndarray = { workspace = true}
+rayon = { workspace = true}
 

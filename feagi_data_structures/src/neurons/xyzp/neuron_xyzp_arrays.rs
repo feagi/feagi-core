@@ -1,5 +1,6 @@
 use std::ops::{RangeInclusive};
 use ndarray::Array1;
+use rayon::prelude::*;
 use crate::FeagiDataError;
 use crate::genomic::descriptors::CorticalCoordinate;
 use crate::neurons::xyzp::NeuronXYZP;
@@ -646,5 +647,133 @@ impl std::fmt::Display for NeuronXYZPArrays {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!("'NeuronXYZPArrays(X: {:?}, Y: {:?}, Z: {:?}, P: {:?})'", self.x, self.y, self.z, self.p);
         write!(f, "{}", s)
+    }
+}
+
+// Implement IntoIterator for owned NeuronXYZPArrays
+impl IntoIterator for NeuronXYZPArrays {
+    type Item = NeuronXYZP;
+    type IntoIter = NeuronXYZPArraysIntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        NeuronXYZPArraysIntoIter {
+            x: self.x.into_iter(),
+            y: self.y.into_iter(),
+            z: self.z.into_iter(),
+            p: self.p.into_iter(),
+        }
+    }
+}
+
+// Iterator struct for owned iteration
+pub struct NeuronXYZPArraysIntoIter {
+    x: std::vec::IntoIter<u32>,
+    y: std::vec::IntoIter<u32>,
+    z: std::vec::IntoIter<u32>,
+    p: std::vec::IntoIter<f32>,
+}
+
+impl Iterator for NeuronXYZPArraysIntoIter {
+    type Item = NeuronXYZP;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match (self.x.next(), self.y.next(), self.z.next(), self.p.next()) {
+            (Some(x), Some(y), Some(z), Some(p)) => {
+                Some(NeuronXYZP {
+                    cortical_coordinate: CorticalCoordinate::new(x, y, z),
+                    potential: p,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.x.size_hint()
+    }
+}
+
+impl ExactSizeIterator for NeuronXYZPArraysIntoIter {
+    fn len(&self) -> usize {
+        self.x.len()
+    }
+}
+
+// Implement IntoParallelIterator for owned NeuronXYZPArrays
+impl IntoParallelIterator for NeuronXYZPArrays {
+    type Item = NeuronXYZP;
+    type Iter = NeuronXYZPArraysParIter;
+
+    fn into_par_iter(self) -> Self::Iter {
+        NeuronXYZPArraysParIter {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+            p: self.p,
+        }
+    }
+}
+
+// Parallel iterator struct for owned iteration
+pub struct NeuronXYZPArraysParIter {
+    x: Vec<u32>,
+    y: Vec<u32>,
+    z: Vec<u32>,
+    p: Vec<f32>,
+}
+
+impl ParallelIterator for NeuronXYZPArraysParIter {
+    type Item = NeuronXYZP;
+
+    fn drive_unindexed<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
+    {
+        // Use rayon's zip to parallelize across the four vectors
+        self.x.into_par_iter()
+            .zip(self.y.into_par_iter())
+            .zip(self.z.into_par_iter())
+            .zip(self.p.into_par_iter())
+            .map(|(((x, y), z), p)| NeuronXYZP {
+                cortical_coordinate: CorticalCoordinate::new(x, y, z),
+                potential: p,
+            })
+            .drive_unindexed(consumer)
+    }
+}
+
+impl IndexedParallelIterator for NeuronXYZPArraysParIter {
+    fn len(&self) -> usize {
+        self.x.len()
+    }
+
+    fn drive<C>(self, consumer: C) -> C::Result
+    where
+        C: rayon::iter::plumbing::Consumer<Self::Item>,
+    {
+        self.x.into_par_iter()
+            .zip(self.y.into_par_iter())
+            .zip(self.z.into_par_iter())
+            .zip(self.p.into_par_iter())
+            .map(|(((x, y), z), p)| NeuronXYZP {
+                cortical_coordinate: CorticalCoordinate::new(x, y, z),
+                potential: p,
+            })
+            .drive(consumer)
+    }
+
+    fn with_producer<CB>(self, callback: CB) -> CB::Output
+    where
+        CB: rayon::iter::plumbing::ProducerCallback<Self::Item>,
+    {
+        self.x.into_par_iter()
+            .zip(self.y.into_par_iter())
+            .zip(self.z.into_par_iter())
+            .zip(self.p.into_par_iter())
+            .map(|(((x, y), z), p)| NeuronXYZP {
+                cortical_coordinate: CorticalCoordinate::new(x, y, z),
+                potential: p,
+            })
+            .with_producer(callback)
     }
 }
