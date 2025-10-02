@@ -401,7 +401,7 @@ impl SegmentedImageFrame {
                 _ = write_target.ensure_clear_and_borrow_mut(&ordered_cortical_ids[index], ordered_refs[index].get_number_elements());
             }
             else {
-                ordered_refs[index].write_as_neuron_xyzp_data(write_target,ordered_cortical_ids[index], channel_index)?;
+                ordered_refs[index].overwrite_neuron_data(write_target, ordered_cortical_ids[index], channel_index)?;
             }
 
         }

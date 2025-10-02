@@ -11,7 +11,7 @@ pub trait NeuronXYZPEncoder: Debug {
 
     fn get_encodable_data_type(&self) -> WrappedIOType;
 
-    fn write_neuron_data_multi_channel(&self, pipelines: &Vec<PipelineStageRunner>, time_of_burst: Instant, write_target: &mut NeuronXYZPArrays, scratch_space: &mut Vec<NeuronXYZPArrays>) -> Result<(), FeagiDataError>;
+    fn write_neuron_data_multi_channel(&self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut NeuronXYZPArrays, scratch_space: &mut Vec<NeuronXYZPArrays>) -> Result<(), FeagiDataError>;
 }
 
 
