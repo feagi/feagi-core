@@ -1,10 +1,13 @@
 use std::time::Instant;
 use ndarray::parallel::prelude::IntoParallelIterator;
+use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex};
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
+use crate::data_types::MiscData;
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
@@ -12,7 +15,7 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 pub struct MiscDataNeuronXYZPEncoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_write_target: CorticalID,
-    number_elements: usize
+    scratch_space: Vec<NeuronXYZPArrays>,
 }
 
 impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
@@ -20,41 +23,61 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
-    fn write_neuron_data_multi_channel<'a, D, T>(&self, data_iterator: D, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>
-    where
-        D: IntoParallelIterator<Item=&'a WrappedIOData>
-    {
-        todo!()
-    }
+    fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
+        // If this is called, then at least one channel has had something updated
+
+        let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
+
+        write_target.clear();
+        pipelines.par_iter()
+            .zip(self.scratch_space.par_iter_mut())
+            .enumerate()
+            .try_for_each(|(index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+                let channel_updated = pipeline.get_last_processed_instant();
+                if channel_updated < time_of_previous_burst {
+                    return Ok(()); // We haven't updated, do nothing
+                }
+                let updated_data = pipeline.get_most_recent_output();
+                let updated_misc: &MiscData = updated_data.into();
+                let x_offset = index as u32 * self.misc_data_dimensions.width;
 
 
 
-    /*
-    fn write_neuron_data_single_channel(&self, wrapped_value: &WrappedIOData, cortical_channel: CorticalChannelIndex, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
-        const Y_OFFSET: u32 = 0;
+                updated_misc.overwrite_neuron_data(scratch, x_offset.into())?;
+                Ok(())
+            })?;
 
-        let value: MiscData = wrapped_value.try_into()?;
-        let values = value.get_internal_data();
+        let total_neurons: usize = self.scratch_space.iter()
+            .map(|scratch| scratch.len())
+            .sum();
 
-        let generated_neuron_data: &mut NeuronXYZPArrays = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target, self.number_elements);
-        let channel_offset: u32 = self.misc_data_dimensions.width * *cortical_channel;
+        neuron_array_target.ensure_capacity(total_neurons);
 
-        for ((x, y, z), value) in values.indexed_iter() {
-            generated_neuron_data.push_raw(x as u32 + channel_offset, y as u32, z as u32, *value);
-        }
+        // TODO could this possibly be done in a parallel way? Probably not worth it
+        neuron_array_target.update_vectors_from_external(|target_x, target_y, target_z, target_p| {
+            for scratch in self.scratch_space.iter() {
+                let (scratch_x, scratch_y, scratch_z, scratch_p) = scratch.borrow_xyzp_vectors();
+                target_x.extend_from_slice(scratch_x);
+                target_y.extend_from_slice(scratch_y);
+                target_z.extend_from_slice(scratch_z);
+                target_p.extend_from_slice(scratch_p);
+            }
+            Ok(())
+        })?;
         Ok(())
     }
 
-     */
+
+
 
 }
 
 impl MiscDataNeuronXYZPEncoder {
-    pub fn new(cortical_write_target: CorticalID, misc_data_dimensions: MiscDataDimensions) -> Result<Self, FeagiDataError> {
+    pub fn new(cortical_write_target: CorticalID, misc_data_dimensions: MiscDataDimensions, number_channels: CorticalChannelCount) -> Result<Self, FeagiDataError> {
         Ok(MiscDataNeuronXYZPEncoder{
             misc_data_dimensions,
             cortical_write_target,
-            number_elements: misc_data_dimensions.number_elements() as usize
+            scratch_space: vec![NeuronXYZPArrays::new(); *number_channels as usize],
         })
     }
 }
