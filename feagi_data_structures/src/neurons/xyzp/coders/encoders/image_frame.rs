@@ -19,36 +19,9 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
 
     fn write_neuron_data_multi_channel<'a, D, T>(&self, data_iterator: D, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>
     where
-        D: IntoParallelIterator<Item = &'a WrappedIOData>,
+        D: IntoParallelIterator<Item=&'a WrappedIOData>
     {
-
-        let data_par = data_iterator.into_par_iter();
-
-        data_par
-            .for_each(|wrapped_data| {
-
-
-
-
-                // Process each (WrappedIOData, Instant) pair here
-                // wrapped_data: &WrappedIOData
-                // update_time: Instant
-
-                // Your processing logic goes here
-                // For example:
-                // match wrapped_data {
-                //     WrappedIOData::ImageFrame(image_frame) => {
-                //         // Process the image frame with the update_time
-                //     },
-                //     _ => {
-                //         // Handle other data types or error
-                //     }
-                // }
-            });
-
-        Ok(())
-
-
+        todo!()
     }
 }
 

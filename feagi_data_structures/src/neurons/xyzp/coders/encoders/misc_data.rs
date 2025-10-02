@@ -1,4 +1,5 @@
 use std::time::Instant;
+use ndarray::parallel::prelude::IntoParallelIterator;
 use crate::data::descriptors::MiscDataDimensions;
 use crate::data::MiscData;
 use crate::FeagiDataError;
@@ -19,16 +20,14 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
-    fn write_neuron_data_multi_channel<'a, D, T>(&self, data_iterator: D, update_time_iterator: T, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>
+    fn write_neuron_data_multi_channel<'a, D, T>(&self, data_iterator: D, time_of_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError>
     where
-        D: IntoParallelIterator<Item = &'a WrappedIOData>,
-        <D as IntoParallelIterator>::Iter: IndexedParallelIterator,
-        T: IntoParallelIterator<Item = Instant>,
-        <T as IntoParallelIterator>::Iter: IndexedParallelIterator,
+        D: IntoParallelIterator<Item=&'a WrappedIOData>
     {
-        
-        Ok(())
+        todo!()
     }
+
+
 
     /*
     fn write_neuron_data_single_channel(&self, wrapped_value: &WrappedIOData, cortical_channel: CorticalChannelIndex, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
