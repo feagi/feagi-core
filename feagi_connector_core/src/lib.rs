@@ -1,4 +1,6 @@
 mod caching;
-pub mod data_pipeline;
+mod wrapped_io_data;
+mod neuron_coding;
 
+pub mod data_types;
 pub use caching::IOCache;

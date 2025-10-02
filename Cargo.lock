@@ -341,9 +341,8 @@ version = "0.0.50-beta.29"
 dependencies = [
  "feagi_data_serialization",
  "feagi_data_structures",
+ "image",
  "ndarray",
- "paste",
- "rayon",
 ]
 
 [[package]]

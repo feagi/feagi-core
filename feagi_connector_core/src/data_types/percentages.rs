@@ -1,4 +1,4 @@
-use crate::FeagiDataError;
+use feagi_data_structures::FeagiDataError;
 
 
 //region 1D Percentage Types

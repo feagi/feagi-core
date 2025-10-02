@@ -1,13 +1,15 @@
-//! Vision processing descriptors and parameter structures for FEAGI.
+//! Descriuptors and Parameter structures for FEAGI Data.
 //!
-//! This module provides data structures and enums for describing image properties
+//! This module provides data structures and enums for describing dat properties
 
 use std::cmp;
 use std::fmt::Display;
-use crate::{define_xyz_mapping, FeagiDataError};
-use crate::data::{ImageFrame, Percentage, Percentage2D, SegmentedImageFrame};
-use crate::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions};
-use crate::genomic::descriptors::CorticalChannelDimensions;
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping};
+use feagi_data_structures::genomic::descriptors::CorticalChannelDimensions;
+use super::{ImageFrame, Percentage, Percentage2D, SegmentedImageFrame};
+
+
 
 //region Images
 

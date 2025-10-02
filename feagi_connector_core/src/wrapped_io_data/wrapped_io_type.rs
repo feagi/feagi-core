@@ -1,7 +1,7 @@
 use std::mem::discriminant;
-use crate::data::descriptors::{ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
-use crate::data::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
-use crate::FeagiDataError;
+use feagi_data_structures::FeagiDataError;
+use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
+use crate::data_types::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
 use crate::wrapped_io_data::WrappedIOData;
 
 

@@ -7,12 +7,14 @@
 //! the periphery.
 
 use ndarray::Array3;
-use crate::data::descriptors::{ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
-use crate::FeagiDataError;
-use crate::data::ImageFrame;
-use crate::genomic::{CorticalID, CorticalType, SensorCorticalType};
-use crate::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
-use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::{CorticalID, CorticalType, SensorCorticalType};
+use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
+use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use super::ImageFrame;
+use super::descriptors::{ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+
+
 
 /// A frame divided into nine segments with different resolutions for peripheral vision simulation.
 ///

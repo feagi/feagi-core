@@ -1,7 +1,7 @@
 use ndarray::{s, Array3, Zip};
-use crate::data::descriptors::MiscDataDimensions;
-use crate::data::ImageFrame;
-use crate::FeagiDataError;
+use feagi_data_structures::FeagiDataError;
+use super::descriptors::MiscDataDimensions;
+use super::ImageFrame;
 
 /// A 3D array container for miscellaneous floating-point data.
 /// 
@@ -10,7 +10,7 @@ use crate::FeagiDataError;
 /// 
 /// # Example
 /// ```
-/// use feagi_data_structures::data::{MiscData, descriptors::MiscDataDimensions};
+/// use feagi_connector_core::data_types::{MiscData, descriptors::MiscDataDimensions};
 /// 
 /// let dims = MiscDataDimensions::new(10, 10, 5).unwrap();
 /// let misc_data = MiscData::new(&dims).unwrap();

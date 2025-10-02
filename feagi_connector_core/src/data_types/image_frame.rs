@@ -1,12 +1,12 @@
 
 use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
-use image;
 use image::{DynamicImage, GenericImageView};
-use crate::FeagiDataError;
-use crate::data::descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions};
-use crate::genomic::CorticalID;
-use crate::genomic::descriptors::CorticalChannelIndex;
-use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
+use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use super::descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions};
+
 
 
 
