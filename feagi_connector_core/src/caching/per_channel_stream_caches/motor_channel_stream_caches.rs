@@ -1,60 +1,140 @@
 use std::time::Instant;
-use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
-use crate::caching::per_channel_stream_caches::MotorChannelStreamCache;
-use crate::data_pipeline::PipelineStageProperties;
+use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
 use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
-use crate::wrapped_io_data::WrappedIOData;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]
 pub(crate) struct MotorChannelStreamCaches {
     neuron_decoder: Box<dyn NeuronXYZPDecoder>,
-    stream_caches: Vec<MotorChannelStreamCache>,
+    pipeline_runners: Vec<PipelineStageRunner>,
+    most_recent_directly_decoded_outputs: Vec<WrappedIOData>,
+    value_updated_callbacks: Vec<FeagiSignal<()>>,
 }
 
 impl MotorChannelStreamCaches {
     pub fn new(neuron_decoder: Box<dyn NeuronXYZPDecoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
-        if stage_properties_per_channels.is_empty() { // Yes checks exist below, but this error has more context
+        if stage_properties_per_channels.is_empty() {
             return Err(FeagiDataError::InternalError("MotorChannelStreamCaches Cannot be initialized with 0 channels!".into()))
         }
 
-        let mut motor_channel_stream_caches: Vec<MotorChannelStreamCache> = Vec::with_capacity(stage_properties_per_channels.len());
+        let num_channels = stage_properties_per_channels.len();
+        let mut pipeline_runners: Vec<PipelineStageRunner> = Vec::with_capacity(num_channels);
+        let mut most_recent_directly_decoded_outputs: Vec<WrappedIOData> = Vec::with_capacity(num_channels);
+        
         for stage_properties_per_channel in stage_properties_per_channels {
-            motor_channel_stream_caches.push(MotorChannelStreamCache::new(stage_properties_per_channel)?);
+            let pipeline_runner = PipelineStageRunner::new(stage_properties_per_channel)?;
+            let blank_data = pipeline_runner.get_input_data_type().create_blank_data_of_type()?;
+            
+            pipeline_runners.push(pipeline_runner);
+            most_recent_directly_decoded_outputs.push(blank_data);
         }
 
         Ok(Self {
             neuron_decoder,
-            stream_caches: motor_channel_stream_caches
+            pipeline_runners,
+            most_recent_directly_decoded_outputs,
+            value_updated_callbacks: vec![FeagiSignal::new(); num_channels],
         })
     }
 
     //region Properties
 
     pub fn number_of_channels(&self) -> CorticalChannelCount {
-        (self.stream_caches.len() as u32).into()
-    }
-
-    pub fn try_get_motor_channel_stream_cache(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&MotorChannelStreamCache, FeagiDataError> {
-        let result = self.stream_caches.get(*cortical_channel_index as usize);
-        match result {
-            Some(stream_cache) => Ok(stream_cache),
-            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} out is out of bounds for MotorChannelStreamCaches with {} channels!", cortical_channel_index, self.stream_caches.len())))
-
-        }
-    }
-
-    pub fn try_get_motor_channel_stream_cache_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut MotorChannelStreamCache, FeagiDataError> {
-        let count = self.stream_caches.len();
-        let result = self.stream_caches.get_mut(*cortical_channel_index as usize);
-        match result {
-            Some(stream_cache) => Ok(stream_cache),
-            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} out is out of bounds for MotorChannelStreamCaches with {} channels!", cortical_channel_index, count)))
-
-        }
+        (self.pipeline_runners.len() as u32).into()
     }
 
     //endregion
 
+    //region Pipeline Runner Data
+
+    pub fn try_get_channel_output_type(&self, cortical_channel_index: CorticalChannelIndex) -> Result<WrappedIOType, FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(pipeline_runner.get_output_data_type())
+    }
+
+    pub fn try_get_most_recent_preprocessed_motor_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+        _ = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(&self.most_recent_directly_decoded_outputs[*cortical_channel_index as usize])
+    }
+
+    pub fn try_get_most_recent_postprocessed_motor_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(pipeline_runner.get_most_recent_output())
+    }
+
+    pub fn try_get_channel_last_processed_instant(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Instant, FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(pipeline_runner.get_last_processed_instant())
+    }
+
+    pub(crate) fn try_get_neuron_decode_data_location_ref_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut WrappedIOData, FeagiDataError> {
+        match self.most_recent_directly_decoded_outputs.get_mut(*cortical_channel_index as usize) {
+            Some(data) => Ok(data),
+            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
+                                                              cortical_channel_index, self.pipeline_runners.len())))
+        }
+
+
+    }
+
+    pub(crate) fn try_process_decoded_value(&mut self, cortical_channel_index: CorticalChannelIndex, process_instant: Instant) -> Result<(), FeagiDataError> {
+        let idx = *cortical_channel_index as usize;
+        self.verify_channel_index(cortical_channel_index)?;
+        
+        let decoded_value = &self.most_recent_directly_decoded_outputs[idx];
+        self.pipeline_runners[idx].try_update_value(decoded_value, process_instant)?;
+        
+        // Emit signal that value was updated
+        self.value_updated_callbacks[idx].emit(&());
+        
+        Ok(())
+    }
+
+    //endregion
+
+    //region Callbacks
+
+    pub fn try_connect_to_data_processed_signal<F>(&mut self, cortical_channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    where
+        F: Fn(&()) + Send + Sync + 'static,
+    {
+        let idx = *cortical_channel_index as usize;
+        self.verify_channel_index(cortical_channel_index)?;
+        Ok(self.value_updated_callbacks[idx].connect(callback))
+    }
+
+    pub fn try_disconnect_to_data_processed_signal(&mut self, cortical_channel_index: CorticalChannelIndex, signal_index: FeagiSignalIndex) -> Result<(), FeagiDataError> {
+        let idx = *cortical_channel_index as usize;
+        self.verify_channel_index(cortical_channel_index)?;
+        self.value_updated_callbacks[idx].disconnect(signal_index)
+    }
+
+    //endregion
+
+    //region Internal
+
+    #[inline]
+    fn try_get_pipeline_runner(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
+        match self.pipeline_runners.get(*cortical_channel_index as usize) {
+            Some(pipeline_runner) => Ok(pipeline_runner),
+            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
+                                                              cortical_channel_index, self.pipeline_runners.len())))
+        }
+
+    }
+
+    #[inline]
+    fn try_get_pipeline_runner_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut PipelineStageRunner, FeagiDataError> {
+        match self.pipeline_runners.get_mut(*cortical_channel_index as usize) {
+            Some(pipeline_runner) => Ok(pipeline_runner),
+            None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
+                                                              cortical_channel_index, self.pipeline_runners.len())))
+        }
+
+    }
+
+    //endregion
 
 }
