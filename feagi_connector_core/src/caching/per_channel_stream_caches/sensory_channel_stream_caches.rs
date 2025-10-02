@@ -4,12 +4,13 @@ use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, Cortical
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::data_pipeline::{PipelineStageProperties};
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
-use crate::wrapped_io_data::WrappedIOData;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use super::sensory_channel_stream_cache::SensoryChannelStreamCache;
 
 pub(crate) struct SensoryChannelStreamCaches {
     neuron_encoder: Box<dyn NeuronXYZPEncoder>,
     stream_caches: Vec<SensoryChannelStreamCache>,
+    time_of_last_update: Instant,
 }
 
 impl SensoryChannelStreamCaches {
@@ -26,7 +27,8 @@ impl SensoryChannelStreamCaches {
 
         Ok(Self {
             neuron_encoder,
-            stream_caches: sensory_channel_stream_caches
+            stream_caches: sensory_channel_stream_caches,
+            time_of_last_update: Instant::now(),
         })
     }
 
@@ -36,7 +38,42 @@ impl SensoryChannelStreamCaches {
         (self.stream_caches.len() as u32).into()
     }
 
-    pub fn try_get_sensory_channel_stream_cache(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&SensoryChannelStreamCache, FeagiDataError> {
+    //endregion
+
+    //region Sensor Stream Cache
+
+    pub fn try_get_channel_input_type(&self, cortical_channel_index: CorticalChannelIndex) -> Result<WrappedIOType, FeagiDataError> {
+        let stream_cache = self.try_get_sensory_channel_stream_cache(cortical_channel_index)?;
+        Ok(stream_cache.get_input_data_type())
+    }
+
+    pub fn try_get_channel_recent_postprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+        let stream_cache = self.try_get_sensory_channel_stream_cache(cortical_channel_index)?;
+        Ok(stream_cache.get_most_recent_postprocessed_sensor_value())
+    }
+
+    pub fn try_get_channel_update_instant(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Instant, FeagiDataError> {
+        let stream_cache = self.try_get_sensory_channel_stream_cache(cortical_channel_index)?;
+        Ok(stream_cache.get_update_instant())
+    }
+
+    pub fn try_update_channel_value(&mut self, cortical_channel_index: CorticalChannelIndex, value: WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
+        let stream_cache = self.try_get_sensory_channel_stream_cache_mut(cortical_channel_index)?;
+        self.time_of_last_update = update_instant;
+        stream_cache.try_update_sensor_value(value, update_instant)
+    }
+    
+    //endregion
+
+    pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&self, neuron_data: &mut CorticalMappedXYZPNeuronData, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+        self.neuron_encoder.write_neuron_data_multi_channel(&self.stream_caches, time_of_burst, neuron_data)?;
+        Ok(())
+    }
+
+    //region Internal
+
+    #[inline]
+    fn try_get_sensory_channel_stream_cache(&self, cortical_channel_index: CorticalChannelIndex)  -> Result<&SensoryChannelStreamCache, FeagiDataError> {
         let result = self.stream_caches.get(*cortical_channel_index as usize);
         match result {
             Some(stream_cache) => Ok(stream_cache),
@@ -45,7 +82,8 @@ impl SensoryChannelStreamCaches {
         }
     }
 
-    pub fn try_get_sensory_channel_stream_cache_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut SensoryChannelStreamCache, FeagiDataError> {
+    #[inline]
+    fn try_get_sensory_channel_stream_cache_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut SensoryChannelStreamCache, FeagiDataError> {
         let count = self.stream_caches.len();
         let result = self.stream_caches.get_mut(*cortical_channel_index as usize);
         match result {
@@ -55,24 +93,8 @@ impl SensoryChannelStreamCaches {
         }
     }
 
-
-
     //endregion
 
-
-
-    pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&self, neuron_data: &mut CorticalMappedXYZPNeuronData, time_of_burst: Instant) -> Result<(), FeagiDataError> {
-        self.neuron_encoder.write_neuron_data_multi_channel(&self.get_data_iterator(), &self.get_update_time_iterator(), time_of_burst, neuron_data)?;
-        Ok(())
-    }
-
-    fn get_data_iterator(&self) -> impl Iterator<Item = &WrappedIOData> {
-        self.stream_caches.iter().map(|stream_cache| stream_cache.get_most_recent_postprocessed_sensor_value())
-    }
-
-    fn get_update_time_iterator(&self) -> impl Iterator<Item = Instant> {
-        self.stream_caches.iter().map(|stream_cache| stream_cache.get_update_time())
-    }
 
 
 

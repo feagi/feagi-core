@@ -57,8 +57,4 @@ impl MotorChannelStreamCaches {
     //endregion
 
 
-    fn get_data_iterator(&mut self) -> impl Iterator<Item = &mut WrappedIOData> {
-        self.stream_caches.iter_mut().map(|stream_cache| stream_cache.get_neuron_decode_data_location_ref_mut())
-    }
-
 }

@@ -27,8 +27,6 @@ pub(crate) struct SensoryChannelStreamCache {
     last_updated: Instant,
 }
 
-// NOTE: We aim to generally abstract away [PipelineStageRunner] data operations from here onward
-
 impl SensoryChannelStreamCache {
     
     pub fn new(pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<Self, FeagiDataError> {
@@ -80,9 +78,9 @@ impl SensoryChannelStreamCache {
 
     //region Data
 
-    pub fn try_update_sensor_value(&mut self, value: WrappedIOData) -> Result<(), FeagiDataError> {
-        _ = self.pipeline_runner.update_value(&value, Instant::now())?; // Checks data type first
-        self.last_updated = Instant::now();
+    pub fn try_update_sensor_value(&mut self, value: WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
+        _ = self.pipeline_runner.update_value(&value, update_instant)?; // Checks data type first
+        self.last_updated = update_instant;
         Ok(())
     }
 
@@ -90,7 +88,7 @@ impl SensoryChannelStreamCache {
         self.pipeline_runner.get_most_recent_output()
     }
     
-    pub fn get_update_time(&self) -> Instant {
+    pub fn get_update_instant(&self) -> Instant {
         self.last_updated
     }
 
