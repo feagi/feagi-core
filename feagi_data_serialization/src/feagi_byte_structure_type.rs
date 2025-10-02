@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use feagi_data_structures::data::FeagiJSON;
+use feagi_data_structures::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::FeagiSerializable;

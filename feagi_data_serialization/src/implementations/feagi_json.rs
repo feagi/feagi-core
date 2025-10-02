@@ -1,4 +1,4 @@
-use feagi_data_structures::data::FeagiJSON;
+use feagi_data_structures::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 

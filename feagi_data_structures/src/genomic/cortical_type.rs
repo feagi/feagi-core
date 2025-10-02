@@ -3,7 +3,6 @@ use crate::{motor_definition, sensor_definition};
 use crate::FeagiDataError;
 use crate::genomic::{CorticalID};
 use crate::genomic::descriptors::{CorticalChannelDimensionRange, CorticalGroupIndex};
-use crate::wrapped_io_data::WrappedIOType;
 
 macro_rules! define_io_cortical_types {
     (
@@ -97,7 +96,8 @@ macro_rules! define_io_cortical_types {
                     ),*
                 }
             }
-
+            
+            /*
             pub fn get_data_type(&self) -> WrappedIOType {
                 match self {
                     $(
@@ -105,6 +105,8 @@ macro_rules! define_io_cortical_types {
                     ),*
                 }
             }
+            
+             
 
             pub fn verify_is_data_type(&self, expected_type: WrappedIOType) -> Result<(), FeagiDataError> {
                 let self_type = self.get_data_type();
@@ -113,6 +115,8 @@ macro_rules! define_io_cortical_types {
                 }
                 Err(FeagiDataError::BadParameters(format!("Expected IO type to be of data variant {}!", expected_type)))
             }
+            
+             */
         }
     }
 }
