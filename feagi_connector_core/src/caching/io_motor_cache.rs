@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
@@ -84,10 +85,11 @@ impl IOMotorCache {
         self.byte_data.try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)
     }
 
-    pub fn try_decode_neural_data_into_cache(&mut self) -> Result<(), FeagiDataError> {
+    pub fn try_decode_neural_data_into_cache(&mut self, time_of_decode: Instant) -> Result<(), FeagiDataError> {
         for motor_channel_stream_cache in self.stream_caches.values_mut() {
-            motor_channel_stream_cache.re
-        }
+            motor_channel_stream_cache.try_read_neuron_data_to_wrapped_io_data(&mut self.neuron_data, time_of_decode)?;
+        };
+        Ok(())
     }
 
     //endregion

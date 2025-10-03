@@ -11,6 +11,7 @@ pub(crate) struct MotorChannelStreamCaches {
     neuron_decoder: Box<dyn NeuronXYZPDecoder>,
     pipeline_runners: Vec<PipelineStageRunner>,
     most_recent_directly_decoded_outputs: Vec<WrappedIOData>,
+    has_channel_been_updated: Vec<bool>,
     value_updated_callbacks: Vec<FeagiSignal<()>>,
 }
 
@@ -38,6 +39,7 @@ impl MotorChannelStreamCaches {
             neuron_decoder,
             pipeline_runners,
             most_recent_directly_decoded_outputs,
+            has_channel_been_updated: vec![false; num_channels],
             value_updated_callbacks: callbacks,
         })
     }
@@ -106,8 +108,9 @@ impl MotorChannelStreamCaches {
 
     //endregion
 
-    pub(crate) fn try_read_neuron_datato_wrapped_io_data(&mut self, neuron_data: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
-        self.neuron_decoder.read_neuron_data_multi_channel(&self.pipeline_runners)
+    pub(crate) fn try_read_neuron_data_to_wrapped_io_data(&mut self, neuron_data: &CorticalMappedXYZPNeuronData, time_of_decode: Instant) -> Result<(), FeagiDataError> {
+        self.neuron_decoder.read_neuron_data_multi_channel(neuron_data, time_of_decode, &mut self.most_recent_directly_decoded_outputs, &mut self.has_channel_been_updated)?;
+        Ok(())
     }
 
     //region Internal

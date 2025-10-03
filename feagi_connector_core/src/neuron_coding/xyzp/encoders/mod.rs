@@ -22,4 +22,6 @@ pub use signed_percentage_fractional_exponential::SignedPercentageFractionalExpo
 
  */
 
-pub use misc_data::MiscDataNeuronXYZPEncoder;
+pub(crate) use misc_data::MiscDataNeuronXYZPEncoder;
+pub(crate) use image_frame::ImageFrameNeuronXYZPEncoder;
+pub(crate) use segmented_image_frame::SegmentedImageFrameNeuronXYZPEncoder;
