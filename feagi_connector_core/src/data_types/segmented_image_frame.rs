@@ -7,10 +7,11 @@
 //! the periphery.
 
 use ndarray::Array3;
+use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::{CorticalID, CorticalType, SensorCorticalType};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
-use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
 use super::ImageFrame;
 use super::descriptors::{ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 
@@ -99,22 +100,6 @@ impl SegmentedImageFrame {
         })
     }
 
-    /// Creates a SegmentedImageFrame from SegmentedImageFrameProperties.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
-    ///
-    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-    ///     ImageXYResolution::new(64, 64).unwrap(), // center
-    ///     ImageXYResolution::new(32, 32).unwrap()  // peripherals
-    /// );
-    /// let props = SegmentedImageFrameProperties::new(
-    ///     &resolutions, &ColorChannelLayout::RGB,
-    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
-    /// );
-    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
-    /// ```
     pub fn from_segmented_image_frame_properties(properties: &SegmentedImageFrameProperties) -> Result<SegmentedImageFrame, FeagiDataError> {
         Self::new(
             properties.get_resolutions(),
@@ -179,19 +164,7 @@ impl SegmentedImageFrame {
         ]
     }
 
-    /// Returns cortical types for each segment in order.
-    ///
-    /// # Arguments
-    /// * `is_incremental` - If the encoder / decoder is incremental instead of instant change
-    ///
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::SegmentedImageFrame;
-    /// use feagi_data_structures::genomic::{CorticalType, SensorCorticalType};
-    /// 
-    /// let types = SegmentedImageFrame::create_ordered_cortical_types_for_segmented_vision(false);
-    /// assert_eq!(types[4], CorticalType::Sensory(SensorCorticalType::ImageCameraCenterInstant));
-    /// ```
+
     pub fn create_ordered_cortical_types_for_segmented_vision(is_incremental: bool) -> [CorticalType; 9] {
 
         if is_incremental {
@@ -269,24 +242,6 @@ impl SegmentedImageFrame {
         self.lower_left.get_channel_layout() // All peripherals should be the same
     }
 
-    /// Returns the resolution configuration for all segments.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
-    /// 
-    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-    ///     ImageXYResolution::new(64, 64).unwrap(),  // center
-    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
-    /// );
-    /// let props = SegmentedImageFrameProperties::new(
-    ///     &resolutions, &ColorChannelLayout::RGB,
-    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
-    /// );
-    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
-    /// let res = frame.get_segmented_frame_target_resolutions();
-    /// assert_eq!(res.center.width, 64);
-    /// ```
     pub fn get_segmented_frame_target_resolutions(&self) -> SegmentedXYImageResolutions {
         SegmentedXYImageResolutions::new(
             self.lower_left.get_xy_resolution(),
@@ -301,14 +256,6 @@ impl SegmentedImageFrame {
         )
     }
 
-    /// Returns references to the internal pixel data arrays for all nine segments.
-    ///
-    /// Provides direct access to the underlying 3D arrays containing pixel data
-    /// for each segment. The arrays are returned in the standard cortical ordering.
-    ///
-    /// # Returns
-    ///
-    /// An array of 9 references to Array3<f32>, one for each segment in cortical order.
     pub fn get_image_internal_data(&self) -> [&Array3<u8>; 9] {
         // return in same order as cortical IDs
         [
@@ -324,49 +271,13 @@ impl SegmentedImageFrame {
         ]
     }
 
-    /// Returns references to all image frames in cortical order.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
-    ///
-    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
-    ///     ImageXYResolution::new(64, 64).unwrap()  // center
-    /// );
-    /// let props = SegmentedImageFrameProperties::new(
-    ///     &resolutions, &ColorChannelLayout::RGB,
-    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
-    /// );
-    /// let frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
-    /// let refs = frame.get_ordered_image_frame_references();
-    /// assert_eq!(refs.len(), 9);
-    /// assert_eq!(refs[4].get_xy_resolution().width, 32); // center segment
-    /// ```
     pub fn get_ordered_image_frame_references(&self) -> [&ImageFrame; 9] {
         [&self.lower_left, &self.lower_middle, &self.lower_right, &self.middle_left,
             &self.center, &self.middle_right, &self.upper_left,
             &self.upper_middle, &self.upper_right]
     }
 
-    /// Returns mutable references to all image frames in cortical order.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::{SegmentedImageFrame, descriptors::*};
-    ///
-    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-    ///     ImageXYResolution::new(32, 32).unwrap(), // peripherals
-    ///     ImageXYResolution::new(64, 64).unwrap()  // center
-    /// );
-    /// let props = SegmentedImageFrameProperties::new(
-    ///     &resolutions, &ColorChannelLayout::RGB,
-    ///     &ColorChannelLayout::RGB, &ColorSpace::Linear
-    /// );
-    /// let mut frame = SegmentedImageFrame::from_segmented_image_frame_properties(&props).unwrap();
-    /// let mut_refs = frame.get_mut_ordered_image_frame_references();
-    /// mut_refs[0].skip_encoding = true; // Modify first segment
-    /// ```
+
     pub fn get_mut_ordered_image_frame_references(&mut self) -> [&mut ImageFrame; 9] {
         [&mut self.lower_left, &mut self.lower_middle, &mut self.lower_right, &mut self.middle_left, &mut self.center,
             &mut self.middle_right, &mut self.upper_left, &mut self.upper_middle,
@@ -393,21 +304,20 @@ impl SegmentedImageFrame {
 
 
     //region neuron export
-    pub fn write_as_neuron_xyzp_data(&self, write_target: &mut CorticalMappedXYZPNeuronData, channel_index: CorticalChannelIndex, ordered_cortical_ids: &[CorticalID; 9]) -> Result<(), FeagiDataError> {
-        let ordered_refs: [&ImageFrame; 9] = self.get_ordered_image_frame_references();
-        
-        for index in 0..9 {
-            if ordered_refs[index].skip_encoding{
-                _ = write_target.ensure_clear_and_borrow_mut(&ordered_cortical_ids[index], ordered_refs[index].get_number_elements());
-            }
-            else {
-                ordered_refs[index].overwrite_neuron_data(write_target, ordered_cortical_ids[index], channel_index)?;
-            }
 
-        }
+    pub(crate) fn overwrite_neuron_data(&self, write_targets: &mut[NeuronXYZPArrays; 9], channel_index: CorticalChannelIndex ) -> Result<(), FeagiDataError> {
+        // NOTE: write_targets should be in the same order as Cortical ID for segmented is!
+
+        let ordered_images = self.get_ordered_image_frame_references();
+        write_targets.par_iter_mut()
+            .enumerate()
+            .try_for_each(|(image_ordered_index, write_target) | -> Result<(), FeagiDataError> {
+                ordered_images[image_ordered_index].overwrite_neuron_data(write_target, channel_index)?; // Handles clearing the array if needed
+                Ok(())
+            })?;
+
         Ok(())
     }
-
     //endregion
 
 

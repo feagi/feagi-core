@@ -8,7 +8,7 @@ use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::ImageFrame;
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use crate::wrapped_io_data::{ WrappedIOType};
 
 #[derive(Debug)]
 pub struct ImageFrameNeuronXYZPEncoder {
@@ -30,15 +30,14 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
         pipelines.par_iter()
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
-            .try_for_each(|(index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+            .try_for_each(|(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                 let channel_updated = pipeline.get_last_processed_instant();
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
                 let updated_data = pipeline.get_most_recent_output();
                 let updated_image: &ImageFrame = updated_data.into();
-                let x_offset = index as u32 * self.image_properties.get_image_resolution().width;
-                updated_image.overwrite_neuron_data(scratch, x_offset.into())?;
+                updated_image.overwrite_neuron_data(scratch, channel_index.into())?;
                 Ok(())
             })?;
 

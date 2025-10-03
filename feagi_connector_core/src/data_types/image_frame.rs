@@ -489,11 +489,16 @@ impl ImageFrame {
 
     // region Outputting Neurons
 
-    pub fn overwrite_neuron_data(&self, write_target: &mut NeuronXYZPArrays, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+    pub(crate) fn overwrite_neuron_data(&self, write_target: &mut NeuronXYZPArrays, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
-        let x_offset: u32 = *x_channel_offset * self.get_xy_resolution().width;
+        let x_offset: u32 = *channel_index * self.get_xy_resolution().width;
         write_target.clear();
+        
+        if self.skip_encoding {
+            return Ok(()) // Encoding is to be skipped
+        }
+        
         write_target.ensure_capacity(self.get_number_elements());
 
         write_target.update_vectors_from_external(|x_vec, y_vec, c_vec, p_vec| {
