@@ -54,7 +54,7 @@ impl PipelineStage for IdentityStage {
     }
 
     fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
-
+        IdentityStageProperties::new_box(self.expected_data_variant).unwrap()
     }
 
     fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
@@ -72,7 +72,7 @@ impl IdentityStage {
         })
     }
 
-    pub fn new_boxed(identity_type: WrappedIOType) -> Result<Box<dyn PipelineStage + 'static>, FeagiDataError> {
+    pub fn new_box(identity_type: WrappedIOType) -> Result<Box<dyn PipelineStage + 'static>, FeagiDataError> {
         Ok(
             Box::new(IdentityStage::new(identity_type)?)
         )

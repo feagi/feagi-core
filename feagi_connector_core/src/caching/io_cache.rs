@@ -4,6 +4,7 @@ use feagi_data_structures::genomic::SensorCorticalType;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
 use crate::data_pipeline::PipelineStageProperties;
+use crate::data_pipeline::stage_properties::IdentityStageProperties;
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::neuron_coding::xyzp::encoders::MiscDataNeuronXYZPEncoder;
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
@@ -44,16 +45,17 @@ impl IOCache {
 
 
         let encoder: Box<dyn NeuronXYZPEncoder + 'static > = MiscDataNeuronXYZPEncoder::new_box(group, dimensions, number_channels, true)?;
-        let blank_data = WrappedIOType::MiscData(Some(dimensions.clone())).create_blank_data_of_type()?;
-        let default_pipeline_single_channel: Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>> =
-            vec![];
-
+        let data_type = WrappedIOType::MiscData(Some(dimensions.clone()));
 
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::MiscellaneousAbsolute;
-        let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> =
-
-
-        self.sensors.register(SENSOR_TYPE, group, encoder, /* Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> */)
+        let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+            let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+            for i in 0..*number_channels {
+                output.push( vec![IdentityStageProperties::new_box(data_type)?]) // TODO properly implement clone so we dont need to do this
+            };
+            output
+        };
+        self.sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
     }
 
 

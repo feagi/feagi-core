@@ -2,6 +2,7 @@ use std::any::Any;
 use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_pipeline::PipelineStage;
+use crate::data_pipeline::stages::IdentityStage;
 use crate::wrapped_io_data::WrappedIOType;
 
 /// Identity Stages have no parameters, so this structure is essentially blank
@@ -28,7 +29,7 @@ impl PipelineStageProperties for IdentityStageProperties {
     }
 
     fn create_stage(&self) -> Box<dyn PipelineStage> {
-        todo!()
+        IdentityStage::new_box(self.identity_type).unwrap()
     }
 }
 
@@ -39,7 +40,7 @@ impl IdentityStageProperties {
         }
     }
     
-    pub fn new_box(identity_type: WrappedIOType) -> Result<Box<dyn PipelineStageProperties + 'static>, FeagiDataError> {
+    pub fn new_box(identity_type: WrappedIOType) -> Result<Box<dyn PipelineStageProperties + Send + Sync + 'static>, FeagiDataError> {
         Ok(Box::new(IdentityStageProperties::new(identity_type)))
     }
 }
