@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
-use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::{FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::MotorCorticalType;
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::caching::per_channel_stream_caches::MotorChannelStreamCaches;
-use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
 use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOData;
 
@@ -54,6 +54,25 @@ impl IOMotorCache {
     pub fn try_read_preprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
+    }
+
+    pub fn try_updating_pipeline_stage(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
+                                       channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
+                                       replacing_property: Box<dyn PipelineStageProperties + Sync + Send>)
+        -> Result<(), FeagiDataError> {
+
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        motor_stream_caches.try_update_pipeline_stage(channel_index, pipeline_stage_property_index, replacing_property)?;
+        Ok(())
+    }
+
+    pub fn try_register_motor_callback<F>(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    where
+        F: Fn(&()) + Send + Sync + 'static,
+    {
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        let index = motor_stream_caches.try_connect_to_data_processed_signal(channel_index, callback)?;
+        Ok(index)
     }
 
     /*

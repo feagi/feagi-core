@@ -73,6 +73,11 @@ impl ImageSegmentorStageProperties {
             image_segmentator
         )))
     }
+
+    pub fn update_from_gaze(&mut self, new_gaze: GazeProperties) -> Result<(), FeagiDataError> {
+        self.image_segmentator.update_gaze(&new_gaze)?;
+        Ok(())
+    }
 }
 
 impl std::fmt::Display for ImageSegmentorStageProperties {

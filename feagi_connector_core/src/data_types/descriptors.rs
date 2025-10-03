@@ -7,7 +7,7 @@ use std::fmt::Display;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping};
 use feagi_data_structures::genomic::descriptors::CorticalChannelDimensions;
-use super::{ImageFrame, Percentage, Percentage2D, SegmentedImageFrame};
+use super::{ImageFrame, Percentage, Percentage2D, Percentage4D, SegmentedImageFrame};
 
 
 
@@ -46,7 +46,7 @@ pub struct SegmentedXYImageResolutions {
 }
 
 impl SegmentedXYImageResolutions {
-    
+
     pub fn new(
         lower_left: ImageXYResolution,
         lower_middle: ImageXYResolution,
@@ -94,7 +94,7 @@ impl SegmentedXYImageResolutions {
                                          peripheral_resolutions, peripheral_resolutions,
                                          peripheral_resolutions)
     }
-    
+
     pub fn as_ordered_array(&self) ->[&ImageXYResolution; 9] {
         [
             &self.lower_left,
@@ -482,6 +482,12 @@ impl GazeProperties {
             eccentricity_location_xy: eccentricity_center_xy,
             modulation_size_xy: modularity_size_xy,
         }
+    }
+
+    pub fn new_4d(percentage4d: Percentage4D) -> Self {
+        let eccentricity_location_xy = Percentage2D::new(percentage4d.a, percentage4d.b);
+        let modulation_size_xy= Percentage2D::new(percentage4d.c, percentage4d.d);
+        GazeProperties::new(eccentricity_location_xy, modulation_size_xy)
     }
 
     /// Creates a default centered SegmentedFrameCenterProperties.

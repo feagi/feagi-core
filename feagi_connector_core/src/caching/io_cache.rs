@@ -1,5 +1,5 @@
 use std::time::Instant;
-use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::{FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use crate::caching::io_motor_cache::IOMotorCache;
@@ -88,6 +88,8 @@ impl IOCache {
 
 
 
+
+
     //endregion
 
     //endregion
@@ -126,8 +128,16 @@ impl IOCache {
         let percentage: Percentage4D = data.try_into()?;
         Ok(percentage)
     }
-    //endregion
 
+    pub fn motor_add_callback_gaze_absolute<F>(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    where
+        F: Fn(&()) + Send + Sync + 'static,
+    {
+        const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
+        let index = self.motors.try_register_motor_callback(MOTOR_TYPE, group, channel, callback)?;
+        Ok(index)
+    }
+    //endregion
 
 
     //endregion

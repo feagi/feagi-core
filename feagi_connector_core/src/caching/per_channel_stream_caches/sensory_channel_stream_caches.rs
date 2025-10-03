@@ -2,7 +2,7 @@ use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
-use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
@@ -39,6 +39,11 @@ impl SensoryChannelStreamCaches {
         (self.pipeline_runners.len() as u32).into()
     }
 
+    pub fn verify_channel_exists(&self, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        _ =  self.try_get_pipeline_runner(channel_index)?;
+        Ok(())
+    }
+
     //endregion
 
     //region Pipeline Runner Data
@@ -65,6 +70,22 @@ impl SensoryChannelStreamCaches {
         Ok(())
     }
     
+    //endregion
+
+    //region Pipeline Runner Stages
+
+    pub fn try_get_stage_properties(&self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        let property = pipeline_runner.try_get_single_stage_property(pipeline_stage_property_index)?;
+        Ok(property)
+    }
+
+    pub fn try_update_pipeline_stage(&mut self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, replacing_property: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        pipeline_runner.try_update_single_stage_properties(pipeline_stage_property_index, replacing_property)?;
+        Ok(())
+    }
+
     //endregion
 
     pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronData, time_of_burst: Instant) -> Result<(), FeagiDataError> {

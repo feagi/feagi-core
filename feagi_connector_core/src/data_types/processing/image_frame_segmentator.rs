@@ -33,7 +33,7 @@ impl ImageFrameSegmentator {
     }
 
     pub fn get_used_gaze(&self) -> GazeProperties {
-        self.gaze_being_used.clone()
+        self.gaze_being_used
     }
     
     pub fn verify_input_image(&self, input: &ImageFrame) -> Result<(), FeagiDataError> {
