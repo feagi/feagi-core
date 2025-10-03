@@ -1,4 +1,5 @@
 use std::time::Instant;
+use ndarray::ErrorKind::IncompatibleShape;
 use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
@@ -104,6 +105,17 @@ impl MotorChannelStreamCaches {
         _ = self.try_get_pipeline_runner(cortical_channel_index)?;
         let idx = *cortical_channel_index as usize;
         self.value_updated_callbacks[idx].disconnect(signal_index)
+    }
+
+    pub(crate) fn try_run_callbacks_on_changed_channels(&mut self) -> Result<(), FeagiDataError> {
+        for channel_index in 0..self.pipeline_runners.len() {
+            if !self.has_channel_been_updated[channel_index] {
+                continue;
+            }
+            self.value_updated_callbacks[channel_index].emit(()); // no value
+        }
+        self.has_channel_been_updated.fill(false);
+        Ok(())
     }
 
     //endregion

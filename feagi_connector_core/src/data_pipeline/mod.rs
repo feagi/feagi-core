@@ -3,7 +3,7 @@ mod pipeline_stage;
 mod pipeline_stage_conversions;
 pub mod stages;
 mod descriptors;
-mod stage_properties;
+pub mod stage_properties;
 mod pipeline_stage_properties;
 
 pub use descriptors::PipelineStagePropertyIndex;

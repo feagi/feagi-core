@@ -1,4 +1,5 @@
 use std::any::Any;
+use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_pipeline::PipelineStage;
 use crate::wrapped_io_data::WrappedIOType;
@@ -36,6 +37,10 @@ impl IdentityStageProperties {
         IdentityStageProperties {
             identity_type
         }
+    }
+    
+    pub fn new_box(identity_type: WrappedIOType) -> Result<Box<dyn PipelineStageProperties + 'static>, FeagiDataError> {
+        Ok(Box::new(IdentityStageProperties::new(identity_type)))
     }
 }
 

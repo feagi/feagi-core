@@ -1,5 +1,13 @@
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalGroupIndex};
+use feagi_data_structures::genomic::SensorCorticalType;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
+use crate::data_pipeline::PipelineStageProperties;
+use crate::data_types::descriptors::MiscDataDimensions;
+use crate::neuron_coding::xyzp::encoders::MiscDataNeuronXYZPEncoder;
+use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
+use crate::wrapped_io_data::WrappedIOType;
 
 pub struct IOCache {
     sensors: IOSensorCache,
@@ -12,7 +20,61 @@ pub struct IOCache {
 // motor_ -> motor device specific function
 
 impl IOCache {
-    
+
+    pub fn new() -> Self {
+        IOCache {
+            sensors: IOSensorCache::new(),
+            motors: IOMotorCache::new()
+        }
+    }
+
+
+    //region Sensors
+
+
+
+
+
+    //endregion
+
+    //region Misc
+
+    pub fn register_misc_absolute_sensor(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount,
+                                     dimensions: MiscDataDimensions, ) -> Result<(), FeagiDataError> {
+
+
+        let encoder: Box<dyn NeuronXYZPEncoder + 'static > = MiscDataNeuronXYZPEncoder::new_box(group, dimensions, number_channels, true)?;
+        let blank_data = WrappedIOType::MiscData(Some(dimensions.clone())).create_blank_data_of_type()?;
+        let default_pipeline_single_channel: Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>> =
+            vec![];
+
+
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::MiscellaneousAbsolute;
+        let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> =
+
+
+        self.sensors.register(SENSOR_TYPE, group, encoder, /* Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> */)
+    }
+
+
+
+    //endregion
+
+
+
+
+
+
+
+    //region Motors
+
+
+
+
+
+    //endregion
+
+
     
     
     

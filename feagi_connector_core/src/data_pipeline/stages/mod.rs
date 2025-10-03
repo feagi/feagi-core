@@ -12,7 +12,7 @@ mod image_pixel_value_count_threshold;
 
  */
 
-pub use identities::*;
+pub use identities::IdentityStage;
 /*
 pub use rolling_windows::*;
 pub use ranges::*;

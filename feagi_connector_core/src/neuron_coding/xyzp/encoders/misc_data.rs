@@ -1,8 +1,8 @@
 use std::time::Instant;
 use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount};
+use feagi_data_structures::genomic::{CorticalID, SensorCorticalType};
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalGroupIndex};
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
@@ -71,11 +71,19 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
 }
 
 impl MiscDataNeuronXYZPEncoder {
-    pub fn new(cortical_write_target: CorticalID, misc_data_dimensions: MiscDataDimensions, number_channels: CorticalChannelCount) -> Result<Self, FeagiDataError> {
-        Ok(MiscDataNeuronXYZPEncoder{
+    pub fn new_box(cortical_group_index: CorticalGroupIndex, misc_data_dimensions: MiscDataDimensions, number_channels: CorticalChannelCount, is_absolute: bool) -> Result<Box<dyn NeuronXYZPEncoder + 'static>, FeagiDataError> {
+        let cortical_id: CorticalID;
+        if is_absolute {
+            cortical_id = SensorCorticalType::MiscellaneousAbsolute.to_cortical_id(cortical_group_index);
+        }
+        else {
+            cortical_id = SensorCorticalType::MiscellaneousIncremental.to_cortical_id(cortical_group_index);
+        }
+        let encoder = MiscDataNeuronXYZPEncoder {
             misc_data_dimensions,
-            cortical_write_target,
+            cortical_write_target: cortical_id,
             scratch_space: vec![NeuronXYZPArrays::new(); *number_channels as usize],
-        })
+        };
+        Ok(Box::new(encoder))
     }
 }

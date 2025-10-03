@@ -88,7 +88,12 @@ impl IOMotorCache {
     pub fn try_decode_neural_data_into_cache(&mut self, time_of_decode: Instant) -> Result<(), FeagiDataError> {
         for motor_channel_stream_cache in self.stream_caches.values_mut() {
             motor_channel_stream_cache.try_read_neuron_data_to_wrapped_io_data(&mut self.neuron_data, time_of_decode)?;
-        };
+        }; // Make sure everything is decoded before calling callbacks, in order to avoid possible race conditions!
+        // for now, callbacks themselves will be serial, as async in python could be a pain
+        for motor_channel_stream_cache in self.stream_caches.values_mut() {
+            motor_channel_stream_cache.try_run_callbacks_on_changed_channels()?
+        }
+
         Ok(())
     }
 
