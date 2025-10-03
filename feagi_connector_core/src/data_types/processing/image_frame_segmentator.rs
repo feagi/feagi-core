@@ -7,6 +7,7 @@ pub struct ImageFrameSegmentator {
     input_properties: ImageFrameProperties,
     output_properties: SegmentedImageFrameProperties,
     ordered_transformers: [ImageFrameProcessor; 9],
+    gaze_being_used: GazeProperties
 }
 
 impl ImageFrameSegmentator {
@@ -19,14 +20,20 @@ impl ImageFrameSegmentator {
                     &input_properties,
                     &output_properties,
                     &initial_gaze,
-                )?
+                )?,
+                gaze_being_used: initial_gaze
             }
         )
     }
     
     pub fn update_gaze(&mut self, gaze: &GazeProperties) -> Result<(), FeagiDataError> {
         self.ordered_transformers = Self::get_new_ordered_transformers(&self.input_properties, &self.output_properties, gaze)?;
+        self.gaze_being_used = gaze.clone();
         Ok(())
+    }
+
+    pub fn get_used_gaze(&self) -> GazeProperties {
+        self.gaze_being_used.clone()
     }
     
     pub fn verify_input_image(&self, input: &ImageFrame) -> Result<(), FeagiDataError> {

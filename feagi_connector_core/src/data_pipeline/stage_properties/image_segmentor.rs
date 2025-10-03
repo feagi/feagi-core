@@ -3,7 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_pipeline::PipelineStage;
 use crate::data_pipeline::stages::ImageFrameSegmentatorStage;
-use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
+use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::data_types::ImageFrameSegmentator;
 use crate::wrapped_io_data::WrappedIOType;
 
@@ -57,8 +57,16 @@ impl ImageSegmentorStageProperties {
     pub fn new_box(
         input_image_properties: ImageFrameProperties,
         output_image_properties: SegmentedImageFrameProperties,
-        image_segmentator: ImageFrameSegmentator
+        initial_gaze: GazeProperties
+
     ) -> Result<Box<dyn PipelineStageProperties + Send + Sync + 'static>, FeagiDataError> {
+
+        let image_segmentator = ImageFrameSegmentator::new(
+            input_image_properties,
+            output_image_properties,
+            initial_gaze
+        )?;
+
         Ok(Box::new(ImageSegmentorStageProperties::new(
             input_image_properties,
             output_image_properties,

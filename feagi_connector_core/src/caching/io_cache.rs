@@ -5,8 +5,8 @@ use feagi_data_structures::genomic::SensorCorticalType;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
 use crate::data_pipeline::PipelineStageProperties;
-use crate::data_pipeline::stage_properties::IdentityStageProperties;
-use crate::data_types::descriptors::{MiscDataDimensions, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+use crate::data_pipeline::stage_properties::{IdentityStageProperties, ImageSegmentorStageProperties};
+use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 use crate::data_types::SegmentedImageFrame;
 use crate::neuron_coding::xyzp::encoders::{MiscDataNeuronXYZPEncoder, SegmentedImageFrameNeuronXYZPEncoder};
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
@@ -64,7 +64,7 @@ impl IOCache {
 
     //region Segmented Vision
 
-    pub fn sensor_register_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, segmented_image_properties: SegmentedImageFrameProperties) -> Result<(), FeagiDataError> {
+    pub fn sensor_register_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, input_image_properties: ImageFrameProperties, segmented_image_properties: SegmentedImageFrameProperties, initial_gaze: GazeProperties) -> Result<(), FeagiDataError> {
 
         let cortical_ids = SegmentedImageFrame::create_ordered_cortical_ids_for_segmented_vision(group, false);
         let encoder: Box<dyn NeuronXYZPEncoder + 'static > = SegmentedImageFrameNeuronXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
@@ -73,7 +73,7 @@ impl IOCache {
         let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
             let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
             for i in 0..*number_channels {
-                output.push( vec![n]) // TODO properly implement clone so we dont need to do this
+                output.push( vec![ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?]) // TODO properly implement clone so we dont need to do this
             };
             output
         };

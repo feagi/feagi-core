@@ -58,7 +58,7 @@ impl PipelineStage for ImageFrameSegmentatorStage {
         ImageSegmentorStageProperties::new_box(
             self.input_image_properties,
             self.output_image_properties,
-            self.image_segmentator.clone()
+            self.image_segmentator.get_used_gaze()
         ).unwrap()
     }
 
