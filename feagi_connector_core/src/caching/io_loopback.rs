@@ -8,11 +8,12 @@ use crate::data_pipeline::stage_properties::ImageSegmentorStageProperties;
 use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::data_types::Percentage4D;
 
-pub fn loopback_absolute_gaze_to_segmentation(sensors: &mut IOSensorCache, motors: &IOMotorCache,
+pub fn loopback_absolute_gaze_to_segmentation(sensors: &mut IOSensorCache, motors: &mut IOMotorCache,
                                      gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex,
                                      segmentation_group: CorticalGroupIndex,
                                      segmentation_channel: CorticalChannelIndex)
                                      -> Result<(), FeagiDataError> {
+
 
 
     fn update_segmentator_from_gaze(sensors: &mut IOSensorCache, motors: &IOMotorCache, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) {
@@ -34,7 +35,7 @@ pub fn loopback_absolute_gaze_to_segmentation(sensors: &mut IOSensorCache, motor
         sensors.try_updating_pipeline_stage(SENSOR_TYPE, segmentation_group, segmentation_channel, temp, segmentator_property).unwrap()
     }
 
-
+    motors.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group), gaze_channel, ())
 
 
     Ok(())
