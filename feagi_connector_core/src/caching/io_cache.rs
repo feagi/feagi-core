@@ -1,14 +1,15 @@
+use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalGroupIndex};
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::SensorCorticalType;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_pipeline::stage_properties::IdentityStageProperties;
-use crate::data_types::descriptors::MiscDataDimensions;
-use crate::neuron_coding::xyzp::encoders::MiscDataNeuronXYZPEncoder;
+use crate::data_types::descriptors::{MiscDataDimensions, SegmentedXYImageResolutions};
+use crate::neuron_coding::xyzp::encoders::{MiscDataNeuronXYZPEncoder, SegmentedImageFrameNeuronXYZPEncoder};
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
-use crate::wrapped_io_data::WrappedIOType;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 pub struct IOCache {
     sensors: IOSensorCache,
@@ -32,16 +33,10 @@ impl IOCache {
 
     //region Sensors
 
-
-
-
-
-    //endregion
-
     //region Misc
 
-    pub fn register_misc_absolute_sensor(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount,
-                                     dimensions: MiscDataDimensions, ) -> Result<(), FeagiDataError> {
+    pub fn sensor_register_misc_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount,
+                                         dimensions: MiscDataDimensions) -> Result<(), FeagiDataError> {
 
 
         let encoder: Box<dyn NeuronXYZPEncoder + 'static > = MiscDataNeuronXYZPEncoder::new_box(group, dimensions, number_channels, true)?;
@@ -58,9 +53,31 @@ impl IOCache {
         self.sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
     }
 
+    pub fn sensor_write_misc_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: &WrappedIOData) -> Result<(), FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::MiscellaneousAbsolute;
+        self.sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())
+    }
+    //endregion
+
+
+    //region Segmented Vision
+
+    pub fn sensor_register_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, segmented_xyimage_resolutions: SegmentedXYImageResolutions) -> Result<(), FeagiDataError> {
+
+        let encoder: Box<dyn NeuronXYZPEncoder + 'static > = SegmentedImageFrameNeuronXYZPEncoder::m
+
+
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+    }
+
 
 
     //endregion
+
+    //endregion
+
+
+
 
 
 
