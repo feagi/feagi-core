@@ -63,11 +63,12 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
 }
 
 impl ImageFrameNeuronXYZPEncoder {
-    pub fn new(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Self, FeagiDataError> {
-        Ok(ImageFrameNeuronXYZPEncoder{
+    pub fn new_box(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPEncoder + 'static>, FeagiDataError> {
+        let encoder = ImageFrameNeuronXYZPEncoder{
             image_properties: image_properties.clone(),
             cortical_write_target,
             scratch_space: vec![NeuronXYZPArrays::new(); *number_channels as usize],
-        })
+        };
+        Ok(Box::new(encoder))
     }
 }

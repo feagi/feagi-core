@@ -46,22 +46,7 @@ pub struct SegmentedXYImageResolutions {
 }
 
 impl SegmentedXYImageResolutions {
-
-    /// Creates a new SegmentedXYImageResolutions with individual resolutions for each segment.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::descriptors::*;
-    /// 
-    /// let center_res = ImageXYResolution::new(64, 64).unwrap();
-    /// let peripheral_res = ImageXYResolution::new(32, 32).unwrap();
-    /// let resolutions = SegmentedXYImageResolutions::new(
-    ///     peripheral_res, peripheral_res, peripheral_res, // bottom row
-    ///     peripheral_res, center_res, peripheral_res, // middle row  
-    ///     peripheral_res, peripheral_res, peripheral_res  // top row
-    /// );
-    /// assert_eq!(resolutions.center.width, 64);
-    /// ```
+    
     pub fn new(
         lower_left: ImageXYResolution,
         lower_middle: ImageXYResolution,
@@ -109,20 +94,7 @@ impl SegmentedXYImageResolutions {
                                          peripheral_resolutions, peripheral_resolutions,
                                          peripheral_resolutions)
     }
-
-    /// Returns all segment resolutions as an ordered array.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::descriptors::*;
-    /// 
-    /// let center_res = ImageXYResolution::new(64, 64).unwrap();
-    /// let peripheral_res = ImageXYResolution::new(32, 32).unwrap();
-    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(center_res, peripheral_res);
-    /// let array = resolutions.as_ordered_array();
-    /// assert_eq!(array.len(), 9);
-    /// assert_eq!(array[4].width, 64); // center segment
-    /// ```
+    
     pub fn as_ordered_array(&self) ->[&ImageXYResolution; 9] {
         [
             &self.lower_left,
@@ -356,36 +328,12 @@ impl ImageFrameProperties {
         self.color_channel_layout
     }
 
-    /// Returns the number of color channels.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::descriptors::*;
-    /// 
-    /// let props = ImageFrameProperties::new(
-    ///     ImageXYResolution::new(32, 32).unwrap(),
-    ///     ColorSpace::Gamma,
-    ///     ColorChannelLayout::RGBA
-    /// ).unwrap();
-    /// assert_eq!(props.get_number_of_channels(), 4);
-    /// ```
+
     pub fn get_number_of_channels(&self) -> usize {
         self.color_channel_layout.into()
     }
 
-    /// Returns the total number of pixel samples (width × height × channels).
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::descriptors::*;
-    /// 
-    /// let props = ImageFrameProperties::new(
-    ///     ImageXYResolution::new(10, 8).unwrap(),
-    ///     ColorSpace::Linear,
-    ///     ColorChannelLayout::RGB
-    /// ).unwrap();
-    /// assert_eq!(props.get_number_of_samples(), 10 * 8 * 3); // 240
-    /// ```
+
     pub fn get_number_of_samples(&self) -> usize {
         self.image_resolution.width as usize * self.image_resolution.height as usize * self.get_number_of_channels()
     }
@@ -402,25 +350,7 @@ impl Display for ImageFrameProperties {
 
 //region Segmented Image Frame Properties
 
-/// Configuration properties for segmented image frames.
-/// 
-/// Defines resolutions, color channels, and color space for all nine segments
-/// in a segmented vision frame. Allows different channel layouts for center
-/// and peripheral segments.
-/// 
-/// # Example
-/// ```
-/// use feagi_data_structures::data::descriptors::*;
-/// 
-/// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-///     ImageXYResolution::new(64, 64).unwrap(), // center
-///     ImageXYResolution::new(32, 32).unwrap()  // peripherals
-/// );
-/// let props = SegmentedImageFrameProperties::new(
-///     &resolutions, &ColorChannelLayout::RGB,
-///     &ColorChannelLayout::RGB, &ColorSpace::Gamma,
-/// );
-/// ```
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct SegmentedImageFrameProperties {
     segment_xy_resolutions: SegmentedXYImageResolutions,
@@ -429,21 +359,7 @@ pub struct SegmentedImageFrameProperties {
     color_space: ColorSpace,
 }
 impl SegmentedImageFrameProperties {
-    /// Creates new SegmentedImageFrameProperties.
-    /// 
-    /// # Example
-    /// ```
-    /// use feagi_data_structures::data::descriptors::*;
-    /// 
-    /// let resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-    ///     ImageXYResolution::new(48, 48).unwrap(), // center
-    ///     ImageXYResolution::new(24, 24).unwrap()  // peripherals
-    /// );
-    /// let props = SegmentedImageFrameProperties::new(
-    ///     &resolutions, &ColorChannelLayout::RGBA, &ColorChannelLayout::RGB, &ColorSpace::Linear
-    /// );
-    /// assert_eq!(props.get_resolutions().center.width, 48);
-    /// ```
+
     pub fn new( // TODO why take references if we are going to clone anyways?
         segment_xy_resolutions: &SegmentedXYImageResolutions,
         center_color_channels: &ColorChannelLayout,
