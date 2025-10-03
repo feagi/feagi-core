@@ -18,5 +18,5 @@ pub trait NeuronXYZPEncoder: Debug {
 pub trait NeuronXYZPDecoder: Debug {
     fn get_decoded_data_type(&self) -> WrappedIOType;
 
-    fn read_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, read_target: &NeuronXYZPArrays) -> Result<(), FeagiDataError>;
+    fn read_neuron_data_multi_channel(&mut self, read_target: &CorticalMappedXYZPNeuronData, time_of_read: Instant, write_target: &mut Vec<WrappedIOData>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError>;
 }

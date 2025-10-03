@@ -1,6 +1,7 @@
 use std::time::Instant;
 use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
+use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
 use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -71,6 +72,7 @@ impl MotorChannelStreamCaches {
         Ok(pipeline_runner.get_last_processed_instant())
     }
 
+    /*
     pub(crate) fn try_get_neuron_decode_data_location_ref_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut WrappedIOData, FeagiDataError> {
         match self.most_recent_directly_decoded_outputs.get_mut(*cortical_channel_index as usize) {
             Some(data) => Ok(data),
@@ -80,6 +82,8 @@ impl MotorChannelStreamCaches {
 
 
     }
+
+     */
 
     //endregion
 
@@ -102,8 +106,10 @@ impl MotorChannelStreamCaches {
 
     //endregion
 
-    
-    
+    pub(crate) fn try_read_neuron_datato_wrapped_io_data(&mut self, neuron_data: &CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
+        self.neuron_decoder.read_neuron_data_multi_channel(&self.pipeline_runners)
+    }
+
     //region Internal
 
     #[inline]

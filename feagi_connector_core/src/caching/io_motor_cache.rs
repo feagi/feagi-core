@@ -84,12 +84,11 @@ impl IOMotorCache {
         self.byte_data.try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)
     }
 
-    /*
     pub fn try_decode_neural_data_into_cache(&mut self) -> Result<(), FeagiDataError> {
-
+        for motor_channel_stream_cache in self.stream_caches.values_mut() {
+            motor_channel_stream_cache.re
+        }
     }
-
-     */
 
     //endregion
 
