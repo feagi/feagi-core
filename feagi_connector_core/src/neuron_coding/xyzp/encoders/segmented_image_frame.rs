@@ -11,7 +11,7 @@ use crate::data_types::{ImageFrame, SegmentedImageFrame};
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-
+#[derive(Debug)]
 pub struct SegmentedImageFrameNeuronXYZPEncoder {
     segmented_image_properties: SegmentedImageFrameProperties,
     cortical_write_targets: [CorticalID; 9],
@@ -24,12 +24,6 @@ impl NeuronXYZPEncoder for SegmentedImageFrameNeuronXYZPEncoder {
         WrappedIOType::SegmentedImageFrame(Some(self.segmented_image_properties))
     }
 
-    fn write_neuron_data_single_channel(&self, wrapped_value: &WrappedIOData, cortical_channel: CorticalChannelIndex, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
-        // We are not doing any sort of verification checks here, other than ensuring data types
-        let segmented_image: &SegmentedImageFrame = wrapped_value.try_into()?;
-        segmented_image.write_as_neuron_xyzp_data(write_target, cortical_channel, &self.cortical_write_targets)?;
-        Ok(())
-    }
 
     fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
@@ -94,7 +88,7 @@ impl SegmentedImageFrameNeuronXYZPEncoder {
         Ok(SegmentedImageFrameNeuronXYZPEncoder{
             segmented_image_properties: segmented_image_properties,
             cortical_write_targets: cortical_ids,
-            scratch_space: vec![vec![NeuronXYZPArrays::new(); *number_channels as usize] ; 9].into()
+            scratch_spaces: vec![vec![NeuronXYZPArrays::new(); 9]; *number_channels as usize].into()
         })
     }
 }

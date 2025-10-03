@@ -15,23 +15,23 @@ macro_rules! motor_definition {
 
                 //region SignedPercentage
 
-                #[doc = "Free spinning motor. Instantaneous change. Neurons encoded linearly"]
-                RotaryMotorInstantLinear => {
-                    friendly_name: "Rotary Motor (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "rotary_motor_instant_linear",
+                #[doc = "Free spinning motor. Absolute (instant) change. Neurons encoded linearly"]
+                RotaryMotorAbsoluteLinear => {
+                    friendly_name: "Rotary Motor (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "rotary_motor_absolute_linear",
                     base_ascii: b"omot00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: SignedPercentage_Instant_Linear,
+                    default_coder_type: SignedPercentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
-                #[doc = "Free spinning motor. Instantaneous change. Neurons encoded fractionally"]
-                RotaryMotorInstantFractional => {
-                    friendly_name: "Rotary Motor (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "rotary_motor_instant_fractional",
+                #[doc = "Free spinning motor. Absolute (instant) change. Neurons encoded fractionally"]
+                RotaryMotorAbsoluteFractional => {
+                    friendly_name: "Rotary Motor (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "rotary_motor_absolute_fractional",
                     base_ascii: b"oMOT00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
-                    default_coder_type: SignedPercentage_Instant_Fractional,
+                    default_coder_type: SignedPercentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
@@ -60,23 +60,23 @@ macro_rules! motor_definition {
 
 
 
-                #[doc = "Servo with max / min rotation distances. Instantaneous change. Neurons encoded linearly"]
-                PositionalServoInstantLinear => {
-                    friendly_name: "Positional Servo (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "positional_servo_instant_linear",
+                #[doc = "Servo with max / min rotation distances. Absolute (instant) change. Neurons encoded linearly"]
+                PositionalServoAbsoluteLinear => {
+                    friendly_name: "Positional Servo (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "positional_servo_absolute_linear",
                     base_ascii: b"opse00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: SignedPercentage_Instant_Linear,
+                    default_coder_type: SignedPercentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
-                #[doc = "Servo with max / min rotation distances. Instantaneous change. Neurons encoded fractionally"]
-                PositionalServoInstantFractional => {
-                    friendly_name: "Positional Servo (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "positional_servo_instant_fractional",
+                #[doc = "Servo with max / min rotation distances. Absolute (instant) change. Neurons encoded fractionally"]
+                PositionalServoAbsoluteFractional => {
+                    friendly_name: "Positional Servo (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "positional_servo_absolute_fractional",
                     base_ascii: b"oPSE00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
-                    default_coder_type: SignedPercentage_Instant_Fractional,
+                    default_coder_type: SignedPercentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
@@ -104,23 +104,13 @@ macro_rules! motor_definition {
 
                 //region Percentage4D
 
-                #[doc = "Controls size and positioning of the central vision in a segmented frame. Instantaneous change. Neurons encoded linearly"]
-                GazeInstantLinear => {
-                    friendly_name: "Gaze (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "gaze_instant_linear",
+                #[doc = "Controls size and positioning of the central vision in a segmented frame. Absolute (instant) change. Neurons encoded linearly"]
+                GazeAbsoluteLinear => {
+                    friendly_name: "Gaze (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "gaze_absolute_linear",
                     base_ascii: b"ogaz00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..u32::MAX),
-                    default_coder_type: Percentage4D_Instant_Linear,
-                    wrapped_data_type: WrappedIOType::Percentage_4D,
-                },
-
-                #[doc = "Controls size and positioning of the central vision in a segmented frame. Instantaneous change. Neurons encoded fractionally"]
-                GazeInstantFractional => {
-                    friendly_name: "Gaze (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "gaze_instant_fractional",
-                    base_ascii: b"oGAZ00",
-                    channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..33),
-                    default_coder_type: Percentage4D_Instant_Fractional,
+                    default_coder_type: Percentage4D_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage_4D,
                 },
 
@@ -131,16 +121,6 @@ macro_rules! motor_definition {
                     base_ascii: b"Ogaz00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage4D_Incremental_Linear,
-                    wrapped_data_type: WrappedIOType::Percentage_4D,
-                },
-
-                #[doc = "Controls size and positioning of the central vision in a segmented frame. Incremental change. Neurons encoded fractionally"]
-                GazeIncrementalFractional => {
-                    friendly_name: "Gaze (Incremental Change, Fractional Encoding)",
-                    snake_case_identifier: "gaze_incremental_fractional",
-                    base_ascii: b"OGAZ00",
-                    channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..33),
-                    default_coder_type: Percentage4D_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage_4D,
                 },
 

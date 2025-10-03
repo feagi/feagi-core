@@ -7,29 +7,29 @@ macro_rules! sensor_definition {
 
                 //region Percentage
 
-                #[doc = "Infrared distance sensor for object detection. Instantaneous change. Neurons encoded linearly"]
-                InfraredInstantLinear => {
-                    friendly_name: "Infrared Sensor (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "infrared_instant_linear",
+                #[doc = "Infrared distance sensor for object detection. Absolute (instant) change. Neurons encoded linearly"]
+                InfraredAbsoluteLinear => {
+                    friendly_name: "Infrared Sensor (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_absolute_linear",
                     base_ascii: b"iinf00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_Linear,
+                    default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type:WrappedIOType:: Percentage,
                 },
 
-                #[doc = "Infrared distance sensor for object detection. Instantaneous change. Neurons encoded fractionally exponentially"]
-                InfraredInstantFractional => {
-                    friendly_name: "Infrared Sensor (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "infrared_instant_fractional",
+                #[doc = "Infrared distance sensor for object detection. Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                InfraredAbsoluteFractional => {
+                    friendly_name: "Infrared Sensor (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_absolute_fractional",
                     base_ascii: b"iINF00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_Fractional,
+                    default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type:WrappedIOType:: Percentage,
                 },
 
                 #[doc = "Infrared distance sensor for object detection. Incremental change. Neurons encoded linearly"]
                 InfraredIncrementalLinear => {
-                    friendly_name: "Infrared Sensor (Instant Change, Linear Encoding)",
+                    friendly_name: "Infrared Sensor (Absolute Change, Linear Encoding)",
                     snake_case_identifier: "infrared_incremental_linear",
                     base_ascii: b"Iinf00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
@@ -39,7 +39,7 @@ macro_rules! sensor_definition {
 
                 #[doc = "Infrared distance sensor for object detection. Incremental change. Neurons encoded fractionally exponentially"]
                 InfraredIncrementalFractional => {
-                    friendly_name: "Infrared Sensor (Instant Change, Linear Encoding)",
+                    friendly_name: "Infrared Sensor (Absolute Change, Linear Encoding)",
                     snake_case_identifier: "infrared_incremental_fractional",
                     base_ascii: b"IINF00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
@@ -49,23 +49,23 @@ macro_rules! sensor_definition {
 
 
 
-                #[doc = "Inverted infrared sensor that provides reverse object detection readings. Instantaneous change. Neurons encoded linearly"]
-                ReverseInfraredInstantLinear => {
-                    friendly_name: "Infrared (Inverted) Sensor (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "infrared_inverted_instant_linear",
+                #[doc = "Inverted infrared sensor that provides reverse object detection readings. Absolute (instant) change. Neurons encoded linearly"]
+                ReverseInfraredAbsoluteLinear => {
+                    friendly_name: "Infrared (Inverted) Sensor (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "infrared_inverted_absolute_linear",
                     base_ascii: b"iiif00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_Linear,
+                    default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
-                #[doc = "Inverted infrared sensor that provides reverse object detection readings. Instantaneous change. Neurons encoded fractionally exponentially"]
-                ReverseInfraredInstantFractional => {
-                    friendly_name: "Infrared (Inverted) Sensor (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "infrared_inverted_instant_fractional",
+                #[doc = "Inverted infrared sensor that provides reverse object detection readings. Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                ReverseInfraredAbsoluteFractional => {
+                    friendly_name: "Infrared (Inverted) Sensor (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "infrared_inverted_absolute_fractional",
                     base_ascii: b"iIIF00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_Fractional,
+                    default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
@@ -91,23 +91,23 @@ macro_rules! sensor_definition {
 
 
 
-                #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded linearly"]
-                DigitalGPIOInputInstantLinear => {
-                    friendly_name: "GPIO Digital Input (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "gpio_digital_instant_linear",
+                #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Absolute (instant) change. Neurons encoded linearly"]
+                DigitalGPIOInputAbsoluteLinear => {
+                    friendly_name: "GPIO Digital Input (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "gpio_digital_absolute_linear",
                     base_ascii: b"idgp00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_Linear,
+                    default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
-                #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded fractionally exponentially"]
-                DigitalGPIOInputInstantFractional => {
-                    friendly_name: "GPIO Digital Input (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "gpio_digital_instant_fractional",
+                #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                DigitalGPIOInputAbsoluteFractional => {
+                    friendly_name: "GPIO Digital Input (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "gpio_digital_absolute_fractional",
                     base_ascii: b"iDGP00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_Fractional,
+                    default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
@@ -133,23 +133,23 @@ macro_rules! sensor_definition {
 
 
 
-                #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Instantaneous change. Neurons encoded linearly"]
-                ProximityInstantLinear => {
-                    friendly_name: "Proximity (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "proximity_instant_linear",
+                #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Absolute (instant) change. Neurons encoded linearly"]
+                ProximityAbsoluteLinear => {
+                    friendly_name: "Proximity (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "proximity_absolute_linear",
                     base_ascii: b"ipro00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: Percentage_Instant_Linear,
+                    default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
-                #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Instantaneous change. Neurons encoded fractionally exponentially"]
-                ProximityInstantFractional => {
-                    friendly_name: "Proximity (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "proximity_instant_fractional",
+                #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                ProximityAbsoluteFractional => {
+                    friendly_name: "Proximity (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "proximity_absolute_fractional",
                     base_ascii: b"iPRO00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
-                    default_coder_type: Percentage_Instant_Fractional,
+                    default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
@@ -175,23 +175,23 @@ macro_rules! sensor_definition {
 
 
 
-                #[doc = "Shock sensor for sensing 'pain'. Instantaneous change. Neurons encoded linearly"]
-                ShockInstantLinear => {
-                    friendly_name: "Shock (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "shock_instant_linear",
+                #[doc = "Shock sensor for sensing 'pain'. Absolute (instant) change. Neurons encoded linearly"]
+                ShockAbsoluteLinear => {
+                    friendly_name: "Shock (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "shock_absolute_linear",
                     base_ascii: b"ishk00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_Linear,
+                    default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
-                #[doc = "Shock sensor for sensing 'pain'. Instantaneous change. Neurons encoded fractionally exponentially"]
-                ShockInstantFractional => {
-                    friendly_name: "Shock (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "shock_instant_fractional",
+                #[doc = "Shock sensor for sensing 'pain'. Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                ShockAbsoluteFractional => {
+                    friendly_name: "Shock (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "shock_absolute_fractional",
                     base_ascii: b"iSHK00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
-                    default_coder_type: Percentage_Instant_Fractional,
+                    default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
@@ -217,23 +217,23 @@ macro_rules! sensor_definition {
 
 
 
-                #[doc = "Battery level sensor for monitoring power remaining. Instantaneous change. Neurons encoded linearly"]
-                BatteryInstantLinear => {
-                    friendly_name: "Battery Gauge (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "battery_gauge_instant_linear",
+                #[doc = "Battery level sensor for monitoring power remaining. Absolute (instant) change. Neurons encoded linearly"]
+                BatteryAbsoluteLinear => {
+                    friendly_name: "Battery Gauge (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "battery_gauge_absolute_linear",
                     base_ascii: b"ibat00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: Percentage_Instant_Linear,
+                    default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
-                #[doc = "Battery level sensor for monitoring power remaining. Instantaneous change. Neurons encoded fractionally exponentially"]
-                BatteryInstantFractional => {
-                    friendly_name: "Battery Gauge (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "battery_gauge_instant_fractional",
+                #[doc = "Battery level sensor for monitoring power remaining. Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                BatteryAbsoluteFractional => {
+                    friendly_name: "Battery Gauge (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "battery_gauge_absolute_fractional",
                     base_ascii: b"iBAT00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
-                    default_coder_type: Percentage_Instant_Fractional,
+                    default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
@@ -259,23 +259,23 @@ macro_rules! sensor_definition {
 
 
 
-                #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded linearly"]
-                AnalogGPIOInputInstantLinear => {
-                    friendly_name: "GPIO Analog Input (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "gpio_analog_instant_linear",
+                #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Absolute (instant) change. Neurons encoded linearly"]
+                AnalogGPIOInputAbsoluteLinear => {
+                    friendly_name: "GPIO Analog Input (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "gpio_analog_absolute_linear",
                     base_ascii: b"iagp00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: Percentage_Instant_Linear,
+                    default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
-                #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Instantaneous change. Neurons encoded fractionally exponentially"]
-                AnalogGPIOInputInstantFractional => {
-                    friendly_name: "GPIO Analog Input (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "gpio_analog_instant_fractional",
+                #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                AnalogGPIOInputAbsoluteFractional => {
+                    friendly_name: "GPIO Analog Input (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "gpio_analog_absolute_fractional",
                     base_ascii: b"iAGP00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
-                    default_coder_type: Percentage_Instant_Fractional,
+                    default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
                 },
 
@@ -303,23 +303,23 @@ macro_rules! sensor_definition {
 
                 //region SignedFloat
 
-                #[doc = "Servo position feedback sensor for monitoring actuator positions. Instantaneous change. Neurons encoded linearly"]
-                ServoPositionInstantLinear => {
-                    friendly_name: "Servo Position (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "servo_position_instant_linear",
+                #[doc = "Servo position feedback sensor for monitoring actuator positions. Absolute (instant) change. Neurons encoded linearly"]
+                ServoPositionAbsoluteLinear => {
+                    friendly_name: "Servo Position (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "servo_position_absolute_linear",
                     base_ascii: b"isvp00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: SignedPercentage_Instant_Linear,
+                    default_coder_type: SignedPercentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
-                #[doc = "Servo position feedback sensor for monitoring actuator positions. Instantaneous change. Neurons encoded fractionally exponentially"]
-                ServoPositionInstantFractional => {
-                    friendly_name: "Servo Position (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "servo_position_instant_fractional",
+                #[doc = "Servo position feedback sensor for monitoring actuator positions. Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                ServoPositionAbsoluteFractional => {
+                    friendly_name: "Servo Position (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "servo_position_absolute_fractional",
                     base_ascii: b"iSVP00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
-                    default_coder_type: SignedPercentage_Instant_Fractional,
+                    default_coder_type: SignedPercentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
@@ -346,23 +346,23 @@ macro_rules! sensor_definition {
 
 
 
-                #[doc = "Servo motion feedback sensor for monitoring actuator positions. Instantaneous change. Neurons encoded linearly"]
-                ServoMotionInstantLinear => {
-                    friendly_name: "Servo Motion (Instant Change, Linear Encoding)",
-                    snake_case_identifier: "servo_motion_instant_linear",
+                #[doc = "Servo motion feedback sensor for monitoring actuator positions. Absolute (instant) change. Neurons encoded linearly"]
+                ServoMotionAbsoluteLinear => {
+                    friendly_name: "Servo Motion (Absolute Change, Linear Encoding)",
+                    snake_case_identifier: "servo_motion_absolute_linear",
                     base_ascii: b"isvm00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
-                    default_coder_type: SignedPercentage_Instant_Linear,
+                    default_coder_type: SignedPercentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
-                #[doc = "Servo motion feedback sensor for monitoring actuator positions. Instantaneous change. Neurons encoded fractionally exponentially"]
-                ServoMotionInstantFractional => {
-                    friendly_name: "Servo Motion (Instant Change, Fractional Encoding)",
-                    snake_case_identifier: "servo_motion_instant_fractional",
+                #[doc = "Servo motion feedback sensor for monitoring actuator positions. Absolute (instant) change. Neurons encoded fractionally exponentially"]
+                ServoMotionAbsoluteFractional => {
+                    friendly_name: "Servo Motion (Absolute Change, Fractional Encoding)",
+                    snake_case_identifier: "servo_motion_absolute_fractional",
                     base_ascii: b"iSVM00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
-                    default_coder_type: SignedPercentage_Instant_Fractional,
+                    default_coder_type: SignedPercentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
                 },
 
@@ -390,13 +390,13 @@ macro_rules! sensor_definition {
 
                 //region Misc
 
-                #[doc = "Miscellaneous area for all types of data FEAGI has no specific implementation for. Instantaneous change."]
-                MiscellaneousInstant=> {
-                    friendly_name: "Miscellaneous (Instant Change)",
-                    snake_case_identifier: "miscellaneous_instant",
+                #[doc = "Miscellaneous area for all types of data FEAGI has no specific implementation for. Absolute (instant) change."]
+                MiscellaneousAbsolute=> {
+                    friendly_name: "Miscellaneous (Absolute Change)",
+                    snake_case_identifier: "miscellaneous_absolute",
                     base_ascii: b"imis00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
-                    default_coder_type: MiscData_Instant,
+                    default_coder_type: MiscData_Absolute,
                     wrapped_data_type: WrappedIOType::MiscData(None),
                 },
 
@@ -414,13 +414,13 @@ macro_rules! sensor_definition {
 
                 //region ImageFrame
 
-                #[doc = "Image camera input. Either alone or in the center of segmented/peripheral image camera setups. Instantaneous change."]
-                ImageCameraCenterInstant => {
-                    friendly_name: "Center Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_center_instant",
+                #[doc = "Image camera input. Either alone or in the center of segmented/peripheral image camera setups. Absolute (instant) change."]
+                ImageCameraCenterAbsolute => {
+                    friendly_name: "Center Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_center_absolute",
                     base_ascii: b"iic400",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
@@ -433,13 +433,13 @@ macro_rules! sensor_definition {
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
-                #[doc = "Top Left peripheral image camera input. Instantaneous change."]
-                ImageCameraTopLeftInstant => {
-                    friendly_name: "Top Left Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_top_left_instant",
+                #[doc = "Top Left peripheral image camera input. Absolute (instant) change."]
+                ImageCameraTopLeftAbsolute => {
+                    friendly_name: "Top Left Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_top_left_absolute",
                     base_ascii: b"iic600",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
@@ -453,13 +453,13 @@ macro_rules! sensor_definition {
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
-                #[doc = "Top Middle peripheral image camera input. Instantaneous change."]
-                ImageCameraTopMiddleInstant => {
-                    friendly_name: "Top Middle Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_top_middle_instant",
+                #[doc = "Top Middle peripheral image camera input. Absolute (instant) change."]
+                ImageCameraTopMiddleAbsolute => {
+                    friendly_name: "Top Middle Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_top_middle_absolute",
                     base_ascii: b"iic700",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
@@ -472,13 +472,13 @@ macro_rules! sensor_definition {
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
-                #[doc = "Top Right peripheral image camera input. Instantaneous change."]
-                ImageCameraTopRightInstant => {
-                    friendly_name: "Top Right Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_top_right_instant",
+                #[doc = "Top Right peripheral image camera input. Absolute (instant) change."]
+                ImageCameraTopRightAbsolute => {
+                    friendly_name: "Top Right Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_top_right_absolute",
                     base_ascii: b"iic800",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
@@ -492,13 +492,13 @@ macro_rules! sensor_definition {
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
-                #[doc = "Middle Left peripheral image camera input. Instantaneous change."]
-                ImageCameraMiddleLeftInstant => {
-                    friendly_name: "Middle Left Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_middle_left_instant",
+                #[doc = "Middle Left peripheral image camera input. Absolute (instant) change."]
+                ImageCameraMiddleLeftAbsolute => {
+                    friendly_name: "Middle Left Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_middle_left_absolute",
                     base_ascii: b"iic300",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
@@ -512,13 +512,13 @@ macro_rules! sensor_definition {
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
-                #[doc = "Middle Right peripheral image camera input. Instantaneous change."]
-                ImageCameraMiddleRightInstant => {
-                    friendly_name: "Middle Right Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_middle_right_instant",
+                #[doc = "Middle Right peripheral image camera input. Absolute (instant) change."]
+                ImageCameraMiddleRightAbsolute => {
+                    friendly_name: "Middle Right Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_middle_right_absolute",
                     base_ascii: b"iic500",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
@@ -532,13 +532,13 @@ macro_rules! sensor_definition {
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
-                #[doc = "Bottom Left peripheral image camera input. Instantaneous change."]
-                ImageCameraBottomLeftInstant => {
-                    friendly_name: "Bottom Left Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_bottom_left_instant",
+                #[doc = "Bottom Left peripheral image camera input. Absolute (instant) change."]
+                ImageCameraBottomLeftAbsolute => {
+                    friendly_name: "Bottom Left Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_bottom_left_absolute",
                     base_ascii: b"iic000",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
@@ -552,13 +552,13 @@ macro_rules! sensor_definition {
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
-                #[doc = "Bottom Middle peripheral image camera input. Instantaneous change."]
-                ImageCameraBottomMiddleInstant => {
-                    friendly_name: "Bottom Middle Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_bottom_middle_instant",
+                #[doc = "Bottom Middle peripheral image camera input. Absolute (instant) change."]
+                ImageCameraBottomMiddleAbsolute => {
+                    friendly_name: "Bottom Middle Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_bottom_middle_absolute",
                     base_ascii: b"iic100",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
@@ -572,13 +572,13 @@ macro_rules! sensor_definition {
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
-                #[doc = "Bottom Right peripheral image camera input. Instantaneous change."]
-                ImageCameraBottomRightInstant => {
-                    friendly_name: "Bottom Right Image Camera Input (Instant Change)",
-                    snake_case_identifier: "image_camera_bottom_right_instant",
+                #[doc = "Bottom Right peripheral image camera input. Absolute (instant) change."]
+                ImageCameraBottomRightAbsolute => {
+                    friendly_name: "Bottom Right Image Camera Input (Absolute Change)",
+                    snake_case_identifier: "image_camera_bottom_right_absolute",
                     base_ascii: b"iic200",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
-                    default_coder_type: ImageFrame_Instant,
+                    default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
                 },
 
