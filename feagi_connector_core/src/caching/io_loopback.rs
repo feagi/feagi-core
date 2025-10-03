@@ -35,7 +35,7 @@ pub fn loopback_absolute_gaze_to_segmentation(sensors: &mut IOSensorCache, motor
         sensors.try_updating_pipeline_stage(SENSOR_TYPE, segmentation_group, segmentation_channel, temp, segmentator_property).unwrap()
     }
 
-    motors.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group), gaze_channel, ())
+    //motors.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group), gaze_channel, ())
 
 
     Ok(())

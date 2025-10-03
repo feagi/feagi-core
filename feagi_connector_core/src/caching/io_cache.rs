@@ -4,7 +4,7 @@ use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, Cortical
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
-use crate::data_pipeline::PipelineStageProperties;
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_pipeline::stage_properties::{IdentityStageProperties, ImageSegmentorStageProperties};
 use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 use crate::data_types::{Percentage4D, SegmentedImageFrame};
@@ -83,7 +83,14 @@ impl IOCache {
 
     pub fn sensor_write_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: &WrappedIOData) -> Result<(), FeagiDataError> {
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
-        self.sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())
+        self.sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())?;
+        Ok(())
+    }
+
+    pub fn sensor_update_stage_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, stage: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        self.sensors.try_updating_pipeline_stage(SENSOR_TYPE, group, channel, pipeline_stage_property_index, stage)?;
+        Ok(())
     }
 
 
@@ -128,6 +135,7 @@ impl IOCache {
         let percentage: Percentage4D = data.try_into()?;
         Ok(percentage)
     }
+
 
     pub fn motor_add_callback_gaze_absolute<F>(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
     where
