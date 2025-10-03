@@ -5,7 +5,7 @@
 
 use feagi_data_structures::genomic::*;
 use feagi_data_structures::genomic::descriptors::*;
-use feagi_data_structures::basic_components::*;
+use feagi_data_structures::common_macros::*;
 use feagi_data_structures::FeagiDataError;
 use std::ops::Range;
 

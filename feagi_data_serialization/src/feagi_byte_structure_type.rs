@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use feagi_data_structures::data::FeagiJSON;
+use feagi_data_structures::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::FeagiSerializable;
@@ -20,7 +20,7 @@ use crate::FeagiSerializable;
 /// assert_eq!(neuron_type as u8, 11);
 /// ```
 #[repr(u8)]
-#[derive(Debug, PartialEq, Clone, Copy, Eq)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
 pub enum FeagiByteStructureType {
     /// JSON serialization format (human-readable text)
     JSON = 1u8,

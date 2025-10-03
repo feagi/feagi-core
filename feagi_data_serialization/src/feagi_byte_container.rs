@@ -28,6 +28,7 @@ type NumberBytesToRead = usize;
 /// assert!(container.is_valid());
 /// assert_eq!(container.get_number_of_bytes_used(), 4); // Just the header
 /// ```
+#[derive(Debug, Clone)]
 pub struct FeagiByteContainer {
     /// The actual contained byte data
     bytes: Vec<u8>,
@@ -501,6 +502,7 @@ impl FeagiByteContainer{
 //endregion
 
 //region Contained Struct Reference
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct ContainedStructReference {
     structure_type: FeagiByteStructureType,
     byte_start_index: ByteIndexReadingStart,

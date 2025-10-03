@@ -93,7 +93,8 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
             let z_end = x_end * 3; // q3
 
             let num_neurons = bytes_length / NeuronXYZP::NUMBER_BYTES_PER_NEURON;
-            let neuron_array = self.ensure_clear_and_borrow_mut(&cortical_id, num_neurons);
+            let neuron_array = self.ensure_clear_and_borrow_mut(&cortical_id);
+            neuron_array.ensure_capacity(num_neurons);
 
             // TODO this could potentially be parallelized
             for i in 0..num_neurons {

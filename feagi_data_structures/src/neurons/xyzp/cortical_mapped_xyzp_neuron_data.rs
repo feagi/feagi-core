@@ -328,29 +328,13 @@ impl CorticalMappedXYZPNeuronData {
     //endregion
     
     
-    /// Gets a mutable reference to a cleared neuron data array
-    ///
-    /// This method ensures that the cortical ID exists and has cleared neuron data.
-    /// If the cortical area doesn't exist, it creates new neuron arrays with the
-    /// specified capacity. If it exists, it clears the existing data before returning a mutable
-    /// reference. Note that in clearing, it does not free allocated capacity.
-    ///
-    /// # Arguments
-    ///
-    /// * `cortical_id` - Cortical area identifier
-    /// * `estimated_neuron_count` - Capacity for new neuron arrays
-    ///
-    /// # Returns
-    ///
-    /// A mutable reference to the neuron arrays, guaranteed to be empty and ready for use.
-    pub fn ensure_clear_and_borrow_mut(&mut self, cortical_id: &CorticalID, estimated_neuron_count: usize) -> &mut NeuronXYZPArrays {
+    pub fn ensure_clear_and_borrow_mut(&mut self, cortical_id: &CorticalID) -> &mut NeuronXYZPArrays {
         if self.mappings.contains_key(cortical_id) { // If already contains neuron array, clear it and return it
             let neurons = self.mappings.get_mut(cortical_id).unwrap();
             neurons.clear();
-            neurons.ensure_capacity(estimated_neuron_count);
             return neurons;
         }
-        _ = self.mappings.insert(cortical_id.clone(), NeuronXYZPArrays::with_capacity(estimated_neuron_count));
+        _ = self.mappings.insert(cortical_id.clone(), NeuronXYZPArrays::new());
         self.mappings.get_mut(cortical_id).unwrap()
     }
 }

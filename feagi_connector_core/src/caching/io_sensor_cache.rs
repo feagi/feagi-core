@@ -4,11 +4,11 @@ use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::SensorCorticalType;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
-use feagi_data_structures::wrapped_io_data::WrappedIOData;
-use feagi_data_serialization::FeagiSerializable;
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::caching::per_channel_stream_caches::{SensoryChannelStreamCaches};
-use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
+use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
+use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOSensorCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
@@ -47,19 +47,36 @@ impl IOSensorCache {
         Ok(())
     }
 
-    pub fn try_update_value(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, value: WrappedIOData) -> Result<(), FeagiDataError> {
+    pub fn try_update_value(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, value: &WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache_mut(channel_index)?; // Handles checking index validity
-        sensor_stream_cache.try_update_sensor_value(value)?; // Handles checking value type
+        sensor_stream_caches.try_update_channel_value(channel_index, value, time_of_update)?; // Handles checking channel, value type
         Ok(())
     }
 
     pub fn try_read_postprocessed_cached_value(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
-        let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache(channel_index)?;
-        Ok(sensor_stream_cache.get_most_recent_postprocessed_sensor_value())
+        let value = sensor_stream_caches.try_get_channel_recent_postprocessed_value(channel_index)?;
+        Ok(value)
+    }
+    
+    pub(crate) fn get_pipeline_stage_properties(&self, sensor_type: SensorCorticalType, 
+                                                group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, 
+                                                pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties+Send+Sync>, FeagiDataError> {
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
+        sensor_stream_caches.try_get_stage_properties(channel_index, pipeline_stage_property_index)
     }
 
+    pub fn try_updating_pipeline_stage(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex,
+                                       channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
+                                       replacing_property: Box<dyn PipelineStageProperties + Sync + Send>)
+                                       -> Result<(), FeagiDataError> {
+
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches.try_update_pipeline_stage(channel_index, pipeline_stage_property_index, replacing_property)?;
+        Ok(())
+    }
+
+    /*
     pub fn try_get_pipeline_stage_runner(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
         let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache(channel_index)?;
@@ -72,14 +89,17 @@ impl IOSensorCache {
         Ok(sensor_stream_cache.get_pipeline_runner_mut())
     }
 
+     */
+
     //endregion      
 
     //region Encoding
 
     pub fn try_encode_updated_sensor_data_to_neurons(&mut self, encode_instant: Instant) -> Result<(), FeagiDataError> {
-        self.neuron_data.clear_neurons_only();
-        for sensory_channel_steam_cache in self.stream_caches.values() {
-            sensory_channel_steam_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, encode_instant)?;
+        self.neuron_data.clear_neurons_only(); // TODO remove extra occurrences of clearing
+        // TODO this can likely be done in parallel. Explore this!
+        for sensory_channel_steam_caches in self.stream_caches.values_mut() {
+            sensory_channel_steam_caches.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, encode_instant)?;
         }
         Ok(())
     }
@@ -93,7 +113,7 @@ impl IOSensorCache {
     }
 
     //endregion
-
+    
 
     //region Internal
     fn try_get_sensory_channel_stream_caches(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex) -> Result<&SensoryChannelStreamCaches, FeagiDataError> {

@@ -1,7 +1,7 @@
 
 
 /// Defines the index of something as an integer of a certain type
-macro_rules! define_index {
+macro_rules! define_index { // TODO isnt this a duplicate?
     ($name:ident, $inner:ty, $doc:expr) => {
         #[doc = $doc]
         #[repr(transparent)]

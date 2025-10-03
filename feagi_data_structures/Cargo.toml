@@ -10,8 +10,5 @@ homepage.workspace = true
 [dependencies]
 serde_json = { workspace = true}
 ndarray = { workspace = true}
-image = { workspace = true}
+rayon = { workspace = true}
 
-
-[dev-dependencies]
-ndarray-npy = "0.9.1"

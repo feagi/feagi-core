@@ -1,12 +1,14 @@
 use std::collections::HashMap;
+use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
-use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::{FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::MotorCorticalType;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder};
-use feagi_data_structures::wrapped_io_data::WrappedIOData;
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::caching::per_channel_stream_caches::MotorChannelStreamCaches;
-use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
+use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOMotorCache {
     stream_caches: HashMap<(MotorCorticalType, CorticalGroupIndex), MotorChannelStreamCaches>,
@@ -46,16 +48,34 @@ impl IOMotorCache {
 
     pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
-        Ok(motor_stream_cache.get_most_recent_postprocessed_motor_value())
+        Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
     }
 
     pub fn try_read_preprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
-        Ok(motor_stream_cache.get_most_recent_preprocessed_motor_value())
+        Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
     }
 
+    pub fn try_updating_pipeline_stage(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
+                                       channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
+                                       replacing_property: Box<dyn PipelineStageProperties + Sync + Send>)
+        -> Result<(), FeagiDataError> {
+
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        motor_stream_caches.try_update_pipeline_stage(channel_index, pipeline_stage_property_index, replacing_property)?;
+        Ok(())
+    }
+
+    pub fn try_register_motor_callback<F>(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    where
+        F: Fn(&()) + Send + Sync + 'static,
+    {
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        let index = motor_stream_caches.try_connect_to_data_processed_signal(channel_index, callback)?;
+        Ok(index)
+    }
+
+    /*
     pub fn try_get_pipeline_stage_runner(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
@@ -67,6 +87,7 @@ impl IOMotorCache {
         let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache_mut(channel_index)?;
         Ok(motor_stream_cache.get_pipeline_runner_mut())
     }
+     */
     
     //endregion
 
@@ -83,12 +104,17 @@ impl IOMotorCache {
         self.byte_data.try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)
     }
 
-    /*
-    pub fn try_decode_neural_data_into_cache(&mut self) -> Result<(), FeagiDataError> {
+    pub fn try_decode_neural_data_into_cache(&mut self, time_of_decode: Instant) -> Result<(), FeagiDataError> {
+        for motor_channel_stream_cache in self.stream_caches.values_mut() {
+            motor_channel_stream_cache.try_read_neuron_data_to_wrapped_io_data(&mut self.neuron_data, time_of_decode)?;
+        }; // Make sure everything is decoded before calling callbacks, in order to avoid possible race conditions!
+        // for now, callbacks themselves will be serial, as async in python could be a pain
+        for motor_channel_stream_cache in self.stream_caches.values_mut() {
+            motor_channel_stream_cache.try_run_callbacks_on_changed_channels()?
+        }
 
+        Ok(())
     }
-
-     */
 
     //endregion
 

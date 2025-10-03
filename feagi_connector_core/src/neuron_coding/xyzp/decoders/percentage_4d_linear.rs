@@ -1,0 +1,122 @@
+use std::time::Instant;
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex};
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use crate::data_types::Percentage4D;
+use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+
+const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neurons along the Z represents 0 -> +1
+const NUMBER_PAIRS_PER_CHANNEL: u32 = 4; // How many numbers are encoded per channel?
+const CHANNEL_WIDTH: u32 = WIDTH_GIVEN_POSITIVE_Z_ROW * NUMBER_PAIRS_PER_CHANNEL;
+
+#[derive(Debug)]
+pub struct Percentage4DLinearNeuronXYZPDecoder {
+    channel_dimensions: CorticalChannelDimensions,
+    cortical_read_target: CorticalID,
+    z_depth_scratch_space: Vec<Vec<u32>>, // # channels * NUMBER_PAIRS_PER_CHANNEL long, basically 1 vector per 1 z rows
+}
+
+// NOTE: we need ot be cautious of multiple neurons coming in affecting the result (we should average them)
+
+
+impl NeuronXYZPDecoder for Percentage4DLinearNeuronXYZPDecoder {
+    fn get_decoded_data_type(&self) -> WrappedIOType {
+        WrappedIOType::Percentage
+    }
+
+    fn read_neuron_data_multi_channel(&mut self, read_target: &CorticalMappedXYZPNeuronData, _time_of_read: Instant, write_target: &mut Vec<WrappedIOData>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
+
+        // NOTE: Expecting channel_changed to be all false. Do not reset write_target, we will write to it if we got a value for the channel!
+        const ONLY_ALLOWED_Y: u32 = 0; // This structure never has height
+
+        let neuron_array = read_target.get_neurons_of(&self.cortical_read_target);
+
+        if neuron_array.is_none() {
+            return Ok(());
+        }
+
+        let mut neuron_array = neuron_array.unwrap();
+        if neuron_array.is_empty() {
+            return Ok(());
+        }
+
+        for scratch_per_z_depth in self.z_depth_scratch_space.iter_mut() { // Not worth making parallel
+            scratch_per_z_depth.clear()
+        }
+
+        let number_of_channels = write_target.len() as u32;
+        let max_possible_x_index = CHANNEL_WIDTH * number_of_channels; // Something is wrong if we reach here
+        let z_depth: u32 = self.channel_dimensions.depth;
+
+
+        for neuron in neuron_array.iter() {
+
+            // Ignoring any neurons that have no potential (if sent for some reason).
+            if neuron.cortical_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+                continue; // Something is wrong, but currently we will just skip these
+            }
+
+            if neuron.cortical_coordinate.x >= max_possible_x_index || neuron.cortical_coordinate.z >= z_depth {
+                continue; // Something is wrong, but currently we will just skip these
+            }
+
+            let z_row_vector = self.z_depth_scratch_space.get_mut(neuron.cortical_coordinate.x as usize).unwrap();
+            z_row_vector.push(neuron.cortical_coordinate.z)
+        };
+
+        let z_depth_float = self.channel_dimensions.depth as f32;
+        
+        // At this point, we have numbers in scratch space to average out
+        for channel_index in 0..number_of_channels as usize { // Literally not worth making parallel... right?
+            let z_row_a_index = channel_index * NUMBER_PAIRS_PER_CHANNEL as usize;
+
+            // We need to ensure if ANY of the numbers changed (as in they added anything to the vector for that row that only originally had 0), we update it and label it as such
+
+            let z_a_row_vector = self.z_depth_scratch_space.get(z_row_a_index).unwrap();
+            let z_b_row_vector = self.z_depth_scratch_space.get(z_row_a_index + 1).unwrap();
+            let z_c_row_vector = self.z_depth_scratch_space.get(z_row_a_index + 2).unwrap();
+            let z_d_row_vector = self.z_depth_scratch_space.get(z_row_a_index + 3).unwrap();
+
+            if z_a_row_vector.is_empty() && z_b_row_vector.is_empty() && z_c_row_vector.is_empty() && z_d_row_vector.is_empty() {
+                continue; // No data collected for this channel. Do not emit
+            }
+            channel_changed[channel_index] = true;
+            let percentage_4d: &mut Percentage4D = write_target.get_mut(channel_index).unwrap().try_into()?;
+
+            if !z_a_row_vector.is_empty() {
+                percentage_4d.a.inplace_update(z_a_row_vector.iter().copied().sum::<u32>() as f32 / (z_depth_float * z_a_row_vector.len() as f32));
+            }
+            if !z_b_row_vector.is_empty() {
+                percentage_4d.b.inplace_update(z_b_row_vector.iter().copied().sum::<u32>() as f32 / (z_depth_float * z_b_row_vector.len() as f32));
+            }
+            if !z_c_row_vector.is_empty() {
+                percentage_4d.c.inplace_update(z_c_row_vector.iter().copied().sum::<u32>() as f32 / (z_depth_float * z_c_row_vector.len() as f32));
+            }
+            if !z_d_row_vector.is_empty() {
+                percentage_4d.d.inplace_update(z_d_row_vector.iter().copied().sum::<u32>() as f32 / (z_depth_float * z_d_row_vector.len() as f32));
+            }
+        };
+
+
+        Ok(())
+
+
+    }
+}
+
+impl Percentage4DLinearNeuronXYZPDecoder {
+
+    pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPDecoder + 'static>, FeagiDataError> {
+        const CHANNEL_Y_HEIGHT: u32 = 1;
+
+        let decoder = Percentage4DLinearNeuronXYZPDecoder {
+            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
+            cortical_read_target,
+            z_depth_scratch_space: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],
+        };
+        Ok(Box::new(decoder))
+    }
+}
+
