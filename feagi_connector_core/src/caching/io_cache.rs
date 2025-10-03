@@ -1,15 +1,16 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
-use feagi_data_structures::genomic::SensorCorticalType;
+use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_pipeline::stage_properties::{IdentityStageProperties, ImageSegmentorStageProperties};
 use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
-use crate::data_types::SegmentedImageFrame;
+use crate::data_types::{Percentage4D, SegmentedImageFrame};
 use crate::neuron_coding::xyzp::encoders::{MiscDataNeuronXYZPEncoder, SegmentedImageFrameNeuronXYZPEncoder};
-use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
+use crate::neuron_coding::xyzp::{NeuronXYZPDecoder, NeuronXYZPEncoder};
+use crate::neuron_coding::xyzp::decoders::Percentage4DLinearNeuronXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 
@@ -80,24 +81,52 @@ impl IOCache {
         self.sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
     }
 
+    pub fn sensor_write_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: &WrappedIOData) -> Result<(), FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        self.sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())
+    }
+
 
 
     //endregion
 
     //endregion
-
-
-
-
-
-
-
-
 
 
     //region Motors
 
+    //region Gaze
 
+    pub fn motor_register_gaze_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, z_depth: u32) -> Result<(), FeagiDataError> {
+        if z_depth == 0 {
+            return Err(FeagiDataError::BadParameters("Z depth cant be zero".into()))
+        }
+
+        const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
+        let data_type = WrappedIOType::Percentage_4D;
+
+        let cortical_id = MOTOR_TYPE.to_cortical_id(group);
+        let decoder: Box<dyn NeuronXYZPDecoder + 'static> = Percentage4DLinearNeuronXYZPDecoder::new_box(cortical_id, z_depth, number_channels)?;
+
+
+        let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+            let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+            for i in 0..*number_channels {
+                output.push( vec![IdentityStageProperties::new_box(data_type)?]) // TODO properly implement clone so we dont need to do this
+            };
+            output
+        };
+
+        self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+    }
+
+    pub fn motor_read_post_processed_gaze_absolute(&self, cortical_group_index: CorticalGroupIndex, cortical_channel_index: CorticalChannelIndex) -> Result<Percentage4D, FeagiDataError> {
+        const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
+        let data = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, cortical_group_index, cortical_channel_index)?;
+        let percentage: Percentage4D = data.try_into()?;
+        Ok(percentage)
+    }
+    //endregion
 
 
 

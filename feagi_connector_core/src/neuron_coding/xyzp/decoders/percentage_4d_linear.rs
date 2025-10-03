@@ -108,15 +108,15 @@ impl NeuronXYZPDecoder for Percentage4DLinearNeuronXYZPDecoder {
 
 impl Percentage4DLinearNeuronXYZPDecoder {
 
-    pub fn new(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Self, FeagiDataError> {
+    pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPDecoder + 'static>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
-
-        Ok(Percentage4DLinearNeuronXYZPDecoder {
+        let decoder = Percentage4DLinearNeuronXYZPDecoder {
             channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
             cortical_read_target,
             z_depth_scratch_space: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],
-        })
+        };
+        Ok(Box::new(decoder))
     }
 }
 
