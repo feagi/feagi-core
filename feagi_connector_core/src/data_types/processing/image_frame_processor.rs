@@ -1,7 +1,7 @@
 use ndarray::{s, ArrayView3, Zip};
-use crate::FeagiDataError;
-use crate::data::descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
-use crate::data::ImageFrame;
+use feagi_data_structures::FeagiDataError;
+use crate::data_types::descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
+use crate::data_types::ImageFrame;
 
 #[derive(Debug, Clone)]
 pub struct ImageFrameProcessor {
