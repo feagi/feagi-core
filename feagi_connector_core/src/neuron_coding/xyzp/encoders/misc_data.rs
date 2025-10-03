@@ -1,15 +1,14 @@
 use std::time::Instant;
-use ndarray::parallel::prelude::IntoParallelIterator;
-use rayon::prelude::{IntoParallelRefIterator, IntoParallelRefMutIterator};
+use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount};
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
 use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use crate::wrapped_io_data::{WrappedIOType};
 
 #[derive(Debug)]
 pub struct MiscDataNeuronXYZPEncoder {
@@ -28,7 +27,6 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
 
         let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
 
-        write_target.clear();
         pipelines.par_iter()
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
@@ -38,7 +36,7 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
                     return Ok(()); // We haven't updated, do nothing
                 }
                 let updated_data = pipeline.get_most_recent_output();
-                let updated_misc: &MiscData = updated_data.into();
+                let updated_misc: &MiscData = updated_data.try_into()?;
                 let x_offset = index as u32 * self.misc_data_dimensions.width;
 
 

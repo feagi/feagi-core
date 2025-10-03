@@ -36,8 +36,8 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
                     return Ok(()); // We haven't updated, do nothing
                 }
                 let updated_data = pipeline.get_most_recent_output();
-                let updated_image: &ImageFrame = updated_data.into();
-                updated_image.overwrite_neuron_data(scratch, channel_index.into())?;
+                let updated_image: &ImageFrame = updated_data.try_into()?;
+                updated_image.overwrite_neuron_data(scratch, (channel_index as u32).into())?;
                 Ok(())
             })?;
 

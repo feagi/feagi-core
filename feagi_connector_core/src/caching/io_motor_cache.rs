@@ -3,10 +3,11 @@ use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::MotorCorticalType;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder};
-use feagi_data_structures::wrapped_io_data::WrappedIOData;
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::caching::per_channel_stream_caches::MotorChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStageRunner};
+use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOMotorCache {
     stream_caches: HashMap<(MotorCorticalType, CorticalGroupIndex), MotorChannelStreamCaches>,
@@ -46,16 +47,15 @@ impl IOMotorCache {
 
     pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
-        Ok(motor_stream_cache.get_most_recent_postprocessed_motor_value())
+        Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
     }
 
     pub fn try_read_preprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
-        Ok(motor_stream_cache.get_most_recent_preprocessed_motor_value())
+        Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
     }
 
+    /*
     pub fn try_get_pipeline_stage_runner(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
@@ -67,6 +67,7 @@ impl IOMotorCache {
         let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache_mut(channel_index)?;
         Ok(motor_stream_cache.get_pipeline_runner_mut())
     }
+     */
     
     //endregion
 

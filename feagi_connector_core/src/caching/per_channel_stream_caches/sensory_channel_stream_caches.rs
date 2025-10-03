@@ -58,17 +58,17 @@ impl SensoryChannelStreamCaches {
         Ok(pipeline_runner.get_last_processed_instant())
     }
 
-    pub fn try_update_channel_value(&mut self, cortical_channel_index: CorticalChannelIndex, value: WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
-        let channel_idx = *cortical_channel_index as usize;
-        self.verify_channel_index(cortical_channel_index)?;
-
-        self.pipeline_runners[channel_idx].try_update_value(&value, update_instant)?;
+    pub fn try_update_channel_value(&mut self, cortical_channel_index: CorticalChannelIndex, value: &WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
+        let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        runner.try_update_value(value, update_instant)?;
+        self.last_update_time = update_instant;
         Ok(())
     }
     
     //endregion
 
-    pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&self, neuron_data: &mut CorticalMappedXYZPNeuronData, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+    pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronData, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+        // TODO We need a new trait method to just have all channels cleared if not up to date
         self.neuron_encoder.write_neuron_data_multi_channel(&self.pipeline_runners, time_of_burst, neuron_data)?;
         Ok(())
     }
@@ -87,10 +87,11 @@ impl SensoryChannelStreamCaches {
 
     #[inline]
     fn try_get_pipeline_runner_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut PipelineStageRunner, FeagiDataError> {
+        let runner_count = self.pipeline_runners.len();
         match self.pipeline_runners.get_mut(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
-                                                              cortical_channel_index, self.pipeline_runners.len())))
+                                                              cortical_channel_index, runner_count)))
         }
 
     }

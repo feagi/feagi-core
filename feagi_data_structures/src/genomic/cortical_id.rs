@@ -101,7 +101,7 @@ impl CorticalID {
     /// use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
     /// 
     /// let index: CorticalGroupIndex = 0.into();
-    /// let id = CorticalID::new_sensor_cortical_area_id(SensorCorticalType::ImageCameraCenterInstant, index).unwrap();
+    /// let id = CorticalID::new_sensor_cortical_area_id(SensorCorticalType::ImageCameraCenterAbsolute, index).unwrap();
     /// assert!(id.as_ascii_string().len() == 6);
     /// ```
     pub fn new_sensor_cortical_area_id(input_type: SensorCorticalType, input_index: CorticalGroupIndex) -> Result<Self, FeagiDataError> {

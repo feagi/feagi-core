@@ -44,8 +44,8 @@ impl NeuronXYZPEncoder for SegmentedImageFrameNeuronXYZPEncoder {
                 }
 
                 let updated_data = pipeline.get_most_recent_output();
-                let updated_segmented_image: &SegmentedImageFrame = updated_data.into();
-                updated_segmented_image.overwrite_neuron_data(scratches, channel_index.into())?;
+                let updated_segmented_image: &SegmentedImageFrame = updated_data.try_into()?;
+                updated_segmented_image.overwrite_neuron_data(scratches, (channel_index as u32).into())?;
                 Ok(())
             })?;
 
@@ -88,7 +88,16 @@ impl SegmentedImageFrameNeuronXYZPEncoder {
         Ok(SegmentedImageFrameNeuronXYZPEncoder{
             segmented_image_properties: segmented_image_properties,
             cortical_write_targets: cortical_ids,
-            scratch_spaces: vec![vec![NeuronXYZPArrays::new(); 9]; *number_channels as usize].into()
+            scratch_spaces: vec![[NeuronXYZPArrays::new(), 
+                                     NeuronXYZPArrays::new(), 
+                                     NeuronXYZPArrays::new(), 
+                                     NeuronXYZPArrays::new(), 
+                                     NeuronXYZPArrays::new(), 
+                                     NeuronXYZPArrays::new(), 
+                                     NeuronXYZPArrays::new(),
+                                     NeuronXYZPArrays::new(), 
+                                     NeuronXYZPArrays::new()]; 
+                                 *number_channels as usize]
         })
     }
 }

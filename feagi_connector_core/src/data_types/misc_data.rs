@@ -99,19 +99,19 @@ impl MiscData {
     // region Outputting Neurons
 
     pub fn overwrite_neuron_data(&self, write_target: &mut NeuronXYZPArrays, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-        const EPSILON: u8 = 1; // avoid writing near zero vals
+        const EPSILON: f32 = 0.0001; // avoid writing near zero vals
 
-        let x_offset: u32 = *x_channel_offset * self.get_xy_resolution().width;
+        let x_offset: u32 = *x_channel_offset * self.get_dimensions().width;
         write_target.clear();
-        write_target.ensure_capacity(self.get_number_elements());
+        write_target.ensure_capacity(self.get_dimensions().number_elements() as usize);
 
         write_target.update_vectors_from_external(|x_vec, y_vec, c_vec, p_vec| {
             for ((x, y, c), val) in self.data.indexed_iter() { // going from row major to cartesian
-                if val > &EPSILON {
+                if val.abs() > EPSILON {
                     x_vec.push(x as u32 + x_offset);
                     y_vec.push(y as u32);  // flip y //TODO wheres the flip part????
                     c_vec.push(c as u32);
-                    p_vec.push(*val.clamp(-1.0, 1.0));
+                    p_vec.push(val.clamp(-1.0, 1.0));
                 }
             };
             Ok(())

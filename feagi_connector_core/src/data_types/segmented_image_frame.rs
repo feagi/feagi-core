@@ -152,15 +152,15 @@ impl SegmentedImageFrame {
         }
 
         [
-            SensorCorticalType::ImageCameraBottomLeftInstant.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraBottomMiddleInstant.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraBottomRightInstant.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraMiddleLeftInstant.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraCenterInstant.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraMiddleRightInstant.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopLeftInstant.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopMiddleInstant.to_cortical_id(camera_index),
-            SensorCorticalType::ImageCameraTopRightInstant.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomLeftAbsolute.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomMiddleAbsolute.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraBottomRightAbsolute.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraMiddleLeftAbsolute.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraMiddleRightAbsolute.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopLeftAbsolute.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopMiddleAbsolute.to_cortical_id(camera_index),
+            SensorCorticalType::ImageCameraTopRightAbsolute.to_cortical_id(camera_index),
         ]
     }
 
@@ -182,15 +182,15 @@ impl SegmentedImageFrame {
         }
 
         [
-            SensorCorticalType::ImageCameraBottomLeftInstant.into(),
-            SensorCorticalType::ImageCameraBottomMiddleInstant.into(),
-            SensorCorticalType::ImageCameraBottomRightInstant.into(),
-            SensorCorticalType::ImageCameraMiddleLeftInstant.into(),
-            SensorCorticalType::ImageCameraCenterInstant.into(),
-            SensorCorticalType::ImageCameraMiddleRightInstant.into(),
-            SensorCorticalType::ImageCameraTopLeftInstant.into(),
-            SensorCorticalType::ImageCameraTopMiddleInstant.into(),
-            SensorCorticalType::ImageCameraTopRightInstant.into(),
+            SensorCorticalType::ImageCameraBottomLeftAbsolute.into(),
+            SensorCorticalType::ImageCameraBottomMiddleAbsolute.into(),
+            SensorCorticalType::ImageCameraBottomRightAbsolute.into(),
+            SensorCorticalType::ImageCameraMiddleLeftAbsolute.into(),
+            SensorCorticalType::ImageCameraCenterAbsolute.into(),
+            SensorCorticalType::ImageCameraMiddleRightAbsolute.into(),
+            SensorCorticalType::ImageCameraTopLeftAbsolute.into(),
+            SensorCorticalType::ImageCameraTopMiddleAbsolute.into(),
+            SensorCorticalType::ImageCameraTopRightAbsolute.into(),
         ]
     }
     

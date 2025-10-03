@@ -22,10 +22,12 @@ impl MotorChannelStreamCaches {
         let num_channels = stage_properties_per_channels.len();
         let mut pipeline_runners: Vec<PipelineStageRunner> = Vec::with_capacity(num_channels);
         let mut most_recent_directly_decoded_outputs: Vec<WrappedIOData> = Vec::with_capacity(num_channels);
-        
+        let mut callbacks: Vec<FeagiSignal<()>> = Vec::with_capacity(num_channels);
+
         for stage_properties_per_channel in stage_properties_per_channels {
             let pipeline_runner = PipelineStageRunner::new(stage_properties_per_channel)?;
             let blank_data = pipeline_runner.get_input_data_type().create_blank_data_of_type()?;
+            callbacks.push(FeagiSignal::new());
             
             pipeline_runners.push(pipeline_runner);
             most_recent_directly_decoded_outputs.push(blank_data);
@@ -35,7 +37,7 @@ impl MotorChannelStreamCaches {
             neuron_decoder,
             pipeline_runners,
             most_recent_directly_decoded_outputs,
-            value_updated_callbacks: vec![FeagiSignal::new(); num_channels],
+            value_updated_callbacks: callbacks,
         })
     }
 
@@ -79,19 +81,6 @@ impl MotorChannelStreamCaches {
 
     }
 
-    pub(crate) fn try_process_decoded_value(&mut self, cortical_channel_index: CorticalChannelIndex, process_instant: Instant) -> Result<(), FeagiDataError> {
-        let idx = *cortical_channel_index as usize;
-        self.verify_channel_index(cortical_channel_index)?;
-        
-        let decoded_value = &self.most_recent_directly_decoded_outputs[idx];
-        self.pipeline_runners[idx].try_update_value(decoded_value, process_instant)?;
-        
-        // Emit signal that value was updated
-        self.value_updated_callbacks[idx].emit(&());
-        
-        Ok(())
-    }
-
     //endregion
 
     //region Callbacks
@@ -100,19 +89,21 @@ impl MotorChannelStreamCaches {
     where
         F: Fn(&()) + Send + Sync + 'static,
     {
+        _ = self.try_get_pipeline_runner(cortical_channel_index)?;
         let idx = *cortical_channel_index as usize;
-        self.verify_channel_index(cortical_channel_index)?;
         Ok(self.value_updated_callbacks[idx].connect(callback))
     }
 
     pub fn try_disconnect_to_data_processed_signal(&mut self, cortical_channel_index: CorticalChannelIndex, signal_index: FeagiSignalIndex) -> Result<(), FeagiDataError> {
+        _ = self.try_get_pipeline_runner(cortical_channel_index)?;
         let idx = *cortical_channel_index as usize;
-        self.verify_channel_index(cortical_channel_index)?;
         self.value_updated_callbacks[idx].disconnect(signal_index)
     }
 
     //endregion
 
+    
+    
     //region Internal
 
     #[inline]
@@ -127,10 +118,11 @@ impl MotorChannelStreamCaches {
 
     #[inline]
     fn try_get_pipeline_runner_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut PipelineStageRunner, FeagiDataError> {
+        let num_runners = self.pipeline_runners.len();
         match self.pipeline_runners.get_mut(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
-                                                              cortical_channel_index, self.pipeline_runners.len())))
+                                                              cortical_channel_index, num_runners)))
         }
 
     }
