@@ -20,7 +20,7 @@ pub trait PipelineStageProperties: fmt::Display + Debug + Sync + Send + Any {
     fn get_output_data_type(&self) -> WrappedIOType;
 
     /// Clones this struct in a box
-    fn clone_box(&self) -> Box<dyn PipelineStageProperties>;
+    fn clone_box(&self) -> Box<dyn PipelineStageProperties + Sync + Send>;
 
     /// Provide access to `Any` trait for downcasting
     fn as_any(&self) -> &dyn Any;

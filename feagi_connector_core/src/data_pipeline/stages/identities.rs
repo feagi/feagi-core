@@ -53,11 +53,11 @@ impl PipelineStage for IdentityStage {
         self
     }
 
-    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
         IdentityStageProperties::new_box(self.expected_data_variant).unwrap()
     }
 
-    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         todo!()
     }
 }

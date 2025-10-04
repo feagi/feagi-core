@@ -20,7 +20,7 @@ impl PipelineStageProperties for IdentityStageProperties {
         self.identity_type
     }
 
-    fn clone_box(&self) -> Box<dyn PipelineStageProperties> {
+    fn clone_box(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
         Box::new(self.clone())
     }
 

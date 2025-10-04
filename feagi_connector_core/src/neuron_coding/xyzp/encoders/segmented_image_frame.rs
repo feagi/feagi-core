@@ -83,7 +83,7 @@ impl NeuronXYZPEncoder for SegmentedImageFrameNeuronXYZPEncoder {
 }
 
 impl SegmentedImageFrameNeuronXYZPEncoder {
-    pub fn new_box(cortical_ids: [CorticalID; 9], segmented_image_properties: SegmentedImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPEncoder + 'static>, FeagiDataError> {
+    pub fn new_box(cortical_ids: [CorticalID; 9], segmented_image_properties: SegmentedImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPEncoder + Sync + Send>, FeagiDataError> {
         let encoder = SegmentedImageFrameNeuronXYZPEncoder{
             segmented_image_properties: segmented_image_properties,
             cortical_write_targets: cortical_ids,

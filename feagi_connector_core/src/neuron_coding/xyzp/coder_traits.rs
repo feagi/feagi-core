@@ -7,7 +7,7 @@ use crate::data_pipeline::PipelineStageRunner;
 use crate::wrapped_io_data::{WrappedIOType, WrappedIOData};
 
 
-pub trait NeuronXYZPEncoder: Debug {
+pub trait NeuronXYZPEncoder: Debug + Sync + Send {
 
     fn get_encodable_data_type(&self) -> WrappedIOType;
 
@@ -15,7 +15,7 @@ pub trait NeuronXYZPEncoder: Debug {
 }
 
 
-pub trait NeuronXYZPDecoder: Debug {
+pub trait NeuronXYZPDecoder: Debug + Sync + Send {
     fn get_decoded_data_type(&self) -> WrappedIOType;
 
     fn read_neuron_data_multi_channel(&mut self, read_target: &CorticalMappedXYZPNeuronData, time_of_read: Instant, write_target: &mut Vec<WrappedIOData>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError>;

@@ -54,8 +54,8 @@ pub(crate) trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// Provide access to `Any` trait for downcasting
     fn as_any(&self) -> &dyn Any;
 
-    fn create_properties(&self) -> Box<dyn PipelineStageProperties>;
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send>;
 
-    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> ;
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> ;
     
 }
