@@ -112,7 +112,12 @@ impl IOCache {
     //region Motors
 
     pub fn motor_send_bytes(&mut self, incoming_bytes: &[u8]) -> Result<(), FeagiDataError> {
-        self.motors.try_import_bytes()?;
+        let mut byte_writer = |buf: &mut Vec<u8>| -> Result<(), FeagiDataError> {
+            buf.clear();
+            buf.extend_from_slice(incoming_bytes);
+            Ok(())
+        };
+        self.motors.try_import_bytes(&mut byte_writer)?;
         self.motors.try_decode_bytes_to_neural_data()?;
         self.motors.try_decode_neural_data_into_cache(Instant::now())
     }
