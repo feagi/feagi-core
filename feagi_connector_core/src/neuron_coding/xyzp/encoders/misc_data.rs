@@ -71,7 +71,7 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
 }
 
 impl MiscDataNeuronXYZPEncoder {
-    pub fn new_box(cortical_group_index: CorticalGroupIndex, misc_data_dimensions: MiscDataDimensions, number_channels: CorticalChannelCount, is_absolute: bool) -> Result<Box<dyn NeuronXYZPEncoder + 'static>, FeagiDataError> {
+    pub fn new_box(cortical_group_index: CorticalGroupIndex, misc_data_dimensions: MiscDataDimensions, number_channels: CorticalChannelCount, is_absolute: bool) -> Result<Box<dyn NeuronXYZPEncoder + Sync + Send>, FeagiDataError> {
         let cortical_id: CorticalID;
         if is_absolute {
             cortical_id = SensorCorticalType::MiscellaneousAbsolute.to_cortical_id(cortical_group_index);

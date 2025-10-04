@@ -54,7 +54,7 @@ impl PipelineStage for ImageFrameSegmentatorStage {
         self
     }
 
-    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
         ImageSegmentorStageProperties::new_box(
             self.input_image_properties,
             self.output_image_properties,
@@ -62,7 +62,7 @@ impl PipelineStage for ImageFrameSegmentatorStage {
         ).unwrap()
     }
 
-    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         todo!()
     }
 }

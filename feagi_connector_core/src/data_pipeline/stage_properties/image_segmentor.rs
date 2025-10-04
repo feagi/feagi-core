@@ -24,7 +24,7 @@ impl PipelineStageProperties for ImageSegmentorStageProperties {
         WrappedIOType::SegmentedImageFrame(Some(self.output_image_properties))
     }
 
-    fn clone_box(&self) -> Box<dyn PipelineStageProperties> {
+    fn clone_box(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
         Box::new(self.clone())
     }
 

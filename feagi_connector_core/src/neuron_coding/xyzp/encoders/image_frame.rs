@@ -63,7 +63,7 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
 }
 
 impl ImageFrameNeuronXYZPEncoder {
-    pub fn new_box(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPEncoder + 'static>, FeagiDataError> {
+    pub fn new_box(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPEncoder + Sync + Send>, FeagiDataError> {
         let encoder = ImageFrameNeuronXYZPEncoder{
             image_properties: image_properties.clone(),
             cortical_write_target,
