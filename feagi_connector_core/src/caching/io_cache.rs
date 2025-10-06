@@ -36,6 +36,13 @@ impl IOCache {
 
     //region Sensors
 
+    pub fn sensor_get_bytes(&mut self) -> Result<&[u8], FeagiDataError> {
+        _ = self.sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;;
+        _ = self.sensors.try_encode_updated_neuron_data_to_feagi_byte_container(0)?;
+        self.sensor_get_bytes()
+    }
+
+
     //region Misc
 
     pub fn sensor_register_misc_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount,
@@ -103,6 +110,17 @@ impl IOCache {
 
 
     //region Motors
+
+    pub fn motor_send_bytes(&mut self, incoming_bytes: &[u8]) -> Result<(), FeagiDataError> {
+        let mut byte_writer = |buf: &mut Vec<u8>| -> Result<(), FeagiDataError> {
+            buf.clear();
+            buf.extend_from_slice(incoming_bytes);
+            Ok(())
+        };
+        self.motors.try_import_bytes(&mut byte_writer)?;
+        self.motors.try_decode_bytes_to_neural_data()?;
+        self.motors.try_decode_neural_data_into_cache(Instant::now())
+    }
 
     //region Gaze
 
