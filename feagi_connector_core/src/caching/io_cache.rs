@@ -37,9 +37,9 @@ impl IOCache {
     //region Sensors
 
     pub fn sensor_get_bytes(&mut self) -> Result<&[u8], FeagiDataError> {
-        _ = self.sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;;
+        _ = self.sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
         _ = self.sensors.try_encode_updated_neuron_data_to_feagi_byte_container(0)?;
-        self.sensor_get_bytes()
+        Ok(self.sensors.export_encoded_bytes())
     }
 
 

@@ -14,6 +14,7 @@ pub(crate) struct IOSensorCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
     neuron_data: CorticalMappedXYZPNeuronData,
     byte_data: FeagiByteContainer,
+    previous_burst: Instant,
 }
 
 impl IOSensorCache {
@@ -22,8 +23,8 @@ impl IOSensorCache {
         IOSensorCache {
             stream_caches: HashMap::new(),
             neuron_data: CorticalMappedXYZPNeuronData::new(),
-            byte_data: FeagiByteContainer::new_empty()
-
+            byte_data: FeagiByteContainer::new_empty(),
+            previous_burst: Instant::now(),
         }
     }
 
@@ -99,8 +100,9 @@ impl IOSensorCache {
         self.neuron_data.clear_neurons_only(); // TODO remove extra occurrences of clearing
         // TODO this can likely be done in parallel. Explore this!
         for sensory_channel_steam_caches in self.stream_caches.values_mut() {
-            sensory_channel_steam_caches.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, encode_instant)?;
+            sensory_channel_steam_caches.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, self.previous_burst)?;
         }
+        self.previous_burst = encode_instant;
         Ok(())
     }
 

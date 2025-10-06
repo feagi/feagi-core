@@ -15,7 +15,7 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 pub struct SegmentedImageFrameNeuronXYZPEncoder {
     segmented_image_properties: SegmentedImageFrameProperties,
     cortical_write_targets: [CorticalID; 9],
-    scratch_spaces: Vec<[NeuronXYZPArrays; 9]>,
+    neuron_scratch_spaces: Vec<[NeuronXYZPArrays; 9]>, //channel index {segment index }
 }
 
 impl NeuronXYZPEncoder for SegmentedImageFrameNeuronXYZPEncoder {
@@ -28,15 +28,14 @@ impl NeuronXYZPEncoder for SegmentedImageFrameNeuronXYZPEncoder {
     fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
 
-        for cortical_id in self.cortical_write_targets {
-            _ = write_target.ensure_clear_and_borrow_mut(&cortical_id); // Make sure we clear all data
-        }
 
-
+        // Parallel iterate over channels
         pipelines.par_iter()
-            .zip(self.scratch_spaces.par_iter_mut())
+            .zip(self.neuron_scratch_spaces.par_iter_mut())
             .enumerate()
             .try_for_each(|(channel_index, (pipeline, scratches))| -> Result<(), FeagiDataError> {
+
+
 
                 let channel_updated = pipeline.get_last_processed_instant();
                 if channel_updated < time_of_previous_burst {
@@ -45,39 +44,35 @@ impl NeuronXYZPEncoder for SegmentedImageFrameNeuronXYZPEncoder {
 
                 let updated_data = pipeline.get_most_recent_output();
                 let updated_segmented_image: &SegmentedImageFrame = updated_data.try_into()?;
+
                 updated_segmented_image.overwrite_neuron_data(scratches, (channel_index as u32).into())?;
                 Ok(())
             })?;
 
-
-        // At this point, the 9 scratch vectors have the data written to them
-        // TODO performance note: We know that the keys will never collide. If we play it smart, we may be able to do this in parallel with the use of unsafe{}
-
+        // At this point, each channels set of scratch vectors have their 9 scratch vectors with data written to them
+        // Lets count the number of neurons in each segment across all their channels for proper allocation, before moving the data
         for segmented_index in 0..9 {
-            let scratch = &self.scratch_spaces[segmented_index];
+            let mut neuron_count_in_segment: usize = 0;
+            for channel_index in 0..pipelines.len() {
+                neuron_count_in_segment += self.neuron_scratch_spaces[channel_index][segmented_index].len();
+            }
+
             let cortical_id = &self.cortical_write_targets[segmented_index];
-
-            let total_neurons: usize = scratch.iter()
-                .map(|scratch| scratch.len())
-                .sum();
-
             let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&cortical_id);
+            neuron_array_target.ensure_capacity(neuron_count_in_segment);
 
-            neuron_array_target.ensure_capacity(total_neurons);
-
-            // TODO could this possibly be done in a parallel way? Probably not worth it
-            neuron_array_target.update_vectors_from_external(|target_x, target_y, target_z, target_p| {
-                for scratch in scratch.iter() {
-                    let (scratch_x, scratch_y, scratch_z, scratch_p) = scratch.borrow_xyzp_vectors();
+            for channel_index in 0..pipelines.len() {
+                let scratch_for_channel_and_segment = &self.neuron_scratch_spaces[channel_index][segmented_index];
+                let (scratch_x, scratch_y, scratch_z, scratch_p) = scratch_for_channel_and_segment.borrow_xyzp_vectors();
+                neuron_array_target.update_vectors_from_external(|target_x, target_y, target_z, target_p| {
                     target_x.extend_from_slice(scratch_x);
                     target_y.extend_from_slice(scratch_y);
                     target_z.extend_from_slice(scratch_z);
                     target_p.extend_from_slice(scratch_p);
-                }
-                Ok(())
-            })?;
-        };
-
+                    Ok(())
+                })?;
+            }
+        }
         Ok(())
     }
 }
@@ -87,7 +82,7 @@ impl SegmentedImageFrameNeuronXYZPEncoder {
         let encoder = SegmentedImageFrameNeuronXYZPEncoder{
             segmented_image_properties: segmented_image_properties,
             cortical_write_targets: cortical_ids,
-            scratch_spaces: vec![[NeuronXYZPArrays::new(), 
+            neuron_scratch_spaces: vec![[NeuronXYZPArrays::new(),
                                      NeuronXYZPArrays::new(), 
                                      NeuronXYZPArrays::new(), 
                                      NeuronXYZPArrays::new(), 
@@ -95,8 +90,8 @@ impl SegmentedImageFrameNeuronXYZPEncoder {
                                      NeuronXYZPArrays::new(), 
                                      NeuronXYZPArrays::new(),
                                      NeuronXYZPArrays::new(), 
-                                     NeuronXYZPArrays::new()]; 
-                                 *number_channels as usize]
+                                     NeuronXYZPArrays::new()];
+                                        *number_channels as usize]
         };
         Ok(Box::new(encoder))
     }

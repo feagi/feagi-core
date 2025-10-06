@@ -14,10 +14,10 @@ pub trait FeagiSerializable {
     fn get_number_of_bytes_needed(&self) -> usize;
 
     /// When given a mutable slice of bytes size specified by "get_number_of_bytes_needed", serialized the struct into it
-    fn try_write_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError>;
+    fn try_serialize_struct_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError>;
 
     /// Given a slice of data of this structure of correct size, Deserialize the slice and update (replace) the data of the structure
-    fn try_update_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError>;
+    fn try_deserialize_and_update_self_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError>;
 
     /// Verifies that the data slice is of the type expected of the struct
     fn verify_byte_slice_is_of_correct_type(&self, byte_source: &[u8]) -> Result<(), FeagiDataError> {
@@ -47,5 +47,5 @@ pub trait FeagiSerializable {
         Ok(())
     }
 
-    // TODO unisversal method to export as a new FBS
+    // TODO universal method to export as a new FBS
 }

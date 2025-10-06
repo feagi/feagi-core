@@ -52,16 +52,16 @@ macro_rules! define_index {
 }
 
 /// Creates a non-zero count type with validation.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::{define_nonzero_count, FeagiDataError};
-/// 
+///
 /// define_nonzero_count!(ItemCount, u32, "Number of items (must be > 0)");
-/// 
+///
 /// let count = ItemCount::new(5).unwrap();
 /// assert_eq!(*count, 5);
-/// 
+///
 /// let invalid = ItemCount::new(0);
 /// assert!(invalid.is_err());
 /// ```
@@ -69,9 +69,10 @@ macro_rules! define_index {
 macro_rules! define_nonzero_count {
     ($name:ident, $base:ty, $doc:expr) => {
         #[doc = $doc]
-        #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-        pub struct $name($base);
+        pub struct $name {
+            value: $base,
+        }
 
         impl $name {
             /// Creates a new instance, returns Err if validation fails
@@ -79,31 +80,34 @@ macro_rules! define_nonzero_count {
                 if value == 0 {
                     return Err(FeagiDataError::BadParameters("Count cannot be zero!".into()));
                 }
-                Ok($name(value))
+                Ok($name{
+                    value,
+                })
             }
         }
-        impl From<$base> for $name {
-            fn from(value: $base) -> Self {
-                Self(value)
+        impl TryFrom<$base> for $name {
+            type Error = FeagiDataError;
+            fn try_from(value: $base) -> Result<Self, FeagiDataError> {
+                $name::new({value})
             }
         }
 
         impl From<$name> for $base {
             fn from(value: $name) -> $base {
-                value.0
+                value.value
             }
         }
 
         impl std::ops::Deref for $name {
             type Target = $base;
             fn deref(&self) -> &Self::Target {
-                &self.0
+                &self.value
             }
         }
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                self.0.fmt(f)
+                self.value.fmt(f)
             }
         }
 
@@ -141,6 +145,18 @@ macro_rules! define_xy_coordinates {
         impl $name {
             pub fn new(x: $var_type, y: $var_type) -> Self {
                 Self { x, y }
+            }
+        }
+
+        impl From<$name> for ($var_type, $var_type) {
+            fn from(value: $name) -> Self {
+                (value.x, value.y)
+            }
+        }
+
+        impl From<($var_type, $var_type)> for $name {
+            fn from(value: ($var_type, $var_type)) -> Self {
+                $name::new(value.0, value.1)
             }
         }
 
@@ -194,6 +210,25 @@ macro_rules! define_xy_dimensions {
             }
         }
 
+        impl From<$name> for ($var_type, $var_type) {
+            fn from(value: $name) -> Self {
+                (value.width, value.height)
+            }
+        }
+
+        impl TryFrom<($var_type, $var_type)> for $name {
+            type Error = FeagiDataError;
+            fn try_from(value: ($var_type, $var_type)) -> Result<Self, Self::Error> {
+                if value.0 == $invalid_zero_value {
+                    return Err(FeagiDataError::BadParameters(format!("X value cannot be zero!")));
+                }
+                if value.1 == $invalid_zero_value {
+                    return Err(FeagiDataError::BadParameters(format!("Y value cannot be zero!")));
+                }
+                Ok(Self { width: value.0, height: value.1 })
+            }
+        }
+
     }
 }
 
@@ -230,6 +265,18 @@ macro_rules! define_xyz_coordinates {
         impl $name {
             pub fn new(x: $var_type, y: $var_type, z: $var_type) -> Self {
                 Self { x, y, z }
+            }
+        }
+
+        impl From<$name> for ($var_type, $var_type, $var_type) {
+            fn from(value: $name) -> Self {
+                (value.x, value.y, value.z)
+            }
+        }
+
+        impl From<($var_type, $var_type, $var_type)> for $name {
+            fn from(value: ($var_type, $var_type, $var_type)) -> Self {
+                $name::new(value.0, value.1, value.2)
             }
         }
 
@@ -287,6 +334,28 @@ macro_rules! define_xyz_dimensions {
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 write!(f, "{}<{}, {}, {}>", $friendly_name, self.width, self.height, self.depth)
+            }
+        }
+
+        impl From<$name> for ($var_type, $var_type, $var_type) {
+            fn from(value: $name) -> Self {
+                (value.width, value.height, value.depth)
+            }
+        }
+
+        impl TryFrom<($var_type, $var_type, $var_type)> for $name {
+            type Error = FeagiDataError;
+            fn try_from(value: ($var_type, $var_type, $var_type)) -> Result<Self, Self::Error> {
+                if value.0 == $invalid_zero_value {
+                    return Err(FeagiDataError::BadParameters(format!("X value cannot be zero!")));
+                }
+                if value.1 == $invalid_zero_value {
+                    return Err(FeagiDataError::BadParameters(format!("Y value cannot be zero!")));
+                }
+                if value.2 == $invalid_zero_value {
+                    return Err(FeagiDataError::BadParameters(format!("Z value cannot be zero!")));
+                }
+                Ok(Self { width: value.0, height: value.1, depth: value.2 })
             }
         }
     }

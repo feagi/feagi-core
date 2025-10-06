@@ -48,7 +48,7 @@ impl MotorChannelStreamCaches {
     //region Properties
 
     pub fn number_of_channels(&self) -> CorticalChannelCount {
-        (self.pipeline_runners.len() as u32).into()
+        (self.pipeline_runners.len() as u32).try_into().unwrap()
     }
 
     pub fn verify_channel_exists(&self, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {

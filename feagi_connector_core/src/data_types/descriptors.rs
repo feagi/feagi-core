@@ -484,7 +484,7 @@ impl GazeProperties {
         }
     }
 
-    pub fn new_4d(percentage4d: Percentage4D) -> Self {
+    pub fn new_from_4d(percentage4d: Percentage4D) -> Self {
         let eccentricity_location_xy = Percentage2D::new(percentage4d.a, percentage4d.b);
         let modulation_size_xy= Percentage2D::new(percentage4d.c, percentage4d.d);
         GazeProperties::new(eccentricity_location_xy, modulation_size_xy)
