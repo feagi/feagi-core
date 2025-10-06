@@ -27,7 +27,7 @@ pub fn loopback_absolute_gaze_to_segmentation(sensors: &mut IOSensorCache, motor
         const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
         let recent_output = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, gaze_group, gaze_channel).unwrap();
         let percentage_output: Percentage4D = recent_output.try_into().unwrap();
-        let new_gaze = GazeProperties::new_4d(percentage_output);
+        let new_gaze = GazeProperties::new_from_4d(percentage_output);
 
         // overwrite and apply
         segmentator_property.update_from_gaze(new_gaze).unwrap();

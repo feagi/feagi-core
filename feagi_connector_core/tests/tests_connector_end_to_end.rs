@@ -24,10 +24,10 @@ mod test_connector_cache_sensor_load_image {
     #[test]
     fn test_segment_bird_image() {
 
-        const CORTICAL_GROUP: CorticalGroupIndex = CorticalGroupIndex(0);
-        const NUMBER_CHANNELS: CorticalChannelCount = CorticalChannelCount(1);
-        const CHANNEL_INDEX: CorticalChannelIndex = CorticalChannelIndex(0);
-        const SEGMENTED_IMAGE_RESOLUTIONS: SegmentedXYImageResolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
+        let cortical_group: CorticalGroupIndex = 0.into();
+        let number_channels: CorticalChannelCount = 1.try_into().unwrap();
+        let channel_index: CorticalChannelIndex = 0.into();
+        let segmented_image_resolutions: SegmentedXYImageResolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
             (64, 64).try_into().unwrap(), (32, 32).try_into().unwrap()
         );
 
@@ -35,15 +35,15 @@ mod test_connector_cache_sensor_load_image {
         let bird_image = load_bird_image();
         let bird_image_properties = bird_image.get_image_frame_properties();
         let segmented_bird_properties = SegmentedImageFrameProperties::new(
-            &SEGMENTED_IMAGE_RESOLUTIONS,
+            &segmented_image_resolutions,
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_space());
-        let initial_gaze = GazeProperties::new((0.5, 0.5), (0.5, 0.5))
+        let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), (0.5, 0.5).try_into().unwrap());
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
 
-        connector_cache.sensor_register_segmented_vision_absolute(CORTICAL_GROUP, NUMBER_CHANNELS, bird_image_properties, segmented_bird_properties, ()).unwrap()
+        connector_cache.sensor_register_segmented_vision_absolute(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap()
 
 
     }

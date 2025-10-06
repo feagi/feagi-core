@@ -125,7 +125,7 @@ mod test_descriptors {
 
         #[test]
         fn test_cortical_channel_count_from_conversion() {
-            let count = CorticalChannelCount::from(10u32);
+            let count = CorticalChannelCount::try_from(10u32).unwrap();
             assert_eq!(*count, 10u32);
         }
 
@@ -677,7 +677,7 @@ mod test_type_conversions {
     #[test]
     fn test_count_conversions() {
         let base_value = 100u32;
-        let channel_count = CorticalChannelCount::from(base_value);
+        let channel_count = CorticalChannelCount::try_from(base_value).unwrap();
         let back_to_base: u32 = channel_count.into();
         
         assert_eq!(base_value, back_to_base);

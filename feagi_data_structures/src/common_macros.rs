@@ -52,16 +52,16 @@ macro_rules! define_index {
 }
 
 /// Creates a non-zero count type with validation.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::{define_nonzero_count, FeagiDataError};
-/// 
+///
 /// define_nonzero_count!(ItemCount, u32, "Number of items (must be > 0)");
-/// 
+///
 /// let count = ItemCount::new(5).unwrap();
 /// assert_eq!(*count, 5);
-/// 
+///
 /// let invalid = ItemCount::new(0);
 /// assert!(invalid.is_err());
 /// ```
@@ -69,9 +69,10 @@ macro_rules! define_index {
 macro_rules! define_nonzero_count {
     ($name:ident, $base:ty, $doc:expr) => {
         #[doc = $doc]
-        #[repr(transparent)]
         #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-        pub struct $name($base);
+        pub struct $name {
+            value: $base,
+        }
 
         impl $name {
             /// Creates a new instance, returns Err if validation fails
@@ -79,31 +80,34 @@ macro_rules! define_nonzero_count {
                 if value == 0 {
                     return Err(FeagiDataError::BadParameters("Count cannot be zero!".into()));
                 }
-                Ok($name(value))
+                Ok($name{
+                    value,
+                })
             }
         }
-        impl From<$base> for $name {
-            fn from(value: $base) -> Self {
-                Self(value)
+        impl TryFrom<$base> for $name {
+            type Error = FeagiDataError;
+            fn try_from(value: $base) -> Result<Self, FeagiDataError> {
+                $name::new({value})
             }
         }
 
         impl From<$name> for $base {
             fn from(value: $name) -> $base {
-                value.0
+                value.value
             }
         }
 
         impl std::ops::Deref for $name {
             type Target = $base;
             fn deref(&self) -> &Self::Target {
-                &self.0
+                &self.value
             }
         }
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                self.0.fmt(f)
+                self.value.fmt(f)
             }
         }
 
