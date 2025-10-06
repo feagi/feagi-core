@@ -355,13 +355,15 @@ impl FeagiByteContainer{
 
 
         if total_number_of_bytes > self.bytes.capacity() {
-            self.bytes.reserve(total_number_of_bytes - self.bytes.capacity());
+            self.bytes.resize(total_number_of_bytes, 0);
         }
 
         // Every single byte will be overridden, don't worry
+        /*
         unsafe {
             self.bytes.set_len(total_number_of_bytes); // Fun!
         }
+         */
 
         // Setup global header
         self.bytes[0] = Self::CURRENT_FBS_VERSION;

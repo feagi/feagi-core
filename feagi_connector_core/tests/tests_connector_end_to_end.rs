@@ -30,7 +30,7 @@ mod test_connector_cache_sensor_load_image {
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
         let segmented_image_resolutions: SegmentedXYImageResolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-            (64, 64).try_into().unwrap(), (32, 32).try_into().unwrap()
+            (256, 256).try_into().unwrap(), (128, 128).try_into().unwrap()
         );
 
 
@@ -48,7 +48,6 @@ mod test_connector_cache_sensor_load_image {
         connector_cache.sensor_register_segmented_vision_absolute(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
         connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &bird_image.into()).unwrap();
         let bytes = connector_cache.sensor_get_bytes().unwrap();
-
     }
 
 }

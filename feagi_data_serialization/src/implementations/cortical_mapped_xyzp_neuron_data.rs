@@ -29,7 +29,6 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
 
     fn try_serialize_struct_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError> {
 
-        dbg!(byte_destination.len());
         // write per struct header
         byte_destination[0] = self.get_type() as u8;
         byte_destination[1] = self.get_version();
@@ -134,7 +133,6 @@ fn write_neuron_array_to_bytes(neuron_array: &NeuronXYZPArrays, bytes_to_write_t
     let mut p_offset = number_of_neurons_to_write * U32_F32_LENGTH * 3; // three quarters way through the total bytes
 
     let (x, y, z, p) = neuron_array.borrow_xyzp_vectors();
-
 
     // TODO Can this be optimized?
     for i in 0 .. number_of_neurons_to_write {
