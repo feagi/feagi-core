@@ -1,4 +1,5 @@
 use std::fmt;
+use std::fmt::Debug;
 use crate::FeagiDataError;
 use crate::genomic::{CorticalType, CoreCorticalType, SensorCorticalType, MotorCorticalType};
 use crate::genomic::descriptors::CorticalGroupIndex;
@@ -21,7 +22,7 @@ use crate::genomic::descriptors::CorticalGroupIndex;
 /// 
 /// assert_eq!(custom_id.as_ascii_string(), "c_lmao");
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CorticalID {
     pub(crate) bytes: [u8; CorticalID::CORTICAL_ID_LENGTH],
 }
@@ -259,6 +260,12 @@ impl fmt::Display for CorticalID {
     }
 }
 
+impl Debug for CorticalID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ch = risky_bytes_to_string(&self.bytes);
+        write!(f, "'{}'", ch)
+    }
+}
 
 fn risky_bytes_to_string(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> String {
     String::from_utf8(bytes.to_vec()).unwrap()

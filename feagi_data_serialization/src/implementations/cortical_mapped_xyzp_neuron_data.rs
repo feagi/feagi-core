@@ -20,15 +20,16 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
     }
 
     fn get_number_of_bytes_needed(&self) -> usize {
-        let mut number_bytes_needed: usize = FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT;
+        let mut number_bytes_needed: usize = FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT + NUMBER_BYTES_CORTICAL_COUNT_HEADER;
         for neuron_data in self.iter() {
-            number_bytes_needed += neuron_data.get_size_in_number_of_bytes();
+            number_bytes_needed += neuron_data.get_size_in_number_of_bytes() + NUMBER_BYTES_PER_CORTICAL_ID_HEADER;
         }
         number_bytes_needed
     }
 
     fn try_serialize_struct_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError> {
 
+        dbg!(byte_destination.len());
         // write per struct header
         byte_destination[0] = self.get_type() as u8;
         byte_destination[1] = self.get_version();
@@ -43,12 +44,10 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
         let mut neuron_data_write_index: usize = subheader_write_index + (number_cortical_areas * NUMBER_BYTES_PER_CORTICAL_ID_HEADER);
 
         for (cortical_id, neuron_data) in &self.mappings {
-
             // Write cortical subheader
             let cortical_area_lookup_header_slice = &mut byte_destination[subheader_write_index .. subheader_write_index + CorticalID::NUMBER_OF_BYTES];
             let cortical_area_lookup_header_slice: &mut[u8; CorticalID::NUMBER_OF_BYTES] = cortical_area_lookup_header_slice.try_into().unwrap();
             cortical_id.write_id_to_bytes(cortical_area_lookup_header_slice);
-
 
             let reading_length: u32 = neuron_data.get_size_in_number_of_bytes() as u32;
             LittleEndian::write_u32(&mut byte_destination[subheader_write_index + CorticalID::NUMBER_OF_BYTES .. subheader_write_index + CorticalID::NUMBER_OF_BYTES + size_of::<u32>()], neuron_data_write_index as u32);
@@ -58,8 +57,8 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
             write_neuron_array_to_bytes(neuron_data, &mut byte_destination[neuron_data_write_index .. (neuron_data_write_index + reading_length as usize)])?;
 
             // update indexes
-            neuron_data_write_index += reading_length as usize;
             subheader_write_index += NUMBER_BYTES_PER_CORTICAL_ID_HEADER;
+            neuron_data_write_index += reading_length as usize;
         };
 
         Ok(())
@@ -136,7 +135,8 @@ fn write_neuron_array_to_bytes(neuron_array: &NeuronXYZPArrays, bytes_to_write_t
 
     let (x, y, z, p) = neuron_array.borrow_xyzp_vectors();
 
-    // TODO use extend from slice, why do this?
+
+    // TODO Can this be optimized?
     for i in 0 .. number_of_neurons_to_write {
         LittleEndian::write_u32(&mut bytes_to_write_to[x_offset .. x_offset + U32_F32_LENGTH], x[i]);
         LittleEndian::write_u32(&mut bytes_to_write_to[y_offset .. y_offset + U32_F32_LENGTH], y[i]);
