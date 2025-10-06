@@ -342,6 +342,30 @@ impl From<(Percentage, Percentage)> for Percentage2D {
     }
 }
 
+impl From<Percentage2D> for (Percentage, Percentage) {
+    fn from(value: Percentage2D) -> Self {
+        (value.a, value.b)
+    }
+}
+
+impl From<&Percentage2D> for (Percentage, Percentage) {
+    fn from(value: &Percentage2D) -> Self {
+        (value.a, value.b)
+    }
+}
+
+impl From<Percentage2D> for (f32, f32) {
+    fn from(value: Percentage2D) -> Self {
+        (value.a.get_as_0_1(), value.b.get_as_0_1())
+    }
+}
+
+impl From<&Percentage2D> for (f32, f32) {
+    fn from(value: &Percentage2D) -> Self {
+        (value.a.get_as_0_1(), value.b.get_as_0_1())
+    }
+}
+
 /// Represents 2 signed percentages over 2 dimensions, going from -100 - 100%
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub struct SignedPercentage2D {
@@ -377,6 +401,45 @@ impl SignedPercentage2D {
 impl std::fmt::Display for SignedPercentage2D {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "SignedPercentage2D({}, {})", self.a, self.b)
+    }
+}
+
+impl TryFrom<(f32, f32)> for SignedPercentage2D {
+    type Error = FeagiDataError;
+    fn try_from(value: (f32, f32)) -> Result<Self, Self::Error> {
+        let a: SignedPercentage = value.0.try_into()?;
+        let b: SignedPercentage = value.1.try_into()?;
+        Ok(SignedPercentage2D { a, b })
+    }
+}
+
+impl From<(SignedPercentage, SignedPercentage)> for SignedPercentage2D {
+    fn from(value: (SignedPercentage, SignedPercentage)) -> Self {
+        SignedPercentage2D { a: value.0, b: value.1 }
+    }
+}
+
+impl From<SignedPercentage2D> for (SignedPercentage, SignedPercentage) {
+    fn from(value: SignedPercentage2D) -> Self {
+        (value.a, value.b)
+    }
+}
+
+impl From<&SignedPercentage2D> for (SignedPercentage, SignedPercentage) {
+    fn from(value: &SignedPercentage2D) -> Self {
+        (value.a, value.b)
+    }
+}
+
+impl From<SignedPercentage2D> for (f32, f32) {
+    fn from(value: SignedPercentage2D) -> Self {
+        (value.a.get_as_m1_1(), value.b.get_as_m1_1())
+    }
+}
+
+impl From<&SignedPercentage2D> for (f32, f32) {
+    fn from(value: &SignedPercentage2D) -> Self {
+        (value.a.get_as_m1_1(), value.b.get_as_m1_1())
     }
 }
 
@@ -426,6 +489,46 @@ impl std::fmt::Display for Percentage3D {
     }
 }
 
+impl TryFrom<(f32, f32, f32)> for Percentage3D {
+    type Error = FeagiDataError;
+    fn try_from(value: (f32, f32, f32)) -> Result<Self, Self::Error> {
+        let a: Percentage = value.0.try_into()?;
+        let b: Percentage = value.1.try_into()?;
+        let c: Percentage = value.2.try_into()?;
+        Ok(Percentage3D { a, b, c })
+    }
+}
+
+impl From<(Percentage, Percentage, Percentage)> for Percentage3D {
+    fn from(value: (Percentage, Percentage, Percentage)) -> Self {
+        Percentage3D { a: value.0, b: value.1, c: value.2 }
+    }
+}
+
+impl From<Percentage3D> for (Percentage, Percentage, Percentage) {
+    fn from(value: Percentage3D) -> Self {
+        (value.a, value.b, value.c)
+    }
+}
+
+impl From<&Percentage3D> for (Percentage, Percentage, Percentage) {
+    fn from(value: &Percentage3D) -> Self {
+        (value.a, value.b, value.c)
+    }
+}
+
+impl From<Percentage3D> for (f32, f32, f32) {
+    fn from(value: Percentage3D) -> Self {
+        (value.a.get_as_0_1(), value.b.get_as_0_1(), value.c.get_as_0_1())
+    }
+}
+
+impl From<&Percentage3D> for (f32, f32, f32) {
+    fn from(value: &Percentage3D) -> Self {
+        (value.a.get_as_0_1(), value.b.get_as_0_1(), value.c.get_as_0_1())
+    }
+}
+
 /// Represents 3 signed percentages over 3 dimensions, going from -100 - 100%
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub struct SignedPercentage3D {
@@ -465,6 +568,46 @@ impl SignedPercentage3D {
 impl std::fmt::Display for SignedPercentage3D {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "SignedPercentage3D({}, {}, {})", self.a, self.b, self.c)
+    }
+}
+
+impl TryFrom<(f32, f32, f32)> for SignedPercentage3D {
+    type Error = FeagiDataError;
+    fn try_from(value: (f32, f32, f32)) -> Result<Self, Self::Error> {
+        let a: SignedPercentage = value.0.try_into()?;
+        let b: SignedPercentage = value.1.try_into()?;
+        let c: SignedPercentage = value.2.try_into()?;
+        Ok(SignedPercentage3D { a, b, c })
+    }
+}
+
+impl From<(SignedPercentage, SignedPercentage, SignedPercentage)> for SignedPercentage3D {
+    fn from(value: (SignedPercentage, SignedPercentage, SignedPercentage)) -> Self {
+        SignedPercentage3D { a: value.0, b: value.1, c: value.2 }
+    }
+}
+
+impl From<SignedPercentage3D> for (SignedPercentage, SignedPercentage, SignedPercentage) {
+    fn from(value: SignedPercentage3D) -> Self {
+        (value.a, value.b, value.c)
+    }
+}
+
+impl From<&SignedPercentage3D> for (SignedPercentage, SignedPercentage, SignedPercentage) {
+    fn from(value: &SignedPercentage3D) -> Self {
+        (value.a, value.b, value.c)
+    }
+}
+
+impl From<SignedPercentage3D> for (f32, f32, f32) {
+    fn from(value: SignedPercentage3D) -> Self {
+        (value.a.get_as_m1_1(), value.b.get_as_m1_1(), value.c.get_as_m1_1())
+    }
+}
+
+impl From<&SignedPercentage3D> for (f32, f32, f32) {
+    fn from(value: &SignedPercentage3D) -> Self {
+        (value.a.get_as_m1_1(), value.b.get_as_m1_1(), value.c.get_as_m1_1())
     }
 }
 
@@ -518,6 +661,47 @@ impl std::fmt::Display for Percentage4D {
     }
 }
 
+impl TryFrom<(f32, f32, f32, f32)> for Percentage4D {
+    type Error = FeagiDataError;
+    fn try_from(value: (f32, f32, f32, f32)) -> Result<Self, Self::Error> {
+        let a: Percentage = value.0.try_into()?;
+        let b: Percentage = value.1.try_into()?;
+        let c: Percentage = value.2.try_into()?;
+        let d: Percentage = value.3.try_into()?;
+        Ok(Percentage4D { a, b, c, d })
+    }
+}
+
+impl From<(Percentage, Percentage, Percentage, Percentage)> for Percentage4D {
+    fn from(value: (Percentage, Percentage, Percentage, Percentage)) -> Self {
+        Percentage4D { a: value.0, b: value.1, c: value.2, d: value.3 }
+    }
+}
+
+impl From<Percentage4D> for (Percentage, Percentage, Percentage, Percentage) {
+    fn from(value: Percentage4D) -> Self {
+        (value.a, value.b, value.c, value.d)
+    }
+}
+
+impl From<&Percentage4D> for (Percentage, Percentage, Percentage, Percentage) {
+    fn from(value: &Percentage4D) -> Self {
+        (value.a, value.b, value.c, value.d)
+    }
+}
+
+impl From<Percentage4D> for (f32, f32, f32, f32) {
+    fn from(value: Percentage4D) -> Self {
+        (value.a.get_as_0_1(), value.b.get_as_0_1(), value.c.get_as_0_1(), value.d.get_as_0_1())
+    }
+}
+
+impl From<&Percentage4D> for (f32, f32, f32, f32) {
+    fn from(value: &Percentage4D) -> Self {
+        (value.a.get_as_0_1(), value.b.get_as_0_1(), value.c.get_as_0_1(), value.d.get_as_0_1())
+    }
+}
+
 /// Represents 4 signed percentages over 4 dimensions, going from -100 - 100%
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub struct SignedPercentage4D {
@@ -561,6 +745,47 @@ impl SignedPercentage4D {
 impl std::fmt::Display for SignedPercentage4D {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "SignedPercentage4D({}, {}, {}, {})", self.a, self.b, self.c, self.d)
+    }
+}
+
+impl TryFrom<(f32, f32, f32, f32)> for SignedPercentage4D {
+    type Error = FeagiDataError;
+    fn try_from(value: (f32, f32, f32, f32)) -> Result<Self, Self::Error> {
+        let a: SignedPercentage = value.0.try_into()?;
+        let b: SignedPercentage = value.1.try_into()?;
+        let c: SignedPercentage = value.2.try_into()?;
+        let d: SignedPercentage = value.3.try_into()?;
+        Ok(SignedPercentage4D { a, b, c, d })
+    }
+}
+
+impl From<(SignedPercentage, SignedPercentage, SignedPercentage, SignedPercentage)> for SignedPercentage4D {
+    fn from(value: (SignedPercentage, SignedPercentage, SignedPercentage, SignedPercentage)) -> Self {
+        SignedPercentage4D { a: value.0, b: value.1, c: value.2, d: value.3 }
+    }
+}
+
+impl From<SignedPercentage4D> for (SignedPercentage, SignedPercentage, SignedPercentage, SignedPercentage) {
+    fn from(value: SignedPercentage4D) -> Self {
+        (value.a, value.b, value.c, value.d)
+    }
+}
+
+impl From<&SignedPercentage4D> for (SignedPercentage, SignedPercentage, SignedPercentage, SignedPercentage) {
+    fn from(value: &SignedPercentage4D) -> Self {
+        (value.a, value.b, value.c, value.d)
+    }
+}
+
+impl From<SignedPercentage4D> for (f32, f32, f32, f32) {
+    fn from(value: SignedPercentage4D) -> Self {
+        (value.a.get_as_m1_1(), value.b.get_as_m1_1(), value.c.get_as_m1_1(), value.d.get_as_m1_1())
+    }
+}
+
+impl From<&SignedPercentage4D> for (f32, f32, f32, f32) {
+    fn from(value: &SignedPercentage4D) -> Self {
+        (value.a.get_as_m1_1(), value.b.get_as_m1_1(), value.c.get_as_m1_1(), value.d.get_as_m1_1())
     }
 }
 
