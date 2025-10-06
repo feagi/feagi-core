@@ -494,7 +494,7 @@ impl ImageFrame {
 
         let x_offset: u32 = *channel_index * self.get_xy_resolution().width;
         write_target.clear();
-        
+
         if self.skip_encoding {
             return Ok(()) // Encoding is to be skipped
         }

@@ -441,7 +441,7 @@ impl FeagiByteContainer{
         if self.bytes[0] != Self::CURRENT_SUPPORTED_VERSION {
             return Err(FeagiDataError::DeserializationError(format!("Given FEAGI Byte Structure is using version {} when this application only supports version {}!", self.bytes[0], Self::CURRENT_SUPPORTED_VERSION)));
         }
-        let number_contained_structs = LittleEndian::read_u16(&self.bytes[1..3]) as usize;
+        let number_contained_structs = self.bytes[3] as usize;
         if number_contained_structs == 0 {
             self.is_data_valid = true; // This is technically valid, even though no meaningful data was sent
             return Ok(())
