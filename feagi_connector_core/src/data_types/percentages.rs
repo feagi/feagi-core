@@ -326,6 +326,22 @@ impl std::fmt::Display for Percentage2D {
     }
 }
 
+impl TryFrom<(f32, f32)> for Percentage2D {
+    
+    type Error = FeagiDataError;
+    fn try_from(value: (f32, f32)) -> Result<Self, Self::Error> {
+        let a: Percentage = value.0.try_into()?;
+        let b: Percentage = value.1.try_into()?;
+        Ok(Percentage2D { a, b })
+    }
+}
+
+impl From<(Percentage, Percentage)> for Percentage2D {
+    fn from(value: (Percentage, Percentage)) -> Self {
+        Percentage2D { a: value.0, b: value.1 }
+    }
+}
+
 /// Represents 2 signed percentages over 2 dimensions, going from -100 - 100%
 #[derive(Clone, Debug, PartialEq, Copy)]
 pub struct SignedPercentage2D {

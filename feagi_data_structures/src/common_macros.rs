@@ -194,6 +194,19 @@ macro_rules! define_xy_dimensions {
             }
         }
 
+        impl TryFrom<($var_type, $var_type)> for $name {
+            type Error = FeagiDataError;
+            fn try_from(value: ($var_type, $var_type)) -> Result<Self, Self::Error> {
+                if value.0 == $invalid_zero_value {
+                    return Err(FeagiDataError::BadParameters(format!("X value cannot be zero!")));
+                }
+                if value.1 != $invalid_zero_value {
+                    return Err(FeagiDataError::BadParameters(format!("Y value cannot be zero!")));
+                }
+                Ok(Self { width: value.0, height: value.1 })
+            }
+        }
+
     }
 }
 
