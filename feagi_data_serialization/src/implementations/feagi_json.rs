@@ -17,7 +17,7 @@ impl FeagiSerializable for FeagiJSON {
         self.borrow_json_value().to_string().as_bytes().len() + FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT
     }
 
-    fn try_write_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError> {
+    fn try_serialize_struct_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError> {
         byte_destination[0] = self.get_type() as u8;
         byte_destination[1] = self.get_version();
 
@@ -29,7 +29,7 @@ impl FeagiSerializable for FeagiJSON {
         Ok(())
     }
 
-    fn try_update_from_byte_slice(&mut self, byte_structure_slice: &[u8]) -> Result<(), FeagiDataError> {
+    fn try_deserialize_and_update_self_from_byte_slice(&mut self, byte_structure_slice: &[u8]) -> Result<(), FeagiDataError> {
         // Assuming type is correct
         self.verify_byte_slice_is_of_correct_version(byte_structure_slice)?;
         

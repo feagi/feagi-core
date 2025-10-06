@@ -13,9 +13,7 @@ All byte transmissions are held in this global container, which can hold 1 or mo
 </td><td>  
 </td><td> These 8 bytes are repeated for every contained structure
 </td></tr><tr><td>
-</td><td>4</td><td>u32</td><td>First byte index of the structure (relative to this entire byte array)</td></tr><tr>
-<td>
-</td><td>4</td><td>u32</td><td>Number of bytes to read for the structure from the start index</td></tr><tr><td>Per Structure header</td><td>
+</td><td>4</td><td>u32</td><td>First byte index of the structure (relative to this entire byte array)</td><tr><td>Per Structure header</td><td>
 </td><td>  
 </td><td> Every struct in follows in sequence. They always start with 2 per header bytes as described below, then the rest is the data.
 </td></tr><tr><td>  
