@@ -5,4 +5,3 @@
 /// handling neuron voxel representations in various formats and containers.
 
 pub mod xyzp;
-mod coder_types;

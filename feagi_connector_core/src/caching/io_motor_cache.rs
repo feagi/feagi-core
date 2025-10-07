@@ -7,7 +7,7 @@ use feagi_data_structures::genomic::MotorCorticalType;
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::caching::per_channel_stream_caches::MotorChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
-use crate::neuron_coding::xyzp::NeuronVoxelXYZPDecoder;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOMotorCache {

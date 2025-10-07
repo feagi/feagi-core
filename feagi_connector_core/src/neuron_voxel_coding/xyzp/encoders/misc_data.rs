@@ -1,25 +1,25 @@
 use std::time::Instant;
 use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::CorticalChannelCount;
+use feagi_data_structures::genomic::{CorticalID, SensorCorticalType};
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalGroupIndex};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use crate::data_pipeline::PipelineStageRunner;
-use crate::data_types::descriptors::ImageFrameProperties;
-use crate::data_types::ImageFrame;
-use crate::neuron_coding::xyzp::NeuronVoxelXYZPEncoder;
-use crate::wrapped_io_data::{ WrappedIOType};
+use crate::data_types::descriptors::MiscDataDimensions;
+use crate::data_types::MiscData;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
+use crate::wrapped_io_data::{WrappedIOType};
 
 #[derive(Debug)]
-pub struct ImageFrameNeuronVoxelXYZPEncoder {
-    image_properties: ImageFrameProperties,
+pub struct MiscDataNeuronVoxelXYZPEncoder {
+    misc_data_dimensions: MiscDataDimensions,
     cortical_write_target: CorticalID,
     scratch_space: Vec<NeuronVoxelXYZPArrays>,
 }
 
-impl NeuronVoxelXYZPEncoder for ImageFrameNeuronVoxelXYZPEncoder {
+impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
-        WrappedIOType::ImageFrame(Some(self.image_properties))
+        WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
     fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
@@ -30,14 +30,18 @@ impl NeuronVoxelXYZPEncoder for ImageFrameNeuronVoxelXYZPEncoder {
         pipelines.par_iter()
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
-            .try_for_each(|(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+            .try_for_each(|(index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                 let channel_updated = pipeline.get_last_processed_instant();
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
                 let updated_data = pipeline.get_most_recent_output();
-                let updated_image: &ImageFrame = updated_data.try_into()?;
-                updated_image.overwrite_neuron_data(scratch, (channel_index as u32).into())?;
+                let updated_misc: &MiscData = updated_data.try_into()?;
+                let x_offset = index as u32 * self.misc_data_dimensions.width;
+
+
+
+                updated_misc.overwrite_neuron_data(scratch, x_offset.into())?;
                 Ok(())
             })?;
 
@@ -60,13 +64,24 @@ impl NeuronVoxelXYZPEncoder for ImageFrameNeuronVoxelXYZPEncoder {
         })?;
         Ok(())
     }
+
+
+
+
 }
 
-impl ImageFrameNeuronVoxelXYZPEncoder {
-    pub fn new_box(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
-        let encoder = ImageFrameNeuronVoxelXYZPEncoder{
-            image_properties: image_properties.clone(),
-            cortical_write_target,
+impl MiscDataNeuronVoxelXYZPEncoder {
+    pub fn new_box(cortical_group_index: CorticalGroupIndex, misc_data_dimensions: MiscDataDimensions, number_channels: CorticalChannelCount, is_absolute: bool) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
+        let cortical_id: CorticalID;
+        if is_absolute {
+            cortical_id = SensorCorticalType::MiscellaneousAbsolute.to_cortical_id(cortical_group_index);
+        }
+        else {
+            cortical_id = SensorCorticalType::MiscellaneousIncremental.to_cortical_id(cortical_group_index);
+        }
+        let encoder = MiscDataNeuronVoxelXYZPEncoder {
+            misc_data_dimensions,
+            cortical_write_target: cortical_id,
             scratch_space: vec![NeuronVoxelXYZPArrays::new(); *number_channels as usize],
         };
         Ok(Box::new(encoder))

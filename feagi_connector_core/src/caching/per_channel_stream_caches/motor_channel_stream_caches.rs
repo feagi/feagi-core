@@ -4,7 +4,7 @@ use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
-use crate::neuron_coding::xyzp::NeuronVoxelXYZPDecoder;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]
@@ -124,7 +124,7 @@ impl MotorChannelStreamCaches {
             if !self.has_channel_been_updated[channel_index] {
                 continue;
             }
-            self.value_updated_callbacks[channel_index].emit(()); // no value
+            self.value_updated_callbacks[channel_index].emit(&()); // no value
         }
         self.has_channel_been_updated.fill(false);
         Ok(())

@@ -8,7 +8,7 @@ use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels,
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::data_types::{ImageFrame, SegmentedImageFrame};
-use crate::neuron_coding::xyzp::NeuronVoxelXYZPEncoder;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]

@@ -8,9 +8,9 @@ use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_pipeline::stage_properties::{IdentityStageProperties, ImageSegmentorStageProperties};
 use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 use crate::data_types::{Percentage4D, SegmentedImageFrame};
-use crate::neuron_coding::xyzp::encoders::{MiscDataNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
-use crate::neuron_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
-use crate::neuron_coding::xyzp::decoders::Percentage4DLinearNeuronVoxelXYZPDecoder;
+use crate::neuron_voxel_coding::xyzp::encoders::{MiscDataNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
+use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
+use crate::neuron_voxel_coding::xyzp::decoders::Percentage4DLinearNeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 

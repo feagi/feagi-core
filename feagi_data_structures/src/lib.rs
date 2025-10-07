@@ -1,3 +1,6 @@
+//! The core crate for FEAGI. Defines the most common data structures used throughout
+#![doc = include_str!("../docs/readme.md")]
+
 mod templates;
 mod error;
 mod feagi_signal;

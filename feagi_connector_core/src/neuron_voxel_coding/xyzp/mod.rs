@@ -1,3 +1,5 @@
+/// Describes encoding / decoding to NeuronVoxelXYZP format
+
 mod coder_traits;
 mod coder_shared_functions;
 

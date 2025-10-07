@@ -28,7 +28,8 @@ pub enum WrappedIOType {
     MiscData(Option<MiscDataDimensions>)
 }
 
-
+// NOTE: Due to some variations in some of the types, this isn't practical to turn into a macro.
+// This isn't too bad though.
 
 impl WrappedIOType {
 

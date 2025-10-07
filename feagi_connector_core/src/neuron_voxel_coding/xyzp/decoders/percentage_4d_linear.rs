@@ -4,7 +4,7 @@ use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use crate::data_types::Percentage4D;
-use crate::neuron_coding::xyzp::NeuronVoxelXYZPDecoder;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
