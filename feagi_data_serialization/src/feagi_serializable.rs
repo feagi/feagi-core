@@ -1,25 +1,56 @@
 use feagi_data_structures::FeagiDataError;
 use crate::{FeagiByteContainer, FeagiByteStructureType};
 
+/// Trait for structures that can be serialized to and from FEAGI byte format.
+/// 
+/// Implementations must provide methods for determining their type, version,
+/// size requirements, and serialization/deserialization logic. The trait includes
+/// default validation methods for type and version checking.
+/// 
+/// # Example
+/// ```ignore
+/// impl FeagiSerializable for MyStruct {
+///     fn get_type(&self) -> FeagiByteStructureType {
+///         FeagiByteStructureType::MyType
+///     }
+///     
+///     fn get_version(&self) -> u8 { 1 }
+///     
+///     fn get_number_of_bytes_needed(&self) -> usize { 
+///         FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT + self.data.len()
+///     }
+///     
+///     fn try_serialize_struct_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError> {
+///         // Serialize implementation
+///         Ok(())
+///     }
+///     
+///     fn try_deserialize_and_update_self_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError> {
+///         // Deserialize implementation
+///         Ok(())
+///     }
+/// }
+/// ```
 pub trait FeagiSerializable {
 
-    // NOTE: None of these methods should be exposed outside this crate! THey should remain private!
-    /// Returns type of structure this is, as defined in the FEAGI Data Serialization Docs
+    /// Returns the structure type identifier.
     fn get_type(&self) -> FeagiByteStructureType;
 
-    /// Returns the specific version of the structure supported by the current code base
+    /// Returns the version number of this structure format.
     fn get_version(&self) -> u8;
 
-    /// Returns the number of bytes needed by be allocated by the FeagiByteContainer when storing the data
+    /// Returns the total number of bytes needed for serialization.
     fn get_number_of_bytes_needed(&self) -> usize;
 
-    /// When given a mutable slice of bytes size specified by "get_number_of_bytes_needed", serialized the struct into it
+    /// Serializes this structure into the provided byte slice.
+    /// 
+    /// The slice must be exactly the size returned by `get_number_of_bytes_needed`.
     fn try_serialize_struct_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError>;
 
-    /// Given a slice of data of this structure of correct size, Deserialize the slice and update (replace) the data of the structure
+    /// Deserializes data from a byte slice and updates this structure.
     fn try_deserialize_and_update_self_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError>;
 
-    /// Verifies that the data slice is of the type expected of the struct
+    /// Verifies that a byte slice contains data of the correct type.
     fn verify_byte_slice_is_of_correct_type(&self, byte_source: &[u8]) -> Result<(), FeagiDataError> {
 
         if byte_source.len() <= FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT {
@@ -33,7 +64,7 @@ pub trait FeagiSerializable {
         Ok(())
     }
 
-    /// Verifies that the data slice is of the version expected of the struct
+    /// Verifies that a byte slice contains data of the correct version.
     fn verify_byte_slice_is_of_correct_version(&self, byte_source: &[u8]) -> Result<(), FeagiDataError> {
 
         if byte_source.len() < FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT {

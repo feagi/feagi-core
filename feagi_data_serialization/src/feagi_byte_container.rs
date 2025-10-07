@@ -228,6 +228,10 @@ impl FeagiByteContainer{
         Ok(boxed_struct)
     }
 
+    /// Creates a new structure from the first instance of the given type.
+    /// 
+    /// Searches for the first structure matching the specified type and deserializes it.
+    /// Returns None if no structure of that type is found.
     pub fn try_create_struct_from_first_found_struct_of_type(&self, structure_type: FeagiByteStructureType) -> Result<Option<Box<dyn FeagiSerializable>>, FeagiDataError> {
         let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
         if getting_slice.is_none() {
@@ -238,6 +242,9 @@ impl FeagiByteContainer{
         Ok(Some(boxed_struct))
     }
 
+    /// Updates an existing structure with data from the specified index.
+    /// 
+    /// Deserializes data at the given index and updates the provided structure.
     pub fn try_update_struct_from_index(&self, index: StructureIndex, updating_boxed_struct: &mut dyn FeagiSerializable) -> Result<(), FeagiDataError> {
         self.verify_structure_index_valid(index)?;
         let relevant_slice = self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
@@ -246,6 +253,9 @@ impl FeagiByteContainer{
         Ok(())
     }
 
+    /// Updates a structure from the first found instance of its type.
+    /// 
+    /// Returns true if a matching structure was found and updated, false otherwise.
     pub fn try_update_struct_from_first_found_struct_of_type(&self, updating_boxed_struct: &mut dyn FeagiSerializable) -> Result<bool, FeagiDataError> {
         let structure_type: FeagiByteStructureType = updating_boxed_struct.get_type();
         let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
@@ -281,6 +291,10 @@ impl FeagiByteContainer{
 
     //region Overwriting Data
 
+    /// Overwrites the container with multiple serialized structures.
+    /// 
+    /// Clears existing data and serializes all provided structures into the container.
+    /// Updates the increment counter to the specified value.
     pub fn overwrite_byte_data_with_multiple_struct_data(&mut self, incoming_structs: Vec<&dyn FeagiSerializable>, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         if incoming_structs.len() > MAX_NUMBER_OF_STRUCTS {
@@ -338,6 +352,10 @@ impl FeagiByteContainer{
 
     }
 
+    /// Overwrites the container with a single serialized structure.
+    /// 
+    /// Optimized version for when only one structure needs to be stored.
+    /// Clears existing data and serializes the structure with the given increment value.
     pub fn overwrite_byte_data_with_single_struct_data(&mut self, incoming_struct: &dyn FeagiSerializable, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         self.bytes.clear();
@@ -388,7 +406,7 @@ impl FeagiByteContainer{
     /// use feagi_data_serialization::FeagiByteContainer;
     /// 
     /// let mut container = FeagiByteContainer::new_empty();
-    /// container.set_increment_counter_state(42);
+    /// _ = container.set_increment_counter_state(42);
     /// ```
     pub fn set_increment_counter_state(&mut self, new_increment_value: u16) -> Result<(), FeagiDataError> {
         if !self.is_data_valid {
@@ -495,18 +513,25 @@ impl FeagiByteContainer{
 //endregion
 
 //region Contained Struct Reference
+
+/// Internal metadata for locating serialized structures within the byte array.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct ContainedStructReference {
+    /// Type of the contained structure
     structure_type: FeagiByteStructureType,
+    /// Starting byte index of the structure data
     byte_start_index: ByteIndexReadingStart,
+    /// Number of bytes occupied by the structure
     number_bytes_to_read: NumberBytesToRead
 }
 
 impl ContainedStructReference {
+    /// Returns an immutable slice of the structure's bytes.
     pub fn get_as_byte_slice<'a>(&self, byte_source: &'a Vec<u8>) -> &'a [u8] {
         &byte_source[self.byte_start_index as usize ..self.byte_start_index as usize + self.number_bytes_to_read as usize]
     }
 
+    /// Returns a mutable slice of the structure's bytes.
     pub fn get_as_byte_slice_mut<'a>(&self, byte_source: &'a mut Vec<u8>) -> &'a mut [u8] {
         &mut byte_source[self.byte_start_index as usize ..self.byte_start_index as usize + self.number_bytes_to_read as usize]
     }
