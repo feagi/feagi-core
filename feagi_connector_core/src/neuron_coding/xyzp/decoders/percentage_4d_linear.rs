@@ -7,7 +7,7 @@ use crate::data_types::Percentage4D;
 use crate::neuron_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron_voxels along the Z represents 0 -> +1
+const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 4; // How many numbers are encoded per channel?
 const CHANNEL_WIDTH: u32 = WIDTH_GIVEN_POSITIVE_Z_ROW * NUMBER_PAIRS_PER_CHANNEL;
 

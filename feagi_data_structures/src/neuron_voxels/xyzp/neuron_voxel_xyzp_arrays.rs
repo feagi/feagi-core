@@ -6,15 +6,19 @@ use crate::genomic::descriptors::CorticalCoordinate;
 use crate::neuron_voxels::xyzp::NeuronVoxelXYZP;
 
 
+/// Structure-of-arrays storage for neuron voxel data.
+/// 
+/// Stores neuron voxel coordinates and potentials in separate parallel arrays.
+/// WARNING: Does not check for duplicate neuron coordinates automatically!
 #[derive(Clone,Debug)]
 pub struct NeuronVoxelXYZPArrays {
-    /// X coordinates of neuron_voxels (using Cartesian coordinate system)
+    /// X coordinates of neuron voxels (using Cartesian coordinate system)
     x: Vec<u32>, // Remember, FEAGI is cartesian!
-    /// Y coordinates of neuron_voxels
+    /// Y coordinates of neuron voxels
     y: Vec<u32>,
-    /// Channel indices of neuron_voxels
+    /// Channel indices of neuron voxels
     z: Vec<u32>,
-    /// Potential/activation values of neuron_voxels
+    /// Potential/activation values of neuron voxels
     p: Vec<f32>,
 }
 
@@ -116,10 +120,10 @@ impl NeuronVoxelXYZPArrays {
     
     //region Array-Like Implementations
     
-    /// Creates a new NeuronVoxelXYZPArrays instance with capacity for the specified maximum number of neuron_voxels.
+    /// Creates a new NeuronVoxelXYZPArrays instance with capacity for the specified maximum number of neuron voxels.
     ///
     /// # Arguments
-    /// * `number_of_neurons_initial` - The number of neuron_voxels to allocate space for
+    /// * `number_of_neurons_initial` - The number of neuron voxels to allocate space for
     ///
     /// # Returns
     /// * `Self` - A new instance
@@ -132,10 +136,10 @@ impl NeuronVoxelXYZPArrays {
         }
     }
     
-    /// Returns the current capacity of the internal vectors.
+    /// Returns the current capacity, IE the number of neurons that can be stored in allocated memory.
     ///
     /// # Returns
-    /// * `usize` - The maximum number of neuron_voxels that can be stored without reallocation
+    /// * `usize` - The maximum number of neuron voxels that can be stored without reallocation
     ///
     /// # Examples
     /// ```
@@ -148,7 +152,7 @@ impl NeuronVoxelXYZPArrays {
         self.x.capacity() // all are the same
     }
     
-    /// Returns the number of additional neuron_voxels that can be stored without reallocation.
+    /// Returns the number of additional neuron voxels that can be stored without reallocation.
     ///
     /// # Returns
     /// * `usize` - The difference between capacity and current length
@@ -165,10 +169,10 @@ impl NeuronVoxelXYZPArrays {
         self.x.capacity() - self.x.len()
     }
 
-    /// Returns the current number of neuron_voxels stored in this structure.
+    /// Returns the current number of neuron voxels stored in this structure.
     ///
     /// # Returns
-    /// * `usize` - The number of neuron_voxels currently stored
+    /// * `usize` - The number of neuron voxels currently stored
     ///
     /// # Examples
     /// ```
@@ -226,13 +230,13 @@ impl NeuronVoxelXYZPArrays {
         self.reserve(number_of_neurons_total - self.len());
     }
     
-    /// Reserves capacity for at least the specified number of additional neuron_voxels.
+    /// Reserves capacity for at least the specified number of additional neuron voxels.
     ///
     /// The actual capacity reserved may be greater than requested to optimize
     /// for future insertions. This operation affects all four internal vectors.
     ///
     /// # Arguments
-    /// * `additional_neuron_count` - The number of additional neuron_voxels to reserve space for
+    /// * `additional_neuron_count` - The number of additional neuron voxels to reserve space for
     ///
     /// # Examples
     /// ```
@@ -270,6 +274,22 @@ impl NeuronVoxelXYZPArrays {
         self.p.push(neuron.potential);
     }
 
+    /// Adds a neuron voxel from raw coordinate and potential values.
+    ///
+    /// # Arguments
+    /// * `x` - X-coordinate within the cortical area
+    /// * `y` - Y-coordinate within the cortical area
+    /// * `z` - Z-coordinate (channel index)
+    /// * `p` - Potential/activation value
+    ///
+    /// # Examples
+    /// ```
+    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+    ///
+    /// let mut arrays = NeuronVoxelXYZPArrays::new();
+    /// arrays.push_raw(1, 2, 3, 0.5);
+    /// assert_eq!(arrays.len(), 1);
+    /// ```
     pub fn push_raw(&mut self, x: u32, y: u32, z: u32, p: f32) {
         self.x.push(x);
         self.y.push(y);
@@ -377,10 +397,10 @@ impl NeuronVoxelXYZPArrays {
         self.p.clear();
     }
     
-    /// Checks if no neuron_voxels are in this structure.
+    /// Checks if no neuron voxels are in this structure.
     ///
     /// # Returns
-    /// * `bool` - True if there are no neuron_voxels stored, false otherwise
+    /// * `bool` - True if there are no neuron voxels stored, false otherwise
     ///
     /// # Examples
     /// ```
@@ -396,7 +416,7 @@ impl NeuronVoxelXYZPArrays {
         self.x.is_empty()
     }
     
-    /// Returns an iterator over all neuron_voxels in the arrays.
+    /// Returns an iterator over all neuron voxels in the arrays.
     ///
     /// # Returns
     /// * `impl Iterator<Item=NeuronVoxelXYZP> + '_` - An iterator yielding NeuronVoxelXYZP instances
@@ -429,7 +449,7 @@ impl NeuronVoxelXYZPArrays {
             })
     }
     
-    /// Returns an iterator over all neuron_voxels with their indices.
+    /// Returns an iterator over all neuron voxels with their indices.
     ///
     /// # Returns
     /// * `impl Iterator<Item=(usize, NeuronVoxelXYZP)> + '_` - An iterator yielding (index, neuron) pairs
@@ -461,8 +481,8 @@ impl NeuronVoxelXYZPArrays {
     
     //endregion
     
-    /// Updates the internal vectors using an external function.
-    /// This allows for custom in-place modifications of the neuron data vectors.
+    /// Updates the internal vectors using an external function before checking for validity.
+    /// This allows for custom in-place modifications of the neuron data vectors with automated checking.
     ///
     /// # Arguments
     /// * `vectors_changer` - A function that takes mutable references to the four vectors and updates them
@@ -480,7 +500,7 @@ impl NeuronVoxelXYZPArrays {
     /// Creates a vector of NeuronVoxelXYZP instances from the current arrays.
     ///
     /// # Returns
-    /// * `Vec<NeuronVoxelXYZP>` - A vector containing all neuron_voxels as individual NeuronVoxelXYZP instances
+    /// * `Vec<NeuronVoxelXYZP>` - A vector containing all neuron voxels as individual NeuronVoxelXYZP instances
     ///
     /// # Examples
     /// ```
@@ -531,13 +551,13 @@ impl NeuronVoxelXYZPArrays {
         )
     }
     
-    /// Returns the total size in bytes required to store all neuron_voxels.
+    /// Returns the total size in bytes required to store all neuron voxels.
     ///
     /// This calculates the number of bytes needed for binary serialization
     /// of the current neuron data.
     ///
     /// # Returns
-    /// * `usize` - Total bytes required (number of neuron_voxels × 16 bytes per neuron)
+    /// * `usize` - Total bytes required (number of neuron voxels × 16 bytes per neuron)
     ///
     /// # Examples
     /// ```
@@ -546,7 +566,7 @@ impl NeuronVoxelXYZPArrays {
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
-    /// assert_eq!(arrays.get_size_in_number_of_bytes(), 32); // 2 neuron_voxels × 16 bytes
+    /// assert_eq!(arrays.get_size_in_number_of_bytes(), 32); // 2 neuron voxels × 16 bytes
     /// ```
     pub fn get_size_in_number_of_bytes(&self) -> usize {
         self.len() * NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON
@@ -575,7 +595,7 @@ impl NeuronVoxelXYZPArrays {
     }
     
     
-    /// Creates a new NeuronVoxelXYZPArrays from filtering neuron_voxels based on their locations.
+    /// Creates a new NeuronVoxelXYZPArrays from filtering neuron voxels based on their locations.
     ///
     /// # Arguments
     /// * `x_range` - Range of valid X coordinates
@@ -583,7 +603,7 @@ impl NeuronVoxelXYZPArrays {
     /// * `z_range` - Range of valid Z coordinates
     ///
     /// # Returns
-    /// * `Result<NeuronVoxelXYZPArrays, NeuronError>` - A new instance containing only neuron_voxels within the specified ranges
+    /// * `Result<NeuronVoxelXYZPArrays, NeuronError>` - A new instance containing only neuron voxels within the specified ranges
     ///
     /// # Examples
     /// ```
@@ -665,7 +685,7 @@ impl IntoIterator for NeuronVoxelXYZPArrays {
     }
 }
 
-// Iterator struct for owned iteration
+/// Iterator for consuming NeuronVoxelXYZPArrays and producing owned NeuronVoxelXYZP instances.
 pub struct NeuronVoxelXYZPArraysIntoIter {
     x: std::vec::IntoIter<u32>,
     y: std::vec::IntoIter<u32>,
@@ -701,8 +721,8 @@ impl ExactSizeIterator for NeuronVoxelXYZPArraysIntoIter {
 
 // Implement IntoParallelIterator for owned NeuronVoxelXYZPArrays
 impl IntoParallelIterator for NeuronVoxelXYZPArrays {
-    type Item = NeuronVoxelXYZP;
     type Iter = NeuronVoxelXYZPArraysParIter;
+    type Item = NeuronVoxelXYZP;
 
     fn into_par_iter(self) -> Self::Iter {
         NeuronVoxelXYZPArraysParIter {
@@ -714,7 +734,7 @@ impl IntoParallelIterator for NeuronVoxelXYZPArrays {
     }
 }
 
-// Parallel iterator struct for owned iteration
+/// Parallel iterator for processing NeuronVoxelXYZPArrays using Rayon.
 pub struct NeuronVoxelXYZPArraysParIter {
     x: Vec<u32>,
     y: Vec<u32>,

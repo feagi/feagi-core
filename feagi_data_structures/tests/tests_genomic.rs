@@ -5,9 +5,7 @@
 
 use feagi_data_structures::genomic::*;
 use feagi_data_structures::genomic::descriptors::*;
-use feagi_data_structures::common_macros::*;
 use feagi_data_structures::FeagiDataError;
-use std::ops::Range;
 
 #[cfg(test)]
 mod test_descriptors {
@@ -521,7 +519,7 @@ mod test_cortical_id {
             let result = CorticalID::from_string("cust🎯1".to_string());
             assert!(result.is_err());
             
-            if let Err(FeagiDataError::BadParameters(msg)) = result {
+            if let Err(FeagiDataError::BadParameters(_msg)) = result {
             } else {
                 panic!("Expected BadParameters error");
             }
@@ -792,7 +790,7 @@ mod test_error_handling_edge_cases {
     #[test]
     fn test_cortical_id_valid_characters() {
         // Test that all valid characters work (alphanumeric + underscore)
-        let valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+        let _valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
         
         // Create valid IDs using these characters
         let result1 = CorticalID::from_string("custom".to_string());

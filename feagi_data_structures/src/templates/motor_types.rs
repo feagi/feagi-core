@@ -1,6 +1,6 @@
 
 
-/// Definition File for Motoers (Input Processing Units)
+/// Definition File for Motors (Input Processing Units)
 #[macro_export]
 macro_rules! motor_definition {
     ($callback:ident) => {

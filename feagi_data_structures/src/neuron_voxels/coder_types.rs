@@ -1,6 +1,9 @@
-
-/// Mainly used in macros, but denotes the type of encoder / decoder to be used
-#[allow(non_camel_case_types)]
+/// Encoding/decoding strategy types for neuron voxel data.
+/// 
+/// Specifies how data should be encoded into or decoded from neuron voxel representations.
+/// Supports various data types (percentages, images) with different encoding methods
+/// Primarily used in macros for code generation
+#[allow(non_camel_case_types, unused)] // allow non-camel case to make differentiating properties easier for us mere mortals
 pub enum CoderTypes {
     Percentage_Absolute_Linear,
     Percentage_Absolute_Fractional,

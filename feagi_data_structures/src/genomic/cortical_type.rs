@@ -43,6 +43,7 @@ macro_rules! define_io_cortical_types {
 
         impl $cortical_io_type_enum_name {
 
+            /// Returns all available cortical I/O types.
             pub fn list_all_sensor_types() -> Vec<$cortical_io_type_enum_name> {
                 let mut output: Vec<$cortical_io_type_enum_name> = Vec::new();
                     $(
@@ -51,7 +52,8 @@ macro_rules! define_io_cortical_types {
                 output
             }
             
-            // Does no cortical ID checking
+            /// Converts bytes to cortical type (no ID validation).
+            #[allow(unreachable_patterns)]
             pub(crate) fn get_type_from_bytes(id: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<CorticalType, FeagiDataError> {
                 let mut id_0: [u8; CorticalID::CORTICAL_ID_LENGTH] = id.clone();
                 //id_0.clone_from_slice(id);
@@ -69,6 +71,7 @@ macro_rules! define_io_cortical_types {
 
             }
 
+            /// Converts to a cortical ID with the given index.
             pub fn to_cortical_id(&self, index: CorticalGroupIndex) -> CorticalID {
                 let (high, low) = u8_to_hex_char_u8(*index);
                 let mut output: [u8; CorticalID::CORTICAL_ID_LENGTH] =  match self {
@@ -81,6 +84,7 @@ macro_rules! define_io_cortical_types {
                 CorticalID {bytes: output} // skip safety checks, we know this is fine
             }
             
+            /// Returns the snake_case identifier for this type.
             pub fn get_snake_case(&self) -> &str {
                 match self {
                     $(
@@ -89,6 +93,7 @@ macro_rules! define_io_cortical_types {
                 }
             }
 
+            /// Returns valid dimension ranges for this type's channels.
             pub fn get_cortical_channel_dimension_range(&self) -> CorticalChannelDimensionRange {
                 match self {
                     $(
@@ -122,17 +127,28 @@ macro_rules! define_io_cortical_types {
 }
 
 //region CorticalType
+
+/// Categories of cortical areas in FEAGI.
+///
+/// Distinguishes between different types of brain regions: custom user-defined areas,
+/// memory regions, core processing areas, sensory inputs, and motor outputs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CorticalType {
+    /// User-defined cortical area
     Custom,
+    /// Memory storage region
     Memory,
+    /// Core processing area (Death/Power)
     Core(CoreCorticalType),
+    /// Sensory input region
     Sensory(SensorCorticalType),
+    /// Motor output region
     Motor(MotorCorticalType),
 }
 
 impl CorticalType {
 
+    /// Determines cortical type from 6-byte ID.
     pub fn try_get_type_from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<CorticalType, FeagiDataError> {
         let start: u8 = bytes[0];
         match start {
@@ -154,6 +170,7 @@ impl CorticalType {
 
     }
     
+    /// Converts cortical type to a cortical ID with the given index.
     pub fn to_cortical_id(&self, io_cortical_index: CorticalGroupIndex) -> Result<CorticalID, FeagiDataError> {
         match self {
             Self::Custom => Err(FeagiDataError::BadParameters("Custom Cortical Areas can have arbitrary Cortical IDs and thus cannot be convert to from type!".into())),
@@ -171,6 +188,7 @@ impl CorticalType {
 
     }
     
+    /// Returns valid dimension ranges for channels. Only applicable to I/O types.
     pub fn try_get_channel_size_boundaries(&self) -> Result<CorticalChannelDimensionRange, FeagiDataError> {
         match self {
             Self::Custom => Err(FeagiDataError::BadParameters("Custom Cortical Areas do not have channels!".into())),
@@ -195,6 +213,7 @@ impl CorticalType {
     
     //region Is Type
 
+    /// Returns true if this is a core cortical type.
     pub fn is_type_core(&self) -> bool {
         match self {
             Self::Core(_) => true,
@@ -202,7 +221,7 @@ impl CorticalType {
         }
     }
 
-
+    /// Returns true if this is a sensory cortical type.
     pub fn is_type_sensor(&self) -> bool {
         match self {
             Self::Sensory(_) => true,
@@ -210,7 +229,7 @@ impl CorticalType {
         }
     }
 
-
+    /// Returns true if this is a motor cortical type.
     pub fn is_type_motor(&self) -> bool {
         match self {
             Self::Motor(_) => true,
@@ -218,7 +237,7 @@ impl CorticalType {
         }
     }
 
-
+    /// Returns true if this is a custom cortical type.
     pub fn is_type_custom(&self) -> bool {
         match self {
             Self::Custom => true,
@@ -226,7 +245,7 @@ impl CorticalType {
         }
     }
 
-
+    /// Returns true if this is a memory cortical type.
     pub fn is_type_memory(&self) -> bool {
         match self {
             Self::Memory => true,
@@ -237,6 +256,8 @@ impl CorticalType {
     //endregion
     
     //region Verify Type
+    
+    /// Verifies this is a core type, returns error otherwise.
     pub fn verify_is_core(&self) -> Result<(), FeagiDataError> {
         if !self.is_type_core() {
             return Err(FeagiDataError::BadParameters("Expected cortical type to be type Core!".into()))
@@ -244,7 +265,7 @@ impl CorticalType {
         Ok(())
     }
 
-
+    /// Verifies this is a sensor type, returns error otherwise.
     pub fn verify_is_sensor(&self) -> Result<(), FeagiDataError> {
         if !self.is_type_sensor() {
             return Err(FeagiDataError::BadParameters("Expected cortical type to be type Sensor!".into()))
@@ -252,7 +273,7 @@ impl CorticalType {
         Ok(())
     }
 
-
+    /// Verifies this is a motor type, returns error otherwise.
     pub fn verify_is_motor(&self) -> Result<(), FeagiDataError> {
         if !self.is_type_motor() {
             return Err(FeagiDataError::BadParameters("Expected cortical type to be type Motor!".into()))
@@ -260,7 +281,7 @@ impl CorticalType {
         Ok(())
     }
 
-
+    /// Verifies this is a custom type, returns error otherwise.
     pub fn verify_is_custom(&self) -> Result<(), FeagiDataError> {
         if !self.is_type_custom() {
             return Err(FeagiDataError::BadParameters("Expected cortical type to be type Custom!".into()))
@@ -268,7 +289,7 @@ impl CorticalType {
         Ok(())
     }
 
-
+    /// Verifies this is a memory type, returns error otherwise.
     pub fn verify_is_memory(&self) -> Result<(), FeagiDataError> {
         if !self.is_type_memory() {
             return Err(FeagiDataError::BadParameters("Expected cortical type to be type Memory!".into()))
@@ -339,9 +360,15 @@ impl TryFrom<CorticalType> for MotorCorticalType {
 //region CoreCorticalType
 // This won't be expanded, this doesn't need a template
 
+/// Core cortical area types for fundamental brain functions.
+///
+/// Represents essential processing regions that manage the agent's power
+/// and termination states.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CoreCorticalType {
+    /// Termination/death signal processing
     Death,
+    /// Power management processing
     Power
 }
 
@@ -368,6 +395,7 @@ impl From<&CoreCorticalType> for CorticalType {
 }
 
 impl CoreCorticalType {
+    /// Converts to the corresponding cortical ID.
     pub fn to_cortical_id(&self) -> CorticalID {
         match self {
             Self::Death => CorticalID{bytes: *b"_death"},
@@ -375,6 +403,7 @@ impl CoreCorticalType {
         }
     }
 
+    /// Parses core cortical type from bytes.
     pub(crate) fn get_type_from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<CorticalType, FeagiDataError> {
         match bytes {
             b"_death" => Ok(CoreCorticalType::Death.into()),
@@ -387,6 +416,9 @@ impl CoreCorticalType {
 //endregion
 
 //region Internal
+
+/// Converts two hex characters to an u8 value.
+#[allow(dead_code)]
 fn hex_chars_to_u8(high: char, low: char) -> Result<u8, FeagiDataError> {
     fn hex_value(c: char) -> Result<u8, FeagiDataError> {
         match c {
@@ -402,6 +434,7 @@ fn hex_chars_to_u8(high: char, low: char) -> Result<u8, FeagiDataError> {
     Ok((hi << 4) | lo)
 }
 
+/// Converts an u8 to two hex character bytes.
 fn u8_to_hex_char_u8(index: u8) -> (u8, u8) {
     const HEX_CHARS: &[u8; 16] = b"0123456789ABCDEF";
 

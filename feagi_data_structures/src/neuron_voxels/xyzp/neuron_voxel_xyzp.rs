@@ -1,23 +1,21 @@
 use crate::genomic::descriptors::CorticalCoordinate;
 
+/// A single neuron voxel storing spatial coordinates and activation potential in XYZP format.
+/// 
+/// Represents a voxel containing neural activity at a specific 3D location within
+/// a cortical area, along with its current activation/voltage level.
 #[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelXYZP {
     /// coordinate within the cortical area.
     pub cortical_coordinate: CorticalCoordinate,
+    /// potential (voltage) of the voxel
     pub potential: f32
-}
-
-impl std::fmt::Display for NeuronVoxelXYZP {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let s = format!("NeuronVoxelXYZP({}, {}, {}, {})", self.cortical_coordinate.x, self.cortical_coordinate.y, self.cortical_coordinate.z, self.potential);
-        write!(f, "{}", s)
-    }
 }
 
 impl NeuronVoxelXYZP {
 
-    /// Number of bytes used to represent a single neuron in memory (going across x y z p elements)
-    pub const NUMBER_BYTES_PER_NEURON: usize = (size_of::<u32>() *  3) + size_of::<f32>(); // 16 bytes per neuron
+    /// Number of bytes used to represent a single neuron voxel in memory (x, y, z, p elements).
+    pub const NUMBER_BYTES_PER_NEURON: usize = (size_of::<u32>() *  3) + size_of::<f32>(); // 16 bytes per voxel
     
     /// Creates a new neuron voxel with the specified coordinates and potential.
     ///
@@ -77,5 +75,12 @@ impl NeuronVoxelXYZP {
     /// ```
     pub fn as_tuple(&self) -> (u32, u32, u32, f32) {
         (self.cortical_coordinate.x, self.cortical_coordinate.y, self.cortical_coordinate.z, self.potential)
+    }
+}
+
+impl std::fmt::Display for NeuronVoxelXYZP {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let s = format!("NeuronVoxelXYZP({}, {}, {}, {})", self.cortical_coordinate.x, self.cortical_coordinate.y, self.cortical_coordinate.z, self.potential);
+        write!(f, "{}", s)
     }
 }

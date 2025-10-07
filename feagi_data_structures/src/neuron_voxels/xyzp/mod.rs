@@ -1,4 +1,7 @@
-/// XYZP is a format where each neuron voxel stores its x y z position, and the voxels potential as float p. Fast and easy, but not memory efficient.
+/// XYZP neuron voxel representation.
+/// 
+/// Each voxel stores its (x, y, z) position and activation potential (p) as floats.
+/// Simple and fast access, but not very memory efficient
 
 mod neuron_voxel_xyzp;
 mod neuron_voxel_xyzp_arrays;
