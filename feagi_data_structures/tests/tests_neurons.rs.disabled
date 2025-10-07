@@ -4,9 +4,9 @@
 //! covering basic neuron types, neuron arrays, cortical mappings, and neural encoding.
 
 use feagi_data_structures::neurons::xyzp::{
-    NeuronXYZP, NeuronXYZPArrays, CorticalMappedXYZPNeuronData,
-    encoders::{F32LinearNeuronXYZPEncoder, F32SplitSignDividedNeuronXYZPEncoder, F32PSPBidirectionalNeuronXYZPEncoder, ImageFrameNeuronXYZPEncoder},
-    NeuronXYZPEncoder
+    NeuronVoxelXYZP, NeuronVoxelXYZPArrays, CorticalMappedXYZPNeuronData,
+    encoders::{F32LinearNeuronVoxelXYZPEncoder, F32SplitSignDividedNeuronVoxelXYZPEncoder, F32PSPBidirectionalNeuronVoxelXYZPEncoder, ImageFrameNeuronVoxelXYZPEncoder},
+    NeuronVoxelXYZPEncoder
 };
 use feagi_data_structures::genomic::{CorticalID, descriptors::NeuronDepth};
 use feagi_data_structures::data::descriptors::{ColorChannelLayout, ColorSpace, ImageXYResolution, ImageFrameProperties};
@@ -24,12 +24,12 @@ mod test_xyzp_neurons {
 
     //region Helper Functions
     
-    fn create_test_neuron(x: u32, y: u32, z: u32, potential: f32) -> NeuronXYZP {
-        NeuronXYZP::new(x, y, z, potential)
+    fn create_test_neuron(x: u32, y: u32, z: u32, potential: f32) -> NeuronVoxelXYZP {
+        NeuronVoxelXYZP::new(x, y, z, potential)
     }
     
-    fn create_test_neuron_arrays(count: usize) -> NeuronXYZPArrays {
-        let mut arrays = NeuronXYZPArrays::with_capacity(count);
+    fn create_test_neuron_arrays(count: usize) -> NeuronVoxelXYZPArrays {
+        let mut arrays = NeuronVoxelXYZPArrays::with_capacity(count);
         for i in 0..count {
             arrays.push(&create_test_neuron(i as u32, (i * 2) as u32, (i * 3) as u32, i as f32 * 0.1));
         }
@@ -42,11 +42,11 @@ mod test_xyzp_neurons {
     
     //endregion
 
-    //region NeuronXYZP Tests
+    //region NeuronVoxelXYZP Tests
     
     #[test]
     fn test_neuron_xyzp_creation() {
-        let neuron = NeuronXYZP::new(10, 20, 30, 0.75);
+        let neuron = NeuronVoxelXYZP::new(10, 20, 30, 0.75);
         
         assert_eq!(neuron.cortical_coordinate.x, 10);
         assert_eq!(neuron.cortical_coordinate.y, 20);
@@ -56,7 +56,7 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_xyzp_as_tuple() {
-        let neuron = NeuronXYZP::new(5, 10, 15, 0.5);
+        let neuron = NeuronVoxelXYZP::new(5, 10, 15, 0.5);
         let (x, y, z, p) = neuron.as_tuple();
         
         assert_eq!(x, 5);
@@ -67,14 +67,14 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_xyzp_pattern_matching() {
-        let neuron = NeuronXYZP::new(1, 2, 3, 0.9);
+        let neuron = NeuronVoxelXYZP::new(1, 2, 3, 0.9);
         
         match neuron.as_tuple() {
             (_, _, _, p) if p > 0.8 => assert!(true, "High activity neuron detected correctly"),
             _ => panic!("Pattern matching failed for high activity neuron"),
         }
         
-        let inactive_neuron = NeuronXYZP::new(1, 2, 3, 0.1);
+        let inactive_neuron = NeuronVoxelXYZP::new(1, 2, 3, 0.1);
         match inactive_neuron.as_tuple() {
             (_, _, _, p) if p < 0.3 => assert!(true, "Low activity neuron detected correctly"),
             _ => panic!("Pattern matching failed for low activity neuron"),
@@ -83,10 +83,10 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_xyzp_display() {
-        let neuron = NeuronXYZP::new(100, 200, 50, 0.85);
+        let neuron = NeuronVoxelXYZP::new(100, 200, 50, 0.85);
         let display_string = format!("{}", neuron);
         
-        assert!(display_string.contains("NeuronXYZP"));
+        assert!(display_string.contains("NeuronVoxelXYZP"));
         assert!(display_string.contains("100"));
         assert!(display_string.contains("200"));
         assert!(display_string.contains("50"));
@@ -95,7 +95,7 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_xyzp_clone_and_equality() {
-        let neuron1 = NeuronXYZP::new(10, 20, 30, 0.75);
+        let neuron1 = NeuronVoxelXYZP::new(10, 20, 30, 0.75);
         let neuron2 = neuron1.clone();
         
         assert_eq!(neuron1, neuron2);
@@ -105,10 +105,10 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_xyzp_debug() {
-        let neuron = NeuronXYZP::new(42, 84, 126, 1.0);
+        let neuron = NeuronVoxelXYZP::new(42, 84, 126, 1.0);
         let debug_string = format!("{:?}", neuron);
         
-        assert!(debug_string.contains("NeuronXYZP"));
+        assert!(debug_string.contains("NeuronVoxelXYZP"));
         assert!(debug_string.contains("cortical_coordinate"));
         assert!(debug_string.contains("potential"));
     }
@@ -117,16 +117,16 @@ mod test_xyzp_neurons {
     fn test_neuron_xyzp_constants() {
         // Test that the constant is correctly calculated
         // 3 u32s (12 bytes) + 1 f32 (4 bytes) = 16 bytes
-        assert_eq!(NeuronXYZP::NUMBER_BYTES_PER_NEURON, 16);
+        assert_eq!(NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON, 16);
     }
     
     //endregion
     
-    //region NeuronXYZPArrays Tests
+    //region NeuronVoxelXYZPArrays Tests
     
     #[test]
     fn test_neuron_arrays_creation() {
-        let arrays = NeuronXYZPArrays::new();
+        let arrays = NeuronVoxelXYZPArrays::new();
         
         assert_eq!(arrays.len(), 0);
         assert!(arrays.is_empty());
@@ -135,7 +135,7 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_arrays_with_capacity() {
-        let arrays = NeuronXYZPArrays::with_capacity(100);
+        let arrays = NeuronVoxelXYZPArrays::with_capacity(100);
         
         assert_eq!(arrays.len(), 0);
         assert!(arrays.is_empty());
@@ -150,7 +150,7 @@ mod test_xyzp_neurons {
         let z = vec![7, 8, 9];
         let p = vec![0.1, 0.2, 0.3];
         
-        let arrays = NeuronXYZPArrays::new_from_vectors(x, y, z, p).unwrap();
+        let arrays = NeuronVoxelXYZPArrays::new_from_vectors(x, y, z, p).unwrap();
         
         assert_eq!(arrays.len(), 3);
         
@@ -168,7 +168,7 @@ mod test_xyzp_neurons {
         let z = vec![7, 8];
         let p = vec![0.1, 0.2];
         
-        let result = NeuronXYZPArrays::new_from_vectors(x, y, z, p);
+        let result = NeuronVoxelXYZPArrays::new_from_vectors(x, y, z, p);
         assert!(result.is_err());
         
         if let Err(FeagiDataError::BadParameters(msg)) = result {
@@ -185,7 +185,7 @@ mod test_xyzp_neurons {
         let z_nd = Array1::from_vec(vec![7, 8, 9]);
         let p_nd = Array1::from_vec(vec![0.1, 0.2, 0.3]);
         
-        let arrays = NeuronXYZPArrays::new_from_ndarrays(x_nd, y_nd, z_nd, p_nd).unwrap();
+        let arrays = NeuronVoxelXYZPArrays::new_from_ndarrays(x_nd, y_nd, z_nd, p_nd).unwrap();
         
         assert_eq!(arrays.len(), 3);
         
@@ -198,7 +198,7 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_arrays_push_and_get() {
-        let mut arrays = NeuronXYZPArrays::with_capacity(2);
+        let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
         
         let neuron1 = create_test_neuron(10, 20, 30, 0.5);
         let neuron2 = create_test_neuron(40, 50, 60, 0.7);
@@ -289,7 +289,7 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_arrays_reserve_and_capacity() {
-        let mut arrays = NeuronXYZPArrays::new();
+        let mut arrays = NeuronVoxelXYZPArrays::new();
         
         arrays.reserve(50);
         assert!(arrays.capacity() >= 50);
@@ -303,7 +303,7 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_arrays_shrink_to_fit() {
-        let mut arrays = NeuronXYZPArrays::with_capacity(100);
+        let mut arrays = NeuronVoxelXYZPArrays::with_capacity(100);
         arrays.push(&create_test_neuron(1, 2, 3, 0.5));
         
         assert!(arrays.capacity() >= 100);
@@ -344,7 +344,7 @@ mod test_xyzp_neurons {
     fn test_neuron_arrays_size_calculation() {
         let arrays = create_test_neuron_arrays(5);
         
-        let expected_size = 5 * NeuronXYZP::NUMBER_BYTES_PER_NEURON;
+        let expected_size = 5 * NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON;
         assert_eq!(arrays.get_size_in_number_of_bytes(), expected_size);
         assert_eq!(arrays.get_size_in_number_of_bytes(), 80); // 5 * 16 bytes
     }
@@ -373,11 +373,11 @@ mod test_xyzp_neurons {
     
     #[test]
     fn test_neuron_arrays_filter_by_location() {
-        let mut arrays = NeuronXYZPArrays::new();
-        arrays.push(&NeuronXYZP::new(1, 2, 3, 0.5));
-        arrays.push(&NeuronXYZP::new(4, 5, 6, 0.7));
-        arrays.push(&NeuronXYZP::new(7, 8, 9, 0.9));
-        arrays.push(&NeuronXYZP::new(10, 11, 12, 0.2));
+        let mut arrays = NeuronVoxelXYZPArrays::new();
+        arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
+        arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
+        arrays.push(&NeuronVoxelXYZP::new(7, 8, 9, 0.9));
+        arrays.push(&NeuronVoxelXYZP::new(10, 11, 12, 0.2));
         
         let filtered = arrays.filter_neurons_by_location_bounds(
             RangeInclusive::new(1, 5),
@@ -399,7 +399,7 @@ mod test_xyzp_neurons {
         let arrays = create_test_neuron_arrays(2);
         let display_string = format!("{}", arrays);
         
-        assert!(display_string.contains("NeuronXYZPArrays"));
+        assert!(display_string.contains("NeuronVoxelXYZPArrays"));
         assert!(display_string.contains("X:"));
         assert!(display_string.contains("Y:"));
         assert!(display_string.contains("Z:"));
@@ -673,7 +673,7 @@ mod test_xyzp_neurons {
         let cortical_id = create_test_cortical_id(1);
         let z_depth = NeuronDepth::new(10).unwrap();
         
-        let encoder = F32LinearNeuronXYZPEncoder::new(cortical_id, z_depth).unwrap();
+        let encoder = F32LinearNeuronVoxelXYZPEncoder::new(cortical_id, z_depth).unwrap();
         
         // Test that encoder reports correct data type
         let data_type = encoder.get_encodable_data_type();
@@ -695,7 +695,7 @@ mod test_xyzp_neurons {
         let cortical_id = create_test_cortical_id(1);
         let z_depth = NeuronDepth::new(10).unwrap();
         
-        let encoder = F32SplitSignDividedNeuronXYZPEncoder::new(cortical_id, z_depth).unwrap();
+        let encoder = F32SplitSignDividedNeuronVoxelXYZPEncoder::new(cortical_id, z_depth).unwrap();
         
         // Test that encoder reports correct data type
         let data_type = encoder.get_encodable_data_type();
@@ -707,7 +707,7 @@ mod test_xyzp_neurons {
         let cortical_id = create_test_cortical_id(1);
         let z_resolution = 5;
         
-        let encoder = F32PSPBidirectionalNeuronXYZPEncoder::new(cortical_id, z_resolution).unwrap();
+        let encoder = F32PSPBidirectionalNeuronVoxelXYZPEncoder::new(cortical_id, z_resolution).unwrap();
         
         // Test that encoder reports correct data type
         let data_type = encoder.get_encodable_data_type();
@@ -721,7 +721,7 @@ mod test_xyzp_neurons {
         let properties = ImageFrameProperties::new(resolution, ColorSpace::Gamma, ColorChannelLayout::RGB).unwrap();
         let cortical_id = create_test_cortical_id(1);
         
-        let encoder = ImageFrameNeuronXYZPEncoder::new(cortical_id, &properties).unwrap();
+        let encoder = ImageFrameNeuronVoxelXYZPEncoder::new(cortical_id, &properties).unwrap();
         
         // Test that encoder reports correct data type
         let data_type = encoder.get_encodable_data_type();
@@ -733,7 +733,7 @@ mod test_xyzp_neurons {
         let cortical_id = create_test_cortical_id(1);
         let z_depth = NeuronDepth::new(5).unwrap();
         
-        let encoder = F32LinearNeuronXYZPEncoder::new(cortical_id.clone(), z_depth).unwrap();
+        let encoder = F32LinearNeuronVoxelXYZPEncoder::new(cortical_id.clone(), z_depth).unwrap();
         let mut cortical_data = CorticalMappedXYZPNeuronData::new();
         
         // Create some test data (single float value for testing)
@@ -752,7 +752,7 @@ mod test_xyzp_neurons {
         let cortical_id = create_test_cortical_id(1);
         let z_depth = NeuronDepth::new(3).unwrap();
         
-        let encoder = F32LinearNeuronXYZPEncoder::new(cortical_id.clone(), z_depth).unwrap();
+        let encoder = F32LinearNeuronVoxelXYZPEncoder::new(cortical_id.clone(), z_depth).unwrap();
         let mut cortical_data = CorticalMappedXYZPNeuronData::new();
         
         // Create test data for multiple channels
@@ -775,9 +775,9 @@ mod test_xyzp_neurons {
         let cortical_id = create_test_cortical_id(1);
         
         // Test different encoder types report different data types
-        let linear_encoder = F32LinearNeuronXYZPEncoder::new(cortical_id.clone(), NeuronDepth::new(5).unwrap()).unwrap();
-        let split_encoder = F32SplitSignDividedNeuronXYZPEncoder::new(cortical_id.clone(), NeuronDepth::new(6).unwrap()).unwrap();
-        let psp_encoder = F32PSPBidirectionalNeuronXYZPEncoder::new(cortical_id.clone(), 4).unwrap();
+        let linear_encoder = F32LinearNeuronVoxelXYZPEncoder::new(cortical_id.clone(), NeuronDepth::new(5).unwrap()).unwrap();
+        let split_encoder = F32SplitSignDividedNeuronVoxelXYZPEncoder::new(cortical_id.clone(), NeuronDepth::new(6).unwrap()).unwrap();
+        let psp_encoder = F32PSPBidirectionalNeuronVoxelXYZPEncoder::new(cortical_id.clone(), 4).unwrap();
         
         let linear_type = linear_encoder.get_encodable_data_type();
         let split_type = split_encoder.get_encodable_data_type();

@@ -71,7 +71,7 @@ fn test_simple_sensor_neuron_encodering() -> Result<(), Box<dyn std::error::Erro
         0.into()
     )?;
     
-    // Encode the data to neurons
+    // Encode the data to neuron_voxels
     sensor_cache.encode_to_neurons(Instant::now(), &mut neuron_data)?;
     
     let byte_structure = neuron_data.as_new_feagi_byte_structure()?;

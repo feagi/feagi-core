@@ -1,19 +1,19 @@
 use std::collections::HashMap;
 use std::mem::size_of;
 use crate::genomic::CorticalID;
-use crate::neurons::xyzp::{ NeuronXYZPArrays};
+use crate::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays};
 
 
 #[derive(Debug, Clone)]
-pub struct CorticalMappedXYZPNeuronData {
+pub struct CorticalMappedXYZPNeuronVoxels {
     /// Hash map storing neuron collections for each cortical area.
     ///
     /// The key is a unique cortical area identifier, and the value contains
-    /// all neurons belonging to that cortical area.
-    pub mappings: HashMap<CorticalID, NeuronXYZPArrays>,
+    /// all neuron_voxels belonging to that cortical area.
+    pub mappings: HashMap<CorticalID, NeuronVoxelXYZPArrays>,
 }
 
-impl CorticalMappedXYZPNeuronData {
+impl CorticalMappedXYZPNeuronVoxels {
 
     /// Size in bytes of each cortical area header in binary format.
     pub const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize = CorticalID::NUMBER_OF_BYTES + size_of::<u32>() + size_of::<u32>();
@@ -28,13 +28,13 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// assert_eq!(neuron_data.len(), 0);
     /// ```
-    pub fn new() -> CorticalMappedXYZPNeuronData {
-        CorticalMappedXYZPNeuronData {mappings: HashMap::new()}
+    pub fn new() -> CorticalMappedXYZPNeuronVoxels {
+        CorticalMappedXYZPNeuronVoxels {mappings: HashMap::new()}
     }
     
     //region HashMap like implementation
@@ -50,14 +50,14 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
     /// // Pre-allocate for a brain with 100 cortical areas
-    /// let neuron_data = CorticalMappedXYZPNeuronData::new_with_capacity(100);
+    /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new_with_capacity(100);
     /// assert_eq!(neuron_data.len(), 0);
     /// ```
-    pub fn new_with_capacity(capacity: usize) -> CorticalMappedXYZPNeuronData {
-        CorticalMappedXYZPNeuronData {mappings: HashMap::with_capacity(capacity)}
+    pub fn new_with_capacity(capacity: usize) -> CorticalMappedXYZPNeuronVoxels {
+        CorticalMappedXYZPNeuronVoxels {mappings: HashMap::with_capacity(capacity)}
     }
 
     /// Returns the number of cortical areas currently stored.
@@ -78,9 +78,9 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// assert!(neuron_data.is_empty());
     /// ```
     pub fn is_empty(&self) -> bool {
@@ -96,9 +96,9 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let neuron_data = CorticalMappedXYZPNeuronData::new_with_capacity(100);
+    /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new_with_capacity(100);
     /// assert!(neuron_data.capacity() >= 100);
     /// ```
     pub fn capacity(&self) -> usize {
@@ -117,9 +117,9 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let mut neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// neuron_data.reserve(50);
     /// assert!(neuron_data.capacity() >= 50);
     /// ```
@@ -134,9 +134,9 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let mut neuron_data = CorticalMappedXYZPNeuronData::new_with_capacity(100);
+    /// let mut neuron_data = CorticalMappedXYZPNeuronVoxels::new_with_capacity(100);
     /// // ... add some data
     /// neuron_data.shrink_to_fit();
     /// ```
@@ -152,8 +152,8 @@ impl CorticalMappedXYZPNeuronData {
     ///
     /// # Returns
     ///
-    /// `Some(&NeuronXYZPArrays)` if the cortical area exists, `None` otherwise.
-    pub fn get_neurons_of(&self, cortical_id: &CorticalID) -> Option<&NeuronXYZPArrays> {
+    /// `Some(&NeuronVoxelXYZPArrays)` if the cortical area exists, `None` otherwise.
+    pub fn get_neurons_of(&self, cortical_id: &CorticalID) -> Option<&NeuronVoxelXYZPArrays> {
         self.mappings.get(cortical_id)
     }
 
@@ -165,8 +165,8 @@ impl CorticalMappedXYZPNeuronData {
     ///
     /// # Returns
     ///
-    /// `Some(&mut NeuronXYZPArrays)` if the cortical area exists, `None` otherwise.
-    pub fn get_neurons_of_mut(&mut self, cortical_id: &CorticalID) -> Option<&mut NeuronXYZPArrays> {
+    /// `Some(&mut NeuronVoxelXYZPArrays)` if the cortical area exists, `None` otherwise.
+    pub fn get_neurons_of_mut(&mut self, cortical_id: &CorticalID) -> Option<&mut NeuronVoxelXYZPArrays> {
         self.mappings.get_mut(&cortical_id)
     }
 
@@ -190,13 +190,13 @@ impl CorticalMappedXYZPNeuronData {
     /// # Arguments
     ///
     /// * `cortical_id` - Unique identifier for the cortical area
-    /// * `neuron_data` - Collection of neurons for this cortical area
+    /// * `neuron_data` - Collection of neuron_voxels for this cortical area
     ///
     /// # Returns
     ///
-    /// `Some(NeuronXYZPArrays)` of the old data if being overwritten
+    /// `Some(NeuronVoxelXYZPArrays)` of the old data if being overwritten
     /// `None` if nothing is being overwritten
-    pub fn insert(&mut self, cortical_id: CorticalID, neuron_data: NeuronXYZPArrays) -> Option<NeuronXYZPArrays> {
+    pub fn insert(&mut self, cortical_id: CorticalID, neuron_data: NeuronVoxelXYZPArrays) -> Option<NeuronVoxelXYZPArrays> {
         self.mappings.insert(cortical_id, neuron_data)
     }
 
@@ -208,23 +208,23 @@ impl CorticalMappedXYZPNeuronData {
     ///
     /// # Returns
     ///
-    /// `Some(NeuronXYZPArrays)` of the removed data if the cortical area existed,
+    /// `Some(NeuronVoxelXYZPArrays)` of the removed data if the cortical area existed,
     /// `None` if the cortical area was not found.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+    /// use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
     /// use feagi_data_structures::genomic::CorticalID;
     ///
-    /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let mut neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// let cortical_id = CorticalID::from_string("iic400".into()).unwrap();
-    /// neuron_data.insert(cortical_id, NeuronXYZPArrays::new());
-    /// 
+    /// neuron_data.insert(cortical_id, NeuronVoxelXYZPArrays::new());
+    ///
     /// let removed = neuron_data.remove(cortical_id);
     /// assert!(removed.is_some());
     /// ```
-    pub fn remove(&mut self, cortical_id: CorticalID) -> Option<NeuronXYZPArrays> {
+    pub fn remove(&mut self, cortical_id: CorticalID) -> Option<NeuronVoxelXYZPArrays> {
         self.mappings.remove(&cortical_id)
     }
     
@@ -235,9 +235,9 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let mut neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// // ... add some data
     /// neuron_data.clear();
     /// assert!(neuron_data.is_empty());
@@ -246,7 +246,7 @@ impl CorticalMappedXYZPNeuronData {
         self.mappings.clear();
     }
 
-    /// Removes all neurons from the neuron arrays of this CorticalMappedXYZPNeuronData without
+    /// Removes all neuron_voxels from the neuron arrays of this CorticalMappedXYZPNeuronData without
     /// clearing allocated capacity on them. Better to use over clear() if you are writing to
     /// similar cortical areas repeatedly.
     pub fn clear_neurons_only(&mut self) {
@@ -262,19 +262,19 @@ impl CorticalMappedXYZPNeuronData {
     ///
     /// # Returns
     ///
-    /// An iterator that yields `&NeuronXYZPArrays` for each cortical area.
+    /// An iterator that yields `&NeuronVoxelXYZPArrays` for each cortical area.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// for neurons in neuron_data.iter() {
     ///     println!("Cortical area has {} neurons", neurons.len());
     /// }
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item=&NeuronXYZPArrays> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item=&NeuronVoxelXYZPArrays> + '_ {
         self.mappings.values()
     }
     
@@ -286,19 +286,19 @@ impl CorticalMappedXYZPNeuronData {
     ///
     /// # Returns
     ///
-    /// An iterator that yields `&mut NeuronXYZPArrays` for each cortical area.
+    /// An iterator that yields `&mut NeuronVoxelXYZPArrays` for each cortical area.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let mut neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// for neurons in neuron_data.iter_mut() {
     ///     neurons.clear(); // Clear all neuron arrays
     /// }
     /// ```
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut NeuronXYZPArrays> + '_ {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut NeuronVoxelXYZPArrays> + '_ {
         self.mappings.values_mut()
     }
     
@@ -314,9 +314,9 @@ impl CorticalMappedXYZPNeuronData {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// for cortical_id in neuron_data.keys() {
     ///     println!("Found cortical area: {:?}", cortical_id);
     /// }
@@ -328,13 +328,13 @@ impl CorticalMappedXYZPNeuronData {
     //endregion
     
     
-    pub fn ensure_clear_and_borrow_mut(&mut self, cortical_id: &CorticalID) -> &mut NeuronXYZPArrays {
+    pub fn ensure_clear_and_borrow_mut(&mut self, cortical_id: &CorticalID) -> &mut NeuronVoxelXYZPArrays {
         if self.mappings.contains_key(cortical_id) { // If already contains neuron array, clear it and return it
             let neurons = self.mappings.get_mut(cortical_id).unwrap();
             neurons.clear();
             return neurons;
         }
-        _ = self.mappings.insert(cortical_id.clone(), NeuronXYZPArrays::new());
+        _ = self.mappings.insert(cortical_id.clone(), NeuronVoxelXYZPArrays::new());
         self.mappings.get_mut(cortical_id).unwrap()
     }
 }
@@ -425,11 +425,11 @@ impl FeagiByteStructureCompatible for CorticalMappedXYZPNeuronData {
 
             let neuron_bytes = &bytes[data_start_reading..data_start_reading + number_bytes_to_read];
             let bytes_length = neuron_bytes.len();
-            if bytes_length % NeuronXYZP::NUMBER_BYTES_PER_NEURON != 0 {
+            if bytes_length % NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON != 0 {
                 return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZPV1 seems invalid! Size is nonsensical given neuron data size!".into()).into());
             }
 
-            if bytes_length % NeuronXYZP::NUMBER_BYTES_PER_NEURON != 0 {
+            if bytes_length % NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON != 0 {
                 return Err(FeagiDataError::SerializationError("As NeuronXYCPArrays contains 4 internal arrays of equal length, each of elements of 4 bytes each (uint32 and float), the input bytes array must be divisible by 16!".into()).into());
             }
             let x_end = bytes_length / 4; // q1
@@ -437,7 +437,7 @@ impl FeagiByteStructureCompatible for CorticalMappedXYZPNeuronData {
             let z_end = x_end * 3; // q3
 
             // Create vectors using bytes order to avoid alignment issues
-            let num_neurons = bytes_length / NeuronXYZP::NUMBER_BYTES_PER_NEURON;
+            let num_neurons = bytes_length / NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON;
             let mut x_coords: Vec<u32> = Vec::with_capacity(num_neurons);
             let mut y_coords: Vec<u32> = Vec::with_capacity(num_neurons);
             let mut z_coords: Vec<u32> = Vec::with_capacity(num_neurons);
@@ -455,14 +455,14 @@ impl FeagiByteStructureCompatible for CorticalMappedXYZPNeuronData {
                 potentials.push(LittleEndian::read_f32(&neuron_bytes[p_start..p_start + 4]));
             }
 
-            let neurons = NeuronXYZPArrays::new_from_vectors(
+            let neuron_voxels = NeuronVoxelXYZPArrays::new_from_vectors(
                 x_coords,
                 y_coords,
                 z_coords,
                 potentials,
             )?;
 
-            output.insert(cortical_id, neurons);
+            output.insert(cortical_id, neuron_voxels);
             reading_header_index += Self::NUMBER_BYTES_PER_CORTICAL_ID_HEADER;
         };
 
@@ -474,18 +474,18 @@ impl FeagiByteStructureCompatible for CorticalMappedXYZPNeuronData {
 
 //region Iterators
 
-impl IntoIterator for CorticalMappedXYZPNeuronData {
-    type Item = (CorticalID, NeuronXYZPArrays);
-    type IntoIter = std::collections::hash_map::IntoIter<CorticalID, NeuronXYZPArrays>;
+impl IntoIterator for CorticalMappedXYZPNeuronVoxels {
+    type Item = (CorticalID, NeuronVoxelXYZPArrays);
+    type IntoIter = std::collections::hash_map::IntoIter<CorticalID, NeuronVoxelXYZPArrays>;
 
-    /// Consumes the collection and returns an iterator over owned (CorticalID, NeuronXYZPArrays) pairs.
+    /// Consumes the collection and returns an iterator over owned (CorticalID, NeuronVoxelXYZPArrays) pairs.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// for (cortical_id, neurons) in neuron_data {
     ///     println!("Area {:?} has {} neurons", cortical_id, neurons.len());
     /// }
@@ -495,18 +495,18 @@ impl IntoIterator for CorticalMappedXYZPNeuronData {
     }
 }
 
-impl<'a> IntoIterator for &'a CorticalMappedXYZPNeuronData {
-    type Item = (&'a CorticalID, &'a NeuronXYZPArrays);
-    type IntoIter = std::collections::hash_map::Iter<'a, CorticalID, NeuronXYZPArrays>;
+impl<'a> IntoIterator for &'a CorticalMappedXYZPNeuronVoxels {
+    type Item = (&'a CorticalID, &'a NeuronVoxelXYZPArrays);
+    type IntoIter = std::collections::hash_map::Iter<'a, CorticalID, NeuronVoxelXYZPArrays>;
 
-    /// Returns an iterator over references to (CorticalID, NeuronXYZPArrays) pairs.
+    /// Returns an iterator over references to (CorticalID, NeuronVoxelXYZPArrays) pairs.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// for (cortical_id, neurons) in &neuron_data {
     ///     println!("Area {:?} has {} neurons", cortical_id, neurons.len());
     /// }
@@ -516,18 +516,18 @@ impl<'a> IntoIterator for &'a CorticalMappedXYZPNeuronData {
     }
 }
 
-impl<'a> IntoIterator for &'a mut CorticalMappedXYZPNeuronData {
-    type Item = (&'a CorticalID, &'a mut NeuronXYZPArrays);
-    type IntoIter = std::collections::hash_map::IterMut<'a, CorticalID, NeuronXYZPArrays>;
+impl<'a> IntoIterator for &'a mut CorticalMappedXYZPNeuronVoxels {
+    type Item = (&'a CorticalID, &'a mut NeuronVoxelXYZPArrays);
+    type IntoIter = std::collections::hash_map::IterMut<'a, CorticalID, NeuronVoxelXYZPArrays>;
 
-    /// Returns a mutable iterator over (CorticalID, NeuronXYZPArrays) pairs.
+    /// Returns a mutable iterator over (CorticalID, NeuronVoxelXYZPArrays) pairs.
     ///
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
-    /// let mut neuron_data = CorticalMappedXYZPNeuronData::new();
+    /// let mut neuron_data = CorticalMappedXYZPNeuronVoxels::new();
     /// for (cortical_id, neurons) in &mut neuron_data {
     ///     neurons.clear(); // Clear all neuron arrays
     /// }
@@ -537,7 +537,7 @@ impl<'a> IntoIterator for &'a mut CorticalMappedXYZPNeuronData {
     }
 }
 
-impl std::fmt::Display for CorticalMappedXYZPNeuronData {
+impl std::fmt::Display for CorticalMappedXYZPNeuronVoxels {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let mut inner :String = String::new();
         for cortical_id_and_data in self {

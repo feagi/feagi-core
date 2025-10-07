@@ -1,15 +1,15 @@
 use crate::error::{FeagiDataProcessingError, IODataError};
 use crate::genomic_structures::{CorticalID, CorticalIOChannelIndex, SingleChannelDimensions};
 use crate::io_data::{IOTypeData, IOTypeVariant, NormalizedM1To1F32};
-use crate::neuron_data::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
-use super::super::NeuronXYZPDecoder;
+use crate::neuron_data::xyzp::{CorticalMappedXYZPNeuronData, NeuronVoxelXYZPArrays};
+use super::super::NeuronVoxelXYZPDecoder;
 
-pub struct LinearNormalizedFloatSplitSignDividedNeuronXYZPDecoder {
+pub struct LinearNormalizedFloatSplitSignDividedNeuronVoxelXYZPDecoder {
     channel_dimensions: SingleChannelDimensions,
     cortical_read_source: [CorticalID; 1]
 }
 
-impl NeuronXYZPDecoder for LinearNormalizedFloatSplitSignDividedNeuronXYZPDecoder {
+impl NeuronVoxelXYZPDecoder for LinearNormalizedFloatSplitSignDividedNeuronVoxelXYZPDecoder {
     fn get_decoded_data_type(&self) -> IOTypeVariant {
         IOTypeVariant::NormalizedM1to1F32
     }
@@ -30,7 +30,7 @@ impl NeuronXYZPDecoder for LinearNormalizedFloatSplitSignDividedNeuronXYZPDecode
         }
         const CHANNEL_WIDTH: u32 = 2;
 
-        let neuron_data: &NeuronXYZPArrays = read_from.borrow(&cortical_id).unwrap();
+        let neuron_data: &NeuronVoxelXYZPArrays = read_from.borrow(&cortical_id).unwrap();
         let positive_x_index: u32 = *cortical_channel * CHANNEL_WIDTH;
         let negative_x_index: u32 = positive_x_index + 1;
         let cortical_depth: f32 = self.channel_dimensions.get_z() as f32;
@@ -62,14 +62,14 @@ impl NeuronXYZPDecoder for LinearNormalizedFloatSplitSignDividedNeuronXYZPDecode
     }
 }
 
-impl LinearNormalizedFloatSplitSignDividedNeuronXYZPDecoder {
+impl LinearNormalizedFloatSplitSignDividedNeuronVoxelXYZPDecoder {
     pub fn new(cortical_id_target: CorticalID, z_resolution: u32) -> Result<Self, FeagiDataProcessingError> {
         if z_resolution == 0 {
             return Err(IODataError::InvalidParameters("Resolution cannot be 0!".into()).into());
         }
         pub const CHANNEL_WIDTH: u32 = 2;
         pub const CHANNEL_HEIGHT: u32 = 1;
-        Ok(LinearNormalizedFloatSplitSignDividedNeuronXYZPDecoder{
+        Ok(LinearNormalizedFloatSplitSignDividedNeuronVoxelXYZPDecoder{
             channel_dimensions: SingleChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_HEIGHT, z_resolution)?,
             cortical_read_source: [cortical_id_target; 1]
         })
@@ -78,13 +78,13 @@ impl LinearNormalizedFloatSplitSignDividedNeuronXYZPDecoder {
 }
 
 
-pub struct LinearNormalizedFloatPSPBirdirectionalDividedNeuronXYZPDecoder {
+pub struct LinearNormalizedFloatPSPBirdirectionalDividedNeuronVoxelXYZPDecoder {
     channel_dimensions: SingleChannelDimensions,
     cortical_read_source: [CorticalID; 1]
 }
 
 // TODO right now the logic is a clone of the above, however we can optimize it specifically for this
-impl NeuronXYZPDecoder for LinearNormalizedFloatPSPBirdirectionalDividedNeuronXYZPDecoder {
+impl NeuronVoxelXYZPDecoder for LinearNormalizedFloatPSPBirdirectionalDividedNeuronVoxelXYZPDecoder {
     fn get_decoded_data_type(&self) -> IOTypeVariant {
         IOTypeVariant::NormalizedM1to1F32
     }
@@ -105,7 +105,7 @@ impl NeuronXYZPDecoder for LinearNormalizedFloatPSPBirdirectionalDividedNeuronXY
         }
         const CHANNEL_WIDTH: u32 = 2;
 
-        let neuron_data: &NeuronXYZPArrays = read_from.borrow(&cortical_id).unwrap();
+        let neuron_data: &NeuronVoxelXYZPArrays = read_from.borrow(&cortical_id).unwrap();
         let positive_x_index: u32 = *cortical_channel * CHANNEL_WIDTH;
         let negative_x_index: u32 = positive_x_index + 1;
         let cortical_depth: f32 = self.channel_dimensions.get_z() as f32;
@@ -137,14 +137,14 @@ impl NeuronXYZPDecoder for LinearNormalizedFloatPSPBirdirectionalDividedNeuronXY
     }
 }
 
-impl LinearNormalizedFloatPSPBirdirectionalDividedNeuronXYZPDecoder {
+impl LinearNormalizedFloatPSPBirdirectionalDividedNeuronVoxelXYZPDecoder {
     pub fn new(cortical_id_target: CorticalID, z_resolution: u32) -> Result<Self, FeagiDataProcessingError> {
         if z_resolution == 0 {
             return Err(IODataError::InvalidParameters("Resolution cannot be 0!".into()).into());
         }
         pub const CHANNEL_WIDTH: u32 = 2;
         pub const CHANNEL_HEIGHT: u32 = 1;
-        Ok(LinearNormalizedFloatPSPBirdirectionalDividedNeuronXYZPDecoder{
+        Ok(LinearNormalizedFloatPSPBirdirectionalDividedNeuronVoxelXYZPDecoder{
             channel_dimensions: SingleChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_HEIGHT, z_resolution)?,
             cortical_read_source: [cortical_id_target; 1]
         })

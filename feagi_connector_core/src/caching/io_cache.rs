@@ -8,9 +8,9 @@ use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_pipeline::stage_properties::{IdentityStageProperties, ImageSegmentorStageProperties};
 use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 use crate::data_types::{Percentage4D, SegmentedImageFrame};
-use crate::neuron_coding::xyzp::encoders::{MiscDataNeuronXYZPEncoder, SegmentedImageFrameNeuronXYZPEncoder};
-use crate::neuron_coding::xyzp::{NeuronXYZPDecoder, NeuronXYZPEncoder};
-use crate::neuron_coding::xyzp::decoders::Percentage4DLinearNeuronXYZPDecoder;
+use crate::neuron_coding::xyzp::encoders::{MiscDataNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
+use crate::neuron_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
+use crate::neuron_coding::xyzp::decoders::Percentage4DLinearNeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 
@@ -49,7 +49,7 @@ impl IOCache {
                                          dimensions: MiscDataDimensions) -> Result<(), FeagiDataError> {
 
 
-        let encoder: Box<dyn NeuronXYZPEncoder + Sync + Send > = MiscDataNeuronXYZPEncoder::new_box(group, dimensions, number_channels, true)?;
+        let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send > = MiscDataNeuronVoxelXYZPEncoder::new_box(group, dimensions, number_channels, true)?;
         let data_type = WrappedIOType::MiscData(Some(dimensions.clone()));
 
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::MiscellaneousAbsolute;
@@ -75,7 +75,7 @@ impl IOCache {
     pub fn sensor_register_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, input_image_properties: ImageFrameProperties, segmented_image_properties: SegmentedImageFrameProperties, initial_gaze: GazeProperties) -> Result<(), FeagiDataError> {
 
         let cortical_ids = SegmentedImageFrame::create_ordered_cortical_ids_for_segmented_vision(group, false);
-        let encoder: Box<dyn NeuronXYZPEncoder + Sync + Send > = SegmentedImageFrameNeuronXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
+        let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send > = SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
 
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
         let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
@@ -133,7 +133,7 @@ impl IOCache {
         let data_type = WrappedIOType::Percentage_4D;
 
         let cortical_id = MOTOR_TYPE.to_cortical_id(group);
-        let decoder: Box<dyn NeuronXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronXYZPDecoder::new_box(cortical_id, z_depth, number_channels)?;
+        let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_depth, number_channels)?;
 
 
         let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {

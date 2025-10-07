@@ -2,9 +2,9 @@ use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex};
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronVoxelXYZPArrays};
 use crate::data_types::Percentage4D;
-use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::neuron_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 const WIDTH_GIVEN_POSITIVE_Z_ROW_AND_NEGATIVE_Z_ROW: u32 = 2; // One row of neurons along the Z represents 0 -> +1, while the other represents 0 -> -1
@@ -12,7 +12,7 @@ const NUMBER_PAIRS_PER_CHANNEL: u32 = 4; // How many numbers are encoded per cha
 const CHANNEL_WIDTH: u32 = WIDTH_GIVEN_POSITIVE_Z_ROW_AND_NEGATIVE_Z_ROW * NUMBER_PAIRS_PER_CHANNEL;
 
 #[derive(Debug)]
-pub struct Percentage4DLinearNeuronXYZPDecoder {
+pub struct Percentage4DLinearNeuronVoxelXYZPDecoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_read_target: CorticalID,
     z_depth_scratch_space: Vec<Vec<i32>>, // # channels * NUMBER_PAIRS_PER_CHANNEL long, basically 1 vector per 2 z rows. First element is always 0
@@ -21,7 +21,7 @@ pub struct Percentage4DLinearNeuronXYZPDecoder {
 // NOTE: we need ot be cautious of multiple neurons coming in affecting the result (we should average them)
 
 
-impl NeuronXYZPDecoder for Percentage4DLinearNeuronXYZPDecoder {
+impl NeuronVoxelXYZPDecoder for Percentage4DLinearNeuronVoxelXYZPDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType {
         WrappedIOType::Percentage
     }
@@ -91,13 +91,13 @@ impl NeuronXYZPDecoder for Percentage4DLinearNeuronXYZPDecoder {
     }
 }
 
-impl Percentage4DLinearNeuronXYZPDecoder {
+impl Percentage4DLinearNeuronVoxelXYZPDecoder {
 
     pub fn new(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Self, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
 
-        Ok(Percentage4DLinearNeuronXYZPDecoder {
+        Ok(Percentage4DLinearNeuronVoxelXYZPDecoder {
             channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
             cortical_read_target,
             z_depth_scratch_space: vec![vec![0]; *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],

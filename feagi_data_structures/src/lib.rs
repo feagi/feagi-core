@@ -3,7 +3,7 @@ mod error;
 mod feagi_signal;
 mod feagi_json;
 pub mod genomic;
-pub mod neurons;
+pub mod neuron_voxels;
 pub mod common_macros;
 
 pub use templates::*;

@@ -4,16 +4,16 @@ use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, Cortical
 use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
-use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::neuron_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]
-pub struct MiscDataNeuronXYZPAbsoluteDecoder {
+pub struct MiscDataNeuronVoxelXYZPAbsoluteDecoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_read_target: CorticalID,
 }
 
-impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
+impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPAbsoluteDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
@@ -58,9 +58,9 @@ impl NeuronXYZPDecoder for MiscDataNeuronXYZPAbsoluteDecoder {
     }
 }
 
-impl MiscDataNeuronXYZPAbsoluteDecoder {
+impl MiscDataNeuronVoxelXYZPAbsoluteDecoder {
     pub fn new(cortical_read_target: CorticalID, misc_data_dimensions: MiscDataDimensions) -> Result<Self, FeagiDataError> {
-        Ok(MiscDataNeuronXYZPAbsoluteDecoder{
+        Ok(MiscDataNeuronVoxelXYZPAbsoluteDecoder{
             misc_data_dimensions,
             cortical_read_target,
         })

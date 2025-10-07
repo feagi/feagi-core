@@ -4,15 +4,15 @@ use crate::data::ImageFrame;
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::CorticalChannelIndex;
-use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPEncoder};
+use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub struct ImageFrameNeuronXYZPEncoder {
+pub struct ImageFrameNeuronVoxelXYZPEncoder {
     image_properties: ImageFrameProperties,
     cortical_write_target: CorticalID
 }
 
-impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
+impl NeuronVoxelXYZPEncoder for ImageFrameNeuronVoxelXYZPEncoder {
 
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::ImageFrame(Some(self.image_properties))
@@ -30,9 +30,9 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
     }
 }
 
-impl ImageFrameNeuronXYZPEncoder {
+impl ImageFrameNeuronVoxelXYZPEncoder {
     pub fn new(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties) -> Result<Self, FeagiDataError> {        
-        Ok(ImageFrameNeuronXYZPEncoder{
+        Ok(ImageFrameNeuronVoxelXYZPEncoder{
             image_properties: image_properties.clone(),
             cortical_write_target
         })

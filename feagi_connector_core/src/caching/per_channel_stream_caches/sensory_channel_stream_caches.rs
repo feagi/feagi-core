@@ -1,20 +1,20 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
-use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
+use crate::neuron_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 pub(crate) struct SensoryChannelStreamCaches {
-    neuron_encoder: Box<dyn NeuronXYZPEncoder>,
+    neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
     pipeline_runners: Vec<PipelineStageRunner>,
     last_update_time: Instant,
 }
 
 impl SensoryChannelStreamCaches {
 
-    pub fn new(neuron_encoder: Box<dyn NeuronXYZPEncoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
+    pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
         if stage_properties_per_channels.is_empty() { // Yes checks exist below, but this error has more context
             return Err(FeagiDataError::InternalError("SensoryChannelStreamCaches Cannot be initialized with 0 channels!".into()))
         }
@@ -88,7 +88,7 @@ impl SensoryChannelStreamCaches {
 
     //endregion
 
-    pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronData, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+    pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronVoxels, time_of_burst: Instant) -> Result<(), FeagiDataError> {
         // TODO We need a new trait method to just have all channels cleared if not up to date
         self.neuron_encoder.write_neuron_data_multi_channel(&self.pipeline_runners, time_of_burst, neuron_data)?;
         Ok(())

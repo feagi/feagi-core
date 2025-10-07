@@ -25,7 +25,7 @@ mod test_pipeline_stages {
     use feagi_data_structures::genomic::CorticalType::Sensory;
     use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalCoordinate, CorticalGroupIndex};
     use feagi_data_structures::genomic::SensorCorticalType::ImageCameraCenter;
-    use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+    use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronVoxelXYZPArrays};
 
     //region Helper Functions
     
@@ -392,7 +392,7 @@ mod test_pipeline_stages {
         let feagi_byte_structure: FeagiByteStructure = FeagiByteStructure::create_from_bytes(bytes.to_vec()).unwrap();
         let cortical_mapped_data: CorticalMappedXYZPNeuronData =  CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&feagi_byte_structure).unwrap();
 
-        let neuron_array: &NeuronXYZPArrays = cortical_mapped_data.get_neurons_of(&cortical_id).unwrap();
+        let neuron_array: &NeuronVoxelXYZPArrays = cortical_mapped_data.get_neurons_of(&cortical_id).unwrap();
 
         for neuron in neuron_array.iter() {
             if neuron.cortical_coordinate == CorticalCoordinate::new(0, 0, 0) {
@@ -455,7 +455,7 @@ mod test_pipeline_stages {
         let feagi_byte_structure: FeagiByteStructure = FeagiByteStructure::create_from_bytes(bytes.to_vec()).unwrap();
         let cortical_mapped_data: CorticalMappedXYZPNeuronData =  CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&feagi_byte_structure).unwrap();
 
-        let neuron_array: &NeuronXYZPArrays = cortical_mapped_data.get_neurons_of(&cortical_id).unwrap();
+        let neuron_array: &NeuronVoxelXYZPArrays = cortical_mapped_data.get_neurons_of(&cortical_id).unwrap();
 
         for neuron in neuron_array.iter() {
             if neuron.cortical_coordinate == CorticalCoordinate::new(0, 0, 0) {
@@ -511,7 +511,7 @@ mod test_pipeline_stages {
         let sensor_bytes_initial = io_cache.sensor_retrieve_latest_bytes().unwrap();
 
         let mut neurons_for_gaze = CorticalMappedXYZPNeuronData::new();
-        let mut neuron_data = NeuronXYZPArrays::new(); // Lets pretend this has a length of 4
+        let mut neuron_data = NeuronVoxelXYZPArrays::new(); // Lets pretend this has a length of 4
         //neuron_data.push_raw(0,0,0,1.0);
         neuron_data.push_raw(1, 0, 0, 1.0);
         neuron_data.push_raw(2, 0, 1, 1.0);

@@ -3,16 +3,16 @@ use crate::FeagiDataError;
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::{CorticalChannelDimensions, CorticalChannelIndex};
 use crate::neurons::xyzp::coders::coder_shared_functions::decode_unsigned_binary_fractional;
-use crate::neurons::xyzp::coders::NeuronXYZPDecoder;
+use crate::neurons::xyzp::coders::NeuronVoxelXYZPDecoder;
 use crate::neurons::xyzp::CorticalMappedXYZPNeuronData;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub struct PercentageFractionalExponentialNeuronXYZPDecoder {
+pub struct PercentageFractionalExponentialNeuronVoxelXYZPDecoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_read_target: CorticalID
 }
 
-impl NeuronXYZPDecoder for PercentageFractionalExponentialNeuronXYZPDecoder {
+impl NeuronVoxelXYZPDecoder for PercentageFractionalExponentialNeuronVoxelXYZPDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType {
         WrappedIOType::Percentage
     }
@@ -32,13 +32,13 @@ impl NeuronXYZPDecoder for PercentageFractionalExponentialNeuronXYZPDecoder {
     }
 }
 
-impl PercentageFractionalExponentialNeuronXYZPDecoder {
+impl PercentageFractionalExponentialNeuronVoxelXYZPDecoder {
 
     pub fn new(cortical_read_target: CorticalID, z_resolution: u32) -> Result<Self, FeagiDataError> {
         const CHANNEL_X_LENGTH: u32 = 1;
         const CHANNEL_Y_LENGTH: u32 = 1;
 
-        Ok(PercentageFractionalExponentialNeuronXYZPDecoder {
+        Ok(PercentageFractionalExponentialNeuronVoxelXYZPDecoder {
             channel_dimensions: CorticalChannelDimensions::new(CHANNEL_X_LENGTH, CHANNEL_Y_LENGTH, z_resolution)?,
             cortical_read_target
         })

@@ -3,26 +3,26 @@ use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::CorticalChannelCount;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::ImageFrame;
-use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
+use crate::neuron_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{ WrappedIOType};
 
 #[derive(Debug)]
-pub struct ImageFrameNeuronXYZPEncoder {
+pub struct ImageFrameNeuronVoxelXYZPEncoder {
     image_properties: ImageFrameProperties,
     cortical_write_target: CorticalID,
-    scratch_space: Vec<NeuronXYZPArrays>,
+    scratch_space: Vec<NeuronVoxelXYZPArrays>,
 }
 
-impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
+impl NeuronVoxelXYZPEncoder for ImageFrameNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::ImageFrame(Some(self.image_properties))
     }
 
-    fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
+    fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
 
         let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
@@ -62,12 +62,12 @@ impl NeuronXYZPEncoder for ImageFrameNeuronXYZPEncoder {
     }
 }
 
-impl ImageFrameNeuronXYZPEncoder {
-    pub fn new_box(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPEncoder + Sync + Send>, FeagiDataError> {
-        let encoder = ImageFrameNeuronXYZPEncoder{
+impl ImageFrameNeuronVoxelXYZPEncoder {
+    pub fn new_box(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
+        let encoder = ImageFrameNeuronVoxelXYZPEncoder{
             image_properties: image_properties.clone(),
             cortical_write_target,
-            scratch_space: vec![NeuronXYZPArrays::new(); *number_channels as usize],
+            scratch_space: vec![NeuronVoxelXYZPArrays::new(); *number_channels as usize],
         };
         Ok(Box::new(encoder))
     }

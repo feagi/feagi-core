@@ -1,15 +1,15 @@
 use crate::FeagiDataError;
 use crate::genomic::CorticalID;
 use crate::genomic::descriptors::{CorticalChannelDimensions, CorticalChannelIndex, NeuronDepth};
-use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZP, NeuronXYZPArrays, NeuronXYZPEncoder};
+use crate::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronVoxelXYZP, NeuronVoxelXYZPArrays, NeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub struct F32SplitSignDividedNeuronXYZPEncoder {
+pub struct F32SplitSignDividedNeuronVoxelXYZPEncoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_write_target: CorticalID
 }
 
-impl NeuronXYZPEncoder for F32SplitSignDividedNeuronXYZPEncoder {
+impl NeuronVoxelXYZPEncoder for F32SplitSignDividedNeuronVoxelXYZPEncoder {
 
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::SignedPercentage
@@ -22,10 +22,10 @@ impl NeuronXYZPEncoder for F32SplitSignDividedNeuronXYZPEncoder {
 
         const NUMBER_NEURONS_IN_STRUCTURE: usize = 1;
 
-        let generated_neuron_data: &mut NeuronXYZPArrays = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target, NUMBER_NEURONS_IN_STRUCTURE);
+        let generated_neuron_data: &mut NeuronVoxelXYZPArrays = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target, NUMBER_NEURONS_IN_STRUCTURE);
         let channel_offset: u32 = self.channel_dimensions.width * *cortical_channel + { if value.is_sign_positive() { 1 } else { 0 } };
         let p_val: f32 = value.into();
-        let neuron: NeuronXYZP = NeuronXYZP::new(
+        let neuron: NeuronVoxelXYZP = NeuronVoxelXYZP::new(
             channel_offset,
             0,
             0,
@@ -36,12 +36,12 @@ impl NeuronXYZPEncoder for F32SplitSignDividedNeuronXYZPEncoder {
     }
 }
 
-impl F32SplitSignDividedNeuronXYZPEncoder {
+impl F32SplitSignDividedNeuronVoxelXYZPEncoder {
 
     pub const CHANNEL_X_LENGTH: u32 = 2;
     pub const CHANNEL_Y_LENGTH: u32 = 1;
     pub fn new(cortical_write_target: CorticalID, z_resolution: NeuronDepth) -> Result<Self, FeagiDataError> {
-        Ok(F32SplitSignDividedNeuronXYZPEncoder {
+        Ok(F32SplitSignDividedNeuronVoxelXYZPEncoder {
             channel_dimensions: CorticalChannelDimensions::new(Self::CHANNEL_X_LENGTH, Self::CHANNEL_Y_LENGTH, *z_resolution)?,
             cortical_write_target,
         })

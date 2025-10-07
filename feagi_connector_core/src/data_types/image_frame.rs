@@ -4,7 +4,7 @@ use image::{DynamicImage, GenericImageView};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use super::descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions};
 
 
@@ -489,7 +489,7 @@ impl ImageFrame {
 
     // region Outputting Neurons
 
-    pub(crate) fn overwrite_neuron_data(&self, write_target: &mut NeuronXYZPArrays, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+    pub(crate) fn overwrite_neuron_data(&self, write_target: &mut NeuronVoxelXYZPArrays, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
         let x_offset: u32 = *channel_index * self.get_xy_resolution().width;

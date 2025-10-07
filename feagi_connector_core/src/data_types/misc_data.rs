@@ -1,7 +1,7 @@
 use ndarray::{s, Array3, Zip};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
-use feagi_data_structures::neurons::xyzp::NeuronXYZPArrays;
+use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
 use super::descriptors::MiscDataDimensions;
 use super::ImageFrame;
 
@@ -98,7 +98,7 @@ impl MiscData {
 
     // region Outputting Neurons
 
-    pub fn overwrite_neuron_data(&self, write_target: &mut NeuronXYZPArrays, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+    pub fn overwrite_neuron_data(&self, write_target: &mut NeuronVoxelXYZPArrays, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         const EPSILON: f32 = 0.0001; // avoid writing near zero vals
 
         let x_offset: u32 = *x_channel_offset * self.get_dimensions().width;

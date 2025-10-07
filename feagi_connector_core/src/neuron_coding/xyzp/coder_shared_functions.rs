@@ -1,12 +1,12 @@
 use std::ops::Range;
-use feagi_data_structures::neurons::xyzp::{NeuronXYZP, NeuronXYZPArrays};
+use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZP, NeuronVoxelXYZPArrays};
 use crate::data_types::Percentage;
 
 //region Percentage Binary Fractional
 #[inline]
-pub(crate) fn encode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, z_length: u32, value: Percentage, neuron_targets: &mut NeuronXYZPArrays) {
+pub(crate) fn encode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, z_length: u32, value: Percentage, neuron_targets: &mut NeuronVoxelXYZPArrays) {
     let processing = value.get_as_0_1();
-    let mut cache_neuron = NeuronXYZP::new(x_offset,y_offset,0,1.0);
+    let mut cache_neuron = NeuronVoxelXYZP::new(x_offset, y_offset, 0, 1.0);
 
     for i in (0..(z_length as i32)).rev().into_iter() {
         let weight = 0.5f32.powi(i);
@@ -19,7 +19,7 @@ pub(crate) fn encode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, z_
 
 /*
 #[inline]
-pub(crate) fn decode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, neuron_targets: &NeuronXYZPArrays) -> Percentage {
+pub(crate) fn decode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, neuron_targets: &NeuronVoxelXYZPArrays) -> Percentage {
     let mut processing: f32 = 0.0;
     let (x_vec, y_vec, z_vec, _p_vec) = neuron_targets.borrow_xyzp_vectors();
     let length = x_vec.len();
@@ -42,7 +42,7 @@ pub(crate) fn decode_unsigned_binary_fractional(x_offset: u32, y_offset: u32, ne
  */
 
 #[inline]
-pub(crate) fn decode_unsigned_binary_fractional_multichannel(x_offsets: Range<u32>, y_offset: u32, neuron_targets: &NeuronXYZPArrays, write_data_to: &mut Vec<Percentage>) {
+pub(crate) fn decode_unsigned_binary_fractional_multichannel(x_offsets: Range<u32>, y_offset: u32, neuron_targets: &NeuronVoxelXYZPArrays, write_data_to: &mut Vec<Percentage>) {
     // WARNING: Assumes x_offsets has the same number of elements as write_data_to. If not, a crash is likely!
 
     for percentage in write_data_to.iter_mut() {
@@ -76,7 +76,7 @@ pub(crate) fn decode_unsigned_binary_fractional_multichannel(x_offsets: Range<u3
 //region Percentage Linear
 
 #[inline]
-pub(crate) fn encode_percentage_linear(x_offset: u32, y_offset: u32, z_length: u32, value: Percentage, neuron_xyzparrays: &mut NeuronXYZPArrays) {
+pub(crate) fn encode_percentage_linear(x_offset: u32, y_offset: u32, z_length: u32, value: Percentage, neuron_xyzparrays: &mut NeuronVoxelXYZPArrays) {
     const POTENTIAL: f32 = 1.0;
     let processing = value.get_as_0_1();
     let z_neuron_index: u32 = (processing * (z_length as f32)) as u32;
@@ -85,7 +85,7 @@ pub(crate) fn encode_percentage_linear(x_offset: u32, y_offset: u32, z_length: u
 
 
 #[inline]
-pub(crate) fn decode_percentage_linear_multichannel(x_offsets: Range<u32>, y_offset: u32, z_length: u32, neuron_targets: &NeuronXYZPArrays, write_data_to: &mut Vec<Percentage>) {
+pub(crate) fn decode_percentage_linear_multichannel(x_offsets: Range<u32>, y_offset: u32, z_length: u32, neuron_targets: &NeuronVoxelXYZPArrays, write_data_to: &mut Vec<Percentage>) {
 
     write_data_to.clear();
 

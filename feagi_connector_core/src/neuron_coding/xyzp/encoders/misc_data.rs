@@ -3,26 +3,26 @@ use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::{CorticalID, SensorCorticalType};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalGroupIndex};
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
-use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
+use crate::neuron_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOType};
 
 #[derive(Debug)]
-pub struct MiscDataNeuronXYZPEncoder {
+pub struct MiscDataNeuronVoxelXYZPEncoder {
     misc_data_dimensions: MiscDataDimensions,
     cortical_write_target: CorticalID,
-    scratch_space: Vec<NeuronXYZPArrays>,
+    scratch_space: Vec<NeuronVoxelXYZPArrays>,
 }
 
-impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
+impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
-    fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronData) -> Result<(), FeagiDataError> {
+    fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
 
         let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
@@ -70,8 +70,8 @@ impl NeuronXYZPEncoder for MiscDataNeuronXYZPEncoder {
 
 }
 
-impl MiscDataNeuronXYZPEncoder {
-    pub fn new_box(cortical_group_index: CorticalGroupIndex, misc_data_dimensions: MiscDataDimensions, number_channels: CorticalChannelCount, is_absolute: bool) -> Result<Box<dyn NeuronXYZPEncoder + Sync + Send>, FeagiDataError> {
+impl MiscDataNeuronVoxelXYZPEncoder {
+    pub fn new_box(cortical_group_index: CorticalGroupIndex, misc_data_dimensions: MiscDataDimensions, number_channels: CorticalChannelCount, is_absolute: bool) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         let cortical_id: CorticalID;
         if is_absolute {
             cortical_id = SensorCorticalType::MiscellaneousAbsolute.to_cortical_id(cortical_group_index);
@@ -79,10 +79,10 @@ impl MiscDataNeuronXYZPEncoder {
         else {
             cortical_id = SensorCorticalType::MiscellaneousIncremental.to_cortical_id(cortical_group_index);
         }
-        let encoder = MiscDataNeuronXYZPEncoder {
+        let encoder = MiscDataNeuronVoxelXYZPEncoder {
             misc_data_dimensions,
             cortical_write_target: cortical_id,
-            scratch_space: vec![NeuronXYZPArrays::new(); *number_channels as usize],
+            scratch_space: vec![NeuronVoxelXYZPArrays::new(); *number_channels as usize],
         };
         Ok(Box::new(encoder))
     }

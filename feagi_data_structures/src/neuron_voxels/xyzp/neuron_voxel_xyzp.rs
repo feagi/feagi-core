@@ -1,25 +1,25 @@
 use crate::genomic::descriptors::CorticalCoordinate;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct NeuronXYZP {
+pub struct NeuronVoxelXYZP {
     /// coordinate within the cortical area.
     pub cortical_coordinate: CorticalCoordinate,
     pub potential: f32
 }
 
-impl std::fmt::Display for NeuronXYZP {
+impl std::fmt::Display for NeuronVoxelXYZP {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let s = format!("NeuronXYZP({}, {}, {}, {})", self.cortical_coordinate.x, self.cortical_coordinate.y, self.cortical_coordinate.z, self.potential);
+        let s = format!("NeuronVoxelXYZP({}, {}, {}, {})", self.cortical_coordinate.x, self.cortical_coordinate.y, self.cortical_coordinate.z, self.potential);
         write!(f, "{}", s)
     }
 }
 
-impl NeuronXYZP {
+impl NeuronVoxelXYZP {
 
     /// Number of bytes used to represent a single neuron in memory (going across x y z p elements)
     pub const NUMBER_BYTES_PER_NEURON: usize = (size_of::<u32>() *  3) + size_of::<f32>(); // 16 bytes per neuron
     
-    /// Creates a new neuron with the specified coordinates and potential.
+    /// Creates a new neuron voxel with the specified coordinates and potential.
     ///
     /// # Arguments
     ///
@@ -31,22 +31,22 @@ impl NeuronXYZP {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::NeuronXYZP;
+    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZP;
     ///
     /// // Create a neuron at the origin with no activation
-    /// let inactive_neuron = NeuronXYZP::new(0, 0, 0, 0.0);
+    /// let inactive_neuron = NeuronVoxelXYZP::new(0, 0, 0, 0.0);
     ///
     /// // Create an active neuron at a specific location
-    /// let active_neuron = NeuronXYZP::new(100, 200, 50, 0.85);
+    /// let active_neuron = NeuronVoxelXYZP::new(100, 200, 50, 0.85);
     /// ```
     pub fn new(x: u32, y: u32, z: u32, potential: f32) -> Self {
-        NeuronXYZP {
+        NeuronVoxelXYZP {
             cortical_coordinate: CorticalCoordinate::new(x, y, z),
             potential
         }
     }
     
-    /// Returns the neuron's coordinates and potential as a tuple.
+    /// Returns the neuron voxel's coordinates and potential as a tuple.
     ///
     /// This method provides a convenient way to destructure the neuron's
     /// data for pattern matching or function arguments that expect tuples.
@@ -58,9 +58,9 @@ impl NeuronXYZP {
     /// # Examples
     ///
     /// ```rust
-    /// use feagi_data_structures::neurons::xyzp::NeuronXYZP;
+    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZP;
     ///
-    /// let neuron = NeuronXYZP::new(10, 20, 30, 0.5);
+    /// let neuron = NeuronVoxelXYZP::new(10, 20, 30, 0.5);
     /// let (x, y, z, potential) = neuron.as_tuple();
     ///
     /// assert_eq!(x, 10);

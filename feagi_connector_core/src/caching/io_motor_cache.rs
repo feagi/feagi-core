@@ -4,15 +4,15 @@ use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::{FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::MotorCorticalType;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::caching::per_channel_stream_caches::MotorChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
-use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::neuron_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOMotorCache {
     stream_caches: HashMap<(MotorCorticalType, CorticalGroupIndex), MotorChannelStreamCaches>,
-    neuron_data: CorticalMappedXYZPNeuronData,
+    neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
 }
 
@@ -21,14 +21,14 @@ impl IOMotorCache {
     pub fn new() -> Self {
         IOMotorCache {
             stream_caches: HashMap::new(),
-            neuron_data: CorticalMappedXYZPNeuronData::new(),
+            neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty()
         }
     }
 
     //region Interactions
     pub fn register(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
-                    neuron_decoder: Box<dyn NeuronXYZPDecoder>,
+                    neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
                     pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>)
                     -> Result<(), FeagiDataError> {
 

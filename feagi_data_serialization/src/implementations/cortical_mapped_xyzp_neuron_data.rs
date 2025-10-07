@@ -1,7 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZP, NeuronXYZPArrays};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays};
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 
 const BYTE_STRUCT_VERSION: u8 = 1;
@@ -10,7 +10,7 @@ const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize = CorticalID::NUMBER_OF_BYTES +
 
 const NUMBER_BYTES_CORTICAL_COUNT_HEADER: usize = size_of::<u16>();
 
-impl FeagiSerializable for CorticalMappedXYZPNeuronData {
+impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
     fn get_type(&self) -> FeagiByteStructureType {
         FeagiByteStructureType::NeuronCategoricalXYZP
     }
@@ -85,7 +85,7 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
             let neuron_bytes = &byte_reading[data_start_reading..data_start_reading + number_bytes_to_read];
             let bytes_length = neuron_bytes.len();
 
-            if bytes_length % NeuronXYZP::NUMBER_BYTES_PER_NEURON != 0 {
+            if bytes_length % NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON != 0 {
                 return Err(FeagiDataError::SerializationError("As NeuronXYCPArrays contains 4 internal arrays of equal length, each of elements of 4 bytes each (uint32 and float), the input bytes array must be divisible by 16!".into()).into());
             }
 
@@ -93,7 +93,7 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
             let y_end = bytes_length / 2; // q2
             let z_end = x_end * 3; // q3
 
-            let num_neurons = bytes_length / NeuronXYZP::NUMBER_BYTES_PER_NEURON;
+            let num_neurons = bytes_length / NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON;
             let neuron_array = self.ensure_clear_and_borrow_mut(&cortical_id);
             neuron_array.ensure_capacity(num_neurons);
 
@@ -120,7 +120,7 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronData {
 }
 
 #[inline]
-fn write_neuron_array_to_bytes(neuron_array: &NeuronXYZPArrays, bytes_to_write_to: &mut [u8]) -> Result<(), FeagiDataError> {
+fn write_neuron_array_to_bytes(neuron_array: &NeuronVoxelXYZPArrays, bytes_to_write_to: &mut [u8]) -> Result<(), FeagiDataError> {
     const U32_F32_LENGTH: usize = 4;
     let number_of_neurons_to_write: usize = neuron_array.len();
     let number_bytes_needed = neuron_array.get_size_in_number_of_bytes();

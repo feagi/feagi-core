@@ -2,31 +2,31 @@ use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex};
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use crate::data_types::Percentage4D;
-use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::neuron_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neurons along the Z represents 0 -> +1
+const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron_voxels along the Z represents 0 -> +1
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 4; // How many numbers are encoded per channel?
 const CHANNEL_WIDTH: u32 = WIDTH_GIVEN_POSITIVE_Z_ROW * NUMBER_PAIRS_PER_CHANNEL;
 
 #[derive(Debug)]
-pub struct Percentage4DLinearNeuronXYZPDecoder {
+pub struct Percentage4DLinearNeuronVoxelXYZPDecoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_read_target: CorticalID,
     z_depth_scratch_space: Vec<Vec<u32>>, // # channels * NUMBER_PAIRS_PER_CHANNEL long, basically 1 vector per 1 z rows
 }
 
-// NOTE: we need ot be cautious of multiple neurons coming in affecting the result (we should average them)
+// NOTE: we need ot be cautious of multiple neuron_voxels coming in affecting the result (we should average them)
 
 
-impl NeuronXYZPDecoder for Percentage4DLinearNeuronXYZPDecoder {
+impl NeuronVoxelXYZPDecoder for Percentage4DLinearNeuronVoxelXYZPDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType {
         WrappedIOType::Percentage
     }
 
-    fn read_neuron_data_multi_channel(&mut self, read_target: &CorticalMappedXYZPNeuronData, _time_of_read: Instant, write_target: &mut Vec<WrappedIOData>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
+    fn read_neuron_data_multi_channel(&mut self, read_target: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, write_target: &mut Vec<WrappedIOData>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
 
         // NOTE: Expecting channel_changed to be all false. Do not reset write_target, we will write to it if we got a value for the channel!
         const ONLY_ALLOWED_Y: u32 = 0; // This structure never has height
@@ -53,7 +53,7 @@ impl NeuronXYZPDecoder for Percentage4DLinearNeuronXYZPDecoder {
 
         for neuron in neuron_array.iter() {
 
-            // Ignoring any neurons that have no potential (if sent for some reason).
+            // Ignoring any neuron_voxels that have no potential (if sent for some reason).
             if neuron.cortical_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                 continue; // Something is wrong, but currently we will just skip these
             }
@@ -106,12 +106,12 @@ impl NeuronXYZPDecoder for Percentage4DLinearNeuronXYZPDecoder {
     }
 }
 
-impl Percentage4DLinearNeuronXYZPDecoder {
+impl Percentage4DLinearNeuronVoxelXYZPDecoder {
 
-    pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronXYZPDecoder + Sync + Send>, FeagiDataError> {
+    pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
-        let decoder = Percentage4DLinearNeuronXYZPDecoder {
+        let decoder = Percentage4DLinearNeuronVoxelXYZPDecoder {
             channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
             cortical_read_target,
             z_depth_scratch_space: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],

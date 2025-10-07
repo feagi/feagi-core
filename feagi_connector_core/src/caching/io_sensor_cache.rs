@@ -4,15 +4,15 @@ use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::SensorCorticalType;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::caching::per_channel_stream_caches::{SensoryChannelStreamCaches};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
-use crate::neuron_coding::xyzp::NeuronXYZPEncoder;
+use crate::neuron_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOSensorCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
-    neuron_data: CorticalMappedXYZPNeuronData,
+    neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
 }
@@ -22,7 +22,7 @@ impl IOSensorCache {
     pub fn new() -> Self {
         IOSensorCache {
             stream_caches: HashMap::new(),
-            neuron_data: CorticalMappedXYZPNeuronData::new(),
+            neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
         }
@@ -31,7 +31,7 @@ impl IOSensorCache {
     //region Sensor Interactions
 
     pub fn register(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex,
-                           neuron_encoder: Box<dyn NeuronXYZPEncoder>,
+                           neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
                            pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>)
         -> Result<(), FeagiDataError> {
 
