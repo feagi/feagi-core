@@ -11,7 +11,7 @@ use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscD
 use crate::data_types::{Percentage4D, SegmentedImageFrame};
 use crate::neuron_voxel_coding::xyzp::encoders::{MiscDataNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
-use crate::neuron_voxel_coding::xyzp::decoders::Percentage4DLinearNeuronVoxelXYZPDecoder;
+use crate::neuron_voxel_coding::xyzp::decoders::*;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 //region macros
@@ -44,132 +44,6 @@ macro_rules! motor_registrations {
         )*
     };
 
-    // Arm for SignedPercentage with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-        }
-    };
-
-    // Arm for SignedPercentage with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-        }
-    };
-
-    // Arm for SignedPercentage with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-        }
-    };
-
-    // Arm for SignedPercentage with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-        }
-    };
-
-    // Arm for Percentage4D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-        }
-    };
-
-    // Arm for Percentage4D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-         }
-    };
-
     // Arm for Percentage with Absolute Linear encoding
     (@generate_function
         $cortical_type_key_name:ident,
@@ -186,7 +60,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -207,7 +94,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -228,7 +128,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -249,7 +162,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -270,7 +196,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage2DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -291,7 +230,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage2DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -312,7 +264,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage2DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -333,7 +298,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage2DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -354,7 +332,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage3DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -375,7 +366,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage3DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -396,7 +400,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage3DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -417,7 +434,54 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage3DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+            }
+         }
+    };
+
+    // Arm for Percentage4D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage4D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -438,7 +502,54 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+            }
+         }
+    };
+
+    // Arm for Percentage4D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage4D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -459,7 +570,156 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentageExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentageExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -480,7 +740,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage2DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -501,7 +774,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage2DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -522,7 +808,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage2DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -543,7 +842,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage2DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -564,7 +876,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage3DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -585,7 +910,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage3DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -606,7 +944,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage3DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -627,7 +978,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage3DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -648,7 +1012,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage4DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -669,7 +1046,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage4DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -690,7 +1080,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage4DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -711,7 +1114,20 @@ macro_rules! motor_registrations {
                 z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage4DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -799,50 +1215,67 @@ macro_rules! motor_registrations {
             }
          }
     };
+}
 
-    // Arm for SegmentedImageFrame with Absolute encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SegmentedImageFrame_Absolute,
-        $wrapped_data_type:expr,
-        $data_type:ident
+macro_rules! motor_read_data {
+    (
+        $cortical_io_type_enum_name:ident {
+            $(
+                $(#[doc = $doc:expr])?
+                $cortical_type_key_name:ident => {
+                    friendly_name: $display_name:expr,
+                    snake_case_identifier: $snake_case_identifier:expr,
+                    base_ascii: $base_ascii:expr,
+                    channel_dimension_range: $channel_dimension_range:expr,
+                    default_coder_type: $default_coder_type:ident,
+                    wrapped_data_type: $wrapped_data_type:expr,
+                    data_type: $data_type:ident,
+                }
+            ),* $(,)?
+        }
     ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-         }
+        $(
+            motor_registrations!(@generate_function
+                $cortical_type_key_name,
+                $snake_case_identifier,
+                $default_coder_type,
+                $wrapped_data_type,
+                $data_type
+            );
+        )*
     };
 
-    // Arm for SegmentedImageFrame with Incremental encoding
+    // Arm for Percentage with Absolute Linear encoding
     (@generate_function
         $cortical_type_key_name:ident,
         $snake_case_identifier:expr,
-        SegmentedImageFrame_Incremental,
+        Percentage_Absolute_Linear,
         $wrapped_data_type:expr,
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
+                channel_index: CorticalChannelIndex
+            ) -> Result<&WrappedIOData, FeagiDataError>
             {
-                return Err(FeagiDataError::NotImplemented)
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)
+            }
+            
+            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<&WrappedIOData, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)
             }
          }
     };
 }
-
 
 
 //endregion
@@ -965,26 +1398,6 @@ impl IOCache {
     motor_definition!(motor_registrations);
 
     //region Gaze
-
-    pub fn _motor_register_gaze_absolute_linear(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, z_neuron_resolution: NeuronDepth) -> Result<(), FeagiDataError> {
-
-        const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
-        let data_type = WrappedIOType::Percentage_4D;
-
-        let cortical_id = MOTOR_TYPE.to_cortical_id(group);
-        let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, *z_neuron_resolution, number_channels)?;
-
-
-        let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-            let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-            for i in 0..*number_channels {
-                output.push( vec![IdentityStageProperties::new_box(data_type)?]) // TODO properly implement clone so we dont need to do this
-            };
-            output
-        };
-
-        self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
-    }
 
     pub fn motor_read_post_processed_gaze_absolute_linear(&self, cortical_group_index: CorticalGroupIndex, cortical_channel_index: CorticalChannelIndex) -> Result<Percentage4D, FeagiDataError> {
         const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;

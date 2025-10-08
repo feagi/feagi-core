@@ -96,6 +96,14 @@ impl IOSensorCache {
 
     //region Encoding
 
+    pub fn get_feagi_byte_container(&self) -> &FeagiByteContainer {
+        &self.byte_data
+    }
+
+    pub fn replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
+        self.byte_data = feagi_byte_container
+    }
+
     pub fn try_encode_updated_sensor_data_to_neurons(&mut self, encode_instant: Instant) -> Result<(), FeagiDataError> {
         self.neuron_data.clear_neurons_only(); // TODO remove extra occurrences of clearing
         // TODO this can likely be done in parallel. Explore this!

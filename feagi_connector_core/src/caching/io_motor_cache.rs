@@ -46,14 +46,14 @@ impl IOMotorCache {
     }
 
 
-    pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
-    }
-
     pub fn try_read_preprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
+    }
+
+    pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+        Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
     }
 
     pub fn try_updating_pipeline_stage(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
@@ -92,6 +92,14 @@ impl IOMotorCache {
     //endregion
 
     //region Decoding
+
+    pub fn get_feagi_byte_container(&self) -> &FeagiByteContainer {
+        &self.byte_data
+    }
+
+    pub fn replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
+        self.byte_data = feagi_byte_container
+    }
 
     pub fn try_import_bytes<F>(&mut self, byte_writing_function: &mut F) -> Result<(), FeagiDataError>
     where F: FnMut(&mut Vec<u8>) -> Result<(), FeagiDataError> {
