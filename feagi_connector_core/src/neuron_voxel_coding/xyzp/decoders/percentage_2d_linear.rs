@@ -3,26 +3,26 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
-use crate::data_types::Percentage4D;
+use crate::data_types::{Percentage2D};
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::decode_unsigned_percentage_from_linear_neurons;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
-const NUMBER_PAIRS_PER_CHANNEL: u32 = 4; // How many numbers are encoded per channel?
+const NUMBER_PAIRS_PER_CHANNEL: u32 = 2; // How many numbers are encoded per channel?
 const CHANNEL_WIDTH: u32 = WIDTH_GIVEN_POSITIVE_Z_ROW * NUMBER_PAIRS_PER_CHANNEL;
 
 #[derive(Debug)]
-pub struct Percentage4DLinearNeuronVoxelXYZPDecoder {
+pub struct Percentage2DLinearNeuronVoxelXYZPDecoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_read_target: CorticalID,
     z_depth_scratch_space: Vec<Vec<u32>>, // # channels * NUMBER_PAIRS_PER_CHANNEL long, basically 1 vector per 1 z rows
 }
 
-// NOTE: we need ot be cautious of multiple neuron_voxels coming in affecting the result (we should average them)
+// NOTE: we need to be cautious of multiple neuron_voxels coming in affecting the result (we should average them)
 
 
-impl NeuronVoxelXYZPDecoder for Percentage4DLinearNeuronVoxelXYZPDecoder {
+impl NeuronVoxelXYZPDecoder for Percentage2DLinearNeuronVoxelXYZPDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType {
         WrappedIOType::Percentage
     }
@@ -38,7 +38,7 @@ impl NeuronVoxelXYZPDecoder for Percentage4DLinearNeuronVoxelXYZPDecoder {
             return Ok(());
         }
 
-        let mut neuron_array = neuron_array.unwrap();
+        let neuron_array = neuron_array.unwrap();
         if neuron_array.is_empty() {
             return Ok(());
         }
@@ -68,7 +68,7 @@ impl NeuronVoxelXYZPDecoder for Percentage4DLinearNeuronVoxelXYZPDecoder {
         };
 
         let z_depth_float = self.channel_dimensions.depth as f32;
-        
+
         // At this point, we have numbers in scratch space to average out
         for channel_index in 0..number_of_channels as usize { // Literally not worth making parallel... right?
             let z_row_a_index = channel_index * NUMBER_PAIRS_PER_CHANNEL as usize;
@@ -77,42 +77,31 @@ impl NeuronVoxelXYZPDecoder for Percentage4DLinearNeuronVoxelXYZPDecoder {
 
             let z_a_row_vector = self.z_depth_scratch_space.get(z_row_a_index).unwrap();
             let z_b_row_vector = self.z_depth_scratch_space.get(z_row_a_index + 1).unwrap();
-            let z_c_row_vector = self.z_depth_scratch_space.get(z_row_a_index + 2).unwrap();
-            let z_d_row_vector = self.z_depth_scratch_space.get(z_row_a_index + 3).unwrap();
 
-            if z_a_row_vector.is_empty() && z_b_row_vector.is_empty() && z_c_row_vector.is_empty() && z_d_row_vector.is_empty() {
+            if z_a_row_vector.is_empty() && z_b_row_vector.is_empty() {
                 continue; // No data collected for this channel. Do not emit
             }
             channel_changed[channel_index] = true;
-            let percentage_4d: &mut Percentage4D = write_target.get_mut(channel_index).unwrap().try_into()?;
+            let percentage_2d: &mut Percentage2D = write_target.get_mut(channel_index).unwrap().try_into()?;
 
             if !z_a_row_vector.is_empty() {
-                decode_unsigned_percentage_from_linear_neurons(&z_a_row_vector, self.channel_dimensions.depth, &mut percentage_4d.a);
+                decode_unsigned_percentage_from_linear_neurons(&z_a_row_vector, self.channel_dimensions.depth, &mut percentage_2d.a);
             }
             if !z_b_row_vector.is_empty() {
-                decode_unsigned_percentage_from_linear_neurons(&z_b_row_vector, self.channel_dimensions.depth, &mut percentage_4d.b)
-            }
-            if !z_c_row_vector.is_empty() {
-                decode_unsigned_percentage_from_linear_neurons(&z_c_row_vector, self.channel_dimensions.depth, &mut percentage_4d.c);
-            }
-            if !z_d_row_vector.is_empty() {
-                decode_unsigned_percentage_from_linear_neurons(&z_d_row_vector, self.channel_dimensions.depth, &mut percentage_4d.d);
+                decode_unsigned_percentage_from_linear_neurons(&z_b_row_vector, self.channel_dimensions.depth, &mut percentage_2d.b)
             }
         };
 
-
         Ok(())
-
-
     }
 }
 
-impl Percentage4DLinearNeuronVoxelXYZPDecoder {
+impl Percentage2DLinearNeuronVoxelXYZPDecoder {
 
     pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
-        let decoder = Percentage4DLinearNeuronVoxelXYZPDecoder {
+        let decoder = Percentage2DLinearNeuronVoxelXYZPDecoder {
             channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
             cortical_read_target,
             z_depth_scratch_space: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],
