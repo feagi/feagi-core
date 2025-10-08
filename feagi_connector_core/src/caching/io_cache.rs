@@ -58,7 +58,9 @@ macro_rules! motor_registrations {
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 z_depth: u32
-            ) {
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
             }
         }
     };
@@ -77,7 +79,9 @@ macro_rules! motor_registrations {
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 z_depth: u32
-            ) {
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
             }
         }
     };
@@ -96,7 +100,9 @@ macro_rules! motor_registrations {
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 z_depth: u32
-            ) {
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
             }
         }
     };
@@ -115,7 +121,9 @@ macro_rules! motor_registrations {
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 z_depth: u32
-            ) {
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
             }
         }
     };
@@ -134,7 +142,9 @@ macro_rules! motor_registrations {
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 z_depth: u32
-            ) {
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
             }
         }
     };
@@ -153,9 +163,683 @@ macro_rules! motor_registrations {
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 z_depth: u32
-            ) {
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
             }
-        }
+         }
+    };
+
+    // Arm for Percentage with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage2D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage2D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage2D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage2D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage2D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage2D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage2D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage2D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage3D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage3D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage3D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage3D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage3D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage3D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage3D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage3D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage4D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage4D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for Percentage4D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage4D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage2D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage2D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage2D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage2D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage2D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage2D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage2D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage2D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage3D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage3D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage3D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage3D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage3D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage3D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage3D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage3D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage4D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage4D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage4D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage4D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage4D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage4D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SignedPercentage4D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage4D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for MiscData with Absolute encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        MiscData_Absolute,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for MiscData with Incremental encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        MiscData_Incremental,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for ImageFrame with Absolute encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        ImageFrame_Absolute,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for ImageFrame with Incremental encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        ImageFrame_Incremental,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SegmentedImageFrame with Absolute encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SegmentedImageFrame_Absolute,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for SegmentedImageFrame with Incremental encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SegmentedImageFrame_Incremental,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_depth: u32
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
     };
 }
 
