@@ -128,15 +128,28 @@ macro_rules! motor_definition {
 
                 //region MiscData
 
-                #[doc = "Used for other stuff"]
-                Miscellaneous => {
-                    friendly_name: "Miscellaneous",
-                    snake_case_identifier: "miscellaneous",
+                /*
+                #[doc = "Used for other stuff. Absolute (instant) change,"]
+                MiscellaneousAbsolute => {
+                    friendly_name: "Miscellaneous (Absolute)",
+                    snake_case_identifier: "miscellaneous_absolute",
                     base_ascii: b"omis00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
-                    default_coder_type: TODO,
+                    default_coder_type: MiscData_Absolute,
                     wrapped_data_type: WrappedIOType::MiscData(None),
                 },
+
+                #[doc = "Used for other stuff. Incremental change,"]
+                MiscellaneousIncremental => {
+                    friendly_name: "Miscellaneous (Incremental Change)",
+                    snake_case_identifier: "miscellaneous_incremental",
+                    base_ascii: b"Omis00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
+                    default_coder_type: MiscData_Incremental,
+                    wrapped_data_type: WrappedIOType::MiscData(None),
+                },
+
+                 */
 
                 //endregion
 
