@@ -1,6 +1,68 @@
 use std::ops::Range;
-use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZP, NeuronVoxelXYZPArrays};
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::descriptors::CorticalChannelCount;
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays};
 use crate::data_types::Percentage;
+use crate::wrapped_io_data::WrappedIOData;
+
+#[inline]
+pub(crate) fn decode_unsigned_binary_fractional_percentages(percentage_dimension_count: u32,
+                                                            channel_count: CorticalChannelCount,
+                                                            read_id: CorticalID,
+                                                            read_target: &CorticalMappedXYZPNeuronVoxels,
+                                                            z_depth: u32,
+                                                            scratch_space: &mut Vec<Vec<u32>>,  // # channels * NUMBER_PAIRS_PER_CHANNEL long, basically 1 vector per 1 z rows
+                                                            write_target: &mut Vec<WrappedIOData>,
+                                                            channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
+
+    // NOTE: Expecting channel_changed to be all false. Do not reset write_target, we will write to it if we got a value for the channel!
+    const ONLY_ALLOWED_Y: u32 = 0; // This structure never has height
+
+    let neuron_array = read_target.get_neurons_of(&read_id);
+    if neuron_array.is_none() {
+        return Ok(()); // All false will be kept for channel_changed, no data modified
+    }
+
+    let mut neuron_array = neuron_array.unwrap();
+    if neuron_array.is_empty() {
+        return Ok(()); // This shouldn't happen?
+    }
+
+    for scratch_per_z_depth in scratch_space.iter_mut() { // Not worth making parallel
+        scratch_per_z_depth.clear()
+    }
+
+    let max_possible_x_index = percentage_dimension_count * *channel_count; // Something is wrong if we reach here
+
+    for neuron in neuron_array.iter() { // Due to array writing, this cannot practically be done parallel
+        // Ignoring any neuron_voxels that have no potential (if sent for some reason).
+        if neuron.cortical_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+            continue; // Something is wrong, but currently we will just skip these
+        }
+
+        if neuron.cortical_coordinate.x >= max_possible_x_index || neuron.cortical_coordinate.z >= z_depth {
+            continue; // Something is wrong, but currently we will just skip these
+        }
+
+        let z_row_vector = scratch_space.get_mut(neuron.cortical_coordinate.x as usize).unwrap();
+        z_row_vector.push(neuron.cortical_coordinate.z)
+    };
+
+    let z_depth_float = z_depth as f32;
+
+    // At this point, we have numbers in scratch space to average out
+    for channel_index in 0..*channel_count as usize { // Literally not worth making parallel... right?
+        let z_row_a_index = channel_index * percentage_dimension_count as usize;
+
+        // We need to ensure if ANY of the numbers changed (as in they added anything to the vector for that row that only originally had 0), we update it and label it as such
+        for i in 0..percentage_dimension_count {
+            
+        }
+
+    };
+}
+
 
 //region Percentage Binary Fractional
 #[inline]
