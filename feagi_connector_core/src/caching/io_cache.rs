@@ -1,5 +1,5 @@
 use std::time::Instant;
-use feagi_data_structures::{FeagiDataError, FeagiSignalIndex};
+use feagi_data_structures::{motor_definition, FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use crate::caching::io_motor_cache::IOMotorCache;
@@ -12,6 +12,33 @@ use crate::neuron_voxel_coding::xyzp::encoders::{MiscDataNeuronVoxelXYZPEncoder,
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::neuron_voxel_coding::xyzp::decoders::Percentage4DLinearNeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+
+//region macros
+
+macro_rules! motor_registrations {
+    (
+        $cortical_io_type_enum_name:ident {
+            $(
+                $(#[doc = $doc:expr])?
+                $cortical_type_key_name:ident => {
+                    friendly_name: $display_name:expr,
+                    snake_case_identifier: $snake_case_identifier:expr,
+                    base_ascii: $base_ascii:expr,
+                    channel_dimension_range: $channel_dimension_range:expr,
+                    default_coder_type: $default_coder_type:ident,
+                    wrapped_data_type: $wrapped_data_type:expr,
+                    data_type: $data_type:ident,
+                }
+            ),* $(,)?
+        }
+    ) => {};
+}
+
+
+
+//endregion
+
+
 
 
 pub struct IOCache {
@@ -111,6 +138,8 @@ impl IOCache {
 
     //region Motors
 
+    //region Cache Logic
+
     pub fn motor_send_bytes(&mut self, incoming_bytes: &[u8]) -> Result<(), FeagiDataError> {
         let mut byte_writer = |buf: &mut Vec<u8>| -> Result<(), FeagiDataError> {
             buf.clear();
@@ -121,6 +150,10 @@ impl IOCache {
         self.motors.try_decode_bytes_to_neural_data()?;
         self.motors.try_decode_neural_data_into_cache(Instant::now())
     }
+
+    //endregion
+
+    motor_definition!(motor_registrations);
 
     //region Gaze
 
