@@ -1,6 +1,6 @@
 use std::time::Instant;
 use feagi_data_structures::{motor_definition, FeagiDataError, FeagiSignalIndex};
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
+use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use paste;
 use crate::caching::io_motor_cache::IOMotorCache;
@@ -57,7 +57,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -78,7 +78,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -99,7 +99,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -120,7 +120,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -141,7 +141,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -162,7 +162,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -183,7 +183,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -204,7 +204,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -225,7 +225,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -246,7 +246,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -267,7 +267,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -288,7 +288,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -309,7 +309,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -330,7 +330,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -351,7 +351,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -372,7 +372,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -393,7 +393,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -414,7 +414,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -435,7 +435,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -456,7 +456,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -477,7 +477,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -498,7 +498,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -519,7 +519,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -540,7 +540,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -561,7 +561,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -582,7 +582,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -603,7 +603,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -624,7 +624,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -645,7 +645,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -666,7 +666,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -687,7 +687,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -708,7 +708,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -729,7 +729,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -750,7 +750,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -771,7 +771,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -792,7 +792,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -813,7 +813,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -834,7 +834,7 @@ macro_rules! motor_registrations {
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_depth: u32
+                z_neuron_resolution: NeuronDepth
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -966,16 +966,13 @@ impl IOCache {
 
     //region Gaze
 
-    pub fn _motor_register_gaze_absolute_linear(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, z_depth: u32) -> Result<(), FeagiDataError> {
-        if z_depth == 0 {
-            return Err(FeagiDataError::BadParameters("Z depth cant be zero".into()))
-        }
+    pub fn _motor_register_gaze_absolute_linear(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, z_neuron_resolution: NeuronDepth) -> Result<(), FeagiDataError> {
 
         const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
         let data_type = WrappedIOType::Percentage_4D;
 
         let cortical_id = MOTOR_TYPE.to_cortical_id(group);
-        let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_depth, number_channels)?;
+        let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, *z_neuron_resolution, number_channels)?;
 
 
         let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
