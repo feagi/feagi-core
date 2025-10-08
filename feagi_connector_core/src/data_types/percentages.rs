@@ -55,7 +55,7 @@ impl Percentage {
 
 //region Update
 
-    pub(crate) fn inplace_update(&mut self, value: f32)  {
+    pub(crate) fn inplace_update_unchecked(&mut self, value: f32)  {
         self.value = value;
     }
 
@@ -315,8 +315,8 @@ impl Percentage2D {
     }
     
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
-        self.a.inplace_update(value);
-        self.b.inplace_update(value);
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
     }
 }
 
@@ -477,9 +477,9 @@ impl Percentage3D {
     }
     
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
-        self.a.inplace_update(value);
-        self.b.inplace_update(value);
-        self.c.inplace_update(value);
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
+        self.c.inplace_update_unchecked(value);
     }
 }
 
@@ -648,10 +648,10 @@ impl Percentage4D {
     }
     
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
-        self.a.inplace_update(value);
-        self.b.inplace_update(value);
-        self.c.inplace_update(value);
-        self.d.inplace_update(value);
+        self.a.inplace_update_unchecked(value);
+        self.b.inplace_update_unchecked(value);
+        self.c.inplace_update_unchecked(value);
+        self.d.inplace_update_unchecked(value);
     }
 }
 

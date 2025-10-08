@@ -24,7 +24,7 @@ pub struct Percentage3DLinearNeuronVoxelXYZPDecoder {
 
 impl NeuronVoxelXYZPDecoder for Percentage3DLinearNeuronVoxelXYZPDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType {
-        WrappedIOType::Percentage
+        WrappedIOType::Percentage_3D
     }
 
     fn read_neuron_data_multi_channel(&mut self, read_target: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, write_target: &mut Vec<WrappedIOData>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
