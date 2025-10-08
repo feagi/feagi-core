@@ -26,7 +26,7 @@ pub(crate) fn decode_unsigned_percentage_from_fractional_exponential_neurons(neu
 }
 
 #[inline]
-pub(crate) fn decode_signed_percentage_from_fractional_exponential_neurons(neuron_indexes_along_z_positive: &Vec<u32>, neuron_indexes_along_z_negative: &Vec<u32>, replace_val: &mut Percentage) {
+pub(crate) fn decode_signed_percentage_from_fractional_exponential_neurons(neuron_indexes_along_z_positive: &Vec<u32>, neuron_indexes_along_z_negative: &Vec<u32>, replace_val: &mut SignedPercentage) {
     let mut processing: f32 = 0.0; // WARNING: If there are repeats along z, then we will have issues
     for z in neuron_indexes_along_z_positive {
         processing += 0.5f32.powi(*z as i32);
