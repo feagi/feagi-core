@@ -124,7 +124,7 @@ impl IOCache {
 
     //region Gaze
 
-    pub fn motor_register_gaze_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, z_depth: u32) -> Result<(), FeagiDataError> {
+    pub fn motor_register_gaze_absolute_linear(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, z_depth: u32) -> Result<(), FeagiDataError> {
         if z_depth == 0 {
             return Err(FeagiDataError::BadParameters("Z depth cant be zero".into()))
         }
@@ -147,7 +147,7 @@ impl IOCache {
         self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
     }
 
-    pub fn motor_read_post_processed_gaze_absolute(&self, cortical_group_index: CorticalGroupIndex, cortical_channel_index: CorticalChannelIndex) -> Result<Percentage4D, FeagiDataError> {
+    pub fn motor_read_post_processed_gaze_absolute_linear(&self, cortical_group_index: CorticalGroupIndex, cortical_channel_index: CorticalChannelIndex) -> Result<Percentage4D, FeagiDataError> {
         const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
         let data = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, cortical_group_index, cortical_channel_index)?;
         let percentage: Percentage4D = data.try_into()?;
@@ -155,7 +155,7 @@ impl IOCache {
     }
 
 
-    pub fn motor_add_callback_gaze_absolute<F>(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    pub fn motor_add_callback_gaze_absolute_linear<F>(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
     where
         F: Fn(&()) + Send + Sync + 'static,
     {

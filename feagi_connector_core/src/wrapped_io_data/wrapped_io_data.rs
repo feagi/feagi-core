@@ -1,6 +1,7 @@
 
 use feagi_data_structures::FeagiDataError;
 use crate::data_types::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
+use crate::wrapped_io_data::WrappedIOType;
 
 /// Macro to define the WrappedIOData enum
 macro_rules! define_wrapped_io_data_enum {
