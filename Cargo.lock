@@ -280,6 +280,7 @@ dependencies = [
  "feagi_data_structures",
  "image",
  "ndarray",
+ "paste",
  "rayon",
 ]
 
