@@ -6,31 +6,6 @@ use crate::{FeagiByteContainer, FeagiByteStructureType};
 /// Implementations must provide methods for determining their type, version,
 /// size requirements, and serialization/deserialization logic. The trait includes
 /// default validation methods for type and version checking.
-/// 
-/// # Example
-/// ```ignore
-/// impl FeagiSerializable for MyStruct {
-///     fn get_type(&self) -> FeagiByteStructureType {
-///         FeagiByteStructureType::MyType
-///     }
-///     
-///     fn get_version(&self) -> u8 { 1 }
-///     
-///     fn get_number_of_bytes_needed(&self) -> usize { 
-///         FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT + self.data.len()
-///     }
-///     
-///     fn try_serialize_struct_to_byte_slice(&self, byte_destination: &mut [u8]) -> Result<(), FeagiDataError> {
-///         // Serialize implementation
-///         Ok(())
-///     }
-///     
-///     fn try_deserialize_and_update_self_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError> {
-///         // Deserialize implementation
-///         Ok(())
-///     }
-/// }
-/// ```
 pub trait FeagiSerializable {
 
     /// Returns the structure type identifier.
