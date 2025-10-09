@@ -47,7 +47,7 @@ mod test_connector_cache_sensor_load_image {
         let mut connector_cache = feagi_connector_core::IOCache::new();
         connector_cache.sensor_register_segmented_vision_absolute(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
         connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &bird_image.into()).unwrap();
-        let bytes = connector_cache.sensor_get_bytes().unwrap();
+        let bytes = connector_cache.sensor_copy_feagi_byte_container();
     }
 
     #[test]
@@ -81,7 +81,7 @@ mod test_connector_cache_sensor_load_image {
 
         // TODO motor bytes sending
 
-        let sensor_bytes = connector_cache.sensor_get_bytes().unwrap();
+        let sensor_bytes = connector_cache.sensor_copy_feagi_byte_container();
         let motor_data = connector_cache.motor_try_read_postprocessed_cached_value_gaze_absolute_linear(cortical_group, channel_index).unwrap();
     }
 
