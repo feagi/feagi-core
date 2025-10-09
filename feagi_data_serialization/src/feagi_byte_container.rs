@@ -3,6 +3,8 @@ use feagi_data_structures::FeagiDataError;
 use crate::feagi_serializable::FeagiSerializable;
 use crate::FeagiByteStructureType;
 
+const MAX_NUMBER_OF_STRUCTS: usize = u8::MAX as usize;
+
 type StructureIndex = u8;
 type ByteIndexReadingStart = u32;
 type NumberBytesToRead = u32;
@@ -226,6 +228,10 @@ impl FeagiByteContainer{
         Ok(boxed_struct)
     }
 
+    /// Creates a new structure from the first instance of the given type.
+    /// 
+    /// Searches for the first structure matching the specified type and deserializes it.
+    /// Returns None if no structure of that type is found.
     pub fn try_create_struct_from_first_found_struct_of_type(&self, structure_type: FeagiByteStructureType) -> Result<Option<Box<dyn FeagiSerializable>>, FeagiDataError> {
         let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
         if getting_slice.is_none() {
@@ -236,6 +242,9 @@ impl FeagiByteContainer{
         Ok(Some(boxed_struct))
     }
 
+    /// Updates an existing structure with data from the specified index.
+    /// 
+    /// Deserializes data at the given index and updates the provided structure.
     pub fn try_update_struct_from_index(&self, index: StructureIndex, updating_boxed_struct: &mut dyn FeagiSerializable) -> Result<(), FeagiDataError> {
         self.verify_structure_index_valid(index)?;
         let relevant_slice = self.contained_struct_references[index as usize].get_as_byte_slice(&self.bytes);
@@ -244,6 +253,9 @@ impl FeagiByteContainer{
         Ok(())
     }
 
+    /// Updates a structure from the first found instance of its type.
+    /// 
+    /// Returns true if a matching structure was found and updated, false otherwise.
     pub fn try_update_struct_from_first_found_struct_of_type(&self, updating_boxed_struct: &mut dyn FeagiSerializable) -> Result<bool, FeagiDataError> {
         let structure_type: FeagiByteStructureType = updating_boxed_struct.get_type();
         let getting_slice = self.try_get_first_structure_slice_of_type(structure_type);
@@ -279,7 +291,15 @@ impl FeagiByteContainer{
 
     //region Overwriting Data
 
+    /// Overwrites the container with multiple serialized structures.
+    /// 
+    /// Clears existing data and serializes all provided structures into the container.
+    /// Updates the increment counter to the specified value.
     pub fn overwrite_byte_data_with_multiple_struct_data(&mut self, incoming_structs: Vec<&dyn FeagiSerializable>, new_increment_value: u16) -> Result<(), FeagiDataError> {
+
+        if incoming_structs.len() > MAX_NUMBER_OF_STRUCTS {
+            return Err(FeagiDataError::BadParameters(format!("FeagiByteContainers only support a max of {} contained structs, {} were given!", MAX_NUMBER_OF_STRUCTS, incoming_structs.len())))
+        }
 
         self.bytes.clear();
         self.contained_struct_references.clear();
@@ -288,8 +308,9 @@ impl FeagiByteContainer{
         let header_total_number_of_bytes: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT +
             Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE * incoming_structs.len();
 
+
         // Fill out contained_struct_references, calculate total number of bytes used for the data section
-        let data_total_number_of_bytes = {
+        let total_number_of_bytes = {
             let mut data_start_index = header_total_number_of_bytes;
             for incoming_struct in &incoming_structs {
                 let per_struct_number_bytes = incoming_struct.get_number_of_bytes_needed();
@@ -305,13 +326,8 @@ impl FeagiByteContainer{
             data_start_index
         };
 
-        if data_total_number_of_bytes > self.bytes.capacity() {
-            self.bytes.reserve(data_total_number_of_bytes - self.bytes.capacity());
-        }
-
-        // Every single byte will be overridden, don't worry
-        unsafe {
-            self.bytes.set_len(data_total_number_of_bytes); // Fun!
+        if total_number_of_bytes > self.bytes.capacity() {
+            self.bytes.resize(total_number_of_bytes, 0);
         }
 
         // Setup global header
@@ -319,16 +335,16 @@ impl FeagiByteContainer{
         LittleEndian::write_u16(&mut self.bytes[1..3], new_increment_value); // Next 2 bytes is increment counter
         self.bytes[3] = incoming_structs.len() as u8; // Struct count
 
-        // Write Header and Data bytes at the same time
-        let mut header_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
+        // Write Structure lookup header and Data bytes at the same time
+        let mut structure_lookup_header_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
         for struct_index in 0..incoming_structs.len() {
             let incoming_struct = &incoming_structs[struct_index];
             let contained_struct_reference = &self.contained_struct_references[struct_index];
 
-            LittleEndian::write_u32(&mut self.bytes[header_byte_index..header_byte_index + 4], contained_struct_reference.number_bytes_to_read as u32);
+            LittleEndian::write_u32(&mut self.bytes[structure_lookup_header_byte_index..structure_lookup_header_byte_index + 4], contained_struct_reference.number_bytes_to_read as u32);
             incoming_struct.try_serialize_struct_to_byte_slice(contained_struct_reference.get_as_byte_slice_mut(&mut self.bytes))?;
 
-            header_byte_index += Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE;
+            structure_lookup_header_byte_index += Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE;
         };
 
         self.is_data_valid = true;
@@ -336,6 +352,10 @@ impl FeagiByteContainer{
 
     }
 
+    /// Overwrites the container with a single serialized structure.
+    /// 
+    /// Optimized version for when only one structure needs to be stored.
+    /// Clears existing data and serializes the structure with the given increment value.
     pub fn overwrite_byte_data_with_single_struct_data(&mut self, incoming_struct: &dyn FeagiSerializable, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
         self.bytes.clear();
@@ -357,13 +377,6 @@ impl FeagiByteContainer{
         if total_number_of_bytes > self.bytes.capacity() {
             self.bytes.resize(total_number_of_bytes, 0);
         }
-
-        // Every single byte will be overridden, don't worry
-        /*
-        unsafe {
-            self.bytes.set_len(total_number_of_bytes); // Fun!
-        }
-         */
 
         // Setup global header
         self.bytes[0] = Self::CURRENT_FBS_VERSION;
@@ -393,7 +406,7 @@ impl FeagiByteContainer{
     /// use feagi_data_serialization::FeagiByteContainer;
     /// 
     /// let mut container = FeagiByteContainer::new_empty();
-    /// container.set_increment_counter_state(42);
+    /// _ = container.set_increment_counter_state(42);
     /// ```
     pub fn set_increment_counter_state(&mut self, new_increment_value: u16) -> Result<(), FeagiDataError> {
         if !self.is_data_valid {
@@ -500,18 +513,25 @@ impl FeagiByteContainer{
 //endregion
 
 //region Contained Struct Reference
+
+/// Internal metadata for locating serialized structures within the byte array.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct ContainedStructReference {
+    /// Type of the contained structure
     structure_type: FeagiByteStructureType,
+    /// Starting byte index of the structure data
     byte_start_index: ByteIndexReadingStart,
+    /// Number of bytes occupied by the structure
     number_bytes_to_read: NumberBytesToRead
 }
 
 impl ContainedStructReference {
+    /// Returns an immutable slice of the structure's bytes.
     pub fn get_as_byte_slice<'a>(&self, byte_source: &'a Vec<u8>) -> &'a [u8] {
         &byte_source[self.byte_start_index as usize ..self.byte_start_index as usize + self.number_bytes_to_read as usize]
     }
 
+    /// Returns a mutable slice of the structure's bytes.
     pub fn get_as_byte_slice_mut<'a>(&self, byte_source: &'a mut Vec<u8>) -> &'a mut [u8] {
         &mut byte_source[self.byte_start_index as usize ..self.byte_start_index as usize + self.number_bytes_to_read as usize]
     }

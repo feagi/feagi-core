@@ -14,7 +14,8 @@ macro_rules! sensor_definition {
                     base_ascii: b"iinf00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Absolute_Linear,
-                    wrapped_data_type:WrappedIOType:: Percentage,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Infrared distance sensor for object detection. Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -24,7 +25,8 @@ macro_rules! sensor_definition {
                     base_ascii: b"iINF00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Absolute_Fractional,
-                    wrapped_data_type:WrappedIOType:: Percentage,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Infrared distance sensor for object detection. Incremental change. Neurons encoded linearly"]
@@ -34,7 +36,8 @@ macro_rules! sensor_definition {
                     base_ascii: b"Iinf00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Incremental_Linear,
-                    wrapped_data_type:WrappedIOType:: Percentage,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Infrared distance sensor for object detection. Incremental change. Neurons encoded fractionally exponentially"]
@@ -44,7 +47,8 @@ macro_rules! sensor_definition {
                     base_ascii: b"IINF00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Incremental_Fractional,
-                    wrapped_data_type:WrappedIOType:: Percentage,
+                    wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
 
@@ -57,6 +61,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Inverted infrared sensor that provides reverse object detection readings. Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -67,6 +72,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Inverted infrared sensor that provides reverse object detection readings. Incremental change. Neurons encoded linearly"]
@@ -77,6 +83,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Inverted infrared sensor that provides reverse object detection readings. Incremental change. Neurons encoded fractionally exponentially"]
@@ -87,6 +94,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
 
@@ -99,6 +107,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -109,6 +118,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Incremental change. Neurons encoded linearly"]
@@ -119,6 +129,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Digital GPIO input pin for reading binary signals (high/low states). Incremental change. Neurons encoded fractionally exponentially"]
@@ -129,6 +140,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
 
@@ -141,6 +153,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -151,6 +164,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Incremental change. Neurons encoded linearly"]
@@ -161,6 +175,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Proximity sensor for detecting nearby objects and measuring distances. Incremental change. Neurons encoded fractionally exponentially"]
@@ -171,6 +186,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
 
@@ -183,6 +199,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Shock sensor for sensing 'pain'. Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -193,6 +210,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Shock sensor for sensing 'pain'. Incremental change. Neurons encoded linearly"]
@@ -203,6 +221,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Shock sensor for sensing 'pain'. Incremental change. Neurons encoded fractionally exponentially"]
@@ -213,6 +232,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..2),
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
 
@@ -225,6 +245,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Battery level sensor for monitoring power remaining. Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -235,6 +256,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Battery level sensor for monitoring power remaining. Incremental change. Neurons encoded linearly"]
@@ -245,6 +267,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Battery level sensor for monitoring power remaining. Incremental change. Neurons encoded fractionally exponentially"]
@@ -255,6 +278,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
 
@@ -267,6 +291,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -277,6 +302,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: Percentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Incremental change. Neurons encoded linearly"]
@@ -287,6 +313,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 #[doc = "Analog GPIO input pin for reading binary signals (high/low states). Incremental change. Neurons encoded fractionally exponentially"]
@@ -297,6 +324,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: Percentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::Percentage,
+                    data_type: Percentage,
                 },
 
                 //endregion
@@ -311,6 +339,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: SignedPercentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo position feedback sensor for monitoring actuator positions. Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -321,6 +350,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: SignedPercentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo position feedback sensor for monitoring actuator positions. Incremental change. Neurons encoded linearly"]
@@ -331,6 +361,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: SignedPercentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo position feedback sensor for monitoring actuator positions. Incremental change. Neurons encoded fractionally exponentially"]
@@ -341,6 +372,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: SignedPercentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
 
@@ -354,6 +386,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: SignedPercentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo motion feedback sensor for monitoring actuator positions. Absolute (instant) change. Neurons encoded fractionally exponentially"]
@@ -364,6 +397,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: SignedPercentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo motion feedback sensor for monitoring actuator positions. Incremental change. Neurons encoded linearly"]
@@ -374,6 +408,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: SignedPercentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo motion feedback sensor for monitoring actuator positions. Incremental change. Neurons encoded fractionally exponentially"]
@@ -384,6 +419,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: SignedPercentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 //endregion
@@ -398,6 +434,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
                     default_coder_type: MiscData_Absolute,
                     wrapped_data_type: WrappedIOType::MiscData(None),
+                    data_type: MiscData,
                 },
 
                 #[doc = "Miscellaneous area for all types of data FEAGI has no specific implementation for. Incremental change."]
@@ -408,6 +445,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
                     default_coder_type: MiscData_Incremental,
                     wrapped_data_type: WrappedIOType::MiscData(None),
+                    data_type: MiscData,
                 },
 
                 //endregion
@@ -422,6 +460,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Image camera input. Either alone or in the center of segmented/peripheral image camera setups. Incremental change."]
@@ -432,6 +471,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
                 #[doc = "Top Left peripheral image camera input. Absolute (instant) change."]
                 ImageCameraTopLeftAbsolute => {
@@ -441,6 +481,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Top Left peripheral image camera input. Incremental change."]
@@ -451,6 +492,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Top Middle peripheral image camera input. Absolute (instant) change."]
@@ -461,6 +503,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Top Middle peripheral image camera input. Incremental change."]
@@ -471,6 +514,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
                 #[doc = "Top Right peripheral image camera input. Absolute (instant) change."]
                 ImageCameraTopRightAbsolute => {
@@ -480,6 +524,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Top Right peripheral image camera input. Incremental change."]
@@ -490,6 +535,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Middle Left peripheral image camera input. Absolute (instant) change."]
@@ -500,6 +546,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Middle Left peripheral image camera input. Incremental change."]
@@ -510,6 +557,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Middle Right peripheral image camera input. Absolute (instant) change."]
@@ -520,6 +568,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Middle Right peripheral image camera input. Incremental change."]
@@ -530,6 +579,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Bottom Left peripheral image camera input. Absolute (instant) change."]
@@ -540,6 +590,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Bottom Left peripheral image camera input. Incremental change."]
@@ -550,6 +601,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Bottom Middle peripheral image camera input. Absolute (instant) change."]
@@ -560,6 +612,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Bottom Middle peripheral image camera input. Incremental change."]
@@ -570,6 +623,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Bottom Right peripheral image camera input. Absolute (instant) change."]
@@ -580,6 +634,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Absolute,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 },
 
                 #[doc = "Bottom Right peripheral image camera input. Incremental change."]
@@ -590,6 +645,7 @@ macro_rules! sensor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..5),
                     default_coder_type: ImageFrame_Incremental,
                     wrapped_data_type: WrappedIOType::ImageFrame(None),
+                    data_type: ImageFrame,
                 }
                 //endregion
             }

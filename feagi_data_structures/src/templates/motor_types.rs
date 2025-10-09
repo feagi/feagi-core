@@ -1,6 +1,6 @@
 
 
-/// Definition File for Motoers (Input Processing Units)
+/// Definition File for Motors (Input Processing Units)
 #[macro_export]
 macro_rules! motor_definition {
     ($callback:ident) => {
@@ -23,6 +23,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: SignedPercentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Free spinning motor. Absolute (instant) change. Neurons encoded fractionally"]
@@ -33,6 +34,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: SignedPercentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Free spinning motor. Incremental change. Neurons encoded linearly"]
@@ -43,6 +45,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: SignedPercentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Free spinning motor. Incremental change. Neurons encoded fractionally"]
@@ -53,6 +56,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: SignedPercentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
 
@@ -68,6 +72,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: SignedPercentage_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo with max / min rotation distances. Absolute (instant) change. Neurons encoded fractionally"]
@@ -78,6 +83,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: SignedPercentage_Absolute_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo with max / min rotation distances. Incremental change. Neurons encoded linearly"]
@@ -88,6 +94,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..u32::MAX),
                     default_coder_type: SignedPercentage_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 #[doc = "Servo with max / min rotation distances. Incremental change. Neurons encoded fractionally"]
@@ -98,6 +105,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..2, 1..2, 1..33),
                     default_coder_type: SignedPercentage_Incremental_Fractional,
                     wrapped_data_type: WrappedIOType::SignedPercentage,
+                    data_type: SignedPercentage,
                 },
 
                 //endregion
@@ -112,6 +120,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage4D_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage_4D,
+                    data_type: SignedPercentage4D,
                 },
 
                 #[doc = "Controls size and positioning of the central vision in a segmented frame. Incremental change. Neurons encoded linearly"]
@@ -122,21 +131,37 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage4D_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::Percentage_4D,
+                    data_type: SignedPercentage4D,
                 },
 
                 //endregion
 
                 //region MiscData
 
-                #[doc = "Used for other stuff"]
-                Miscellaneous => {
-                    friendly_name: "Miscellaneous",
-                    snake_case_identifier: "miscellaneous",
+                /*
+                #[doc = "Used for other stuff. Absolute (instant) change,"]
+                MiscellaneousAbsolute => {
+                    friendly_name: "Miscellaneous (Absolute)",
+                    snake_case_identifier: "miscellaneous_absolute",
                     base_ascii: b"omis00",
                     channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
-                    default_coder_type: TODO,
+                    default_coder_type: MiscData_Absolute,
                     wrapped_data_type: WrappedIOType::MiscData(None),
+                    data_type: MiscData,
                 },
+
+                #[doc = "Used for other stuff. Incremental change,"]
+                MiscellaneousIncremental => {
+                    friendly_name: "Miscellaneous (Incremental Change)",
+                    snake_case_identifier: "miscellaneous_incremental",
+                    base_ascii: b"Omis00",
+                    channel_dimension_range: CorticalChannelDimensionRange::new(1..u32::MAX, 1..u32::MAX, 1..u32::MAX),
+                    default_coder_type: MiscData_Incremental,
+                    wrapped_data_type: WrappedIOType::MiscData(None),
+                    data_type: MiscData,
+                },
+
+                 */
 
                 //endregion
 

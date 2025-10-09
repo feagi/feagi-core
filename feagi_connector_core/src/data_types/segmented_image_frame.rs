@@ -11,7 +11,7 @@ use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::{CorticalID, CorticalType, SensorCorticalType};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPArrays};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use super::ImageFrame;
 use super::descriptors::{ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
 
@@ -305,7 +305,7 @@ impl SegmentedImageFrame {
 
     //region neuron export
 
-    pub(crate) fn overwrite_neuron_data(&self, write_targets: &mut[NeuronXYZPArrays; 9], channel_index: CorticalChannelIndex ) -> Result<(), FeagiDataError> {
+    pub(crate) fn overwrite_neuron_data(&self, write_targets: &mut[NeuronVoxelXYZPArrays; 9], channel_index: CorticalChannelIndex ) -> Result<(), FeagiDataError> {
         // NOTE: write_targets should be in the same order as Cortical ID for segmented is!
 
         let ordered_images = self.get_ordered_image_frame_references();

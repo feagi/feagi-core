@@ -4,15 +4,15 @@ use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::{FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::MotorCorticalType;
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData};
+use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::caching::per_channel_stream_caches::MotorChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
-use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOMotorCache {
     stream_caches: HashMap<(MotorCorticalType, CorticalGroupIndex), MotorChannelStreamCaches>,
-    neuron_data: CorticalMappedXYZPNeuronData,
+    neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
 }
 
@@ -21,14 +21,14 @@ impl IOMotorCache {
     pub fn new() -> Self {
         IOMotorCache {
             stream_caches: HashMap::new(),
-            neuron_data: CorticalMappedXYZPNeuronData::new(),
+            neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty()
         }
     }
 
     //region Interactions
     pub fn register(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
-                    neuron_decoder: Box<dyn NeuronXYZPDecoder>,
+                    neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
                     pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>)
                     -> Result<(), FeagiDataError> {
 
@@ -46,14 +46,14 @@ impl IOMotorCache {
     }
 
 
-    pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
-    }
-
     pub fn try_read_preprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
+    }
+
+    pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+        Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
     }
 
     pub fn try_updating_pipeline_stage(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
@@ -92,6 +92,14 @@ impl IOMotorCache {
     //endregion
 
     //region Decoding
+
+    pub fn get_feagi_byte_container(&self) -> &FeagiByteContainer {
+        &self.byte_data
+    }
+
+    pub fn replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
+        self.byte_data = feagi_byte_container
+    }
 
     pub fn try_import_bytes<F>(&mut self, byte_writing_function: &mut F) -> Result<(), FeagiDataError>
     where F: FnMut(&mut Vec<u8>) -> Result<(), FeagiDataError> {

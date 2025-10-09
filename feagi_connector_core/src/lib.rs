@@ -1,5 +1,5 @@
 mod caching;
-mod neuron_coding;
+mod neuron_voxel_coding;
 
 pub mod data_pipeline;
 pub mod wrapped_io_data;

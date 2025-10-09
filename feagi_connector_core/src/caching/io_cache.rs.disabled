@@ -7,9 +7,9 @@ use feagi_data_structures::data::{ImageFrame, MiscData, Percentage, Percentage4D
 use feagi_data_structures::{FeagiDataError, FeagiSignal};
 use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
-use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronXYZPDecoder, NeuronXYZPEncoder};
-use feagi_data_structures::neurons::xyzp::decoders::{Percentage4DFractionalExponentialNeuronXYZPDecoder};
-use feagi_data_structures::neurons::xyzp::encoders::{F32LinearNeuronXYZPEncoder, F32SplitSignDividedNeuronXYZPEncoder, ImageFrameNeuronXYZPEncoder, MiscDataNeuronXYZPEncoder, SegmentedImageFrameNeuronXYZPEncoder};
+use feagi_data_structures::neurons::xyzp::{CorticalMappedXYZPNeuronData, NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
+use feagi_data_structures::neurons::xyzp::decoders::{Percentage4DFractionalExponentialNeuronVoxelXYZPDecoder};
+use feagi_data_structures::neurons::xyzp::encoders::{F32LinearNeuronVoxelXYZPEncoder, F32SplitSignDividedNeuronVoxelXYZPEncoder, ImageFrameNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
 use feagi_data_structures::processing::{ImageFrameProcessor, ImageFrameSegmentator};
 use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::caching::hashmap_helpers::{AccessAgentLookupKey, CorticalAreaMetadataKey, FullChannelCacheKey};
@@ -107,7 +107,7 @@ impl IOCache {
 
         sensor_cortical_type.verify_is_data_type(WrappedIOType::Percentage)?;
         let cortical_id = sensor_cortical_type.to_cortical_id(group);
-        let encoder =  Box::new(F32LinearNeuronXYZPEncoder::new(cortical_id, neuron_depth)?);
+        let encoder =  Box::new(F32LinearNeuronVoxelXYZPEncoder::new(cortical_id, neuron_depth)?);
         let mut processors: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
         for _i in 0..*number_channels {
             processors.push(vec![Box::new(LinearScaleToPercentageStage::new(bounds.start, bounds.end, Percentage::new_from_0_1_unchecked(0.0))?)]);
@@ -189,7 +189,7 @@ impl IOCache {
 
         sensor_cortical_type.verify_is_data_type(WrappedIOType::SignedPercentage)?;
         let cortical_id = sensor_cortical_type.to_cortical_id(group);
-        let encoder =  Box::new(F32SplitSignDividedNeuronXYZPEncoder::new(cortical_id, neuron_depth)?); // TODO this shouldnt be hard coded, there are different versions
+        let encoder =  Box::new(F32SplitSignDividedNeuronVoxelXYZPEncoder::new(cortical_id, neuron_depth)?); // TODO this shouldnt be hard coded, there are different versions
         let mut processors: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
         for _i in 0..*number_channels {
             processors.push(vec![Box::new(LinearScaleToSignedPercentageStage::new(bounds.start, bounds.end, SignedPercentage::new_from_m1_1_unchecked(0.0))?)]);
@@ -285,7 +285,7 @@ impl IOCache {
 
         sensor_cortical_type.verify_is_data_type(WrappedIOType::ImageFrame(None))?;
         let cortical_id = sensor_cortical_type.to_cortical_id(group);
-        let encoder =  Box::new(ImageFrameNeuronXYZPEncoder::new(cortical_id, &output_image_properties)?);
+        let encoder =  Box::new(ImageFrameNeuronVoxelXYZPEncoder::new(cortical_id, &output_image_properties)?);
         let mut stages: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
         if input_image_properties == output_image_properties {
             // No changes to image, just cache it to avoid processing penalty
@@ -375,7 +375,7 @@ impl IOCache {
         // Type will always be Misc
         let sensor_cortical_type = SensorCorticalType::Miscellaneous;
         let cortical_id = sensor_cortical_type.to_cortical_id(group);
-        let encoder =  Box::new(MiscDataNeuronXYZPEncoder::new(cortical_id, dimensions)?);
+        let encoder =  Box::new(MiscDataNeuronVoxelXYZPEncoder::new(cortical_id, dimensions)?);
         let mut stages: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
         // TODO add stage
         self.sensor_register_cortical_area_and_channels(sensor_cortical_type, group, encoder, stages)?;
@@ -468,7 +468,7 @@ impl IOCache {
         }; // ensure no cortical ID is used already
 
         let segmentator = ImageFrameSegmentator::new(input_image_properties, output_image_properties, segmentation_center_properties)?;
-        let neuron_encoder = Box::new(SegmentedImageFrameNeuronXYZPEncoder::new(cortical_ids, output_image_properties)?);
+        let neuron_encoder = Box::new(SegmentedImageFrameNeuronVoxelXYZPEncoder::new(cortical_ids, output_image_properties)?);
         let mut processors: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_of_channels as usize);
         for _i in 0..*number_of_channels {
             processors.push(vec![Box::new(ImageFrameSegmentatorStage::new(input_image_properties, output_image_properties, segmentator.clone()))]);
@@ -577,7 +577,7 @@ impl IOCache {
     pub fn register_percentage_4d_data_motor(&mut self, motor_cortical_type: MotorCorticalType, group: CorticalGroupIndex, number_channels: CorticalChannelCount, neuron_depth: u32) -> Result<(), FeagiDataError> {
 
         let cortical_id = motor_cortical_type.to_cortical_id(group);
-        let decoder =  Box::new(Percentage4DFractionalExponentialNeuronXYZPDecoder::new(cortical_id, neuron_depth)?);
+        let decoder =  Box::new(Percentage4DFractionalExponentialNeuronVoxelXYZPDecoder::new(cortical_id, neuron_depth)?);
         let mut stages: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
         let per4d = Percentage4D::new(Percentage::new_from_0_1_unchecked(0.0), Percentage::new_from_0_1_unchecked(0.0), Percentage::new_from_0_1_unchecked(0.0), Percentage::new_from_0_1_unchecked(0.0));
         for _i in 0..*number_channels {
@@ -638,7 +638,7 @@ impl IOCache {
         // Type will always be Misc
         let motor_cortical_type = MotorCorticalType::Miscellaneous;
         let cortical_id = motor_cortical_type.to_cortical_id(group);
-        let decoder =  Box::new(MiscDataNeuronXYZPDecoder::new(cortical_id, dimensions)?);
+        let decoder =  Box::new(MiscDataNeuronVoxelXYZPDecoder::new(cortical_id, dimensions)?);
         let mut stages: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>> = Vec::with_capacity(*number_channels as usize);
         // TODO add stage
         self.motor_register_cortical_area_and_channels(motor_cortical_type, group, decoder, stages)?;
@@ -754,7 +754,7 @@ impl IOCache {
     //endregion
 
     fn sensor_register_cortical_area_and_channels(&mut self, sensor_cortical_type: SensorCorticalType, cortical_group: CorticalGroupIndex,
-                                           neuron_encoder: Box<dyn NeuronXYZPEncoder + Sync + Send>,
+                                           neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>,
                                            mut initial_processor_chains: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>>) -> Result<(), FeagiDataError> {
         // NOTE: initial_processor_chains is a vector of vectors, meaning each channel gets a vector of processing
 
@@ -908,7 +908,7 @@ impl IOCache {
     //endregion
 
     fn motor_register_cortical_area_and_channels(&mut self, motor_cortical_type: MotorCorticalType, cortical_group: CorticalGroupIndex,
-                                                  neuron_decoder: Box<dyn NeuronXYZPDecoder + Sync + Send>,
+                                                  neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>,
                                                   mut initial_processor_chains: Vec<Vec<Box<dyn PipelineStage + Sync + Send>>>) -> Result<(), FeagiDataError> {
         // NOTE: initial_processor_chains is a vector of vectors, meaning each channel gets a vector of processing
 
@@ -1015,11 +1015,11 @@ impl IOCache {
 struct SensoryCorticalAreaCacheDetails {
     relevant_channel_lookups: Vec<FullChannelCacheKey>,
     number_channels: u32,
-    neuron_encoder: Box<dyn NeuronXYZPEncoder + Sync + Send>
+    neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>
 }
 
 impl SensoryCorticalAreaCacheDetails {
-    pub fn new(relevant_channel_lookups: Vec<FullChannelCacheKey>, number_channels: u32, neuron_encoder: Box<dyn NeuronXYZPEncoder + Sync + Send>) -> Self {
+    pub fn new(relevant_channel_lookups: Vec<FullChannelCacheKey>, number_channels: u32, neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>) -> Self {
         SensoryCorticalAreaCacheDetails {
             relevant_channel_lookups,
             number_channels,
@@ -1032,11 +1032,11 @@ impl SensoryCorticalAreaCacheDetails {
 struct MotorCorticalAreaCacheDetails {
     relevant_channel_lookups: Vec<FullChannelCacheKey>,
     number_channels: u32,
-    neuron_decoder: Box<dyn NeuronXYZPDecoder + Sync + Send>
+    neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>
 }
 
 impl MotorCorticalAreaCacheDetails {
-    pub fn new(relevant_channel_lookups: Vec<FullChannelCacheKey>, number_channels: u32, neuron_decoder: Box<dyn NeuronXYZPDecoder + Sync + Send>) -> Self {
+    pub fn new(relevant_channel_lookups: Vec<FullChannelCacheKey>, number_channels: u32, neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>) -> Self {
         MotorCorticalAreaCacheDetails {
             relevant_channel_lookups,
             number_channels,

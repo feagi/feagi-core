@@ -2,14 +2,14 @@ use std::time::Instant;
 use ndarray::ErrorKind::IncompatibleShape;
 use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
-use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
-use crate::neuron_coding::xyzp::NeuronXYZPDecoder;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]
 pub(crate) struct MotorChannelStreamCaches {
-    neuron_decoder: Box<dyn NeuronXYZPDecoder>,
+    neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
     pipeline_runners: Vec<PipelineStageRunner>,
     most_recent_directly_decoded_outputs: Vec<WrappedIOData>,
     has_channel_been_updated: Vec<bool>,
@@ -17,7 +17,7 @@ pub(crate) struct MotorChannelStreamCaches {
 }
 
 impl MotorChannelStreamCaches {
-    pub fn new(neuron_decoder: Box<dyn NeuronXYZPDecoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
+    pub fn new(neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
         if stage_properties_per_channels.is_empty() {
             return Err(FeagiDataError::InternalError("MotorChannelStreamCaches Cannot be initialized with 0 channels!".into()))
         }
@@ -124,7 +124,7 @@ impl MotorChannelStreamCaches {
             if !self.has_channel_been_updated[channel_index] {
                 continue;
             }
-            self.value_updated_callbacks[channel_index].emit(()); // no value
+            self.value_updated_callbacks[channel_index].emit(&()); // no value
         }
         self.has_channel_been_updated.fill(false);
         Ok(())
@@ -132,7 +132,7 @@ impl MotorChannelStreamCaches {
 
     //endregion
 
-    pub(crate) fn try_read_neuron_data_to_wrapped_io_data(&mut self, neuron_data: &CorticalMappedXYZPNeuronData, time_of_decode: Instant) -> Result<(), FeagiDataError> {
+    pub(crate) fn try_read_neuron_data_to_wrapped_io_data(&mut self, neuron_data: &CorticalMappedXYZPNeuronVoxels, time_of_decode: Instant) -> Result<(), FeagiDataError> {
         self.neuron_decoder.read_neuron_data_multi_channel(neuron_data, time_of_decode, &mut self.most_recent_directly_decoded_outputs, &mut self.has_channel_been_updated)?;
         Ok(())
     }

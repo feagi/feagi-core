@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use feagi_data_structures::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::neurons::xyzp::CorticalMappedXYZPNeuronData;
+use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::FeagiSerializable;
 
 /// Represents different types of serializable data structures in the FEAGI system.
@@ -69,7 +69,7 @@ impl FeagiByteStructureType {
     /// ```
     pub fn create_new_struct_of_type(&self) -> Box<dyn FeagiSerializable> {
         match self {
-            FeagiByteStructureType::NeuronCategoricalXYZP => Box::new(CorticalMappedXYZPNeuronData::new()),
+            FeagiByteStructureType::NeuronCategoricalXYZP => Box::new(CorticalMappedXYZPNeuronVoxels::new()),
             FeagiByteStructureType::JSON => Box::new(FeagiJSON::new_empty())
         }
     }

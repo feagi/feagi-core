@@ -4,11 +4,11 @@ use crate::FeagiDataError;
 use crate::genomic::{CorticalType, CoreCorticalType, SensorCorticalType, MotorCorticalType};
 use crate::genomic::descriptors::CorticalGroupIndex;
 
-/// A 6-byte identifier for cortical areas in FEAGI.
+/// A 6-byte ASCII identifier for cortical areas in FEAGI.
 /// 
 /// Represents unique identifiers for different types of cortical areas including
 /// custom, memory, core, sensor, and motor cortical areas. Uses ASCII-only alphanumeric
-/// characters and underscores.
+/// characters and underscores. Not random, follows some pattern depending on types and context.
 /// 
 /// # Example
 /// ```
@@ -86,9 +86,9 @@ impl CorticalID {
     /// # Example
     /// ```
     /// use feagi_data_structures::genomic::{CorticalID, CoreCorticalType};
-    /// 
+    ///
     /// let id = CorticalID::new_core_cortical_area_id(CoreCorticalType::Power).unwrap();
-    /// assert!(id.as_ascii_string().len() == 6);
+    /// assert_eq!(id.as_ascii_string().len(), 6);
     /// ```
     pub fn new_core_cortical_area_id(core_type: CoreCorticalType) -> Result<Self, FeagiDataError> {
         Ok(core_type.to_cortical_id())
@@ -100,10 +100,10 @@ impl CorticalID {
     /// ```
     /// use feagi_data_structures::genomic::{CorticalID, SensorCorticalType};
     /// use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
-    /// 
+    ///
     /// let index: CorticalGroupIndex = 0.into();
     /// let id = CorticalID::new_sensor_cortical_area_id(SensorCorticalType::ImageCameraCenterAbsolute, index).unwrap();
-    /// assert!(id.as_ascii_string().len() == 6);
+    /// assert_eq!(id.as_ascii_string().len(), 6);
     /// ```
     pub fn new_sensor_cortical_area_id(input_type: SensorCorticalType, input_index: CorticalGroupIndex) -> Result<Self, FeagiDataError> {
         Ok(input_type.to_cortical_id(input_index))
@@ -115,10 +115,10 @@ impl CorticalID {
     /// ```
     /// use feagi_data_structures::genomic::{CorticalID, MotorCorticalType};
     /// use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
-    /// 
+    ///
     /// let index: CorticalGroupIndex = 0.into();
     /// let id = CorticalID::new_motor_cortical_area_id(MotorCorticalType::PositionalServoIncrementalFractional, index).unwrap();
-    /// assert!(id.as_ascii_string().len() == 6);
+    /// assert_eq!(id.as_ascii_string().len(), 6);
     /// ```
     pub fn new_motor_cortical_area_id(output_type: MotorCorticalType, output_index: CorticalGroupIndex) -> Result<Self, FeagiDataError> {
         Ok(output_type.to_cortical_id(output_index))
@@ -176,11 +176,11 @@ impl CorticalID {
     /// ```
     /// use feagi_data_structures::genomic::{CorticalID, CorticalType, CoreCorticalType};
     /// use feagi_data_structures::genomic::descriptors::CorticalGroupIndex;
-    /// 
+    ///
     /// let cortical_type = CorticalType::Core(CoreCorticalType::Power);
     /// let index: CorticalGroupIndex = 0.into();
     /// let id = CorticalID::try_from_cortical_type(&cortical_type, index).unwrap();
-    /// assert!(id.as_ascii_string().len() == 6);
+    /// assert_eq!(id.as_ascii_string().len(), 6);
     /// ```
     pub fn try_from_cortical_type(cortical_type: &CorticalType, io_cortical_index: CorticalGroupIndex) -> Result<Self, FeagiDataError> {
         CorticalType::to_cortical_id(cortical_type, io_cortical_index)
