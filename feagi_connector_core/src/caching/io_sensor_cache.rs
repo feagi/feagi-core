@@ -118,9 +118,6 @@ impl IOSensorCache {
         self.byte_data.overwrite_byte_data_with_single_struct_data(&self.neuron_data, data_increment_value)
     }
 
-    pub fn export_encoded_bytes(&self) -> &[u8] {
-        self.byte_data.get_byte_ref()
-    }
 
     //endregion
     

@@ -1,8 +1,9 @@
 use std::time::Instant;
+use std::sync::{Arc, Mutex};
+use paste;
 use feagi_data_structures::{motor_definition, FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
-use paste;
 use feagi_data_serialization::FeagiByteContainer;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
@@ -73,8 +74,8 @@ macro_rules! motor_registrations {
                     };
                     output
                 };
-
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -107,8 +108,8 @@ macro_rules! motor_registrations {
                     };
                     output
                 };
-
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -142,7 +143,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -176,7 +178,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -210,7 +213,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -244,7 +248,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -278,7 +283,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -312,7 +318,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -346,7 +353,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -380,7 +388,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -414,7 +423,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -448,7 +458,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -482,7 +493,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -516,7 +528,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -550,7 +563,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -584,7 +598,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -618,7 +633,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -652,7 +668,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -686,7 +703,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -720,7 +738,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -754,7 +773,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -788,7 +808,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -822,7 +843,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -856,7 +878,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -890,7 +913,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -924,7 +948,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -958,7 +983,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -992,7 +1018,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -1026,7 +1053,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -1060,7 +1088,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -1094,7 +1123,8 @@ macro_rules! motor_registrations {
                     output
                 };
 
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -1127,8 +1157,9 @@ macro_rules! motor_registrations {
                     };
                     output
                 };
-
-                self.motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -1259,22 +1290,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage, FeagiDataError>
+            ) -> Result<Percentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage, FeagiDataError>
+            ) -> Result<Percentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1292,22 +1327,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage, FeagiDataError>
+            ) -> Result<Percentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage, FeagiDataError>
+            ) -> Result<Percentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1325,22 +1364,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage, FeagiDataError>
+            ) -> Result<Percentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage, FeagiDataError>
+            ) -> Result<Percentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1358,22 +1401,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage, FeagiDataError>
+            ) -> Result<Percentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage, FeagiDataError>
+            ) -> Result<Percentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1391,22 +1438,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage2D, FeagiDataError>
+            ) -> Result<Percentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage2D, FeagiDataError>
+            ) -> Result<Percentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1424,22 +1475,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage2D, FeagiDataError>
+            ) -> Result<Percentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage2D, FeagiDataError>
+            ) -> Result<Percentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1457,22 +1512,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage2D, FeagiDataError>
+            ) -> Result<Percentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage2D, FeagiDataError>
+            ) -> Result<Percentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1490,22 +1549,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage2D, FeagiDataError>
+            ) -> Result<Percentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage2D, FeagiDataError>
+            ) -> Result<Percentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1523,22 +1586,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage3D, FeagiDataError>
+            ) -> Result<Percentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage3D, FeagiDataError>
+            ) -> Result<Percentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1556,22 +1623,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage3D, FeagiDataError>
+            ) -> Result<Percentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage3D, FeagiDataError>
+            ) -> Result<Percentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1589,22 +1660,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage3D, FeagiDataError>
+            ) -> Result<Percentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage3D, FeagiDataError>
+            ) -> Result<Percentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1622,22 +1697,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage3D, FeagiDataError>
+            ) -> Result<Percentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage3D, FeagiDataError>
+            ) -> Result<Percentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1655,22 +1734,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage4D, FeagiDataError>
+            ) -> Result<Percentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage4D, FeagiDataError>
+            ) -> Result<Percentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1688,22 +1771,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage4D, FeagiDataError>
+            ) -> Result<Percentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage4D, FeagiDataError>
+            ) -> Result<Percentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1721,22 +1808,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage4D, FeagiDataError>
+            ) -> Result<Percentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage4D, FeagiDataError>
+            ) -> Result<Percentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1754,22 +1845,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage4D, FeagiDataError>
+            ) -> Result<Percentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&Percentage4D, FeagiDataError>
+            ) -> Result<Percentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1787,22 +1882,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1820,22 +1919,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1853,22 +1956,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1886,22 +1993,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1919,22 +2030,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage, FeagiDataError>
+            ) -> Result<SignedPercentage, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1952,22 +2067,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage2D, FeagiDataError>
+            ) -> Result<SignedPercentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage2D, FeagiDataError>
+            ) -> Result<SignedPercentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1985,22 +2104,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage2D, FeagiDataError>
+            ) -> Result<SignedPercentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage2D, FeagiDataError>
+            ) -> Result<SignedPercentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2018,22 +2141,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage2D, FeagiDataError>
+            ) -> Result<SignedPercentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage2D, FeagiDataError>
+            ) -> Result<SignedPercentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2051,22 +2178,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage2D, FeagiDataError>
+            ) -> Result<SignedPercentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage2D, FeagiDataError>
+            ) -> Result<SignedPercentage2D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2084,22 +2215,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage3D, FeagiDataError>
+            ) -> Result<SignedPercentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage3D, FeagiDataError>
+            ) -> Result<SignedPercentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2117,22 +2252,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage3D, FeagiDataError>
+            ) -> Result<SignedPercentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage3D, FeagiDataError>
+            ) -> Result<SignedPercentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2150,22 +2289,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage3D, FeagiDataError>
+            ) -> Result<SignedPercentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage3D, FeagiDataError>
+            ) -> Result<SignedPercentage3D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2183,22 +2326,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage4D, FeagiDataError>
+            ) -> Result<SignedPercentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage4D, FeagiDataError>
+            ) -> Result<SignedPercentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2216,22 +2363,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage4D, FeagiDataError>
+            ) -> Result<SignedPercentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage4D, FeagiDataError>
+            ) -> Result<SignedPercentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2249,22 +2400,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage4D, FeagiDataError>
+            ) -> Result<SignedPercentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage4D, FeagiDataError>
+            ) -> Result<SignedPercentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2282,22 +2437,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage4D, FeagiDataError>
+            ) -> Result<SignedPercentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&SignedPercentage4D, FeagiDataError>
+            ) -> Result<SignedPercentage4D, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2315,22 +2474,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&MiscData, FeagiDataError>
+            ) -> Result<MiscData, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&MiscData, FeagiDataError>
+            ) -> Result<MiscData, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2348,22 +2511,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&MiscData, FeagiDataError>
+            ) -> Result<MiscData, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&MiscData, FeagiDataError>
+            ) -> Result<MiscData, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2381,22 +2548,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&ImageFrame, FeagiDataError>
+            ) -> Result<ImageFrame, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &ImageFrame = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&ImageFrame, FeagiDataError>
+            ) -> Result<ImageFrame, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &ImageFrame = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2414,22 +2585,26 @@ macro_rules! motor_read_data {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&ImageFrame, FeagiDataError>
+            ) -> Result<ImageFrame, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &ImageFrame = wrapped.try_into()?;
+                Ok(value.clone())
             }
             
             pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<&ImageFrame, FeagiDataError>
+            ) -> Result<ImageFrame, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let wrapped = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                wrapped.try_into()
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &ImageFrame = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -2442,8 +2617,8 @@ macro_rules! motor_read_data {
 
 
 pub struct IOCache {
-    sensors: IOSensorCache,
-    motors: IOMotorCache,
+    sensors: Arc<Mutex<IOSensorCache>>,
+    motors: Arc<Mutex<IOMotorCache>>,
 }
 
 // prefixes:
@@ -2455,29 +2630,32 @@ impl IOCache {
 
     pub fn new() -> Self {
         IOCache {
-            sensors: IOSensorCache::new(),
-            motors: IOMotorCache::new()
+            sensors: Arc::new(Mutex::new(IOSensorCache::new())),
+            motors: Arc::new(Mutex::new(IOMotorCache::new()))
         }
     }
 
 
     //region Sensors
 
-    pub fn sensor_get_bytes(&mut self) -> Result<&[u8], FeagiDataError> {
-        _ = self.sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
-        _ = self.sensors.try_encode_updated_neuron_data_to_feagi_byte_container(0)?;
-        Ok(self.sensors.export_encoded_bytes())
+    pub fn sensor_encode_data_to_bytes(&mut self, increment_value: u16) -> Result<(), FeagiDataError> {
+        let mut sensors = self.sensors.lock().unwrap();
+        _ = sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
+        _ = sensors.try_encode_updated_neuron_data_to_feagi_byte_container(increment_value)?;
+        Ok(())
     }
 
-    pub fn sensor_get_feagi_byte_container(&self) -> &FeagiByteContainer {
-        self.sensors.get_feagi_byte_container()
+    pub fn sensor_copy_feagi_byte_container(&self) -> FeagiByteContainer {
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.get_feagi_byte_container().clone()
     }
 
     pub fn sensor_replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
-        self.sensors.replace_feagi_byte_container(feagi_byte_container);
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.replace_feagi_byte_container(feagi_byte_container);
     }
 
-
+    /*
     //region Misc
 
     pub fn sensor_register_misc_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount,
@@ -2503,7 +2681,7 @@ impl IOCache {
         self.sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())
     }
     //endregion
-
+    */
 
     //region Segmented Vision
 
@@ -2520,18 +2698,22 @@ impl IOCache {
             };
             output
         };
-        self.sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)?;
+        Ok(())
     }
 
     pub fn sensor_write_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: &WrappedIOData) -> Result<(), FeagiDataError> {
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
-        self.sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())?;
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())?;
         Ok(())
     }
 
     pub fn sensor_update_stage_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, stage: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
-        self.sensors.try_updating_pipeline_stage(SENSOR_TYPE, group, channel, pipeline_stage_property_index, stage)?;
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.try_updating_pipeline_stage(SENSOR_TYPE, group, channel, pipeline_stage_property_index, stage)?;
         Ok(())
     }
 
@@ -2548,23 +2730,26 @@ impl IOCache {
 
     //region Cache Logic
 
-    pub fn motor_send_bytes(&mut self, incoming_bytes: &[u8]) -> Result<(), FeagiDataError> {
-        let mut byte_writer = |buf: &mut Vec<u8>| -> Result<(), FeagiDataError> {
-            buf.clear();
-            buf.extend_from_slice(incoming_bytes);
-            Ok(())
-        };
-        self.motors.try_import_bytes(&mut byte_writer)?;
-        self.motors.try_decode_bytes_to_neural_data()?;
-        self.motors.try_decode_neural_data_into_cache(Instant::now())
+    pub fn motor_update_data_from_bytes(&mut self) -> Result<bool, FeagiDataError> {
+        let mut motors = self.motors.lock().unwrap();
+        let has_decoded_neuron_data = motors.try_decode_bytes_to_neural_data()?;
+        if !has_decoded_neuron_data {
+            return Ok(false);
+        }
+        motors.try_decode_neural_data_into_cache(Instant::now())?;
+        Ok(true)
+
     }
 
-    pub fn motor_get_feagi_byte_container(&self) -> &FeagiByteContainer {
-        self.motors.get_feagi_byte_container()
+    pub fn motor_copy_feagi_byte_container(&self) -> FeagiByteContainer {
+        let motors = self.motors.lock().unwrap();
+        let byte_container =  motors.get_feagi_byte_container();
+        byte_container.clone()
     }
 
     pub fn motor_replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
-        self.motors.replace_feagi_byte_container(feagi_byte_container);
+        let mut motors = self.motors.lock().unwrap();
+        motors.replace_feagi_byte_container(feagi_byte_container);
     }
 
     //endregion
@@ -2580,7 +2765,8 @@ impl IOCache {
         F: Fn(&()) + Send + Sync + 'static,
     {
         const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
-        let index = self.motors.try_register_motor_callback(MOTOR_TYPE, group, channel, callback)?;
+        let mut motors = self.motors.lock().unwrap();
+        let index = motors.try_register_motor_callback(MOTOR_TYPE, group, channel, callback)?;
         Ok(index)
     }
     //endregion
