@@ -3,6 +3,7 @@ use feagi_data_structures::{motor_definition, FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use paste;
+use feagi_data_serialization::FeagiByteContainer;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
@@ -2468,6 +2469,14 @@ impl IOCache {
         Ok(self.sensors.export_encoded_bytes())
     }
 
+    pub fn sensor_get_feagi_byte_container(&self) -> &FeagiByteContainer {
+        self.sensors.get_feagi_byte_container()
+    }
+
+    pub fn sensor_replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
+        self.sensors.replace_feagi_byte_container(feagi_byte_container);
+    }
+
 
     //region Misc
 
@@ -2550,19 +2559,20 @@ impl IOCache {
         self.motors.try_decode_neural_data_into_cache(Instant::now())
     }
 
+    pub fn motor_get_feagi_byte_container(&self) -> &FeagiByteContainer {
+        self.motors.get_feagi_byte_container()
+    }
+
+    pub fn motor_replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
+        self.motors.replace_feagi_byte_container(feagi_byte_container);
+    }
+
     //endregion
 
     motor_definition!(motor_registrations);
     motor_definition!(motor_read_data);
 
     //region Gaze
-
-    pub fn _motor_read_post_processed_gaze_absolute_linear(&self, cortical_group_index: CorticalGroupIndex, cortical_channel_index: CorticalChannelIndex) -> Result<Percentage4D, FeagiDataError> {
-        const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
-        let data = self.motors.try_read_postprocessed_cached_value(MOTOR_TYPE, cortical_group_index, cortical_channel_index)?;
-        let percentage: Percentage4D = data.try_into()?;
-        Ok(percentage)
-    }
 
 
     pub fn motor_add_callback_gaze_absolute_linear<F>(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
