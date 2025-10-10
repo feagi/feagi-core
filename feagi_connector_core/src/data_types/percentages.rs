@@ -194,6 +194,10 @@ impl SignedPercentage {
         Ok(SignedPercentage { value: Self::linear_interp(value, range) })
 
     }
+    
+    pub fn is_positive(&self) -> bool {
+        self.value > 0.0
+    }
 
     //endregion
 

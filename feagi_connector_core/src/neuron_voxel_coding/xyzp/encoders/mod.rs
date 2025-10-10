@@ -11,6 +11,7 @@ mod signed_percentage_fractional_exponential;
 mod misc_data;
 mod image_frame;
 mod segmented_image_frame;
+mod percentage_2d_exponential;
 /*
 pub use image_frame::{ImageFrameNeuronVoxelXYZPEncoder};
 pub use signed_percentage_split_sign_divided::{F32SplitSignDividedNeuronVoxelXYZPEncoder};

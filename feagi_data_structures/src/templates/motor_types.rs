@@ -120,7 +120,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage4D_Absolute_Linear,
                     wrapped_data_type: WrappedIOType::Percentage_4D,
-                    data_type: SignedPercentage4D,
+                    data_type: Percentage4D,
                 },
 
                 #[doc = "Controls size and positioning of the central vision in a segmented frame. Incremental change. Neurons encoded linearly"]
@@ -131,7 +131,7 @@ macro_rules! motor_definition {
                     channel_dimension_range: CorticalChannelDimensionRange::new(4..5, 1..2, 1..u32::MAX),
                     default_coder_type: Percentage4D_Incremental_Linear,
                     wrapped_data_type: WrappedIOType::Percentage_4D,
-                    data_type: SignedPercentage4D,
+                    data_type: Percentage4D,
                 },
 
                 //endregion

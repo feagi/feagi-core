@@ -18,7 +18,8 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 //region macros
 
-macro_rules! motor_registrations {
+macro_rules! motor_registrations
+{
     (
         $cortical_io_type_enum_name:ident {
             $(
@@ -2610,6 +2611,70 @@ macro_rules! motor_read_data {
     };
 }
 
+macro_rules! sensor_registration{
+    (
+        $cortical_io_type_enum_name:ident {
+            $(
+                $(#[doc = $doc:expr])?
+                $cortical_type_key_name:ident => {
+                    friendly_name: $display_name:expr,
+                    snake_case_identifier: $snake_case_identifier:expr,
+                    base_ascii: $base_ascii:expr,
+                    channel_dimension_range: $channel_dimension_range:expr,
+                    default_coder_type: $default_coder_type:ident,
+                    wrapped_data_type: $wrapped_data_type:expr,
+                    data_type: $data_type:ident,
+                }
+            ),* $(,)?
+        }
+    ) => {
+        $(
+            motor_registrations!(@generate_function
+                $cortical_type_key_name,
+                $snake_case_identifier,
+                $default_coder_type,
+                $wrapped_data_type,
+                $data_type
+            );
+        )*
+    };
+
+    // Arm for Percentage with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+            }
+         }
+    };
+
+}
+
 
 //endregion
 
@@ -2620,6 +2685,25 @@ pub struct IOCache {
     sensors: Arc<Mutex<IOSensorCache>>,
     motors: Arc<Mutex<IOMotorCache>>,
 }
+
+// TODO
+/*
+——— No Performant Parallelism? ———
+⠀⣞⢽⢪⢣⢣⢣⢫⡺⡵⣝⡮⣗⢷⢽⢽⢽⣮⡷⡽⣜⣜⢮⢺⣜⢷⢽⢝⡽⣝
+⠸⡸⠜⠕⠕⠁⢁⢇⢏⢽⢺⣪⡳⡝⣎⣏⢯⢞⡿⣟⣷⣳⢯⡷⣽⢽⢯⣳⣫⠇
+⠀⠀⢀⢀⢄⢬⢪⡪⡎⣆⡈⠚⠜⠕⠇⠗⠝⢕⢯⢫⣞⣯⣿⣻⡽⣏⢗⣗⠏⠀
+⠀⠪⡪⡪⣪⢪⢺⢸⢢⢓⢆⢤⢀⠀⠀⠀⠀⠈⢊⢞⡾⣿⡯⣏⢮⠷⠁⠀⠀
+⠀⠀⠀⠈⠊⠆⡃⠕⢕⢇⢇⢇⢇⢇⢏⢎⢎⢆⢄⠀⢑⣽⣿⢝⠲⠉⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⡿⠂⠠⠀⡇⢇⠕⢈⣀⠀⠁⠡⠣⡣⡫⣂⣿⠯⢪⠰⠂⠀⠀⠀⠀
+⠀⠀⠀⠀⡦⡙⡂⢀⢤⢣⠣⡈⣾⡃⠠⠄⠀⡄⢱⣌⣶⢏⢊⠂⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⢝⡲⣜⡮⡏⢎⢌⢂⠙⠢⠐⢀⢘⢵⣽⣿⡿⠁⠁⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠨⣺⡺⡕⡕⡱⡑⡆⡕⡅⡕⡜⡼⢽⡻⠏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⣼⣳⣫⣾⣵⣗⡵⡱⡡⢣⢑⢕⢜⢕⡝⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⣴⣿⣾⣿⣿⣿⡿⡽⡑⢌⠪⡢⡣⣣⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⡟⡾⣿⢿⢿⢵⣽⣾⣼⣘⢸⢸⣞⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠁⠇⠡⠩⡫⢿⣝⡻⡮⣒⢽⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+—————————————————————————————————
+ */
 
 // prefixes:
 // cache_ -> cache encoding / decoding / alteration related function
