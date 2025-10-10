@@ -12,6 +12,8 @@ mod misc_data;
 mod image_frame;
 mod segmented_image_frame;
 mod percentage_2d_exponential;
+mod percentage_3d_exponential;
+mod percentage_4d_exponential;
 /*
 pub use image_frame::{ImageFrameNeuronVoxelXYZPEncoder};
 pub use signed_percentage_split_sign_divided::{F32SplitSignDividedNeuronVoxelXYZPEncoder};
@@ -26,3 +28,6 @@ pub use signed_percentage_fractional_exponential::SignedPercentageFractionalExpo
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
 pub(crate) use image_frame::ImageFrameNeuronVoxelXYZPEncoder;
 pub(crate) use segmented_image_frame::SegmentedImageFrameNeuronVoxelXYZPEncoder;
+pub(crate) use percentage_2d_exponential::Percentage2DExponentialNeuronVoxelXYZPEncoder;
+pub(crate) use percentage_3d_exponential::Percentage3DExponentialNeuronVoxelXYZPEncoder;
+pub(crate) use percentage_4d_exponential::Percentage4DExponentialNeuronVoxelXYZPEncoder;

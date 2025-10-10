@@ -5,24 +5,24 @@ use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::data_pipeline::PipelineStageRunner;
-use crate::data_types::Percentage2D;
+use crate::data_types::Percentage4D;
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
 
-const NUMBER_PAIRS_PER_CHANNEL: u32 = 2; // How many numbers are encoded per channel?
+const NUMBER_PAIRS_PER_CHANNEL: u32 = 4; // How many numbers are encoded per channel?
 const CHANNEL_WIDTH: u32 = NUMBER_PAIRS_PER_CHANNEL * 1;
 
 #[derive(Debug)]
-pub struct Percentage2DExponentialNeuronVoxelXYZPEncoder {
+pub struct Percentage4DExponentialNeuronVoxelXYZPEncoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_write_target: CorticalID,
-    scratch_space: Vec<(Vec<u32>, Vec<u32>)>, // # channels long
+    scratch_space: Vec<(Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>)>, // # channels long
 }
 
-impl NeuronVoxelXYZPEncoder for Percentage2DExponentialNeuronVoxelXYZPEncoder {
+impl NeuronVoxelXYZPEncoder for Percentage4DExponentialNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
-        WrappedIOType::Percentage_2D
+        WrappedIOType::Percentage_4D
     }
 
     fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
@@ -39,11 +39,13 @@ impl NeuronVoxelXYZPEncoder for Percentage2DExponentialNeuronVoxelXYZPEncoder {
                     return Ok(()); // We haven't updated, do nothing
                 }
                 let updated_data = pipeline.get_most_recent_output();
-                let updated_percentage_2d: Percentage2D = updated_data.try_into()?;
+                let updated_percentage_4d: Percentage4D = updated_data.try_into()?;
 
                 // scratch arrays get cleared
-                encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(&updated_percentage_2d.a, self.channel_dimensions.depth, &mut scratch.0);
-                encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(&updated_percentage_2d.b, self.channel_dimensions.depth, &mut scratch.1);
+                encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(&updated_percentage_4d.a, self.channel_dimensions.depth, &mut scratch.0);
+                encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(&updated_percentage_4d.b, self.channel_dimensions.depth, &mut scratch.1);
+                encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(&updated_percentage_4d.c, self.channel_dimensions.depth, &mut scratch.2);
+                encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(&updated_percentage_4d.d, self.channel_dimensions.depth, &mut scratch.3);
 
                 Ok(())
             })?;
@@ -58,6 +60,12 @@ impl NeuronVoxelXYZPEncoder for Percentage2DExponentialNeuronVoxelXYZPEncoder {
             for b in &channel_scratch.1 {
                 neuron_array_target.push_raw((c * CHANNEL_WIDTH) + 1, Y, *b, 1.0);
             }
+            for c_val in &channel_scratch.2 {
+                neuron_array_target.push_raw((c * CHANNEL_WIDTH) + 2, Y, *c_val, 1.0);
+            }
+            for d in &channel_scratch.3 {
+                neuron_array_target.push_raw((c * CHANNEL_WIDTH) + 3, Y, *d, 1.0);
+            }
         }
 
         Ok(())
@@ -65,16 +73,17 @@ impl NeuronVoxelXYZPEncoder for Percentage2DExponentialNeuronVoxelXYZPEncoder {
     }
 }
 
-impl Percentage2DExponentialNeuronVoxelXYZPEncoder {
+impl Percentage4DExponentialNeuronVoxelXYZPEncoder {
     pub fn new_box(cortical_write_target: CorticalID, z_resolution: NeuronDepth, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         use feagi_data_structures::genomic::descriptors::CorticalChannelDimensions;
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
-        let encoder = Percentage2DExponentialNeuronVoxelXYZPEncoder {
+        let encoder = Percentage4DExponentialNeuronVoxelXYZPEncoder {
             channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, *z_resolution)?,
             cortical_write_target,
-            scratch_space: vec![(Vec::new(), Vec::new()); *number_channels as usize],
+            scratch_space: vec![(Vec::new(), Vec::new(), Vec::new(), Vec::new()); *number_channels as usize],
         };
         Ok(Box::new(encoder))
     }
 }
+
