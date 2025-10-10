@@ -27,16 +27,7 @@ mod signed_percentage_3d_linear;
 mod signed_percentage_3d_exponential;
 mod signed_percentage_4d_linear;
 mod signed_percentage_4d_exponential;
-/*
-pub use image_frame::{ImageFrameNeuronVoxelXYZPEncoder};
-pub use signed_percentage_split_sign_divided::{F32SplitSignDividedNeuronVoxelXYZPEncoder};
-pub use signed_percentage_psp_bidirectional::{F32PSPBidirectionalNeuronVoxelXYZPEncoder};
-pub use percentage_linear::{F32LinearNeuronVoxelXYZPEncoder};
-pub use segmented_image_frame::{SegmentedImageFrameNeuronVoxelXYZPEncoder};
-pub use percentage_fractional_exponential::PercentageFractionalExponentialNeuronVoxelXYZPEncoder;
-pub use signed_percentage_fractional_exponential::SignedPercentageFractionalExponentialNeuronVoxelXYZPEncoder;
 
- */
 
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
 pub(crate) use image_frame::ImageFrameNeuronVoxelXYZPEncoder;
