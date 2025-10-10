@@ -1,5 +1,6 @@
 use std::time::Instant;
 use std::sync::{Arc, Mutex};
+use std::mem;
 use paste;
 use feagi_data_structures::{motor_definition, sensor_definition, FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
@@ -5570,18 +5571,6 @@ impl IOCache {
     sensor_definition!(sensor_write_data);
 
 
-
-    /*
-    //region Misc
-
-
-    pub fn sensor_write_misc_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: &WrappedIOData) -> Result<(), FeagiDataError> {
-        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::MiscellaneousAbsolute;
-        self.sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())
-    }
-    //endregion
-    */
-
     //region Segmented Vision
 
     pub fn sensor_register_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, input_image_properties: ImageFrameProperties, segmented_image_properties: SegmentedImageFrameProperties, initial_gaze: GazeProperties) -> Result<(), FeagiDataError> {
@@ -5653,11 +5642,12 @@ impl IOCache {
 
     //endregion
 
+    //region Devices
+
     motor_definition!(motor_registrations);
     motor_definition!(motor_read_data);
 
     //region Gaze
-
 
     pub fn motor_add_callback_gaze_absolute_linear<F>(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
     where
@@ -5670,11 +5660,49 @@ impl IOCache {
     }
     //endregion
 
+    //endregion
+
 
     //endregion
 
 
-    
+    //region Reflexes (premade callbacks)
+
+    // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling ehre
+    pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+
+        // Simple way to check if valid. // TODO we should probably have a proper method
+        let mut m = self.motors.lock().unwrap();
+        _ = m.try_read_postprocessed_cached_value(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel)?;
+
+        let s = self.sensors.lock().unwrap();
+        _ = s.try_read_postprocessed_cached_value(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel)?;
+        mem::drop(s);
+
+        let motor_ref = Arc::clone(&self.motors);
+        let sensor_ref = Arc::clone(&self.sensors);
+
+        let closure = move || {
+            let motors = motor_ref.lock().unwrap();
+            let wrapped_motor = motors.try_read_postprocessed_cached_value(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel).unwrap();
+            let per_4d: Percentage4D = wrapped_motor.try_into().unwrap();
+            let gaze: GazeProperties = GazeProperties::new_from_4d(per_4d);
+
+            let mut sensors = sensor_ref.lock().unwrap();
+            let stage_properties = sensors.get_pipeline_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into()).unwrap();
+            let mut segmentation_stage_properties: ImageSegmentorStageProperties = stage_properties.as_any().downcast_ref::<ImageSegmentorStageProperties>().unwrap().clone();
+            segmentation_stage_properties.update_from_gaze(gaze);
+            _ = sensors.try_updating_pipeline_stage(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into(), Box::new(segmentation_stage_properties));
+        };
+        
+        m.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel, closure);
+
+        Ok(())
+    }
+
+
+
+    //endregion
     
     
 }
