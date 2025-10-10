@@ -3922,6 +3922,20 @@ macro_rules! sensor_write_data
                 sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
                 Ok(())
             }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< &$data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                Ok(wrapped)
+            }
+
          }
     };
 }
