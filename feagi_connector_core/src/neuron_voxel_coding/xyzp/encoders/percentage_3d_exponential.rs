@@ -75,7 +75,7 @@ impl Percentage3DExponentialNeuronVoxelXYZPEncoder {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
         let encoder = Percentage3DExponentialNeuronVoxelXYZPEncoder {
-            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, *z_resolution)?,
+            channel_dimensions: CorticalChannelDimensions::new(*number_channels * CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, *z_resolution)?,
             cortical_write_target,
             scratch_space: vec![(Vec::new(), Vec::new(), Vec::new()); *number_channels as usize],
         };
