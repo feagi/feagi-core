@@ -2658,7 +2658,7 @@ macro_rules! sensor_registration{
                 const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
                 let data_type: WrappedIOType = $wrapped_data_type;
 
-                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPEncoder::new_box(MOTOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();

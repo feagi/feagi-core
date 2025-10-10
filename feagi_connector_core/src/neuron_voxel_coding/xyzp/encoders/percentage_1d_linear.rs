@@ -14,13 +14,13 @@ const NUMBER_PAIRS_PER_CHANNEL: u32 = 1; // How many numbers are encoded per cha
 const CHANNEL_WIDTH: u32 = NUMBER_PAIRS_PER_CHANNEL * 1;
 
 #[derive(Debug)]
-pub struct Percentage1DLinearNeuronVoxelXYZPEncoder {
+pub struct PercentageLinearNeuronVoxelXYZPEncoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_write_target: CorticalID,
     scratch_space: Vec<Vec<u32>>, // # channels long
 }
 
-impl NeuronVoxelXYZPEncoder for Percentage1DLinearNeuronVoxelXYZPEncoder {
+impl NeuronVoxelXYZPEncoder for PercentageLinearNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::Percentage
     }
@@ -63,11 +63,11 @@ impl NeuronVoxelXYZPEncoder for Percentage1DLinearNeuronVoxelXYZPEncoder {
     }
 }
 
-impl Percentage1DLinearNeuronVoxelXYZPEncoder {
+impl PercentageLinearNeuronVoxelXYZPEncoder {
     pub fn new_box(cortical_write_target: CorticalID, z_resolution: NeuronDepth, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
-        let encoder = Percentage1DLinearNeuronVoxelXYZPEncoder {
+        let encoder = PercentageLinearNeuronVoxelXYZPEncoder {
             channel_dimensions: CorticalChannelDimensions::new(*number_channels * CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, *z_resolution)?,
             cortical_write_target,
             scratch_space: vec![Vec::new(); *number_channels as usize],
