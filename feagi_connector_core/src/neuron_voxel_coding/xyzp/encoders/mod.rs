@@ -19,6 +19,14 @@ mod percentage_3d_exponential;
 mod percentage_3d_linear;
 mod percentage_4d_exponential;
 mod percentage_4d_linear;
+mod signed_percentage_1d_linear;
+mod signed_percentage_1d_exponential;
+mod signed_percentage_2d_linear;
+mod signed_percentage_2d_exponential;
+mod signed_percentage_3d_linear;
+mod signed_percentage_3d_exponential;
+mod signed_percentage_4d_linear;
+mod signed_percentage_4d_exponential;
 /*
 pub use image_frame::{ImageFrameNeuronVoxelXYZPEncoder};
 pub use signed_percentage_split_sign_divided::{F32SplitSignDividedNeuronVoxelXYZPEncoder};
@@ -41,3 +49,11 @@ pub(crate) use percentage_3d_exponential::Percentage3DExponentialNeuronVoxelXYZP
 pub(crate) use percentage_3d_linear::Percentage3DLinearNeuronVoxelXYZPEncoder;
 pub(crate) use percentage_4d_exponential::Percentage4DExponentialNeuronVoxelXYZPEncoder;
 pub(crate) use percentage_4d_linear::Percentage4DLinearNeuronVoxelXYZPEncoder;
+pub(crate) use signed_percentage_1d_linear::SignedPercentage1DLinearNeuronVoxelXYZPEncoder;
+pub(crate) use signed_percentage_1d_exponential::SignedPercentage1DExponentialNeuronVoxelXYZPEncoder;
+pub(crate) use signed_percentage_2d_linear::SignedPercentage2DLinearNeuronVoxelXYZPEncoder;
+pub(crate) use signed_percentage_2d_exponential::SignedPercentage2DExponentialNeuronVoxelXYZPEncoder;
+pub(crate) use signed_percentage_3d_linear::SignedPercentage3DLinearNeuronVoxelXYZPEncoder;
+pub(crate) use signed_percentage_3d_exponential::SignedPercentage3DExponentialNeuronVoxelXYZPEncoder;
+pub(crate) use signed_percentage_4d_linear::SignedPercentage4DLinearNeuronVoxelXYZPEncoder;
+pub(crate) use signed_percentage_4d_exponential::SignedPercentage4DExponentialNeuronVoxelXYZPEncoder;
