@@ -3869,6 +3869,63 @@ macro_rules! sensor_registrations
 }
 
 
+macro_rules! sensor_write_data
+{
+    (
+        $cortical_io_type_enum_name:ident {
+            $(
+                $(#[doc = $doc:expr])?
+                $cortical_type_key_name:ident => {
+                    friendly_name: $display_name:expr,
+                    snake_case_identifier: $snake_case_identifier:expr,
+                    base_ascii: $base_ascii:expr,
+                    channel_dimension_range: $channel_dimension_range:expr,
+                    default_coder_type: $default_coder_type:ident,
+                    wrapped_data_type: $wrapped_data_type:expr,
+                    data_type: $data_type:ident,
+                }
+            ),* $(,)?
+        }
+    ) => {
+        $(
+            sensor_write_data!(@generate_function
+                $cortical_type_key_name,
+                $snake_case_identifier,
+                $default_coder_type,
+                $wrapped_data_type,
+                $data_type
+            );
+        )*
+    };
+
+    // Arm for Percentage with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+         }
+    };
+}
+
 //endregion
 
 
