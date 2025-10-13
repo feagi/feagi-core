@@ -78,9 +78,11 @@ mod test_connector_cache_sensor_load_image {
         let wrapped: WrappedIOData = bird_image.into();
 
         connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &wrapped).unwrap();
+        connector_cache.sensor_encode_data_to_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
 
         connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &wrapped).unwrap();
+        connector_cache.sensor_encode_data_to_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
     }
 
