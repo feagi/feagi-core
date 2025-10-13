@@ -1,3 +1,5 @@
+#![allow(unused_imports)] // These are used, but by macros that some IDEs cannot see
+
 mod percentage_1d_linear;
 mod percentage_2d_linear;
 mod percentage_3d_linear;
@@ -14,6 +16,7 @@ mod signed_percentage_1d_exponential;
 mod signed_percentage_2d_exponential;
 mod signed_percentage_3d_exponential;
 mod signed_percentage_4d_exponential;
+mod misc_data;
 
 pub(crate) use percentage_1d_linear::PercentageLinearNeuronVoxelXYZPDecoder;
 pub(crate) use percentage_2d_linear::Percentage2DLinearNeuronVoxelXYZPDecoder;
@@ -31,3 +34,4 @@ pub(crate) use signed_percentage_1d_exponential::SignedPercentageExponentialNeur
 pub(crate) use signed_percentage_2d_exponential::SignedPercentage2DExponentialNeuronVoxelXYZPDecoder;
 pub(crate) use signed_percentage_3d_exponential::SignedPercentage3DExponentialNeuronVoxelXYZPDecoder;
 pub(crate) use signed_percentage_4d_exponential::SignedPercentage4DExponentialNeuronVoxelXYZPDecoder;
+pub(crate) use misc_data::MiscDataNeuronVoxelXYZPDecoder;

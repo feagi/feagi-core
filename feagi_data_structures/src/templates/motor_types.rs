@@ -138,7 +138,6 @@ macro_rules! motor_definition {
 
                 //region MiscData
 
-                /*
                 #[doc = "Used for other stuff. Absolute (instant) change,"]
                 MiscellaneousAbsolute => {
                     friendly_name: "Miscellaneous (Absolute)",
@@ -160,8 +159,6 @@ macro_rules! motor_definition {
                     wrapped_data_type: WrappedIOType::MiscData(None),
                     data_type: MiscData,
                 },
-
-                 */
 
                 //endregion
 

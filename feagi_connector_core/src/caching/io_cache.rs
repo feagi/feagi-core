@@ -1166,48 +1166,6 @@ macro_rules! motor_registrations
          }
     };
 
-    // Arm for MiscData with Absolute encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        MiscData_Absolute,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-         }
-    };
-
-    // Arm for MiscData with Incremental encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        MiscData_Incremental,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
-            ) -> Result<(), FeagiDataError>
-            {
-                return Err(FeagiDataError::NotImplemented)
-            }
-         }
-    };
-
     // Arm for ImageFrame with Absolute encoding
     (@generate_function
         $cortical_type_key_name:ident,
@@ -1221,7 +1179,7 @@ macro_rules! motor_registrations
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
+                image_properties: ImageFrameProperties
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
@@ -1242,10 +1200,80 @@ macro_rules! motor_registrations
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                z_neuron_resolution: NeuronDepth
+                image_properties: ImageFrameProperties
             ) -> Result<(), FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for MiscData with Absolute encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        MiscellaneousAbsolute,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                misc_dimensions: MiscDataDimensions
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , misc_dimensions, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+            }
+         }
+    };
+
+    // Arm for MiscData with Incremental encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        MiscellaneousIncremental,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_register_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                misc_dimensions: MiscDataDimensions
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , misc_dimensions, number_channels)?;
+
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for i in 0..*number_channels {
+                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
+                    };
+                    output
+                };
+
+                let mut motors = self.motors.lock().unwrap();
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
          }
     };
@@ -2607,6 +2635,80 @@ macro_rules! motor_read_data
                 let motors = self.motors.lock().unwrap();
                 let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
                 let value: &ImageFrame = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+         }
+    };
+
+    // Arm for Misc Data with Absolute encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        MiscellaneousAbsolute,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+         }
+    };
+
+    // Arm for Misc Data with Incremental encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        MiscellaneousIncremental,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
                 Ok(value.clone())
             }
          }
@@ -5669,7 +5771,7 @@ impl IOCache {
     //region Reflexes (premade callbacks)
 
     // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling ehre
-    // TODO we can change the call back signature
+    // TODO we can change the call back signature // TODO feedback
     pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
 
         // Simple way to check if valid. // TODO we should probably have a proper method
