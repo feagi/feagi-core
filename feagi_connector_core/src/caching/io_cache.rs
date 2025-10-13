@@ -1212,7 +1212,7 @@ macro_rules! motor_registrations
     (@generate_function
         $cortical_type_key_name:ident,
         $snake_case_identifier:expr,
-        MiscellaneousAbsolute,
+        MiscData_Absolute,
         $wrapped_data_type:expr,
         $data_type:ident
     ) => {
@@ -1247,7 +1247,7 @@ macro_rules! motor_registrations
     (@generate_function
         $cortical_type_key_name:ident,
         $snake_case_identifier:expr,
-        MiscellaneousIncremental,
+        MiscData_Incremental,
         $wrapped_data_type:expr,
         $data_type:ident
     ) => {
@@ -2492,80 +2492,6 @@ macro_rules! motor_read_data
          }
     };
 
-    // Arm for MiscData with Absolute encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        MiscData_Absolute,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<MiscData, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &MiscData = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<MiscData, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &MiscData = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for MiscData with Incremental encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        MiscData_Incremental,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<MiscData, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &MiscData = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<MiscData, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &MiscData = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
     // Arm for ImageFrame with Absolute encoding
     (@generate_function
         $cortical_type_key_name:ident,
@@ -2644,7 +2570,7 @@ macro_rules! motor_read_data
     (@generate_function
         $cortical_type_key_name:ident,
         $snake_case_identifier:expr,
-        MiscellaneousAbsolute,
+        MiscData_Absolute,
         $wrapped_data_type:expr,
         $data_type:ident
     ) => {
@@ -2653,7 +2579,7 @@ macro_rules! motor_read_data
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<ImageFrame, FeagiDataError>
+            ) -> Result<MiscData, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
                 let motors = self.motors.lock().unwrap();
@@ -2666,7 +2592,7 @@ macro_rules! motor_read_data
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<ImageFrame, FeagiDataError>
+            ) -> Result<MiscData, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
                 let motors = self.motors.lock().unwrap();
@@ -2681,7 +2607,7 @@ macro_rules! motor_read_data
     (@generate_function
         $cortical_type_key_name:ident,
         $snake_case_identifier:expr,
-        MiscellaneousIncremental,
+        MiscData_Incremental,
         $wrapped_data_type:expr,
         $data_type:ident
     ) => {
@@ -2690,7 +2616,7 @@ macro_rules! motor_read_data
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<ImageFrame, FeagiDataError>
+            ) -> Result<MiscData, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
                 let motors = self.motors.lock().unwrap();
@@ -2703,7 +2629,7 @@ macro_rules! motor_read_data
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<ImageFrame, FeagiDataError>
+            ) -> Result<MiscData, FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
                 let motors = self.motors.lock().unwrap();
