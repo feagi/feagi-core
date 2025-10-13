@@ -105,7 +105,7 @@ impl IOSensorCache {
     }
 
     pub fn try_encode_updated_sensor_data_to_neurons(&mut self, encode_instant: Instant) -> Result<(), FeagiDataError> {
-        self.neuron_data.clear_neurons_only(); // TODO remove extra occurrences of clearing
+        self.neuron_data.clear_neurons_only();
         // TODO this can likely be done in parallel. Explore this!
         for sensory_channel_steam_caches in self.stream_caches.values_mut() {
             sensory_channel_steam_caches.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, self.previous_burst)?;

@@ -11,6 +11,7 @@ pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
 
     fn get_encodable_data_type(&self) -> WrappedIOType;
 
+    /// Writes data to NeuronXYZPVoxelArray(s) of the relevant cortical area(s), where each element in pipelines is the channel. Assumes write_target been cleared of neuron data
     fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError>;
 }
 

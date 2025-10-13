@@ -358,7 +358,7 @@ impl FeagiByteContainer{
     /// Clears existing data and serializes the structure with the given increment value.
     pub fn overwrite_byte_data_with_single_struct_data(&mut self, incoming_struct: &dyn FeagiSerializable, new_increment_value: u16) -> Result<(), FeagiDataError> {
 
-        self.bytes.clear();
+        //self.bytes.clear(); // NOTE: Just... Don't clear the bytes. We are overwriting them or expanding if needed anyways
         self.contained_struct_references.clear();
         self.is_data_valid = false;
 
