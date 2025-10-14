@@ -5648,8 +5648,8 @@ impl IOCache {
 
     pub fn motor_update_data_from_bytes(&mut self) -> Result<bool, FeagiDataError> {
         let mut motors = self.motors.lock().unwrap();
-        let has_decoded_neuron_data = motors.try_decode_bytes_to_neural_data()?;
-        if !has_decoded_neuron_data {
+        let decoded_bytes_contain_neuron_data = motors.try_decode_bytes_to_neural_data()?;
+        if !decoded_bytes_contain_neuron_data {
             return Ok(false);
         }
         motors.try_decode_neural_data_into_cache(Instant::now())?;

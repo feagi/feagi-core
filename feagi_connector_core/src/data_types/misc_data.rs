@@ -18,7 +18,7 @@ use super::ImageFrame;
 /// let misc_data = MiscData::new(&dims).unwrap();
 /// assert_eq!(misc_data.get_dimensions().width, 10);
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MiscData {
     data: Array3<f32>
 }
