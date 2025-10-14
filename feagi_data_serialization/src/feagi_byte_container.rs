@@ -340,7 +340,7 @@ impl FeagiByteContainer{
             return Err(FeagiDataError::BadParameters(format!("FeagiByteContainers only support a max of {} contained structs, {} were given!", MAX_NUMBER_OF_STRUCTS, incoming_structs.len())))
         }
 
-        self.bytes.clear();
+        //self.bytes.clear(); // NOTE: Just... Don't clear the bytes. We are overwriting them or expanding if needed anyways
         self.contained_struct_references.clear();
         self.is_data_valid = false;
 
@@ -380,7 +380,7 @@ impl FeagiByteContainer{
             let incoming_struct = &incoming_structs[struct_index];
             let contained_struct_reference = &self.contained_struct_references[struct_index];
 
-            LittleEndian::write_u32(&mut self.bytes[structure_size_header_byte_index..structure_size_header_byte_index + 4], contained_struct_reference.number_bytes_to_read as u32);
+            LittleEndian::write_u32(&mut self.bytes[structure_size_header_byte_index..structure_size_header_byte_index + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE], contained_struct_reference.number_bytes_to_read as u32);
             incoming_struct.try_serialize_struct_to_byte_slice(contained_struct_reference.get_as_byte_slice_mut(&mut self.bytes))?;
 
             structure_size_header_byte_index += Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE;
