@@ -62,6 +62,8 @@ pub trait FeagiSerializable: Debug + Any {
     // TODO universal method to export as a new FBS
 }
 
+// TODO there is cloning here, can it be avoided?
+
 impl TryFrom<Box<dyn FeagiSerializable>> for FeagiJSON {
     type Error = FeagiDataError;
     fn try_from(value: Box<dyn FeagiSerializable>) -> Result<Self, Self::Error> {

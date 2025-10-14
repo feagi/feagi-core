@@ -17,10 +17,14 @@ fn load_bird_image() -> ImageFrame {
 
 #[cfg(test)]
 mod test_connector_cache_sensor_load_image {
+    use std::ops::Deref;
     use std::time::Instant;
     use feagi_connector_core::data_types::descriptors::{ColorChannelLayout, ColorSpace, GazeProperties, ImageXYResolution, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+    use feagi_connector_core::data_types::MiscData;
     use feagi_connector_core::wrapped_io_data::WrappedIOData;
+    use feagi_data_serialization::FeagiByteContainer;
     use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
+    use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
     use crate::load_bird_image;
 
     #[test]
@@ -117,8 +121,41 @@ mod test_connector_cache_sensor_load_image {
 
         // TODO motor bytes sending
 
+        connector_cache.sensor_encode_data_to_bytes(0);
         let sensor_bytes = connector_cache.sensor_copy_feagi_byte_container();
         let motor_data = connector_cache.motor_try_read_postprocessed_cached_value_gaze_absolute_linear(cortical_group, channel_index).unwrap();
     }
+
+    #[test]
+    fn test_encode_of_misc_then_reencode() {
+        let time_of_previous_burst: Instant = Instant::now();
+
+        let cortical_group: CorticalGroupIndex = 0.into();
+        let number_channels: CorticalChannelCount = 1.try_into().unwrap();
+        let channel_index: CorticalChannelIndex = 0.into();
+
+        let bird_image = load_bird_image();
+        let misc_data = MiscData::new_from_image_frame(&bird_image).unwrap();
+
+        let mut connector_cache = feagi_connector_core::IOCache::new();
+        connector_cache.sensor_register_miscellaneous_absolute(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
+        connector_cache.motor_register_miscellaneous_absolute(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
+
+        connector_cache.sensor_write_miscellaneous_absolute(cortical_group, channel_index, misc_data.clone()).unwrap();
+        connector_cache.sensor_encode_data_to_bytes(0);
+        let bytes = connector_cache.sensor_copy_feagi_byte_container();
+
+        let neuron_struct_box = bytes.try_create_new_struct_from_index(0).unwrap();
+        let neuron_struct: CorticalMappedXYZPNeuronVoxels = neuron_struct_box.try_into().unwrap(); // Just doing this step for test
+        let neuron_struct_box = bytes.try_create_new_struct_from_index(0).unwrap();
+
+        let mut new_bytes: FeagiByteContainer = FeagiByteContainer::new_empty();
+        new_bytes.overwrite_byte_data_with_single_struct_data(neuron_struct_box.deref(), 0).unwrap();
+
+        connector_cache.motor_replace_feagi_byte_container(new_bytes);
+        connector_cache.motor_update_data_from_bytes();
+        let new_misc_data = connector_cache.motor_try_read_postprocessed_cached_value_miscellaneous_absolute(cortical_group, channel_index).unwrap();
+        dbg!(&new_misc_data);
+}
 
 }
