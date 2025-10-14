@@ -75,19 +75,6 @@ impl IOMotorCache {
         Ok(index)
     }
 
-    /*
-    pub fn try_get_pipeline_stage_runner(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache(channel_index)?;
-        Ok(motor_stream_cache.get_pipeline_runner())
-    }
-
-    pub fn try_get_pipeline_stage_runner_mut(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&mut PipelineStageRunner, FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
-        let motor_stream_cache = motor_stream_caches.try_get_motor_channel_stream_cache_mut(channel_index)?;
-        Ok(motor_stream_cache.get_pipeline_runner_mut())
-    }
-     */
     
     //endregion
 

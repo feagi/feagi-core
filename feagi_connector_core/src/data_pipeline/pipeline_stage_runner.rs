@@ -148,13 +148,23 @@ impl PipelineStageRunner {
         Ok(self.pipeline_stages[*stage_index as usize].create_properties())
     }
 
+    pub fn try_update_all_stage_properties(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+        if new_pipeline_stage_properties.len() != self.pipeline_stages.len() {
+            return Err(FeagiDataError::BadParameters(format!("Unable to update {} contained stages with {} properties!", self.pipeline_stages.len(), new_pipeline_stage_properties.len())).into());
+        }
+        self.pipeline_stages.iter_mut()
+            .zip(new_pipeline_stage_properties)
+            .try_for_each(|(current_stage, new_properties)| {
+                current_stage.load_properties(new_properties)
+            })?;
+        Ok(())
+    }
+
     pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         self.verify_pipeline_stage_index(updating_stage_index)?;
         self.pipeline_stages[*updating_stage_index as usize].load_properties(updated_properties)?;
         Ok(())
     }
-
-    // NOTE: No vector form of updating stage properties
 
     pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
         verify_pipeline_stage_properties(&new_pipeline_stage_properties)?;
