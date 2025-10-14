@@ -1,5 +1,6 @@
 //! Serialization implementation for cortical-mapped neuron voxel xyzp data.
 
+use std::any::Any;
 use byteorder::{ByteOrder, LittleEndian};
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
@@ -121,6 +122,10 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
         };
 
         Ok(())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
     }
 }
 

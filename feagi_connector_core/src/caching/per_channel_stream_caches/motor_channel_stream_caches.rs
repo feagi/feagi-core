@@ -1,5 +1,5 @@
 use std::time::Instant;
-use ndarray::ErrorKind::IncompatibleShape;
+use rayon::prelude::*;
 use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
@@ -102,6 +102,8 @@ impl MotorChannelStreamCaches {
         Ok(())
     }
 
+    //endregion
+
     //region Callbacks
 
     pub fn try_connect_to_data_processed_signal<F>(&mut self, cortical_channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
@@ -134,6 +136,15 @@ impl MotorChannelStreamCaches {
 
     pub(crate) fn try_read_neuron_data_to_wrapped_io_data(&mut self, neuron_data: &CorticalMappedXYZPNeuronVoxels, time_of_decode: Instant) -> Result<(), FeagiDataError> {
         self.neuron_decoder.read_neuron_data_multi_channel(neuron_data, time_of_decode, &mut self.most_recent_directly_decoded_outputs, &mut self.has_channel_been_updated)?;
+        self.most_recent_directly_decoded_outputs.par_iter()
+            .zip(&self.has_channel_been_updated)
+            .zip(&mut self.pipeline_runners)
+            .try_for_each(|((output, &has_changed), pipeline_runner)| {
+                if has_changed {
+                    pipeline_runner.try_update_value(output, time_of_decode)?;
+                }
+                Ok(())
+            })?;
         Ok(())
     }
 

@@ -8,7 +8,7 @@ use crate::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays};
 /// Maps cortical area identifiers to their respective neuron voxel collections,
 /// allowing efficient storage and retrieval of neural activity across different
 /// brain regions.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CorticalMappedXYZPNeuronVoxels {
     /// Hash map storing neuron collections for each cortical area.
     ///

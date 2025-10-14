@@ -115,6 +115,45 @@ impl FeagiByteContainer{
         self.verify_container_valid_and_populate()
     }
 
+    /// Writes data to the container by taking ownership of a byte vector then validates it. Resets
+    /// allocation.
+    ///
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::{FeagiByteContainer};
+    ///
+    /// // NOTE: This here as an example, but this specific implementation is invalid
+    /// let bytes = vec![20u8, 2u8, 3u8];
+    /// let mut container = FeagiByteContainer::new_empty();
+    /// let result = container.try_write_data_by_ownership_to_container_and_verify(bytes);
+    /// // This will fail validation since we're setting invalid data
+    /// assert!(result.is_err());
+    /// ```
+    pub fn try_write_data_by_ownership_to_container_and_verify(&mut self, new_data: Vec<u8>) -> Result<(), FeagiDataError> {
+        self.bytes = new_data;
+        self.verify_container_valid_and_populate()
+    }
+
+    /// Writes data to the container by expanding the internal byte vector (if needed) and
+    /// overwriting the internal data with the given slice. Does not free allocation.
+    ///
+    /// # Example
+    /// ```
+    /// use feagi_data_serialization::{FeagiByteContainer};
+    ///
+    /// // NOTE: This here as an example, but this specific implementation is invalid
+    /// let bytes = vec![20u8, 2u8, 3u8];
+    /// let mut container = FeagiByteContainer::new_empty();
+    /// let result = container.try_write_data_by_copy_and_verify(&bytes);
+    /// // This will fail validation since we're setting invalid data
+    /// assert!(result.is_err());
+    /// ```
+    pub fn try_write_data_by_copy_and_verify(&mut self, new_data: &[u8]) -> Result<(), FeagiDataError> {
+        self.bytes.clear();
+        self.bytes.extend_from_slice(new_data);
+        self.verify_container_valid_and_populate()
+    }
+
     //endregion
 
     //region Get Properties
@@ -336,15 +375,15 @@ impl FeagiByteContainer{
         self.bytes[3] = incoming_structs.len() as u8; // Struct count
 
         // Write Structure lookup header and Data bytes at the same time
-        let mut structure_lookup_header_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
+        let mut structure_size_header_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
         for struct_index in 0..incoming_structs.len() {
             let incoming_struct = &incoming_structs[struct_index];
             let contained_struct_reference = &self.contained_struct_references[struct_index];
 
-            LittleEndian::write_u32(&mut self.bytes[structure_lookup_header_byte_index..structure_lookup_header_byte_index + 4], contained_struct_reference.number_bytes_to_read as u32);
+            LittleEndian::write_u32(&mut self.bytes[structure_size_header_byte_index..structure_size_header_byte_index + 4], contained_struct_reference.number_bytes_to_read as u32);
             incoming_struct.try_serialize_struct_to_byte_slice(contained_struct_reference.get_as_byte_slice_mut(&mut self.bytes))?;
 
-            structure_lookup_header_byte_index += Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE;
+            structure_size_header_byte_index += Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE;
         };
 
         self.is_data_valid = true;
@@ -384,11 +423,12 @@ impl FeagiByteContainer{
         self.bytes[3] = 1u8; // Struct count is always 1 for single struct
 
         // Write Structure lookup header ( only 1 entry)
-        let data_read_index: u32 = (Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE) as u32;
-        LittleEndian::write_u32(&mut self.bytes[Self::GLOBAL_BYTE_HEADER_BYTE_COUNT..Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + 4], data_read_index);
+        let data_size: u32 =  number_of_bytes_used_by_struct as u32;
+        LittleEndian::write_u32(&mut self.bytes[Self::GLOBAL_BYTE_HEADER_BYTE_COUNT..Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + 4], data_size);
 
         // Write data
-        let data_byte_slice = &mut self.bytes[data_read_index as usize..]; // rest of the array
+        let data_start_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE; // first index is always here
+        let data_byte_slice = &mut self.bytes[data_start_index..]; // rest of the array
         incoming_struct.try_serialize_struct_to_byte_slice(data_byte_slice)?;
 
         self.is_data_valid = true;
@@ -459,14 +499,14 @@ impl FeagiByteContainer{
             // NOTE: It is possible due to an error, that there is data sent after this point. However, we are going to treat this FBC as empty and report it as such.
         }
 
-        let minimum_count_header_size = Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE * number_contained_structs;
-        let total_header_size = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + minimum_count_header_size;
+        let structure_lookup_header_size_in_bytes = Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE * number_contained_structs;
+        let total_header_size = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + structure_lookup_header_size_in_bytes;
         if byte_length < total_header_size {
-            return Err(FeagiDataError::DeserializationError(format!("Feagi Byte Data specifies the existence of {} structures, but the given byte array is under the required {} byte length!", minimum_count_header_size, Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + minimum_count_header_size)));
+            return Err(FeagiDataError::DeserializationError(format!("Feagi Byte Data specifies the existence of {} structures, but the given byte array is under the required {} byte length!", structure_lookup_header_size_in_bytes, Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + structure_lookup_header_size_in_bytes)));
         }
 
         let mut structure_header_byte_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
-        let mut structure_data_byte_index: usize = total_header_size;
+        let mut structure_data_byte_index: usize = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT + structure_lookup_header_size_in_bytes;
         for contained_structure_index in 0..number_contained_structs {
             let structure_length = LittleEndian::read_u32(&self.bytes[structure_header_byte_index..structure_header_byte_index + 4]);
 

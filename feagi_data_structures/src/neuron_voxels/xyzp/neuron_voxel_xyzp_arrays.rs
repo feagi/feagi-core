@@ -10,7 +10,7 @@ use crate::neuron_voxels::xyzp::NeuronVoxelXYZP;
 /// 
 /// Stores neuron voxel coordinates and potentials in separate parallel arrays.
 /// WARNING: Does not check for duplicate neuron coordinates automatically!
-#[derive(Clone,Debug)]
+#[derive(Clone,Debug, PartialEq)]
 pub struct NeuronVoxelXYZPArrays {
     /// X coordinates of neuron voxels (using Cartesian coordinate system)
     x: Vec<u32>, // Remember, FEAGI is cartesian!

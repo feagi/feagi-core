@@ -1221,13 +1221,13 @@ macro_rules! motor_registrations
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                misc_dimensions: MiscDataDimensions
+                misc_data_dimensions: MiscDataDimensions
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let data_type: WrappedIOType = $wrapped_data_type;
+                let data_type: WrappedIOType = WrappedIOType::MiscData(Some(misc_data_dimensions));
 
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , misc_dimensions, number_channels)?;
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
 
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
@@ -1256,13 +1256,13 @@ macro_rules! motor_registrations
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                misc_dimensions: MiscDataDimensions
+                misc_data_dimensions: MiscDataDimensions
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let data_type: WrappedIOType = $wrapped_data_type;
+                let data_type: WrappedIOType = WrappedIOType::MiscData(Some(misc_data_dimensions));
 
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , misc_dimensions, number_channels)?;
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
 
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
@@ -3776,7 +3776,7 @@ macro_rules! sensor_registrations
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let data_type: WrappedIOType = $wrapped_data_type;
+                let data_type: WrappedIOType = WrappedIOType::MiscData(Some(misc_data_dimensions));
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
 
@@ -3810,7 +3810,7 @@ macro_rules! sensor_registrations
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let data_type: WrappedIOType = $wrapped_data_type;
+                let data_type: WrappedIOType = WrappedIOType::MiscData(Some(misc_data_dimensions));
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
 
@@ -3840,13 +3840,13 @@ macro_rules! sensor_registrations
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                image_properties: &ImageFrameProperties,
+                image_properties: ImageFrameProperties,
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let data_type: WrappedIOType = $wrapped_data_type;
+                let data_type: WrappedIOType = WrappedIOType::ImageFrame(Some(image_properties));
 
-                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , image_properties, number_channels)?;
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , &image_properties, number_channels)?;
 
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
@@ -3874,13 +3874,13 @@ macro_rules! sensor_registrations
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
-                image_properties: &ImageFrameProperties,
+                image_properties: ImageFrameProperties,
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let data_type: WrappedIOType = $wrapped_data_type;
+                let data_type: WrappedIOType = WrappedIOType::ImageFrame(Some(image_properties));
 
-                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , image_properties, number_channels)?;
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , &image_properties, number_channels)?;
 
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
@@ -5648,8 +5648,8 @@ impl IOCache {
 
     pub fn motor_update_data_from_bytes(&mut self) -> Result<bool, FeagiDataError> {
         let mut motors = self.motors.lock().unwrap();
-        let has_decoded_neuron_data = motors.try_decode_bytes_to_neural_data()?;
-        if !has_decoded_neuron_data {
+        let decoded_bytes_contain_neuron_data = motors.try_decode_bytes_to_neural_data()?;
+        if !decoded_bytes_contain_neuron_data {
             return Ok(false);
         }
         motors.try_decode_neural_data_into_cache(Instant::now())?;

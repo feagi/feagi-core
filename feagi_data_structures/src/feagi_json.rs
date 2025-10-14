@@ -4,7 +4,7 @@ use crate::FeagiDataError;
 /// A wrapper around serde_json::Value for handling JSON data in FEAGI.
 /// 
 /// Provides methods to create, parse, and manipulate JSON data with error handling.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FeagiJSON {
     json : serde_json::Value,
 }
