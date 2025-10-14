@@ -165,4 +165,6 @@ mod test_connector_cache_sensor_load_image {
         assert_eq!(misc_data, new_misc_data);
     }
 
+
+
 }
