@@ -22,7 +22,8 @@ mod test_connector_cache_sensor_load_image {
     use feagi_connector_core::data_types::descriptors::{ColorChannelLayout, ColorSpace, GazeProperties, ImageXYResolution, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
     use feagi_connector_core::data_types::MiscData;
     use feagi_connector_core::wrapped_io_data::WrappedIOData;
-    use feagi_data_serialization::FeagiByteContainer;
+    use feagi_data_serialization::{FeagiByteContainer, FeagiSerializable};
+    use feagi_data_structures::genomic::{CorticalID, MotorCorticalType, SensorCorticalType};
     use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
     use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
     use crate::load_bird_image;
@@ -146,16 +147,22 @@ mod test_connector_cache_sensor_load_image {
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
 
         let neuron_struct_box = bytes.try_create_new_struct_from_index(0).unwrap();
-        let neuron_struct: CorticalMappedXYZPNeuronVoxels = neuron_struct_box.try_into().unwrap(); // Just doing this step for test
-        let neuron_struct_box = bytes.try_create_new_struct_from_index(0).unwrap();
+        let sensor_neuron_struct: CorticalMappedXYZPNeuronVoxels = neuron_struct_box.try_into().unwrap();
+
+        // Since the output of the sensor is under cortical ID imis00, to read it to the motor, we need to assign it to omis00,
+        let neuron_data = sensor_neuron_struct.get_neurons_of(&CorticalID::new_sensor_cortical_area_id(SensorCorticalType::MiscellaneousAbsolute, cortical_group).unwrap()).unwrap();
+        let mut motor_neuron_struct = CorticalMappedXYZPNeuronVoxels::new();
+        motor_neuron_struct.insert(CorticalID::new_motor_cortical_area_id(MotorCorticalType::MiscellaneousAbsolute, cortical_group).unwrap(), neuron_data.clone());
+
+
 
         let mut new_bytes: FeagiByteContainer = FeagiByteContainer::new_empty();
-        new_bytes.overwrite_byte_data_with_single_struct_data(neuron_struct_box.deref(), 0).unwrap();
+        new_bytes.overwrite_byte_data_with_single_struct_data(&motor_neuron_struct, 0).unwrap();
 
         connector_cache.motor_replace_feagi_byte_container(new_bytes);
         connector_cache.motor_update_data_from_bytes();
         let new_misc_data = connector_cache.motor_try_read_postprocessed_cached_value_miscellaneous_absolute(cortical_group, channel_index).unwrap();
-        dbg!(&new_misc_data);
-}
+        assert_eq!(misc_data, new_misc_data);
+    }
 
 }

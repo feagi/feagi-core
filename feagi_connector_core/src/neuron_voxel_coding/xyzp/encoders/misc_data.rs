@@ -30,18 +30,15 @@ impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
         pipelines.par_iter()
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
-            .try_for_each(|(index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+            .try_for_each(|(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                 let channel_updated = pipeline.get_last_processed_instant();
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
                 let updated_data = pipeline.get_most_recent_output();
                 let updated_misc: &MiscData = updated_data.try_into()?;
-                let x_offset = index as u32 * self.misc_data_dimensions.width;
 
-
-
-                updated_misc.overwrite_neuron_data(scratch, x_offset.into())?;
+                updated_misc.overwrite_neuron_data(scratch, (channel_index as u32).into())?;
                 Ok(())
             })?;
 

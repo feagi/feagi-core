@@ -42,7 +42,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
             }
 
             let channel_index: u32  = neuron.cortical_coordinate.x / self.misc_dimensions.width;
-            let in_channel_x_index: u32  = channel_index % self.misc_dimensions.width;
+            let in_channel_x_index: u32  = neuron.cortical_coordinate.x % self.misc_dimensions.width;
             let misc_data: &mut MiscData = write_target.get_mut(channel_index as usize).unwrap().try_into()?;
             if !channel_changed[channel_index as usize] {
                 misc_data.blank_data();
