@@ -1,4 +1,7 @@
-use feagi_data_structures::FeagiDataError;
+use std::any::Any;
+use std::fmt::Debug;
+use feagi_data_structures::{FeagiDataError, FeagiJSON};
+use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::{FeagiByteContainer, FeagiByteStructureType};
 
 /// Trait for structures that can be serialized to and from FEAGI byte format.
@@ -6,7 +9,7 @@ use crate::{FeagiByteContainer, FeagiByteStructureType};
 /// Implementations must provide methods for determining their type, version,
 /// size requirements, and serialization/deserialization logic. The trait includes
 /// default validation methods for type and version checking.
-pub trait FeagiSerializable {
+pub trait FeagiSerializable: Debug + Any {
 
     /// Returns the structure type identifier.
     fn get_type(&self) -> FeagiByteStructureType;
@@ -24,6 +27,9 @@ pub trait FeagiSerializable {
 
     /// Deserializes data from a byte slice and updates this structure.
     fn try_deserialize_and_update_self_from_byte_slice(&mut self, byte_reading: &[u8]) -> Result<(), FeagiDataError>;
+
+    /// Provide access to `Any` trait for downcasting
+    fn as_any(&self) -> &dyn Any;
 
     /// Verifies that a byte slice contains data of the correct type.
     fn verify_byte_slice_is_of_correct_type(&self, byte_source: &[u8]) -> Result<(), FeagiDataError> {
@@ -54,4 +60,26 @@ pub trait FeagiSerializable {
     }
 
     // TODO universal method to export as a new FBS
+}
+
+impl TryFrom<Box<dyn FeagiSerializable>> for FeagiJSON {
+    type Error = FeagiDataError;
+    fn try_from(value: Box<dyn FeagiSerializable>) -> Result<Self, Self::Error> {
+        let option = value.as_any().downcast_ref::<FeagiJSON>();
+        match option {
+            Some(value) => Ok(value.clone()),
+            None => Err(FeagiDataError::DeserializationError("This struct is not a FeagiJSON struct and cannot be deserialized as such!".into()))
+        }
+    }
+}
+
+impl TryFrom<Box<dyn FeagiSerializable>> for CorticalMappedXYZPNeuronVoxels {
+    type Error = FeagiDataError;
+    fn try_from(value: Box<dyn FeagiSerializable>) -> Result<Self, Self::Error> {
+        let option = value.as_any().downcast_ref::<CorticalMappedXYZPNeuronVoxels>();
+        match option {
+            Some(value) => Ok(value.clone()),
+            None => Err(FeagiDataError::DeserializationError("This struct is not a CorticalMappedXYZPNeuronVoxels struct and cannot be deserialized as such!".into()))
+        }
+    }
 }

@@ -3,6 +3,7 @@
 //! Provides UTF-8 text serialization for `FeagiJSON` values, allowing
 //! arbitrary JSON data to be stored in FEAGI byte containers.
 
+use std::any::Any;
 use feagi_data_structures::FeagiJSON;
 use feagi_data_structures::FeagiDataError;
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
@@ -51,5 +52,8 @@ impl FeagiSerializable for FeagiJSON {
         Ok(())
     }
 
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 
 }
