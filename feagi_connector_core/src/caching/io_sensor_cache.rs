@@ -62,6 +62,8 @@ impl IOSensorCache {
         Ok(value)
     }
 
+    //endregion
+
     //region Pipeline Stages
 
     pub fn try_get_single_stage_properties(&self, sensor_type: SensorCorticalType,
@@ -101,10 +103,6 @@ impl IOSensorCache {
     }
 
     //endregion
-
-    
-
-    //endregion      
 
     //region AgentDeviceKey
 
@@ -167,7 +165,6 @@ impl IOSensorCache {
 
 
     //endregion
-    
 
     //region Internal
     fn try_get_sensory_channel_stream_caches(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex) -> Result<&SensoryChannelStreamCaches, FeagiDataError> {
