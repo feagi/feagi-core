@@ -4662,7 +4662,7 @@ impl IOCache {
     pub fn sensor_update_stage_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, stage: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
         let mut sensors = self.sensors.lock().unwrap();
-        sensors.try_updating_pipeline_stage(SENSOR_TYPE, group, channel, pipeline_stage_property_index, stage)?;
+        sensors.try_update_single_stage_properties(SENSOR_TYPE, group, channel, pipeline_stage_property_index, stage)?;
         Ok(())
     }
 
@@ -4749,10 +4749,10 @@ impl IOCache {
             let gaze: GazeProperties = GazeProperties::new_from_4d(per_4d);
 
             let mut sensors = sensor_ref.lock().unwrap();
-            let stage_properties = sensors.get_pipeline_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into()).unwrap();
+            let stage_properties = sensors.try_get_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into()).unwrap();
             let mut segmentation_stage_properties: ImageSegmentorStageProperties = stage_properties.as_any().downcast_ref::<ImageSegmentorStageProperties>().unwrap().clone();
             segmentation_stage_properties.update_from_gaze(gaze);
-            _ = sensors.try_updating_pipeline_stage(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into(), Box::new(segmentation_stage_properties));
+            _ = sensors.try_update_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into(), Box::new(segmentation_stage_properties));
         };
 
         m.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel, closure);
