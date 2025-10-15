@@ -5,6 +5,7 @@ use crate::data_pipeline::PipelineStage;
 use crate::data_pipeline::stages::ImageFrameSegmentatorStage;
 use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::data_types::ImageFrameSegmentator;
+use crate::pipeline_stage_property_implementations;
 use crate::wrapped_io_data::WrappedIOType;
 
 /// Properties for ImageFrameSegmentatorStage that store configuration for image segmentation
@@ -80,30 +81,10 @@ impl ImageSegmentorStageProperties {
     }
 }
 
-impl std::fmt::Display for ImageSegmentorStageProperties {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "ImageSegmentorStage(input: {:?}, output: {:?})", 
-               self.input_image_properties, self.output_image_properties)
-    }
-}
-
-impl<'a> TryFrom<&'a Box::<dyn PipelineStageProperties>> for &'a ImageSegmentorStageProperties {
-    type Error = FeagiDataError;
-    fn try_from(value: &'a Box::<dyn PipelineStageProperties>) -> Result<Self, Self::Error> {
-        match value.as_any().downcast_ref::<ImageSegmentorStageProperties>() {
-            Some(p) => Ok(p),
-            None => Err(FeagiDataError::InternalError("Given stage attempted to be cast as '&ImageSegmentorStageProperties' when it isn't!".into()))
-        }
-    }
-}
-
-impl TryFrom<Box::<dyn PipelineStageProperties>> for ImageSegmentorStageProperties {
-    type Error = FeagiDataError;
-    fn try_from(value: Box::<dyn PipelineStageProperties>) -> Result<Self, Self::Error> {
-        match value.as_any().downcast_ref::<ImageSegmentorStageProperties>() {
-            Some(p) => Ok(p.clone()),
-            None => Err(FeagiDataError::InternalError("Given stage attempted to be cast as 'ImageSegmentorStageProperties' when it isn't!".into()))
-        }
-    }
-}
+pipeline_stage_property_implementations!(
+    ImageSegmentorStageProperties, 
+    "ImageSegmentorStage(input: {:?}, output: {:?})", 
+    input_image_properties, 
+    output_image_properties
+);
 

@@ -5,6 +5,7 @@ pub mod stages;
 mod descriptors;
 pub mod stage_properties;
 mod pipeline_stage_properties;
+mod common_macros;
 
 pub use descriptors::PipelineStagePropertyIndex;
 pub use pipeline_stage_properties::PipelineStageProperties;

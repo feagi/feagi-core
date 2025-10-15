@@ -11,7 +11,6 @@ use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_pipeline::stage_properties::IdentityStageProperties;
-use crate::data_types::{ImageFrame, Percentage, Percentage4D, SegmentedImageFrame, SignedPercentage};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 /// A stream processor that passes data through unchanged.
