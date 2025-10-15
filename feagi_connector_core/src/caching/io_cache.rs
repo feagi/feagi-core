@@ -4562,9 +4562,6 @@ macro_rules! sensor_functions
 
 //endregion
 
-
-
-
 pub struct IOCache {
     sensors: Arc<Mutex<IOSensorCache>>,
     motors: Arc<Mutex<IOMotorCache>>,

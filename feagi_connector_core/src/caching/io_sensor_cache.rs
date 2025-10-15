@@ -2,16 +2,17 @@ use std::collections::HashMap;
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
+use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::SensorCorticalType;
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::caching::per_channel_stream_caches::{SensoryChannelStreamCaches};
-use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOSensorCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
+    agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(SensorCorticalType, CorticalGroupIndex)>>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
@@ -22,6 +23,7 @@ impl IOSensorCache {
     pub fn new() -> Self {
         IOSensorCache {
             stream_caches: HashMap::new(),
+            agent_device_key_lookup: HashMap::new(),
             neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
@@ -104,6 +106,24 @@ impl IOSensorCache {
 
     //endregion      
 
+    //region AgentDeviceKey
+
+    pub fn register_agent_device_key(&mut self, agent_device_index: AgentDeviceIndex, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex) -> Result<(), FeagiDataError> {
+        let keys = {
+            match self.agent_device_key_lookup.get_mut(&agent_device_index) {
+                Some(keys) => keys,
+                None => {
+                    self.agent_device_key_lookup.insert(agent_device_index, Vec::new());
+                    self.agent_device_key_lookup.get_mut(&agent_device_index).unwrap()
+                }
+            }
+        };
+        keys.push((sensor_type, group_index));
+        Ok(())
+    }
+
+    //endregion
+
     //region Encoding
 
     pub fn get_feagi_byte_container(&self) -> &FeagiByteContainer {
@@ -151,6 +171,22 @@ impl IOSensorCache {
         Ok(check)
     }
     //endregion
+
+    fn try_get_agent_device_lookup(&self, agent_device_index: AgentDeviceIndex) -> Result<&[(SensorCorticalType, CorticalGroupIndex)], FeagiDataError> {
+        let val = self.agent_device_key_lookup.get(&agent_device_index).ok_or(
+            FeagiDataError::BadParameters(format!("No registered sensor device found in agent's list for agent index {}!", *agent_device_index))
+        )?;
+        Ok(val)
+    }
+
+    fn try_get_agent_device_lookup_mut(&mut self, agent_device_index: AgentDeviceIndex) -> Result<&mut Vec<(SensorCorticalType, CorticalGroupIndex)>, FeagiDataError> {
+        let val = self.agent_device_key_lookup.get_mut(&agent_device_index).ok_or(
+            FeagiDataError::BadParameters(format!("No registered sensor device found in agent's list for agent index {}!", *agent_device_index))
+        )?;
+        Ok(val)
+    }
+
+
 
 }
 
