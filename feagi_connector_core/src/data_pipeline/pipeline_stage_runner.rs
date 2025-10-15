@@ -135,6 +135,11 @@ impl PipelineStageRunner {
 
     //region Pipeline Stages
 
+    pub fn try_get_single_stage_properties(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+        self.verify_pipeline_stage_index(stage_index)?;
+        Ok(self.pipeline_stages[*stage_index as usize].create_properties())
+    }
+
     pub fn get_all_stage_properties(&self) -> Vec<Box<dyn PipelineStageProperties + Sync + Send>>  {
         let mut output: Vec<Box<dyn PipelineStageProperties + Sync + Send>> = Vec::with_capacity(self.pipeline_stages.len());
         for stage in &self.pipeline_stages {
@@ -143,9 +148,10 @@ impl PipelineStageRunner {
         output
     }
 
-    pub fn try_get_single_stage_property(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
-        self.verify_pipeline_stage_index(stage_index)?;
-        Ok(self.pipeline_stages[*stage_index as usize].create_properties())
+    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        self.verify_pipeline_stage_index(updating_stage_index)?;
+        self.pipeline_stages[*updating_stage_index as usize].load_properties(updated_properties)?;
+        Ok(())
     }
 
     pub fn try_update_all_stage_properties(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
@@ -160,9 +166,10 @@ impl PipelineStageRunner {
         Ok(())
     }
 
-    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        self.verify_pipeline_stage_index(updating_stage_index)?;
-        self.pipeline_stages[*updating_stage_index as usize].load_properties(updated_properties)?;
+    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        self.verify_pipeline_stage_index(replacing_at_index)?;
+        verify_replacing_stage_properties(&self.pipeline_stages, &new_pipeline_stage_properties, &self.input_type, &self.output_type, replacing_at_index)?;
+        self.pipeline_stages[*replacing_at_index as usize] = new_pipeline_stage_properties.create_stage();
         Ok(())
     }
 
@@ -172,12 +179,6 @@ impl PipelineStageRunner {
         Ok(())
     }
 
-    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        self.verify_pipeline_stage_index(replacing_at_index)?;
-        verify_replacing_stage_properties(&self.pipeline_stages, &new_pipeline_stage_properties, &self.input_type, &self.output_type, replacing_at_index)?;
-        self.pipeline_stages[*replacing_at_index as usize] = new_pipeline_stage_properties.create_stage();
-        Ok(())
-    }
 
     /*
     // TODO we may not need these

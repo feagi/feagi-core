@@ -59,38 +59,48 @@ impl IOSensorCache {
         let value = sensor_stream_caches.try_get_channel_recent_postprocessed_value(channel_index)?;
         Ok(value)
     }
-    
-    pub(crate) fn get_pipeline_stage_properties(&self, sensor_type: SensorCorticalType, 
-                                                group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, 
+
+    //region Pipeline Stages
+
+    pub fn try_get_single_stage_properties(&self, sensor_type: SensorCorticalType,
+                                                group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex,
                                                 pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties+Send+Sync>, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
-        sensor_stream_caches.try_get_stage_properties(channel_index, pipeline_stage_property_index)
+        sensor_stream_caches.try_get_single_stage_properties(channel_index, pipeline_stage_property_index)
     }
 
-    pub fn try_updating_pipeline_stage(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex,
-                                       channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
-                                       replacing_property: Box<dyn PipelineStageProperties + Sync + Send>)
-                                       -> Result<(), FeagiDataError> {
-
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        sensor_stream_caches.try_update_pipeline_stage(channel_index, pipeline_stage_property_index, replacing_property)?;
-        Ok(())
-    }
-
-    /*
-    pub fn try_get_pipeline_stage_runner(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
+    pub fn get_all_stage_properties(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
-        let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache(channel_index)?;
-        Ok(sensor_stream_cache.get_pipeline_runner())
+        sensor_stream_caches.get_all_stage_properties(channel_index)
     }
 
-    pub fn try_get_pipeline_stage_runner_mut(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&mut PipelineStageRunner, FeagiDataError> {
+    pub fn try_update_single_stage_properties(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex,
+                                              channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
+                                              replacing_property: Box<dyn PipelineStageProperties + Sync + Send>)
+                                              -> Result<(), FeagiDataError> {
+
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        let sensor_stream_cache = sensor_stream_caches.try_get_sensory_channel_stream_cache_mut(channel_index)?;
-        Ok(sensor_stream_cache.get_pipeline_runner_mut())
+        sensor_stream_caches.try_update_single_stage_properties(channel_index, pipeline_stage_property_index, replacing_property)
     }
 
-     */
+    pub fn try_update_all_stage_properties(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches.try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
+    }
+
+    pub fn try_replace_single_stage(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches.try_replace_single_stage(channel_index, replacing_at_index, new_pipeline_stage_properties)
+    }
+
+    pub fn try_replace_all_stages(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
+    }
+
+    //endregion
+
+    
 
     //endregion      
 

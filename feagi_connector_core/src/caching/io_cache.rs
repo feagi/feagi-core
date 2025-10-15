@@ -4629,10 +4629,6 @@ impl IOCache {
 
     //region Devices
 
-    //sensor_definition!(sensor_registrations);
-
-    //sensor_definition!(sensor_write_data);
-
     sensor_definition!(sensor_functions);
 
 
@@ -4708,9 +4704,6 @@ impl IOCache {
     //endregion
 
     //region Devices
-
-    //motor_definition!(motor_registrations);
-    //motor_definition!(motor_read_data);
     motor_definition!(motor_functions);
 
     //region Gaze

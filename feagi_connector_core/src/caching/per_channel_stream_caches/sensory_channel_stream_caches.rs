@@ -58,37 +58,55 @@ impl SensoryChannelStreamCaches {
         Ok(pipeline_runner.get_most_recent_output())
     }
 
-    pub fn try_get_channel_update_instant(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Instant, FeagiDataError> {
-        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(pipeline_runner.get_last_processed_instant())
-    }
-
     pub fn try_update_channel_value(&mut self, cortical_channel_index: CorticalChannelIndex, value: &WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
         let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         runner.try_update_value(value, update_instant)?;
         self.last_update_time = update_instant;
         Ok(())
     }
-    
+
+    pub fn try_get_channel_update_instant(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Instant, FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(pipeline_runner.get_last_processed_instant())
+    }
+
     //endregion
 
     //region Pipeline Runner Stages
 
-    pub fn try_get_stage_properties(&self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+    pub fn try_get_single_stage_properties(&self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        let property = pipeline_runner.try_get_single_stage_property(pipeline_stage_property_index)?;
-        Ok(property)
+        pipeline_runner.try_get_single_stage_properties(pipeline_stage_property_index)
     }
 
-    pub fn try_update_pipeline_stage(&mut self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, replacing_property: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    pub fn get_all_stage_properties(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(pipeline_runner.get_all_stage_properties())
+    }
+
+    pub fn try_update_single_stage_properties(&mut self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, replacing_property: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
-        pipeline_runner.try_update_single_stage_properties(pipeline_stage_property_index, replacing_property)?;
-        Ok(())
+        pipeline_runner.try_update_single_stage_properties(pipeline_stage_property_index, replacing_property)
+    }
+
+    pub fn try_update_all_stage_properties(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        pipeline_runner.try_update_all_stage_properties(new_pipeline_stage_properties)
+    }
+
+    pub fn try_replace_single_stage(&mut self, cortical_channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        pipeline_runner.try_replace_single_stage(replacing_at_index, new_pipeline_stage_properties)
+    }
+
+    pub fn try_replace_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
     }
 
     //endregion
 
-    pub fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronVoxels, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+    pub(crate) fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronVoxels, time_of_burst: Instant) -> Result<(), FeagiDataError> {
         // TODO We need a new trait method to just have all channels cleared if not up to date
         // Note: We expect neuron data to be cleared before this step
         self.neuron_encoder.write_neuron_data_multi_channel(&self.pipeline_runners, time_of_burst, neuron_data)?;
