@@ -87,3 +87,23 @@ impl std::fmt::Display for ImageSegmentorStageProperties {
     }
 }
 
+impl<'a> TryFrom<&'a Box::<dyn PipelineStageProperties>> for &'a ImageSegmentorStageProperties {
+    type Error = FeagiDataError;
+    fn try_from(value: &Box::<dyn PipelineStageProperties>) -> Result<Self, Self::Error> {
+        match value.as_any().downcast_ref::<ImageSegmentorStageProperties>() {
+            Some(p) => Ok(p),
+            None => Err(FeagiDataError::InternalError("Given stage attempted to be cast as '&ImageSegmentorStageProperties' when it isn't!".into()))
+        }
+    }
+}
+
+impl TryFrom<Box::<dyn PipelineStageProperties>> for ImageSegmentorStageProperties {
+    type Error = FeagiDataError;
+    fn try_from(value: Box::<dyn PipelineStageProperties>) -> Result<Self, Self::Error> {
+        match value.as_any().downcast_ref::<ImageSegmentorStageProperties>() {
+            Some(p) => Ok(p.clone()),
+            None => Err(FeagiDataError::InternalError("Given stage attempted to be cast as 'ImageSegmentorStageProperties' when it isn't!".into()))
+        }
+    }
+}
+

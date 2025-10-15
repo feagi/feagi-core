@@ -4729,7 +4729,7 @@ impl IOCache {
 
     // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling ehre
     // TODO we can change the call back signature // TODO feedback
-    pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+    pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<FeagiSignalIndex, FeagiDataError> {
 
         // Simple way to check if valid. // TODO we should probably have a proper method
         let mut m = self.motors.lock().unwrap();
@@ -4755,9 +4755,9 @@ impl IOCache {
             _ = sensors.try_update_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into(), Box::new(segmentation_stage_properties));
         };
 
-        m.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel, closure);
+        let index = m.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel, closure)?;
 
-        Ok(())
+        Ok(index)
     }
 
 
