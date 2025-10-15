@@ -122,6 +122,23 @@ impl IOSensorCache {
         Ok(())
     }
 
+    pub fn try_update_value_by_agent_device(&mut self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex, value: &WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
+        let sensor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?.to_vec();
+        for (sensor_type, group_index) in sensor_group_pairs {
+            self.try_update_value(sensor_type, group_index, channel_index, value, time_of_update)?;
+        }
+        Ok(())
+    }
+
+    pub fn try_read_postprocessed_cached_values_by_agent_device(&self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
+        let sensor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
+        let mut results = Vec::with_capacity(sensor_group_pairs.len());
+        for (sensor_type, group_index) in sensor_group_pairs {
+            let value = self.try_read_postprocessed_cached_value(*sensor_type, *group_index, channel_index)?;
+            results.push(value);
+        }
+        Ok(results)
+    }
     //endregion
 
     //region Encoding
