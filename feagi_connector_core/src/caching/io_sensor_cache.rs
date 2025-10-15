@@ -184,7 +184,6 @@ impl IOSensorCache {
         let check = check.unwrap();
         Ok(check)
     }
-    //endregion
 
     fn try_get_agent_device_lookup(&self, agent_device_index: AgentDeviceIndex) -> Result<&[(SensorCorticalType, CorticalGroupIndex)], FeagiDataError> {
         let val = self.agent_device_key_lookup.get(&agent_device_index).ok_or(
@@ -200,7 +199,7 @@ impl IOSensorCache {
         Ok(val)
     }
 
-
+    //endregion
 
 }
 

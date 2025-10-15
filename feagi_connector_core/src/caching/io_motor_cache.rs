@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::{FeagiDataError, FeagiSignalIndex};
-use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
+use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::MotorCorticalType;
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::caching::per_channel_stream_caches::MotorChannelStreamCaches;
@@ -12,6 +12,7 @@ use crate::wrapped_io_data::WrappedIOData;
 
 pub(crate) struct IOMotorCache {
     stream_caches: HashMap<(MotorCorticalType, CorticalGroupIndex), MotorChannelStreamCaches>,
+    agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(MotorCorticalType, CorticalGroupIndex)>>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
 }
@@ -21,6 +22,7 @@ impl IOMotorCache {
     pub fn new() -> Self {
         IOMotorCache {
             stream_caches: HashMap::new(),
+            agent_device_key_lookup: HashMap::new(),
             neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty()
         }
@@ -103,7 +105,44 @@ impl IOMotorCache {
         Ok(index)
     }
 
-    
+    //endregion
+
+    //region AgentDeviceKey
+
+    pub fn register_agent_device_key(&mut self, agent_device_index: AgentDeviceIndex, motor_type: MotorCorticalType, group_index: CorticalGroupIndex) -> Result<(), FeagiDataError> {
+        let keys = {
+            match self.agent_device_key_lookup.get_mut(&agent_device_index) {
+                Some(keys) => keys,
+                None => {
+                    self.agent_device_key_lookup.insert(agent_device_index, Vec::new());
+                    self.agent_device_key_lookup.get_mut(&agent_device_index).unwrap()
+                }
+            }
+        };
+        keys.push((motor_type, group_index));
+        Ok(())
+    }
+
+    pub fn try_read_preprocessed_cached_values_by_agent_device(&self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
+        let motor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
+        let mut results = Vec::with_capacity(motor_group_pairs.len());
+        for (motor_type, group_index) in motor_group_pairs {
+            let value = self.try_read_preprocessed_cached_value(*motor_type, *group_index, channel_index)?;
+            results.push(value);
+        }
+        Ok(results)
+    }
+
+    pub fn try_read_postprocessed_cached_values_by_agent_device(&self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
+        let motor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
+        let mut results = Vec::with_capacity(motor_group_pairs.len());
+        for (motor_type, group_index) in motor_group_pairs {
+            let value = self.try_read_postprocessed_cached_value(*motor_type, *group_index, channel_index)?;
+            results.push(value);
+        }
+        Ok(results)
+    }
+
     //endregion
 
     //region Decoding
@@ -160,6 +199,21 @@ impl IOMotorCache {
         let check = check.unwrap();
         Ok(check)
     }
+
+    fn try_get_agent_device_lookup(&self, agent_device_index: AgentDeviceIndex) -> Result<&[(MotorCorticalType, CorticalGroupIndex)], FeagiDataError> {
+        let val = self.agent_device_key_lookup.get(&agent_device_index).ok_or(
+            FeagiDataError::BadParameters(format!("No registered motor device found in agent's list for agent index {}!", *agent_device_index))
+        )?;
+        Ok(val)
+    }
+
+    fn try_get_agent_device_lookup_mut(&mut self, agent_device_index: AgentDeviceIndex) -> Result<&mut Vec<(MotorCorticalType, CorticalGroupIndex)>, FeagiDataError> {
+        let val = self.agent_device_key_lookup.get_mut(&agent_device_index).ok_or(
+            FeagiDataError::BadParameters(format!("No registered motor device found in agent's list for agent index {}!", *agent_device_index))
+        )?;
+        Ok(val)
+    }
+
     //endregion
 
 }
