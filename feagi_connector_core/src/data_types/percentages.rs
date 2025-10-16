@@ -2,6 +2,24 @@ use feagi_data_structures::FeagiDataError;
 
 
 //region 1D Percentage Types
+
+/// A validated percentage value constrained to [0.0, 1.0].
+///
+/// Represents a normalized value commonly used for sensor readings like
+/// brightness, distance, etc. Provides checked and unchecked constructors
+/// along with various conversion methods.
+///
+/// # Examples
+/// ```
+/// use feagi_connector_core::data_types::Percentage;
+///
+/// let p = Percentage::new_from_0_1(0.75).unwrap();
+/// assert_eq!(p.get_as_0_1(), 0.75);
+/// assert_eq!(p.get_as_u8(), 191); // 75% of 255
+///
+/// // Fails validation
+/// assert!(Percentage::new_from_0_1(1.5).is_err());
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Percentage {
     value: f32,
@@ -11,10 +29,15 @@ impl Percentage {
 
 //region Constructors
 
+    /// Creates a percentage from a value in [0.0, 1.0] without validation.
+    ///
+    /// # Safety
+    /// Caller must ensure value is in [0.0, 1.0] to maintain invariants.
     pub fn new_from_0_1_unchecked(value: f32) -> Self {
         Percentage { value }
     }
 
+    /// Creates a percentage from a value in [0.0, 1.0] with validation.
     pub fn new_from_0_1(value: f32) -> Result<Percentage, FeagiDataError> {
     if value > 1.0 || value < 0.0 {
     return Err(FeagiDataError::BadParameters("Percentage Value must be between 0 and 1!".into()));

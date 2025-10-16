@@ -1,5 +1,12 @@
-/// Module of all StreamCacheProcessors, which handle the direct caching, filtering, and transforming of data 
-/// going in and out of FEAGI
+//! Concrete pipeline stage implementations.
+//!
+//! Provides actual processing stages that transform data flowing through
+//! the FEAGI connector pipeline. Each stage has corresponding properties
+//! defined in [`crate::data_pipeline::stage_properties`].
+//!
+//! Available stages:
+//! - **[`IdentityStage`]** - Pass-through stage (no transformation)
+//! - **[`ImageFrameSegmentatorStage`]** - Segments images for peripheral vision
 
 mod identities;
 mod image_segmentor;

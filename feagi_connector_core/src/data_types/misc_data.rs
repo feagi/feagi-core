@@ -27,14 +27,16 @@ impl MiscData {
 
     //region Common Constructors
 
-
+    /// Creates a new MiscData container filled with zeros.
     pub fn new(resolution: &MiscDataDimensions) -> Result<MiscData, FeagiDataError> {
         Ok(MiscData {
             data: Array3::zeros([resolution.width as usize, resolution.height as usize, resolution.depth as usize])
         })
     }
 
-
+    /// Creates a MiscData container from an existing 3D array.
+    ///
+    /// Returns an error if any dimension is zero.
     pub fn new_with_data(data: Array3<f32>) -> Result<MiscData, FeagiDataError> {
         let shape = data.shape();
         if shape[0] == 0 || shape[1] == 0 || shape[2] == 0 {
@@ -44,6 +46,7 @@ impl MiscData {
     }
 
 
+    /// Creates MiscData from an image frame by normalizing pixel values to [0.0, 1.0].
     pub fn new_from_image_frame(image: &ImageFrame) -> Result<MiscData, FeagiDataError> {
         let mut output  = MiscData::new(&image.get_dimensions().into())?;
         let output_data = output.get_internal_data_mut();
@@ -55,7 +58,7 @@ impl MiscData {
         Ok(output)
     }
 
-
+    /// Creates a 1x1x1 MiscData container with a single float value.
     pub fn new_from_f32(value: f32) -> Result<MiscData, FeagiDataError> {
         let mut output = MiscData::new(&MiscDataDimensions::new(1, 1, 1)?)?;
         let output_data = output.get_internal_data_mut();
