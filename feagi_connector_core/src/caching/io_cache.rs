@@ -65,7 +65,7 @@ macro_rules! motor_functions {
                 Ok(stage)
             }
 
-            pub fn [<motor_ $snake_case_identifier _get_all_stage_properties>](
+            pub fn [<motor_ $snake_case_identifier _try_get_all_stage_properties>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -179,7 +179,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -241,7 +241,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -304,7 +304,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -367,7 +367,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -430,7 +430,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -494,7 +494,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -558,7 +558,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -622,7 +622,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -686,7 +686,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -750,7 +750,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -814,7 +814,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -878,7 +878,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -942,7 +942,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1006,7 +1006,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1070,7 +1070,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1134,7 +1134,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1198,7 +1198,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1262,7 +1262,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1326,7 +1326,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1390,7 +1390,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1454,7 +1454,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1518,7 +1518,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1582,7 +1582,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1646,7 +1646,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1710,7 +1710,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1774,7 +1774,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1838,7 +1838,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1902,7 +1902,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -1966,7 +1966,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2027,7 +2027,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2088,7 +2088,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2149,7 +2149,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2199,7 +2199,7 @@ macro_rules! motor_functions {
                 return Err(FeagiDataError::NotImplemented)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2238,7 +2238,7 @@ macro_rules! motor_functions {
                 return Err(FeagiDataError::NotImplemented)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2277,7 +2277,7 @@ macro_rules! motor_functions {
                 return Err(FeagiDataError::NotImplemented)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2330,7 +2330,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2394,7 +2394,7 @@ macro_rules! motor_functions {
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2474,7 +2474,7 @@ macro_rules! sensor_functions
                 Ok(stage)
             }
 
-            pub fn [<sensor_ $snake_case_identifier _get_all_stage_properties>](
+            pub fn [<sensor_ $snake_case_identifier _try_get_all_stage_properties>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
@@ -2482,7 +2482,7 @@ macro_rules! sensor_functions
             {
                 const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
                 let mut sensors = self.sensors.lock().unwrap();
-                let stages = sensors.get_all_stage_properties(SENSOR_TYPE, group, channel_index)?;
+                let stages = sensors.try_get_all_stage_properties(SENSOR_TYPE, group, channel_index)?;
                 Ok(stages)
             }
 
@@ -2551,7 +2551,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -2574,7 +2574,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2590,7 +2590,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2616,7 +2616,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -2639,7 +2639,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2655,7 +2655,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2682,7 +2682,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -2705,7 +2705,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2721,7 +2721,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2748,7 +2748,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -2771,7 +2771,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2787,7 +2787,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2814,7 +2814,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -2837,7 +2837,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2853,7 +2853,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2880,7 +2880,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -2903,7 +2903,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2919,7 +2919,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2946,7 +2946,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -2969,7 +2969,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -2985,7 +2985,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3012,7 +3012,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3035,7 +3035,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3051,7 +3051,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3078,7 +3078,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3101,7 +3101,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3117,7 +3117,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3144,7 +3144,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3167,7 +3167,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3183,7 +3183,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3210,7 +3210,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3233,7 +3233,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3249,7 +3249,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3276,7 +3276,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3299,7 +3299,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3315,7 +3315,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3342,7 +3342,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3365,7 +3365,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3381,7 +3381,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3408,7 +3408,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3431,7 +3431,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3447,7 +3447,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3474,7 +3474,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3497,7 +3497,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3513,7 +3513,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3540,7 +3540,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3563,7 +3563,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3579,7 +3579,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3606,7 +3606,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3629,7 +3629,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3645,7 +3645,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3672,7 +3672,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3695,7 +3695,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3711,7 +3711,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3738,7 +3738,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3761,7 +3761,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3777,7 +3777,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3804,7 +3804,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3827,7 +3827,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3843,7 +3843,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3870,7 +3870,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3893,7 +3893,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3909,7 +3909,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3936,7 +3936,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -3959,7 +3959,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -3975,7 +3975,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4002,7 +4002,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4025,7 +4025,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4041,7 +4041,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4068,7 +4068,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4091,7 +4091,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4107,7 +4107,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4134,7 +4134,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4157,7 +4157,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4173,7 +4173,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4200,7 +4200,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4223,7 +4223,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4239,7 +4239,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4266,7 +4266,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4289,7 +4289,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4305,7 +4305,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4332,7 +4332,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4355,7 +4355,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4371,7 +4371,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4398,7 +4398,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4421,7 +4421,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4437,7 +4437,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4464,7 +4464,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4487,7 +4487,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4503,7 +4503,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4530,7 +4530,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4553,7 +4553,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4569,7 +4569,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4596,7 +4596,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4619,7 +4619,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4635,7 +4635,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4662,7 +4662,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4685,7 +4685,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4701,7 +4701,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4728,7 +4728,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4751,7 +4751,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4767,7 +4767,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4794,7 +4794,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4817,7 +4817,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4833,7 +4833,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4860,7 +4860,7 @@ macro_rules! sensor_functions
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<sensor_register_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -4883,7 +4883,7 @@ macro_rules! sensor_functions
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
 
-            pub fn [<sensor_write_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4899,7 +4899,7 @@ macro_rules! sensor_functions
                 Ok(())
             }
 
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
@@ -4990,7 +4990,7 @@ impl IOCache {
 
     //region Segmented Vision
 
-    pub fn sensor_register_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, input_image_properties: ImageFrameProperties, segmented_image_properties: SegmentedImageFrameProperties, initial_gaze: GazeProperties) -> Result<(), FeagiDataError> {
+    pub fn sensor_segmented_vision_absolute_try_register(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, input_image_properties: ImageFrameProperties, segmented_image_properties: SegmentedImageFrameProperties, initial_gaze: GazeProperties) -> Result<(), FeagiDataError> {
 
         let cortical_ids = SegmentedImageFrame::create_ordered_cortical_ids_for_segmented_vision(group, false);
         let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send > = SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
@@ -5008,17 +5008,59 @@ impl IOCache {
         Ok(())
     }
 
-    pub fn sensor_write_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: &WrappedIOData) -> Result<(), FeagiDataError> {
+    pub fn sensor_segmented_vision_absolute_try_write(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: &WrappedIOData) -> Result<(), FeagiDataError> {
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
         let mut sensors = self.sensors.lock().unwrap();
         sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())?;
         Ok(())
     }
 
-    pub fn sensor_update_stage_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, stage: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    /* // TODO
+    pub fn sensor_segmented_vision_absolute_try_read_postprocessed_cache_value(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,) -> Result<SegmentedImageFrame, FeagiDataError> {
+        let mut sensors = self.sensors.lock().unwrap();
+    }
+
+     */
+
+    pub fn sensor_segmented_vision_absolute_try_get_single_stage_properties(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
         let mut sensors = self.sensors.lock().unwrap();
-        sensors.try_update_single_stage_properties(SENSOR_TYPE, group, channel, pipeline_stage_property_index, stage)?;
+        let properties = sensors.try_get_single_stage_properties(SENSOR_TYPE, group, channel_index, stage_index)?;
+        Ok(properties)
+    }
+
+    pub fn sensor_segmented_vision_absolute_try_get_all_stage_properties(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let mut sensors = self.sensors.lock().unwrap();
+        let properties = sensors.try_get_all_stage_properties(SENSOR_TYPE, group, channel_index)?;
+        Ok(properties)
+    }
+
+    pub fn sensor_segmented_vision_absolute_try_update_single_stage_properties(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, updating_property: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<() , FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.try_update_single_stage_properties(SENSOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+        Ok(())
+    }
+
+    pub fn sensor_segmented_vision_absolute_try_update_all_stage_properties(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<() , FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.try_update_all_stage_properties(SENSOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+        Ok(())
+    }
+
+    pub fn sensor_segmented_vision_absolute_try_replace_single_stage(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, updating_property: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<() , FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.try_replace_single_stage(SENSOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+        Ok(())
+    }
+
+    pub fn sensor_segmented_vision_absolute_try_replace_all_stages(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<() , FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let mut sensors = self.sensors.lock().unwrap();
+        sensors.try_replace_all_stages(SENSOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
         Ok(())
     }
 
@@ -5061,19 +5103,6 @@ impl IOCache {
 
     //region Devices
     motor_definition!(motor_functions);
-
-    //region Gaze
-
-    pub fn motor_add_callback_gaze_absolute_linear<F>(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
-    where
-        F: Fn(&()) + Send + Sync + 'static,
-    {
-        const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::GazeAbsoluteLinear;
-        let mut motors = self.motors.lock().unwrap();
-        let index = motors.try_register_motor_callback(MOTOR_TYPE, group, channel, callback)?;
-        Ok(index)
-    }
-    //endregion
 
     //endregion
 

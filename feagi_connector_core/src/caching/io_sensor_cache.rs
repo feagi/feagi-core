@@ -73,7 +73,7 @@ impl IOSensorCache {
         sensor_stream_caches.try_get_single_stage_properties(channel_index, pipeline_stage_property_index)
     }
 
-    pub fn get_all_stage_properties(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
+    pub fn try_get_all_stage_properties(&self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
         sensor_stream_caches.get_all_stage_properties(channel_index)
     }
