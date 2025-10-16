@@ -116,7 +116,7 @@ mod test_connector_cache_sensor_load_image {
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
         connector_cache.sensor_register_segmented_vision_absolute(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
-        connector_cache.motor_register_gaze_absolute_linear(cortical_group, number_channels, 10.try_into().unwrap());
+        connector_cache.motor_gaze_absolute_linear_try_register(cortical_group, number_channels, 10.try_into().unwrap());
 
         connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &bird_image.into()).unwrap();
 
@@ -124,7 +124,7 @@ mod test_connector_cache_sensor_load_image {
 
         connector_cache.sensor_encode_data_to_bytes(0);
         let sensor_bytes = connector_cache.sensor_copy_feagi_byte_container();
-        let motor_data = connector_cache.motor_try_read_postprocessed_cached_value_gaze_absolute_linear(cortical_group, channel_index).unwrap();
+        let motor_data = connector_cache.motor_gaze_absolute_linear_try_read_postprocessed_cached_value(cortical_group, channel_index).unwrap();
     }
 
     #[test]
@@ -140,7 +140,7 @@ mod test_connector_cache_sensor_load_image {
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
         connector_cache.sensor_register_miscellaneous_absolute(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
-        connector_cache.motor_register_miscellaneous_absolute(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
+        connector_cache.motor_miscellaneous_absolute_try_register(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
 
         connector_cache.sensor_write_miscellaneous_absolute(cortical_group, channel_index, misc_data.clone()).unwrap();
         connector_cache.sensor_encode_data_to_bytes(0);
@@ -161,7 +161,7 @@ mod test_connector_cache_sensor_load_image {
 
         connector_cache.motor_replace_feagi_byte_container(new_bytes);
         connector_cache.motor_update_data_from_bytes();
-        let new_misc_data = connector_cache.motor_try_read_postprocessed_cached_value_miscellaneous_absolute(cortical_group, channel_index).unwrap();
+        let new_misc_data = connector_cache.motor_miscellaneous_absolute_try_read_postprocessed_cached_value(cortical_group, channel_index).unwrap();
         assert_eq!(misc_data, new_misc_data);
     }
 
