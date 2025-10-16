@@ -27,7 +27,7 @@ pub enum FeagiByteStructureType {
 
     /// Binary format for neuron categorical XYZP data.
     /// 
-    /// Binary format specifically designed for neuron dataW
+    /// Binary format specifically designed for neuron data
     /// with X, Y, Z coordinates and potential (P) values.
     NeuronCategoricalXYZP = 11u8
 }

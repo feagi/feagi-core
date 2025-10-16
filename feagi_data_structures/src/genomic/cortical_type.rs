@@ -4,6 +4,13 @@ use crate::FeagiDataError;
 use crate::genomic::{CorticalID};
 use crate::genomic::descriptors::{CorticalChannelDimensionRange, CorticalGroupIndex};
 
+/// Internal macro for defining I/O cortical type enums and their implementations.
+///
+/// Generates:
+/// - Enum type with doc comments
+/// - Display implementation
+/// - Conversion methods to/from cortical IDs
+/// - Property accessors for encoding types and dimension ranges
 macro_rules! define_io_cortical_types {
     (
         $cortical_io_type_enum_name:ident {

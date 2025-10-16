@@ -1,3 +1,11 @@
+//! Data processing pipeline infrastructure.
+//!
+//! Provides a flexible pipeline system for preprocessing sensor data before encoding
+//! and postprocessing motor data after decoding. Stages can perform transformations
+//! like image segmentation, filtering, normalization, and more.
+//!
+//! Pipelines are configured via properties and can be dynamically modified at runtime.
+
 mod pipeline_stage_runner;
 mod pipeline_stage;
 mod pipeline_stage_conversions;
@@ -5,6 +13,7 @@ pub mod stages;
 mod descriptors;
 pub mod stage_properties;
 mod pipeline_stage_properties;
+mod common_macros;
 
 pub use descriptors::PipelineStagePropertyIndex;
 pub use pipeline_stage_properties::PipelineStageProperties;

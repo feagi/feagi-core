@@ -18,10 +18,8 @@ use crate::neuron_voxel_coding::xyzp::decoders::*;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 //region macros
-
-macro_rules! motor_registrations
-{
-    (
+macro_rules! motor_functions {
+        (
         $cortical_io_type_enum_name:ident {
             $(
                 $(#[doc = $doc:expr])?
@@ -38,7 +36,7 @@ macro_rules! motor_registrations
         }
     ) => {
         $(
-            motor_registrations!(@generate_function
+            motor_functions!(@generate_function
                 $cortical_type_key_name,
                 $snake_case_identifier,
                 $default_coder_type,
@@ -46,6 +44,107 @@ macro_rules! motor_registrations
                 $data_type
             );
         )*
+    };
+
+    // Helper macro to generate stage and callback functions
+    (@generate_stage_and_callback_functions
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_ $snake_case_identifier _try_get_single_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                stage_index: PipelineStagePropertyIndex
+            ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let stage = motors.try_get_single_stage_properties(MOTOR_TYPE, group, channel_index, stage_index)?;
+                Ok(stage)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _get_all_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let stages = motors.get_all_stage_properties(MOTOR_TYPE, group, channel_index)?;
+                Ok(stages)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_update_single_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                updating_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                motors.try_update_single_stage_properties(MOTOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+                Ok(())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_update_all_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                motors.try_update_all_stage_properties(MOTOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+                Ok(())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_replace_single_stage>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                motors.try_replace_single_stage(MOTOR_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
+                Ok(())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_replace_all_stages>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                motors.try_replace_all_stages(MOTOR_TYPE, group, channel_index, new_pipeline_stage_properties)?;
+                Ok(())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_register_motor_callback>]<F>(
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                callback: F
+            ) -> Result<FeagiSignalIndex, FeagiDataError>
+            where F: Fn(&()) + Send + Sync + 'static,
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                let signal_index = motors.try_register_motor_callback(MOTOR_TYPE, group, channel_index, callback)?;
+                Ok(signal_index)
+            }
+        }
     };
 
     // Arm for Percentage with Absolute Linear encoding
@@ -57,7 +156,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -79,7 +178,35 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+        
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Absolute Fractional encoding
@@ -91,7 +218,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -113,7 +240,35 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+        
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Incremental Linear encoding
@@ -125,7 +280,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -148,7 +303,35 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+        
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Incremental Fractional encoding
@@ -160,7 +343,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -183,6 +366,34 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+            
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
          }
     };
 
@@ -195,7 +406,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -218,7 +429,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Absolute Fractional encoding
@@ -230,7 +470,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -253,7 +493,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Incremental Linear encoding
@@ -265,7 +534,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -288,7 +557,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Incremental Fractional encoding
@@ -300,7 +598,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -323,7 +621,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Absolute Linear encoding
@@ -335,7 +662,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -358,7 +685,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Absolute Fractional encoding
@@ -370,7 +726,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -393,7 +749,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Incremental Linear encoding
@@ -405,7 +790,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -428,7 +813,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Incremental Fractional encoding
@@ -440,7 +854,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -463,7 +877,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Absolute Linear encoding
@@ -475,7 +918,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -498,7 +941,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Absolute Fractional encoding
@@ -510,7 +982,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -533,7 +1005,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Incremental Linear encoding
@@ -545,7 +1046,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -568,7 +1069,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Incremental Fractional encoding
@@ -580,7 +1110,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -603,7 +1133,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Percentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &Percentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Absolute Linear encoding
@@ -615,7 +1174,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -638,7 +1197,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Absolute Fractional encoding
@@ -650,7 +1238,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -673,7 +1261,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Incremental Linear encoding
@@ -685,7 +1302,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -708,7 +1325,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Incremental Fractional encoding
@@ -720,7 +1366,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -743,7 +1389,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Absolute Linear encoding
@@ -755,7 +1430,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -778,7 +1453,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Absolute Fractional encoding
@@ -790,7 +1494,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -813,7 +1517,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Incremental Linear encoding
@@ -825,7 +1558,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -848,7 +1581,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Incremental Fractional encoding
@@ -860,7 +1622,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -883,7 +1645,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Absolute Linear encoding
@@ -895,7 +1686,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -918,7 +1709,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage2D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage2D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Absolute Fractional encoding
@@ -930,7 +1750,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -953,7 +1773,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Incremental Linear encoding
@@ -965,7 +1814,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -988,7 +1837,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Incremental Fractional encoding
@@ -1000,7 +1878,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -1023,7 +1901,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage3D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage3D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage4D with Absolute Linear encoding
@@ -1035,7 +1942,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -1057,6 +1964,32 @@ macro_rules! motor_registrations
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
             }
          }
     };
@@ -1070,7 +2003,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -1093,6 +2026,32 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
     };
 
@@ -1105,7 +2064,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -1128,6 +2087,32 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
     };
 
@@ -1140,7 +2125,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -1159,11 +2144,40 @@ macro_rules! motor_registrations
                     };
                     output
                 };
-                
+
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<SignedPercentage4D, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &SignedPercentage4D = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for ImageFrame with Absolute encoding
@@ -1175,12 +2189,30 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 image_properties: ImageFrameProperties
             ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
             }
@@ -1196,12 +2228,69 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 image_properties: ImageFrameProperties
             ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+         }
+    };
+
+    // Arm for ImageFrame with Incremental encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        ImageFrame_Incremental,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                image_properties: ImageFrameProperties
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<ImageFrame, FeagiDataError>
             {
                 return Err(FeagiDataError::NotImplemented)
             }
@@ -1217,7 +2306,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -1240,7 +2329,36 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<MiscData, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<MiscData, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for MiscData with Incremental encoding
@@ -1252,7 +2370,7 @@ macro_rules! motor_registrations
         $data_type:ident
     ) => {
         ::paste::paste! {
-            pub fn [<motor_register_ $snake_case_identifier>](
+            pub fn [<motor_ $snake_case_identifier _try_register>](
                 &mut self,
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
@@ -1275,11 +2393,40 @@ macro_rules! motor_registrations
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
             }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<MiscData, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<MiscData, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
+                let value: &MiscData = wrapped.try_into()?;
+                Ok(value.clone())
+            }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 }
 
-macro_rules! motor_read_data
+macro_rules! sensor_functions
 {
     (
         $cortical_io_type_enum_name:ident {
@@ -1298,7 +2445,7 @@ macro_rules! motor_read_data
         }
     ) => {
         $(
-            motor_read_data!(@generate_function
+            sensor_functions!(@generate_function
                 $cortical_type_key_name,
                 $snake_case_identifier,
                 $default_coder_type,
@@ -1308,1367 +2455,91 @@ macro_rules! motor_read_data
         )*
     };
 
-    // Arm for Percentage with Absolute Linear encoding
-    (@generate_function
+    // Helper macro to generate stage functions
+    (@generate_stage_functions
         $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
+        $snake_case_identifier:expr
     ) => {
         ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_get_single_stage_properties>](
                 &mut self,
                 group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage, FeagiDataError>
+                channel_index: CorticalChannelIndex,
+                stage_index: PipelineStagePropertyIndex
+            ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
             {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage2D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage2D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage2D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage2D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage2D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage2D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage2D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage2D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage3D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage3D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage3D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage3D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage3D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage3D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage3D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage3D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage4D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage4D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage4D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Percentage4D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Percentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &Percentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage2D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage2D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage2D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage2D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage2D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage2D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage2D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage2D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage3D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage3D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage2D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage2D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage3D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage3D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage3D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage3D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage3D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage3D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage3D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage3D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage4D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage4D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage4D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage4D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage4D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage4D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for SignedPercentage4D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage4D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<SignedPercentage4D, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &SignedPercentage4D = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for ImageFrame with Absolute encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        ImageFrame_Absolute,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<ImageFrame, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &ImageFrame = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<ImageFrame, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &ImageFrame = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for ImageFrame with Incremental encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        ImageFrame_Incremental,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<ImageFrame, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &ImageFrame = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-            
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<ImageFrame, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &ImageFrame = wrapped.try_into()?;
-                Ok(value.clone())
-            }
-         }
-    };
-
-    // Arm for Misc Data with Absolute encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        MiscData_Absolute,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<MiscData, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &MiscData = wrapped.try_into()?;
-                Ok(value.clone())
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let mut sensors = self.sensors.lock().unwrap();
+                let stage = sensors.try_get_single_stage_properties(SENSOR_TYPE, group, channel_index, stage_index)?;
+                Ok(stage)
             }
 
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _get_all_stage_properties>](
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<MiscData, FeagiDataError>
+            ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
             {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &MiscData = wrapped.try_into()?;
-                Ok(value.clone())
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let mut sensors = self.sensors.lock().unwrap();
+                let stages = sensors.get_all_stage_properties(SENSOR_TYPE, group, channel_index)?;
+                Ok(stages)
             }
-         }
-    };
 
-    // Arm for Misc Data with Incremental encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        MiscData_Incremental,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<motor_try_read_preprocessed_cached_value_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_update_single_stage_properties>](
                 &mut self,
                 group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<MiscData, FeagiDataError>
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                updating_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
             {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &MiscData = wrapped.try_into()?;
-                Ok(value.clone())
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_single_stage_properties(SENSOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+                Ok(())
             }
 
-            pub fn [<motor_try_read_postprocessed_cached_value_ $snake_case_identifier>](
+            pub fn [<sensor_ $snake_case_identifier _try_update_all_stage_properties>](
                 &mut self,
                 group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<MiscData, FeagiDataError>
+                channel_index: CorticalChannelIndex,
+                updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
             {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &MiscData = wrapped.try_into()?;
-                Ok(value.clone())
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_all_stage_properties(SENSOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+                Ok(())
             }
-         }
-    };
-}
 
+            pub fn [<sensor_ $snake_case_identifier _try_replace_single_stage>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_replace_single_stage(SENSOR_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
+                Ok(())
+            }
 
-macro_rules! sensor_registrations
-{
-    (
-        $cortical_io_type_enum_name:ident {
-            $(
-                $(#[doc = $doc:expr])?
-                $cortical_type_key_name:ident => {
-                    friendly_name: $display_name:expr,
-                    snake_case_identifier: $snake_case_identifier:expr,
-                    base_ascii: $base_ascii:expr,
-                    channel_dimension_range: $channel_dimension_range:expr,
-                    default_coder_type: $default_coder_type:ident,
-                    wrapped_data_type: $wrapped_data_type:expr,
-                    data_type: $data_type:ident,
-                }
-            ),* $(,)?
+            pub fn [<sensor_ $snake_case_identifier _try_replace_all_stages>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_replace_all_stages(SENSOR_TYPE, group, channel_index, new_pipeline_stage_properties)?;
+                Ok(())
+            }
         }
-    ) => {
-        $(
-            sensor_registrations!(@generate_function
-                $cortical_type_key_name,
-                $snake_case_identifier,
-                $default_coder_type,
-                $wrapped_data_type,
-                $data_type
-            );
-        )*
     };
 
     // Arm for Percentage with Absolute Linear encoding
@@ -2702,7 +2573,38 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Absolute Fractional encoding
@@ -2736,7 +2638,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Incremental Linear encoding
@@ -2770,7 +2704,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Incremental Fractional encoding
@@ -2804,7 +2770,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Absolute Linear encoding
@@ -2838,7 +2836,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Absolute Fractional encoding
@@ -2872,7 +2902,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Incremental Linear encoding
@@ -2906,7 +2968,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Incremental Fractional encoding
@@ -2940,7 +3034,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Absolute Linear encoding
@@ -2974,7 +3100,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Absolute Fractional encoding
@@ -3008,7 +3166,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Incremental Linear encoding
@@ -3042,7 +3232,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Incremental Fractional encoding
@@ -3076,7 +3298,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Absolute Linear encoding
@@ -3110,7 +3364,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Absolute Fractional encoding
@@ -3144,7 +3430,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Incremental Linear encoding
@@ -3178,7 +3496,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Incremental Fractional encoding
@@ -3212,7 +3562,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Absolute Linear encoding
@@ -3246,7 +3628,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Absolute Fractional encoding
@@ -3280,7 +3694,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Incremental Linear encoding
@@ -3314,7 +3760,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Incremental Fractional encoding
@@ -3348,7 +3826,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Absolute Linear encoding
@@ -3382,7 +3892,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Absolute Fractional encoding
@@ -3416,7 +3958,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Incremental Linear encoding
@@ -3450,7 +4024,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Incremental Fractional encoding
@@ -3484,7 +4090,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Absolute Linear encoding
@@ -3518,7 +4156,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Absolute Fractional encoding
@@ -3552,7 +4222,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Incremental Linear encoding
@@ -3586,7 +4288,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Incremental Fractional encoding
@@ -3620,7 +4354,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage4D with Absolute Linear encoding
@@ -3654,7 +4420,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage4D with Absolute Fractional encoding
@@ -3688,7 +4486,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage4D with Incremental Linear encoding
@@ -3722,7 +4552,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage4D with Incremental Fractional encoding
@@ -3756,7 +4618,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for MiscData with Absolute encoding
@@ -3790,7 +4684,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for MiscData with Incremental encoding
@@ -3824,7 +4750,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for ImageFrame with Absolute encoding
@@ -3858,7 +4816,39 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for ImageFrame with Incremental encoding
@@ -3892,1643 +4882,44 @@ macro_rules! sensor_registrations
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
             }
+
+            pub fn [<sensor_write_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                let mut sensors = self.sensors.lock().unwrap();
+                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let mut sensors = self.sensors.lock().unwrap();
+                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
          }
-    };
 
-}
-
-
-macro_rules! sensor_write_data
-{
-    (
-        $cortical_io_type_enum_name:ident {
-            $(
-                $(#[doc = $doc:expr])?
-                $cortical_type_key_name:ident => {
-                    friendly_name: $display_name:expr,
-                    snake_case_identifier: $snake_case_identifier:expr,
-                    base_ascii: $base_ascii:expr,
-                    channel_dimension_range: $channel_dimension_range:expr,
-                    default_coder_type: $default_coder_type:ident,
-                    wrapped_data_type: $wrapped_data_type:expr,
-                    data_type: $data_type:ident,
-                }
-            ),* $(,)?
-        }
-    ) => {
-        $(
-            sensor_write_data!(@generate_function
-                $cortical_type_key_name,
-                $snake_case_identifier,
-                $default_coder_type,
-                $wrapped_data_type,
-                $data_type
-            );
-        )*
-    };
-
-    // Arm for Percentage with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage2D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage2D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage2D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage2D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage2D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage2D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage2D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage2D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage3D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage3D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage3D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage3D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage3D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage3D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage3D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage3D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage4D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage4D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage4D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for Percentage4D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        Percentage4D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage2D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage2D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage2D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage2D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage2D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage2D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage2D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage2D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage3D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage3D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage3D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage3D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage3D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage3D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage3D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage3D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage4D with Absolute Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage4D_Absolute_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage4D with Absolute Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage4D_Absolute_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage4D with Incremental Linear encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage4D_Incremental_Linear,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SignedPercentage4D with Incremental Fractional encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SignedPercentage4D_Incremental_Fractional,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for MiscData with Absolute encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        MiscData_Absolute,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for MiscData with Incremental encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        MiscData_Incremental,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for ImageFrame with Absolute encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        ImageFrame_Absolute,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for ImageFrame with Incremental encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        ImageFrame_Incremental,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SegmentedImageFrame with Absolute encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SegmentedImageFrame_Absolute,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
-    };
-
-    // Arm for SegmentedImageFrame with Incremental encoding
-    (@generate_function
-        $cortical_type_key_name:ident,
-        $snake_case_identifier:expr,
-        SegmentedImageFrame_Incremental,
-        $wrapped_data_type:expr,
-        $data_type:ident
-    ) => {
-        ::paste::paste! {
-            pub fn [<sensor_write_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-                data: $data_type
-            ) -> Result<(), FeagiDataError>
-            {
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
-                let instant = Instant::now();
-
-                let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
-                Ok(())
-            }
-
-            pub fn [<_read_postprocessed_cache_ $snake_case_identifier>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel: CorticalChannelIndex,
-            ) -> Result< $data_type, FeagiDataError> {
-
-                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-
-                let mut sensors = self.sensors.lock().unwrap();
-                let wrapped = sensors.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                let val: $data_type = wrapped.try_into()?;
-                Ok(val)
-            }
-
-          }
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
 }
 
 //endregion
-
-
-
 
 pub struct IOCache {
     sensors: Arc<Mutex<IOSensorCache>>,
@@ -5594,9 +4985,7 @@ impl IOCache {
 
     //region Devices
 
-    sensor_definition!(sensor_registrations);
-
-    sensor_definition!(sensor_write_data);
+    sensor_definition!(sensor_functions);
 
 
     //region Segmented Vision
@@ -5629,7 +5018,7 @@ impl IOCache {
     pub fn sensor_update_stage_segmented_vision_absolute(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, stage: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
         let mut sensors = self.sensors.lock().unwrap();
-        sensors.try_updating_pipeline_stage(SENSOR_TYPE, group, channel, pipeline_stage_property_index, stage)?;
+        sensors.try_update_single_stage_properties(SENSOR_TYPE, group, channel, pipeline_stage_property_index, stage)?;
         Ok(())
     }
 
@@ -5671,9 +5060,7 @@ impl IOCache {
     //endregion
 
     //region Devices
-
-    motor_definition!(motor_registrations);
-    motor_definition!(motor_read_data);
+    motor_definition!(motor_functions);
 
     //region Gaze
 
@@ -5698,7 +5085,7 @@ impl IOCache {
 
     // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling ehre
     // TODO we can change the call back signature // TODO feedback
-    pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+    pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<FeagiSignalIndex, FeagiDataError> {
 
         // Simple way to check if valid. // TODO we should probably have a proper method
         let mut m = self.motors.lock().unwrap();
@@ -5718,15 +5105,15 @@ impl IOCache {
             let gaze: GazeProperties = GazeProperties::new_from_4d(per_4d);
 
             let mut sensors = sensor_ref.lock().unwrap();
-            let stage_properties = sensors.get_pipeline_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into()).unwrap();
+            let stage_properties = sensors.try_get_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into()).unwrap();
             let mut segmentation_stage_properties: ImageSegmentorStageProperties = stage_properties.as_any().downcast_ref::<ImageSegmentorStageProperties>().unwrap().clone();
             segmentation_stage_properties.update_from_gaze(gaze);
-            _ = sensors.try_updating_pipeline_stage(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into(), Box::new(segmentation_stage_properties));
+            _ = sensors.try_update_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into(), Box::new(segmentation_stage_properties));
         };
 
-        m.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel, closure);
+        let index = m.try_register_motor_callback(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel, closure)?;
 
-        Ok(())
+        Ok(index)
     }
 
 

@@ -3,6 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_pipeline::PipelineStage;
 use crate::data_pipeline::stages::IdentityStage;
+use crate::pipeline_stage_property_implementations;
 use crate::wrapped_io_data::WrappedIOType;
 
 /// Identity Stages have no parameters, so this structure is essentially blank
@@ -45,8 +46,8 @@ impl IdentityStageProperties {
     }
 }
 
-impl std::fmt::Display for IdentityStageProperties {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "IdentityStage({})", self.identity_type)
-    }
-}
+pipeline_stage_property_implementations!(
+    IdentityStageProperties,
+    "IdentityStage(holding {:?})",
+    identity_type,
+);

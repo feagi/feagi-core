@@ -5,11 +5,24 @@ use crate::data_types::{ImageFrame, MiscData, Percentage, Percentage2D, Percenta
 use crate::wrapped_io_data::WrappedIOData;
 
 
+/// Type descriptor for wrapped I/O data.
+///
+/// Describes the variant of data stored in a [`WrappedIOData`] enum without holding
+/// the actual data. Used for type checking, validation, and creating appropriately-typed
+/// blank data instances.
+///
+/// Some variants (images, misc data) can optionally include dimensional properties
+/// to enable efficient memory pre-allocation.
+///
+/// # Examples
+/// ```
+/// use feagi_connector_core::wrapped_io_data::WrappedIOType;
+///
+/// let io_type = WrappedIOType::Percentage;
+/// let blank_data = io_type.create_blank_data_of_type().unwrap();
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
-/// Generally used to describe a type of IO data, such as that found in [WrappedIOData].
-/// Some variants which describe various sized data structures, such as images, Optionally can
-/// include properties which aid in avoiding memory reallocation.
 pub enum WrappedIOType {
     F32, // NOTE: No Feagi Neurons encode floats directly!
     F32_2D,
@@ -33,14 +46,29 @@ pub enum WrappedIOType {
 
 impl WrappedIOType {
 
+    /// Checks if two types are the same variant, ignoring associated data.
+    ///
+    /// # Example
+    /// ```
+    /// use feagi_connector_core::wrapped_io_data::WrappedIOType;
+    ///
+    /// let a = WrappedIOType::Percentage;
+    /// let b = WrappedIOType::Percentage;
+    /// assert!(WrappedIOType::is_same_variant(&a, &b));
+    /// ```
     pub fn is_same_variant(a: &WrappedIOType, b: &WrappedIOType) -> bool {
         discriminant(a) == discriminant(b)
     }
 
+    /// Checks if actual I/O data matches this type descriptor.
     pub fn is_of(&self, io_type: &WrappedIOData) -> bool {
         WrappedIOType::from(io_type) == *self
     }
     
+    /// Creates a zero-initialized instance of wrapped data for this type.
+    ///
+    /// For types with associated properties (images, misc data), those properties
+    /// must be provided or this will return an error.
     pub fn create_blank_data_of_type(&self) -> Result<WrappedIOData, FeagiDataError> {
         match self {
             WrappedIOType::F32 => Ok(WrappedIOData::F32(0.0)),

@@ -5,6 +5,7 @@ use crate::data_pipeline::PipelineStage;
 use crate::data_pipeline::stages::ImageFrameSegmentatorStage;
 use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::data_types::ImageFrameSegmentator;
+use crate::pipeline_stage_property_implementations;
 use crate::wrapped_io_data::WrappedIOType;
 
 /// Properties for ImageFrameSegmentatorStage that store configuration for image segmentation
@@ -80,10 +81,10 @@ impl ImageSegmentorStageProperties {
     }
 }
 
-impl std::fmt::Display for ImageSegmentorStageProperties {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "ImageSegmentorStage(input: {:?}, output: {:?})", 
-               self.input_image_properties, self.output_image_properties)
-    }
-}
+pipeline_stage_property_implementations!(
+    ImageSegmentorStageProperties, 
+    "ImageSegmentorStage(input: {:?}, output: {:?})", 
+    input_image_properties, 
+    output_image_properties
+);
 

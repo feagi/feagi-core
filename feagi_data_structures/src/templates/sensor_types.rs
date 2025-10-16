@@ -1,4 +1,17 @@
-/// Definition File for Sensors (Input Processing Units)
+//! Sensor cortical type definitions for FEAGI.
+//!
+//! Defines all supported sensor types including infrared, ultrasonic,
+//! accelerometer, gyroscope, camera, and various other sensory inputs.
+
+/// Macro defining all sensor (input processing unit) cortical types.
+///
+/// This macro generates enum variants and associated metadata for each
+/// sensor type, including encoding methods, dimension ranges, and identifiers.
+///
+/// # Usage
+/// ```ignore
+/// sensor_definition!(define_io_cortical_types);
+/// ```
 #[macro_export]
 macro_rules! sensor_definition {
     ($callback:ident) => {

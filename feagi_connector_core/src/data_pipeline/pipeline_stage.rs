@@ -1,6 +1,6 @@
 //! Core trait definition for stream cache processing.
 //!
-//! This module defines the `StreamCacheStage` trait, which provides a unified interface
+//! This module defines the `PipelineStage` trait, which provides a unified interface
 //! for all data pipeline processing in the FEAGI system. Processors implementing this
 //! trait can be chained together to create complex data processing pipelines.
 
