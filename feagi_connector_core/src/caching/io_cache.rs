@@ -46,6 +46,107 @@ macro_rules! motor_functions {
         )*
     };
 
+    // Helper macro to generate stage and callback functions
+    (@generate_stage_and_callback_functions
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_ $snake_case_identifier _try_get_single_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                stage_index: PipelineStagePropertyIndex
+            ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let stage = motors.try_get_single_stage_properties(MOTOR_TYPE, group, channel_index, stage_index)?;
+                Ok(stage)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _get_all_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let motors = self.motors.lock().unwrap();
+                let stages = motors.get_all_stage_properties(MOTOR_TYPE, group, channel_index)?;
+                Ok(stages)
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_update_single_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                updating_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                motors.try_update_single_stage_properties(MOTOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+                Ok(())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_update_all_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                motors.try_update_all_stage_properties(MOTOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+                Ok(())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_replace_single_stage>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                motors.try_replace_single_stage(MOTOR_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
+                Ok(())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_replace_all_stages>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                motors.try_replace_all_stages(MOTOR_TYPE, group, channel_index, new_pipeline_stage_properties)?;
+                Ok(())
+            }
+
+            pub fn [<motor_ $snake_case_identifier _try_register_motor_callback>]<F>(
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                callback: F
+            ) -> Result<FeagiSignalIndex, FeagiDataError>
+            where F: Fn(&()) + Send + Sync + 'static,
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                let mut motors = self.motors.lock().unwrap();
+                let signal_index = motors.try_register_motor_callback(MOTOR_TYPE, group, channel_index, callback)?;
+                Ok(signal_index)
+            }
+        }
+    };
+
     // Arm for Percentage with Absolute Linear encoding
     (@generate_function
         $cortical_type_key_name:ident,
@@ -103,87 +204,9 @@ macro_rules! motor_functions {
                 let value: &Percentage = wrapped.try_into()?;
                 Ok(value.clone())
             }
-
-            pub fn [<motor_ $snake_case_identifier _try_get_single_stage_properties>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex,
-                stage_index: PipelineStagePropertyIndex
-            ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let stage = motors.try_get_single_stage_properties(MOTOR_TYPE, channel_index, stage_index)?;
-                Ok(stage)
-            }
-
-            pub fn [<motor_ $snake_case_identifier get_all_stage_properties>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex
-            ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let stages = motors.get_all_stage_properties(MOTOR_TYPE, group, channel_index)?;
-                Ok(stages)
-            }
-
-            pub fn [<motor_ $snake_case_identifier try_update_single_stage_properties>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex,
-                pipeline_stage_property_index: PipelineStagePropertyIndex,
-                updating_property: Box<dyn PipelineStageProperties + Sync + Send>
-            ) -> Result<(), FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                motors.try_update_single_stage_properties(MOTOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
-                Ok(())
-            }
-
-            pub fn [<motor_ $snake_case_identifier try_update_all_stage_properties>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex,
-                updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
-            ) -> Result<(), FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let stages = motors.try_update_all_stage_properties(MOTOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
-                Ok(stages)
-            }
-
-            pub fn [<motor_ $snake_case_identifier try_replace_single_stage>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex,
-                pipeline_stage_property_index: PipelineStagePropertyIndex,
-                replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
-            ) -> Result<(), FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                motors.try_replace_single_stage(MOTOR_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
-                Ok(())
-            }
-
-            pub fn [<motor_ $snake_case_identifier try_replace_all_stages>](
-                &mut self,
-                group: CorticalGroupIndex,
-                channel_index: CorticalChannelIndex,
-                new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
-            ) -> Result<(), FeagiDataError>
-            {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                motors.try_replace_single_stage(MOTOR_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
-                Ok(())
-            }
-
          }
+        
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Absolute Fractional encoding
@@ -244,6 +267,8 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+        
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Incremental Linear encoding
@@ -305,6 +330,8 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+        
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage with Incremental Fractional encoding
@@ -365,6 +392,8 @@ macro_rules! motor_functions {
                 let value: &Percentage = wrapped.try_into()?;
                 Ok(value.clone())
             }
+            
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
          }
     };
 
@@ -427,6 +456,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Absolute Fractional encoding
@@ -488,6 +520,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Incremental Linear encoding
@@ -549,6 +584,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage2D with Incremental Fractional encoding
@@ -610,6 +648,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Absolute Linear encoding
@@ -671,6 +712,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Absolute Fractional encoding
@@ -732,6 +776,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Incremental Linear encoding
@@ -793,6 +840,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage3D with Incremental Fractional encoding
@@ -854,6 +904,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Absolute Linear encoding
@@ -915,6 +968,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Absolute Fractional encoding
@@ -976,6 +1032,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Incremental Linear encoding
@@ -1037,6 +1096,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for Percentage4D with Incremental Fractional encoding
@@ -1098,6 +1160,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Absolute Linear encoding
@@ -1159,6 +1224,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Absolute Fractional encoding
@@ -1220,6 +1288,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Incremental Linear encoding
@@ -1281,6 +1352,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage with Incremental Fractional encoding
@@ -1342,6 +1416,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Absolute Linear encoding
@@ -1403,6 +1480,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Absolute Fractional encoding
@@ -1464,6 +1544,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Incremental Linear encoding
@@ -1525,6 +1608,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage2D with Incremental Fractional encoding
@@ -1586,6 +1672,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Absolute Linear encoding
@@ -1647,6 +1736,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Absolute Fractional encoding
@@ -1708,6 +1800,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Incremental Linear encoding
@@ -1769,6 +1864,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage3D with Incremental Fractional encoding
@@ -1830,6 +1928,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for SignedPercentage4D with Absolute Linear encoding
@@ -2073,6 +2174,30 @@ macro_rules! motor_functions {
                 let value: &SignedPercentage4D = wrapped.try_into()?;
                 Ok(value.clone())
             }
+         }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for ImageFrame with Absolute encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        ImageFrame_Absolute,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<motor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                image_properties: ImageFrameProperties
+            ) -> Result<(), FeagiDataError>
+            {
+                return Err(FeagiDataError::NotImplemented)
+            }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value_>](
                 &mut self,
@@ -2080,11 +2205,7 @@ macro_rules! motor_functions {
                 channel_index: CorticalChannelIndex
             ) -> Result<ImageFrame, FeagiDataError>
             {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &ImageFrame = wrapped.try_into()?;
-                Ok(value.clone())
+                return Err(FeagiDataError::NotImplemented)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_postprocessed_cached_value>](
@@ -2093,20 +2214,16 @@ macro_rules! motor_functions {
                 channel_index: CorticalChannelIndex
             ) -> Result<ImageFrame, FeagiDataError>
             {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
-                let motors = self.motors.lock().unwrap();
-                let wrapped = motors.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel_index)?;
-                let value: &ImageFrame = wrapped.try_into()?;
-                Ok(value.clone())
+                return Err(FeagiDataError::NotImplemented)
             }
          }
     };
 
-    // Arm for ImageFrame with Absolute encoding
+    // Arm for ImageFrame with Incremental encoding
     (@generate_function
         $cortical_type_key_name:ident,
         $snake_case_identifier:expr,
-        ImageFrame_Absolute,
+        ImageFrame_Incremental,
         $wrapped_data_type:expr,
         $data_type:ident
     ) => {
@@ -2239,6 +2356,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 
     // Arm for MiscData with Incremental encoding
@@ -2300,6 +2420,9 @@ macro_rules! motor_functions {
                 Ok(value.clone())
             }
          }
+
+         
+         motor_functions!(@generate_stage_and_callback_functions $cortical_type_key_name, $snake_case_identifier);
     };
 }
 
