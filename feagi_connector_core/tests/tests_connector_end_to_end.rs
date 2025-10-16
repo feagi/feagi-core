@@ -51,8 +51,8 @@ mod test_connector_cache_sensor_load_image {
 
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
-        connector_cache.sensor_register_segmented_vision_absolute(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
-        connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &bird_image.into()).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_register(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &bird_image.into()).unwrap();
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
     }
 
@@ -78,15 +78,15 @@ mod test_connector_cache_sensor_load_image {
         let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), (0.5, 0.5).try_into().unwrap());
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
-        connector_cache.sensor_register_segmented_vision_absolute(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_register(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
 
         let wrapped: WrappedIOData = bird_image.into();
 
-        connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &wrapped).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &wrapped).unwrap();
         connector_cache.sensor_encode_data_to_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
 
-        connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &wrapped).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &wrapped).unwrap();
         connector_cache.sensor_encode_data_to_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
     }
@@ -115,10 +115,10 @@ mod test_connector_cache_sensor_load_image {
 
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
-        connector_cache.sensor_register_segmented_vision_absolute(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_register(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
         connector_cache.motor_gaze_absolute_linear_try_register(cortical_group, number_channels, 10.try_into().unwrap());
 
-        connector_cache.sensor_write_segmented_vision_absolute(cortical_group, channel_index, &bird_image.into()).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &bird_image.into()).unwrap();
 
         // TODO motor bytes sending
 
@@ -139,10 +139,10 @@ mod test_connector_cache_sensor_load_image {
         let misc_data = MiscData::new_from_image_frame(&bird_image).unwrap();
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
-        connector_cache.sensor_register_miscellaneous_absolute(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
+        connector_cache.sensor_miscellaneous_absolute_try_register(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
         connector_cache.motor_miscellaneous_absolute_try_register(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
 
-        connector_cache.sensor_write_miscellaneous_absolute(cortical_group, channel_index, misc_data.clone()).unwrap();
+        connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data.clone()).unwrap();
         connector_cache.sensor_encode_data_to_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
 
