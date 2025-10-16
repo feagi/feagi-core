@@ -165,6 +165,66 @@ mod test_connector_cache_sensor_load_image {
         assert_eq!(misc_data, new_misc_data);
     }
 
+    #[test]
+    fn test_expanding_encode() {
+        let time_of_previous_burst: Instant = Instant::now();
+
+        let cortical_group: CorticalGroupIndex = 0.into();
+        let number_channels: CorticalChannelCount = 1.try_into().unwrap();
+        let channel_index: CorticalChannelIndex = 0.into();
+
+        let bird_image = load_bird_image();
+        let misc_data_image = MiscData::new_from_image_frame(&bird_image).unwrap();
+        let misc_data_empty = MiscData::new(&misc_data_image.get_dimensions()).unwrap();
+        let mut misc_data_semi = misc_data_empty.clone();
+        {
+            let mut data = misc_data_semi.get_internal_data_mut();
+            for i in 0..20usize {
+                data[[i, 0, 0]] = 1.0;
+            }
+        }
+        let mut misc_data_solid = misc_data_empty.clone();
+        {
+            let mut data = misc_data_semi.get_internal_data_mut();
+            data.fill(10.0);
+        }
+
+
+
+        let mut connector_cache = feagi_connector_core::IOCache::new();
+        connector_cache.sensor_miscellaneous_absolute_try_register(cortical_group, number_channels, misc_data_empty.get_dimensions()).unwrap();
+
+
+        connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data_empty.clone()).unwrap();
+        connector_cache.sensor_encode_data_to_bytes(0);
+        let bytes_empty = connector_cache.sensor_copy_feagi_byte_container();
+
+        connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data_semi.clone()).unwrap();
+        connector_cache.sensor_encode_data_to_bytes(0);
+        let bytes_semi = connector_cache.sensor_copy_feagi_byte_container();
+
+        connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data_image.clone()).unwrap();
+        connector_cache.sensor_encode_data_to_bytes(0);
+        let bytes_image = connector_cache.sensor_copy_feagi_byte_container();
+
+        connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data_solid.clone()).unwrap();
+        connector_cache.sensor_encode_data_to_bytes(0);
+        let bytes_solid = connector_cache.sensor_copy_feagi_byte_container();
+
+        connector_cache.sensor_miscellaneous_absolute_try_register(1.into(), number_channels, misc_data_empty.get_dimensions()).unwrap();
+        connector_cache.sensor_miscellaneous_absolute_try_register(2.into(), number_channels, misc_data_empty.get_dimensions()).unwrap();
+        connector_cache.sensor_miscellaneous_absolute_try_register(3.into(), number_channels, misc_data_empty.get_dimensions()).unwrap();
+
+        connector_cache.sensor_miscellaneous_absolute_try_write(1.into(), channel_index, misc_data_image.clone()).unwrap();
+        connector_cache.sensor_miscellaneous_absolute_try_write(2.into(), channel_index, misc_data_solid.clone()).unwrap();
+        connector_cache.sensor_miscellaneous_absolute_try_write(3.into(), channel_index, misc_data_image.clone()).unwrap();
+
+
+        connector_cache.sensor_encode_data_to_bytes(0);
+        let bytes_multi = connector_cache.sensor_copy_feagi_byte_container();
+        dbg!(bytes_multi.get_number_of_bytes_used());
+    }
+
 
 
 }
