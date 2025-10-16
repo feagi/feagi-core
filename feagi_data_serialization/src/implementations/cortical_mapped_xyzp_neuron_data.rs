@@ -129,7 +129,10 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
     }
 }
 
-/// Serializes a neuron voxel array to bytes
+/// Serializes a neuron voxel array to bytes in structure-of-arrays format.
+///
+/// Writes X, Y, Z coordinates and potential values as separate contiguous blocks
+/// for memory efficiency and cache locality during deserialization.
 #[inline]
 fn write_neuron_array_to_bytes(neuron_array: &NeuronVoxelXYZPArrays, bytes_to_write_to: &mut [u8]) -> Result<(), FeagiDataError> {
     const U32_F32_LENGTH: usize = 4;
