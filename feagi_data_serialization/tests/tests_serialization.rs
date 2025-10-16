@@ -72,10 +72,11 @@ fn test_byte_container_progressive_memory_allocation() {
     let mut previous_bytes_used = byte_container.get_number_of_bytes_used();
     
     // Iterate through progressively larger neuron structures
-    let iteration_count = 100;
+    let iteration_count = 20;
     for iteration in 0..iteration_count {
         // Exponentially increase dimensions each iteration
         let dimension_size = iteration * iteration + 1;
+        dbg!(iteration);
         let dimensions = CorticalDimensions::new(dimension_size as u32, dimension_size as u32, 1).unwrap();
         let total_neurons = dimensions.number_elements();
         

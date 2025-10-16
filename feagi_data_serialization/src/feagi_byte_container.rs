@@ -412,8 +412,10 @@ impl FeagiByteContainer{
             }
         );
 
-
-        if total_number_of_bytes > self.bytes.capacity() {
+        if total_number_of_bytes > self.bytes.len() {
+            //unsafe {
+            //    self.bytes.set_len(total_number_of_bytes);
+            //}
             self.bytes.resize(total_number_of_bytes, 0);
         }
 
