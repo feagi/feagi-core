@@ -1,6 +1,17 @@
+//! Motor cortical type definitions for FEAGI.
+//!
+//! Defines all supported motor output types including rotary motors,
+//! servos, and other actuator types.
 
-
-/// Definition File for Motors (Input Processing Units)
+/// Macro defining all motor (output processing unit) cortical types.
+///
+/// This macro generates enum variants and associated metadata for each
+/// motor type, including encoding methods, dimension ranges, and identifiers.
+///
+/// # Usage
+/// ```ignore
+/// motor_definition!(define_io_cortical_types);
+/// ```
 #[macro_export]
 macro_rules! motor_definition {
     ($callback:ident) => {
