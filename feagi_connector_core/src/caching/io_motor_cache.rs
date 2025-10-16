@@ -28,7 +28,7 @@ impl IOMotorCache {
         }
     }
 
-    //region Interactions
+    //region Motor Interactions
     pub fn register(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
                     neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
                     pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>)
@@ -58,13 +58,24 @@ impl IOMotorCache {
         Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
     }
 
+    pub fn try_register_motor_callback<F>(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    where
+        F: Fn(&()) + Send + Sync + 'static,
+    {
+        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        let index = motor_stream_caches.try_connect_to_data_processed_signal(channel_index, callback)?;
+        Ok(index)
+    }
+
+    //endregion
+
     //region Pipeline Stages
 
     pub fn try_get_single_stage_properties(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         motor_stream_caches.try_get_single_stage_properties(channel_index, stage_index)
     }
-    
+
     pub fn get_all_stage_properties(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         motor_stream_caches.get_all_stage_properties(channel_index)
@@ -78,7 +89,7 @@ impl IOMotorCache {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_update_single_stage_properties(channel_index, pipeline_stage_property_index, replacing_property)
     }
-    
+
     pub fn try_update_all_stage_properties(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
@@ -88,21 +99,10 @@ impl IOMotorCache {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_replace_single_stage(channel_index, replacing_at_index, new_pipeline_stage_properties)
     }
-    
+
     pub fn try_replace_all_stages(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
-    }
-
-    //endregion
-
-    pub fn try_register_motor_callback<F>(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
-    where
-        F: Fn(&()) + Send + Sync + 'static,
-    {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
-        let index = motor_stream_caches.try_connect_to_data_processed_signal(channel_index, callback)?;
-        Ok(index)
     }
 
     //endregion
@@ -179,7 +179,6 @@ impl IOMotorCache {
     }
 
     //endregion
-
 
     //region Internal
     fn try_get_motor_channel_stream_caches(&self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex) -> Result<&MotorChannelStreamCaches, FeagiDataError> {
