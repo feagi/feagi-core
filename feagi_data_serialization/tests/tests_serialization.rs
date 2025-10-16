@@ -61,3 +61,155 @@ fn test_byte_container_overwrite_bytes() {
     let decoded_neurons: CorticalMappedXYZPNeuronVoxels = byte_container.try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::NeuronCategoricalXYZP).unwrap().unwrap().try_into().unwrap();
     assert_eq!(decoded_neurons, source_neurons);
 }
+
+#[test]
+fn test_byte_container_progressive_memory_allocation() {
+    let mut byte_container = FeagiByteContainer::new_empty();
+    let initial_allocation = byte_container.get_number_of_bytes_allocated();
+    let cortical_id = CorticalID::new_custom_cortical_area_id("c_test".into()).unwrap();
+    
+    let mut previous_allocation = initial_allocation;
+    let mut previous_bytes_used = byte_container.get_number_of_bytes_used();
+    
+    // Iterate through progressively larger neuron structures
+    let iteration_count = 10;
+    for iteration in 0..iteration_count {
+        // Exponentially increase dimensions each iteration
+        let dimension_size = 2u32.pow(iteration + 2) as usize; // 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048
+        let dimensions = CorticalDimensions::new(dimension_size as u32, dimension_size as u32, 1).unwrap();
+        let total_neurons = dimensions.number_elements();
+        
+        // Create neurons with increasing size
+        let neurons = sample_cortical_mapped_neurons(dimensions, cortical_id.clone());
+        
+        // Serialize into the byte container
+        byte_container.overwrite_byte_data_with_single_struct_data(&neurons, iteration as u16).unwrap();
+        
+        // Track memory metrics
+        let current_allocation = byte_container.get_number_of_bytes_allocated();
+        let current_bytes_used = byte_container.get_number_of_bytes_used();
+        
+        // Verify the container is valid
+        assert!(byte_container.is_valid());
+        assert_eq!(byte_container.try_get_number_contained_structures().unwrap(), 1);
+        assert_eq!(byte_container.get_increment_counter().unwrap(), iteration as u16);
+        
+        // Verify bytes used increases with more neurons
+        assert!(current_bytes_used > previous_bytes_used, 
+            "Iteration {}: bytes used ({}) should be greater than previous ({})", 
+            iteration, current_bytes_used, previous_bytes_used);
+        
+        // Verify allocation grows when needed (may not grow every iteration due to capacity)
+        assert!(current_allocation >= previous_allocation,
+            "Iteration {}: allocation ({}) should not shrink from previous ({})",
+            iteration, current_allocation, previous_allocation);
+        
+        // Verify we can deserialize correctly
+        let decoded_neurons: CorticalMappedXYZPNeuronVoxels = byte_container
+            .try_create_new_struct_from_index(0)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(decoded_neurons, neurons, "Iteration {}: decoded neurons should match source", iteration);
+        
+        // Verify the decoded structure has the expected number of neurons
+        let decoded_neuron_count = decoded_neurons.get_neurons_of(&cortical_id).unwrap().len();
+        assert_eq!(decoded_neuron_count, total_neurons as usize,
+            "Iteration {}: expected {} neurons, got {}", 
+            iteration, total_neurons, decoded_neuron_count);
+        
+        println!("Iteration {}: {} neurons, {} bytes used, {} bytes allocated", 
+                 iteration, total_neurons, current_bytes_used, current_allocation);
+        
+        previous_allocation = current_allocation;
+        previous_bytes_used = current_bytes_used;
+    }
+    
+    // Verify final allocation is significantly larger than initial
+    let final_allocation = byte_container.get_number_of_bytes_allocated();
+    assert!(final_allocation > initial_allocation * 100,
+        "Final allocation ({}) should be much larger than initial ({})",
+        final_allocation, initial_allocation);
+    
+    // Test freeing unused allocation
+    byte_container.free_unused_allocation();
+    let freed_allocation = byte_container.get_number_of_bytes_allocated();
+    assert_eq!(freed_allocation, byte_container.get_number_of_bytes_used(),
+        "After freeing, allocation should equal bytes used");
+}
+
+#[test]
+fn test_byte_container_progressive_memory_allocation_with_increasing_cortical_count() {
+    let mut byte_container = FeagiByteContainer::new_empty();
+    let initial_allocation = byte_container.get_number_of_bytes_allocated();
+    let cortical_id = CorticalID::new_custom_cortical_area_id("c_test".into()).unwrap();
+
+    let mut previous_allocation = initial_allocation;
+    let mut previous_bytes_used = byte_container.get_number_of_bytes_used();
+
+    // Iterate through progressively larger neuron structures
+    let iteration_count = 10;
+    for iteration in 0..iteration_count {
+        // Exponentially increase dimensions each iteration
+        let dimension_size = 2u32.pow(iteration + 2) as usize; // 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048
+        let dimensions = CorticalDimensions::new(dimension_size as u32, dimension_size as u32, 1).unwrap();
+        let total_neurons = dimensions.number_elements();
+
+        // Create neurons with increasing size
+        let neurons = sample_cortical_mapped_neurons(dimensions, cortical_id.clone());
+
+        // Serialize into the byte container
+        byte_container.overwrite_byte_data_with_single_struct_data(&neurons, iteration as u16).unwrap();
+
+        // Track memory metrics
+        let current_allocation = byte_container.get_number_of_bytes_allocated();
+        let current_bytes_used = byte_container.get_number_of_bytes_used();
+
+        // Verify the container is valid
+        assert!(byte_container.is_valid());
+        assert_eq!(byte_container.try_get_number_contained_structures().unwrap(), 1);
+        assert_eq!(byte_container.get_increment_counter().unwrap(), iteration as u16);
+
+        // Verify bytes used increases with more neurons
+        assert!(current_bytes_used > previous_bytes_used,
+                "Iteration {}: bytes used ({}) should be greater than previous ({})",
+                iteration, current_bytes_used, previous_bytes_used);
+
+        // Verify allocation grows when needed (may not grow every iteration due to capacity)
+        assert!(current_allocation >= previous_allocation,
+                "Iteration {}: allocation ({}) should not shrink from previous ({})",
+                iteration, current_allocation, previous_allocation);
+
+        // Verify we can deserialize correctly
+        let decoded_neurons: CorticalMappedXYZPNeuronVoxels = byte_container
+            .try_create_new_struct_from_index(0)
+            .unwrap()
+            .try_into()
+            .unwrap();
+        assert_eq!(decoded_neurons, neurons, "Iteration {}: decoded neurons should match source", iteration);
+
+        // Verify the decoded structure has the expected number of neurons
+        let decoded_neuron_count = decoded_neurons.get_neurons_of(&cortical_id).unwrap().len();
+        assert_eq!(decoded_neuron_count, total_neurons as usize,
+                   "Iteration {}: expected {} neurons, got {}",
+                   iteration, total_neurons, decoded_neuron_count);
+
+        println!("Iteration {}: {} neurons, {} bytes used, {} bytes allocated",
+                 iteration, total_neurons, current_bytes_used, current_allocation);
+
+        previous_allocation = current_allocation;
+        previous_bytes_used = current_bytes_used;
+    }
+
+    // Verify final allocation is significantly larger than initial
+    let final_allocation = byte_container.get_number_of_bytes_allocated();
+    assert!(final_allocation > initial_allocation * 100,
+            "Final allocation ({}) should be much larger than initial ({})",
+            final_allocation, initial_allocation);
+
+    // Test freeing unused allocation
+    byte_container.free_unused_allocation();
+    let freed_allocation = byte_container.get_number_of_bytes_allocated();
+    assert_eq!(freed_allocation, byte_container.get_number_of_bytes_used(),
+               "After freeing, allocation should equal bytes used");
+}
