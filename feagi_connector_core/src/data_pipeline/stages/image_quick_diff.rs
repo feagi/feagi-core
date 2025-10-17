@@ -1,4 +1,3 @@
-
 use std::any::Any;
 use std::fmt::Display;
 use std::ops::RangeInclusive;
@@ -6,13 +5,13 @@ use std::time::Instant;
 use ndarray::{Array3, Zip};
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
-use feagi_data_structures::data::descriptors::{ImageFrameProperties};
-use feagi_data_structures::data::{ImageFrame, Percentage};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_pipeline::stage_properties::ImageQuickDiffStageProperties;
+use crate::data_types::descriptors::ImageFrameProperties;
+use crate::data_types::{ImageFrame, Percentage};
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug, Clone)]
 pub struct ImageFrameQuickDiffStage {
@@ -25,6 +24,7 @@ pub struct ImageFrameQuickDiffStage {
     inclusive_pixel_range: RangeInclusive<u8>,
     samples_count_lower_bound: usize,
     samples_count_upper_bound: usize,
+    acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>
 }
 
 impl Display for ImageFrameQuickDiffStage {
@@ -46,7 +46,7 @@ impl PipelineStage for ImageFrameQuickDiffStage {
         &self.diff_cache
     }
 
-    fn process_new_input(&mut self, value: &WrappedIOData, _time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+    fn process_new_input(&mut self, value: &WrappedIOData, time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         quick_diff_and_check_if_pass(value, &self.previous_frame_cache, &mut self.diff_cache, &self.inclusive_pixel_range, self.samples_count_lower_bound, self.samples_count_upper_bound)?;
         self.previous_frame_cache = value.clone();
         Ok(&self.diff_cache)
@@ -60,16 +60,17 @@ impl PipelineStage for ImageFrameQuickDiffStage {
         self
     }
 
-    fn create_properties(&self) -> Box<dyn PipelineStageProperties> {
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
 
         let number_of_samples = self.input_definition.get_number_of_channels();
         Box::new(ImageQuickDiffStageProperties {
+            image_properties: self.input_definition.clone(),
             per_pixel_allowed_range: self.inclusive_pixel_range.clone(),
-            acceptable_amount_of_activity_in_image: (),
+            acceptable_amount_of_activity_in_image: self.acceptable_amount_of_activity_in_image.clone(),
         })
     }
 
-    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         todo!()
     }
 }
@@ -77,7 +78,7 @@ impl PipelineStage for ImageFrameQuickDiffStage {
 impl ImageFrameQuickDiffStage {
 
     pub fn new(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Self, FeagiDataError> {
-        
+
         let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;
         let number_of_samples = image_properties.get_number_of_channels();
         Ok(ImageFrameQuickDiffStage {
@@ -86,8 +87,13 @@ impl ImageFrameQuickDiffStage {
             input_definition: image_properties,
             inclusive_pixel_range: per_pixel_allowed_range,
             samples_count_lower_bound: (acceptable_amount_of_activity_in_image.start().get_as_0_1() * number_of_samples as f32) as usize,
-            samples_count_upper_bound: (acceptable_amount_of_activity_in_image.end().get_as_0_1() * number_of_samples as f32) as usize
+            samples_count_upper_bound: (acceptable_amount_of_activity_in_image.end().get_as_0_1() * number_of_samples as f32) as usize,
+            acceptable_amount_of_activity_in_image,
         })
+    }
+
+    pub fn new_box(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Box<dyn PipelineStage + Send + Sync + 'static>, FeagiDataError> {
+        Ok(Box::new(ImageFrameQuickDiffStage::new(image_properties, per_pixel_allowed_range, acceptable_amount_of_activity_in_image)?))
     }
 }
 
@@ -123,5 +129,3 @@ fn quick_diff_and_check_if_pass(minuend: &WrappedIOData, subtrahend: &WrappedIOD
     diff_result.skip_encoding = !should_pass ||  diff_result.skip_encoding;
     Ok(())
 }
-
-
