@@ -40,6 +40,20 @@ impl PipelineStageProperties for ImageQuickDiffStageProperties {
     }
 }
 
+impl ImageQuickDiffStageProperties {
+    pub fn new(per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>, image_properties: ImageFrameProperties) -> Self {
+        ImageQuickDiffStageProperties {
+            per_pixel_allowed_range,
+            acceptable_amount_of_activity_in_image,
+            image_properties
+        }
+    }
+
+    pub fn new_box(per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>, image_properties: ImageFrameProperties) -> Box<dyn PipelineStageProperties + Send + Sync> {
+        Box::new(ImageQuickDiffStageProperties::new(per_pixel_allowed_range, acceptable_amount_of_activity_in_image, image_properties))
+    }
+}
+
 pipeline_stage_property_implementations!(
     ImageQuickDiffStageProperties,
     "ImageQuickDiffStageProperties(per pixel allow range: {:?}, acceptable_amount_of_activity_in_image: {:?}, image_properties: {:?})",
