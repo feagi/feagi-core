@@ -61,8 +61,6 @@ impl PipelineStage for ImageFrameQuickDiffStage {
     }
 
     fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
-
-        let number_of_samples = self.input_definition.get_number_of_channels();
         Box::new(ImageQuickDiffStageProperties {
             image_properties: self.input_definition.clone(),
             per_pixel_allowed_range: self.inclusive_pixel_range.clone(),
