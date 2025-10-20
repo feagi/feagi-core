@@ -145,6 +145,10 @@ impl IOSensorCache {
         &self.byte_data
     }
 
+    pub fn get_neurons(&self) -> &CorticalMappedXYZPNeuronVoxels {
+        &self.neuron_data
+    }
+
     pub fn replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
         self.byte_data = feagi_byte_container
     }
