@@ -83,11 +83,11 @@ mod test_connector_cache_sensor_load_image {
         let wrapped: WrappedIOData = bird_image.into();
 
         connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &wrapped).unwrap();
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
 
         connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &wrapped).unwrap();
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
     }
 
@@ -122,7 +122,7 @@ mod test_connector_cache_sensor_load_image {
 
         // TODO motor bytes sending
 
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let sensor_bytes = connector_cache.sensor_copy_feagi_byte_container();
         let motor_data = connector_cache.motor_gaze_absolute_linear_try_read_postprocessed_cached_value(cortical_group, channel_index).unwrap();
     }
@@ -143,7 +143,7 @@ mod test_connector_cache_sensor_load_image {
         connector_cache.motor_miscellaneous_absolute_try_register(cortical_group, number_channels, misc_data.get_dimensions()).unwrap();
 
         connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data.clone()).unwrap();
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
 
         let neuron_struct_box = bytes.try_create_new_struct_from_index(0).unwrap();
@@ -196,19 +196,19 @@ mod test_connector_cache_sensor_load_image {
 
 
         connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data_empty.clone()).unwrap();
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes_empty = connector_cache.sensor_copy_feagi_byte_container();
 
         connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data_semi.clone()).unwrap();
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes_semi = connector_cache.sensor_copy_feagi_byte_container();
 
         connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data_image.clone()).unwrap();
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes_image = connector_cache.sensor_copy_feagi_byte_container();
 
         connector_cache.sensor_miscellaneous_absolute_try_write(cortical_group, channel_index, misc_data_solid.clone()).unwrap();
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes_solid = connector_cache.sensor_copy_feagi_byte_container();
 
         connector_cache.sensor_miscellaneous_absolute_try_register(1.into(), number_channels, misc_data_empty.get_dimensions()).unwrap();
@@ -220,7 +220,7 @@ mod test_connector_cache_sensor_load_image {
         connector_cache.sensor_miscellaneous_absolute_try_write(3.into(), channel_index, misc_data_image.clone()).unwrap();
 
 
-        connector_cache.sensor_encode_data_to_bytes(0);
+        connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes_multi = connector_cache.sensor_copy_feagi_byte_container();
         dbg!(bytes_multi.get_number_of_bytes_used());
     }
