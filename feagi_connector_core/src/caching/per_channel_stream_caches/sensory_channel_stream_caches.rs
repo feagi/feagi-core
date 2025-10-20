@@ -37,8 +37,12 @@ impl SensoryChannelStreamCaches {
     ///
     /// # Returns
     /// * `Ok(SensoryChannelStreamCaches)` - Successfully created cache system
-    /// * `Err(FeagiDataError)` - If pipeline initialization fails for any channel
+    /// * `Err(FeagiDataError)` - If pipeline initialization fails for any channel, or zero channels are submitted
     pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, initial_cached_value: WrappedIOData, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
+
+        if stage_properties_per_channels.is_empty() {
+            return Err(FeagiDataError::BadParameters("Cannot create a sensor stream cache with 0 channels!".into()))
+        }
 
         let expected_data_encoded_type: WrappedIOType = neuron_encoder.get_encodable_data_type();
 
@@ -78,22 +82,18 @@ impl SensoryChannelStreamCaches {
         Ok(())
     }
 
+    /// Retrieves the expected input data type for any of the channels
+    ///
+    ///
+    /// # Returns
+    /// * `WrappedIOType` - The input type expected
+    pub fn get_input_type(&self) -> WrappedIOType {
+        self.pipeline_runners.first().unwrap().get_input_data_type()
+    }
+
     //endregion
 
     //region Pipeline Runner Data
-
-    /// Retrieves the expected input data type for a specific channel's pipeline.
-    ///
-    /// # Arguments
-    /// * `cortical_channel_index` - The channel to query
-    ///
-    /// # Returns
-    /// * `Ok(WrappedIOType)` - The input type expected by the channel's pipeline
-    /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    pub fn try_get_channel_input_type(&self, cortical_channel_index: CorticalChannelIndex) -> Result<WrappedIOType, FeagiDataError> {
-        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(pipeline_runner.get_input_data_type())
-    }
 
     /// Retrieves the most recent raw input value for a channel before pipeline processing.
     ///
@@ -142,7 +142,8 @@ impl SensoryChannelStreamCaches {
     /// * `Err(FeagiDataError)` - If channel is invalid or processing fails
     pub fn try_update_channel_value(&mut self, cortical_channel_index: CorticalChannelIndex, value: WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
         let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
-        runner.try_update_value(value, update_instant)?;
+        let mut_val = runner.get_cached_input_mut();
+        *mut_val = value;
         self.last_update_time = update_instant;
         Ok(())
     }

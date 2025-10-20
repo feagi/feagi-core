@@ -64,6 +64,14 @@ impl PipelineStageRunner {
     pub fn get_input_data_type(&self) -> WrappedIOType {
         self.input_type
     }
+    
+    pub fn verify_input_data(&self, incoming_data: &WrappedIOData) -> Result<(), FeagiDataError> {
+        let incoming_type: WrappedIOType = (&incoming_data).into();
+        if incoming_type != self.input_type {
+            return Err(FeagiDataError::BadParameters(format!("Expected input data type to be {} but got {incoming_type}!", self.input_type)))
+        }
+        Ok(())
+    }
 
     /// Returns the output data type produced by this processor chain.
     ///
@@ -72,27 +80,8 @@ impl PipelineStageRunner {
     pub fn get_output_data_type(&self) -> WrappedIOType {
         self.output_type
     }
-
-    /// Processes new input data through the entire pipeline.
-    ///
-    /// Updates the cached input with the new value and propagates it through all
-    /// pipeline stages sequentially. Each stage processes the output from the
-    /// previous stage. The final output is returned.
-    ///
-    /// # Arguments
-    /// * `new_value` - The new input data to process
-    /// * `time_of_update` - Timestamp when this data was received/updated
-    ///
-    /// # Returns
-    /// * `Ok(&WrappedIOData)` - Reference to the final processed output
-    /// * `Err(FeagiDataError)` - If input type doesn't match or processing fails
-    pub fn try_update_value(&mut self, new_value: WrappedIOData, time_of_update: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-        if WrappedIOType::from(&new_value) != self.input_type {
-            return Err(FeagiDataError::BadParameters(format!("Expected Input data type of {} but received {}!", self.input_type.to_string(), &new_value.to_string())).into());
-        }
-
-        self.cached_input = new_value;
-
+    
+    pub fn process_updated_value(&mut self, time_of_update: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         if self.pipeline_stages.is_empty() {
             return Ok(&self.cached_input);
         }
