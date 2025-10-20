@@ -2,10 +2,11 @@ use std::time::Instant;
 use std::sync::{Arc, Mutex};
 use std::mem;
 use paste;
-use feagi_data_structures::{motor_definition, sensor_definition, FeagiDataError, FeagiSignalIndex};
+use feagi_data_structures::{motor_definition, sensor_definition, FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::{MotorCorticalType, SensorCorticalType};
 use feagi_data_serialization::FeagiByteContainer;
+use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
@@ -4923,6 +4924,8 @@ macro_rules! sensor_functions
 
 pub struct IOCache {
     sensors: Arc<Mutex<IOSensorCache>>,
+    sensor_neuron_callbacks: FeagiSignal<CorticalMappedXYZPNeuronVoxels>,
+    sensor_byte_callbacks: FeagiSignal<FeagiByteContainer>,
     motors: Arc<Mutex<IOMotorCache>>,
 }
 
@@ -4955,6 +4958,8 @@ impl IOCache {
     pub fn new() -> Self {
         IOCache {
             sensors: Arc::new(Mutex::new(IOSensorCache::new())),
+            sensor_neuron_callbacks: FeagiSignal::new(),
+            sensor_byte_callbacks: FeagiSignal::new(),
             motors: Arc::new(Mutex::new(IOMotorCache::new()))
         }
     }
@@ -4964,11 +4969,37 @@ impl IOCache {
 
     //region Cache Logic
 
-    pub fn sensor_encode_data_to_bytes(&mut self, increment_value: u16) -> Result<(), FeagiDataError> {
+    pub fn sensor_encode_data_to_neurons_only(&mut self) -> Result<(), FeagiDataError> {
         let mut sensors = self.sensors.lock().unwrap();
         _ = sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
-        _ = sensors.try_encode_updated_neuron_data_to_feagi_byte_container(increment_value)?;
+        self.sensor_neuron_callbacks.emit(sensors.get_neurons());
         Ok(())
+    }
+
+    pub fn sensor_encode_data_to_neurons_then_bytes(&mut self, increment_value: u16) -> Result<(), FeagiDataError> {
+        let mut sensors = self.sensors.lock().unwrap();
+        _ = sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
+        self.sensor_neuron_callbacks.emit(sensors.get_neurons());
+
+        _ = sensors.try_encode_updated_neuron_data_to_feagi_byte_container(increment_value)?;
+        self.sensor_byte_callbacks.emit(sensors.get_feagi_byte_container());
+        Ok(())
+    }
+
+    pub fn sensor_encoded_neuron_register_callback<F>(&mut self, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    where
+        F: Fn(&CorticalMappedXYZPNeuronVoxels) + Send + Sync + 'static,
+    {
+        let index = self.sensor_neuron_callbacks.connect(callback);
+        Ok(index)
+    }
+
+    pub fn sensor_encoded_bytes_register_callback<F>(&mut self, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    where
+        F: Fn(&FeagiByteContainer) + Send + Sync + 'static,
+    {
+        let index = self.sensor_byte_callbacks.connect(callback);
+        Ok(index)
     }
 
     pub fn sensor_copy_feagi_byte_container(&self) -> FeagiByteContainer {
@@ -4980,6 +5011,7 @@ impl IOCache {
         let mut sensors = self.sensors.lock().unwrap();
         sensors.replace_feagi_byte_container(feagi_byte_container);
     }
+
 
     //endregion
 
