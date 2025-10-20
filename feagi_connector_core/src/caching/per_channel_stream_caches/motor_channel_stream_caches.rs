@@ -11,7 +11,6 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 pub(crate) struct MotorChannelStreamCaches {
     neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
     pipeline_runners: Vec<PipelineStageRunner>,
-    most_recent_directly_decoded_outputs: Vec<WrappedIOData>,
     has_channel_been_updated: Vec<bool>,
     value_updated_callbacks: Vec<FeagiSignal<()>>,
 }
@@ -72,7 +71,7 @@ impl MotorChannelStreamCaches {
 
     pub fn try_get_most_recent_postprocessed_motor_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(pipeline_runner.get_most_recent_output())
+        Ok(pipeline_runner.get_most_recent_postprocessed_output())
     }
 
     pub fn try_get_channel_last_processed_instant(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Instant, FeagiDataError> {

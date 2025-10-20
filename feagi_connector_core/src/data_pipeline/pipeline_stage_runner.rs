@@ -113,14 +113,22 @@ impl PipelineStageRunner {
         Ok(self.pipeline_stages.last().unwrap().get_most_recent_output()) // Return the output from the last processor
     }
 
-    /// Returns the most recent output from the final processor in the chain.
-    ///
-    /// This provides access to the current state of the processing pipeline without
-    /// triggering new processing. Useful for reading the current processed value.
+    /// Returns the last cached input of this struct that had no processing applied.
+    /// Guaranteed to be of the same type and properties as defined by self.get_output_data_type().
     ///
     /// # Returns
-    /// Reference to the output data from the last processor in the chain.
-    pub fn get_most_recent_output(&self) -> &WrappedIOData {
+    /// Reference to the cached value (before any processing)
+    pub fn get_most_recent_preprocessed_output(&self) -> &WrappedIOData {
+        &self.cached_input
+    }
+
+    /// Returns the most recent output from the last element in the processor chain (if one exists).
+    /// Otherwise, returns the last cached input of this struct that had no processing applied.
+    /// Guaranteed to be of the same type and properties as defined by self.get_output_data_type().
+    ///
+    /// # Returns
+    /// Reference to the output data from the last processor in the chain or from the internal cache.
+    pub fn get_most_recent_postprocessed_output(&self) -> &WrappedIOData {
         if self.pipeline_stages.is_empty() {
             return &self.cached_input;
         }
@@ -136,6 +144,10 @@ impl PipelineStageRunner {
     /// The `Instant` when data was last processed through the pipeline.
     pub fn get_last_processed_instant(&self) -> Instant {
         self.last_instant_data_processed
+    }
+
+    pub(crate) fn get_cached_input_mut(&mut self) -> &mut WrappedIOData {
+        &mut self.cached_input
     }
 
     //endregion
@@ -252,6 +264,22 @@ impl PipelineStageRunner {
     pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
         verify_pipeline_stage_properties(&new_pipeline_stage_properties, self.input_type, self.output_type)?;
         self.pipeline_stages = stage_properties_to_stages(&new_pipeline_stage_properties)?;
+        Ok(())
+    }
+
+    /// Tries replacing all stages with nothing (remove all stages)
+    ///
+    /// Checks to ensure that the input and output properties of the stage runner are the same
+    /// in order to do this safely
+    /// # Returns
+    /// * `Ok(())` - If all stages were successfully removed
+    /// * `Err(FeagiDataError)` - If input and output properties do not match
+    pub fn try_removing_all_stages(&mut self) -> Result<(), FeagiDataError> {
+        if self.pipeline_stages.is_empty() {
+            return Ok(());
+        }
+        verify_pipeline_stage_properties(&Vec::new(), self.input_type, self.output_type)?;
+        self.pipeline_stages = stage_properties_to_stages(&Vec::new())?;
         Ok(())
     }
 

@@ -35,7 +35,7 @@ impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
-                let updated_data = pipeline.get_most_recent_output();
+                let updated_data = pipeline.get_most_recent_postprocessed_output();
                 let updated_misc: &MiscData = updated_data.try_into()?;
 
                 updated_misc.overwrite_neuron_data(scratch, (channel_index as u32).into())?;

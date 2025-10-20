@@ -40,7 +40,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage1DExponentialNeuronVoxelXYZPEnco
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
-                let updated_data = pipeline.get_most_recent_output();
+                let updated_data = pipeline.get_most_recent_postprocessed_output();
                 let updated_signed_percentage: SignedPercentage = updated_data.try_into()?;
 
                 // scratch arrays get cleared

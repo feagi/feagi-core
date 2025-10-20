@@ -14,16 +14,14 @@ pub(crate) struct SensoryChannelStreamCaches {
 
 impl SensoryChannelStreamCaches {
 
-    pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
-        if stage_properties_per_channels.is_empty() { // Yes checks exist below, but this error has more context
-            return Err(FeagiDataError::InternalError("SensoryChannelStreamCaches Cannot be initialized with 0 channels!".into()))
-        }
+    pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, initial_cached_value: WrappedIOData, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
 
-        let num_channels = stage_properties_per_channels.len();
-        let mut pipeline_runners: Vec<PipelineStageRunner> = Vec::with_capacity(num_channels);
+        let expected_data_encoded_type: WrappedIOType = neuron_encoder.get_encodable_data_type();
+
+        let mut pipeline_runners: Vec<PipelineStageRunner> = Vec::with_capacity(stage_properties_per_channels.len());
         
         for stage_properties_per_channel in stage_properties_per_channels {
-            pipeline_runners.push(PipelineStageRunner::new(stage_properties_per_channel)?);
+            pipeline_runners.push(PipelineStageRunner::new(stage_properties_per_channel, initial_cached_value.clone(), expected_data_encoded_type)?); // No need to optimize away the clone() here, this isn't being called often
         }
 
         Ok(Self {
@@ -53,12 +51,17 @@ impl SensoryChannelStreamCaches {
         Ok(pipeline_runner.get_input_data_type())
     }
 
-    pub fn try_get_channel_recent_postprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_get_channel_recent_preprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(pipeline_runner.get_most_recent_output())
+        Ok(pipeline_runner.get_most_recent_preprocessed_output())
     }
 
-    pub fn try_update_channel_value(&mut self, cortical_channel_index: CorticalChannelIndex, value: &WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
+    pub fn try_get_channel_recent_postprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(pipeline_runner.get_most_recent_postprocessed_output())
+    }
+
+    pub fn try_update_channel_value(&mut self, cortical_channel_index: CorticalChannelIndex, value: WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
         let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         runner.try_update_value(value, update_instant)?;
         self.last_update_time = update_instant;
@@ -102,6 +105,12 @@ impl SensoryChannelStreamCaches {
     pub fn try_replace_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
+    }
+
+    pub fn try_removing_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        pipeline_runner.try_removing_all_stages()?;
+        Ok(())
     }
 
     //endregion

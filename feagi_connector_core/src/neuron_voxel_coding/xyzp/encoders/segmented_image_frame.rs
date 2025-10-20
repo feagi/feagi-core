@@ -42,7 +42,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
                     return Ok(()); // We haven't updated, do nothing
                 }
 
-                let updated_data = pipeline.get_most_recent_output();
+                let updated_data = pipeline.get_most_recent_postprocessed_output();
                 let updated_segmented_image: &SegmentedImageFrame = updated_data.try_into()?;
 
                 updated_segmented_image.overwrite_neuron_data(scratches, (channel_index as u32).into())?;
