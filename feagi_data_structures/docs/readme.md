@@ -12,8 +12,8 @@ There are various Genomic structures / identifiers to be aware of
 ### Cortical Type
 CorticalType is a nested enum that differentiates between different types of cortical areas. The possible types are:
 - Memory: Cortical areas to store memories from learning
-- Custom: Inbetween Cortical Areas that handle the bulk of processing / thinking in a FEAGI model
-- Core: Universal Cortical areas that are found in all genomes. THis has a sub Enum CoreCorticalType to define these different cortical types
+- Custom: In between Cortical Areas that handle the bulk of processing / thinking in a FEAGI model
+- Core: Universal Cortical areas that are found in all genomes. This has a sub Enum CoreCorticalType to define these different cortical types
 - Sensor: Defines some sensory input to FEAGI to allow it to sense the world, and uses sub enum SensorCorticalType to differentiate the sensor type
 - Motor: Defines some motor output of FEAGI to allow world interactions, and uses sub enum MotorCorticalType to differentiate what type of motor it is
 
@@ -29,7 +29,7 @@ Cortical IDs are identifiers for a specific cortical area within a genome, essen
 
 There are certain types of numbers to be aware of as well.
 
-#### Cortical Group
+#### Cortical Groups
 Since you can have multiple cortical areas of the same sensor / motor cortical type, the Cortical Group is an u8 number defining which specific instance of a given cortical type is being referenced.
 
 #### Cortical Channels

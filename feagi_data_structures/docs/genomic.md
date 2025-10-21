@@ -2,7 +2,8 @@
 This module contains types which describe the structure of a FEAGI Genome
 
 ## Cortical Type
-A nested enum that can be used to describe the type of cortical area, and the subtype (in the cases of Core, Input, and Output cortical areas as there are a set number of types of those). Has plenty of helper methods to check restrictions and details of various types of cortical areas.
+A nested enum that can be used to describe the type of cortical area, and the subtype (
+in the cases of Core, Input, and Output cortical areas as there are a set number of types of those). Has plenty of helper methods to check restrictions and details of various types of cortical areas.
 
 ## Cortical ID
 A unique identifier for a cortical area in a genome. Consists of 6 ASCII AlphaNumeric characters. In addition, they also follow the following formatting rules:
