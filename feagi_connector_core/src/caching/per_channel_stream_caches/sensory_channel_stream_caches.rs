@@ -127,25 +127,21 @@ impl SensoryChannelStreamCaches {
         Ok(pipeline_runner.get_most_recent_postprocessed_output())
     }
 
-    /// Updates a specific channel with new input data and processes it through the pipeline.
-    ///
-    /// The new value is cached and propagated through all pipeline stages for the specified
-    /// channel. Updates the last update time for the entire cache system.
-    ///
-    /// # Arguments
-    /// * `cortical_channel_index` - The channel to update
-    /// * `value` - The new input data
-    /// * `update_instant` - Timestamp of this update
-    ///
-    /// # Returns
-    /// * `Ok(())` - If the update and processing succeeded
-    /// * `Err(FeagiDataError)` - If channel is invalid or processing fails
-    pub fn try_update_channel_value(&mut self, cortical_channel_index: CorticalChannelIndex, value: WrappedIOData, update_instant: Instant) -> Result<(), FeagiDataError> {
+
+    pub fn try_replace_input_channel_cache_value_and_run_pipeline(&mut self, cortical_channel_index: CorticalChannelIndex, value: WrappedIOData, update_instant: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+        // We assume value is of correct type
+        self.last_update_time = update_instant;// TODO cant this cause weird issues?
         let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         let mut_val = runner.get_cached_input_mut();
         *mut_val = value;
-        self.last_update_time = update_instant;
-        Ok(())
+        let processed_data = runner.process_cached_input_value(update_instant)?;
+        Ok(processed_data)
+    }
+
+    pub fn try_running_pipeline_runner_from_input_cache(&mut self, cortical_channel_index: CorticalChannelIndex, update_instant: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+        let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        let processed_data = runner.process_cached_input_value(update_instant)?;
+        Ok(processed_data)
     }
 
     /// Retrieves the timestamp of the last data update for a specific channel.

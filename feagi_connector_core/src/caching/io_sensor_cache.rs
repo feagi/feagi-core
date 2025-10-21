@@ -53,7 +53,7 @@ impl IOSensorCache {
 
     pub fn try_update_value(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, value: WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        sensor_stream_caches.try_update_channel_value(channel_index, value, time_of_update)?; // Handles checking channel, value type
+        sensor_stream_caches.try_replace_input_channel_cache_value_and_run_pipeline(channel_index, value, time_of_update)?; // Handles checking channel, value type
         Ok(())
     }
 
