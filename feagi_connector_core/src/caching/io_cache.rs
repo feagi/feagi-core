@@ -1,6 +1,5 @@
 use std::time::Instant;
 use std::sync::{Arc, Mutex};
-use std::mem;
 use paste;
 use feagi_data_structures::{motor_definition, sensor_definition, FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
@@ -10,8 +9,8 @@ use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_pipeline::stage_properties::{IdentityStageProperties, ImageSegmentorStageProperties};
-use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+use crate::data_pipeline::stage_properties::{ImageSegmentorStageProperties};
+use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
 use crate::data_types::*;
 use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
@@ -170,13 +169,11 @@ macro_rules! motor_functions {
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
@@ -234,13 +231,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
@@ -298,13 +292,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -363,13 +354,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -428,13 +416,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -494,13 +479,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -560,13 +542,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -626,13 +605,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -692,13 +668,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -758,13 +731,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -824,13 +794,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -890,13 +857,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -956,13 +920,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1022,13 +983,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1088,13 +1046,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1154,13 +1109,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1220,13 +1172,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1286,13 +1235,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1352,13 +1298,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1418,13 +1361,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1484,13 +1424,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1550,13 +1487,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1616,13 +1550,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1682,13 +1613,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1748,13 +1676,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1814,13 +1739,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1880,13 +1802,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -1946,13 +1865,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -2012,13 +1928,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -2075,13 +1988,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -2138,13 +2048,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -2201,13 +2108,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -2384,13 +2288,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -2450,13 +2351,10 @@ macro_rules! motor_functions {
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
                 motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
@@ -2633,13 +2531,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -2700,13 +2595,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -2768,13 +2660,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -2836,13 +2725,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -2904,13 +2790,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -2972,13 +2855,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3040,13 +2920,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3108,13 +2985,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3176,13 +3050,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3244,13 +3115,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3312,13 +3180,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3380,13 +3245,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3448,13 +3310,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3516,13 +3375,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3584,13 +3440,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3652,13 +3505,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3720,13 +3570,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3788,13 +3635,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3856,13 +3700,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3924,13 +3765,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -3992,13 +3830,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4060,13 +3895,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4128,13 +3960,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4196,13 +4025,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4264,13 +4090,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4332,13 +4155,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4400,13 +4220,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4468,13 +4285,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4536,13 +4350,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4604,13 +4415,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4672,13 +4480,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4740,13 +4545,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4808,13 +4610,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4876,13 +4675,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -4944,13 +4740,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -5012,13 +4805,10 @@ macro_rules! sensor_functions
 
                 let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
                 sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
@@ -5142,7 +4932,7 @@ impl IOCache {
     }
 
     pub fn sensor_copy_feagi_byte_container(&self) -> FeagiByteContainer {
-        let mut sensors = self.sensors.lock().unwrap();
+        let sensors = self.sensors.lock().unwrap();
         sensors.get_feagi_byte_container().clone()
     }
 
@@ -5171,7 +4961,7 @@ impl IOCache {
         let initial_val: WrappedIOData = WrappedIOType::SegmentedImageFrame(Some(segmented_image_properties)).create_blank_data_of_type()?;
         let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
             let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-            for i in 0..*number_channels {
+            for _i in 0..*number_channels {
                 output.push( vec![ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?]) // TODO properly implement clone so we dont need to do this
             };
             output
@@ -5293,7 +5083,7 @@ impl IOCache {
 
     //region Reflexes (premade callbacks)
 
-    // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling ehre
+    // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling here
     // TODO we can change the call back signature // TODO feedback
     pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<FeagiSignalIndex, FeagiDataError> {
 
@@ -5303,7 +5093,7 @@ impl IOCache {
 
         let s = self.sensors.lock().unwrap();
         _ = s.try_read_postprocessed_cached_value(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel)?;
-        mem::drop(s);
+        drop(s);
 
         let sensor_ref = Arc::clone(&self.sensors);
 
@@ -5314,7 +5104,7 @@ impl IOCache {
             let mut sensors = sensor_ref.lock().unwrap();
             let stage_properties = sensors.try_get_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into()).unwrap();
             let mut segmentation_stage_properties: ImageSegmentorStageProperties = stage_properties.as_any().downcast_ref::<ImageSegmentorStageProperties>().unwrap().clone();
-            segmentation_stage_properties.update_from_gaze(gaze);
+            _ = segmentation_stage_properties.update_from_gaze(gaze);
             _ = sensors.try_update_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into(), Box::new(segmentation_stage_properties));
         };
 
