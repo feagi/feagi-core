@@ -3,6 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
+use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::{Percentage2D};
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{decode_unsigned_percentage_from_fractional_exponential_neurons};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
@@ -27,12 +28,12 @@ impl NeuronVoxelXYZPDecoder for Percentage2DExponentialNeuronVoxelXYZPDecoder {
         WrappedIOType::Percentage_2D
     }
 
-    fn read_neuron_data_multi_channel(&mut self, read_target: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, write_target: &mut Vec<WrappedIOData>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
+    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<PipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
 
         // NOTE: Expecting channel_changed to be all false. Do not reset write_target, we will write to it if we got a value for the channel!
         const ONLY_ALLOWED_Y: u32 = 0; // This structure never has height
 
-        let neuron_array = read_target.get_neurons_of(&self.cortical_read_target);
+        let neuron_array = neurons_to_read.get_neurons_of(&self.cortical_read_target);
 
         if neuron_array.is_none() {
             return Ok(());
@@ -47,7 +48,7 @@ impl NeuronVoxelXYZPDecoder for Percentage2DExponentialNeuronVoxelXYZPDecoder {
             scratch_per_z_depth.clear()
         }
 
-        let number_of_channels = write_target.len() as u32;
+        let number_of_channels = pipelines_with_data_to_update.len() as u32;
         let max_possible_x_index = CHANNEL_WIDTH * number_of_channels; // Something is wrong if we reach here
         let z_depth: u32 = self.channel_dimensions.depth;
 
@@ -82,7 +83,7 @@ impl NeuronVoxelXYZPDecoder for Percentage2DExponentialNeuronVoxelXYZPDecoder {
                 continue; // No data collected for this channel. Do not emit
             }
             channel_changed[channel_index] = true;
-            let percentage_2d: &mut Percentage2D = write_target.get_mut(channel_index).unwrap().try_into()?;
+            let percentage_2d: &mut Percentage2D = pipelines_with_data_to_update.get_mut(channel_index).unwrap().get_cached_input_mut().try_into()?;
 
             if !z_a_row_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(&z_a_row_vector, &mut percentage_2d.a);

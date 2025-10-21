@@ -3,6 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::CorticalID;
 use feagi_data_structures::genomic::descriptors::CorticalChannelCount;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
@@ -19,8 +20,8 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
         WrappedIOType::MiscData(Some(self.misc_dimensions))
     }
 
-    fn read_neuron_data_multi_channel(&mut self, read_target: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, write_target: &mut Vec<WrappedIOData>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
-        let neuron_array = read_target.get_neurons_of(&self.cortical_read_target);
+    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<PipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
+        let neuron_array = neurons_to_read.get_neurons_of(&self.cortical_read_target);
 
         if neuron_array.is_none() {
             return Ok(());
@@ -31,7 +32,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
             return Ok(());
         }
 
-        let number_of_channels = write_target.len() as u32;
+        let number_of_channels = pipelines_with_data_to_update.len() as u32;
         let max_possible_x_index = self.misc_dimensions.width * number_of_channels; // Something is wrong if we reach here
         let max_possible_y_index = self.misc_dimensions.height;
         let max_possible_z_index = self.misc_dimensions.depth;
@@ -43,16 +44,13 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
 
             let channel_index: u32  = neuron.cortical_coordinate.x / self.misc_dimensions.width;
             let in_channel_x_index: u32  = neuron.cortical_coordinate.x % self.misc_dimensions.width;
-            let misc_data: &mut MiscData = write_target.get_mut(channel_index as usize).unwrap().try_into()?;
+            let misc_data: &mut MiscData = pipelines_with_data_to_update.get_mut(channel_index as usize).unwrap().get_cached_input_mut().try_into()?;
             if !channel_changed[channel_index as usize] {
                 misc_data.blank_data();
                 channel_changed[channel_index as usize] = true;
             }
-            let internal_data = misc_data.get_internal_data_mut();
+            let internal_data = misc_data.get_internal_data_mut(); // TODO should we possibly allocate these references outside this loop?
             internal_data[(in_channel_x_index as usize, neuron.cortical_coordinate.y as usize, neuron.cortical_coordinate.z as usize)] = neuron.potential.clamp(-1.0, 1.0);
-
-
-
         };
 
         Ok(())

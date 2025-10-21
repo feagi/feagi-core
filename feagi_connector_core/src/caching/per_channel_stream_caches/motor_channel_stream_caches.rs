@@ -27,7 +27,7 @@ impl MotorChannelStreamCaches {
 
         let num_channels = stage_properties_per_channels.len();
         let mut pipeline_runners: Vec<PipelineStageRunner> = Vec::with_capacity(num_channels);
-        let mut callbacks: Vec<FeagiSignal<()>> = Vec::with_capacity(num_channels);
+        let mut callbacks: Vec<FeagiSignal<WrappedIOData>> = Vec::with_capacity(num_channels);
 
         for stage_properties_per_channel in stage_properties_per_channels {
             let pipeline_runner = PipelineStageRunner::new(stage_properties_per_channel, initial_cached_value.clone(), expected_data_decoded_type)?;
@@ -136,7 +136,7 @@ impl MotorChannelStreamCaches {
     /// iterates over callbacks over channels to have them update. We do this after all channels
     /// are updated in case users are doing multichannel data stuff, in order to avoid giving them
     /// race condition issues.
-    pub(crate) fn try_run_callbacks_on_changed_channels(&mut self) -> Result<(), FeagiDataError> {
+    fn try_run_callbacks_on_changed_channels(&mut self) -> Result<(), FeagiDataError> {
         for channel_index in 0..self.pipeline_runners.len() { // TODO could this be parallelized?
             if !self.has_channel_been_updated[channel_index] {
                 continue;
@@ -144,21 +144,28 @@ impl MotorChannelStreamCaches {
             let data_ref = self.pipeline_runners.get(channel_index).unwrap();
             self.value_updated_callbacks[channel_index].emit(data_ref.get_most_recent_postprocessed_output()); // no value
         }
-        self.has_channel_been_updated.fill(false);
         Ok(())
     }
 
     //endregion
 
-    pub(crate) fn try_read_neuron_data_to_wrapped_io_data(&mut self, neuron_data: &CorticalMappedXYZPNeuronVoxels, time_of_decode: Instant) -> Result<(), FeagiDataError> {
+    pub(crate) fn try_read_neuron_data_to_cache_and_do_callbacks(&mut self, neuron_data: &CorticalMappedXYZPNeuronVoxels, time_of_decode: Instant) -> Result<(), FeagiDataError> {
+        self.try_read_neuron_data_to_wrapped_io_data(neuron_data, time_of_decode)?;
+        self.try_run_callbacks_on_changed_channels()?;
+        self.has_channel_been_updated.fill(false);
+        Ok(())
+    }
 
-        self.neuron_decoder.read_neuron_data_multi_channel(neuron_data, time_of_decode, &mut self.pipeline_runners, &mut self.has_channel_been_updated)?; // NOTE: This will ONLY write the updated
-        self.most_recent_directly_decoded_outputs.par_iter()
+
+    fn try_read_neuron_data_to_wrapped_io_data(&mut self, neuron_data: &CorticalMappedXYZPNeuronVoxels, time_of_decode: Instant) -> Result<(), FeagiDataError> {
+
+        self.neuron_decoder.read_neuron_data_multi_channel_into_pipeline_input_cache(neuron_data, time_of_decode, &mut self.pipeline_runners, &mut self.has_channel_been_updated)?; // Only writes to cache, does not process
+        self.pipeline_runners.par_iter_mut()
             .zip(&self.has_channel_been_updated)
-            .zip(&mut self.pipeline_runners)
-            .try_for_each(|((output, &has_changed), pipeline_runner)| {
-                if has_changed {
-                    pipeline_runner.try_update_value(output, time_of_decode)?;
+            .try_for_each(|(pipeline_runner, has_channel_been_updated)| {
+                if *has_channel_been_updated {
+                    _ = pipeline_runner.process_cached_input_value(time_of_decode)?;
+                    // Don't do call backs here, we want everything to be done first
                 }
                 Ok(())
             })?;

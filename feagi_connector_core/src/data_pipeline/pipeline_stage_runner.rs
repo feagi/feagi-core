@@ -64,9 +64,9 @@ impl PipelineStageRunner {
     pub fn get_input_data_type(&self) -> WrappedIOType {
         self.input_type
     }
-    
+
     pub fn verify_input_data(&self, incoming_data: &WrappedIOData) -> Result<(), FeagiDataError> {
-        let incoming_type: WrappedIOType = (&incoming_data).into();
+        let incoming_type: WrappedIOType = incoming_data.into();
         if incoming_type != self.input_type {
             return Err(FeagiDataError::BadParameters(format!("Expected input data type to be {} but got {incoming_type}!", self.input_type)))
         }
@@ -80,27 +80,7 @@ impl PipelineStageRunner {
     pub fn get_output_data_type(&self) -> WrappedIOType {
         self.output_type
     }
-    
-    pub fn process_updated_value(&mut self, time_of_update: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-        if self.pipeline_stages.is_empty() {
-            return Ok(&self.cached_input);
-        }
 
-        //TODO There has to be a better way to do this, but I keep running into limitations with mutating self.cache_processors
-
-        // Process the first processor with the input value
-        self.pipeline_stages[0].process_new_input(&self.cached_input, time_of_update)?;
-
-        // Process subsequent processing using split_at_mut to avoid borrowing conflicts
-        for i in 1..self.pipeline_stages.len() {
-            let (left, right) = self.pipeline_stages.split_at_mut(i);
-            let previous_output = left[i - 1].get_most_recent_output();
-            right[0].process_new_input(previous_output, time_of_update)?;
-        }
-
-        self.last_instant_data_processed = time_of_update;
-        Ok(self.pipeline_stages.last().unwrap().get_most_recent_output()) // Return the output from the last processor
-    }
 
     /// Returns the last cached input of this struct that had no processing applied.
     /// Guaranteed to be of the same type and properties as defined by self.get_output_data_type().
@@ -136,7 +116,35 @@ impl PipelineStageRunner {
     }
 
     pub(crate) fn get_cached_input_mut(&mut self) -> &mut WrappedIOData {
+        // WARNING: DOES NOT CHECK TYPE!
         &mut self.cached_input
+    }
+
+    pub fn set_cached_input_value(&mut self, value: WrappedIOData) -> Result<(), FeagiDataError> {
+        self.verify_input_data(&value)?;
+        self.cached_input = value;
+        Ok(())
+    }
+
+    pub fn process_cached_input_value(&mut self, time_of_update: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+        if self.pipeline_stages.is_empty() {
+            return Ok(&self.cached_input);
+        }
+
+        //TODO There has to be a better way to do this, but I keep running into limitations with mutating self.cache_processors
+
+        // Process the first processor with the input value
+        self.pipeline_stages[0].process_new_input(&self.cached_input, time_of_update)?;
+
+        // Process subsequent processing using split_at_mut to avoid borrowing conflicts
+        for i in 1..self.pipeline_stages.len() {
+            let (left, right) = self.pipeline_stages.split_at_mut(i);
+            let previous_output = left[i - 1].get_most_recent_output();
+            right[0].process_new_input(previous_output, time_of_update)?;
+        }
+
+        self.last_instant_data_processed = time_of_update;
+        Ok(self.get_most_recent_postprocessed_output()) // Return the output from the last processor
     }
 
     //endregion

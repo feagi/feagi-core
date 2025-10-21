@@ -288,7 +288,7 @@ impl SensoryChannelStreamCaches {
     pub(crate) fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronVoxels, time_of_burst: Instant) -> Result<(), FeagiDataError> {
         // TODO We need a new trait method to just have all channels cleared if not up to date
         // Note: We expect neuron data to be cleared before this step
-        self.neuron_encoder.write_neuron_data_multi_channel(&self.pipeline_runners, time_of_burst, neuron_data)?;
+        self.neuron_encoder.write_neuron_data_multi_channel_from_processed_cache(&self.pipeline_runners, time_of_burst, neuron_data)?;
         Ok(())
     }
 

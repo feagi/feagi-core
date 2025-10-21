@@ -31,7 +31,8 @@ impl IOMotorCache {
     //region Motor Interactions
     pub fn register(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex,
                     neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
-                    pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>)
+                    pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>,
+                    initial_cached_value: WrappedIOData)
                     -> Result<(), FeagiDataError> {
 
         // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
@@ -42,7 +43,7 @@ impl IOMotorCache {
 
         self.stream_caches.insert(
             (motor_type, group_index),
-            MotorChannelStreamCaches::new(neuron_decoder, pipeline_stages_across_channels)?);
+            MotorChannelStreamCaches::new(neuron_decoder, initial_cached_value, pipeline_stages_across_channels)?);
 
         Ok(())
     }
@@ -60,7 +61,7 @@ impl IOMotorCache {
 
     pub fn try_register_motor_callback<F>(&mut self, motor_type: MotorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
     where
-        F: Fn(&()) + Send + Sync + 'static,
+        F: Fn(&WrappedIOData) + Send + Sync + 'static,
     {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         let index = motor_stream_caches.try_connect_to_data_processed_signal(channel_index, callback)?;
@@ -168,13 +169,8 @@ impl IOMotorCache {
 
     pub fn try_decode_neural_data_into_cache(&mut self, time_of_decode: Instant) -> Result<(), FeagiDataError> {
         for motor_channel_stream_cache in self.stream_caches.values_mut() {
-            motor_channel_stream_cache.try_read_neuron_data_to_wrapped_io_data(&mut self.neuron_data, time_of_decode)?;
-        }; // Make sure everything is decoded before calling callbacks, in order to avoid possible race conditions!
-        // for now, callbacks themselves will be serial, as async in python could be a pain
-        for motor_channel_stream_cache in self.stream_caches.values_mut() {
-            motor_channel_stream_cache.try_run_callbacks_on_changed_channels()?
-        }
-
+            motor_channel_stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(&mut self.neuron_data, time_of_decode)?;
+        };
         Ok(())
     }
 
