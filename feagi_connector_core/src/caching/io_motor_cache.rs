@@ -10,6 +10,11 @@ use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, 
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOData;
 
+/// Internal cache for motor outputs, managing data flow from FEAGI.
+///
+/// Maintains separate stream caches for each registered motor type and group,
+/// handles decoding neuron voxels to motor commands, and manages callbacks
+/// for motor updates. Supports pipeline stages for postprocessing.
 pub(crate) struct IOMotorCache {
     stream_caches: HashMap<(MotorCorticalType, CorticalGroupIndex), MotorChannelStreamCaches>,
     agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(MotorCorticalType, CorticalGroupIndex)>>,

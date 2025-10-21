@@ -4884,6 +4884,7 @@ pub struct IOCache {
 
 impl IOCache {
 
+    /// Creates a new IOCache instance for managing sensors and motors.
     pub fn new() -> Self {
         IOCache {
             sensors: Arc::new(Mutex::new(IOSensorCache::new())),
@@ -4898,6 +4899,7 @@ impl IOCache {
 
     //region Cache Logic
 
+    /// Encodes sensor data to neuron voxels and triggers neuron callbacks.
     pub fn sensor_encode_data_to_neurons_only(&mut self) -> Result<(), FeagiDataError> {
         let mut sensors = self.sensors.lock().unwrap();
         _ = sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
@@ -4905,6 +4907,7 @@ impl IOCache {
         Ok(())
     }
 
+    /// Encodes sensor data to neuron voxels, then serializes to bytes.
     pub fn sensor_encode_data_to_neurons_then_bytes(&mut self, increment_value: u16) -> Result<(), FeagiDataError> {
         let mut sensors = self.sensors.lock().unwrap();
         _ = sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
@@ -4915,6 +4918,7 @@ impl IOCache {
         Ok(())
     }
 
+    /// Registers a callback to be invoked when sensor data is encoded to neurons.
     pub fn sensor_encoded_neuron_register_callback<F>(&mut self, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
     where
         F: Fn(&CorticalMappedXYZPNeuronVoxels) + Send + Sync + 'static,
@@ -4923,6 +4927,7 @@ impl IOCache {
         Ok(index)
     }
 
+    /// Registers a callback to be invoked when sensor data is serialized to bytes.
     pub fn sensor_encoded_bytes_register_callback<F>(&mut self, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
     where
         F: Fn(&FeagiByteContainer) + Send + Sync + 'static,
@@ -4931,11 +4936,13 @@ impl IOCache {
         Ok(index)
     }
 
+    /// Returns a clone of the current sensor byte container.
     pub fn sensor_copy_feagi_byte_container(&self) -> FeagiByteContainer {
         let sensors = self.sensors.lock().unwrap();
         sensors.get_feagi_byte_container().clone()
     }
 
+    /// Replaces the sensor byte container with a new one.
     pub fn sensor_replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
         let mut sensors = self.sensors.lock().unwrap();
         sensors.replace_feagi_byte_container(feagi_byte_container);
@@ -5048,6 +5055,8 @@ impl IOCache {
 
     //region Cache Logic
 
+    /// Decodes motor byte container to neuron data and then to motor commands.
+    /// Returns true if neuron data was present, false otherwise.
     pub fn motor_update_data_from_bytes(&mut self) -> Result<bool, FeagiDataError> {
         let mut motors = self.motors.lock().unwrap();
         let decoded_bytes_contain_neuron_data = motors.try_decode_bytes_to_neural_data()?;
@@ -5059,12 +5068,14 @@ impl IOCache {
 
     }
 
+    /// Returns a clone of the current motor byte container.
     pub fn motor_copy_feagi_byte_container(&self) -> FeagiByteContainer {
         let motors = self.motors.lock().unwrap();
         let byte_container =  motors.get_feagi_byte_container();
         byte_container.clone()
     }
 
+    /// Replaces the motor byte container with a new one.
     pub fn motor_replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
         let mut motors = self.motors.lock().unwrap();
         motors.replace_feagi_byte_container(feagi_byte_container);
@@ -5083,6 +5094,8 @@ impl IOCache {
 
     //region Reflexes (premade callbacks)
 
+    /// Creates a reflex linking gaze motor output to segmented vision sensor.
+    /// When gaze updates, the segmented vision pipeline adjusts to the new gaze position.
     // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling here
     // TODO we can change the call back signature // TODO feedback
     pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<FeagiSignalIndex, FeagiDataError> {

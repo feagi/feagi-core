@@ -73,7 +73,7 @@ impl MiscData {
 
     //region Get Properties
 
-
+    /// Returns the dimensions (width, height, depth) of this data container.
     pub fn get_dimensions(&self) -> MiscDataDimensions {
         MiscDataDimensions::new(
             self.data.shape()[0] as u32,
@@ -84,16 +84,17 @@ impl MiscData {
 
     //endregion
 
-
+    /// Returns a reference to the internal 3D array.
     pub fn get_internal_data(&self) -> &Array3<f32> {
         &self.data
     }
 
-
+    /// Returns a mutable reference to the internal 3D array.
     pub fn get_internal_data_mut(&mut self) -> &mut Array3<f32> {
         &mut self.data
     }
     
+    /// Fills all data with zeros.
     pub fn blank_data(&mut self) {
         self.data.fill(0.0);
     }
@@ -101,6 +102,7 @@ impl MiscData {
 
     // region Outputting Neurons
 
+    /// Encodes this misc data into neuron voxels, writing to the target array.
     pub fn overwrite_neuron_data(&self, write_target: &mut NeuronVoxelXYZPArrays, x_channel_offset: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         const EPSILON: f32 = 0.0001; // avoid writing near zero vals
 
