@@ -527,6 +527,7 @@ impl FeagiByteContainer{
             structure_header_byte_index += 4; // Next u32
             structure_data_byte_index += structure_length as usize;
         }
+        self.is_data_valid = true;
         Ok(())
     }
 
