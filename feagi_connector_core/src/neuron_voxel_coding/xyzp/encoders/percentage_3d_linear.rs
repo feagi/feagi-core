@@ -25,7 +25,7 @@ impl NeuronVoxelXYZPEncoder for Percentage3DLinearNeuronVoxelXYZPEncoder {
         WrappedIOType::Percentage_3D
     }
 
-    fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
+    fn write_neuron_data_multi_channel_from_processed_cache(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
 
         let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
@@ -40,7 +40,7 @@ impl NeuronVoxelXYZPEncoder for Percentage3DLinearNeuronVoxelXYZPEncoder {
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
-                let updated_data = pipeline.get_most_recent_output();
+                let updated_data = pipeline.get_most_recent_postprocessed_output();
                 let updated_percentage_3d: Percentage3D = updated_data.try_into()?;
 
                 // scratch arrays get cleared

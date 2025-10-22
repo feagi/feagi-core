@@ -22,7 +22,7 @@ impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
     }
 
-    fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
+    fn write_neuron_data_multi_channel_from_processed_cache(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
 
         let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
@@ -35,7 +35,7 @@ impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
-                let updated_data = pipeline.get_most_recent_output();
+                let updated_data = pipeline.get_most_recent_postprocessed_output();
                 let updated_misc: &MiscData = updated_data.try_into()?;
 
                 updated_misc.overwrite_neuron_data(scratch, (channel_index as u32).into())?;

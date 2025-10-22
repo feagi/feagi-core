@@ -25,7 +25,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
     }
 
 
-    fn write_neuron_data_multi_channel(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
+    fn write_neuron_data_multi_channel_from_processed_cache(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
 
 
@@ -42,7 +42,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
                     return Ok(()); // We haven't updated, do nothing
                 }
 
-                let updated_data = pipeline.get_most_recent_output();
+                let updated_data = pipeline.get_most_recent_postprocessed_output();
                 let updated_segmented_image: &SegmentedImageFrame = updated_data.try_into()?;
 
                 updated_segmented_image.overwrite_neuron_data(scratches, (channel_index as u32).into())?;

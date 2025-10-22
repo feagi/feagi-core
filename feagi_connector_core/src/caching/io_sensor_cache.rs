@@ -10,6 +10,11 @@ use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOData;
 
+/// Internal cache for sensor inputs, managing data flow to FEAGI.
+///
+/// Maintains separate stream caches for each registered sensor type and group,
+/// handles encoding sensor data to neuron voxels, and manages serialization
+/// for transmission to FEAGI. Supports pipeline stages for preprocessing.
 pub(crate) struct IOSensorCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
     agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(SensorCorticalType, CorticalGroupIndex)>>,
@@ -34,7 +39,8 @@ impl IOSensorCache {
 
     pub fn register(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex,
                            neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
-                           pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>)
+                           pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>,
+                            initial_cached_value: WrappedIOData)
         -> Result<(), FeagiDataError> {
 
         // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
@@ -45,14 +51,14 @@ impl IOSensorCache {
 
         self.stream_caches.insert(
             (sensor_type, group_index),
-            SensoryChannelStreamCaches::new(neuron_encoder, pipeline_stages_across_channels)?);
+            SensoryChannelStreamCaches::new(neuron_encoder, initial_cached_value, pipeline_stages_across_channels)?);
 
         Ok(())
     }
 
-    pub fn try_update_value(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, value: &WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
+    pub fn try_update_value(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, value: WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        sensor_stream_caches.try_update_channel_value(channel_index, value, time_of_update)?; // Handles checking channel, value type
+        sensor_stream_caches.try_replace_input_channel_cache_value_and_run_pipeline(channel_index, value, time_of_update)?; // Handles checking channel, value type
         Ok(())
     }
 
@@ -120,10 +126,10 @@ impl IOSensorCache {
         Ok(())
     }
 
-    pub fn try_update_value_by_agent_device(&mut self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex, value: &WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
+    pub fn try_update_value_by_agent_device(&mut self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex, value: WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
         let sensor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?.to_vec();
         for (sensor_type, group_index) in sensor_group_pairs {
-            self.try_update_value(sensor_type, group_index, channel_index, value, time_of_update)?;
+            self.try_update_value(sensor_type, group_index, channel_index, value.clone(), time_of_update)?;
         }
         Ok(())
     }

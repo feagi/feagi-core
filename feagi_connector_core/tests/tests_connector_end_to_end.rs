@@ -52,7 +52,7 @@ mod test_connector_cache_sensor_load_image {
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
         connector_cache.sensor_segmented_vision_absolute_try_register(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
-        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &bird_image.into()).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, bird_image.into()).unwrap();
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
     }
 
@@ -82,11 +82,11 @@ mod test_connector_cache_sensor_load_image {
 
         let wrapped: WrappedIOData = bird_image.into();
 
-        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &wrapped).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, wrapped.clone()).unwrap();
         connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
 
-        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &wrapped).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, wrapped).unwrap();
         connector_cache.sensor_encode_data_to_neurons_then_bytes(0);
         let bytes = connector_cache.sensor_copy_feagi_byte_container();
     }
@@ -118,7 +118,7 @@ mod test_connector_cache_sensor_load_image {
         connector_cache.sensor_segmented_vision_absolute_try_register(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
         connector_cache.motor_gaze_absolute_linear_try_register(cortical_group, number_channels, 10.try_into().unwrap());
 
-        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, &bird_image.into()).unwrap();
+        connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, bird_image.into()).unwrap();
 
         // TODO motor bytes sending
 

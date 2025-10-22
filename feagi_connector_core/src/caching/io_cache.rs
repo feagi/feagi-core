@@ -1,6 +1,5 @@
 use std::time::Instant;
 use std::sync::{Arc, Mutex};
-use std::mem;
 use paste;
 use feagi_data_structures::{motor_definition, sensor_definition, FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
@@ -10,8 +9,8 @@ use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::caching::io_motor_cache::IOMotorCache;
 use crate::caching::io_sensor_cache::IOSensorCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_pipeline::stage_properties::{IdentityStageProperties, ImageSegmentorStageProperties};
-use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+use crate::data_pipeline::stage_properties::{ImageSegmentorStageProperties};
+use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
 use crate::data_types::*;
 use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
@@ -138,7 +137,7 @@ macro_rules! motor_functions {
                 channel_index: CorticalChannelIndex,
                 callback: F
             ) -> Result<FeagiSignalIndex, FeagiDataError>
-            where F: Fn(&()) + Send + Sync + 'static,
+            where F: Fn(&WrappedIOData) + Send + Sync + 'static,
             {
                 const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
                 let mut motors = self.motors.lock().unwrap();
@@ -168,16 +167,15 @@ macro_rules! motor_functions {
                 let data_type: WrappedIOType = $wrapped_data_type;
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -231,15 +229,14 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -293,16 +290,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -356,16 +352,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -419,16 +414,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage2DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -483,16 +477,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage2DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -547,16 +540,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage2DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -611,16 +603,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage2DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -675,16 +666,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage3DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -739,16 +729,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage3DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -803,16 +792,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage3DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -867,16 +855,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage3DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -931,16 +918,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -995,16 +981,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1059,16 +1044,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1123,16 +1107,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = Percentage4DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1187,16 +1170,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1251,16 +1233,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentageExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1315,16 +1296,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentageLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1379,16 +1359,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentageExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1443,16 +1422,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage2DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1507,16 +1485,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage2DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1571,16 +1548,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage2DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1635,16 +1611,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage2DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1699,16 +1674,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage3DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1763,16 +1737,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage3DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1827,16 +1800,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage3DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1891,16 +1863,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage3DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -1955,16 +1926,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage4DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -2016,16 +1986,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage4DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -2077,16 +2046,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage4DLinearNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -2138,16 +2106,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = SignedPercentage4DExponentialNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , *z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -2319,16 +2286,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -2383,16 +2349,15 @@ macro_rules! motor_functions {
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(MOTOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
 
                 let mut motors = self.motors.lock().unwrap();
-                motors.register(MOTOR_TYPE, group, decoder, default_pipeline)
+                motors.register(MOTOR_TYPE, group, decoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<motor_ $snake_case_identifier _try_read_preprocessed_cached_value>](
@@ -2564,15 +2529,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -2587,7 +2551,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -2629,15 +2593,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -2652,7 +2615,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -2695,15 +2658,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -2718,7 +2680,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -2761,15 +2723,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -2784,7 +2745,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -2827,15 +2788,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage2DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -2850,7 +2810,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -2893,15 +2853,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage2DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -2916,7 +2875,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -2959,15 +2918,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage2DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -2982,7 +2940,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3025,15 +2983,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage2DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3048,7 +3005,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3091,15 +3048,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage3DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3114,7 +3070,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3157,15 +3113,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage3DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3180,7 +3135,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3223,15 +3178,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage3DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3246,7 +3200,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3289,15 +3243,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage3DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3312,7 +3265,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3355,15 +3308,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3378,7 +3330,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3421,15 +3373,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage4DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3444,7 +3395,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3487,15 +3438,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3510,7 +3460,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3553,15 +3503,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage4DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3576,7 +3525,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3619,15 +3568,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage1DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3642,7 +3590,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3685,15 +3633,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage1DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3708,7 +3655,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3751,15 +3698,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage1DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3774,7 +3720,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3817,15 +3763,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage1DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3840,7 +3785,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3883,15 +3828,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage2DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3906,7 +3850,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -3949,15 +3893,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage2DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -3972,7 +3915,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4015,15 +3958,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage2DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4038,7 +3980,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4081,15 +4023,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage2DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4104,7 +4045,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4147,15 +4088,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage3DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4170,7 +4110,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4213,15 +4153,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage3DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4236,7 +4175,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4279,15 +4218,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage3DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4302,7 +4240,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4345,15 +4283,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage3DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4368,7 +4305,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4411,15 +4348,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage4DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4434,7 +4370,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4477,15 +4413,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage4DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4500,7 +4435,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4543,15 +4478,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage4DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4566,7 +4500,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4609,15 +4543,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage4DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4632,7 +4565,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4675,15 +4608,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4698,7 +4630,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4741,15 +4673,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4764,7 +4695,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4807,15 +4738,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , &image_properties, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4830,7 +4760,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4873,15 +4803,14 @@ macro_rules! sensor_functions
 
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , &image_properties, number_channels)?;
 
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for i in 0..*number_channels {
-                        output.push( vec![IdentityStageProperties::new_box(data_type)?])
-                    };
-                    output
-                };
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)
+                sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
             }
 
             pub fn [<sensor_ $snake_case_identifier _try_write>](
@@ -4896,7 +4825,7 @@ macro_rules! sensor_functions
                 let instant = Instant::now();
 
                 let mut sensors = self.sensors.lock().unwrap();
-                sensors.try_update_value(SENSOR_TYPE, group, channel, &wrapped_data, instant)?;
+                sensors.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
                 Ok(())
             }
 
@@ -4955,6 +4884,7 @@ pub struct IOCache {
 
 impl IOCache {
 
+    /// Creates a new IOCache instance for managing sensors and motors.
     pub fn new() -> Self {
         IOCache {
             sensors: Arc::new(Mutex::new(IOSensorCache::new())),
@@ -4969,6 +4899,7 @@ impl IOCache {
 
     //region Cache Logic
 
+    /// Encodes sensor data to neuron voxels and triggers neuron callbacks.
     pub fn sensor_encode_data_to_neurons_only(&mut self) -> Result<(), FeagiDataError> {
         let mut sensors = self.sensors.lock().unwrap();
         _ = sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
@@ -4976,6 +4907,7 @@ impl IOCache {
         Ok(())
     }
 
+    /// Encodes sensor data to neuron voxels, then serializes to bytes.
     pub fn sensor_encode_data_to_neurons_then_bytes(&mut self, increment_value: u16) -> Result<(), FeagiDataError> {
         let mut sensors = self.sensors.lock().unwrap();
         _ = sensors.try_encode_updated_sensor_data_to_neurons(Instant::now())?;
@@ -4986,6 +4918,7 @@ impl IOCache {
         Ok(())
     }
 
+    /// Registers a callback to be invoked when sensor data is encoded to neurons.
     pub fn sensor_encoded_neuron_register_callback<F>(&mut self, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
     where
         F: Fn(&CorticalMappedXYZPNeuronVoxels) + Send + Sync + 'static,
@@ -4994,6 +4927,7 @@ impl IOCache {
         Ok(index)
     }
 
+    /// Registers a callback to be invoked when sensor data is serialized to bytes.
     pub fn sensor_encoded_bytes_register_callback<F>(&mut self, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
     where
         F: Fn(&FeagiByteContainer) + Send + Sync + 'static,
@@ -5002,11 +4936,13 @@ impl IOCache {
         Ok(index)
     }
 
+    /// Returns a clone of the current sensor byte container.
     pub fn sensor_copy_feagi_byte_container(&self) -> FeagiByteContainer {
-        let mut sensors = self.sensors.lock().unwrap();
+        let sensors = self.sensors.lock().unwrap();
         sensors.get_feagi_byte_container().clone()
     }
 
+    /// Replaces the sensor byte container with a new one.
     pub fn sensor_replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
         let mut sensors = self.sensors.lock().unwrap();
         sensors.replace_feagi_byte_container(feagi_byte_container);
@@ -5029,20 +4965,21 @@ impl IOCache {
         let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send > = SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
 
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let initial_val: WrappedIOData = WrappedIOType::SegmentedImageFrame(Some(segmented_image_properties)).create_blank_data_of_type()?;
         let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
             let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-            for i in 0..*number_channels {
+            for _i in 0..*number_channels {
                 output.push( vec![ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?]) // TODO properly implement clone so we dont need to do this
             };
             output
         };
         let mut sensors = self.sensors.lock().unwrap();
-        sensors.register(SENSOR_TYPE, group, encoder, default_pipeline)?;
+        sensors.register(SENSOR_TYPE, group, encoder, default_pipeline, initial_val)?;
         Ok(())
     }
 
     /// Writes raw image data to a specific segmented vision sensor channel for processing.
-    pub fn sensor_segmented_vision_absolute_try_write(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: &WrappedIOData) -> Result<(), FeagiDataError> {
+    pub fn sensor_segmented_vision_absolute_try_write(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: WrappedIOData) -> Result<(), FeagiDataError> {
         const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
         let mut sensors = self.sensors.lock().unwrap();
         sensors.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())?;
@@ -5118,6 +5055,8 @@ impl IOCache {
 
     //region Cache Logic
 
+    /// Decodes motor byte container to neuron data and then to motor commands.
+    /// Returns true if neuron data was present, false otherwise.
     pub fn motor_update_data_from_bytes(&mut self) -> Result<bool, FeagiDataError> {
         let mut motors = self.motors.lock().unwrap();
         let decoded_bytes_contain_neuron_data = motors.try_decode_bytes_to_neural_data()?;
@@ -5129,12 +5068,14 @@ impl IOCache {
 
     }
 
+    /// Returns a clone of the current motor byte container.
     pub fn motor_copy_feagi_byte_container(&self) -> FeagiByteContainer {
         let motors = self.motors.lock().unwrap();
         let byte_container =  motors.get_feagi_byte_container();
         byte_container.clone()
     }
 
+    /// Replaces the motor byte container with a new one.
     pub fn motor_replace_feagi_byte_container(&mut self, feagi_byte_container: FeagiByteContainer) {
         let mut motors = self.motors.lock().unwrap();
         motors.replace_feagi_byte_container(feagi_byte_container);
@@ -5153,7 +5094,9 @@ impl IOCache {
 
     //region Reflexes (premade callbacks)
 
-    // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling ehre
+    /// Creates a reflex linking gaze motor output to segmented vision sensor.
+    /// When gaze updates, the segmented vision pipeline adjusts to the new gaze position.
+    // TODO we need to discuss how to handle absolute,  linear, and we need to figure out better error handling here
     // TODO we can change the call back signature // TODO feedback
     pub fn reflex_absolute_gaze_to_absolute_segmented_vision(&mut self, gaze_group: CorticalGroupIndex, gaze_channel: CorticalChannelIndex, segmentation_group: CorticalGroupIndex, segmentation_channel: CorticalChannelIndex) -> Result<FeagiSignalIndex, FeagiDataError> {
 
@@ -5163,21 +5106,18 @@ impl IOCache {
 
         let s = self.sensors.lock().unwrap();
         _ = s.try_read_postprocessed_cached_value(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel)?;
-        mem::drop(s);
+        drop(s);
 
-        let motor_ref = Arc::clone(&self.motors);
         let sensor_ref = Arc::clone(&self.sensors);
 
-        let closure = move |_: &()| {
-            let motors = motor_ref.lock().unwrap();
-            let wrapped_motor = motors.try_read_postprocessed_cached_value(MotorCorticalType::GazeAbsoluteLinear, gaze_group, gaze_channel).unwrap();
+        let closure = move |wrapped_motor: &WrappedIOData| {
             let per_4d: Percentage4D = wrapped_motor.try_into().unwrap();
             let gaze: GazeProperties = GazeProperties::new_from_4d(per_4d);
 
             let mut sensors = sensor_ref.lock().unwrap();
             let stage_properties = sensors.try_get_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into()).unwrap();
             let mut segmentation_stage_properties: ImageSegmentorStageProperties = stage_properties.as_any().downcast_ref::<ImageSegmentorStageProperties>().unwrap().clone();
-            segmentation_stage_properties.update_from_gaze(gaze);
+            _ = segmentation_stage_properties.update_from_gaze(gaze);
             _ = sensors.try_update_single_stage_properties(SensorCorticalType::ImageCameraCenterAbsolute, segmentation_group, segmentation_channel, 0.into(), Box::new(segmentation_stage_properties));
         };
 
