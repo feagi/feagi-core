@@ -1,14 +1,2372 @@
 use std::collections::HashMap;
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
-use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelIndex, CorticalGroupIndex};
+use feagi_data_structures::{sensor_definition, FeagiDataError};
+use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth, CorticalChannelCount};
 use feagi_data_structures::genomic::SensorCorticalType;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::caching::per_channel_stream_caches::SensoryChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
-use crate::wrapped_io_data::WrappedIOData;
+use crate::data_types::*;
+use crate::data_types::descriptors::*;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use crate::neuron_voxel_coding::xyzp::encoders::*;
+use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPEncoder};
+use crate::neuron_voxel_coding::xyzp::encoders::*;
+
+macro_rules! sensor_functions
+{
+    (
+        $cortical_io_type_enum_name:ident {
+            $(
+                $(#[doc = $doc:expr])?
+                $cortical_type_key_name:ident => {
+                    friendly_name: $display_name:expr,
+                    snake_case_identifier: $snake_case_identifier:expr,
+                    base_ascii: $base_ascii:expr,
+                    channel_dimension_range: $channel_dimension_range:expr,
+                    default_coder_type: $default_coder_type:ident,
+                    wrapped_data_type: $wrapped_data_type:expr,
+                    data_type: $data_type:ident,
+                }
+            ),* $(,)?
+        }
+    ) => {
+        $(
+            sensor_functions!(@generate_function
+                $cortical_type_key_name,
+                $snake_case_identifier,
+                $default_coder_type,
+                $wrapped_data_type,
+                $data_type
+            );
+        )*
+    };
+
+    // Helper macro to generate stage functions
+    (@generate_stage_functions
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_get_single_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                stage_index: PipelineStagePropertyIndex
+            ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let stage = self.try_get_single_stage_properties(SENSOR_TYPE, group, channel_index, stage_index)?;
+                Ok(stage)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_get_all_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let stages = self.try_get_all_stage_properties(SENSOR_TYPE, group, channel_index)?;
+                Ok(stages)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_update_single_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                updating_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                self.try_update_single_stage_properties(SENSOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_update_all_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                self.try_update_all_stage_properties(SENSOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_replace_single_stage>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                self.try_replace_single_stage(SENSOR_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_replace_all_stages>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                self.try_replace_all_stages(SENSOR_TYPE, group, channel_index, new_pipeline_stage_properties)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_removing_all_stages>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                self.try_removing_all_stages(SENSOR_TYPE, group, channel_index)?;
+                Ok(())
+            }
+        }
+    };
+
+    // Arm for Percentage with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage2D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage2D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage2DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage2D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage2D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage2DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage2D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage2D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage2DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage2D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage2D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage2DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage3D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage3D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage3DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage3D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage3D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage3DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage3D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage3D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage3DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage3D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage3D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage3DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage4D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage4D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage4D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage4D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage4DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage4D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage4D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage4DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for Percentage4D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        Percentage4D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = Percentage4DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage1DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage1DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage1DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage1DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage2D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage2D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage2DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage2D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage2D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage2DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage2D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage2D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage2DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage2D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage2D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage2DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage3D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage3D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage3DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage3D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage3D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage3DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage3D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage3D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage3DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage3D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage3D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage3DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage4D with Absolute Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage4D_Absolute_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage4DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage4D with Absolute Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage4D_Absolute_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage4DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage4D with Incremental Linear encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage4D_Incremental_Linear,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage4DLinearNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for SignedPercentage4D with Incremental Fractional encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        SignedPercentage4D_Incremental_Fractional,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = $wrapped_data_type;
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SignedPercentage4DExponentialNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , z_neuron_resolution, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for MiscData with Absolute encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        MiscData_Absolute,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                misc_data_dimensions: MiscDataDimensions
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = WrappedIOType::MiscData(Some(misc_data_dimensions));
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for MiscData with Incremental encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        MiscData_Incremental,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                misc_data_dimensions: MiscDataDimensions
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = WrappedIOType::MiscData(Some(misc_data_dimensions));
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , misc_data_dimensions, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for ImageFrame with Absolute encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        ImageFrame_Absolute,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                image_properties: ImageFrameProperties,
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = WrappedIOType::ImageFrame(Some(image_properties));
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , &image_properties, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+    // Arm for ImageFrame with Incremental encoding
+    (@generate_function
+        $cortical_type_key_name:ident,
+        $snake_case_identifier:expr,
+        ImageFrame_Incremental,
+        $wrapped_data_type:expr,
+        $data_type:ident
+    ) => {
+        ::paste::paste! {
+            pub fn [<sensor_ $snake_case_identifier _try_register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                image_properties: ImageFrameProperties,
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let data_type: WrappedIOType = WrappedIOType::ImageFrame(Some(image_properties));
+
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(SENSOR_TYPE.to_cortical_id(group) , &image_properties, number_channels)?;
+
+                let wrapped_default: WrappedIOData = data_type.create_blank_data_of_type()?;
+
+                let mut default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                for _i in 0..*number_channels {
+                    default_pipeline.push(Vec::new());
+                }
+                self.register(SENSOR_TYPE, group, encoder, default_pipeline, wrapped_default)
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $data_type
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
+
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
+            }
+
+            pub fn [<sensor_ $snake_case_identifier _try_read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
+
+                const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
+
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
+         }
+
+        sensor_functions!(@generate_stage_functions $cortical_type_key_name, $snake_case_identifier);
+    };
+
+}
 
 pub(crate) struct SensorDeviceCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
@@ -30,7 +2388,12 @@ impl SensorDeviceCache {
         }
     }
 
+    //region Devices
 
+    sensor_definition!(sensor_functions);
+
+
+    //endregion
 
     //region Internal
 
@@ -113,6 +2476,12 @@ impl SensorDeviceCache {
     fn try_replace_all_stages(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
         sensor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
+    }
+
+    fn try_removing_all_stages(&mut self, sensor_type: SensorCorticalType, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches.try_removing_all_stages(channel_index)?;
+        Ok(())
     }
 
     //endregion
