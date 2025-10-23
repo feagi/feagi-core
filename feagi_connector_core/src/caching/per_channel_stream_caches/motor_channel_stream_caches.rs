@@ -7,11 +7,6 @@ use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, 
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-/// Manages multiple motor output streams with independent processing pipelines per channel.
-///
-/// Handles decoding neuron voxels to motor commands, pipeline processing for each channel,
-/// and callback signals when motor values are updated. Each channel can have its own
-/// pipeline stages for postprocessing decoded motor commands.
 #[derive(Debug)]
 pub(crate) struct MotorChannelStreamCaches {
     neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,

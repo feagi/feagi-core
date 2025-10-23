@@ -15,3 +15,6 @@ feagi_data_serialization = { workspace = true }
 image = {workspace = true}
 rayon = { workspace = true}
 paste = { workspace = true}
+
+[dev-dependencies]
+clap = { version =  "4.5.50", features = ["derive"] }

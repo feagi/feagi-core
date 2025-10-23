@@ -71,10 +71,6 @@ impl ImageFrame {
         })
     }
 
-    /// Creates an ImageFrame from a DynamicImage.
-    ///
-    /// Converts an image loaded via the `image` crate into an ImageFrame,
-    /// handling various color formats automatically.
     pub fn new_from_dynamic_image(img: DynamicImage, color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
         let (width, height) = img.dimensions();
         let color_layout = ColorChannelLayout::try_from(img.color())?;
@@ -110,28 +106,24 @@ impl ImageFrame {
         }
     }
 
-    /// Creates an ImageFrame from PNG image bytes.
     pub fn new_from_png_bytes(input: &[u8], color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
         let image_format = image::ImageFormat::Png;
         let img = image::load_from_memory_with_format(input, image_format).unwrap();
         Self::new_from_dynamic_image(img, color_space)
     }
 
-    /// Creates an ImageFrame from BMP image bytes.
     pub fn new_from_bmp_bytes(input: &[u8], color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
         let image_format = image::ImageFormat::Bmp;
         let img = image::load_from_memory_with_format(input, image_format).unwrap();
         Self::new_from_dynamic_image(img, color_space)
     }
 
-    /// Creates an ImageFrame from JPEG image bytes.
     pub fn new_from_jpeg_bytes(input: &[u8], color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
         let image_format = image::ImageFormat::Jpeg;
         let img = image::load_from_memory_with_format(input, image_format).unwrap();
         Self::new_from_dynamic_image(img, color_space)
     }
 
-    /// Creates an ImageFrame from TIFF image bytes.
     pub fn new_from_tiff_bytes(input: &[u8], color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
         let image_format = image::ImageFormat::Tiff;
         let img = image::load_from_memory_with_format(input, image_format).unwrap();
@@ -261,12 +253,10 @@ impl ImageFrame {
         &mut self.pixels
     }
 
-    /// Returns the pixel data as a contiguous byte slice.
     pub fn get_internal_byte_data(&self) -> &[u8] {
         self.pixels.as_slice().unwrap()
     }
 
-    /// Returns the pixel data as a mutable contiguous byte slice.
     pub fn get_internal_byte_data_mut(&mut self) -> &mut [u8] {
         self.pixels.as_slice_mut().unwrap()
     }

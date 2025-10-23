@@ -10,11 +10,6 @@ use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOData;
 
-/// Internal cache for sensor inputs, managing data flow to FEAGI.
-///
-/// Maintains separate stream caches for each registered sensor type and group,
-/// handles encoding sensor data to neuron voxels, and manages serialization
-/// for transmission to FEAGI. Supports pipeline stages for preprocessing.
 pub(crate) struct IOSensorCache {
     stream_caches: HashMap<(SensorCorticalType, CorticalGroupIndex), SensoryChannelStreamCaches>,
     agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(SensorCorticalType, CorticalGroupIndex)>>,
