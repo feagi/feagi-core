@@ -113,6 +113,23 @@ impl MotorChannelStreamCaches {
         pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
     }
 
+    /// Removes all pipeline stages from a specific channel.
+    ///
+    /// This is only possible if the channel's input and output types are the same,
+    /// allowing data to pass through unchanged.
+    ///
+    /// # Arguments
+    /// * `cortical_channel_index` - The channel to clear
+    ///
+    /// # Returns
+    /// * `Ok(())` - If all stages were successfully removed
+    /// * `Err(FeagiDataError)` - If channel is invalid or input/output types don't match
+    pub fn try_removing_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        pipeline_runner.try_removing_all_stages()?;
+        Ok(())
+    }
+
     //endregion
 
     //region Callbacks

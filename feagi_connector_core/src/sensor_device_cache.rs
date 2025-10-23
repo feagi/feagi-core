@@ -12,7 +12,6 @@ use crate::data_types::descriptors::*;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPEncoder};
-use crate::neuron_voxel_coding::xyzp::encoders::*;
 
 macro_rules! sensor_functions
 {
