@@ -4,12 +4,10 @@ members = [
     "crates/feagi-types",
     "crates/feagi-burst-engine",
     "crates/feagi-plasticity",
-    "crates/feagi-python",
     "crates/feagi-bdu",
     "crates/feagi-pns",
     "crates/feagi-connectome-serialization",
     "crates/feagi-agent-sdk",
-    "crates/feagi-agent-sdk-py",
     "crates/feagi-inference-engine",
     # "crates/feagi-zmq-server",  # Optional: High-performance ZMQ server (experimental)
 ]
