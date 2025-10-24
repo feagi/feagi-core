@@ -5,7 +5,7 @@
 //! Serializable synapse array structures
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use ahash::AHashMap;
 
 /// Serializable version of SynapseArray
 ///
@@ -38,7 +38,7 @@ pub struct SerializableSynapseArray {
 
     /// Source neuron index (for fast lookup)
     /// Maps source_neuron_id -> Vec<synapse_index>
-    pub source_index: HashMap<u32, Vec<usize>>,
+    pub source_index: AHashMap<u32, Vec<usize>>,
 }
 
 impl Default for SerializableSynapseArray {
@@ -52,7 +52,7 @@ impl Default for SerializableSynapseArray {
             conductances: Vec::new(),
             types: Vec::new(),
             valid_mask: Vec::new(),
-            source_index: HashMap::new(),
+            source_index: AHashMap::new(),
         }
     }
 }
@@ -69,7 +69,7 @@ impl SerializableSynapseArray {
             conductances: vec![0; capacity],
             types: vec![0; capacity],
             valid_mask: vec![false; capacity],
-            source_index: HashMap::new(),
+            source_index: AHashMap::new(),
         }
     }
 }

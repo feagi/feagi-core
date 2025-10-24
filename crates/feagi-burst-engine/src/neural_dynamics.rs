@@ -103,11 +103,10 @@ pub fn process_neural_dynamics(
                 results.push(neuron);
             }
             
-            // Count refractory neurons (use HashMap for ID→index lookup)
-            if let Some(&idx) = neuron_array.neuron_id_to_index.get(&neuron_id.0) {
-                if neuron_array.refractory_countdowns[idx] > 0 {
-                    refractory += 1;
-                }
+            // Count refractory neurons (neuron_id == array index)
+            let idx = neuron_id.0 as usize;
+            if idx < neuron_array.count && neuron_array.refractory_countdowns[idx] > 0 {
+                refractory += 1;
             }
         }
         
@@ -139,15 +138,12 @@ fn process_single_neuron(
     neuron_array: &mut NeuronArray,
     burst_count: u64,
 ) -> Option<FiringNeuron> {
-    // CRITICAL: Use neuron_id_to_index HashMap to convert ID to array index
-    let idx = match neuron_array.neuron_id_to_index.get(&neuron_id.0) {
-        Some(&index) => index,
-        None => return None,  // Neuron ID doesn't exist
-    };
+    // neuron_id == array index (direct access, no HashMap needed!)
+    let idx = neuron_id.0 as usize;
     
-    // Validate index (should always be valid if in HashMap, but check anyway)
-    if idx >= neuron_array.count {
-        return None;
+    // Validate index
+    if idx >= neuron_array.count || !neuron_array.valid_mask[idx] {
+        return None;  // Neuron doesn't exist
     }
     
     // CRITICAL DEBUG: Log entry for neuron 16438 (disabled to reduce spam)
