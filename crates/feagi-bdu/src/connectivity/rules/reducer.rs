@@ -12,8 +12,8 @@ pub fn syn_reducer_x(
     neuron_location: Position,
     _src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
-    dst_y_index: i32,
-    dst_z_index: i32,
+    dst_y_index: u32,
+    dst_z_index: u32,
 ) -> BduResult<Vec<Position>> {
     let (x, _y, _z) = neuron_location;
     let dst_x_dim = dst_dimensions.0;
@@ -25,7 +25,7 @@ pub fn syn_reducer_x(
         if bit_pos < 32 {  // Safety check for bit shift
             let mask = 1 << bit_pos;
             if (x & mask) != 0 {
-                positions.push((bit_pos as i32, dst_y_index, dst_z_index));
+                positions.push((bit_pos as u32, dst_y_index, dst_z_index));
             }
         }
     }

@@ -22,10 +22,10 @@ pub fn apply_vector_offset(
     let scaled_y = (vec_y as f32 * morphology_scalar) as i32;
     let scaled_z = (vec_z as f32 * morphology_scalar) as i32;
     
-    // Apply offset and clamp to dimensions
-    let dst_x = (src_x + scaled_x).max(0).min(dst_dimensions.0 as i32 - 1);
-    let dst_y = (src_y + scaled_y).max(0).min(dst_dimensions.1 as i32 - 1);
-    let dst_z = (src_z + scaled_z).max(0).min(dst_dimensions.2 as i32 - 1);
+    // Apply offset and clamp to dimensions (cast to i32 for signed arithmetic)
+    let dst_x = (src_x as i32 + scaled_x).max(0).min(dst_dimensions.0 as i32 - 1) as u32;
+    let dst_y = (src_y as i32 + scaled_y).max(0).min(dst_dimensions.1 as i32 - 1) as u32;
+    let dst_z = (src_z as i32 + scaled_z).max(0).min(dst_dimensions.2 as i32 - 1) as u32;
     
     Ok((dst_x, dst_y, dst_z))
 }

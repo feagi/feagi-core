@@ -13,7 +13,7 @@ pub type AreaId = String;
 pub type NeuronId = u64;
 
 /// 3D position (x, y, z)
-pub type Position = (i32, i32, i32);
+pub type Position = (u32, u32, u32);
 
 /// Synaptic weight (0-255 in u8, converted from Python float)
 pub type Weight = u8;

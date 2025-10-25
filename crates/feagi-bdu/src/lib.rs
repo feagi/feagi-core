@@ -33,7 +33,16 @@ pub mod ffi;
 pub mod spatial;
 pub mod types;
 
-// Re-export commonly used types
+// Re-export NPU-native synaptogenesis functions (primary API)
+pub use connectivity::{
+    apply_projector_morphology,
+    apply_expander_morphology,
+    apply_block_connection_morphology,
+    apply_patterns_morphology,
+    apply_vectors_morphology,
+};
+
+// Re-export legacy types for backward compatibility (will be removed)
 pub use connectivity::{
     find_candidate_neurons, CandidateNeuron, MorphologyParams, SynaptogenesisRequest,
     SynaptogenesisResult,

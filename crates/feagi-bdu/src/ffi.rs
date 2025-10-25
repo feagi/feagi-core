@@ -34,19 +34,20 @@ fn py_syn_projector(
     transpose: Option<(usize, usize, usize)>,
     project_last_layer_of: Option<usize>,
 ) -> PyResult<Vec<(i32, i32, i32)>> {
+    let loc_u32 = (neuron_location.0 as u32, neuron_location.1 as u32, neuron_location.2 as u32);
     let result = crate::connectivity::rules::syn_projector(
         src_area_id,
         dst_area_id,
         src_neuron_id,
         src_dimensions,
         dst_dimensions,
-        neuron_location,
+        loc_u32,
         transpose,
         project_last_layer_of,
     );
 
     match result {
-        Ok(positions) => Ok(positions),
+        Ok(positions) => Ok(positions.iter().map(|(x, y, z)| (*x as i32, *y as i32, *z as i32)).collect()),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
             "Rust syn_projector error: {}",
             e
@@ -82,11 +83,14 @@ fn py_syn_projector_batch(
     transpose: Option<(usize, usize, usize)>,
     project_last_layer_of: Option<usize>,
 ) -> PyResult<Vec<Vec<(i32, i32, i32)>>> {
+    let locs_u32: Vec<(u32, u32, u32)> = neuron_locations.iter()
+        .map(|(x, y, z)| (*x as u32, *y as u32, *z as u32))
+        .collect();
     let result = crate::connectivity::rules::syn_projector_batch(
         src_area_id,
         dst_area_id,
         &neuron_ids,
-        &neuron_locations,
+        &locs_u32,
         src_dimensions,
         dst_dimensions,
         transpose,
@@ -94,7 +98,11 @@ fn py_syn_projector_batch(
     );
 
     match result {
-        Ok(position_lists) => Ok(position_lists),
+        Ok(position_lists) => Ok(position_lists.iter()
+            .map(|positions| positions.iter()
+                .map(|(x, y, z)| (*x as i32, *y as i32, *z as i32))
+                .collect())
+            .collect()),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
             "Rust syn_projector_batch error: {}",
             e
@@ -112,10 +120,14 @@ fn py_syn_block_connection(
     dst_dimensions: (usize, usize, usize),
     scaling_factor: i32,
 ) -> PyResult<(i32, i32, i32)> {
+    // Convert from Python's i32 coordinates to Rust's u32 coordinates
+    let loc_u32 = (neuron_location.0 as u32, neuron_location.1 as u32, neuron_location.2 as u32);
+    let scale_u32 = scaling_factor as u32;
+    
     match crate::connectivity::rules::syn_block_connection(
-        src_area_id, dst_area_id, neuron_location, src_dimensions, dst_dimensions, scaling_factor
+        src_area_id, dst_area_id, loc_u32, src_dimensions, dst_dimensions, scale_u32
     ) {
-        Ok(pos) => Ok(pos),
+        Ok((x, y, z)) => Ok((x as i32, y as i32, z as i32)),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e))),
     }
 }
@@ -129,10 +141,11 @@ fn py_syn_expander(
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
 ) -> PyResult<(i32, i32, i32)> {
+    let loc_u32 = (neuron_location.0 as u32, neuron_location.1 as u32, neuron_location.2 as u32);
     match crate::connectivity::rules::syn_expander(
-        src_area_id, dst_area_id, neuron_location, src_dimensions, dst_dimensions
+        src_area_id, dst_area_id, loc_u32, src_dimensions, dst_dimensions
     ) {
-        Ok(pos) => Ok(pos),
+        Ok((x, y, z)) => Ok((x as i32, y as i32, z as i32)),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e))),
     }
 }
@@ -146,10 +159,13 @@ fn py_syn_expander_batch(
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
 ) -> PyResult<Vec<(i32, i32, i32)>> {
+    let locs_u32: Vec<(u32, u32, u32)> = neuron_locations.iter()
+        .map(|(x, y, z)| (*x as u32, *y as u32, *z as u32))
+        .collect();
     match crate::connectivity::rules::syn_expander_batch(
-        src_area_id, dst_area_id, &neuron_locations, src_dimensions, dst_dimensions
+        src_area_id, dst_area_id, &locs_u32, src_dimensions, dst_dimensions
     ) {
-        Ok(positions) => Ok(positions),
+        Ok(positions) => Ok(positions.iter().map(|(x, y, z)| (*x as i32, *y as i32, *z as i32)).collect()),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e))),
     }
 }
@@ -165,10 +181,11 @@ fn py_syn_reducer_x(
     dst_y_index: i32,
     dst_z_index: i32,
 ) -> PyResult<Vec<(i32, i32, i32)>> {
+    let loc_u32 = (neuron_location.0 as u32, neuron_location.1 as u32, neuron_location.2 as u32);
     match crate::connectivity::rules::syn_reducer_x(
-        src_area_id, dst_area_id, neuron_location, src_dimensions, dst_dimensions, dst_y_index, dst_z_index
+        src_area_id, dst_area_id, loc_u32, src_dimensions, dst_dimensions, dst_y_index as u32, dst_z_index as u32
     ) {
-        Ok(positions) => Ok(positions),
+        Ok(positions) => Ok(positions.iter().map(|(x, y, z)| (*x as i32, *y as i32, *z as i32)).collect()),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e))),
     }
 }
@@ -255,10 +272,11 @@ fn py_apply_vector_offset(
     morphology_scalar: f32,
     dst_dimensions: (usize, usize, usize),
 ) -> PyResult<(i32, i32, i32)> {
+    let src_u32 = (src_position.0 as u32, src_position.1 as u32, src_position.2 as u32);
     match crate::connectivity::rules::apply_vector_offset(
-        src_position, vector, morphology_scalar, dst_dimensions
+        src_u32, vector, morphology_scalar, dst_dimensions
     ) {
-        Ok(pos) => Ok(pos),
+        Ok((x, y, z)) => Ok((x as i32, y as i32, z as i32)),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e))),
     }
 }
@@ -271,10 +289,13 @@ fn py_match_vectors_batch(
     morphology_scalar: f32,
     dst_dimensions: (usize, usize, usize),
 ) -> PyResult<Vec<(i32, i32, i32)>> {
+    let srcs_u32: Vec<(u32, u32, u32)> = src_positions.iter()
+        .map(|(x, y, z)| (*x as u32, *y as u32, *z as u32))
+        .collect();
     match crate::connectivity::rules::match_vectors_batch(
-        &src_positions, vector, morphology_scalar, dst_dimensions
+        &srcs_u32, vector, morphology_scalar, dst_dimensions
     ) {
-        Ok(positions) => Ok(positions),
+        Ok(positions) => Ok(positions.iter().map(|(x, y, z)| (*x as i32, *y as i32, *z as i32)).collect()),
         Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("{}", e))),
     }
 }
@@ -295,6 +316,8 @@ fn py_match_patterns(
 ) -> PyResult<Vec<(i32, i32, i32)>> {
     use crate::connectivity::rules::patterns::{PatternElement, match_patterns_batch};
     
+    let src_u32 = (src_coordinate.0 as u32, src_coordinate.1 as u32, src_coordinate.2 as u32);
+    
     // Convert integer patterns to PatternElement
     let parsed_patterns: Vec<_> = patterns.iter().map(|(src, dst)| {
         let src_pattern = (
@@ -311,13 +334,13 @@ fn py_match_patterns(
     }).collect();
     
     let results = match_patterns_batch(
-        src_coordinate,
+        src_u32,
         &parsed_patterns,
         src_dimensions,
         dst_dimensions,
     );
     
-    Ok(results)
+    Ok(results.iter().map(|(x, y, z)| (*x as i32, *y as i32, *z as i32)).collect())
 }
 
 /// Find source coordinates that match a pattern
@@ -334,13 +357,15 @@ fn py_find_source_coordinates(
         PatternElement::from_int(src_pattern.2),
     );
     
-    Ok(find_source_coordinates(&pattern, src_dimensions))
+    let results = find_source_coordinates(&pattern, src_dimensions);
+    Ok(results.iter().map(|(x, y, z)| (*x as i32, *y as i32, *z as i32)).collect())
 }
 
 /// Randomizer - select random position in destination area
 #[pyfunction]
 fn py_syn_randomizer(dst_dimensions: (usize, usize, usize)) -> PyResult<(i32, i32, i32)> {
-    Ok(crate::connectivity::rules::syn_randomizer(dst_dimensions))
+    let (x, y, z) = crate::connectivity::rules::syn_randomizer(dst_dimensions);
+    Ok((x as i32, y as i32, z as i32))
 }
 
 /// Lateral pairs X - connect neurons in pairs along X axis
@@ -349,7 +374,9 @@ fn py_syn_lateral_pairs_x(
     neuron_location: (i32, i32, i32),
     src_dimensions: (usize, usize, usize),
 ) -> PyResult<Option<(i32, i32, i32)>> {
-    Ok(crate::connectivity::rules::syn_lateral_pairs_x(neuron_location, src_dimensions))
+    let loc_u32 = (neuron_location.0 as u32, neuron_location.1 as u32, neuron_location.2 as u32);
+    Ok(crate::connectivity::rules::syn_lateral_pairs_x(loc_u32, src_dimensions)
+        .map(|(x, y, z)| (x as i32, y as i32, z as i32)))
 }
 
 /// Last to first - connect last neuron to first (feedback connection)
@@ -358,7 +385,9 @@ fn py_syn_last_to_first(
     neuron_location: (i32, i32, i32),
     src_dimensions: (usize, usize, usize),
 ) -> PyResult<Option<(i32, i32, i32)>> {
-    Ok(crate::connectivity::rules::syn_last_to_first(neuron_location, src_dimensions))
+    let loc_u32 = (neuron_location.0 as u32, neuron_location.1 as u32, neuron_location.2 as u32);
+    Ok(crate::connectivity::rules::syn_last_to_first(loc_u32, src_dimensions)
+        .map(|(x, y, z)| (x as i32, y as i32, z as i32)))
 }
 
 /// Python module initialization (PyO3 0.22 API with Bound)

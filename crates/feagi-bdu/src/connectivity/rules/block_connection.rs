@@ -14,7 +14,7 @@ pub fn syn_block_connection(
     neuron_location: Position,
     _src_dimensions: (usize, usize, usize),
     _dst_dimensions: (usize, usize, usize),
-    scaling_factor: i32,
+    scaling_factor: u32,
 ) -> BduResult<Position> {
     let (x, y, z) = neuron_location;
     

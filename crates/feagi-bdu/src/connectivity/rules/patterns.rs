@@ -70,63 +70,63 @@ pub fn find_destination_coordinates(
     let (src_x, src_y, src_z) = src_coordinate;
     
     // Generate ranges based on destination pattern
-    let x_range: Vec<i32> = match &dst_pattern.0 {
-        PatternElement::Wildcard => (0..dst_width as i32).collect(),
+    let x_range: Vec<u32> = match &dst_pattern.0 {
+        PatternElement::Wildcard => (0..dst_width as u32).collect(),
         PatternElement::Skip => {
-            if src_x < dst_width as i32 {
+            if (src_x as usize) < dst_width {
                 vec![src_x]
             } else {
                 vec![]
             }
         }
         PatternElement::Exclude => {
-            (0..dst_width as i32).filter(|&x| x != src_x).collect()
+            (0..dst_width as u32).filter(|&x| x != src_x).collect()
         }
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < dst_width {
-                vec![*val]
+                vec![*val as u32]
             } else {
                 vec![]
             }
         }
     };
     
-    let y_range: Vec<i32> = match &dst_pattern.1 {
-        PatternElement::Wildcard => (0..dst_height as i32).collect(),
+    let y_range: Vec<u32> = match &dst_pattern.1 {
+        PatternElement::Wildcard => (0..dst_height as u32).collect(),
         PatternElement::Skip => {
-            if src_y < dst_height as i32 {
+            if (src_y as usize) < dst_height {
                 vec![src_y]
             } else {
                 vec![]
             }
         }
         PatternElement::Exclude => {
-            (0..dst_height as i32).filter(|&y| y != src_y).collect()
+            (0..dst_height as u32).filter(|&y| y != src_y).collect()
         }
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < dst_height {
-                vec![*val]
+                vec![*val as u32]
             } else {
                 vec![]
             }
         }
     };
     
-    let z_range: Vec<i32> = match &dst_pattern.2 {
-        PatternElement::Wildcard => (0..dst_depth as i32).collect(),
+    let z_range: Vec<u32> = match &dst_pattern.2 {
+        PatternElement::Wildcard => (0..dst_depth as u32).collect(),
         PatternElement::Skip => {
-            if src_z < dst_depth as i32 {
+            if (src_z as usize) < dst_depth {
                 vec![src_z]
             } else {
                 vec![]
             }
         }
         PatternElement::Exclude => {
-            (0..dst_depth as i32).filter(|&z| z != src_z).collect()
+            (0..dst_depth as u32).filter(|&z| z != src_z).collect()
         }
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < dst_depth {
-                vec![*val]
+                vec![*val as u32]
             } else {
                 vec![]
             }
@@ -155,40 +155,40 @@ pub fn find_source_coordinates(
     let (src_width, src_height, src_depth) = src_dimensions;
     
     // Generate ranges based on source pattern
-    let x_range: Vec<i32> = match &src_pattern.0 {
-        PatternElement::Wildcard => (0..src_width as i32).collect(),
+    let x_range: Vec<u32> = match &src_pattern.0 {
+        PatternElement::Wildcard => (0..src_width as u32).collect(),
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < src_width {
-                vec![*val]
+                vec![*val as u32]
             } else {
                 vec![]
             }
         }
-        _ => (0..src_width as i32).collect(), // Skip/Exclude treated as wildcard for source
+        _ => (0..src_width as u32).collect(), // Skip/Exclude treated as wildcard for source
     };
     
-    let y_range: Vec<i32> = match &src_pattern.1 {
-        PatternElement::Wildcard => (0..src_height as i32).collect(),
+    let y_range: Vec<u32> = match &src_pattern.1 {
+        PatternElement::Wildcard => (0..src_height as u32).collect(),
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < src_height {
-                vec![*val]
+                vec![*val as u32]
             } else {
                 vec![]
             }
         }
-        _ => (0..src_height as i32).collect(),
+        _ => (0..src_height as u32).collect(),
     };
     
-    let z_range: Vec<i32> = match &src_pattern.2 {
-        PatternElement::Wildcard => (0..src_depth as i32).collect(),
+    let z_range: Vec<u32> = match &src_pattern.2 {
+        PatternElement::Wildcard => (0..src_depth as u32).collect(),
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < src_depth {
-                vec![*val]
+                vec![*val as u32]
             } else {
                 vec![]
             }
         }
-        _ => (0..src_depth as i32).collect(),
+        _ => (0..src_depth as u32).collect(),
     };
     
     // Generate all combinations
@@ -218,19 +218,19 @@ pub fn match_patterns_batch(
         
         let x_match = match &src_pattern.0 {
             PatternElement::Wildcard => true,
-            PatternElement::Exact(val) => src_x == *val,
+            PatternElement::Exact(val) => src_x == (*val as u32),
             _ => true, // Skip/Exclude don't filter source
         };
         
         let y_match = match &src_pattern.1 {
             PatternElement::Wildcard => true,
-            PatternElement::Exact(val) => src_y == *val,
+            PatternElement::Exact(val) => src_y == (*val as u32),
             _ => true,
         };
         
         let z_match = match &src_pattern.2 {
             PatternElement::Wildcard => true,
-            PatternElement::Exact(val) => src_z == *val,
+            PatternElement::Exact(val) => src_z == (*val as u32),
             _ => true,
         };
         

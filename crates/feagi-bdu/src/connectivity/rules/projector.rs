@@ -88,7 +88,7 @@ pub fn syn_projector(
     };
 
     // Calculate destination voxel coordinates for each axis
-    let mut dst_voxels: [Vec<i32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
+    let mut dst_voxels: [Vec<u32>; 3] = [Vec::new(), Vec::new(), Vec::new()];
 
     for axis in 0..3 {
         dst_voxels[axis] = calculate_axis_projection(
@@ -137,11 +137,11 @@ pub fn syn_projector(
 /// 2. Source < Dest: Scale up (one-to-many)  
 /// 3. Source == Dest: Direct mapping (one-to-one)
 fn calculate_axis_projection(
-    location: i32,
+    location: u32,
     src_size: usize,
     dst_size: usize,
     force_first_layer: bool,
-) -> BduResult<Vec<i32>> {
+) -> BduResult<Vec<u32>> {
     let mut voxels = Vec::new();
 
     if force_first_layer {
@@ -153,8 +153,8 @@ fn calculate_axis_projection(
     if src_size > dst_size {
         // Source is larger: scale down (many-to-one)
         let ratio = src_size as f32 / dst_size as f32;
-        let target = (location as f32 / ratio) as i32;
-        if target >= 0 && (target as usize) < dst_size {
+        let target = (location as f32 / ratio) as u32;
+        if (target as usize) < dst_size {
             voxels.push(target);
         }
     } else if src_size < dst_size {
@@ -163,14 +163,14 @@ fn calculate_axis_projection(
         let ratio = dst_size as f32 / src_size as f32;
         
         for dst_vox in 0..dst_size {
-            let src_vox = (dst_vox as f32 / ratio) as i32;
+            let src_vox = (dst_vox as f32 / ratio) as u32;
             if src_vox == location {
-                voxels.push(dst_vox as i32);
+                voxels.push(dst_vox as u32);
             }
         }
     } else {
         // Source and destination are same size: direct mapping
-        if location >= 0 && (location as usize) < dst_size {
+        if (location as usize) < dst_size {
             voxels.push(location);
         }
     }
@@ -184,7 +184,7 @@ fn apply_transpose(
     dst_dims: Dimensions,
     location: Position,
     transpose: (usize, usize, usize),
-) -> ([usize; 3], [usize; 3], [i32; 3]) {
+) -> ([usize; 3], [usize; 3], [u32; 3]) {
     let src_arr = [src_dims.width, src_dims.height, src_dims.depth];
     let dst_arr = [dst_dims.width, dst_dims.height, dst_dims.depth];
     let loc_arr = [location.0, location.1, location.2];

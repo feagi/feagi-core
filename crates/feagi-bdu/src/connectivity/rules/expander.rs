@@ -22,9 +22,9 @@ pub fn syn_expander(
     
     // Scale neuron position
     let (x, y, z) = neuron_location;
-    let scaled_x = ((x as f32 * ratio_x) as usize).min(dst_x - 1) as i32;
-    let scaled_y = ((y as f32 * ratio_y) as usize).min(dst_y - 1) as i32;
-    let scaled_z = ((z as f32 * ratio_z) as usize).min(dst_z - 1) as i32;
+    let scaled_x = ((x as f32 * ratio_x) as usize).min(dst_x - 1) as u32;
+    let scaled_y = ((y as f32 * ratio_y) as usize).min(dst_y - 1) as u32;
+    let scaled_z = ((z as f32 * ratio_z) as usize).min(dst_z - 1) as u32;
     
     Ok((scaled_x, scaled_y, scaled_z))
 }

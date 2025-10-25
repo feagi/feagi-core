@@ -11,9 +11,9 @@ type Dimensions = (usize, usize, usize);
 pub fn syn_randomizer(dst_dimensions: Dimensions) -> Position {
     let mut rng = rand::thread_rng();
     (
-        rng.gen_range(0..dst_dimensions.0 as i32),
-        rng.gen_range(0..dst_dimensions.1 as i32),
-        rng.gen_range(0..dst_dimensions.2 as i32),
+        rng.gen_range(0..dst_dimensions.0 as u32),
+        rng.gen_range(0..dst_dimensions.1 as u32),
+        rng.gen_range(0..dst_dimensions.2 as u32),
     )
 }
 
@@ -27,7 +27,7 @@ pub fn syn_lateral_pairs_x(
     
     if x % 2 == 0 {
         // Even neurons connect to the right
-        if (x + 1) < src_dimensions.0 as i32 {
+        if (x + 1) < src_dimensions.0 as u32 {
             Some((x + 1, y, z))
         } else {
             None
@@ -48,9 +48,9 @@ pub fn syn_last_to_first(
     src_dimensions: Dimensions,
 ) -> Option<Position> {
     let last_pos = (
-        src_dimensions.0 as i32 - 1,
-        src_dimensions.1 as i32 - 1,
-        src_dimensions.2 as i32 - 1,
+        src_dimensions.0 as u32 - 1,
+        src_dimensions.1 as u32 - 1,
+        src_dimensions.2 as u32 - 1,
     );
     
     if neuron_location == last_pos {
