@@ -19,17 +19,17 @@ Mirrors the Python structure:
 - SIMD-optimized coordinate transformations
 - Parallel processing for large mappings
 
-## FFI / Python Integration
+## Python Integration
 
-All public functions are exposed via PyO3 for seamless Python integration.
-See `ffi` module for C-compatible API.
+NPU-native synaptogenesis functions are exposed via PyO3 bindings in `feagi-rust-py-libs`.
+Python code calls these functions directly with area IDs - no FFI overhead.
 
 Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
 pub mod connectivity;
-pub mod ffi;
+// pub mod ffi;  // DEPRECATED: Legacy Python-driven synaptogenesis (replaced by NPU-native functions)
 pub mod spatial;
 pub mod types;
 

@@ -20,9 +20,6 @@ ndarray = { workspace = true }
 ahash = { workspace = true }
 roaring = "0.10"  # Roaring bitmaps for spatial indexing
 
-# FFI / Python bindings (using workspace versions)
-pyo3 = { workspace = true, features = ["abi3-py38"] }
-
 # Serialization (for debugging)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
