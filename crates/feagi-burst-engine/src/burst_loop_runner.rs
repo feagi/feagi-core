@@ -284,26 +284,27 @@ fn burst_loop(
         burst_num += 1;
         // Note: NPU.process_burst() already incremented its internal burst_count
         
-        // Write visualization data to SHM (if attached)
-        {
-            static FIRST_CHECK_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        // Write visualization data (SHM and/or ZMQ)
+        // Check if we need to do ANY visualization (SHM writer OR ZMQ publisher)
+        let has_shm_writer = viz_shm_writer.lock().unwrap().is_some();
+        let has_zmq_publisher = viz_zmq_publisher.lock().unwrap().is_some();
+        
+        if has_shm_writer || has_zmq_publisher {
+            // Force sample FQ on every burst (bypasses rate limiting)
+            let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
             
-            let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
-            if let Some(writer) = viz_writer_lock.as_mut() {
-                // Force sample FQ on every burst (bypasses rate limiting)
-                let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
-                
-                if !FIRST_CHECK_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                    println!("[BURST-LOOP] 🔍 Viz SHM writer is attached, checking FQ sample...");
-                    if fire_data_opt.is_some() {
-                        println!("[BURST-LOOP] 🔍 FQ sample available!");
-                    } else {
-                        println!("[BURST-LOOP] ⚠️ FQ sample is None (no neurons have fired yet)");
-                    }
-                    FIRST_CHECK_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+            static FIRST_CHECK_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+            if !FIRST_CHECK_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+                if has_shm_writer {
+                    println!("[BURST-LOOP] 🔍 Viz SHM writer is attached");
                 }
-                
-                if let Some(fire_data) = fire_data_opt {
+                if has_zmq_publisher {
+                    println!("[BURST-LOOP] 🔍 Viz ZMQ publisher is attached");
+                }
+                FIRST_CHECK_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            
+            if let Some(fire_data) = fire_data_opt {
                     // Debug: Log first successful viz write (for migration debugging)
                     // Warning about unused static is expected - kept for development debugging
                     static FIRST_VIZ_WRITE_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -375,22 +376,29 @@ fn burst_loop(
                 let mut buffer = vec![0u8; bytes_needed];
                 
                 if let Ok(_) = cortical_mapped.try_serialize_struct_to_byte_slice(&mut buffer) {
-                    // Write raw structure bytes to SHM
-                    match writer.write_payload(&buffer) {
-                        Ok(_) => {
-                            // Visualization data written successfully to SHM
-                            
-                            // Also publish to ZMQ if publisher is configured
-                            if let Some(publisher_guard) = viz_zmq_publisher.lock().ok() {
-                                if let Some(ref publisher) = *publisher_guard {
-                                    // Publish the same buffer to ZMQ (no extra serialization needed)
-                                    publisher(&buffer);
+                    // Write to SHM if writer is attached
+                    if has_shm_writer {
+                        let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
+                        if let Some(writer) = viz_writer_lock.as_mut() {
+                            match writer.write_payload(&buffer) {
+                                Ok(_) => {
+                                    // Visualization data written successfully to SHM
+                                }
+                                Err(e) => {
+                                    let timestamp = get_timestamp();
+                                    eprintln!("[{}] [BURST-LOOP] ❌ Failed to write viz SHM: {}", timestamp, e);
                                 }
                             }
                         }
-                        Err(e) => {
-                            let timestamp = get_timestamp();
-                            eprintln!("[{}] [BURST-LOOP] ❌ Failed to write viz SHM: {}", timestamp, e);
+                    }
+                    
+                    // Publish to ZMQ if publisher is configured (independent of SHM)
+                    if has_zmq_publisher {
+                        if let Some(publisher_guard) = viz_zmq_publisher.lock().ok() {
+                            if let Some(ref publisher) = *publisher_guard {
+                                // Publish the same buffer to ZMQ (no extra serialization needed)
+                                publisher(&buffer);
+                            }
                         }
                     }
                 } else {
@@ -409,8 +417,7 @@ fn burst_loop(
                 }
             }
                 }  // Close if let Some(fire_data)
-            }  // Close if let Some(writer)
-        }  // Close outer viz SHM block
+        }  // Close visualization block
         
         // Performance logging every 5 seconds
         let now = Instant::now();

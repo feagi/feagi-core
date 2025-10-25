@@ -145,8 +145,16 @@ impl VizSHMWriter {
         // Check payload size
         if payload.len() + 4 > self.slot_size {
             // Truncate if too large (should not happen with proper encoding)
-            eprintln!("[VIZ-SHM] Warning: payload {} bytes exceeds slot size {} bytes, truncating", 
-                payload.len(), self.slot_size);
+            eprintln!(
+                "⚠️  [VIZ-SHM] WARNING: Payload {} bytes exceeds slot size {} bytes - DATA WILL BE TRUNCATED!",
+                payload.len(), self.slot_size
+            );
+            eprintln!(
+                "⚠️  [VIZ-SHM] This should NOT happen! Shared memory mode may not be fully supported yet."
+            );
+            eprintln!(
+                "⚠️  [VIZ-SHM] Recommendation: Run FEAGI without --shared-mem flag to use ZMQ mode instead."
+            );
             let truncated = &payload[0..(self.slot_size - 4)];
             self.write_to_ring_slot(truncated)?;
         } else {

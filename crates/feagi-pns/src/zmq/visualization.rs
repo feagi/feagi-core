@@ -41,10 +41,10 @@ impl VisualizationStream {
             .set_linger(0) // Don't wait on close
             .map_err(|e| e.to_string())?;
         socket
-            .set_sndhwm(1000) // High water mark for send buffer
+            .set_sndhwm(10000) // Increased from 1000 to 10000 for large neuron firing bursts (tens of thousands per burst)
             .map_err(|e| e.to_string())?;
         socket
-            .set_conflate(true) // Keep only latest message (real-time data)
+            .set_conflate(false) // CRITICAL: Disabled conflate - was dropping neuron activations with large bursts! Must preserve all firing data.
             .map_err(|e| e.to_string())?;
 
         // Bind socket
@@ -77,10 +77,17 @@ impl VisualizationStream {
             }
         };
 
-        sock.send(data, 0)
-            .map_err(|e| e.to_string())?;
-
-        Ok(())
+        // Use blocking send - ZMQ PUB socket with proper HWM settings handles backpressure
+        // The sndhwm=10000 setting will queue messages, and conflate=false preserves all data
+        match sock.send(data, 0) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                // Log error but this should be rare with proper HWM settings
+                eprintln!("⚠️  [ZMQ-VIZ] WARNING: Send failed ({} bytes): {}", data.len(), e);
+                eprintln!("⚠️  [ZMQ-VIZ] This may indicate buffer overflow or disconnected subscribers.");
+                Err(e.to_string())
+            }
+        }
     }
 
     /// Check if stream is running
