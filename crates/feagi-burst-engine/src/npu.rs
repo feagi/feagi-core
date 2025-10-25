@@ -204,11 +204,19 @@ impl RustNPU {
             Ok(neuron_ids) => {
                 // BULK update propagation engine's neuron-to-area mapping
                 // Reserve capacity upfront to minimize rehashing
+                use std::time::Instant;
+                let prop_start = Instant::now();
                 self.propagation_engine.neuron_to_area.reserve(n);
+                let reserve_time = prop_start.elapsed();
                 
+                let insert_start = Instant::now();
                 for (i, neuron_id) in neuron_ids.iter().enumerate() {
                     self.propagation_engine.neuron_to_area.insert(*neuron_id, CorticalAreaId(cortical_areas[i]));
                 }
+                let insert_time = insert_start.elapsed();
+                
+                eprintln!("🦀🦀🦀 [PROP-ENGINE] n={}, reserve={:?}, inserts={:?}, size={}", 
+                    n, reserve_time, insert_time, self.propagation_engine.neuron_to_area.len());
                 
                 // ✅ ARCHITECTURE FIX: Return only success COUNT, not full Vec<u32> of IDs
                 // Python doesn't need IDs - Rust owns all neuron data!
@@ -267,6 +275,10 @@ impl RustNPU {
         
         // Calculate total neurons
         let total_neurons = (width * height * depth * neurons_per_voxel) as usize;
+        
+        // ✅ GUARANTEED UNCONDITIONAL LOG - Will ALWAYS print
+        eprintln!("🦀🦀🦀 [RUST-ENTRY] create_cortical_area_neurons called: area={}, n={}", 
+            cortical_idx, total_neurons);
         
         if total_neurons == 0 {
             return Ok(0);
@@ -327,11 +339,9 @@ impl RustNPU {
         let batch_time = batch_start.elapsed();
         let total_time = fn_start.elapsed();
         
-        // Log if slow (>100ms)
-        if total_time.as_millis() > 100 {
-            eprintln!("⚠️  [CREATE-CORTICAL-SLOW] n={}, alloc={:?}, batch={:?}, TOTAL={:?}", 
-                total_neurons, alloc_time, batch_time, total_time);
-        }
+        // ✅ ALWAYS LOG (removed conditional for debugging)
+        eprintln!("🦀🦀🦀 [RUST-EXIT] create_cortical_area_neurons: n={}, alloc={:?}, batch={:?}, TOTAL={:?}", 
+            total_neurons, alloc_time, batch_time, total_time);
         
         if !failed.is_empty() {
             return Err(FeagiError::ComputationError(
@@ -1112,11 +1122,6 @@ impl RustNPU {
         true
     }
     
-    /// Get neuron count
-    pub fn get_neuron_count(&self) -> usize {
-        self.neuron_array.count
-    }
-    
     /// Get neuron coordinates (x, y, z)
     pub fn get_neuron_coordinates(&self, neuron_id: u32) -> (u32, u32, u32) {
         self.neuron_array.get_coordinates(NeuronId(neuron_id))
@@ -1125,6 +1130,16 @@ impl RustNPU {
     /// Get cortical area for a neuron
     pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> u32 {
         self.neuron_array.get_cortical_area(NeuronId(neuron_id)).0
+    }
+    
+    /// Get all neuron IDs in a specific cortical area
+    pub fn get_neurons_in_cortical_area(&self, cortical_idx: u32) -> Vec<u32> {
+        self.neuron_array.get_neurons_in_cortical_area(cortical_idx)
+    }
+    
+    /// Get total number of active neurons
+    pub fn get_neuron_count(&self) -> usize {
+        self.neuron_array.get_neuron_count()
     }
     
     /// Get synapse count (valid only)
