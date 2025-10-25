@@ -67,7 +67,7 @@ impl VisualizationStream {
         Ok(())
     }
 
-    /// Publish visualization data to all subscribers
+    /// Publish visualization data to all subscribers (with LZ4 compression)
     pub fn publish(&self, data: &[u8]) -> Result<(), String> {
         let sock_guard = self.socket.lock();
         let sock = match sock_guard.as_ref() {
@@ -77,14 +77,47 @@ impl VisualizationStream {
             }
         };
 
-        // Use blocking send - ZMQ PUB socket with proper HWM settings handles backpressure
-        // The sndhwm=10000 setting will queue messages, and conflate=false preserves all data
-        match sock.send(data, 0) {
+        // TEMPORARY: LZ4 compression disabled due to BV Rust crash
+        // TODO: Re-enable once BV LZ4 decompression is debugged
+        // Sending uncompressed data for now
+        
+        // Use NON-BLOCKING send to prevent burst loop from freezing during high neuron activity
+        // With tens of thousands of neurons firing, the buffer can fill and blocking would freeze the burst loop
+        match sock.send(data, zmq::DONTWAIT) {
             Ok(_) => Ok(()),
+            Err(zmq::Error::EAGAIN) => {
+                // Buffer full - frame will be dropped but burst loop continues
+                // This is better than blocking the entire burst loop
+                use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+                static DROP_COUNT: AtomicUsize = AtomicUsize::new(0);
+                static LAST_WARNING_SECS: AtomicU64 = AtomicU64::new(0);
+                
+                let drops = DROP_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+                let now_secs = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                
+                let last_warn = LAST_WARNING_SECS.load(Ordering::Relaxed);
+                
+                // Rate-limit warnings to once per second
+                if now_secs > last_warn {
+                    if LAST_WARNING_SECS.compare_exchange(last_warn, now_secs, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+                        eprintln!(
+                            "⚠️  [ZMQ-VIZ] WARNING: Send buffer full - dropped {} frames in last second ({} bytes/frame)",
+                            drops, data.len()
+                        );
+                        eprintln!("⚠️  [ZMQ-VIZ] Subscribers too slow! Consider: (1) Increase rcv_hwm on Bridge, (2) Reduce burst rate");
+                        DROP_COUNT.store(0, Ordering::Relaxed);
+                    }
+                }
+                
+                // Return Ok to prevent error propagation - dropping frames is acceptable
+                Ok(())
+            }
             Err(e) => {
-                // Log error but this should be rare with proper HWM settings
-                eprintln!("⚠️  [ZMQ-VIZ] WARNING: Send failed ({} bytes): {}", data.len(), e);
-                eprintln!("⚠️  [ZMQ-VIZ] This may indicate buffer overflow or disconnected subscribers.");
+                // Real error (not just buffer full)
+                eprintln!("❌ [ZMQ-VIZ] Send failed: {}", e);
                 Err(e.to_string())
             }
         }

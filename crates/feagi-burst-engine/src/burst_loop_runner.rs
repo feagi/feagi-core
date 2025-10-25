@@ -376,7 +376,7 @@ fn burst_loop(
                 let mut buffer = vec![0u8; bytes_needed];
                 
                 if let Ok(_) = cortical_mapped.try_serialize_struct_to_byte_slice(&mut buffer) {
-                    // Write to SHM if writer is attached
+                    // Write to SHM if writer is attached (uncompressed - local IPC)
                     if has_shm_writer {
                         let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
                         if let Some(writer) = viz_writer_lock.as_mut() {
@@ -392,11 +392,11 @@ fn burst_loop(
                         }
                     }
                     
-                    // Publish to ZMQ if publisher is configured (independent of SHM)
+                    // Publish to ZMQ if publisher is configured (PNS handles compression)
                     if has_zmq_publisher {
                         if let Some(publisher_guard) = viz_zmq_publisher.lock().ok() {
                             if let Some(ref publisher) = *publisher_guard {
-                                // Publish the same buffer to ZMQ (no extra serialization needed)
+                                // Send raw buffer - PNS layer handles LZ4 compression
                                 publisher(&buffer);
                             }
                         }
