@@ -190,10 +190,17 @@ impl PNS {
     /// Publish visualization data to all ZMQ subscribers
     /// Called by burst engine after writing FQ data to SHM
     pub fn publish_visualization(&self, data: &[u8]) -> Result<()> {
+        static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("[PNS] 🔍 TRACE: publish_visualization() called with {} bytes", data.len());
+            FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        
         if let Some(streams) = self.zmq_streams.lock().as_ref() {
             streams.publish_visualization(data)?;
             Ok(())
         } else {
+            eprintln!("[PNS] ❌ CRITICAL: ZMQ streams not started!");
             Err(PNSError::NotRunning("ZMQ streams not started".to_string()))
         }
     }

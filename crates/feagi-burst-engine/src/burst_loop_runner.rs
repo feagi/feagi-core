@@ -313,6 +313,13 @@ fn burst_loop(
         let has_shm_writer = viz_shm_writer.lock().unwrap().is_some();
         let has_viz_publisher = viz_publisher.is_some();
         
+        // 🔍 CRITICAL DEBUG: Log what's available
+        static DEBUG_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !DEBUG_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("[BURST-LOOP] 🔍 CRITICAL: has_shm_writer={}, has_viz_publisher={}", has_shm_writer, has_viz_publisher);
+            DEBUG_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        
         if has_shm_writer || has_viz_publisher {
             // Force sample FQ on every burst (bypasses rate limiting)
             let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
@@ -399,7 +406,18 @@ fn burst_loop(
                 let bytes_needed = cortical_mapped.get_number_of_bytes_needed();
                 let mut buffer = vec![0u8; bytes_needed];
                 
+                static FIRST_SIZE_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if !FIRST_SIZE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                    eprintln!("[BURST-LOOP] 🔍 SERIALIZE: bytes_needed={}, buffer.len()={}", bytes_needed, buffer.len());
+                    FIRST_SIZE_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                
                 if let Ok(_) = cortical_mapped.try_serialize_struct_to_byte_slice(&mut buffer) {
+                    static FIRST_ACTUAL_SIZE_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                    if !FIRST_ACTUAL_SIZE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                        eprintln!("[BURST-LOOP] 🔍 SERIALIZE: Actual serialized buffer.len()={}, first 8 bytes: {:02x?}", buffer.len(), &buffer[..8.min(buffer.len())]);
+                        FIRST_ACTUAL_SIZE_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
                     // Write to SHM if writer is attached (uncompressed - local IPC)
                     if has_shm_writer {
                         let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
@@ -419,12 +437,33 @@ fn burst_loop(
                     // Publish to ZMQ via trait object (direct Rust-to-Rust call, NO PYTHON!)
                     // Publisher (PNS) handles LZ4 compression and ZMQ publishing
                     if let Some(ref publisher) = viz_publisher {
-                        if let Err(e) = publisher.publish_visualization(&buffer) {
-                            static VIZ_ERROR_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-                            if !VIZ_ERROR_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                eprintln!("[BURST-LOOP] ❌ Failed to publish visualization: {}", e);
-                                VIZ_ERROR_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        static FIRST_PUBLISH_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                        if !FIRST_PUBLISH_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+                            eprintln!("[BURST-LOOP] 🔍 CRITICAL: Calling publisher.publish_visualization() with {} bytes", buffer.len());
+                            FIRST_PUBLISH_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
+                        
+                        match publisher.publish_visualization(&buffer) {
+                            Ok(_) => {
+                                static SUCCESS_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                                if !SUCCESS_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+                                    eprintln!("[BURST-LOOP] ✅ CRITICAL: publish_visualization() SUCCESS!");
+                                    SUCCESS_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                                }
                             }
+                            Err(e) => {
+                                static VIZ_ERROR_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                                if !VIZ_ERROR_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+                                    eprintln!("[BURST-LOOP] ❌ CRITICAL: Failed to publish visualization: {}", e);
+                                    VIZ_ERROR_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                                }
+                            }
+                        }
+                    } else {
+                        static NO_PUBLISHER_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                        if !NO_PUBLISHER_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+                            eprintln!("[BURST-LOOP] ⚠️ CRITICAL: viz_publisher is None!");
+                            NO_PUBLISHER_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
                 } else {

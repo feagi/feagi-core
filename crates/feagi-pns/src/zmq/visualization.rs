@@ -69,34 +69,77 @@ impl VisualizationStream {
 
     /// Publish visualization data to all subscribers (with LZ4 compression)
     pub fn publish(&self, data: &[u8]) -> Result<(), String> {
+        static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("[VIZ-STREAM] 🔍 TRACE: publish() called with {} bytes (BEFORE compression)", data.len());
+            FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        
         let sock_guard = self.socket.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
             None => {
+                eprintln!("[VIZ-STREAM] ❌ CRITICAL: Socket not initialized!");
                 return Err("Visualization stream not started".to_string())
             }
         };
 
         // Compress with LZ4 before sending (PNS responsibility, not burst engine)
         // NO FALLBACK: Compression must succeed or fail
-        let compressed = match lz4::block::compress(data, Some(lz4::block::CompressionMode::HIGHCOMPRESSION(9)), false) {
+        static COMPRESS_CALL_COUNT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let call_num = COMPRESS_CALL_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        
+        if call_num == 0 {
+            let mut full_input = String::new();
+            for (i, byte) in data.iter().enumerate() {
+                if i > 0 { full_input.push(' '); }
+                full_input.push_str(&format!("{:02x}", byte));
+            }
+            eprintln!("\n=== [INPUT-FULL] {} bytes ===", data.len());
+            eprintln!("{}", full_input);
+            eprintln!("=== END INPUT ===\n");
+        }
+        
+        eprintln!("[VIZ-STREAM] 🔍 TRACE #{}: About to call lz4::block::compress() on {} bytes...", call_num, data.len());
+        
+        // 🔍 DEBUG: Try FAST compression without size header (store_size=false is WRONG for our use case!)
+        let compressed = match lz4::block::compress(data, Some(lz4::block::CompressionMode::FAST(1)), true) {
             Ok(c) => {
-                static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-                if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                eprintln!("[VIZ-STREAM] ✅ TRACE #{}: LZ4 SUCCESS! {} → {} bytes", call_num, data.len(), c.len());
+                static FIRST_SUCCESS_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if !FIRST_SUCCESS_LOG.load(std::sync::atomic::Ordering::Relaxed) {
                     let ratio = (1.0 - c.len() as f64 / data.len() as f64) * 100.0;
                     eprintln!("[ZMQ-VIZ] 🗜️  LZ4 compression: {} → {} bytes ({:.1}% reduction)",
                         data.len(), c.len(), ratio);
-                    FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                    FIRST_SUCCESS_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
                 c
             }
             Err(e) => {
+                eprintln!("[VIZ-STREAM] ❌ CRITICAL #{}: LZ4 FAILED: {:?}", call_num, e);
                 return Err(format!("LZ4 compression failed: {}", e));
             }
         };
 
-        // Use NON-BLOCKING send to prevent burst loop from freezing during high neuron activity
-        match sock.send(&compressed, zmq::DONTWAIT) {
+            // 🔍 CRITICAL: Dump FULL compressed buffer
+            static FIRST_SEND_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+            if !FIRST_SEND_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                let mut full_hex = String::new();
+                for (i, byte) in compressed.iter().enumerate() {
+                    if i > 0 { full_hex.push(' '); }
+                    full_hex.push_str(&format!("{:02x}", byte));
+                }
+                eprintln!("\n=== [COMPRESSED-FULL] {} bytes ===", compressed.len());
+                eprintln!("{}", full_hex);
+                eprintln!("=== END ===\n");
+                FIRST_SEND_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+            }
+            
+            // Use NON-BLOCKING send with explicit topic (PUB/SUB pattern requires topic prefix)
+            // Send as multipart: [topic, data]
+            let result = sock.send(&b"activity"[..], zmq::SNDMORE)
+                .and_then(|_| sock.send(&compressed[..], zmq::DONTWAIT));
+            match result {
             Ok(_) => Ok(()),
             Err(zmq::Error::EAGAIN) => {
                 // Buffer full - frame will be dropped but burst loop continues

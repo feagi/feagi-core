@@ -95,6 +95,12 @@ impl ZmqStreams {
 
     /// Publish visualization data to ZMQ subscribers
     pub fn publish_visualization(&self, data: &[u8]) -> Result<(), PNSError> {
+        static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+            eprintln!("[ZMQ-STREAMS] 🔍 TRACE: Forwarding {} bytes to viz_stream.publish()", data.len());
+            FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        
         self.viz_stream
             .publish(data)
             .map_err(|e| PNSError::Zmq(format!("Viz publish: {}", e)))
