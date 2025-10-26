@@ -77,13 +77,26 @@ impl VisualizationStream {
             }
         };
 
-        // TEMPORARY: LZ4 compression disabled due to BV Rust crash
-        // TODO: Re-enable once BV LZ4 decompression is debugged
-        // Sending uncompressed data for now
-        
+        // Compress with LZ4 before sending (PNS responsibility, not burst engine)
+        // NO FALLBACK: Compression must succeed or fail
+        let compressed = match lz4::block::compress(data, Some(lz4::block::CompressionMode::HIGHCOMPRESSION(9)), false) {
+            Ok(c) => {
+                static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                    let ratio = (1.0 - c.len() as f64 / data.len() as f64) * 100.0;
+                    eprintln!("[ZMQ-VIZ] 🗜️  LZ4 compression: {} → {} bytes ({:.1}% reduction)",
+                        data.len(), c.len(), ratio);
+                    FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                c
+            }
+            Err(e) => {
+                return Err(format!("LZ4 compression failed: {}", e));
+            }
+        };
+
         // Use NON-BLOCKING send to prevent burst loop from freezing during high neuron activity
-        // With tens of thousands of neurons firing, the buffer can fill and blocking would freeze the burst loop
-        match sock.send(data, zmq::DONTWAIT) {
+        match sock.send(&compressed, zmq::DONTWAIT) {
             Ok(_) => Ok(()),
             Err(zmq::Error::EAGAIN) => {
                 // Buffer full - frame will be dropped but burst loop continues
@@ -104,10 +117,10 @@ impl VisualizationStream {
                 if now_secs > last_warn {
                     if LAST_WARNING_SECS.compare_exchange(last_warn, now_secs, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
                         eprintln!(
-                            "⚠️  [ZMQ-VIZ] WARNING: Send buffer full - dropped {} frames in last second ({} bytes/frame)",
-                            drops, data.len()
+                            "⚠️  [ZMQ-VIZ] WARNING: Send buffer full - dropped {} frames in last second ({} bytes/frame compressed)",
+                            drops, compressed.len()
                         );
-                        eprintln!("⚠️  [ZMQ-VIZ] Subscribers too slow! Consider: (1) Increase rcv_hwm on Bridge, (2) Reduce burst rate");
+                        eprintln!("⚠️  [ZMQ-VIZ] Subscribers too slow even with LZ4! Consider: (1) Increase rcv_hwm on Bridge, (2) Reduce burst rate");
                         DROP_COUNT.store(0, Ordering::Relaxed);
                     }
                 }
