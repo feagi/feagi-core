@@ -199,6 +199,13 @@ impl PNS {
     }
 }
 
+/// Implement VisualizationPublisher trait for burst engine integration (NO PYTHON IN HOT PATH!)
+impl feagi_burst_engine::VisualizationPublisher for PNS {
+    fn publish_visualization(&self, data: &[u8]) -> std::result::Result<(), String> {
+        self.publish_visualization(data).map_err(|e| e.to_string())
+    }
+}
+
 impl Drop for PNS {
     fn drop(&mut self) {
         let _ = self.stop();

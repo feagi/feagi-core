@@ -22,7 +22,15 @@ use feagi_types::NeuronId;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+
 use std::thread;
+
+/// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-pns)
+/// Any component that can publish visualization data implements this trait.
+pub trait VisualizationPublisher: Send + Sync {
+    /// Publish visualization data (LZ4-compressed Type 11 format)
+    fn publish_visualization(&self, data: &[u8]) -> Result<(), String>;
+}
 
 /// Burst loop runner - manages the main neural processing loop
 /// 
@@ -43,13 +51,23 @@ pub struct BurstLoopRunner {
     pub viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     /// Motor SHM writer (optional, None if not configured)
     pub motor_shm_writer: Arc<Mutex<Option<crate::motor_shm_writer::MotorSHMWriter>>>,
-    /// Visualization ZMQ publisher callback (optional, called after writing to SHM)
-    pub viz_zmq_publisher: Arc<Mutex<Option<Box<dyn Fn(&[u8]) + Send + Sync>>>>,
+    /// Visualization publisher for direct Rust-to-Rust publishing (NO PYTHON IN HOT PATH)
+    /// Uses trait abstraction to avoid circular dependency with feagi-pns
+    pub viz_publisher: Option<Arc<dyn VisualizationPublisher>>,
 }
 
 impl BurstLoopRunner {
     /// Create a new burst loop runner
-    pub fn new(npu: Arc<Mutex<RustNPU>>, frequency_hz: f64) -> Self {
+    /// 
+    /// # Arguments
+    /// * `npu` - The NPU to run bursts on
+    /// * `viz_publisher` - Optional visualization publisher (None = no ZMQ visualization)
+    /// * `frequency_hz` - Burst frequency in Hz
+    pub fn new<P: VisualizationPublisher + 'static>(
+        npu: Arc<Mutex<RustNPU>>,
+        viz_publisher: Option<Arc<Mutex<P>>>,
+        frequency_hz: f64
+    ) -> Self {
         // Create FCL injection callback for sensory data
         let npu_for_callback = npu.clone();
         let injection_callback = Arc::new(move |cortical_area: u32, xyzp_data: Vec<(u32, u32, u32, f32)>| {
@@ -110,6 +128,19 @@ impl BurstLoopRunner {
         });
         
         let sensory_manager = AgentManager::new(injection_callback);
+        
+        // Convert generic publisher to trait object (if provided)
+        let viz_publisher_trait: Option<Arc<dyn VisualizationPublisher>> = viz_publisher.map(|p| {
+            // Wrap Arc<Mutex<P>> to implement VisualizationPublisher
+            struct VisualizerWrapper<P: VisualizationPublisher>(Arc<Mutex<P>>);
+            impl<P: VisualizationPublisher> VisualizationPublisher for VisualizerWrapper<P> {
+                fn publish_visualization(&self, data: &[u8]) -> Result<(), String> {
+                    self.0.lock().unwrap().publish_visualization(data)
+                }
+            }
+            Arc::new(VisualizerWrapper(p)) as Arc<dyn VisualizationPublisher>
+        });
+        
         Self {
             npu,
             frequency_hz,
@@ -118,7 +149,7 @@ impl BurstLoopRunner {
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
             viz_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_viz_shm_writer
             motor_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_motor_shm_writer
-            viz_zmq_publisher: Arc::new(Mutex::new(None)), // Initialized later via set_viz_zmq_publisher
+            viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
         }
     }
     
@@ -138,15 +169,8 @@ impl BurstLoopRunner {
         Ok(())
     }
     
-    /// Set visualization ZMQ publisher callback (called from PNS after initialization)
-    pub fn set_viz_zmq_publisher<F>(&mut self, publisher: F)
-    where
-        F: Fn(&[u8]) + Send + Sync + 'static,
-    {
-        let mut guard = self.viz_zmq_publisher.lock().unwrap();
-        *guard = Some(Box::new(publisher));
-        println!("[BURST-RUNNER] 📡 Visualization ZMQ publisher attached");
-    }
+    // REMOVED: set_viz_zmq_publisher - NO PYTHON CALLBACKS IN HOT PATH!
+    // PNS is now passed directly in constructor for pure Rust-to-Rust communication
     
     /// Set burst frequency (can be called while running)
     pub fn set_frequency(&mut self, frequency_hz: f64) {
@@ -171,12 +195,12 @@ impl BurstLoopRunner {
         let frequency = self.frequency_hz;
         let running = self.running.clone();
         let viz_writer = self.viz_shm_writer.clone();
-        let viz_zmq_publisher = self.viz_zmq_publisher.clone();
+        let viz_publisher = self.viz_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
         
         self.thread_handle = Some(thread::Builder::new()
             .name("feagi-burst-loop".to_string())
             .spawn(move || {
-                burst_loop(npu, frequency, running, viz_writer, viz_zmq_publisher);
+                burst_loop(npu, frequency, running, viz_writer, viz_publisher);
             })
             .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?);
         
@@ -240,7 +264,7 @@ fn burst_loop(
     frequency_hz: f64,
     running: Arc<AtomicBool>,
     viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
-    viz_zmq_publisher: Arc<Mutex<Option<Box<dyn Fn(&[u8]) + Send + Sync>>>>,
+    viz_publisher: Option<Arc<dyn VisualizationPublisher>>, // Trait object for visualization (NO PYTHON CALLBACKS!)
 ) {
     let timestamp = get_timestamp();
     println!("[{}] [BURST-LOOP] 🚀 Starting main loop at {:.2} Hz", timestamp, frequency_hz);
@@ -284,12 +308,12 @@ fn burst_loop(
         burst_num += 1;
         // Note: NPU.process_burst() already incremented its internal burst_count
         
-        // Write visualization data (SHM and/or ZMQ)
-        // Check if we need to do ANY visualization (SHM writer OR ZMQ publisher)
+        // Write visualization data (SHM and/or PNS ZMQ)
+        // Check if we need to do ANY visualization (SHM writer OR viz publisher)
         let has_shm_writer = viz_shm_writer.lock().unwrap().is_some();
-        let has_zmq_publisher = viz_zmq_publisher.lock().unwrap().is_some();
+        let has_viz_publisher = viz_publisher.is_some();
         
-        if has_shm_writer || has_zmq_publisher {
+        if has_shm_writer || has_viz_publisher {
             // Force sample FQ on every burst (bypasses rate limiting)
             let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
             
@@ -298,8 +322,8 @@ fn burst_loop(
                 if has_shm_writer {
                     println!("[BURST-LOOP] 🔍 Viz SHM writer is attached");
                 }
-                if has_zmq_publisher {
-                    println!("[BURST-LOOP] 🔍 Viz ZMQ publisher is attached");
+                if has_viz_publisher {
+                    println!("[BURST-LOOP] 🔍 Visualization publisher is attached (Rust-to-Rust, NO PYTHON!)");
                 }
                 FIRST_CHECK_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
             }
@@ -392,12 +416,14 @@ fn burst_loop(
                         }
                     }
                     
-                    // Publish to ZMQ if publisher is configured (PNS handles compression)
-                    if has_zmq_publisher {
-                        if let Some(publisher_guard) = viz_zmq_publisher.lock().ok() {
-                            if let Some(ref publisher) = *publisher_guard {
-                                // Send raw buffer - PNS layer handles LZ4 compression
-                                publisher(&buffer);
+                    // Publish to ZMQ via trait object (direct Rust-to-Rust call, NO PYTHON!)
+                    // Publisher (PNS) handles LZ4 compression and ZMQ publishing
+                    if let Some(ref publisher) = viz_publisher {
+                        if let Err(e) = publisher.publish_visualization(&buffer) {
+                            static VIZ_ERROR_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                            if !VIZ_ERROR_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+                                eprintln!("[BURST-LOOP] ❌ Failed to publish visualization: {}", e);
+                                VIZ_ERROR_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                             }
                         }
                     }
