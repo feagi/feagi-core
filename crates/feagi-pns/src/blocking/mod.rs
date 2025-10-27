@@ -7,11 +7,10 @@
 //! - Bounded channels for backpressure
 //! - LZ4 compression utilities
 
-pub mod transport;
 pub mod channels;
-pub mod worker;
 pub mod compression;
+pub mod transport;
+pub mod worker;
 
 // Re-export main trait
 pub use transport::BlockingTransport;
-

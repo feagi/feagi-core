@@ -61,16 +61,16 @@ mod tests {
     #[tokio::test]
     async fn test_bounded_channel() {
         let (tx, mut rx) = create_bounded::<i32>(2);
-        
+
         tx.send(1).await.unwrap();
         tx.send(2).await.unwrap();
-        
+
         // Receive one
         assert_eq!(rx.recv().await.unwrap(), 1);
-        
+
         // Can send again
         tx.send(3).await.unwrap();
-        
+
         assert_eq!(rx.recv().await.unwrap(), 2);
         assert_eq!(rx.recv().await.unwrap(), 3);
     }

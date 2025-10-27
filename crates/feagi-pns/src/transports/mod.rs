@@ -10,11 +10,10 @@
 //! - websocket: WebSocket (nonblocking only, future)
 //! - rtos: Embedded/RTOS (special no_std, future)
 
-pub mod zmq;
 pub mod udp;
+pub mod zmq;
 
 // Future transports (placeholder modules will be added as needed):
 // pub mod shm;
 // pub mod websocket;
 // pub mod rtos;
-

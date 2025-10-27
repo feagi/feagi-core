@@ -183,4 +183,3 @@ mod tests {
         assert_eq!(*count.lock().unwrap(), 1);
     }
 }
-

@@ -1,7 +1,7 @@
 //! PNS configuration
 
-use crate::transports::zmq::VisualizationSendConfig;
 use crate::transports::udp::UdpConfig;
+use crate::transports::zmq::VisualizationSendConfig;
 
 /// Transport mode selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,4 +69,3 @@ impl Default for PNSConfig {
         }
     }
 }
-

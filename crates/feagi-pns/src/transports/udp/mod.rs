@@ -222,16 +222,19 @@ impl UdpTransport {
                 buffer.retain(|_, msg| msg.received_at.elapsed() < REASSEMBLY_TIMEOUT);
 
                 // Get or create incomplete message
-                let incomplete = buffer.entry(header.message_id).or_insert_with(|| {
-                    IncompleteMessage {
-                        chunks: HashMap::new(),
-                        total_chunks: header.total_chunks,
-                        received_at: Instant::now(),
-                    }
-                });
+                let incomplete =
+                    buffer
+                        .entry(header.message_id)
+                        .or_insert_with(|| IncompleteMessage {
+                            chunks: HashMap::new(),
+                            total_chunks: header.total_chunks,
+                            received_at: Instant::now(),
+                        });
 
                 // Store chunk
-                incomplete.chunks.insert(header.chunk_index, payload.to_vec());
+                incomplete
+                    .chunks
+                    .insert(header.chunk_index, payload.to_vec());
 
                 // Check if complete
                 if incomplete.chunks.len() == header.total_chunks as usize {
@@ -279,9 +282,7 @@ impl NonBlockingTransport for UdpTransport {
         // Bind socket
         let socket = UdpSocket::bind(&self.config.bind_address)
             .await
-            .map_err(|e| {
-                PNSError::Transport(format!("Failed to bind UDP socket: {}", e))
-            })?;
+            .map_err(|e| PNSError::Transport(format!("Failed to bind UDP socket: {}", e)))?;
 
         println!(
             "🦀 [UDP] Bound to {} (peer: {})",
@@ -416,4 +417,3 @@ mod tests {
         std::mem::forget(runtime);
     }
 }
-

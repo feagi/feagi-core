@@ -8,21 +8,20 @@
 //! - Heartbeat monitoring
 //! - PNS configuration
 
-pub mod types;
 pub mod agent_registry;
-pub mod registration;
-pub mod heartbeat;
 pub mod config;
 pub mod events;
+pub mod heartbeat;
+pub mod registration;
+pub mod types;
 
 // Re-export commonly used types
-pub use types::{SharedFBC, PNSError, StreamType, Result};
-pub use agent_registry::{AgentRegistry, AgentInfo, AgentType, AgentCapabilities};
-pub use registration::{RegistrationHandler, RegistrationRequest};
-pub use heartbeat::HeartbeatTracker;
+pub use agent_registry::{AgentCapabilities, AgentInfo, AgentRegistry, AgentType};
 pub use config::{PNSConfig, TransportMode};
 pub use events::{
     AgentDisconnectedEvent, AgentRegisteredEvent, MotorCommandEvent, SensoryDataEvent,
     VisualizationReadyEvent,
 };
-
+pub use heartbeat::HeartbeatTracker;
+pub use registration::{RegistrationHandler, RegistrationRequest};
+pub use types::{PNSError, Result, SharedFBC, StreamType};

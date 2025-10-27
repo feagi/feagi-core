@@ -7,11 +7,10 @@
 //! - Async channels
 //! - Async LZ4 compression
 
-pub mod transport;
-pub mod runtime;
 pub mod channels;
 pub mod compression;
+pub mod runtime;
+pub mod transport;
 
 // Re-export main trait
 pub use transport::NonBlockingTransport;
-

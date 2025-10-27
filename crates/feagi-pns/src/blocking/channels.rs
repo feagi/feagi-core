@@ -60,16 +60,16 @@ mod tests {
     #[test]
     fn test_bounded_channel() {
         let (tx, rx) = create_bounded::<i32>(2);
-        
+
         tx.send(1).unwrap();
         tx.send(2).unwrap();
-        
+
         // Channel is full
         assert!(tx.try_send(3).is_err());
-        
+
         // Receive one
         assert_eq!(rx.recv().unwrap(), 1);
-        
+
         // Now we can send again
         tx.send(3).unwrap();
     }
@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn test_channel_stats() {
         let (tx, _rx) = create_bounded::<i32>(10);
-        
+
         let stats = ChannelStats::from_channel(&tx);
         assert_eq!(stats.capacity, 10);
         assert_eq!(stats.len, 0);
@@ -86,4 +86,3 @@ mod tests {
         assert_eq!(stats.utilization(), 0.0);
     }
 }
-

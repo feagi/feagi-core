@@ -149,4 +149,3 @@ mod tests {
         assert!(!worker.is_running());
     }
 }
-

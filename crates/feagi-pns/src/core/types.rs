@@ -53,4 +53,3 @@ pub enum PNSError {
 
 /// Result type for PNS operations
 pub type Result<T> = std::result::Result<T, PNSError>;
-
