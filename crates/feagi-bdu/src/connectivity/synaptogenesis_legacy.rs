@@ -47,9 +47,7 @@ pub struct SynaptogenesisResult {
 ///
 /// Phase 1: Implements projector morphology only
 /// Phase 2+: Add remaining morphology types
-pub fn find_candidate_neurons(
-    request: &SynaptogenesisRequest,
-) -> BduResult<SynaptogenesisResult> {
+pub fn find_candidate_neurons(request: &SynaptogenesisRequest) -> BduResult<SynaptogenesisResult> {
     // Phase 1: Only implement PROJECTOR morphology
     let morphology_id = request.morphology.morphology_id.as_str();
 
@@ -132,4 +130,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

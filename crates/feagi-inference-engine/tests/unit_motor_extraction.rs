@@ -15,7 +15,10 @@ mod motor_extractor_tests {
         // Test that different names produce different IDs
         let id1 = hash_cortical_name("opu_motor_left");
         let id2 = hash_cortical_name("opu_motor_right");
-        assert_ne!(id1, id2, "Different names should produce different cortical IDs");
+        assert_ne!(
+            id1, id2,
+            "Different names should produce different cortical IDs"
+        );
     }
 
     #[test]
@@ -112,7 +115,7 @@ mod motor_extractor_tests {
         // Test verbose output frequency calculation
         let extraction_count = 100u64;
         let verbose_interval = 10u64;
-        
+
         // Should print on every 10th extraction
         assert_eq!(extraction_count % verbose_interval, 0);
         assert_ne!((extraction_count - 1) % verbose_interval, 0);
@@ -145,10 +148,7 @@ mod motor_config_tests {
     #[test]
     fn test_multiple_motor_areas() {
         // Test configuration with multiple motor areas
-        let motor_areas = vec![
-            "opu_motor_left".to_string(),
-            "opu_motor_right".to_string(),
-        ];
+        let motor_areas = vec!["opu_motor_left".to_string(), "opu_motor_right".to_string()];
 
         assert_eq!(motor_areas.len(), 2);
         assert!(motor_areas.contains(&"opu_motor_left".to_string()));
@@ -209,7 +209,7 @@ mod fire_queue_tests {
     fn test_empty_fire_queue() {
         // Test handling of empty fire queue
         let fire_data: Vec<(u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>))> = vec![];
-        
+
         assert!(fire_data.is_empty());
     }
 
@@ -217,10 +217,10 @@ mod fire_queue_tests {
     fn test_fire_queue_filtering() {
         // Test filtering motor areas from fire queue
         let motor_area_ids = vec![10u32, 20u32];
-        
+
         // Simulate fire queue data
         let area_id_1 = 10u32; // Motor area
-        let area_id_2 = 5u32;  // Non-motor area
+        let area_id_2 = 5u32; // Non-motor area
         let area_id_3 = 20u32; // Motor area
 
         assert!(motor_area_ids.contains(&area_id_1));
@@ -228,4 +228,3 @@ mod fire_queue_tests {
         assert!(motor_area_ids.contains(&area_id_3));
     }
 }
-

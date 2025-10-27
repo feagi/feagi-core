@@ -57,12 +57,12 @@ mod gpu_integration {
         // Create test FCL with some candidates
         use feagi_types::FireCandidateList;
         let mut fcl = FireCandidateList::new();
-        
+
         // Add 10% of neurons to FCL (simulating realistic burst scenario)
         for i in 0..neuron_count / 10 {
             fcl.add_candidate(feagi_types::NeuronId(i as u32), 10.0);
         }
-        
+
         println!("📋 Created FCL with {} candidates", neuron_count / 10);
 
         // Process neural dynamics (FCL-aware)
@@ -76,7 +76,11 @@ mod gpu_integration {
             result.0.len()
         );
 
-        assert_eq!(result.1, neuron_count / 10, "Should process only FCL neurons");
+        assert_eq!(
+            result.1,
+            neuron_count / 10,
+            "Should process only FCL neurons"
+        );
         println!("✅ GPU FCL-aware integration test passed!");
     }
 
@@ -108,7 +112,7 @@ mod gpu_integration {
     /// Helper: Create test neuron array
     fn create_test_neurons(count: usize) -> NeuronArray {
         use feagi_types::*;
-        
+
         NeuronArray {
             capacity: count,
             count,
@@ -133,7 +137,7 @@ mod gpu_integration {
     fn create_test_synapses(neuron_count: usize, synapse_count: usize) -> SynapseArray {
         use feagi_types::*;
         use std::collections::HashMap;
-        
+
         let source_neurons: Vec<u32> = (0..synapse_count)
             .map(|i| (i % neuron_count) as u32)
             .collect();
@@ -144,13 +148,16 @@ mod gpu_integration {
         let conductances = vec![100u8; synapse_count];
         let types = vec![0u8; synapse_count];
         let valid_mask = vec![true; synapse_count];
-        
+
         // Build source index
         let mut source_index: HashMap<u32, Vec<usize>> = HashMap::new();
         for (idx, &source) in source_neurons.iter().enumerate() {
-            source_index.entry(source).or_insert_with(Vec::new).push(idx);
+            source_index
+                .entry(source)
+                .or_insert_with(Vec::new)
+                .push(idx);
         }
-        
+
         SynapseArray {
             capacity: synapse_count,
             count: synapse_count,
@@ -164,4 +171,3 @@ mod gpu_integration {
         }
     }
 }
-

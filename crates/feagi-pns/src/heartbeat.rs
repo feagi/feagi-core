@@ -11,6 +11,7 @@ pub struct HeartbeatTracker {
     running: Arc<RwLock<bool>>,
     thread_handle: Option<thread::JoinHandle<()>>,
     timeout: Duration,
+    poll_interval: Duration,
 }
 
 impl HeartbeatTracker {
@@ -19,6 +20,7 @@ impl HeartbeatTracker {
             running: Arc::new(RwLock::new(false)),
             thread_handle: None,
             timeout: Duration::from_secs(68), // Increased by 50% from 45s (was timing out prematurely)
+            poll_interval: Duration::from_secs(10),
         }
     }
 
@@ -31,12 +33,13 @@ impl HeartbeatTracker {
         *self.running.write() = true;
         let running = Arc::clone(&self.running);
         let timeout = self.timeout;
+        let poll_interval = self.poll_interval;
 
         let handle = thread::spawn(move || {
             println!("🦀 [HEARTBEAT] Monitoring started (timeout: {:?})", timeout);
 
             while *running.read() {
-                thread::sleep(Duration::from_secs(10)); // Check every 10s
+                thread::sleep(poll_interval);
 
                 if !*running.read() {
                     break;
@@ -46,16 +49,16 @@ impl HeartbeatTracker {
                 let stale_agents = agent_registry.read().get_stale_agents();
 
                 if !stale_agents.is_empty() {
-                    println!(
-                        "🦀 [HEARTBEAT] Found {} stale agent(s)",
-                        stale_agents.len()
-                    );
+                    println!("🦀 [HEARTBEAT] Found {} stale agent(s)", stale_agents.len());
 
                     // Deregister stale agents
                     for agent_id in stale_agents {
                         println!("🦀 [HEARTBEAT] Deregistering stale agent: {}", agent_id);
                         if let Err(e) = agent_registry.write().deregister(&agent_id) {
-                            eprintln!("🦀 [HEARTBEAT] [ERR] Failed to deregister {}: {}", agent_id, e);
+                            eprintln!(
+                                "🦀 [HEARTBEAT] [ERR] Failed to deregister {}: {}",
+                                agent_id, e
+                            );
                         }
                     }
                 }
@@ -80,6 +83,11 @@ impl HeartbeatTracker {
     pub fn set_timeout(&mut self, timeout: Duration) {
         self.timeout = timeout;
     }
+
+    /// Set poll interval for checking agent heartbeats (useful for tests)
+    pub fn set_poll_interval(&mut self, interval: Duration) {
+        self.poll_interval = interval;
+    }
 }
 
 impl Drop for HeartbeatTracker {
@@ -91,39 +99,47 @@ impl Drop for HeartbeatTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent_registry::{AgentCapabilities, AgentInfo, AgentTransport};
-    use std::time::Instant;
+    use crate::agent_registry::{
+        AgentCapabilities, AgentInfo, AgentTransport, AgentType, VisualizationCapability,
+    };
 
     #[test]
     fn test_heartbeat_tracker() {
-        let registry = Arc::new(RwLock::new(AgentRegistry::new()));
+        let registry = Arc::new(RwLock::new(AgentRegistry::new(100, 50)));
         let mut tracker = HeartbeatTracker::new();
         tracker.set_timeout(Duration::from_millis(100));
+        tracker.set_poll_interval(Duration::from_millis(20));
 
         // Register a test agent
-        let agent_info = AgentInfo {
-            agent_id: "test-agent".to_string(),
-            agent_type: "external".to_string(),
-            capabilities: AgentCapabilities {
-                sensory: None,
-                motor: None,
-                visualization: None,
-            },
-            registered_at: Instant::now(),
-            last_heartbeat: Instant::now() - Duration::from_secs(60), // Stale
-            transport: AgentTransport::Zmq,
-        };
+        let mut capabilities = AgentCapabilities::default();
+        capabilities.visualization = Some(VisualizationCapability {
+            visualization_type: "test_viz".to_string(),
+            resolution: None,
+            refresh_rate: Some(30.0),
+            bridge_proxy: false,
+        });
+
+        let mut agent_info = AgentInfo::new(
+            "test-agent".to_string(),
+            AgentType::Visualization,
+            capabilities,
+            AgentTransport::Zmq,
+        );
+
+        // Make the agent stale by rewinding timestamps
+        let stale_offset_ms = 1_000;
+        agent_info.last_seen = agent_info.last_seen.saturating_sub(stale_offset_ms);
+        agent_info.registered_at = agent_info.registered_at.saturating_sub(stale_offset_ms);
 
         registry.write().register(agent_info).unwrap();
         assert_eq!(registry.read().count(), 1);
 
         // Start tracker (should deregister stale agent)
         tracker.start(Arc::clone(&registry));
-        thread::sleep(Duration::from_millis(500)); // Wait for check
+        thread::sleep(Duration::from_millis(200));
         tracker.stop();
 
         // Agent should be deregistered
         assert_eq!(registry.read().count(), 0);
     }
 }
-

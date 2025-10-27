@@ -11,7 +11,7 @@
 //! Used for synaptic propagation and archiving to Fire Ledger.
 
 use ahash::AHashMap;
-use feagi_types::{NeuronId, CorticalAreaId};
+use feagi_types::{CorticalAreaId, NeuronId};
 
 /// A single neuron that fired in the current burst
 #[derive(Debug, Clone)]
@@ -30,10 +30,10 @@ pub struct FiringNeuron {
 pub struct FireQueue {
     /// Firing neurons grouped by cortical area
     pub neurons_by_area: AHashMap<u32, Vec<FiringNeuron>>,
-    
+
     /// Total number of neurons across all areas
     total_count: usize,
-    
+
     /// Timestep this queue represents
     pub timestep: u64,
 }
@@ -47,7 +47,7 @@ impl FireQueue {
             timestep: 0,
         }
     }
-    
+
     /// Add a firing neuron to the queue
     pub fn add_neuron(&mut self, neuron: FiringNeuron) {
         let cortical_idx = neuron.cortical_area.0;
@@ -57,28 +57,28 @@ impl FireQueue {
             .push(neuron);
         self.total_count += 1;
     }
-    
+
     /// Get total number of fired neurons across all areas
     pub fn total_neurons(&self) -> usize {
         self.total_count
     }
-    
+
     /// Get neurons for a specific cortical area
     pub fn get_area_neurons(&self, cortical_idx: u32) -> Option<&Vec<FiringNeuron>> {
         self.neurons_by_area.get(&cortical_idx)
     }
-    
+
     /// Clear the queue
     pub fn clear(&mut self) {
         self.neurons_by_area.clear();
         self.total_count = 0;
     }
-    
+
     /// Set timestep
     pub fn set_timestep(&mut self, timestep: u64) {
         self.timestep = timestep;
     }
-    
+
     /// Get all neuron IDs from all areas
     pub fn get_all_neuron_ids(&self) -> Vec<NeuronId> {
         let mut ids = Vec::with_capacity(self.total_count);
@@ -87,7 +87,7 @@ impl FireQueue {
         }
         ids
     }
-    
+
     /// Check if fire queue is empty
     pub fn is_empty(&self) -> bool {
         self.total_count == 0
@@ -99,4 +99,3 @@ impl Default for FireQueue {
         Self::new()
     }
 }
-

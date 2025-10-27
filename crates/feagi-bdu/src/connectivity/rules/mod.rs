@@ -8,22 +8,21 @@ Implements various connectivity patterns:
 - Reducer: Binary encoding/decoding
 */
 
-mod projector;
 mod block_connection;
 mod expander;
-mod reducer;
-mod vectors;
 pub mod patterns;
+mod projector;
+mod reducer;
 mod trivial;
+mod vectors;
 
-pub use projector::{syn_projector, syn_projector_batch, ProjectorParams};
 pub use block_connection::syn_block_connection;
 pub use expander::{syn_expander, syn_expander_batch};
-pub use reducer::syn_reducer_x;
-pub use vectors::{apply_vector_offset, match_vectors_batch};
 pub use patterns::{
-    Pattern3D, PatternElement, 
-    find_destination_coordinates, find_source_coordinates, match_patterns_batch
+    find_destination_coordinates, find_source_coordinates, match_patterns_batch, Pattern3D,
+    PatternElement,
 };
-pub use trivial::{syn_randomizer, syn_lateral_pairs_x, syn_last_to_first};
-
+pub use projector::{syn_projector, syn_projector_batch, ProjectorParams};
+pub use reducer::syn_reducer_x;
+pub use trivial::{syn_last_to_first, syn_lateral_pairs_x, syn_randomizer};
+pub use vectors::{apply_vector_offset, match_vectors_batch};

@@ -35,9 +35,9 @@
 //! - Python: ~165ms for 12K neurons
 //! - Rust Target: <3ms (50-100x speedup)
 
+use ahash::AHashMap;
 use feagi_types::*;
-use rayon::prelude::*;
-use ahash::AHashMap;  // Faster non-cryptographic hash
+use rayon::prelude::*; // Faster non-cryptographic hash
 
 /// Synapse lookup index: maps source neuron → list of synapse indices
 pub type SynapseIndex = AHashMap<NeuronId, Vec<usize>>;
@@ -69,11 +69,11 @@ impl SynapticPropagationEngine {
 
     /// Build the synapse index from a synapse array (Structure-of-Arrays)
     /// This should be called once during initialization or when connectome changes
-    /// 
+    ///
     /// ZERO-COPY: Works directly with SynapseArray without allocating intermediate structures
     pub fn build_synapse_index(&mut self, synapse_array: &SynapseArray) {
         self.synapse_index.clear();
-        
+
         for i in 0..synapse_array.count {
             if synapse_array.valid_mask[i] {
                 let source = NeuronId(synapse_array.source_neurons[i]);
@@ -91,9 +91,9 @@ impl SynapticPropagationEngine {
     }
 
     /// Compute synaptic propagation for a set of fired neurons
-    /// 
+    ///
     /// This is the MAIN PERFORMANCE-CRITICAL function that replaces the Python bottleneck.
-    /// 
+    ///
     /// # Performance Notes
     /// - Uses Rayon for parallel processing
     /// - SIMD-friendly vectorized calculations
@@ -138,7 +138,7 @@ impl SynapticPropagationEngine {
 
                 // Get target neuron from SoA
                 let target_neuron = NeuronId(synapse_array.target_neurons[syn_idx]);
-                
+
                 // Get target cortical area
                 let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
 
@@ -149,10 +149,15 @@ impl SynapticPropagationEngine {
                     0 => SynapseType::Excitatory,
                     _ => SynapseType::Inhibitory,
                 };
-                
+
                 // Calculate: weight × conductance × sign
-                let sign = if synapse_type == SynapseType::Excitatory { 1.0 } else { -1.0 };
-                let contribution = SynapticContribution(weight.to_float() * conductance.to_float() * sign);
+                let sign = if synapse_type == SynapseType::Excitatory {
+                    1.0
+                } else {
+                    -1.0
+                };
+                let contribution =
+                    SynapticContribution(weight.to_float() * conductance.to_float() * sign);
 
                 Some((target_neuron, cortical_area, contribution))
             })
@@ -198,21 +203,25 @@ mod tests {
         let mut synapse_array = SynapseArray {
             capacity: 10,
             count: 3,
-            source_neurons: vec![1, 1, 2],  // Raw u32 values
+            source_neurons: vec![1, 1, 2],     // Raw u32 values
             target_neurons: vec![10, 11, 10],  // Raw u32 values
-            weights: vec![255, 128, 200],  // Raw u8 values
-            conductances: vec![255, 255, 200],  // Raw u8 values
-            types: vec![0, 1, 0],  // 0=excitatory, 1=inhibitory
+            weights: vec![255, 128, 200],      // Raw u8 values
+            conductances: vec![255, 255, 200], // Raw u8 values
+            types: vec![0, 1, 0],              // 0=excitatory, 1=inhibitory
             valid_mask: vec![true, true, true],
             source_index: HashMap::new(),
         };
-        
+
         // Build source index
         for i in 0..synapse_array.count {
             let source = synapse_array.source_neurons[i];
-            synapse_array.source_index.entry(source).or_insert_with(Vec::new).push(i);
+            synapse_array
+                .source_index
+                .entry(source)
+                .or_insert_with(Vec::new)
+                .push(i);
         }
-        
+
         synapse_array
     }
 
@@ -261,6 +270,6 @@ mod tests {
         let result = engine.propagate(&fired, &synapses).unwrap();
 
         let area1_contributions = result.get(&CorticalAreaId(1)).unwrap();
-        assert_eq!(area1_contributions.len(), 3);  // 2 from neuron 1, 1 from neuron 2
+        assert_eq!(area1_contributions.len(), 3); // 2 from neuron 1, 1 from neuron 2
     }
 }

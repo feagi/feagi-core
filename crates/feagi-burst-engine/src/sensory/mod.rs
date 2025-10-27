@@ -59,11 +59,10 @@
 //! - **Capability-aware**: Respects agent-requested rate_hz
 //! - **Graceful lifecycle**: Clean shutdown on agent deregistration
 
-mod shm_reader;
 mod agent_manager;
 mod rate_limiter;
+mod shm_reader;
 
-pub use shm_reader::*;
 pub use agent_manager::*;
 pub use rate_limiter::*;
-
+pub use shm_reader::*;

@@ -1,14 +1,16 @@
 // ZMQ Streams - manages all ZMQ communication
 
-mod rest;
 mod motor;
-mod visualization;
+mod rest;
 mod sensory;
+mod visualization;
 
-pub use rest::RestStream;
 pub use motor::MotorStream;
-pub use visualization::VisualizationStream;
+pub use rest::RestStream;
 pub use sensory::SensoryStream;
+pub use visualization::{
+    VisualizationOverflowStrategy, VisualizationSendConfig, VisualizationStream,
+};
 
 use crate::registration::RegistrationHandler;
 use crate::PNSError;
@@ -30,6 +32,7 @@ impl ZmqStreams {
         viz_address: &str,
         sensory_address: &str,
         registration_handler: Arc<Mutex<RegistrationHandler>>,
+        viz_config: VisualizationSendConfig,
     ) -> Result<Self, PNSError> {
         let context = Arc::new(zmq::Context::new());
 
@@ -42,7 +45,7 @@ impl ZmqStreams {
         let motor_stream = MotorStream::new(Arc::clone(&context), motor_address)
             .map_err(|e| PNSError::Zmq(format!("Motor stream: {}", e)))?;
 
-        let viz_stream = VisualizationStream::new(Arc::clone(&context), viz_address)
+        let viz_stream = VisualizationStream::new(Arc::clone(&context), viz_address, viz_config)
             .map_err(|e| PNSError::Zmq(format!("Viz stream: {}", e)))?;
 
         let sensory_stream = SensoryStream::new(Arc::clone(&context), sensory_address)
@@ -87,7 +90,7 @@ impl ZmqStreams {
             .map_err(|e| PNSError::Zmq(format!("Sensory stop: {}", e)))?;
         Ok(())
     }
-    
+
     /// Get reference to sensory stream (for NPU connection)
     pub fn get_sensory_stream(&self) -> &SensoryStream {
         &self.sensory_stream
@@ -97,13 +100,15 @@ impl ZmqStreams {
     pub fn publish_visualization(&self, data: &[u8]) -> Result<(), PNSError> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-            eprintln!("[ZMQ-STREAMS] 🔍 TRACE: Forwarding {} bytes to viz_stream.publish()", data.len());
+            eprintln!(
+                "[ZMQ-STREAMS] 🔍 TRACE: Forwarding {} bytes to viz_stream.publish()",
+                data.len()
+            );
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
-        
+
         self.viz_stream
             .publish(data)
             .map_err(|e| PNSError::Zmq(format!("Viz publish: {}", e)))
     }
 }
-

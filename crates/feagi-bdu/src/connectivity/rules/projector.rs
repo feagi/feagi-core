@@ -161,7 +161,7 @@ fn calculate_axis_projection(
         // Source is smaller: scale up (one-to-many)
         // Find all destination voxels that map to this source voxel
         let ratio = dst_size as f32 / src_size as f32;
-        
+
         for dst_vox in 0..dst_size {
             let src_vox = (dst_vox as f32 / ratio) as u32;
             if src_vox == location {
@@ -260,15 +260,22 @@ mod tests {
     fn test_projection_128x128x3_to_128x128x1() {
         // This is the actual performance test case: 49,152 source neurons
         let result = syn_projector(
-            "src", "dst", 0, (128, 128, 3), (128, 128, 1), (64, 64, 1), None, None,
+            "src",
+            "dst",
+            0,
+            (128, 128, 3),
+            (128, 128, 1),
+            (64, 64, 1),
+            None,
+            None,
         );
-        
+
         assert!(result.is_ok());
         let positions = result.unwrap();
-        
+
         // Should project to multiple z-layers in destination
         assert!(!positions.is_empty());
-        
+
         // All positions should be within bounds
         for pos in &positions {
             assert!(pos.0 >= 0 && pos.0 < 128);
@@ -319,10 +326,15 @@ mod tests {
     #[test]
     fn test_out_of_bounds() {
         let result = syn_projector(
-            "src", "dst", 0, (128, 128, 3), (128, 128, 1), (200, 0, 0), // Out of bounds
-            None, None,
+            "src",
+            "dst",
+            0,
+            (128, 128, 3),
+            (128, 128, 1),
+            (200, 0, 0), // Out of bounds
+            None,
+            None,
         );
         assert!(result.is_err());
     }
 }
-

@@ -9,10 +9,10 @@ type Dimensions = (usize, usize, usize);
 /// Pattern element types
 #[derive(Debug, Clone, PartialEq)]
 pub enum PatternElement {
-    Wildcard,        // "*" - matches any coordinate
-    Skip,            // "?" - pass through source coordinate
-    Exclude,         // "!" - exclude source coordinate
-    Exact(i32),      // Exact integer match
+    Wildcard,   // "*" - matches any coordinate
+    Skip,       // "?" - pass through source coordinate
+    Exclude,    // "!" - exclude source coordinate
+    Exact(i32), // Exact integer match
 }
 
 impl PatternElement {
@@ -30,7 +30,7 @@ impl PatternElement {
             }
         }
     }
-    
+
     pub fn from_int(value: i32) -> Self {
         if value == -1 {
             PatternElement::Wildcard
@@ -65,10 +65,10 @@ pub fn find_destination_coordinates(
     dst_pattern: &Pattern3D,
 ) -> Vec<Position> {
     let mut results = Vec::new();
-    
+
     let (dst_width, dst_height, dst_depth) = dst_dimensions;
     let (src_x, src_y, src_z) = src_coordinate;
-    
+
     // Generate ranges based on destination pattern
     let x_range: Vec<u32> = match &dst_pattern.0 {
         PatternElement::Wildcard => (0..dst_width as u32).collect(),
@@ -79,9 +79,7 @@ pub fn find_destination_coordinates(
                 vec![]
             }
         }
-        PatternElement::Exclude => {
-            (0..dst_width as u32).filter(|&x| x != src_x).collect()
-        }
+        PatternElement::Exclude => (0..dst_width as u32).filter(|&x| x != src_x).collect(),
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < dst_width {
                 vec![*val as u32]
@@ -90,7 +88,7 @@ pub fn find_destination_coordinates(
             }
         }
     };
-    
+
     let y_range: Vec<u32> = match &dst_pattern.1 {
         PatternElement::Wildcard => (0..dst_height as u32).collect(),
         PatternElement::Skip => {
@@ -100,9 +98,7 @@ pub fn find_destination_coordinates(
                 vec![]
             }
         }
-        PatternElement::Exclude => {
-            (0..dst_height as u32).filter(|&y| y != src_y).collect()
-        }
+        PatternElement::Exclude => (0..dst_height as u32).filter(|&y| y != src_y).collect(),
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < dst_height {
                 vec![*val as u32]
@@ -111,7 +107,7 @@ pub fn find_destination_coordinates(
             }
         }
     };
-    
+
     let z_range: Vec<u32> = match &dst_pattern.2 {
         PatternElement::Wildcard => (0..dst_depth as u32).collect(),
         PatternElement::Skip => {
@@ -121,9 +117,7 @@ pub fn find_destination_coordinates(
                 vec![]
             }
         }
-        PatternElement::Exclude => {
-            (0..dst_depth as u32).filter(|&z| z != src_z).collect()
-        }
+        PatternElement::Exclude => (0..dst_depth as u32).filter(|&z| z != src_z).collect(),
         PatternElement::Exact(val) => {
             if *val >= 0 && (*val as usize) < dst_depth {
                 vec![*val as u32]
@@ -132,7 +126,7 @@ pub fn find_destination_coordinates(
             }
         }
     };
-    
+
     // Generate all combinations
     for x in &x_range {
         for y in &y_range {
@@ -141,7 +135,7 @@ pub fn find_destination_coordinates(
             }
         }
     }
-    
+
     results
 }
 
@@ -151,9 +145,9 @@ pub fn find_source_coordinates(
     src_dimensions: Dimensions,
 ) -> Vec<Position> {
     let mut results = Vec::new();
-    
+
     let (src_width, src_height, src_depth) = src_dimensions;
-    
+
     // Generate ranges based on source pattern
     let x_range: Vec<u32> = match &src_pattern.0 {
         PatternElement::Wildcard => (0..src_width as u32).collect(),
@@ -166,7 +160,7 @@ pub fn find_source_coordinates(
         }
         _ => (0..src_width as u32).collect(), // Skip/Exclude treated as wildcard for source
     };
-    
+
     let y_range: Vec<u32> = match &src_pattern.1 {
         PatternElement::Wildcard => (0..src_height as u32).collect(),
         PatternElement::Exact(val) => {
@@ -178,7 +172,7 @@ pub fn find_source_coordinates(
         }
         _ => (0..src_height as u32).collect(),
     };
-    
+
     let z_range: Vec<u32> = match &src_pattern.2 {
         PatternElement::Wildcard => (0..src_depth as u32).collect(),
         PatternElement::Exact(val) => {
@@ -190,7 +184,7 @@ pub fn find_source_coordinates(
         }
         _ => (0..src_depth as u32).collect(),
     };
-    
+
     // Generate all combinations
     for x in &x_range {
         for y in &y_range {
@@ -199,7 +193,7 @@ pub fn find_source_coordinates(
             }
         }
     }
-    
+
     results
 }
 
@@ -211,29 +205,29 @@ pub fn match_patterns_batch(
     dst_dimensions: Dimensions,
 ) -> Vec<Position> {
     let mut all_results = Vec::new();
-    
+
     for (src_pattern, dst_pattern) in patterns {
         // Check if source coordinate matches source pattern
         let (src_x, src_y, src_z) = src_coordinate;
-        
+
         let x_match = match &src_pattern.0 {
             PatternElement::Wildcard => true,
             PatternElement::Exact(val) => src_x == (*val as u32),
             _ => true, // Skip/Exclude don't filter source
         };
-        
+
         let y_match = match &src_pattern.1 {
             PatternElement::Wildcard => true,
             PatternElement::Exact(val) => src_y == (*val as u32),
             _ => true,
         };
-        
+
         let z_match = match &src_pattern.2 {
             PatternElement::Wildcard => true,
             PatternElement::Exact(val) => src_z == (*val as u32),
             _ => true,
         };
-        
+
         if x_match && y_match && z_match {
             let mut results = find_destination_coordinates(
                 dst_dimensions,
@@ -244,11 +238,11 @@ pub fn match_patterns_batch(
             all_results.append(&mut results);
         }
     }
-    
+
     // Remove duplicates
     all_results.sort_unstable();
     all_results.dedup();
-    
+
     all_results
 }
 
@@ -268,14 +262,10 @@ mod tests {
             PatternElement::Skip,
             PatternElement::Exact(1),
         );
-        
-        let results = find_destination_coordinates(
-            (10, 10, 10),
-            (5, 5, 0),
-            &src_pattern,
-            &dst_pattern,
-        );
-        
+
+        let results =
+            find_destination_coordinates((10, 10, 10), (5, 5, 0), &src_pattern, &dst_pattern);
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], (5, 5, 1)); // Pass through x,y, set z=1
     }
@@ -292,14 +282,10 @@ mod tests {
             PatternElement::Exact(2),
             PatternElement::Exact(3),
         );
-        
-        let results = find_destination_coordinates(
-            (10, 10, 10),
-            (0, 0, 0),
-            &src_pattern,
-            &dst_pattern,
-        );
-        
+
+        let results =
+            find_destination_coordinates((10, 10, 10), (0, 0, 0), &src_pattern, &dst_pattern);
+
         assert_eq!(results.len(), 1);
         assert_eq!(results[0], (1, 2, 3));
     }
@@ -316,18 +302,13 @@ mod tests {
             PatternElement::Exact(0),
             PatternElement::Exact(0),
         );
-        
-        let results = find_destination_coordinates(
-            (3, 1, 1),
-            (1, 0, 0),
-            &src_pattern,
-            &dst_pattern,
-        );
-        
+
+        let results =
+            find_destination_coordinates((3, 1, 1), (1, 0, 0), &src_pattern, &dst_pattern);
+
         // Should match x=0 and x=2 (excluding x=1)
         assert_eq!(results.len(), 2);
         assert!(results.contains(&(0, 0, 0)));
         assert!(results.contains(&(2, 0, 0)));
     }
 }
-

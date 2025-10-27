@@ -184,19 +184,12 @@ impl RestStream {
             }
         };
 
-        println!(
-            "🦀 [ZMQ-REST] {} {}",
-            request.method, request.path
-        );
+        println!("🦀 [ZMQ-REST] {} {}", request.method, request.path);
 
         // Route request
         let response = match (request.method.as_str(), request.path.as_str()) {
-            ("POST", "/v1/agent/register") => {
-                Self::handle_registration(handler, request.body)
-            }
-            ("POST", "/v1/agent/heartbeat") => {
-                Self::handle_heartbeat(handler, request.body)
-            }
+            ("POST", "/v1/agent/register") => Self::handle_registration(handler, request.body),
+            ("POST", "/v1/agent/heartbeat") => Self::handle_heartbeat(handler, request.body),
             ("DELETE", "/v1/agent/deregister") => {
                 Self::handle_deregistration(handler, request.body)
             }
@@ -255,7 +248,7 @@ impl RestStream {
     ) -> serde_json::Value {
         use std::sync::atomic::{AtomicU32, Ordering};
         static HEARTBEAT_COUNT: AtomicU32 = AtomicU32::new(0);
-        
+
         let agent_id = body
             .and_then(|b| b.get("agent_id").and_then(|v| v.as_str()).map(String::from))
             .unwrap_or_default();
@@ -264,20 +257,23 @@ impl RestStream {
             Ok(_) => {
                 let count = HEARTBEAT_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
                 if count == 1 || count % 30 == 0 {
-                    println!("🦀 [PNS] 💓 Heartbeat #{} received from {}", count, agent_id);
+                    println!(
+                        "🦀 [PNS] 💓 Heartbeat #{} received from {}",
+                        count, agent_id
+                    );
                 }
                 serde_json::json!({
                     "status": 200,
                     "body": {"message": "ok"}
                 })
-            },
+            }
             Err(e) => {
                 eprintln!("🦀 [PNS] Heartbeat failed for {}: {}", agent_id, e);
                 serde_json::json!({
                     "status": 404,
                     "body": {"error": e}
                 })
-            },
+            }
         }
     }
 
@@ -314,9 +310,12 @@ impl RestStream {
             None => return Err("Socket not available".to_string()),
         };
 
-        sock.send(&identity, zmq::SNDMORE).map_err(|e| e.to_string())?;
-        sock.send(&Vec::<u8>::new(), zmq::SNDMORE).map_err(|e| e.to_string())?;
-        sock.send(response_json.as_bytes(), 0).map_err(|e| e.to_string())?;
+        sock.send(&identity, zmq::SNDMORE)
+            .map_err(|e| e.to_string())?;
+        sock.send(&Vec::<u8>::new(), zmq::SNDMORE)
+            .map_err(|e| e.to_string())?;
+        sock.send(response_json.as_bytes(), 0)
+            .map_err(|e| e.to_string())?;
 
         Ok(())
     }

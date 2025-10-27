@@ -10,5 +10,4 @@ pub mod motor_extraction;
 
 // Re-export key types for convenience
 // pub use sensory_injection::{SensoryInjector, SensoryConfig};
-pub use motor_extraction::{MotorExtractor, MotorConfig};
-
+pub use motor_extraction::{MotorConfig, MotorExtractor};

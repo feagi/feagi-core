@@ -31,10 +31,7 @@ impl MotorStream {
         }
 
         // Create PUB socket for broadcasting motor data
-        let socket = self
-            .context
-            .socket(zmq::PUB)
-            .map_err(|e| e.to_string())?;
+        let socket = self.context.socket(zmq::PUB).map_err(|e| e.to_string())?;
 
         // Set socket options for optimal performance
         socket
@@ -48,9 +45,7 @@ impl MotorStream {
             .map_err(|e| e.to_string())?;
 
         // Bind socket
-        socket
-            .bind(&self.bind_address)
-            .map_err(|e| e.to_string())?;
+        socket.bind(&self.bind_address).map_err(|e| e.to_string())?;
 
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
@@ -72,13 +67,10 @@ impl MotorStream {
         let sock_guard = self.socket.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
-            None => {
-                return Err("Motor stream not started".to_string())
-            }
+            None => return Err("Motor stream not started".to_string()),
         };
 
-        sock.send(data, 0)
-            .map_err(|e| e.to_string())?;
+        sock.send(data, 0).map_err(|e| e.to_string())?;
 
         Ok(())
     }
@@ -100,4 +92,3 @@ mod tests {
         assert!(stream.is_ok());
     }
 }
-

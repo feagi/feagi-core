@@ -35,11 +35,8 @@ pub mod types;
 
 // Re-export NPU-native synaptogenesis functions (primary API)
 pub use connectivity::{
-    apply_projector_morphology,
-    apply_expander_morphology,
-    apply_block_connection_morphology,
-    apply_patterns_morphology,
-    apply_vectors_morphology,
+    apply_block_connection_morphology, apply_expander_morphology, apply_patterns_morphology,
+    apply_projector_morphology, apply_vectors_morphology,
 };
 
 // Re-export legacy types for backward compatibility (will be removed)
@@ -48,7 +45,7 @@ pub use connectivity::{
     SynaptogenesisResult,
 };
 
-pub use spatial::{MortonSpatialHash, SpatialHashStats, morton_encode_3d, morton_decode_3d};
+pub use spatial::{morton_decode_3d, morton_encode_3d, MortonSpatialHash, SpatialHashStats};
 
 pub use types::{AreaId, NeuronId, Position, Weight};
 
@@ -72,4 +69,3 @@ mod tests {
         assert!(result.is_ok());
     }
 }
-

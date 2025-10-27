@@ -118,4 +118,3 @@ impl std::fmt::Display for ConnectomeStatistics {
         )
     }
 }
-

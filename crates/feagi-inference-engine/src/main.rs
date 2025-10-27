@@ -1,10 +1,10 @@
 use clap::Parser;
-use log::{info, warn, debug};
+use log::{debug, info, warn};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-extern crate zmq;
 extern crate serde_json;
+extern crate zmq;
 
 /// FEAGI Inference Engine - Standalone neural processing engine with online learning
 #[derive(Parser, Debug)]
@@ -73,8 +73,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let connectome = feagi_connectome_serialization::load_connectome(&args.connectome)?;
 
     info!("✓ Connectome loaded successfully!");
-    info!("  Neurons: {}/{}", connectome.neurons.count, connectome.neurons.capacity);
-    info!("  Synapses: {}/{}", connectome.synapses.count, connectome.synapses.capacity);
+    info!(
+        "  Neurons: {}/{}",
+        connectome.neurons.count, connectome.neurons.capacity
+    );
+    info!(
+        "  Synapses: {}/{}",
+        connectome.synapses.count, connectome.synapses.capacity
+    );
     info!("  Cortical areas: {}", connectome.cortical_area_names.len());
 
     // Create NPU from connectome
@@ -84,15 +90,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize agent registry
     info!("Initializing agent registry...");
-    let registry = Arc::new(std::sync::RwLock::new(feagi_pns::agent_registry::AgentRegistry::new(
-        args.max_agents,
-        args.agent_timeout_ms,
-    )));
-    info!("✓ Agent registry initialized (max_agents={}, timeout={}ms)", 
-          args.max_agents, args.agent_timeout_ms);
+    let registry = Arc::new(std::sync::RwLock::new(
+        feagi_pns::agent_registry::AgentRegistry::new(args.max_agents, args.agent_timeout_ms),
+    ));
+    info!(
+        "✓ Agent registry initialized (max_agents={}, timeout={}ms)",
+        args.max_agents, args.agent_timeout_ms
+    );
 
     // Note: ZMQ transport functionality integrated directly into main loop
-    info!("✓ ZMQ registration endpoint: {}", args.registration_endpoint);
+    info!(
+        "✓ ZMQ registration endpoint: {}",
+        args.registration_endpoint
+    );
     info!("  ZMQ sensory input endpoint: {}", args.sensory_endpoint);
     info!("  ZMQ motor output endpoint: {}", args.motor_endpoint);
 
@@ -128,13 +138,13 @@ fn run_engine(
 
     // Create ZMQ context and sockets for sensory/motor I/O
     let ctx = zmq::Context::new();
-    
+
     // Sensory input socket (PULL pattern - agents PUSH data to us)
     let sensory_socket = ctx.socket(zmq::PULL)?;
     sensory_socket.bind(&args.sensory_endpoint)?;
     sensory_socket.set_rcvtimeo(10)?; // 10ms timeout for non-blocking
     info!("✓ Sensory input bound to: {}", args.sensory_endpoint);
-    
+
     // Motor output socket (PUB pattern - we PUBLISH motor data to agents)
     let motor_socket = ctx.socket(zmq::PUB)?;
     motor_socket.bind(&args.motor_endpoint)?;
@@ -156,22 +166,34 @@ fn run_engine(
                     match serde_json::from_slice::<serde_json::Value>(&msg_bytes) {
                         Ok(json) => {
                             // Extract neuron_id and potential pairs
-                            if let Some(pairs) = json.get("neuron_id_potential_pairs").and_then(|v| v.as_array()) {
-                                let mut injection_data: Vec<(feagi_types::NeuronId, f32)> = Vec::new();
+                            if let Some(pairs) = json
+                                .get("neuron_id_potential_pairs")
+                                .and_then(|v| v.as_array())
+                            {
+                                let mut injection_data: Vec<(feagi_types::NeuronId, f32)> =
+                                    Vec::new();
                                 for pair in pairs {
                                     if let Some(arr) = pair.as_array() {
                                         if arr.len() == 2 {
-                                            if let (Some(id), Some(pot)) = (arr[0].as_u64(), arr[1].as_f64()) {
-                                                injection_data.push((feagi_types::NeuronId(id as u32), pot as f32));
+                                            if let (Some(id), Some(pot)) =
+                                                (arr[0].as_u64(), arr[1].as_f64())
+                                            {
+                                                injection_data.push((
+                                                    feagi_types::NeuronId(id as u32),
+                                                    pot as f32,
+                                                ));
                                             }
                                         }
                                     }
                                 }
-                                
+
                                 if !injection_data.is_empty() {
                                     npu.inject_sensory_with_potentials(&injection_data);
                                     if burst_count % (args.burst_hz * 10) == 0 {
-                                        debug!("Injected {} neurons from agent", injection_data.len());
+                                        debug!(
+                                            "Injected {} neurons from agent",
+                                            injection_data.len()
+                                        );
                                     }
                                 }
                             }
@@ -196,7 +218,10 @@ fn run_engine(
         match npu.process_burst() {
             Ok(result) => {
                 if result.neuron_count > 0 && burst_count % (args.burst_hz * 10) == 0 {
-                    debug!("Burst #{}: {} neurons fired", burst_count, result.neuron_count);
+                    debug!(
+                        "Burst #{}: {} neurons fired",
+                        burst_count, result.neuron_count
+                    );
                 }
             }
             Err(e) => {
@@ -214,7 +239,7 @@ fn run_engine(
                     "burst": burst_count,
                     "cortical_areas": {}
                 });
-                
+
                 for (area_id, (ids, xs, ys, zs, ps)) in fire_data.iter() {
                     if !ids.is_empty() {
                         motor_json["cortical_areas"][area_id.to_string()] = serde_json::json!({
@@ -226,7 +251,7 @@ fn run_engine(
                         });
                     }
                 }
-                
+
                 // Serialize and publish
                 if let Ok(motor_msg) = serde_json::to_vec(&motor_json) {
                     if let Err(e) = motor_socket.send(&motor_msg, 0) {
@@ -245,8 +270,10 @@ fn run_engine(
         // Periodic status
         if burst_count % (args.burst_hz * 10) == 0 {
             let agent_count = registry.read().unwrap().count();
-            info!("Status: {} bursts processed, {} agents registered", 
-                  burst_count, agent_count);
+            info!(
+                "Status: {} bursts processed, {} agents registered",
+                burst_count, agent_count
+            );
         }
 
         // Prune inactive agents every 10 seconds

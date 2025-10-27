@@ -1,44 +1,46 @@
 //! Configuration for FEAGI Agent SDK
 
-use feagi_pns::agent_registry::{AgentCapabilities, AgentType, VisionCapability, MotorCapability, VisualizationCapability};
 use crate::error::{Result, SdkError};
+use feagi_pns::agent_registry::{
+    AgentCapabilities, AgentType, MotorCapability, VisionCapability, VisualizationCapability,
+};
 
 /// Agent configuration builder
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
     /// Unique agent identifier
     pub agent_id: String,
-    
+
     /// Agent type (sensory, motor, both, visualization, or infrastructure)
     pub agent_type: AgentType,
-    
+
     /// Agent capabilities
     pub capabilities: AgentCapabilities,
-    
+
     /// FEAGI registration endpoint (ZMQ REQ)
     pub registration_endpoint: String,
-    
+
     /// FEAGI sensory input endpoint (ZMQ PUSH)
     pub sensory_endpoint: String,
-    
+
     /// FEAGI motor output endpoint (ZMQ SUB)
     pub motor_endpoint: String,
-    
+
     /// FEAGI visualization stream endpoint (ZMQ SUB)
     pub visualization_endpoint: String,
-    
+
     /// FEAGI control/API endpoint (ZMQ REQ - REST over ZMQ)
     pub control_endpoint: String,
-    
+
     /// Heartbeat interval in seconds (0 = disabled)
     pub heartbeat_interval: f64,
-    
+
     /// Connection timeout in milliseconds
     pub connection_timeout_ms: u64,
-    
+
     /// Registration retry attempts
     pub registration_retries: u32,
-    
+
     /// Retry backoff base in milliseconds
     pub retry_backoff_ms: u64,
 }
@@ -73,7 +75,7 @@ impl AgentConfig {
             retry_backoff_ms: 1000,
         }
     }
-    
+
     /// Set FEAGI host and ports to derive all endpoints
     ///
     /// Note: This method requires explicit port numbers. NO DEFAULTS are provided.
@@ -100,7 +102,7 @@ impl AgentConfig {
         self.control_endpoint = format!("tcp://{}:5563", host);
         self
     }
-    
+
     /// Set FEAGI endpoints with explicit ports (RECOMMENDED)
     ///
     /// All ports must be provided explicitly to match FEAGI's configuration.
@@ -136,55 +138,55 @@ impl AgentConfig {
         self.control_endpoint = format!("tcp://{}:{}", host, control_port);
         self
     }
-    
+
     /// Set registration endpoint
     pub fn with_registration_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.registration_endpoint = endpoint.into();
         self
     }
-    
+
     /// Set sensory input endpoint
     pub fn with_sensory_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.sensory_endpoint = endpoint.into();
         self
     }
-    
+
     /// Set motor output endpoint
     pub fn with_motor_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.motor_endpoint = endpoint.into();
         self
     }
-    
+
     /// Set visualization stream endpoint
     pub fn with_visualization_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.visualization_endpoint = endpoint.into();
         self
     }
-    
+
     /// Set control/API endpoint
     pub fn with_control_endpoint(mut self, endpoint: impl Into<String>) -> Self {
         self.control_endpoint = endpoint.into();
         self
     }
-    
+
     /// Set heartbeat interval in seconds (0 to disable)
     pub fn with_heartbeat_interval(mut self, interval: f64) -> Self {
         self.heartbeat_interval = interval;
         self
     }
-    
+
     /// Set connection timeout in milliseconds
     pub fn with_connection_timeout_ms(mut self, timeout_ms: u64) -> Self {
         self.connection_timeout_ms = timeout_ms;
         self
     }
-    
+
     /// Set registration retry attempts
     pub fn with_registration_retries(mut self, retries: u32) -> Self {
         self.registration_retries = retries;
         self
     }
-    
+
     /// Add vision capability
     ///
     /// # Example
@@ -208,7 +210,7 @@ impl AgentConfig {
         });
         self
     }
-    
+
     /// Add motor capability
     ///
     /// # Example
@@ -230,7 +232,7 @@ impl AgentConfig {
         });
         self
     }
-    
+
     /// Add visualization capability
     ///
     /// # Example
@@ -254,14 +256,14 @@ impl AgentConfig {
         });
         self
     }
-    
+
     /// Add custom capability
     ///
     /// # Example
     /// ```
     /// # use feagi_agent_sdk::{AgentConfig, AgentType};
     /// use serde_json::json;
-    /// 
+    ///
     /// let config = AgentConfig::new("audio", AgentType::Sensory)
     ///     .with_custom_capability("audio", json!({
     ///         "sample_rate": 44100,
@@ -276,14 +278,16 @@ impl AgentConfig {
         self.capabilities.custom.insert(key.into(), value);
         self
     }
-    
+
     /// Validate configuration
     pub fn validate(&self) -> Result<()> {
         // Agent ID must not be empty
         if self.agent_id.is_empty() {
-            return Err(SdkError::InvalidConfig("agent_id cannot be empty".to_string()));
+            return Err(SdkError::InvalidConfig(
+                "agent_id cannot be empty".to_string(),
+            ));
         }
-        
+
         // Must have at least one capability
         if self.capabilities.vision.is_none()
             && self.capabilities.motor.is_none()
@@ -291,23 +295,23 @@ impl AgentConfig {
             && self.capabilities.custom.is_empty()
         {
             return Err(SdkError::InvalidConfig(
-                "Agent must have at least one capability".to_string()
+                "Agent must have at least one capability".to_string(),
             ));
         }
-        
+
         // Validate agent type matches capabilities
         match self.agent_type {
             AgentType::Sensory => {
                 if self.capabilities.vision.is_none() && self.capabilities.custom.is_empty() {
                     return Err(SdkError::InvalidConfig(
-                        "Sensory agent must have vision or custom input capability".to_string()
+                        "Sensory agent must have vision or custom input capability".to_string(),
                     ));
                 }
             }
             AgentType::Motor => {
                 if self.capabilities.motor.is_none() {
                     return Err(SdkError::InvalidConfig(
-                        "Motor agent must have motor capability".to_string()
+                        "Motor agent must have motor capability".to_string(),
                     ));
                 }
             }
@@ -316,14 +320,15 @@ impl AgentConfig {
                     || self.capabilities.motor.is_none()
                 {
                     return Err(SdkError::InvalidConfig(
-                        "Bidirectional agent must have both input and output capabilities".to_string()
+                        "Bidirectional agent must have both input and output capabilities"
+                            .to_string(),
                     ));
                 }
             }
             AgentType::Visualization => {
                 if self.capabilities.visualization.is_none() {
                     return Err(SdkError::InvalidConfig(
-                        "Visualization agent must have visualization capability".to_string()
+                        "Visualization agent must have visualization capability".to_string(),
                     ));
                 }
             }
@@ -336,12 +341,12 @@ impl AgentConfig {
                     && self.capabilities.custom.is_empty()
                 {
                     return Err(SdkError::InvalidConfig(
-                        "Infrastructure agent must declare at least one capability".to_string()
+                        "Infrastructure agent must declare at least one capability".to_string(),
                     ));
                 }
             }
         }
-        
+
         // Validate endpoints based on agent type
         // Registration endpoint is always required
         if self.registration_endpoint.is_empty() {
@@ -351,10 +356,10 @@ impl AgentConfig {
         }
         if !self.registration_endpoint.starts_with("tcp://") {
             return Err(SdkError::InvalidConfig(
-                "registration_endpoint must start with tcp://".to_string()
+                "registration_endpoint must start with tcp://".to_string(),
             ));
         }
-        
+
         // Validate sensory endpoint for sensory agents
         if matches!(self.agent_type, AgentType::Sensory | AgentType::Both) {
             if self.sensory_endpoint.is_empty() {
@@ -364,11 +369,11 @@ impl AgentConfig {
             }
             if !self.sensory_endpoint.starts_with("tcp://") {
                 return Err(SdkError::InvalidConfig(
-                    "sensory_endpoint must start with tcp://".to_string()
+                    "sensory_endpoint must start with tcp://".to_string(),
                 ));
             }
         }
-        
+
         // Validate motor endpoint for motor agents
         if matches!(self.agent_type, AgentType::Motor | AgentType::Both) {
             if self.motor_endpoint.is_empty() {
@@ -378,11 +383,11 @@ impl AgentConfig {
             }
             if !self.motor_endpoint.starts_with("tcp://") {
                 return Err(SdkError::InvalidConfig(
-                    "motor_endpoint must start with tcp://".to_string()
+                    "motor_endpoint must start with tcp://".to_string(),
                 ));
             }
         }
-        
+
         // Validate visualization endpoint for visualization agents
         if matches!(self.agent_type, AgentType::Visualization) {
             if self.visualization_endpoint.is_empty() {
@@ -392,11 +397,11 @@ impl AgentConfig {
             }
             if !self.visualization_endpoint.starts_with("tcp://") {
                 return Err(SdkError::InvalidConfig(
-                    "visualization_endpoint must start with tcp://".to_string()
+                    "visualization_endpoint must start with tcp://".to_string(),
                 ));
             }
         }
-        
+
         Ok(())
     }
 }
@@ -404,32 +409,32 @@ impl AgentConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_config_builder() {
         let config = AgentConfig::new("test_agent", AgentType::Sensory)
             .with_feagi_host("192.168.1.100")
             .with_vision_capability("camera", (640, 480), 3, "i_vision")
             .with_heartbeat_interval(10.0);
-        
+
         assert_eq!(config.agent_id, "test_agent");
         assert_eq!(config.heartbeat_interval, 10.0);
         assert_eq!(config.registration_endpoint, "tcp://192.168.1.100:30001");
         assert!(config.capabilities.vision.is_some());
     }
-    
+
     #[test]
     fn test_config_validation_empty_agent_id() {
         let config = AgentConfig::new("", AgentType::Sensory);
         assert!(config.validate().is_err());
     }
-    
+
     #[test]
     fn test_config_validation_no_capabilities() {
         let config = AgentConfig::new("test", AgentType::Sensory);
         assert!(config.validate().is_err());
     }
-    
+
     #[test]
     fn test_config_validation_sensory_without_input() {
         let mut config = AgentConfig::new("test", AgentType::Sensory);
@@ -440,12 +445,15 @@ mod tests {
         });
         assert!(config.validate().is_err());
     }
-    
+
     #[test]
     fn test_config_validation_valid() {
-        let config = AgentConfig::new("test", AgentType::Sensory)
-            .with_vision_capability("camera", (640, 480), 3, "vision");
+        let config = AgentConfig::new("test", AgentType::Sensory).with_vision_capability(
+            "camera",
+            (640, 480),
+            3,
+            "vision",
+        );
         assert!(config.validate().is_ok());
     }
 }
-

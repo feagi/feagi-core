@@ -1,5 +1,5 @@
 //! Unit tests for sensory injection module
-//! 
+//!
 //! NOTE: DISABLED - Video/image processing is now handled by external agents via ZMQ
 //! This test module is kept for reference but all tests are disabled.
 
@@ -26,14 +26,17 @@ mod sensory_injector_tests {
         // Test that different names produce different IDs
         let id1 = hash_cortical_name("ipu_vision");
         let id2 = hash_cortical_name("opu_motor");
-        assert_ne!(id1, id2, "Different names should produce different cortical IDs");
+        assert_ne!(
+            id1, id2,
+            "Different names should produce different cortical IDs"
+        );
     }
 
     #[test]
     fn test_xyzp_coordinate_generation() {
         // Create a simple 4x4 RGB image
         let mut img = RgbImage::new(4, 4);
-        
+
         // Set some bright pixels
         img.put_pixel(0, 0, image::Rgb([255, 0, 0])); // Red
         img.put_pixel(1, 1, image::Rgb([0, 255, 0])); // Green
@@ -58,10 +61,10 @@ mod sensory_injector_tests {
     fn test_activation_threshold_filtering() {
         // Test that dim pixels are filtered out
         let mut img = RgbImage::new(4, 4);
-        
+
         // Set one bright pixel and rest dim
         img.put_pixel(0, 0, image::Rgb([255, 255, 255])); // Bright
-        // Rest are default (0, 0, 0) - dim
+                                                          // Rest are default (0, 0, 0) - dim
 
         let dynamic_img = DynamicImage::ImageRgb8(img);
         let rgb_image = dynamic_img.to_rgb8();
@@ -160,4 +163,3 @@ mod sensory_config_tests {
         assert_eq!(adjusted, 5);
     }
 }
-

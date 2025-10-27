@@ -17,12 +17,12 @@ pub fn syn_block_connection(
     scaling_factor: u32,
 ) -> BduResult<Position> {
     let (x, y, z) = neuron_location;
-    
+
     // Calculate destination position by dividing by scaling factor
     let dst_x = x / scaling_factor;
     let dst_y = y;
     let dst_z = z;
-    
+
     Ok((dst_x, dst_y, dst_z))
 }
 
@@ -32,15 +32,9 @@ mod tests {
 
     #[test]
     fn test_block_connection() {
-        let result = syn_block_connection(
-            "src", "dst",
-            (20, 5, 3),
-            (100, 10, 10),
-            (10, 10, 10),
-            10
-        );
+        let result =
+            syn_block_connection("src", "dst", (20, 5, 3), (100, 10, 10), (10, 10, 10), 10);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), (2, 5, 3));
     }
 }
-

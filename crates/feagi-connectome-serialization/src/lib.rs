@@ -28,8 +28,8 @@
 //! let npu = load_connectome("brain.connectome")?;
 //! ```
 
-use serde::{Deserialize, Serialize};
 use ahash::AHashMap;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
@@ -161,10 +161,7 @@ impl Default for ConnectomeMetadata {
 /// [Data]
 /// - Bincode-serialized ConnectomeSnapshot (optionally LZ4 compressed)
 /// ```
-pub fn save_connectome<P: AsRef<Path>>(
-    snapshot: &ConnectomeSnapshot,
-    path: P,
-) -> Result<()> {
+pub fn save_connectome<P: AsRef<Path>>(snapshot: &ConnectomeSnapshot, path: P) -> Result<()> {
     let mut file = File::create(path)?;
 
     // Write header
@@ -172,8 +169,8 @@ pub fn save_connectome<P: AsRef<Path>>(
     file.write_all(&FORMAT_VERSION.to_le_bytes())?;
 
     // Serialize data
-    let data = bincode::serialize(snapshot)
-        .map_err(|e| ConnectomeError::Serialization(e.to_string()))?;
+    let data =
+        bincode::serialize(snapshot).map_err(|e| ConnectomeError::Serialization(e.to_string()))?;
 
     // Compress if feature enabled
     #[cfg(feature = "compression")]
@@ -182,7 +179,7 @@ pub fn save_connectome<P: AsRef<Path>>(
             .map_err(|e| ConnectomeError::Compression(e.to_string()))?;
         (compressed, 1u8) // Flag bit 0 = compressed
     };
-    
+
     #[cfg(not(feature = "compression"))]
     let (final_data, flags) = (data, 0u8);
 
@@ -263,7 +260,7 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
         #[cfg(not(feature = "compression"))]
         {
             return Err(ConnectomeError::Compression(
-                "File is compressed but compression feature is not enabled".to_string()
+                "File is compressed but compression feature is not enabled".to_string(),
             ));
         }
     } else {
@@ -271,8 +268,8 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
     };
 
     // Deserialize
-    let snapshot: ConnectomeSnapshot = bincode::deserialize(&data)
-        .map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
+    let snapshot: ConnectomeSnapshot =
+        bincode::deserialize(&data).map_err(|e| ConnectomeError::Deserialization(e.to_string()))?;
 
     Ok(snapshot)
 }
@@ -343,4 +340,3 @@ mod tests {
         assert_ne!(calculate_checksum(data1), calculate_checksum(data3));
     }
 }
-

@@ -6,8 +6,10 @@
 use anyhow::Result;
 use feagi_burst_engine::RustNPU;
 use feagi_data_serialization::FeagiSerializable;
-use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::neuron_voxels::xyzp::{
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+};
 use log::{debug, info};
 use std::collections::HashMap;
 
@@ -119,11 +121,14 @@ impl MotorExtractor {
             let mut cortical_id_bytes = [0u8; 6]; // CorticalID::CORTICAL_ID_LENGTH
             let copy_len = area_bytes.len().min(6);
             cortical_id_bytes[..copy_len].copy_from_slice(&area_bytes[..copy_len]);
-            
+
             let cortical_id = match CorticalID::from_bytes(&cortical_id_bytes) {
                 Ok(id) => id,
                 Err(e) => {
-                    debug!("Failed to create CorticalID for '{}': {:?}", area_name_str, e);
+                    debug!(
+                        "Failed to create CorticalID for '{}': {:?}",
+                        area_name_str, e
+                    );
                     continue;
                 }
             };
@@ -160,7 +165,10 @@ impl MotorExtractor {
                     }
                 }
                 Err(e) => {
-                    debug!("Failed to create NeuronVoxelXYZPArrays for area {}: {:?}", area_id, e);
+                    debug!(
+                        "Failed to create NeuronVoxelXYZPArrays for area {}: {:?}",
+                        area_id, e
+                    );
                     continue;
                 }
             }
@@ -258,11 +266,10 @@ mod tests {
         let id1 = MotorExtractor::parse_cortical_id("opu_motor");
         let id2 = MotorExtractor::parse_cortical_id("opu_motor");
         let id3 = MotorExtractor::parse_cortical_id("other_motor");
-        
+
         // Same name should give same ID
         assert_eq!(id1, id2);
         // Different names should give different IDs (probabilistically)
         assert_ne!(id1, id3);
     }
 }
-

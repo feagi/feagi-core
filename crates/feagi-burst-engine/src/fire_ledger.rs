@@ -30,10 +30,10 @@ use crate::fire_structures::FireQueue;
 pub struct RustFireLedger {
     /// Firing history per cortical area
     cortical_histories: AHashMap<u32, CorticalHistory>,
-    
+
     /// Default window size for new areas
     default_window_size: usize,
-    
+
     /// Current timestep
     current_timestep: u64,
 }
@@ -43,10 +43,10 @@ pub struct RustFireLedger {
 struct CorticalHistory {
     /// Circular buffer of timesteps
     timesteps: VecDeque<u64>,
-    
+
     /// Circular buffer of neuron ID vectors (parallel with timesteps)
     neuron_ids: VecDeque<Vec<u32>>,
-    
+
     /// Maximum number of timesteps to retain
     window_size: usize,
 }
@@ -60,28 +60,27 @@ impl RustFireLedger {
             current_timestep: 0,
         }
     }
-    
+
     /// Archive a burst's firing data (ZERO COPY from Fire Queue!)
     pub fn archive_burst(&mut self, timestep: u64, fire_queue: &FireQueue) {
         self.current_timestep = timestep;
-        
+
         // Archive each cortical area's firing data
         for (&cortical_idx, neurons) in &fire_queue.neurons_by_area {
             // Extract neuron IDs from FiringNeuron structs
-            let neuron_ids: Vec<u32> = neurons.iter()
-                .map(|n| n.neuron_id.0)
-                .collect();
-            
+            let neuron_ids: Vec<u32> = neurons.iter().map(|n| n.neuron_id.0).collect();
+
             // Get or create history for this area
-            let history = self.cortical_histories
+            let history = self
+                .cortical_histories
                 .entry(cortical_idx)
                 .or_insert_with(|| CorticalHistory::new(self.default_window_size));
-            
+
             // Archive to circular buffer
             history.add_timestep(timestep, neuron_ids);
         }
     }
-    
+
     /// Get firing history for a cortical area
     /// Returns Vec of (timestep, neuron_ids) tuples, newest first
     pub fn get_history(&self, cortical_idx: u32, lookback_steps: usize) -> Vec<(u64, Vec<u32>)> {
@@ -91,7 +90,7 @@ impl RustFireLedger {
             Vec::new()
         }
     }
-    
+
     /// Get window size for a specific cortical area
     pub fn get_area_window_size(&self, cortical_idx: u32) -> usize {
         self.cortical_histories
@@ -99,20 +98,18 @@ impl RustFireLedger {
             .map(|h| h.window_size)
             .unwrap_or(self.default_window_size)
     }
-    
+
     /// Configure window size for a specific cortical area
     pub fn configure_area_window(&mut self, cortical_idx: u32, window_size: usize) {
         if let Some(history) = self.cortical_histories.get_mut(&cortical_idx) {
             history.resize_window(window_size);
         } else {
             // Create new history with custom window size
-            self.cortical_histories.insert(
-                cortical_idx,
-                CorticalHistory::new(window_size)
-            );
+            self.cortical_histories
+                .insert(cortical_idx, CorticalHistory::new(window_size));
         }
     }
-    
+
     /// Get all configured area window sizes
     pub fn get_all_window_configs(&self) -> Vec<(u32, usize)> {
         self.cortical_histories
@@ -120,7 +117,7 @@ impl RustFireLedger {
             .map(|(&idx, hist)| (idx, hist.window_size))
             .collect()
     }
-    
+
     /// Get current timestep
     pub fn current_timestep(&self) -> u64 {
         self.current_timestep
@@ -136,7 +133,7 @@ impl CorticalHistory {
             window_size,
         }
     }
-    
+
     /// Add a timestep's firing data (maintains circular buffer)
     fn add_timestep(&mut self, timestep: u64, neuron_ids: Vec<u32>) {
         // If at capacity, remove oldest
@@ -144,17 +141,17 @@ impl CorticalHistory {
             self.timesteps.pop_front();
             self.neuron_ids.pop_front();
         }
-        
+
         // Add new data
         self.timesteps.push_back(timestep);
         self.neuron_ids.push_back(neuron_ids);
     }
-    
+
     /// Get recent firing history (newest first)
     fn get_recent(&self, lookback_steps: usize) -> Vec<(u64, Vec<u32>)> {
         let available = self.timesteps.len();
         let count = lookback_steps.min(available);
-        
+
         // Collect from newest to oldest
         let mut result = Vec::with_capacity(count);
         for i in (available.saturating_sub(count)..available).rev() {
@@ -163,14 +160,14 @@ impl CorticalHistory {
                 self.neuron_ids[i].clone(), // Clone neuron IDs for Python
             ));
         }
-        
+
         result
     }
-    
+
     /// Resize the window (may truncate old data)
     fn resize_window(&mut self, new_size: usize) {
         self.window_size = new_size;
-        
+
         // Truncate if new size is smaller
         while self.timesteps.len() > new_size {
             self.timesteps.pop_front();
@@ -182,13 +179,13 @@ impl CorticalHistory {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fire_structures::{FiringNeuron, FireQueue};
-    use feagi_types::{NeuronId, CorticalAreaId};
-    
+    use crate::fire_structures::{FireQueue, FiringNeuron};
+    use feagi_types::{CorticalAreaId, NeuronId};
+
     #[test]
     fn test_fire_ledger_basic() {
         let mut ledger = RustFireLedger::new(5);
-        
+
         // Create mock fire queue with some neurons
         let mut fire_queue = FireQueue::new();
         let neuron1 = FiringNeuron {
@@ -207,13 +204,13 @@ mod tests {
             y: 0,
             z: 0,
         };
-        
+
         fire_queue.add_neuron(neuron1);
         fire_queue.add_neuron(neuron2);
-        
+
         // Archive burst
         ledger.archive_burst(1, &fire_queue);
-        
+
         // Retrieve history
         let history = ledger.get_history(1, 10);
         assert_eq!(history.len(), 1);
@@ -222,11 +219,11 @@ mod tests {
         assert!(history[0].1.contains(&100));
         assert!(history[0].1.contains(&200));
     }
-    
+
     #[test]
     fn test_fire_ledger_circular_buffer() {
         let mut ledger = RustFireLedger::new(3); // Only keep 3 timesteps
-        
+
         // Archive 5 bursts
         for t in 1..=5 {
             let mut fire_queue = FireQueue::new();
@@ -241,7 +238,7 @@ mod tests {
             fire_queue.add_neuron(neuron);
             ledger.archive_burst(t, &fire_queue);
         }
-        
+
         // Should only have last 3 timesteps (3, 4, 5)
         let history = ledger.get_history(1, 10);
         assert_eq!(history.len(), 3);
@@ -249,14 +246,13 @@ mod tests {
         assert_eq!(history[1].0, 4);
         assert_eq!(history[2].0, 3);
     }
-    
+
     #[test]
     fn test_fire_ledger_empty_area() {
         let ledger = RustFireLedger::new(20);
-        
+
         // Query non-existent area
         let history = ledger.get_history(999, 10);
         assert_eq!(history.len(), 0);
     }
 }
-

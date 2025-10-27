@@ -24,7 +24,7 @@ pub fn syn_lateral_pairs_x(
     src_dimensions: Dimensions,
 ) -> Option<Position> {
     let (x, y, z) = neuron_location;
-    
+
     if x % 2 == 0 {
         // Even neurons connect to the right
         if (x + 1) < src_dimensions.0 as u32 {
@@ -52,7 +52,7 @@ pub fn syn_last_to_first(
         src_dimensions.1 as u32 - 1,
         src_dimensions.2 as u32 - 1,
     );
-    
+
     if neuron_location == last_pos {
         Some((0, 0, 0))
     } else {
@@ -80,15 +80,15 @@ mod tests {
         // Even neuron
         let result = syn_lateral_pairs_x((2, 5, 3), (10, 10, 10));
         assert_eq!(result, Some((3, 5, 3)));
-        
+
         // Odd neuron
         let result = syn_lateral_pairs_x((3, 5, 3), (10, 10, 10));
         assert_eq!(result, Some((2, 5, 3)));
-        
+
         // Edge case: even at boundary
         let result = syn_lateral_pairs_x((9, 5, 3), (10, 10, 10));
         assert_eq!(result, None);
-        
+
         // Edge case: odd at boundary
         let result = syn_lateral_pairs_x((0, 5, 3), (10, 10, 10));
         assert_eq!(result, None);
@@ -97,14 +97,13 @@ mod tests {
     #[test]
     fn test_last_to_first() {
         let dims = (10, 10, 10);
-        
+
         // Last position
         let result = syn_last_to_first((9, 9, 9), dims);
         assert_eq!(result, Some((0, 0, 0)));
-        
+
         // Not last position
         let result = syn_last_to_first((5, 5, 5), dims);
         assert_eq!(result, None);
     }
 }
-

@@ -6,15 +6,18 @@ use std::sync::Arc;
 use thiserror::Error;
 
 pub mod agent_registry;
-pub mod registration;
 pub mod heartbeat;
-pub mod zmq;
+pub mod registration;
 pub mod shm;
+pub mod zmq;
 
-pub use agent_registry::{AgentRegistry, AgentInfo, AgentCapabilities};
-pub use registration::RegistrationHandler;
+pub use agent_registry::{AgentCapabilities, AgentInfo, AgentRegistry};
 pub use heartbeat::HeartbeatTracker;
-pub use zmq::{ZmqStreams, RestStream, MotorStream, VisualizationStream, SensoryStream};
+pub use registration::RegistrationHandler;
+pub use zmq::{
+    MotorStream, RestStream, SensoryStream, VisualizationOverflowStrategy, VisualizationSendConfig,
+    VisualizationStream, ZmqStreams,
+};
 
 #[derive(Error, Debug)]
 pub enum PNSError {
@@ -40,16 +43,18 @@ pub struct PNSConfig {
     pub zmq_viz_address: String,
     pub zmq_sensory_address: String,
     pub shm_base_path: String,
+    pub visualization_stream: VisualizationSendConfig,
 }
 
 impl Default for PNSConfig {
     fn default() -> Self {
         Self {
-            zmq_rest_address: "tcp://0.0.0.0:5563".to_string(),  // REST/registration port
+            zmq_rest_address: "tcp://0.0.0.0:5563".to_string(), // REST/registration port
             zmq_motor_address: "tcp://0.0.0.0:30005".to_string(), // Motor output port
-            zmq_viz_address: "tcp://0.0.0.0:5562".to_string(),    // Visualization output port
+            zmq_viz_address: "tcp://0.0.0.0:5562".to_string(),  // Visualization output port
             zmq_sensory_address: "tcp://0.0.0.0:5558".to_string(), // Sensory input port (PULL socket)
             shm_base_path: "/tmp".to_string(),
+            visualization_stream: VisualizationSendConfig::default(),
         }
     }
 }
@@ -63,7 +68,8 @@ pub struct PNS {
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
     running: Arc<RwLock<bool>>,
     /// Optional reference to burst engine's sensory agent manager for SHM I/O
-    sensory_agent_manager: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>>>>,
+    sensory_agent_manager:
+        Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>>>>,
 }
 
 impl PNS {
@@ -76,10 +82,10 @@ impl PNS {
     pub fn with_config(config: PNSConfig) -> Result<Self> {
         let agent_registry = Arc::new(RwLock::new(AgentRegistry::with_defaults()));
         let heartbeat_tracker = Arc::new(Mutex::new(HeartbeatTracker::new()));
-        let registration_handler = Arc::new(Mutex::new(
-            RegistrationHandler::new(Arc::clone(&agent_registry))
-        ));
-        
+        let registration_handler = Arc::new(Mutex::new(RegistrationHandler::new(Arc::clone(
+            &agent_registry,
+        ))));
+
         Ok(Self {
             config,
             agent_registry,
@@ -93,16 +99,24 @@ impl PNS {
 
     /// Set the sensory agent manager (for SHM I/O coordination)
     /// Should be called before starting the PNS
-    pub fn set_sensory_agent_manager(&self, manager: Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>) {
+    pub fn set_sensory_agent_manager(
+        &self,
+        manager: Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>,
+    ) {
         *self.sensory_agent_manager.lock() = Some(manager.clone());
         // Also propagate to registration handler
-        self.registration_handler.lock().set_sensory_agent_manager(manager);
+        self.registration_handler
+            .lock()
+            .set_sensory_agent_manager(manager);
         println!("🦀 [PNS] Sensory agent manager connected for SHM I/O");
     }
-    
+
     /// Connect the Rust NPU to the sensory stream for direct injection
     /// Should be called after starting the PNS
-    pub fn connect_npu_to_sensory_stream(&self, npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) {
+    pub fn connect_npu_to_sensory_stream(
+        &self,
+        npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>,
+    ) {
         if let Some(streams) = self.zmq_streams.lock().as_ref() {
             streams.get_sensory_stream().set_npu(npu);
             println!("🦀 [PNS] NPU connected to sensory stream for direct injection");
@@ -116,7 +130,9 @@ impl PNS {
     where
         F: Fn(String, String, String) + Send + Sync + 'static,
     {
-        self.registration_handler.lock().set_on_agent_registered(callback);
+        self.registration_handler
+            .lock()
+            .set_on_agent_registered(callback);
     }
 
     /// Set callback for agent deregistration events (for Python integration)
@@ -124,7 +140,9 @@ impl PNS {
     where
         F: Fn(String) + Send + Sync + 'static,
     {
-        self.registration_handler.lock().set_on_agent_deregistered(callback);
+        self.registration_handler
+            .lock()
+            .set_on_agent_deregistered(callback);
     }
 
     /// Start all PNS services
@@ -142,13 +160,16 @@ impl PNS {
             &self.config.zmq_viz_address,
             &self.config.zmq_sensory_address,
             Arc::clone(&self.registration_handler),
+            self.config.visualization_stream.clone(),
         )?;
 
         zmq_streams.start()?;
         *self.zmq_streams.lock() = Some(zmq_streams);
 
         // Start heartbeat monitoring
-        self.heartbeat_tracker.lock().start(Arc::clone(&self.agent_registry));
+        self.heartbeat_tracker
+            .lock()
+            .start(Arc::clone(&self.agent_registry));
 
         *self.running.write() = true;
         println!("🦀 [PNS] ✅ All services started successfully");
@@ -192,10 +213,13 @@ impl PNS {
     pub fn publish_visualization(&self, data: &[u8]) -> Result<()> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-            eprintln!("[PNS] 🔍 TRACE: publish_visualization() called with {} bytes", data.len());
+            eprintln!(
+                "[PNS] 🔍 TRACE: publish_visualization() called with {} bytes",
+                data.len()
+            );
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
-        
+
         if let Some(streams) = self.zmq_streams.lock().as_ref() {
             streams.publish_visualization(data)?;
             Ok(())
@@ -233,7 +257,7 @@ mod tests {
     fn test_pns_lifecycle() {
         let pns = PNS::new().unwrap();
         assert!(!pns.is_running());
-        
+
         // Note: Can't actually start without conflicting with running FEAGI
         // Real tests require integration testing with Docker
     }

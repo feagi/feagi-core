@@ -4,8 +4,8 @@
 
 //! Serializable synapse array structures
 
-use serde::{Deserialize, Serialize};
 use ahash::AHashMap;
+use serde::{Deserialize, Serialize};
 
 /// Serializable version of SynapseArray
 ///
@@ -73,4 +73,3 @@ impl SerializableSynapseArray {
         }
     }
 }
-

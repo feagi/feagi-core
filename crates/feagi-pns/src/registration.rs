@@ -1,8 +1,8 @@
 // Registration Handler - processes agent registration requests
 
 use crate::agent_registry::{
-    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType,
-    MotorCapability, SensoryCapability, VisualizationCapability,
+    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
+    SensoryCapability, VisualizationCapability,
 };
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -27,15 +27,18 @@ pub struct RegistrationResponse {
 }
 
 /// Type alias for registration callbacks
-pub type RegistrationCallback = Arc<parking_lot::Mutex<Option<Box<dyn Fn(String, String, String) + Send + Sync>>>>;
-pub type DeregistrationCallback = Arc<parking_lot::Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>;
+pub type RegistrationCallback =
+    Arc<parking_lot::Mutex<Option<Box<dyn Fn(String, String, String) + Send + Sync>>>>;
+pub type DeregistrationCallback =
+    Arc<parking_lot::Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>;
 
 /// Registration Handler
 pub struct RegistrationHandler {
     agent_registry: Arc<RwLock<AgentRegistry>>,
     shm_base_path: String,
     /// Optional reference to burst engine's sensory agent manager for SHM I/O
-    sensory_agent_manager: Arc<parking_lot::Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>>>>,
+    sensory_agent_manager:
+        Arc<parking_lot::Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>>>>,
     /// Callbacks for Python integration
     on_agent_registered: RegistrationCallback,
     on_agent_deregistered: DeregistrationCallback,
@@ -53,7 +56,10 @@ impl RegistrationHandler {
     }
 
     /// Set the sensory agent manager (for SHM I/O coordination)
-    pub fn set_sensory_agent_manager(&self, manager: Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>) {
+    pub fn set_sensory_agent_manager(
+        &self,
+        manager: Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>,
+    ) {
         *self.sensory_agent_manager.lock() = Some(manager);
         println!("🦀 [REGISTRATION] Sensory agent manager connected");
     }
@@ -111,7 +117,10 @@ impl RegistrationHandler {
         }
 
         if allocated_capabilities.visualization.is_some() {
-            let shm_path = format!("{}/feagi-shared-mem-visualization_stream.bin", self.shm_base_path);
+            let shm_path = format!(
+                "{}/feagi-shared-mem-visualization_stream.bin",
+                self.shm_base_path
+            );
             shm_paths.insert("visualization".to_string(), shm_path);
         }
 
@@ -154,7 +163,7 @@ impl RegistrationHandler {
                         "🦀 [REGISTRATION] Registering {} with burst engine: {} @ {}Hz",
                         request.agent_id, shm_path, sensory.rate_hz
                     );
-                    
+
                     let sensory_mgr = sensory_mgr_lock.lock().unwrap();
                     let config = feagi_burst_engine::AgentConfig {
                         agent_id: request.agent_id.clone(),
@@ -162,10 +171,14 @@ impl RegistrationHandler {
                         rate_hz: sensory.rate_hz,
                         area_mapping: sensory.cortical_mappings.clone(),
                     };
-                    sensory_mgr.register_agent(config)
+                    sensory_mgr
+                        .register_agent(config)
                         .map_err(|e| format!("Failed to register with burst engine: {}", e))?;
-                    
-                    println!("🦀 [REGISTRATION] ✅ Agent {} registered with burst engine", request.agent_id);
+
+                    println!(
+                        "🦀 [REGISTRATION] ✅ Agent {} registered with burst engine",
+                        request.agent_id
+                    );
                 } else {
                     println!("🦀 [REGISTRATION] ⚠️  Sensory capability exists but no SHM path");
                 }
@@ -177,17 +190,27 @@ impl RegistrationHandler {
         // Invoke Python callback if set
         if let Some(ref callback) = *self.on_agent_registered.lock() {
             // Serialize capabilities to JSON string for Python
-            let caps_json = serde_json::to_string(&request.capabilities)
-                .unwrap_or_else(|_| "{}".to_string());
-            
-            println!("🦀 [REGISTRATION] Invoking Python callback for agent: {}", request.agent_id);
-            callback(request.agent_id.clone(), request.agent_type.clone(), caps_json);
+            let caps_json =
+                serde_json::to_string(&request.capabilities).unwrap_or_else(|_| "{}".to_string());
+
+            println!(
+                "🦀 [REGISTRATION] Invoking Python callback for agent: {}",
+                request.agent_id
+            );
+            callback(
+                request.agent_id.clone(),
+                request.agent_type.clone(),
+                caps_json,
+            );
         }
 
         // Return success response
         Ok(RegistrationResponse {
             status: "success".to_string(),
-            message: Some(format!("Agent {} registered successfully", request.agent_id)),
+            message: Some(format!(
+                "Agent {} registered successfully",
+                request.agent_id
+            )),
             shm_paths: if shm_paths.is_empty() {
                 None
             } else {
@@ -209,7 +232,7 @@ impl RegistrationHandler {
         if let Ok(capabilities) = serde_json::from_value::<AgentCapabilities>(caps_json.clone()) {
             return Ok(capabilities);
         }
-        
+
         // Fall back to manual parsing for legacy format
         let mut capabilities = AgentCapabilities::default();
 
@@ -226,10 +249,21 @@ impl RegistrationHandler {
 
         // Parse motor capability (support both legacy and new format)
         if let Some(motor) = caps_json.get("motor") {
-            if motor.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
+            if motor
+                .get("enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
                 capabilities.motor = Some(MotorCapability {
-                    modality: motor.get("modality").and_then(|v| v.as_str()).unwrap_or("generic").to_string(),
-                    output_count: motor.get("output_count").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
+                    modality: motor
+                        .get("modality")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("generic")
+                        .to_string(),
+                    output_count: motor
+                        .get("output_count")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(1) as usize,
                     source_cortical_areas: vec![],
                 });
             }
@@ -237,12 +271,23 @@ impl RegistrationHandler {
 
         // Parse visualization capability
         if let Some(viz) = caps_json.get("visualization") {
-            if viz.get("enabled").and_then(|v| v.as_bool()).unwrap_or(false) {
+            if viz
+                .get("enabled")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
                 capabilities.visualization = Some(VisualizationCapability {
-                    visualization_type: viz.get("type").and_then(|v| v.as_str()).unwrap_or("generic").to_string(),
+                    visualization_type: viz
+                        .get("type")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("generic")
+                        .to_string(),
                     resolution: None,
                     refresh_rate: viz.get("rate_hz").and_then(|v| v.as_f64()),
-                    bridge_proxy: viz.get("bridge_proxy").and_then(|v| v.as_bool()).unwrap_or(false),
+                    bridge_proxy: viz
+                        .get("bridge_proxy")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
                 });
             }
         }
@@ -256,26 +301,36 @@ impl RegistrationHandler {
         if let Some(sensory_mgr_lock) = self.sensory_agent_manager.lock().as_ref() {
             let sensory_mgr = sensory_mgr_lock.lock().unwrap();
             if let Err(e) = sensory_mgr.deregister_agent(agent_id) {
-                println!("🦀 [REGISTRATION] ⚠️  Failed to deregister {} from burst engine: {}", agent_id, e);
+                println!(
+                    "🦀 [REGISTRATION] ⚠️  Failed to deregister {} from burst engine: {}",
+                    agent_id, e
+                );
             } else {
-                println!("🦀 [REGISTRATION] ✅ Agent {} deregistered from burst engine", agent_id);
+                println!(
+                    "🦀 [REGISTRATION] ✅ Agent {} deregistered from burst engine",
+                    agent_id
+                );
             }
         }
-        
+
         // Deregister from registry
-        let result = self.agent_registry
+        let result = self
+            .agent_registry
             .write()
             .deregister(agent_id)
             .map(|_| format!("Agent {} deregistered", agent_id));
-        
+
         // Invoke Python callback if deregistration was successful
         if result.is_ok() {
             if let Some(ref callback) = *self.on_agent_deregistered.lock() {
-                println!("🦀 [REGISTRATION] Invoking Python deregistration callback for agent: {}", agent_id);
+                println!(
+                    "🦀 [REGISTRATION] Invoking Python deregistration callback for agent: {}",
+                    agent_id
+                );
                 callback(agent_id.to_string());
             }
         }
-        
+
         result
     }
 
@@ -294,15 +349,15 @@ mod tests {
 
     #[test]
     fn test_registration_handler() {
-        let registry = Arc::new(RwLock::new(AgentRegistry::new()));
+        let registry = Arc::new(RwLock::new(AgentRegistry::with_defaults()));
         let handler = RegistrationHandler::new(registry.clone());
 
         let request = RegistrationRequest {
             agent_id: "test-agent".to_string(),
-            agent_type: "external".to_string(),
+            agent_type: "both".to_string(),
             capabilities: serde_json::json!({
                 "sensory": {"rate_hz": 30.0},
-                "motor": {"enabled": true, "rate_hz": 20.0}
+                "motor": {"enabled": true, "rate_hz": 20.0, "modality": "servo", "output_count": 2}
             }),
         };
 
@@ -313,4 +368,3 @@ mod tests {
         assert_eq!(registry.read().count(), 1);
     }
 }
-

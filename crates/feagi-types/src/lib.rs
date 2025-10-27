@@ -17,7 +17,7 @@
 //! # FEAGI Core Types
 //!
 //! Shared types for the FEAGI neural processing framework.
-//! 
+//!
 //! ## Design Philosophy
 //! - **RTOS-Compatible**: No allocations in hot paths
 //! - **Zero-copy**: Use references and slices where possible
@@ -26,11 +26,11 @@
 
 use std::fmt;
 
-pub mod npu;
 pub mod fire_structures;
+pub mod npu;
 
-pub use npu::*;
 pub use fire_structures::*;
+pub use npu::*;
 
 /// Neuron ID (globally unique across the entire brain)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -64,7 +64,7 @@ impl SynapticWeight {
     /// Convert to float (direct cast, NO normalization - matches Python behavior)
     #[inline(always)]
     pub fn to_float(self) -> f32 {
-        self.0 as f32  // Direct cast: 1 → 1.0 (same as Python's .astype(np.float32))
+        self.0 as f32 // Direct cast: 1 → 1.0 (same as Python's .astype(np.float32))
     }
 
     /// Create from float (direct cast)
@@ -82,7 +82,7 @@ impl SynapticConductance {
     /// Convert to float (direct cast, NO normalization - matches Python behavior)
     #[inline(always)]
     pub fn to_float(self) -> f32 {
-        self.0 as f32  // Direct cast: 1 → 1.0 (same as Python's .astype(np.float32))
+        self.0 as f32 // Direct cast: 1 → 1.0 (same as Python's .astype(np.float32))
     }
 
     /// Create from float (direct cast)
@@ -125,7 +125,7 @@ impl SynapseType {
 }
 
 /// A single synapse (compact representation)
-#[repr(C)]  // C layout for predictable memory layout
+#[repr(C)] // C layout for predictable memory layout
 #[derive(Debug, Clone, Copy)]
 pub struct Synapse {
     pub source_neuron: NeuronId,
@@ -133,7 +133,7 @@ pub struct Synapse {
     pub weight: SynapticWeight,
     pub conductance: SynapticConductance,
     pub synapse_type: SynapseType,
-    pub valid: bool,  // For soft deletion
+    pub valid: bool, // For soft deletion
 }
 
 impl Synapse {
@@ -208,19 +208,19 @@ mod tests {
         let synapse = Synapse {
             source_neuron: NeuronId(1),
             target_neuron: NeuronId(2),
-            weight: SynapticWeight(255),  // Max weight
-            conductance: SynapticConductance(255),  // Max conductance
+            weight: SynapticWeight(255),           // Max weight
+            conductance: SynapticConductance(255), // Max conductance
             synapse_type: SynapseType::Excitatory,
             valid: true,
         };
         let contribution = synapse.calculate_contribution();
-        assert!((contribution.0 - 1.0).abs() < 0.01);  // Should be ~1.0
+        assert!((contribution.0 - 1.0).abs() < 0.01); // Should be ~1.0
 
         let inhibitory = Synapse {
             synapse_type: SynapseType::Inhibitory,
             ..synapse
         };
         let contribution = inhibitory.calculate_contribution();
-        assert!((contribution.0 + 1.0).abs() < 0.01);  // Should be ~-1.0
+        assert!((contribution.0 + 1.0).abs() < 0.01); // Should be ~-1.0
     }
 }

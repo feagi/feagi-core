@@ -10,16 +10,17 @@ pub fn create_temp_dir() -> TempDir {
 
 /// Get path to test fixtures directory
 pub fn fixtures_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join("fixtures")
 }
 
 /// Create a minimal test connectome for integration tests
 pub fn create_minimal_test_connectome() -> feagi_connectome_serialization::ConnectomeSnapshot {
-    use feagi_connectome_serialization::{
-        ConnectomeSnapshot, SerializableNeuronArray, SerializableSynapseArray,
-        ConnectomeMetadata,
-    };
     use ahash::AHashMap;
+    use feagi_connectome_serialization::{
+        ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray, SerializableSynapseArray,
+    };
 
     const FORMAT_VERSION: u32 = 1; // Match the crate's version
 
@@ -35,7 +36,7 @@ pub fn create_minimal_test_connectome() -> feagi_connectome_serialization::Conne
         refractory_countdowns: vec![0; 100],
         excitabilities: vec![1.0; 100],
         cortical_areas: vec![0; 100], // All in area 0 for simplicity
-        coordinates: vec![0; 300], // 100 neurons * 3 coords (x,y,z)
+        coordinates: vec![0; 300],    // 100 neurons * 3 coords (x,y,z)
         valid_mask: vec![true; 100],
     };
 
@@ -76,4 +77,3 @@ pub fn assert_approx_eq(a: f32, b: f32, epsilon: f32) {
         (a - b).abs()
     );
 }
-

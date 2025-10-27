@@ -17,19 +17,20 @@ pub fn syn_reducer_x(
 ) -> BduResult<Vec<Position>> {
     let (x, _y, _z) = neuron_location;
     let dst_x_dim = dst_dimensions.0;
-    
+
     let mut positions = Vec::new();
-    
+
     // Convert x to binary and map to destination positions
     for bit_pos in 0..dst_x_dim {
-        if bit_pos < 32 {  // Safety check for bit shift
+        if bit_pos < 32 {
+            // Safety check for bit shift
             let mask = 1 << bit_pos;
             if (x & mask) != 0 {
                 positions.push((bit_pos as u32, dst_y_index, dst_z_index));
             }
         }
     }
-    
+
     Ok(positions)
 }
 
@@ -40,17 +41,10 @@ mod tests {
     #[test]
     fn test_reducer() {
         // Binary 5 = 101, should map to positions 0 and 2
-        let result = syn_reducer_x(
-            "src", "dst",
-            (5, 0, 0),
-            (10, 10, 10),
-            (8, 1, 1),
-            0, 0
-        );
+        let result = syn_reducer_x("src", "dst", (5, 0, 0), (10, 10, 10), (8, 1, 1), 0, 0);
         assert!(result.is_ok());
         let positions = result.unwrap();
         assert!(positions.contains(&(0, 0, 0)));
         assert!(positions.contains(&(2, 0, 0)));
     }
 }
-

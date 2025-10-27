@@ -107,4 +107,3 @@ mod tests {
         assert_eq!(dims.total_voxels(), 128 * 128 * 20);
     }
 }
-

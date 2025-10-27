@@ -7,8 +7,8 @@ Implements Morton encoding (Z-order curve) + Roaring bitmaps for:
 - Spatial locality preservation
 */
 
-pub mod morton;
 pub mod hash;
+pub mod morton;
 
-pub use morton::{morton_encode_3d, morton_decode_3d, morton_encode_region_3d};
 pub use hash::{MortonSpatialHash, SpatialHashStats};
+pub use morton::{morton_decode_3d, morton_encode_3d, morton_encode_region_3d};

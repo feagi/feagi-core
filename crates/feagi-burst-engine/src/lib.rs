@@ -31,27 +31,27 @@
 //! - Minimal allocations in hot paths
 
 pub mod backend;
-pub mod synaptic_propagation;
+pub mod burst_loop_runner; // Pure Rust burst loop
+pub mod fire_ledger;
+pub mod fire_structures;
+pub mod fq_sampler;
+pub mod motor_shm_writer;
 pub mod neural_dynamics;
 pub mod npu;
-pub mod fire_structures;
-pub mod fire_ledger;
-pub mod fq_sampler;
-pub mod sensory;  // Rust sensory injection system
-pub mod burst_loop_runner;  // Pure Rust burst loop
-pub mod viz_shm_writer;  // Rust visualization SHM writer
-pub mod motor_shm_writer;  // Rust motor SHM writer
+pub mod sensory; // Rust sensory injection system
+pub mod synaptic_propagation;
+pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
 
 pub use backend::*;
-pub use synaptic_propagation::*;
+pub use burst_loop_runner::*;
+pub use fire_ledger::*;
+pub use fire_structures::*;
+pub use fq_sampler::*;
 pub use neural_dynamics::*;
 pub use npu::*;
-pub use fire_structures::*;
-pub use fire_ledger::*;
-pub use fq_sampler::*;
 pub use sensory::*;
+pub use synaptic_propagation::*;
 pub use viz_shm_writer::*;
-pub use burst_loop_runner::*;
 
 /// Burst engine performance statistics
 #[derive(Debug, Clone, Default)]

@@ -19,19 +19,15 @@
 //! - Thread-safe operations
 //! - RTOS-compatible design
 
-pub mod stdp;
-pub mod pattern_detector;
 pub mod memory_neuron_array;
 pub mod neuron_id_manager;
+pub mod pattern_detector;
 pub mod service;
+pub mod stdp;
 
 // Re-export key types
-pub use stdp::{STDPConfig, compute_activity_factors, compute_timing_factors};
-pub use pattern_detector::{PatternConfig, PatternDetector, BatchPatternDetector, TemporalPattern};
 pub use memory_neuron_array::{MemoryNeuronArray, MemoryNeuronLifecycleConfig, MemoryNeuronStats};
-pub use neuron_id_manager::{NeuronIdManager, NeuronType, AllocationStats};
-pub use service::{PlasticityService, PlasticityConfig, PlasticityCommand};
-
-
-
-
+pub use neuron_id_manager::{AllocationStats, NeuronIdManager, NeuronType};
+pub use pattern_detector::{BatchPatternDetector, PatternConfig, PatternDetector, TemporalPattern};
+pub use service::{PlasticityCommand, PlasticityConfig, PlasticityService};
+pub use stdp::{compute_activity_factors, compute_timing_factors, STDPConfig};

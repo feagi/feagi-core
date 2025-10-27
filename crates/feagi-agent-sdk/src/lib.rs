@@ -75,20 +75,16 @@ pub use error::{Result, SdkError};
 
 // Re-export types from feagi-pns
 pub use feagi_pns::agent_registry::{
-    AgentType,
-    AgentCapabilities,
-    VisionCapability,
-    MotorCapability,
+    AgentCapabilities, AgentType, MotorCapability, VisionCapability,
 };
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_sdk_imports() {
         // Verify all main types are accessible
         let _config = AgentConfig::new("test", AgentType::Sensory);
     }
 }
-
