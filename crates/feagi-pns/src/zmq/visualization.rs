@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 /// Overflow handling strategy when the visualization queue is saturated.
 #[derive(Clone, Copy, Debug)]
@@ -61,7 +61,6 @@ impl VisualizationSendConfig {
 struct VisualizationQueueItem {
     topic: Vec<u8>,
     payload: Vec<u8>,
-    enqueued_at: Instant,
 }
 
 #[derive(Default, Debug)]
@@ -136,13 +135,7 @@ impl VisualizationStream {
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
             queue: Arc::new(ArrayQueue::new(config.queue_capacity)),
-            stats: Arc::new(VisualizationQueueStats {
-                enqueued: AtomicU64::new(0),
-                dropped: AtomicU64::new(0),
-                send_failures: AtomicU64::new(0),
-                queue_high_watermark: AtomicUsize::new(0),
-                backpressure_waits: AtomicU64::new(0),
-            }),
+            stats: Arc::new(VisualizationQueueStats::default()),
             shutdown: Arc::new(AtomicBool::new(false)),
             worker_thread: Arc::new(Mutex::new(None)),
             send_config: config,
@@ -218,7 +211,6 @@ impl VisualizationStream {
         let item = VisualizationQueueItem {
             topic: b"activity".to_vec(),
             payload: compressed,
-            enqueued_at: Instant::now(),
         };
 
         self.enqueue(item);
@@ -234,22 +226,35 @@ impl VisualizationStream {
     fn enqueue(&self, item: VisualizationQueueItem) {
         let sleep_duration = Duration::from_millis(self.send_config.backpressure_sleep_ms);
         let mut pending = Some(item);
-        let mut wait_count = 0_u64;
 
         while let Some(current) = pending.take() {
             match self.queue.push(current) {
                 Ok(()) => {
                     self.stats.record_enqueue(self.queue.len());
+                    eprintln!(
+                        "[ZMQ-VIZ] enqueue success: queue_len={} hwm={} waits={} drops={}",
+                        self.queue.len(),
+                        self.stats.queue_high_watermark.load(Ordering::Relaxed),
+                        self.stats.backpressure_waits.load(Ordering::Relaxed),
+                        self.stats.dropped.load(Ordering::Relaxed)
+                    );
                     break;
                 }
                 Err(returned) => {
                     pending = Some(returned);
-                    wait_count = self.stats.record_backpressure_wait();
+                    let backpressure_count = self.stats.record_backpressure_wait();
 
-                    if wait_count == 1 || wait_count % 100 == 0 {
+                    if backpressure_count == 1 || backpressure_count % 100 == 0 {
                         eprintln!(
                             "⚠️  [ZMQ-VIZ] Backpressure active - queue full (waits: {})",
-                            wait_count
+                            backpressure_count
+                        );
+                        eprintln!(
+                            "[ZMQ-VIZ] queue snapshot: len={} hwm={} drops={} waits={}",
+                            self.queue.len(),
+                            self.stats.queue_high_watermark.load(Ordering::Relaxed),
+                            self.stats.dropped.load(Ordering::Relaxed),
+                            backpressure_count
                         );
                     }
 
@@ -274,13 +279,14 @@ impl VisualizationStream {
         let shutdown = Arc::clone(&self.shutdown);
         let stats = Arc::clone(&self.stats);
         let idle_sleep = Duration::from_millis(self.send_config.idle_sleep_ms);
+        let send_retry_sleep = Duration::from_millis(self.send_config.backpressure_sleep_ms);
 
         let handle = thread::Builder::new()
             .name("feagi-viz-sender".to_string())
             .spawn(move || {
                 while !shutdown.load(Ordering::Relaxed) {
                     if let Some(item) = queue.pop() {
-                        Self::send_item(&socket, item, &stats);
+                        Self::send_item(&socket, item, &stats, &shutdown, send_retry_sleep);
                         continue;
                     }
 
@@ -288,7 +294,7 @@ impl VisualizationStream {
                 }
 
                 while let Some(item) = queue.pop() {
-                    Self::send_item(&socket, item, &stats);
+                    Self::send_item(&socket, item, &stats, &shutdown, send_retry_sleep);
                 }
             })
             .expect("Failed to spawn visualization sender thread");
@@ -300,6 +306,8 @@ impl VisualizationStream {
         socket: &Arc<Mutex<Option<zmq::Socket>>>,
         item: VisualizationQueueItem,
         stats: &VisualizationQueueStats,
+        shutdown: &Arc<AtomicBool>,
+        retry_sleep: Duration,
     ) {
         let mut guard = socket.lock();
         let sock = match guard.as_mut() {
@@ -326,6 +334,12 @@ impl VisualizationStream {
                             "⚠️  [ZMQ-VIZ] Send backpressure from ZMQ socket (waits: {})",
                             waits
                         );
+                        eprintln!(
+                            "[ZMQ-VIZ] send loop snapshot: waits={} drops={} failures={}",
+                            waits,
+                            stats.dropped.load(Ordering::Relaxed),
+                            stats.send_failures.load(Ordering::Relaxed)
+                        );
                     }
                     if shutdown.load(Ordering::Relaxed) {
                         let drops = stats.record_drop();
@@ -333,13 +347,23 @@ impl VisualizationStream {
                             "⚠️  [ZMQ-VIZ] Shutdown during send - dropping frame ({} drops)",
                             drops
                         );
+                        eprintln!(
+                            "[ZMQ-VIZ] send loop exit due to shutdown (drops={} waits={})",
+                            drops, waits
+                        );
                         return;
                     }
-                    thread::sleep(Duration::from_millis(5));
+                    thread::sleep(retry_sleep);
                 }
                 Err(other) => {
                     eprintln!("❌ [ZMQ-VIZ] Payload send failed: {}", other);
                     stats.record_send_failure();
+                    eprintln!(
+                        "[ZMQ-VIZ] send failure snapshot: drops={} failures={} waits={}",
+                        stats.dropped.load(Ordering::Relaxed),
+                        stats.send_failures.load(Ordering::Relaxed),
+                        stats.backpressure_waits.load(Ordering::Relaxed)
+                    );
                     return;
                 }
             }
