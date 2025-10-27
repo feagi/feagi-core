@@ -1,14 +1,19 @@
 //! PNS configuration
 
-use crate::transports::udp::UdpConfig;
+#[cfg(feature = "zmq-transport")]
 use crate::transports::zmq::VisualizationSendConfig;
+
+#[cfg(feature = "udp-transport")]
+use crate::transports::udp::UdpConfig;
 
 /// Transport mode selection
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransportMode {
     /// ZMQ (TCP-based, reliable, blocking)
+    #[cfg(feature = "zmq-transport")]
     Zmq,
     /// UDP (best-effort, high-throughput, nonblocking)
+    #[cfg(feature = "udp-transport")]
     Udp,
 }
 
@@ -16,14 +21,21 @@ pub enum TransportMode {
 #[derive(Debug, Clone)]
 pub struct PNSConfig {
     // === ZMQ Configuration ===
+    #[cfg(feature = "zmq-transport")]
     pub zmq_rest_address: String,
+    #[cfg(feature = "zmq-transport")]
     pub zmq_motor_address: String,
+    #[cfg(feature = "zmq-transport")]
     pub zmq_viz_address: String,
+    #[cfg(feature = "zmq-transport")]
     pub zmq_sensory_address: String,
+    #[cfg(feature = "zmq-transport")]
     pub visualization_stream: VisualizationSendConfig,
 
     // === UDP Configuration ===
+    #[cfg(feature = "udp-transport")]
     pub udp_viz_config: UdpConfig,
+    #[cfg(feature = "udp-transport")]
     pub udp_sensory_config: UdpConfig,
 
     // === Transport Mode Selection ===
@@ -40,19 +52,26 @@ impl Default for PNSConfig {
     fn default() -> Self {
         Self {
             // ZMQ defaults
+            #[cfg(feature = "zmq-transport")]
             zmq_rest_address: "tcp://0.0.0.0:5563".to_string(), // REST/registration port
+            #[cfg(feature = "zmq-transport")]
             zmq_motor_address: "tcp://0.0.0.0:30005".to_string(), // Motor output port
-            zmq_viz_address: "tcp://0.0.0.0:5562".to_string(),  // Visualization output port
+            #[cfg(feature = "zmq-transport")]
+            zmq_viz_address: "tcp://0.0.0.0:5562".to_string(), // Visualization output port
+            #[cfg(feature = "zmq-transport")]
             zmq_sensory_address: "tcp://0.0.0.0:5558".to_string(), // Sensory input port
+            #[cfg(feature = "zmq-transport")]
             visualization_stream: VisualizationSendConfig::default(),
 
             // UDP defaults
+            #[cfg(feature = "udp-transport")]
             udp_viz_config: UdpConfig {
                 bind_address: "0.0.0.0:5565".to_string(),
                 peer_address: "127.0.0.1:5565".to_string(),
                 compress: true,
                 max_message_size: 262144, // 256KB
             },
+            #[cfg(feature = "udp-transport")]
             udp_sensory_config: UdpConfig {
                 bind_address: "0.0.0.0:5566".to_string(),
                 peer_address: "127.0.0.1:5566".to_string(),
@@ -60,9 +79,16 @@ impl Default for PNSConfig {
                 max_message_size: 65536, // 64KB
             },
 
-            // Default to ZMQ for compatibility
+            // Default to ZMQ for compatibility (or UDP if ZMQ is not enabled)
+            #[cfg(feature = "zmq-transport")]
             visualization_transport: TransportMode::Zmq,
+            #[cfg(all(feature = "udp-transport", not(feature = "zmq-transport")))]
+            visualization_transport: TransportMode::Udp,
+
+            #[cfg(feature = "zmq-transport")]
             sensory_transport: TransportMode::Zmq,
+            #[cfg(all(feature = "udp-transport", not(feature = "zmq-transport")))]
+            sensory_transport: TransportMode::Udp,
 
             // Shared
             shm_base_path: "/tmp".to_string(),

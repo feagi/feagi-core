@@ -39,7 +39,10 @@ use crate::nonblocking::transport::NonBlockingTransport;
 // Core modules (shared across all transports)
 pub mod blocking;
 pub mod core;
+
+#[cfg(feature = "udp-transport")]
 pub mod nonblocking;
+
 pub mod transports;
 
 // Re-export commonly used types from core
@@ -50,11 +53,14 @@ pub use core::{
 };
 
 // Re-export transport-specific types
-pub use transports::udp::{UdpConfig, UdpTransport};
+#[cfg(feature = "zmq-transport")]
 pub use transports::zmq::{
     MotorStream, RestStream, SensoryStream, VisualizationOverflowStrategy, VisualizationSendConfig,
     VisualizationStream, ZmqStreams,
 };
+
+#[cfg(feature = "udp-transport")]
+pub use transports::udp::{UdpConfig, UdpTransport};
 
 // Keep shm module at root for now (will be moved to transports/ in future)
 pub mod shm;
@@ -98,12 +104,17 @@ pub struct PNS {
 
     // === Transport Layer ===
     /// ZMQ streams (blocking, TCP-based)
+    #[cfg(feature = "zmq-transport")]
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
+
     /// UDP visualization transport (async, best-effort)
+    #[cfg(feature = "udp-transport")]
     udp_viz_transport: Arc<Mutex<Option<UdpTransport>>>,
     /// UDP sensory transport (async, best-effort)
+    #[cfg(feature = "udp-transport")]
     udp_sensory_transport: Arc<Mutex<Option<UdpTransport>>>,
     /// Tokio runtime for async transports (Arc-wrapped for sharing with UDP transports)
+    #[cfg(feature = "udp-transport")]
     async_runtime: Arc<Mutex<Option<Arc<Runtime>>>>,
 
     running: Arc<RwLock<bool>>,
@@ -146,9 +157,13 @@ impl PNS {
             registration_handler,
             heartbeat_tracker,
             // Transport layer
+            #[cfg(feature = "zmq-transport")]
             zmq_streams: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "udp-transport")]
             udp_viz_transport: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "udp-transport")]
             udp_sensory_transport: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "udp-transport")]
             async_runtime: Arc::new(Mutex::new(None)),
             running: Arc::new(RwLock::new(false)),
             sensory_agent_manager: Arc::new(Mutex::new(None)),
@@ -177,6 +192,7 @@ impl PNS {
 
     /// Connect the Rust NPU to the sensory stream for direct injection
     /// Should be called after starting the PNS
+    #[cfg(feature = "zmq-transport")]
     pub fn connect_npu_to_sensory_stream(
         &self,
         npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>,
@@ -218,66 +234,77 @@ impl PNS {
         println!("🦀 [PNS] Starting FEAGI Peripheral Nervous System...");
 
         // Initialize async runtime if needed for UDP transports
-        let needs_async = self.config.visualization_transport == TransportMode::Udp
-            || self.config.sensory_transport == TransportMode::Udp;
+        #[cfg(feature = "udp-transport")]
+        {
+            let needs_async = self.config.visualization_transport == TransportMode::Udp
+                || self.config.sensory_transport == TransportMode::Udp;
 
-        if needs_async {
-            let runtime = tokio::runtime::Builder::new_multi_thread()
-                .worker_threads(num_cpus::get())
-                .thread_name("feagi-pns-async")
-                .enable_all()
-                .build()
-                .map_err(|e| {
-                    PNSError::Transport(format!("Failed to create async runtime: {}", e))
-                })?;
-            *self.async_runtime.lock() = Some(Arc::new(runtime));
-            println!("🦀 [PNS] Async runtime initialized");
-        }
-
-        // Start ZMQ streams (always needed for REST/motor)
-        let zmq_streams = ZmqStreams::new(
-            &self.config.zmq_rest_address,
-            &self.config.zmq_motor_address,
-            &self.config.zmq_viz_address,
-            &self.config.zmq_sensory_address,
-            Arc::clone(&self.registration_handler),
-            self.config.visualization_stream.clone(),
-        )?;
-
-        zmq_streams.start()?;
-        *self.zmq_streams.lock() = Some(zmq_streams);
-
-        // Start UDP visualization transport if configured
-        if self.config.visualization_transport == TransportMode::Udp {
-            if let Some(runtime) = self.async_runtime.lock().as_ref() {
-                let runtime_clone = Arc::clone(runtime);
-                let mut udp_viz =
-                    UdpTransport::new(self.config.udp_viz_config.clone(), runtime_clone.clone());
-
-                runtime_clone
-                    .block_on(udp_viz.start())
-                    .map_err(|e| PNSError::Transport(format!("UDP viz start failed: {}", e)))?;
-
-                *self.udp_viz_transport.lock() = Some(udp_viz);
-                println!("🦀 [PNS] UDP visualization transport started");
+            if needs_async {
+                let runtime = tokio::runtime::Builder::new_multi_thread()
+                    .worker_threads(num_cpus::get())
+                    .thread_name("feagi-pns-async")
+                    .enable_all()
+                    .build()
+                    .map_err(|e| {
+                        PNSError::Transport(format!("Failed to create async runtime: {}", e))
+                    })?;
+                *self.async_runtime.lock() = Some(Arc::new(runtime));
+                println!("🦀 [PNS] Async runtime initialized");
             }
         }
 
-        // Start UDP sensory transport if configured
-        if self.config.sensory_transport == TransportMode::Udp {
-            if let Some(runtime) = self.async_runtime.lock().as_ref() {
-                let runtime_clone = Arc::clone(runtime);
-                let mut udp_sensory = UdpTransport::new(
-                    self.config.udp_sensory_config.clone(),
-                    runtime_clone.clone(),
-                );
+        // Start ZMQ streams (always needed for REST/motor)
+        #[cfg(feature = "zmq-transport")]
+        {
+            let zmq_streams = ZmqStreams::new(
+                &self.config.zmq_rest_address,
+                &self.config.zmq_motor_address,
+                &self.config.zmq_viz_address,
+                &self.config.zmq_sensory_address,
+                Arc::clone(&self.registration_handler),
+                self.config.visualization_stream.clone(),
+            )?;
 
-                runtime_clone
-                    .block_on(udp_sensory.start())
-                    .map_err(|e| PNSError::Transport(format!("UDP sensory start failed: {}", e)))?;
+            zmq_streams.start()?;
+            *self.zmq_streams.lock() = Some(zmq_streams);
+        }
 
-                *self.udp_sensory_transport.lock() = Some(udp_sensory);
-                println!("🦀 [PNS] UDP sensory transport started");
+        // Start UDP visualization transport if configured
+        #[cfg(feature = "udp-transport")]
+        {
+            if self.config.visualization_transport == TransportMode::Udp {
+                if let Some(runtime) = self.async_runtime.lock().as_ref() {
+                    let runtime_clone = Arc::clone(runtime);
+                    let mut udp_viz = UdpTransport::new(
+                        self.config.udp_viz_config.clone(),
+                        runtime_clone.clone(),
+                    );
+
+                    runtime_clone
+                        .block_on(udp_viz.start())
+                        .map_err(|e| PNSError::Transport(format!("UDP viz start failed: {}", e)))?;
+
+                    *self.udp_viz_transport.lock() = Some(udp_viz);
+                    println!("🦀 [PNS] UDP visualization transport started");
+                }
+            }
+
+            // Start UDP sensory transport if configured
+            if self.config.sensory_transport == TransportMode::Udp {
+                if let Some(runtime) = self.async_runtime.lock().as_ref() {
+                    let runtime_clone = Arc::clone(runtime);
+                    let mut udp_sensory = UdpTransport::new(
+                        self.config.udp_sensory_config.clone(),
+                        runtime_clone.clone(),
+                    );
+
+                    runtime_clone.block_on(udp_sensory.start()).map_err(|e| {
+                        PNSError::Transport(format!("UDP sensory start failed: {}", e))
+                    })?;
+
+                    *self.udp_sensory_transport.lock() = Some(udp_sensory);
+                    println!("🦀 [PNS] UDP sensory transport started");
+                }
             }
         }
 
@@ -302,46 +329,52 @@ impl PNS {
         *self.running.write() = false;
 
         // Stop ZMQ streams
-        if let Some(streams) = self.zmq_streams.lock().take() {
-            streams.stop()?;
+        #[cfg(feature = "zmq-transport")]
+        {
+            if let Some(streams) = self.zmq_streams.lock().take() {
+                streams.stop()?;
+            }
         }
 
-        // Stop UDP visualization transport
-        if let Some(runtime) = self.async_runtime.lock().as_ref() {
-            if let Some(mut udp_viz) = self.udp_viz_transport.lock().take() {
-                runtime
-                    .block_on(udp_viz.stop())
-                    .map_err(|e| PNSError::Transport(format!("UDP viz stop failed: {}", e)))?;
-                println!("🦀 [PNS] UDP visualization transport stopped");
+        // Stop UDP transports
+        #[cfg(feature = "udp-transport")]
+        {
+            if let Some(runtime) = self.async_runtime.lock().as_ref() {
+                if let Some(mut udp_viz) = self.udp_viz_transport.lock().take() {
+                    runtime
+                        .block_on(udp_viz.stop())
+                        .map_err(|e| PNSError::Transport(format!("UDP viz stop failed: {}", e)))?;
+                    println!("🦀 [PNS] UDP visualization transport stopped");
+                }
+
+                // Stop UDP sensory transport
+                if let Some(mut udp_sensory) = self.udp_sensory_transport.lock().take() {
+                    runtime.block_on(udp_sensory.stop()).map_err(|e| {
+                        PNSError::Transport(format!("UDP sensory stop failed: {}", e))
+                    })?;
+                    println!("🦀 [PNS] UDP sensory transport stopped");
+                }
             }
 
-            // Stop UDP sensory transport
-            if let Some(mut udp_sensory) = self.udp_sensory_transport.lock().take() {
-                runtime
-                    .block_on(udp_sensory.stop())
-                    .map_err(|e| PNSError::Transport(format!("UDP sensory stop failed: {}", e)))?;
-                println!("🦀 [PNS] UDP sensory transport stopped");
+            // Shutdown async runtime
+            if let Some(runtime_arc) = self.async_runtime.lock().take() {
+                // Try to unwrap Arc if we have the only reference, otherwise clone will keep it alive
+                match Arc::try_unwrap(runtime_arc) {
+                    Ok(runtime) => {
+                        runtime.shutdown_timeout(std::time::Duration::from_secs(2));
+                        println!("🦀 [PNS] Async runtime shutdown");
+                    }
+                    Err(_) => {
+                        println!(
+                            "🦀 [PNS] ⚠️  Async runtime has outstanding references, skipping shutdown"
+                        );
+                    }
+                }
             }
         }
 
         // Stop heartbeat monitoring
         self.heartbeat_tracker.lock().stop();
-
-        // Shutdown async runtime
-        if let Some(runtime_arc) = self.async_runtime.lock().take() {
-            // Try to unwrap Arc if we have the only reference, otherwise clone will keep it alive
-            match Arc::try_unwrap(runtime_arc) {
-                Ok(runtime) => {
-                    runtime.shutdown_timeout(std::time::Duration::from_secs(2));
-                    println!("🦀 [PNS] Async runtime shutdown");
-                }
-                Err(_) => {
-                    println!(
-                        "🦀 [PNS] ⚠️  Async runtime has outstanding references, skipping shutdown"
-                    );
-                }
-            }
-        }
 
         println!("🦀 [PNS] ✅ All services stopped");
         Ok(())
@@ -371,6 +404,7 @@ impl PNS {
         }
 
         match self.config.visualization_transport {
+            #[cfg(feature = "zmq-transport")]
             TransportMode::Zmq => {
                 if let Some(streams) = self.zmq_streams.lock().as_ref() {
                     streams.publish_visualization(data)?;
@@ -380,6 +414,7 @@ impl PNS {
                     Err(PNSError::NotRunning("ZMQ streams not started".to_string()))
                 }
             }
+            #[cfg(feature = "udp-transport")]
             TransportMode::Udp => {
                 // UDP requires async context, bridge via runtime.block_on()
                 if let Some(runtime) = self.async_runtime.lock().as_ref() {
@@ -411,6 +446,12 @@ impl PNS {
                         "Async runtime not available".to_string(),
                     ))
                 }
+            }
+            #[cfg(not(any(feature = "zmq-transport", feature = "udp-transport")))]
+            _ => {
+                Err(PNSError::Transport(
+                    "No visualization transport enabled (enable zmq-transport or udp-transport feature)".to_string(),
+                ))
             }
         }
     }

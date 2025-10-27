@@ -5,22 +5,34 @@ edition = "2021"
 license = "Apache-2.0"
 description = "FEAGI Peripheral Nervous System - Agent I/O, registration, ZMQ & SHM"
 
+[features]
+default = ["zmq-transport", "udp-transport"]  # Most deployments need both
+zmq-transport = ["dep:zmq"]                   # Blocking, TCP-based transport
+udp-transport = ["dep:tokio", "dep:async-trait", "dep:num_cpus"]  # Async, best-effort transport
+shm-transport = []                            # Shared memory (no extra deps, future)
+websocket-transport = ["udp-transport"]       # WebSocket for browser (future)
+all-transports = ["zmq-transport", "udp-transport", "shm-transport"]
+
 [dependencies]
 feagi-burst-engine = { path = "../feagi-burst-engine" }
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi_data_structures.workspace = true
 feagi_data_serialization.workspace = true
-zmq = "0.10"
-tokio = { version = "1.0", features = ["full"] }
+
+# Core dependencies (always required)
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
 crossbeam = "0.8"
 parking_lot = "0.12"
 thiserror = "1.0"
-lz4 = "1.28"  # LZ4 compression for visualization data
-async-trait = "0.1"  # For NonBlockingTransport trait
-num_cpus = "1.16"  # For tokio runtime worker thread count
+lz4 = "1.28"  # LZ4 compression (used by multiple transports)
+
+# Optional transport-specific dependencies
+zmq = { version = "0.10", optional = true }
+tokio = { version = "1.0", features = ["full"], optional = true }
+async-trait = { version = "0.1", optional = true }
+num_cpus = { version = "1.16", optional = true }
 
 [dev-dependencies]
 tokio-test = "0.4"
