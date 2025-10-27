@@ -20,7 +20,7 @@ pub use types::{SharedFBC, PNSError, StreamType, Result};
 pub use agent_registry::{AgentRegistry, AgentInfo, AgentType, AgentCapabilities};
 pub use registration::{RegistrationHandler, RegistrationRequest};
 pub use heartbeat::HeartbeatTracker;
-pub use config::PNSConfig;
+pub use config::{PNSConfig, TransportMode};
 pub use events::{
     AgentDisconnectedEvent, AgentRegisteredEvent, MotorCommandEvent, SensoryDataEvent,
     VisualizationReadyEvent,

@@ -20,6 +20,7 @@ parking_lot = "0.12"
 thiserror = "1.0"
 lz4 = "1.28"  # LZ4 compression for visualization data
 async-trait = "0.1"  # For NonBlockingTransport trait
+num_cpus = "1.16"  # For tokio runtime worker thread count
 
 [dev-dependencies]
 tokio-test = "0.4"

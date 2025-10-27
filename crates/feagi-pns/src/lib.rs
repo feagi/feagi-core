@@ -39,7 +39,7 @@ pub mod transports;
 pub use core::{
     AgentCapabilities, AgentDisconnectedEvent, AgentInfo, AgentRegisteredEvent, AgentRegistry,
     AgentType, HeartbeatTracker, MotorCommandEvent, PNSConfig, PNSError, RegistrationHandler,
-    Result, SensoryDataEvent, SharedFBC, StreamType, VisualizationReadyEvent,
+    Result, SensoryDataEvent, SharedFBC, StreamType, TransportMode, VisualizationReadyEvent,
 };
 
 // Re-export transport-specific types
@@ -47,6 +47,7 @@ pub use transports::zmq::{
     MotorStream, RestStream, SensoryStream, VisualizationOverflowStrategy, VisualizationSendConfig,
     VisualizationStream, ZmqStreams,
 };
+pub use transports::udp::{UdpConfig, UdpTransport};
 
 // Keep shm module at root for now (will be moved to transports/ in future)
 pub mod shm;
