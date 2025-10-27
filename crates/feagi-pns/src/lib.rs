@@ -25,6 +25,7 @@
 //! pns.stop().unwrap();
 //! ```
 
+use feagi_data_structures::FeagiSignal;
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 
@@ -36,8 +37,9 @@ pub mod transports;
 
 // Re-export commonly used types from core
 pub use core::{
-    AgentCapabilities, AgentInfo, AgentRegistry, AgentType, HeartbeatTracker, PNSConfig,
-    PNSError, RegistrationHandler, Result, SharedFBC, StreamType,
+    AgentCapabilities, AgentDisconnectedEvent, AgentInfo, AgentRegisteredEvent, AgentRegistry,
+    AgentType, HeartbeatTracker, MotorCommandEvent, PNSConfig, PNSError, RegistrationHandler,
+    Result, SensoryDataEvent, SharedFBC, StreamType, VisualizationReadyEvent,
 };
 
 // Re-export transport-specific types
@@ -50,6 +52,36 @@ pub use transports::zmq::{
 pub mod shm;
 
 /// Main PNS - manages all agent I/O
+///
+/// # Event-Driven Architecture
+///
+/// PNS uses FeagiSignal for decoupled communication:
+///
+/// **Incoming Signals (Burst Engine → PNS)**:
+/// - `visualization_ready`: Burst engine emits when neural activity is ready
+/// - `motor_commands`: Burst engine emits when motor outputs are computed
+///
+/// **Outgoing Signals (PNS → Burst Engine)**:
+/// - `sensory_data_received`: PNS emits when sensory data arrives from agent
+/// - `agent_registered`: PNS emits when new agent registers
+/// - `agent_disconnected`: PNS emits when agent disconnects/times out
+///
+/// # Example
+/// ```no_run
+/// use feagi_pns::PNS;
+///
+/// let pns = PNS::new().unwrap();
+///
+/// // Burst engine subscribes to PNS outgoing signals
+/// pns.sensory_data_received.lock().connect(|event| {
+///     println!("Received sensory data from {}", event.agent_id);
+/// });
+///
+/// // PNS subscribes to burst engine incoming signals
+/// // (burst engine would call pns.visualization_ready.lock().connect(...))
+///
+/// pns.start().unwrap();
+/// ```
 pub struct PNS {
     config: PNSConfig,
     agent_registry: Arc<RwLock<AgentRegistry>>,
@@ -60,6 +92,20 @@ pub struct PNS {
     /// Optional reference to burst engine's sensory agent manager for SHM I/O
     sensory_agent_manager:
         Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>>>>,
+
+    // === Incoming Signals (Burst Engine → PNS) ===
+    /// Signal for visualization data ready to be published
+    pub visualization_ready: Arc<Mutex<FeagiSignal<VisualizationReadyEvent>>>,
+    /// Signal for motor commands ready to be sent
+    pub motor_commands: Arc<Mutex<FeagiSignal<MotorCommandEvent>>>,
+
+    // === Outgoing Signals (PNS → Burst Engine) ===
+    /// Signal emitted when sensory data is received from an agent
+    pub sensory_data_received: Arc<Mutex<FeagiSignal<SensoryDataEvent>>>,
+    /// Signal emitted when a new agent registers
+    pub agent_registered: Arc<Mutex<FeagiSignal<AgentRegisteredEvent>>>,
+    /// Signal emitted when an agent disconnects
+    pub agent_disconnected: Arc<Mutex<FeagiSignal<AgentDisconnectedEvent>>>,
 }
 
 impl PNS {
@@ -84,6 +130,12 @@ impl PNS {
             zmq_streams: Arc::new(Mutex::new(None)),
             running: Arc::new(RwLock::new(false)),
             sensory_agent_manager: Arc::new(Mutex::new(None)),
+            // Initialize signals
+            visualization_ready: Arc::new(Mutex::new(FeagiSignal::new())),
+            motor_commands: Arc::new(Mutex::new(FeagiSignal::new())),
+            sensory_data_received: Arc::new(Mutex::new(FeagiSignal::new())),
+            agent_registered: Arc::new(Mutex::new(FeagiSignal::new())),
+            agent_disconnected: Arc::new(Mutex::new(FeagiSignal::new())),
         })
     }
 
