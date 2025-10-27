@@ -1,6 +1,6 @@
 // Registration Handler - processes agent registration requests
 
-use crate::agent_registry::{
+use super::agent_registry::{
     AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
     SensoryCapability, VisualizationCapability,
 };

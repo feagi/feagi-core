@@ -1,6 +1,6 @@
 // Heartbeat Tracker - monitors agent health and deregisters stale agents
 
-use crate::agent_registry::AgentRegistry;
+use super::agent_registry::AgentRegistry;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::thread;
@@ -99,7 +99,7 @@ impl Drop for HeartbeatTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agent_registry::{
+    use crate::core::agent_registry::{
         AgentCapabilities, AgentInfo, AgentTransport, AgentType, VisualizationCapability,
     };
 

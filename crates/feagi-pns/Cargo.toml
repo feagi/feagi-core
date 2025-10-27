@@ -19,6 +19,7 @@ crossbeam = "0.8"
 parking_lot = "0.12"
 thiserror = "1.0"
 lz4 = "1.28"  # LZ4 compression for visualization data
+async-trait = "0.1"  # For NonBlockingTransport trait
 
 [dev-dependencies]
 tokio-test = "0.4"

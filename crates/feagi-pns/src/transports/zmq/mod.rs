@@ -12,8 +12,7 @@ pub use visualization::{
     VisualizationOverflowStrategy, VisualizationSendConfig, VisualizationStream,
 };
 
-use crate::registration::RegistrationHandler;
-use crate::PNSError;
+use crate::core::{PNSError, RegistrationHandler};
 use parking_lot::Mutex;
 use std::sync::Arc;
 

@@ -1,63 +1,53 @@
-// FEAGI Peripheral Nervous System (PNS)
-// Handles all agent I/O: registration, ZMQ, SHM, heartbeat tracking
+//! FEAGI Peripheral Nervous System (PNS)
+//!
+//! Handles all agent I/O: registration, ZMQ, SHM, heartbeat tracking.
+//!
+//! # Architecture
+//!
+//! This crate follows a hybrid module structure:
+//! - **`core/`**: Shared types, agent registry, configuration
+//! - **`blocking/`**: Infrastructure for blocking I/O transports (threads, channels, compression)
+//! - **`nonblocking/`**: Infrastructure for async/await transports (tokio, async channels)
+//! - **`transports/`**: Specific transport implementations (ZMQ, UDP, SHM, WebSocket, RTOS)
+//!
+//! # Example
+//!
+//! ```no_run
+//! use feagi_pns::{PNS, PNSConfig};
+//!
+//! let pns = PNS::new().unwrap();
+//! pns.start().unwrap();
+//!
+//! // Publish visualization data
+//! let data = vec![1, 2, 3];
+//! pns.publish_visualization(&data).unwrap();
+//!
+//! pns.stop().unwrap();
+//! ```
 
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
-use thiserror::Error;
 
-pub mod agent_registry;
-pub mod heartbeat;
-pub mod registration;
-pub mod shm;
-pub mod zmq;
+// Core modules (shared across all transports)
+pub mod core;
+pub mod blocking;
+pub mod nonblocking;
+pub mod transports;
 
-pub use agent_registry::{AgentCapabilities, AgentInfo, AgentRegistry};
-pub use heartbeat::HeartbeatTracker;
-pub use registration::RegistrationHandler;
-pub use zmq::{
+// Re-export commonly used types from core
+pub use core::{
+    AgentCapabilities, AgentInfo, AgentRegistry, AgentType, HeartbeatTracker, PNSConfig,
+    PNSError, RegistrationHandler, Result, SharedFBC, StreamType,
+};
+
+// Re-export transport-specific types
+pub use transports::zmq::{
     MotorStream, RestStream, SensoryStream, VisualizationOverflowStrategy, VisualizationSendConfig,
     VisualizationStream, ZmqStreams,
 };
 
-#[derive(Error, Debug)]
-pub enum PNSError {
-    #[error("ZMQ error: {0}")]
-    Zmq(String),
-    #[error("SHM error: {0}")]
-    Shm(String),
-    #[error("Agent error: {0}")]
-    Agent(String),
-    #[error("Registration error: {0}")]
-    Registration(String),
-    #[error("Not running: {0}")]
-    NotRunning(String),
-}
-
-pub type Result<T> = std::result::Result<T, PNSError>;
-
-/// Configuration for PNS
-#[derive(Debug, Clone)]
-pub struct PNSConfig {
-    pub zmq_rest_address: String,
-    pub zmq_motor_address: String,
-    pub zmq_viz_address: String,
-    pub zmq_sensory_address: String,
-    pub shm_base_path: String,
-    pub visualization_stream: VisualizationSendConfig,
-}
-
-impl Default for PNSConfig {
-    fn default() -> Self {
-        Self {
-            zmq_rest_address: "tcp://0.0.0.0:5563".to_string(), // REST/registration port
-            zmq_motor_address: "tcp://0.0.0.0:30005".to_string(), // Motor output port
-            zmq_viz_address: "tcp://0.0.0.0:5562".to_string(),  // Visualization output port
-            zmq_sensory_address: "tcp://0.0.0.0:5558".to_string(), // Sensory input port (PULL socket)
-            shm_base_path: "/tmp".to_string(),
-            visualization_stream: VisualizationSendConfig::default(),
-        }
-    }
-}
+// Keep shm module at root for now (will be moved to transports/ in future)
+pub mod shm;
 
 /// Main PNS - manages all agent I/O
 pub struct PNS {
@@ -211,7 +201,8 @@ impl PNS {
     /// Publish visualization data to all ZMQ subscribers
     /// Called by burst engine after writing FQ data to SHM
     pub fn publish_visualization(&self, data: &[u8]) -> Result<()> {
-        static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        static FIRST_LOG: std::sync::atomic::AtomicBool =
+            std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
             eprintln!(
                 "[PNS] 🔍 TRACE: publish_visualization() called with {} bytes",
@@ -240,6 +231,12 @@ impl feagi_burst_engine::VisualizationPublisher for PNS {
 impl Drop for PNS {
     fn drop(&mut self) {
         let _ = self.stop();
+    }
+}
+
+impl Default for PNS {
+    fn default() -> Self {
+        Self::new().expect("Failed to create default PNS")
     }
 }
 

@@ -1,7 +1,7 @@
 // REST stream for agent registration, heartbeat, and deregistration
 // Uses ROUTER socket pattern for request-reply with agent identity tracking
 
-use crate::registration::{RegistrationHandler, RegistrationRequest};
+use crate::core::{RegistrationHandler, RegistrationRequest};
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
