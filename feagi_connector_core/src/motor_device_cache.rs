@@ -120,6 +120,17 @@ macro_rules! motor_functions {
                 Ok(())
             }
 
+            pub fn [<motor_ $snake_case_identifier _try_removing_all_stages>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+            ) -> Result<(), FeagiDataError>
+            {
+                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                self.try_removing_all_stages(MOTOR_TYPE, group, channel_index)?;
+                Ok(())
+            }
+
             pub fn [<motor_ $snake_case_identifier _try_register_motor_callback>]<F>(
                 &mut self,
                 group: CorticalGroupIndex,

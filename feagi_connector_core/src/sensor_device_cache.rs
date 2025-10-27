@@ -7,6 +7,7 @@ use feagi_data_structures::genomic::SensorCorticalType;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::caching::per_channel_stream_caches::SensoryChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_pipeline::stage_properties::ImageSegmentorStageProperties;
 use crate::data_types::*;
 use crate::data_types::descriptors::*;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -2387,9 +2388,91 @@ impl SensorDeviceCache {
         }
     }
 
+    
+    
     //region Devices
 
     sensor_definition!(sensor_functions);
+
+    //region Segmented Vision
+
+    /// Registers a new segmented vision sensor group with absolute gaze positioning. Sets up a processing pipeline that extracts regions of interest from full-resolution images based on gaze properties.
+    pub fn sensor_segmented_vision_absolute_try_register(&mut self, group: CorticalGroupIndex, number_channels: CorticalChannelCount, input_image_properties: ImageFrameProperties, segmented_image_properties: SegmentedImageFrameProperties, initial_gaze: GazeProperties) -> Result<(), FeagiDataError> {
+
+        let cortical_ids = SegmentedImageFrame::create_ordered_cortical_ids_for_segmented_vision(group, false);
+        let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send > = SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
+
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let initial_val: WrappedIOData = WrappedIOType::SegmentedImageFrame(Some(segmented_image_properties)).create_blank_data_of_type()?;
+        let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+            let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+            for _i in 0..*number_channels {
+                output.push( vec![ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?]) // TODO properly implement clone so we dont need to do this
+            };
+            output
+        };
+        self.register(SENSOR_TYPE, group, encoder, default_pipeline, initial_val)?;
+        Ok(())
+    }
+
+    /// Writes raw image data to a specific segmented vision sensor channel for processing.
+    pub fn sensor_segmented_vision_absolute_try_write(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex, data: WrappedIOData) -> Result<(), FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        self.try_update_value(SENSOR_TYPE, group, channel, data, Instant::now())?;
+        Ok(())
+    }
+
+    /// Reads the post-processed segmented image frame after pipeline processing.
+    pub fn sensor_segmented_vision_absolute_try_read_postprocessed_cache_value(&mut self, group: CorticalGroupIndex, channel: CorticalChannelIndex,) -> Result<SegmentedImageFrame, FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let wrapped_segmented_frame = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+        Ok(wrapped_segmented_frame.try_into()?)
+    }
+
+    /// Retrieves the properties of a single processing stage in the pipeline.
+    pub fn sensor_segmented_vision_absolute_try_get_single_stage_properties(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let properties = self.try_get_single_stage_properties(SENSOR_TYPE, group, channel_index, stage_index)?;
+        Ok(properties)
+    }
+
+    /// Retrieves the properties of all processing stages in the pipeline.
+    pub fn sensor_segmented_vision_absolute_try_get_all_stage_properties(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        let properties = self.try_get_all_stage_properties(SENSOR_TYPE, group, channel_index)?;
+        Ok(properties)
+    }
+
+    /// Updates the properties of a single processing stage without changing the stage type.
+    pub fn sensor_segmented_vision_absolute_try_update_single_stage_properties(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, updating_property: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<() , FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        self.try_update_single_stage_properties(SENSOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+        Ok(())
+    }
+
+    /// Updates the properties of all processing stages while preserving pipeline structure and stage types.
+    pub fn sensor_segmented_vision_absolute_try_update_all_stage_properties(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<() , FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        self.try_update_all_stage_properties(SENSOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+        Ok(())
+    }
+
+    /// Replaces a single processing stage, allowing a different stage type to be used.
+    pub fn sensor_segmented_vision_absolute_try_replace_single_stage(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, updating_property: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<() , FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        self.try_replace_single_stage(SENSOR_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+        Ok(())
+    }
+
+    /// Replaces the entire processing pipeline, allowing changes to the number, types, and order of stages.
+    pub fn sensor_segmented_vision_absolute_try_replace_all_stages(&mut self, group: CorticalGroupIndex, channel_index: CorticalChannelIndex, updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<() , FeagiDataError> {
+        const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::ImageCameraCenterAbsolute;
+        self.try_replace_all_stages(SENSOR_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+        Ok(())
+    }
+
+
+    //endregion
 
 
     //endregion
