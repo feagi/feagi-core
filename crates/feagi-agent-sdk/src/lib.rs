@@ -74,9 +74,7 @@ pub use config::AgentConfig;
 pub use error::{Result, SdkError};
 
 // Re-export types from feagi-pns
-pub use feagi_pns::agent_registry::{
-    AgentCapabilities, AgentType, MotorCapability, VisionCapability,
-};
+pub use feagi_pns::{AgentCapabilities, AgentType, MotorCapability, VisionCapability};
 
 #[cfg(test)]
 mod tests {

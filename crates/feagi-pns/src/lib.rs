@@ -48,8 +48,9 @@ pub mod transports;
 // Re-export commonly used types from core
 pub use core::{
     AgentCapabilities, AgentDisconnectedEvent, AgentInfo, AgentRegisteredEvent, AgentRegistry,
-    AgentType, HeartbeatTracker, MotorCommandEvent, PNSConfig, PNSError, RegistrationHandler,
-    Result, SensoryDataEvent, SharedFBC, StreamType, TransportMode, VisualizationReadyEvent,
+    AgentTransport, AgentType, HeartbeatTracker, MotorCapability, MotorCommandEvent, PNSConfig,
+    PNSError, RegistrationHandler, RegistrationRequest, Result, SensoryDataEvent, SharedFBC,
+    StreamType, TransportMode, VisionCapability, VisualizationCapability, VisualizationReadyEvent,
 };
 
 // Re-export transport-specific types

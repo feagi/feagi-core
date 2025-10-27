@@ -16,7 +16,10 @@ pub mod registration;
 pub mod types;
 
 // Re-export commonly used types
-pub use agent_registry::{AgentCapabilities, AgentInfo, AgentRegistry, AgentType};
+pub use agent_registry::{
+    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
+    VisionCapability, VisualizationCapability,
+};
 pub use config::{PNSConfig, TransportMode};
 pub use events::{
     AgentDisconnectedEvent, AgentRegisteredEvent, MotorCommandEvent, SensoryDataEvent,
