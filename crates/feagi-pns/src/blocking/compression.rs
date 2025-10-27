@@ -44,7 +44,8 @@ mod tests {
         let compressed = compress_lz4(&data).unwrap();
         assert!(compressed.len() < data.len());
 
-        let decompressed = decompress_lz4(&compressed, 10000).unwrap();
+        // LZ4 prepends the size, so we can decompress without specifying max size
+        let decompressed = lz4::block::decompress(&compressed, None).unwrap();
         assert_eq!(decompressed, data);
     }
 }

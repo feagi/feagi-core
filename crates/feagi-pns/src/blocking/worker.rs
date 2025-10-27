@@ -40,7 +40,7 @@ impl<T: Send + 'static> WorkerThread<T> {
     /// let worker = WorkerThread::spawn(
     ///     "zmq-sender".to_string(),
     ///     rx,
-    ///     |data: Vec<u8>| {
+    ///     |data: Vec<u8>| -> Result<(), String> {
     ///         // Process data
     ///         Ok(())
     ///     }
