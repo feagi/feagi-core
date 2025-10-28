@@ -189,7 +189,7 @@ impl RustNPU {
         // CRITICAL: Add to propagation engine's neuron-to-area mapping
         self.propagation_engine
             .write().unwrap()
-            .write().unwrap().neuron_to_area
+            .neuron_to_area
             .insert(neuron_id, CorticalAreaId(cortical_area));
 
         Ok(neuron_id)
@@ -541,7 +541,7 @@ impl RustNPU {
         }
 
         for &neuron_id in neuron_ids {
-            self.fire_candidate_list.add_candidate(neuron_id, potential);
+            self.fire_structures.lock().unwrap().fire_candidate_list.add_candidate(neuron_id, potential);
         }
 
         // 🔍 DEBUG: Log FCL size after first injection
@@ -552,7 +552,7 @@ impl RustNPU {
         {
             println!(
                 "[NPU-INJECT]    FCL size after: {}",
-                self.fire_candidate_list.len()
+                self.fire_structures.lock().unwrap().fire_candidate_list.len()
             );
             FIRST_BATCH_AFTER_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
         }
@@ -561,7 +561,8 @@ impl RustNPU {
     /// Stage sensory neurons for next burst (thread-safe, prevents FCL clear race)
     /// XYZP data from agents is staged here and injected AFTER fcl.clear() in Phase 1
     pub fn inject_sensory_with_potentials(&mut self, neurons: &[(NeuronId, f32)]) {
-        if let Ok(mut pending) = self.fire_structures.lock().unwrap().pending_sensory_injections.lock() {
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        if let Some(mut pending) = Some(&mut fire_structures.pending_sensory_injections) {
             pending.extend_from_slice(neurons);
 
             // 🔍 DEBUG: Log first staging
@@ -580,15 +581,15 @@ impl RustNPU {
         }
     }
 
-    /// Get immutable reference to FCL for inspection (debugging only)
-    pub fn get_fcl_ref(&self) -> &FireCandidateList {
-        &self.fire_candidate_list
+    /// Get a clone of the FCL for inspection (debugging only)
+    pub fn get_fcl_clone(&self) -> FireCandidateList {
+        self.fire_structures.lock().unwrap().fire_candidate_list.clone()
     }
 
     /// Get last FCL snapshot (captured before clear in previous burst)
     /// Returns Vec of (NeuronId, potential) pairs
-    pub fn get_last_fcl_snapshot(&self) -> &[(NeuronId, f32)] {
-        &self.last_fcl_snapshot
+    pub fn get_last_fcl_snapshot(&self) -> Vec<(NeuronId, f32)> {
+        self.fire_structures.lock().unwrap().last_fcl_snapshot.clone()
     }
 
     // ===== END SENSORY INJECTION API =====
@@ -622,15 +623,19 @@ impl RustNPU {
         let mut fire_structures = self.fire_structures.lock().unwrap();
 
         // Phase 1: Injection (power + synaptic propagation + staged sensory)
+        // Clone previous_fire_queue to avoid multiple borrows
+        let previous_fq = fire_structures.previous_fire_queue.clone();
+        let pending_mutex = std::sync::Mutex::new(fire_structures.pending_sensory_injections.clone());
         let injection_result = phase1_injection_with_synapses(
             &mut fire_structures.fire_candidate_list,
             &mut neuron_array,
             &mut propagation_engine,
-            &fire_structures.previous_fire_queue,
+            &previous_fq,
             power_amount,
             &synapse_array,
-            &fire_structures.pending_sensory_injections,
+            &pending_mutex,
         )?;
+        fire_structures.pending_sensory_injections = pending_mutex.into_inner().unwrap();
 
         // Phase 2: Neural Dynamics (membrane potential updates, threshold checks, firing)
         let dynamics_result = process_neural_dynamics(
@@ -648,7 +653,8 @@ impl RustNPU {
         fire_structures.current_fire_queue = dynamics_result.fire_queue.clone();
 
         // Phase 5: Sample fire queue for visualization (FQ Sampler)
-        fire_structures.fq_sampler.sample(&fire_structures.current_fire_queue);
+        let current_fq_clone = fire_structures.current_fire_queue.clone();
+        fire_structures.fq_sampler.sample(&current_fq_clone);
 
         // Phase 6: Cleanup (snapshot FCL before clearing for API access)
         fire_structures.last_fcl_snapshot = fire_structures.fire_candidate_list.get_all_candidates();
@@ -678,9 +684,10 @@ impl RustNPU {
 
     /// Get the cortical area name for a given area_id
     /// Returns None if the area_id is not registered
-    pub fn get_cortical_area_name(&self, area_id: u32) -> Option<&str> {
-        self.area_id_to_name.read().unwrap().get(&area_id).map(|s| s.as_str())
+    pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
+        self.area_id_to_name.read().unwrap().get(&area_id).cloned()
     }
+
 
     /// Get the cortical area ID for a given cortical name
     /// Returns None if the name is not registered
@@ -694,6 +701,54 @@ impl RustNPU {
         None
     }
 
+    // ===== PUBLIC ACCESSORS FOR PYTHON BINDINGS =====
+
+    /// Get neuron at specific coordinate (for Python bindings)
+    pub fn get_neuron_id_at_coordinate(&self, cortical_area: u32, x: u32, y: u32, z: u32) -> Option<u32> {
+        self.neuron_array.read().unwrap()
+            .get_neuron_at_coordinate(cortical_area, x, y, z)
+            .map(|id| id.0)
+    }
+
+    /// Get neuron property by index (for Python bindings)
+    pub fn get_neuron_property_by_index(&self, idx: usize, property: &str) -> Option<f32> {
+        let neuron_array = self.neuron_array.read().unwrap();
+        if idx >= neuron_array.count {
+            return None;
+        }
+        match property {
+            "threshold" => neuron_array.thresholds.get(idx).copied(),
+            "leak_coefficient" => neuron_array.leak_coefficients.get(idx).copied(),
+            "membrane_potential" => neuron_array.membrane_potentials.get(idx).copied(),
+            "resting_potential" => neuron_array.resting_potentials.get(idx).copied(),
+            "excitability" => neuron_array.excitabilities.get(idx).copied(),
+            _ => None,
+        }
+    }
+
+    /// Get neuron property u16 by index (for Python bindings)
+    pub fn get_neuron_property_u16_by_index(&self, idx: usize, property: &str) -> Option<u16> {
+        let neuron_array = self.neuron_array.read().unwrap();
+        if idx >= neuron_array.count {
+            return None;
+        }
+        match property {
+            "refractory_period" => neuron_array.refractory_periods.get(idx).copied(),
+            "consecutive_fire_limit" => neuron_array.consecutive_fire_limits.get(idx).copied(),
+            _ => None,
+        }
+    }
+
+    /// Get neuron array snapshot for FCL inspection (for Python bindings)
+    pub fn get_neuron_array_snapshot(&self) -> (usize, Vec<u32>, Vec<bool>) {
+        let neuron_array = self.neuron_array.read().unwrap();
+        (
+            neuron_array.count,
+            neuron_array.cortical_areas.clone(),
+            neuron_array.valid_mask.clone(),
+        )
+    }
+
     /// Get the number of registered cortical areas
     pub fn get_registered_cortical_area_count(&self) -> usize {
         self.area_id_to_name.read().unwrap().len()
@@ -702,6 +757,7 @@ impl RustNPU {
     /// Get all registered cortical areas as (idx, name) pairs
     pub fn get_all_cortical_areas(&self) -> Vec<(u32, String)> {
         self.area_id_to_name
+            .read().unwrap()
             .iter()
             .map(|(&idx, name)| (idx, name.clone()))
             .collect()
@@ -782,43 +838,47 @@ impl RustNPU {
             SerializableSynapseArray,
         };
 
-        // Convert neuron array
+        // Convert neuron array (lock once and clone all fields)
+        let neuron_array = self.neuron_array.read().unwrap();
         let neurons = SerializableNeuronArray {
-            count: self.neuron_array.read().unwrap().count,
-            capacity: self.neuron_array.capacity,
-            membrane_potentials: self.neuron_array.membrane_potentials.clone(),
-            thresholds: self.neuron_array.thresholds.clone(),
-            leak_coefficients: self.neuron_array.leak_coefficients.clone(),
-            resting_potentials: self.neuron_array.resting_potentials.clone(),
-            neuron_types: self.neuron_array.neuron_types.clone(),
-            refractory_periods: self.neuron_array.refractory_periods.clone(),
-            refractory_countdowns: self.neuron_array.refractory_countdowns.clone(),
-            excitabilities: self.neuron_array.excitabilities.clone(),
-            cortical_areas: self.neuron_array.cortical_areas.clone(),
-            coordinates: self.neuron_array.coordinates.clone(),
-            valid_mask: self.neuron_array.read().unwrap().valid_mask.clone(),
+            count: neuron_array.count,
+            capacity: neuron_array.capacity,
+            membrane_potentials: neuron_array.membrane_potentials.clone(),
+            thresholds: neuron_array.thresholds.clone(),
+            leak_coefficients: neuron_array.leak_coefficients.clone(),
+            resting_potentials: neuron_array.resting_potentials.clone(),
+            neuron_types: neuron_array.neuron_types.clone(),
+            refractory_periods: neuron_array.refractory_periods.clone(),
+            refractory_countdowns: neuron_array.refractory_countdowns.clone(),
+            excitabilities: neuron_array.excitabilities.clone(),
+            cortical_areas: neuron_array.cortical_areas.clone(),
+            coordinates: neuron_array.coordinates.clone(),
+            valid_mask: neuron_array.valid_mask.clone(),
         };
+        drop(neuron_array);  // Release lock
 
-        // Convert synapse array
+        // Convert synapse array (lock once and clone all fields)
+        let synapse_array = self.synapse_array.read().unwrap();
         let synapses = SerializableSynapseArray {
-            count: self.synapse_array.count,
-            capacity: self.synapse_array.capacity,
-            source_neurons: self.synapse_array.source_neurons.clone(),
-            target_neurons: self.synapse_array.target_neurons.clone(),
-            weights: self.synapse_array.weights.clone(),
-            conductances: self.synapse_array.postsynaptic_potentials.clone(),  // TODO: Rename field in snapshot struct
-            types: self.synapse_array.types.clone(),
-            valid_mask: self.synapse_array.valid_mask.clone(),
-            source_index: self.synapse_array.source_index.clone(),
+            count: synapse_array.count,
+            capacity: synapse_array.capacity,
+            source_neurons: synapse_array.source_neurons.clone(),
+            target_neurons: synapse_array.target_neurons.clone(),
+            weights: synapse_array.weights.clone(),
+            conductances: synapse_array.postsynaptic_potentials.clone(),
+            types: synapse_array.types.clone(),
+            valid_mask: synapse_array.valid_mask.clone(),
+            source_index: synapse_array.source_index.clone(),
         };
+        drop(synapse_array);  // Release lock
 
         ConnectomeSnapshot {
             version: 1,
             neurons,
             synapses,
-            cortical_area_names: self.area_id_to_name.clone(),
-            burst_count: self.burst_count,
-            power_amount: self.power_amount,
+            cortical_area_names: self.area_id_to_name.read().unwrap().clone(),
+            burst_count: self.get_burst_count(),
+            power_amount: self.get_power_amount(),
             fire_ledger_window: 20, // Default value (fire_ledger doesn't expose window)
             metadata: ConnectomeMetadata::default(),
         }
@@ -855,19 +915,21 @@ impl RustNPU {
         synapse_array.source_index = snapshot.synapses.source_index;
 
         Self {
-            neuron_array,
-            synapse_array,
-            fire_candidate_list: FireCandidateList::new(),
-            current_fire_queue: FireQueue::new(),
-            previous_fire_queue: FireQueue::new(),
-            fire_ledger: RustFireLedger::new(snapshot.fire_ledger_window),
-            fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
-            pending_sensory_injections: std::sync::Mutex::new(Vec::with_capacity(10000)),
-            last_fcl_snapshot: Vec::new(),
-            area_id_to_name: snapshot.cortical_area_names,
-            propagation_engine: SynapticPropagationEngine::new(),
-            burst_count: snapshot.burst_count,
-            power_amount: snapshot.power_amount,
+            neuron_array: std::sync::RwLock::new(neuron_array),
+            synapse_array: std::sync::RwLock::new(synapse_array),
+            fire_structures: std::sync::Mutex::new(FireStructures {
+                fire_candidate_list: FireCandidateList::new(),
+                current_fire_queue: FireQueue::new(),
+                previous_fire_queue: FireQueue::new(),
+                fire_ledger: RustFireLedger::new(snapshot.fire_ledger_window),
+                fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
+                pending_sensory_injections: Vec::with_capacity(10000),
+                last_fcl_snapshot: Vec::new(),
+            }),
+            area_id_to_name: std::sync::RwLock::new(snapshot.cortical_area_names),
+            propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
+            burst_count: std::sync::atomic::AtomicU64::new(snapshot.burst_count),
+            power_amount: std::sync::atomic::AtomicU32::new(snapshot.power_amount.to_bits()),
         }
     }
 
@@ -905,7 +967,7 @@ impl RustNPU {
             return false;
         }
 
-        self.neuron_array.excitabilities[idx] = excitability.clamp(0.0, 1.0);
+        self.neuron_array.write().unwrap().excitabilities[idx] = excitability.clamp(0.0, 1.0);
         true
     }
 
@@ -924,7 +986,7 @@ impl RustNPU {
             if self.neuron_array.read().unwrap().valid_mask[idx]
                 && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
-                self.neuron_array.excitabilities[idx] = clamped_excitability;
+                self.neuron_array.write().unwrap().excitabilities[idx] = clamped_excitability;
                 updated_count += 1;
             }
         }
@@ -949,10 +1011,10 @@ impl RustNPU {
                 && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
                 // Get the actual neuron_id for this array index
-                let neuron_id = self.neuron_array.index_to_neuron_id[idx];
+                let neuron_id = self.neuron_array.read().unwrap().index_to_neuron_id[idx];
 
                 // Update base refractory period (used when neuron fires)
-                self.neuron_array.refractory_periods[idx] = refractory_period;
+                self.neuron_array.write().unwrap().refractory_periods[idx] = refractory_period;
 
                 // CRITICAL FIX: Do NOT set countdown here!
                 // The countdown should only be set AFTER a neuron fires.
@@ -970,12 +1032,12 @@ impl RustNPU {
 
                 // Only clear countdown if setting refractory to 0 (allow immediate firing)
                 if refractory_period == 0 {
-                    self.neuron_array.refractory_countdowns[idx] = 0;
+                    self.neuron_array.write().unwrap().refractory_countdowns[idx] = 0;
                 }
 
                 // Reset consecutive fire count when applying a new period to avoid
                 // stale state causing unexpected immediate extended refractory.
-                self.neuron_array.consecutive_fire_counts[idx] = 0;
+                self.neuron_array.write().unwrap().consecutive_fire_counts[idx] = 0;
 
                 updated_count += 1;
 
@@ -983,7 +1045,7 @@ impl RustNPU {
                 if updated_count <= 3 {
                     println!(
                         "[RUST-BATCH-UPDATE]   Neuron {}: refractory_period={}, countdown={}",
-                        neuron_id, refractory_period, self.neuron_array.refractory_countdowns[idx]
+                        neuron_id, refractory_period, self.neuron_array.read().unwrap().refractory_countdowns[idx]
                     );
                 }
             }
@@ -1001,7 +1063,7 @@ impl RustNPU {
             if self.neuron_array.read().unwrap().valid_mask[idx]
                 && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
-                self.neuron_array.thresholds[idx] = threshold;
+                self.neuron_array.write().unwrap().thresholds[idx] = threshold;
                 updated_count += 1;
             }
         }
@@ -1018,7 +1080,7 @@ impl RustNPU {
             if self.neuron_array.read().unwrap().valid_mask[idx]
                 && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
-                self.neuron_array.leak_coefficients[idx] = leak;
+                self.neuron_array.write().unwrap().leak_coefficients[idx] = leak;
                 updated_count += 1;
             }
         }
@@ -1039,7 +1101,7 @@ impl RustNPU {
             if self.neuron_array.read().unwrap().valid_mask[idx]
                 && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
-                self.neuron_array.consecutive_fire_limits[idx] = limit;
+                self.neuron_array.write().unwrap().consecutive_fire_limits[idx] = limit;
                 updated_count += 1;
             }
         }
@@ -1060,7 +1122,7 @@ impl RustNPU {
             if self.neuron_array.read().unwrap().valid_mask[idx]
                 && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
-                self.neuron_array.snooze_periods[idx] = snooze_period;
+                self.neuron_array.write().unwrap().snooze_periods[idx] = snooze_period;
                 updated_count += 1;
             }
         }
@@ -1085,22 +1147,22 @@ impl RustNPU {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 // Update base period
-                self.neuron_array.refractory_periods[idx] = *value;
+                self.neuron_array.write().unwrap().refractory_periods[idx] = *value;
                 // Enforce immediately: set countdown to new period (or 0)
                 if *value > 0 {
-                    self.neuron_array.refractory_countdowns[idx] = *value;
+                    self.neuron_array.write().unwrap().refractory_countdowns[idx] = *value;
                 } else {
-                    self.neuron_array.refractory_countdowns[idx] = 0;
+                    self.neuron_array.write().unwrap().refractory_countdowns[idx] = 0;
                 }
                 // Reset consecutive fire count to avoid stale extended refractory state
-                self.neuron_array.consecutive_fire_counts[idx] = 0;
+                self.neuron_array.write().unwrap().consecutive_fire_counts[idx] = 0;
                 updated_count += 1;
 
                 // Log first few neurons and any that match our monitored neuron 16438
                 if updated_count <= 3 || *neuron_id == 16438 {
                     println!(
                         "[RUST-BATCH-UPDATE]   Neuron {}: refractory_period={}, countdown={}",
-                        neuron_id, value, self.neuron_array.refractory_countdowns[idx]
+                        neuron_id, value, self.neuron_array.read().unwrap().refractory_countdowns[idx]
                     );
                 }
             }
@@ -1120,7 +1182,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.thresholds[idx] = *value;
+                self.neuron_array.write().unwrap().thresholds[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1139,7 +1201,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.leak_coefficients[idx] = value.clamp(0.0, 1.0);
+                self.neuron_array.write().unwrap().leak_coefficients[idx] = value.clamp(0.0, 1.0);
                 updated_count += 1;
             }
         }
@@ -1162,7 +1224,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.consecutive_fire_limits[idx] = *value;
+                self.neuron_array.write().unwrap().consecutive_fire_limits[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1181,7 +1243,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.snooze_periods[idx] = *value;
+                self.neuron_array.write().unwrap().snooze_periods[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1200,7 +1262,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.membrane_potentials[idx] = *value;
+                self.neuron_array.write().unwrap().membrane_potentials[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1219,7 +1281,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.resting_potentials[idx] = *value;
+                self.neuron_array.write().unwrap().resting_potentials[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1238,7 +1300,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.excitabilities[idx] = value.clamp(0.0, 1.0);
+                self.neuron_array.write().unwrap().excitabilities[idx] = value.clamp(0.0, 1.0);
                 updated_count += 1;
             }
         }
@@ -1257,7 +1319,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.neuron_types[idx] = *value;
+                self.neuron_array.write().unwrap().neuron_types[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1280,7 +1342,7 @@ impl RustNPU {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.mp_charge_accumulation[idx] = *value;
+                self.neuron_array.write().unwrap().mp_charge_accumulation[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1302,7 +1364,7 @@ impl RustNPU {
             if self.neuron_array.read().unwrap().valid_mask[idx]
                 && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
-                self.neuron_array.mp_charge_accumulation[idx] = mp_charge_accumulation;
+                self.neuron_array.write().unwrap().mp_charge_accumulation[idx] = mp_charge_accumulation;
                 updated_count += 1;
             }
         }
@@ -1318,28 +1380,28 @@ impl RustNPU {
             return false;
         }
 
-        self.neuron_array.read().unwrap().valid_mask[idx] = false;
+        self.neuron_array.write().unwrap().valid_mask[idx] = false;
         true
     }
 
     /// Get neuron coordinates (x, y, z)
     pub fn get_neuron_coordinates(&self, neuron_id: u32) -> (u32, u32, u32) {
-        self.neuron_array.get_coordinates(NeuronId(neuron_id))
+        self.neuron_array.read().unwrap().get_coordinates(NeuronId(neuron_id))
     }
 
     /// Get cortical area for a neuron
     pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> u32 {
-        self.neuron_array.get_cortical_area(NeuronId(neuron_id)).0
+        self.neuron_array.read().unwrap().get_cortical_area(NeuronId(neuron_id)).0
     }
 
     /// Get all neuron IDs in a specific cortical area
     pub fn get_neurons_in_cortical_area(&self, cortical_idx: u32) -> Vec<u32> {
-        self.neuron_array.get_neurons_in_cortical_area(cortical_idx)
+        self.neuron_array.read().unwrap().get_neurons_in_cortical_area(cortical_idx)
     }
 
     /// Get total number of active neurons
     pub fn get_neuron_count(&self) -> usize {
-        self.neuron_array.get_neuron_count()
+        self.neuron_array.read().unwrap().get_neuron_count()
     }
 
     /// Get synapse count (valid only)
@@ -1353,7 +1415,8 @@ impl RustNPU {
         let source = NeuronId(source_neuron_id);
 
         // Look up synapse indices for this source neuron
-        let synapse_indices = match self.propagation_engine.synapse_index.get(&source) {
+        let prop_engine = self.propagation_engine.read().unwrap();
+        let synapse_indices = match prop_engine.synapse_index.get(&source) {
             Some(indices) => indices,
             None => return Vec::new(), // No synapses from this neuron
         };
@@ -1361,11 +1424,11 @@ impl RustNPU {
         // Collect all valid synapses with full properties
         let mut outgoing = Vec::new();
         for &syn_idx in synapse_indices {
-            if syn_idx < self.synapse_array.count && self.synapse_array.valid_mask[syn_idx] {
-                let target = self.synapse_array.target_neurons[syn_idx];
-                let weight = self.synapse_array.weights[syn_idx];
-                let psp = self.synapse_array.postsynaptic_potentials[syn_idx];
-                let synapse_type = self.synapse_array.types[syn_idx];
+            if syn_idx < self.synapse_array.read().unwrap().count && self.synapse_array.read().unwrap().valid_mask[syn_idx] {
+                let target = self.synapse_array.read().unwrap().target_neurons[syn_idx];
+                let weight = self.synapse_array.read().unwrap().weights[syn_idx];
+                let psp = self.synapse_array.read().unwrap().postsynaptic_potentials[syn_idx];
+                let synapse_type = self.synapse_array.read().unwrap().types[syn_idx];
                 outgoing.push((target, weight, psp, synapse_type));
             }
         }
@@ -1380,15 +1443,15 @@ impl RustNPU {
 
         // Iterate through all synapses to find ones targeting this neuron
         // Note: This is O(n) - we could optimize with a target_index HashMap if needed
-        for i in 0..self.synapse_array.count {
-            if self.synapse_array.valid_mask[i]
-                && self.synapse_array.target_neurons[i] == target_neuron_id
+        for i in 0..self.synapse_array.read().unwrap().count {
+            if self.synapse_array.read().unwrap().valid_mask[i]
+                && self.synapse_array.read().unwrap().target_neurons[i] == target_neuron_id
             {
                 synapses.push((
-                    self.synapse_array.source_neurons[i],
-                    self.synapse_array.weights[i],
-                    self.synapse_array.postsynaptic_potentials[i],
-                    self.synapse_array.types[i],
+                    self.synapse_array.read().unwrap().source_neurons[i],
+                    self.synapse_array.read().unwrap().weights[i],
+                    self.synapse_array.read().unwrap().postsynaptic_potentials[i],
+                    self.synapse_array.read().unwrap().types[i],
                 ));
             }
         }
@@ -1406,12 +1469,12 @@ impl RustNPU {
         }
 
         Some((
-            self.neuron_array.consecutive_fire_counts[idx],
-            self.neuron_array.consecutive_fire_limits[idx],
-            self.neuron_array.snooze_periods[idx], // Extended refractory period (additive)
-            self.neuron_array.membrane_potentials[idx],
-            self.neuron_array.thresholds[idx],
-            self.neuron_array.refractory_countdowns[idx],
+            self.neuron_array.read().unwrap().consecutive_fire_counts[idx],
+            self.neuron_array.read().unwrap().consecutive_fire_limits[idx],
+            self.neuron_array.read().unwrap().snooze_periods[idx], // Extended refractory period (additive)
+            self.neuron_array.read().unwrap().membrane_potentials[idx],
+            self.neuron_array.read().unwrap().thresholds[idx],
+            self.neuron_array.read().unwrap().refractory_countdowns[idx],
         ))
     }
 }
@@ -1567,12 +1630,12 @@ impl RustNPU {
         cortical_idx: u32,
         lookback_steps: usize,
     ) -> Vec<(u64, Vec<u32>)> {
-        self.fire_ledger.get_history(cortical_idx, lookback_steps)
+        self.fire_structures.lock().unwrap().fire_ledger.get_history(cortical_idx, lookback_steps)
     }
 
     /// Get Fire Ledger window size for a cortical area
     pub fn get_fire_ledger_window_size(&self, cortical_idx: u32) -> usize {
-        self.fire_ledger.get_area_window_size(cortical_idx)
+        self.fire_structures.lock().unwrap().fire_ledger.get_area_window_size(cortical_idx)
     }
 
     /// Configure Fire Ledger window size for a specific cortical area
@@ -1583,7 +1646,7 @@ impl RustNPU {
 
     /// Get all configured Fire Ledger window sizes
     pub fn get_all_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
-        self.fire_ledger.get_all_window_configs()
+        self.fire_structures.lock().unwrap().fire_ledger.get_all_window_configs()
     }
 }
 
@@ -1605,7 +1668,10 @@ impl RustNPU {
     pub fn sample_fire_queue(
         &mut self,
     ) -> Option<AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
-        let sample_result = self.fq_sampler.sample(&self.current_fire_queue)?;
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        let current_fq_clone = fire_structures.current_fire_queue.clone();
+        let sample_result = fire_structures.fq_sampler.sample(&current_fq_clone)?;
+        drop(fire_structures);
 
         // Convert to Python-friendly format
         let mut result = AHashMap::new();
@@ -1634,7 +1700,8 @@ impl RustNPU {
     pub fn get_latest_fire_queue_sample(
         &self,
     ) -> Option<AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
-        let sample_result = self.fq_sampler.get_latest_sample()?;
+        let fire_structures = self.fire_structures.lock().unwrap();
+        let sample_result = fire_structures.fq_sampler.get_latest_sample()?;
 
         // Convert to Python-friendly format
         let mut result = AHashMap::new();
@@ -1673,7 +1740,7 @@ impl RustNPU {
         let mut result = AHashMap::new();
 
         // Convert current Fire Queue to the same format as sample_fire_queue
-        for (cortical_idx, neurons) in &self.current_fire_queue.neurons_by_area {
+        for (cortical_idx, neurons) in &self.fire_structures.lock().unwrap().current_fire_queue.neurons_by_area {
             let mut neuron_ids = Vec::with_capacity(neurons.len());
             let mut coords_x = Vec::with_capacity(neurons.len());
             let mut coords_y = Vec::with_capacity(neurons.len());
@@ -1704,7 +1771,7 @@ impl RustNPU {
 
     /// Get FQ Sampler frequency (Hz)
     pub fn get_fq_sampler_frequency(&self) -> f64 {
-        self.fq_sampler.get_sample_frequency()
+        self.fire_structures.lock().unwrap().fq_sampler.get_sample_frequency()
     }
 
     /// Set visualization subscriber state
@@ -1715,7 +1782,7 @@ impl RustNPU {
 
     /// Check if visualization subscribers are connected
     pub fn has_visualization_subscribers(&self) -> bool {
-        self.fq_sampler.has_visualization_subscribers()
+        self.fire_structures.lock().unwrap().fq_sampler.has_visualization_subscribers()
     }
 
     /// Set motor subscriber state
@@ -1725,12 +1792,12 @@ impl RustNPU {
 
     /// Check if motor subscribers are connected
     pub fn has_motor_subscribers(&self) -> bool {
-        self.fq_sampler.has_motor_subscribers()
+        self.fire_structures.lock().unwrap().fq_sampler.has_motor_subscribers()
     }
 
     /// Get total FQ Sampler samples taken
     pub fn get_fq_sampler_samples_taken(&self) -> u64 {
-        self.fq_sampler.get_samples_taken()
+        self.fire_structures.lock().unwrap().fq_sampler.get_samples_taken()
     }
 }
 

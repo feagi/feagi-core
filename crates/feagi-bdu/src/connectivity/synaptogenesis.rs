@@ -34,6 +34,7 @@ use crate::connectivity::rules::{
 };
 use crate::types::{BduError, BduResult, Position};
 use feagi_types::{NeuronId, SynapseType, SynapticConductance, SynapticWeight};
+use feagi_burst_engine::npu::RustNPU;
 
 /// Apply projector morphology directly on NPU
 ///
@@ -63,19 +64,19 @@ pub fn apply_projector_morphology(
     let mut rng = rand::thread_rng();
 
     // Query source neurons from NPU (zero copy - just iteration)
-    let src_neurons = npu.neuron_array.get_neurons_in_cortical_area(src_area_id);
+    let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
     if src_neurons.is_empty() {
         return Ok(0);
     }
 
     // Calculate dimensions by finding max coordinates in each area
-    let src_dimensions = calculate_area_dimensions(&npu.neuron_array, src_area_id);
-    let dst_dimensions = calculate_area_dimensions(&npu.neuron_array, dst_area_id);
+    let src_dimensions = calculate_area_dimensions(npu, src_area_id);
+    let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
 
     // Build destination position-to-neuron map (O(N) once)
     let mut dst_pos_map = std::collections::HashMap::new();
-    for dst_nid in npu.neuron_array.get_neurons_in_cortical_area(dst_area_id) {
-        let coords = npu.neuron_array.get_coordinates(NeuronId(dst_nid));
+    for dst_nid in npu.get_neurons_in_cortical_area(dst_area_id) {
+        let coords = npu.get_neuron_coordinates(dst_nid);
         dst_pos_map.insert(coords, dst_nid);
     }
 
@@ -83,7 +84,7 @@ pub fn apply_projector_morphology(
 
     // Process each source neuron
     for src_nid in src_neurons {
-        let src_pos = npu.neuron_array.get_coordinates(NeuronId(src_nid));
+        let src_pos = npu.get_neuron_coordinates(src_nid);
 
         // Apply projector morphology (Rust computation)
         let dst_positions = syn_projector(
@@ -104,7 +105,6 @@ pub fn apply_projector_morphology(
                 if rng.gen_range(0..100) < synapse_attractivity {
                     // Create synapse directly in NPU
                     if npu
-                        .synapse_array
                         .add_synapse(
                             NeuronId(src_nid),
                             NeuronId(dst_nid),
@@ -136,31 +136,30 @@ pub fn apply_expander_morphology(
     use rand::Rng;
     let mut rng = rand::thread_rng();
 
-    let src_neurons = npu.neuron_array.get_neurons_in_cortical_area(src_area_id);
+    let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
     if src_neurons.is_empty() {
         return Ok(0);
     }
 
-    let src_dimensions = calculate_area_dimensions(&npu.neuron_array, src_area_id);
-    let dst_dimensions = calculate_area_dimensions(&npu.neuron_array, dst_area_id);
+    let src_dimensions = calculate_area_dimensions(npu, src_area_id);
+    let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
 
     let mut dst_pos_map = std::collections::HashMap::new();
-    for dst_nid in npu.neuron_array.get_neurons_in_cortical_area(dst_area_id) {
-        let coords = npu.neuron_array.get_coordinates(NeuronId(dst_nid));
+    for dst_nid in npu.get_neurons_in_cortical_area(dst_area_id) {
+        let coords = npu.get_neuron_coordinates(dst_nid);
         dst_pos_map.insert(coords, dst_nid);
     }
 
     let mut synapse_count = 0u32;
 
     for src_nid in src_neurons {
-        let src_pos = npu.neuron_array.get_coordinates(NeuronId(src_nid));
+        let src_pos = npu.get_neuron_coordinates(src_nid);
 
         let dst_pos = syn_expander("", "", src_pos, src_dimensions, dst_dimensions)?;
 
         if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
             if rng.gen_range(0..100) < synapse_attractivity {
                 if npu
-                    .synapse_array
                     .add_synapse(
                         NeuronId(src_nid),
                         NeuronId(dst_nid),
@@ -192,24 +191,24 @@ pub fn apply_block_connection_morphology(
     use rand::Rng;
     let mut rng = rand::thread_rng();
 
-    let src_neurons = npu.neuron_array.get_neurons_in_cortical_area(src_area_id);
+    let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
     if src_neurons.is_empty() {
         return Ok(0);
     }
 
-    let src_dimensions = calculate_area_dimensions(&npu.neuron_array, src_area_id);
-    let dst_dimensions = calculate_area_dimensions(&npu.neuron_array, dst_area_id);
+    let src_dimensions = calculate_area_dimensions(npu, src_area_id);
+    let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
 
     let mut dst_pos_map = std::collections::HashMap::new();
-    for dst_nid in npu.neuron_array.get_neurons_in_cortical_area(dst_area_id) {
-        let coords = npu.neuron_array.get_coordinates(NeuronId(dst_nid));
+    for dst_nid in npu.get_neurons_in_cortical_area(dst_area_id) {
+        let coords = npu.get_neuron_coordinates(dst_nid);
         dst_pos_map.insert(coords, dst_nid);
     }
 
     let mut synapse_count = 0u32;
 
     for src_nid in src_neurons {
-        let src_pos = npu.neuron_array.get_coordinates(NeuronId(src_nid));
+        let src_pos = npu.get_neuron_coordinates(src_nid);
 
         let dst_pos = syn_block_connection(
             "",
@@ -223,7 +222,6 @@ pub fn apply_block_connection_morphology(
         if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
             if rng.gen_range(0..100) < synapse_attractivity {
                 if npu
-                    .synapse_array
                     .add_synapse(
                         NeuronId(src_nid),
                         NeuronId(dst_nid),
@@ -259,24 +257,24 @@ pub fn apply_patterns_morphology(
         return Ok(0);
     }
 
-    let src_neurons = npu.neuron_array.get_neurons_in_cortical_area(src_area_id);
+    let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
     if src_neurons.is_empty() {
         return Ok(0);
     }
 
-    let src_dimensions = calculate_area_dimensions(&npu.neuron_array, src_area_id);
-    let dst_dimensions = calculate_area_dimensions(&npu.neuron_array, dst_area_id);
+    let src_dimensions = calculate_area_dimensions(npu, src_area_id);
+    let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
 
     let mut dst_pos_map = std::collections::HashMap::new();
-    for dst_nid in npu.neuron_array.get_neurons_in_cortical_area(dst_area_id) {
-        let coords = npu.neuron_array.get_coordinates(NeuronId(dst_nid));
+    for dst_nid in npu.get_neurons_in_cortical_area(dst_area_id) {
+        let coords = npu.get_neuron_coordinates(dst_nid);
         dst_pos_map.insert(coords, dst_nid);
     }
 
     let mut synapse_count = 0u32;
 
     for src_nid in src_neurons {
-        let src_pos = npu.neuron_array.get_coordinates(NeuronId(src_nid));
+        let src_pos = npu.get_neuron_coordinates(src_nid);
 
         // Match patterns (Rust computation)
         let dst_positions =
@@ -286,7 +284,6 @@ pub fn apply_patterns_morphology(
             if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
                 if rng.gen_range(0..100) < synapse_attractivity {
                     if npu
-                        .synapse_array
                         .add_synapse(
                             NeuronId(src_nid),
                             NeuronId(dst_nid),
@@ -323,23 +320,23 @@ pub fn apply_vectors_morphology(
         return Ok(0);
     }
 
-    let src_neurons = npu.neuron_array.get_neurons_in_cortical_area(src_area_id);
+    let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
     if src_neurons.is_empty() {
         return Ok(0);
     }
 
-    let dst_dimensions = calculate_area_dimensions(&npu.neuron_array, dst_area_id);
+    let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
 
     let mut dst_pos_map = std::collections::HashMap::new();
-    for dst_nid in npu.neuron_array.get_neurons_in_cortical_area(dst_area_id) {
-        let coords = npu.neuron_array.get_coordinates(NeuronId(dst_nid));
+    for dst_nid in npu.get_neurons_in_cortical_area(dst_area_id) {
+        let coords = npu.get_neuron_coordinates(dst_nid);
         dst_pos_map.insert(coords, dst_nid);
     }
 
     let mut synapse_count = 0u32;
 
     for src_nid in src_neurons {
-        let src_pos = npu.neuron_array.get_coordinates(NeuronId(src_nid));
+        let src_pos = npu.get_neuron_coordinates(src_nid);
 
         // Apply all vectors
         for &vector in &vectors {
@@ -347,8 +344,7 @@ pub fn apply_vectors_morphology(
                 if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
                     if rng.gen_range(0..100) < synapse_attractivity {
                         if npu
-                            .synapse_array
-                            .add_synapse(
+        .add_synapse(
                                 NeuronId(src_nid),
                                 NeuronId(dst_nid),
                                 SynapticWeight(weight),
@@ -370,15 +366,15 @@ pub fn apply_vectors_morphology(
 
 /// Calculate area dimensions by finding max coordinates
 fn calculate_area_dimensions(
-    neuron_array: &feagi_types::NeuronArray,
+    npu: &RustNPU,
     area_id: u32,
 ) -> (usize, usize, usize) {
     let mut max_x = 0;
     let mut max_y = 0;
     let mut max_z = 0;
 
-    for nid in neuron_array.get_neurons_in_cortical_area(area_id) {
-        let (x, y, z) = neuron_array.get_coordinates(NeuronId(nid));
+    for nid in npu.get_neurons_in_cortical_area(area_id) {
+        let (x, y, z) = npu.get_neuron_coordinates(nid);
         max_x = max_x.max(x as usize);
         max_y = max_y.max(y as usize);
         max_z = max_z.max(z as usize);
