@@ -206,6 +206,21 @@ impl PNS {
         }
     }
 
+    /// Connect the Rust NPU to the API control stream for direct queries (zero GIL contention)
+    /// Should be called after starting the PNS
+    #[cfg(feature = "zmq-transport")]
+    pub fn connect_npu_to_api_control_stream(
+        &self,
+        npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>,
+    ) {
+        if let Some(streams) = self.zmq_streams.lock().as_mut() {
+            streams.get_api_control_stream_mut().set_npu(npu);
+            println!("🦀 [PNS] NPU connected to API control stream for direct queries");
+        } else {
+            eprintln!("🦀 [PNS] [ERR] Cannot connect NPU: ZMQ streams not started");
+        }
+    }
+
     /// Set callback for agent registration events (for Python integration)
     pub fn set_on_agent_registered<F>(&self, callback: F)
     where
@@ -244,6 +259,7 @@ impl PNS {
         {
             let zmq_streams = ZmqStreams::new(
                 &self.config.zmq_rest_address,
+                &self.config.zmq_api_control_address,
                 &self.config.zmq_motor_address,
                 &self.config.zmq_viz_address,
                 &self.config.zmq_sensory_address,

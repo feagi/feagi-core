@@ -24,6 +24,8 @@ pub struct PNSConfig {
     #[cfg(feature = "zmq-transport")]
     pub zmq_rest_address: String,
     #[cfg(feature = "zmq-transport")]
+    pub zmq_api_control_address: String,
+    #[cfg(feature = "zmq-transport")]
     pub zmq_motor_address: String,
     #[cfg(feature = "zmq-transport")]
     pub zmq_viz_address: String,
@@ -56,6 +58,8 @@ impl Default for PNSConfig {
             // ZMQ defaults
             #[cfg(feature = "zmq-transport")]
             zmq_rest_address: "tcp://0.0.0.0:5563".to_string(), // REST/registration port
+            #[cfg(feature = "zmq-transport")]
+            zmq_api_control_address: "tcp://0.0.0.0:5565".to_string(), // API control port
             #[cfg(feature = "zmq-transport")]
             zmq_motor_address: "tcp://0.0.0.0:30005".to_string(), // Motor output port
             #[cfg(feature = "zmq-transport")]

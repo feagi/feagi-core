@@ -1,10 +1,12 @@
 // ZMQ Streams - manages all ZMQ communication
 
+mod api_control;
 mod motor;
 mod rest;
 mod sensory;
 mod visualization;
 
+pub use api_control::ApiControlStream;
 pub use motor::MotorStream;
 pub use rest::RestStream;
 pub use sensory::{SensoryReceiveConfig, SensoryStream};
@@ -19,6 +21,7 @@ use std::sync::Arc;
 /// ZMQ Streams coordinator
 pub struct ZmqStreams {
     rest_stream: RestStream,
+    api_control_stream: ApiControlStream,
     motor_stream: MotorStream,
     viz_stream: VisualizationStream,
     sensory_stream: SensoryStream,
@@ -27,6 +30,7 @@ pub struct ZmqStreams {
 impl ZmqStreams {
     pub fn new(
         rest_address: &str,
+        api_control_address: &str,
         motor_address: &str,
         viz_address: &str,
         sensory_address: &str,
@@ -42,6 +46,9 @@ impl ZmqStreams {
         // Set registration handler
         rest_stream.set_registration_handler(registration_handler);
 
+        let api_control_stream = ApiControlStream::new(Arc::clone(&context), api_control_address)
+            .map_err(|e| PNSError::Zmq(format!("API control stream: {}", e)))?;
+
         let motor_stream = MotorStream::new(Arc::clone(&context), motor_address)
             .map_err(|e| PNSError::Zmq(format!("Motor stream: {}", e)))?;
 
@@ -54,18 +61,22 @@ impl ZmqStreams {
 
         Ok(Self {
             rest_stream,
+            api_control_stream,
             motor_stream,
             viz_stream,
             sensory_stream,
         })
     }
 
-    /// Start only control streams (REST/registration) - safe before burst engine
+    /// Start only control streams (REST/registration + API control) - safe before burst engine
     pub fn start_control_streams(&self) -> Result<(), PNSError> {
         self.rest_stream
             .start()
             .map_err(|e| PNSError::Zmq(format!("REST start: {}", e)))?;
-        println!("🦀 [ZMQ-STREAMS] ✅ Control streams started (REST)");
+        self.api_control_stream
+            .start()
+            .map_err(|e| PNSError::Zmq(format!("API control start: {}", e)))?;
+        println!("🦀 [ZMQ-STREAMS] ✅ Control streams started (REST + API Control)");
         Ok(())
     }
 
@@ -95,6 +106,9 @@ impl ZmqStreams {
         self.rest_stream
             .stop()
             .map_err(|e| PNSError::Zmq(format!("REST stop: {}", e)))?;
+        self.api_control_stream
+            .stop()
+            .map_err(|e| PNSError::Zmq(format!("API control stop: {}", e)))?;
         self.motor_stream
             .stop()
             .map_err(|e| PNSError::Zmq(format!("Motor stop: {}", e)))?;
@@ -110,6 +124,11 @@ impl ZmqStreams {
     /// Get reference to sensory stream (for NPU connection)
     pub fn get_sensory_stream(&self) -> &SensoryStream {
         &self.sensory_stream
+    }
+
+    /// Get mutable reference to API control stream (for NPU connection)
+    pub fn get_api_control_stream_mut(&mut self) -> &mut ApiControlStream {
+        &mut self.api_control_stream
     }
 
     /// Publish visualization data to ZMQ subscribers
