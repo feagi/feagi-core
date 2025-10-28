@@ -29,16 +29,15 @@ use std::fmt;
 pub mod fire_structures;
 pub mod npu;
 
-// Multi-model neuron architecture (Phase 0: Structure only)
+// Multi-model neuron architecture (Phase 0: ID management only)
 // See: feagi-core/docs/MULTI_MODEL_NEURON_ARCHITECTURE.md
-pub mod neuron_models;
+// Note: Neuron model implementations are in feagi-burst-engine
 pub mod id_manager;
 
 pub use fire_structures::*;
 pub use npu::*;
 
-// Export neuron model types (currently only LIF implemented)
-pub use neuron_models::{LIFNeuronArray, NeuronModel};
+// Export ID management types for multi-model architecture
 pub use id_manager::NeuronArrayType;
 
 /// Neuron ID (globally unique across the entire brain)

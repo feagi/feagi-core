@@ -1,14 +1,25 @@
-// Synaptic Propagation Compute Shader - FCL Output (GPU→GPU)
-// **CONSOLIDATED LAYOUT - Metal-compatible (7 bindings)**
+// ═══════════════════════════════════════════════════════════════════════
+// Synaptic Propagation Compute Shader - LIF Model (GPU→GPU)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// **NEURON MODEL**: Leaky Integrate-and-Fire (LIF)
+// **LAYOUT**: Metal-compatible (7 bindings)
+//
+// This shader implements the LIF model's synaptic contribution formula.
+// For other neuron models (Izhikevich, AdEx, etc.), create separate shader files.
 //
 // Accumulates synaptic contributions into FCL buffer on GPU (no CPU roundtrip!)
 //
 // Algorithm:
 // 1. For each fired neuron, find its outgoing synapses (hash table lookup)
-// 2. Calculate synaptic contribution (weight × psp × sign)
+// 2. Calculate synaptic contribution using LIF formula: sign × weight × psp
 // 3. Atomically accumulate to FCL potential buffer
 //
 // Output: FCL candidates ready for neural dynamics (all on GPU)
+//
+// **IMPORTANT**: Keep this formula synchronized with:
+// - CPU implementation: feagi-burst-engine/src/neuron_models/lif.rs::compute_synaptic_contribution()
+// - Documentation: feagi-burst-engine/src/neuron_models/lif.rs (module docs)
 
 // ═══════════════════════════════════════════════════════════
 // SYNAPSE DATA (Consolidated, stride=3)

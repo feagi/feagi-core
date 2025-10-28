@@ -1,12 +1,24 @@
-// Synaptic Propagation Compute Shader (WGSL)
+// ═══════════════════════════════════════════════════════════════════════
+// Synaptic Propagation Compute Shader - LIF Model (Legacy/Non-FCL)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// **NEURON MODEL**: Leaky Integrate-and-Fire (LIF)
+// **NOTE**: This is the legacy non-FCL version. For production, use synaptic_propagation_fcl.wgsl
+//
+// This shader implements the LIF model's synaptic contribution formula.
+// For other neuron models (Izhikevich, AdEx, etc.), create separate shader files.
 //
 // Processes synaptic contributions from fired neurons to target neurons.
 // This is the BOTTLENECK - 95% of burst time in Python implementation.
 //
 // Algorithm:
 // 1. For each fired neuron, find its outgoing synapses
-// 2. Calculate synaptic contribution (weight × psp × sign)
+// 2. Calculate synaptic contribution using LIF formula: sign × weight × psp
 // 3. Accumulate to target neuron membrane potentials
+//
+// **IMPORTANT**: Keep this formula synchronized with:
+// - CPU implementation: feagi-burst-engine/src/neuron_models/lif.rs::compute_synaptic_contribution()
+// - FCL version: synaptic_propagation_fcl.wgsl
 //
 // Challenge: GPU hash table lookup for synapse indices
 

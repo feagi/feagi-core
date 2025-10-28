@@ -1,14 +1,27 @@
-// Neural Dynamics Compute Shader (WGSL) - Optimized for Metal (≤8 bindings)
+// ═══════════════════════════════════════════════════════════════════════
+// Neural Dynamics Compute Shader - LIF Model (Legacy/Non-FCL)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// **NEURON MODEL**: Leaky Integrate-and-Fire (LIF)
+// **NOTE**: This is the legacy non-FCL version. For production, use neural_dynamics_fcl.wgsl
+// **LAYOUT**: Metal-compatible (≤8 bindings)
+//
+// This shader implements LIF membrane potential update and firing logic.
+// For other neuron models (Izhikevich, AdEx, etc.), create separate shader files.
 // 
 // Processes neural dynamics for all neurons in parallel on GPU.
 // 
 // Algorithm:
-// 1. Apply leak toward resting potential
+// 1. Apply LIF leak: V(t+1) = V(t) - leak * (V(t) - resting)
 // 2. Check unified refractory period (handles both normal and extended)
-// 3. Check firing threshold
+// 3. Check LIF firing threshold: V ≥ threshold
 // 4. Apply probabilistic excitability
 // 5. Update consecutive fire counts
 // 6. Apply additive extended refractory when consecutive fire limit hit
+//
+// **IMPORTANT**: Keep formulas synchronized with:
+// - CPU implementation: feagi-burst-engine/src/neuron_models/lif.rs
+// - FCL version: neural_dynamics_fcl.wgsl
 //
 // Buffer Layout (interleaved for Metal compatibility):
 // - f32_params: [threshold, leak, resting, excitability] per neuron (stride=4)

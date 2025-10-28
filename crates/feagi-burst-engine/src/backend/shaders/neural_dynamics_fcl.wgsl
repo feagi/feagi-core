@@ -1,13 +1,23 @@
-// Neural Dynamics Compute Shader - FCL-Aware (Sparse Processing)
+// ═══════════════════════════════════════════════════════════════════════
+// Neural Dynamics Compute Shader - LIF Model (FCL-Aware, Sparse Processing)
+// ═══════════════════════════════════════════════════════════════════════
+//
+// **NEURON MODEL**: Leaky Integrate-and-Fire (LIF)
+// **OPTIMIZATION**: Processes ONLY Fire Candidate List neurons (sparse, ~1-10% of brain)
 // 
-// **Key Difference**: Processes ONLY Fire Candidate List neurons (sparse, ~1-10% of brain)
+// This shader implements LIF membrane potential update and firing logic.
+// For other neuron models (Izhikevich, AdEx, etc.), create separate shader files.
 // 
 // Algorithm:
 // 1. Get FCL index from workgroup
 // 2. Lookup actual neuron_id from FCL array
 // 3. Apply FCL accumulated potential to membrane potential
-// 4. Process neural dynamics (leak, threshold, firing)
-// 5. Write sparse output (only FCL neurons in fired mask)
+// 4. Process LIF neural dynamics: V(t+1) = V(t) + I_syn - leak * (V(t) - V_rest)
+// 5. Check firing condition and write sparse output
+//
+// **IMPORTANT**: Keep formulas synchronized with:
+// - CPU implementation: feagi-burst-engine/src/neuron_models/lif.rs
+// - Non-FCL version: neural_dynamics.wgsl
 
 // ═══════════════════════════════════════════════════════════
 // FCL INPUT (Sparse arrays - only candidate neurons)

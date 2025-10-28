@@ -37,6 +37,7 @@ pub mod fire_structures;
 pub mod fq_sampler;
 pub mod motor_shm_writer;
 pub mod neural_dynamics;
+pub mod neuron_models; // Neuron model trait system (LIF, Izhikevich, etc.)
 pub mod npu;
 pub mod sensory; // Rust sensory injection system
 pub mod synaptic_propagation;
@@ -48,6 +49,7 @@ pub use fire_ledger::*;
 pub use fire_structures::*;
 pub use fq_sampler::*;
 pub use neural_dynamics::*;
+pub use neuron_models::*;
 pub use npu::*;
 pub use sensory::*;
 pub use synaptic_propagation::*;

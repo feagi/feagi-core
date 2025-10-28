@@ -206,10 +206,10 @@ mod tests {
             source_neurons: vec![1, 1, 2],     // Raw u32 values
             target_neurons: vec![10, 11, 10],  // Raw u32 values
             weights: vec![255, 128, 200],      // Raw u8 values
-            conductances: vec![255, 255, 200], // Raw u8 values
+            postsynaptic_potentials: vec![255, 255, 200], // Raw u8 values (renamed from conductances)
             types: vec![0, 1, 0],              // 0=excitatory, 1=inhibitory
             valid_mask: vec![true, true, true],
-            source_index: HashMap::new(),
+            source_index: ahash::AHashMap::new(),
         };
 
         // Build source index
