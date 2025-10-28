@@ -227,12 +227,59 @@ impl PNS {
     }
 
     /// Start all PNS services
-    pub fn start(&self) -> Result<()> {
+    /// Start only control streams (REST/registration) - safe before burst engine
+    /// 
+    /// This starts the REST API for agent registration and heartbeats but does NOT
+    /// start sensory/motor/viz streams. Use this during FEAGI startup before the
+    /// burst engine is ready.
+    pub fn start_control_streams(&self) -> Result<()> {
         if *self.running.read() {
             return Err(PNSError::Agent("PNS already running".to_string()));
         }
 
-        println!("🦀 [PNS] Starting FEAGI Peripheral Nervous System...");
+        println!("🦀 [PNS] Starting control streams (REST/registration)...");
+
+        // Initialize ZMQ streams but only start control streams
+        #[cfg(feature = "zmq-transport")]
+        {
+            let zmq_streams = ZmqStreams::new(
+                &self.config.zmq_rest_address,
+                &self.config.zmq_motor_address,
+                &self.config.zmq_viz_address,
+                &self.config.zmq_sensory_address,
+                Arc::clone(&self.registration_handler),
+                self.config.visualization_stream.clone(),
+                self.config.sensory_stream.clone(),
+            )?;
+
+            zmq_streams.start_control_streams()?;
+            *self.zmq_streams.lock() = Some(zmq_streams);
+        }
+
+        // Start heartbeat monitoring
+        self.heartbeat_tracker
+            .lock()
+            .start(Arc::clone(&self.agent_registry));
+
+        *self.running.write() = true;
+        println!("🦀 [PNS] ✅ Control streams started - ready for agent registration");
+        println!("🦀 [PNS] ⏸️  Data streams (sensory/motor/viz) NOT started - waiting for burst engine");
+
+        Ok(())
+    }
+
+    /// Start data streams (sensory/motor/viz) - requires burst engine running
+    /// 
+    /// This starts the data processing streams that require an active burst engine.
+    /// Call this AFTER the burst engine has been started and is ready to process data.
+    pub fn start_data_streams(&self) -> Result<()> {
+        if !*self.running.read() {
+            return Err(PNSError::Agent(
+                "PNS not running - call start_control_streams() first".to_string(),
+            ));
+        }
+
+        println!("🦀 [PNS] Starting data streams (sensory/motor/viz)...");
 
         // Initialize async runtime if needed for UDP transports
         #[cfg(feature = "udp-transport")]
@@ -254,21 +301,16 @@ impl PNS {
             }
         }
 
-        // Start ZMQ streams (always needed for REST/motor)
+        // Start ZMQ data streams
         #[cfg(feature = "zmq-transport")]
         {
-            let zmq_streams = ZmqStreams::new(
-                &self.config.zmq_rest_address,
-                &self.config.zmq_motor_address,
-                &self.config.zmq_viz_address,
-                &self.config.zmq_sensory_address,
-                Arc::clone(&self.registration_handler),
-                self.config.visualization_stream.clone(),
-                self.config.sensory_stream.clone(),
-            )?;
-
-            zmq_streams.start()?;
-            *self.zmq_streams.lock() = Some(zmq_streams);
+            if let Some(ref zmq_streams) = *self.zmq_streams.lock() {
+                zmq_streams.start_data_streams()?;
+            } else {
+                return Err(PNSError::Agent(
+                    "ZMQ streams not initialized - call start_control_streams() first".to_string(),
+                ));
+            }
         }
 
         // Start UDP visualization transport if configured
@@ -310,14 +352,18 @@ impl PNS {
             }
         }
 
-        // Start heartbeat monitoring
-        self.heartbeat_tracker
-            .lock()
-            .start(Arc::clone(&self.agent_registry));
+        println!("🦀 [PNS] ✅ Data streams started - sensory data will now be processed");
 
-        *self.running.write() = true;
-        println!("🦀 [PNS] ✅ All services started successfully");
+        Ok(())
+    }
 
+    /// Start all streams at once (legacy method for backward compatibility)
+    /// 
+    /// Equivalent to calling start_control_streams() followed by start_data_streams().
+    /// Prefer using the split methods during FEAGI startup for proper sequencing.
+    pub fn start(&self) -> Result<()> {
+        self.start_control_streams()?;
+        self.start_data_streams()?;
         Ok(())
     }
 

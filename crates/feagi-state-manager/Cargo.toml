@@ -1,0 +1,47 @@
+[package]
+name = "feagi-state-manager"
+version = "2.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Runtime state management for FEAGI - cross-platform, RTOS-compatible"
+repository = "https://github.com/Neuraville/FEAGI-2.0"
+authors = ["Neuraville Inc."]
+
+[features]
+default = ["std"]
+
+# Platform targets
+std = ["parking_lot", "crossbeam", "memmap2", "serde"]
+no_std = ["heapless", "spin", "critical-section"]
+wasm = ["wasm-bindgen", "js-sys", "web-sys"]
+wasm-threaded = ["wasm", "wasm_sync"]
+
+[dependencies]
+# Core (always available)
+atomic-polyfill = "1.0"
+ahash = { version = "0.8", default-features = false }
+
+# feagi-data-processing for efficient data structures (TODO: Add when published to crates.io)
+# feagi_data_structures = "0.0.50-beta.50"
+# feagi_data_serialization = "0.0.50-beta.50"
+
+# Standard Rust (desktop/server)
+parking_lot = { version = "0.12", optional = true }
+crossbeam = { version = "0.8", optional = true }
+memmap2 = { version = "0.9", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+# RTOS/embedded
+heapless = { version = "0.8", default-features = false, optional = true }
+spin = { version = "0.9", default-features = false, optional = true }
+critical-section = { version = "1.1", optional = true }
+
+# WASM (browser)
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
+web-sys = { version = "0.3", optional = true, features = ["Window", "Performance"] }
+wasm_sync = { version = "0.1", optional = true }
+
+[dev-dependencies]
+# TODO: Add benchmarks
+# criterion = "0.5"

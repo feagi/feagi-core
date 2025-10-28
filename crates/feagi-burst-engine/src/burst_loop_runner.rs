@@ -409,7 +409,9 @@ fn burst_loop(
                 let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
                 let mut _total_neurons = 0;
 
-                for (area_id, (_id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data.iter() {
+                // 🚀 ZERO-COPY OPTIMIZATION: Consume fire_data to avoid cloning vectors
+                // This eliminates ~1 MB allocation per burst @ 10 Hz = ~10 MB/sec saved
+                for (area_id, (_id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data {
                     _total_neurons += _id_vec.len();
 
                     // Debug: Log what areas we're encoding
@@ -419,7 +421,7 @@ fn burst_loop(
                         let area_name = npu
                             .lock()
                             .unwrap()
-                            .get_cortical_area_name(*area_id)
+                            .get_cortical_area_name(area_id)
                             .map(|s| s.to_string());
                         eprintln!(
                             "[BURST-LOOP] 🔍 Area {} ({}): {} neurons",
@@ -427,16 +429,14 @@ fn burst_loop(
                             area_name.as_deref().unwrap_or("unknown"),
                             _id_vec.len()
                         );
-                        if fire_data.len() == 1 {
-                            FIRST_AREAS_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
-                        }
+                        FIRST_AREAS_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
 
                     // Get cortical area name from NPU mapping
                     let cortical_name_opt = npu
                         .lock()
                         .unwrap()
-                        .get_cortical_area_name(*area_id)
+                        .get_cortical_area_name(area_id)
                         .map(|s| s.to_string());
                     let cortical_id = match cortical_name_opt {
                         Some(name) => {
@@ -462,11 +462,12 @@ fn burst_loop(
                         }
                     };
 
+                    // MOVED: Transfer ownership instead of cloning (zero-copy)
                     match NeuronVoxelXYZPArrays::new_from_vectors(
-                        x_vec.clone(),
-                        y_vec.clone(),
-                        z_vec.clone(),
-                        p_vec.clone(),
+                        x_vec,  // ✅ MOVE (no clone)
+                        y_vec,  // ✅ MOVE (no clone)
+                        z_vec,  // ✅ MOVE (no clone)
+                        p_vec,  // ✅ MOVE (no clone)
                     ) {
                         Ok(neuron_arrays) => {
                             cortical_mapped.insert(cortical_id, neuron_arrays);
@@ -530,6 +531,14 @@ fn burst_loop(
                                 FIRST_PUBLISH_LOGGED
                                     .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
+                            
+                            // DIAGNOSTIC: Track publish rate and data volume
+                            static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                            
+                            let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                            if count % 30 == 0 {  // Log every 30 publishes (~1 second at 30Hz)
+                                eprintln!("[BURST-LOOP] 📊 VIZ PUBLISH #{}: {} bytes/frame", count, buffer.len());
+                            }
 
                             match publisher.publish_visualization(&buffer) {
                                 Ok(_) => {
@@ -542,14 +551,7 @@ fn burst_loop(
                                     }
                                 }
                                 Err(e) => {
-                                    static VIZ_ERROR_LOGGED: std::sync::atomic::AtomicBool =
-                                        std::sync::atomic::AtomicBool::new(false);
-                                    if !VIZ_ERROR_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
-                                    {
-                                        eprintln!("[BURST-LOOP] ❌ CRITICAL: Failed to publish visualization: {}", e);
-                                        VIZ_ERROR_LOGGED
-                                            .store(true, std::sync::atomic::Ordering::Relaxed);
-                                    }
+                                    eprintln!("[BURST-LOOP] ❌ VIZ PUBLISH ERROR: {}", e);
                                 }
                             }
                         } else {

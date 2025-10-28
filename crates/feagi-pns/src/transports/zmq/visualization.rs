@@ -326,7 +326,15 @@ impl VisualizationStream {
             }
 
             match sock.send(&item.payload, 0) {
-                Ok(()) => break,
+                Ok(()) => {
+                    // DIAGNOSTIC: Track actual ZMQ send rate
+                    static SEND_COUNTER: AtomicU64 = AtomicU64::new(0);
+                    let count = SEND_COUNTER.fetch_add(1, Ordering::Relaxed);
+                    if count % 30 == 0 {  // Log every 30 sends
+                        eprintln!("[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)", count, item.payload.len());
+                    }
+                    break;
+                }
                 Err(zmq::Error::EAGAIN) => {
                     let waits = stats.record_backpressure_wait();
                     if waits == 1 || waits % 100 == 0 {

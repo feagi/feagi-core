@@ -60,10 +60,17 @@ impl ZmqStreams {
         })
     }
 
-    pub fn start(&self) -> Result<(), PNSError> {
+    /// Start only control streams (REST/registration) - safe before burst engine
+    pub fn start_control_streams(&self) -> Result<(), PNSError> {
         self.rest_stream
             .start()
             .map_err(|e| PNSError::Zmq(format!("REST start: {}", e)))?;
+        println!("🦀 [ZMQ-STREAMS] ✅ Control streams started (REST)");
+        Ok(())
+    }
+
+    /// Start data streams (sensory/motor/viz) - requires burst engine running
+    pub fn start_data_streams(&self) -> Result<(), PNSError> {
         self.motor_stream
             .start()
             .map_err(|e| PNSError::Zmq(format!("Motor start: {}", e)))?;
@@ -73,6 +80,14 @@ impl ZmqStreams {
         self.sensory_stream
             .start()
             .map_err(|e| PNSError::Zmq(format!("Sensory start: {}", e)))?;
+        println!("🦀 [ZMQ-STREAMS] ✅ Data streams started (sensory/motor/viz)");
+        Ok(())
+    }
+
+    /// Start all streams at once (legacy method for backward compatibility)
+    pub fn start(&self) -> Result<(), PNSError> {
+        self.start_control_streams()?;
+        self.start_data_streams()?;
         Ok(())
     }
 

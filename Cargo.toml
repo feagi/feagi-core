@@ -1,23 +1,102 @@
-[workspace]
-resolver = "2"
-members = [
-    "crates/feagi-types",
-    "crates/feagi-burst-engine",
-    "crates/feagi-plasticity",
-    "crates/feagi-bdu",
-    "crates/feagi-pns",
-    "crates/feagi-connectome-serialization",
-    "crates/feagi-agent-sdk",
-    "crates/feagi-inference-engine",
-    # "crates/feagi-zmq-server",  # Optional: High-performance ZMQ server (experimental)
-]
+# ============================================================================
+# MAIN FACADE CRATE: feagi
+# 
+# This is the primary crate that users import. It re-exports all components
+# with feature flags for selective compilation.
+# ============================================================================
 
-[workspace.package]
-version = "0.1.0"
+[package]
+name = "feagi"
+version = "2.0.0"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/feagi/feagi"
+description = "Framework for Evolutionary Artificial General Intelligence - Core Neural Computation"
+repository = "https://github.com/Neuraville/FEAGI-2.0"
+readme = "README.md"
+keywords = ["neuroscience", "ai", "neural-network", "brain", "agi"]
+categories = ["science", "simulation"]
+
+[features]
+default = ["std", "full"]
+
+# Platform targets
+std = [
+    "feagi-types/default",
+    "feagi-state-manager/std",
+    "feagi-burst-engine/default",
+]
+no_std = [
+    "feagi-state-manager/no_std",
+]
+wasm = [
+    "feagi-state-manager/wasm",
+]
+
+# Component features (selective compilation)
+full = ["compute", "io"]
+compute = ["burst-engine", "bdu", "plasticity", "serialization", "state-manager"]
+io = ["pns", "agent-sdk"]
+
+# Individual components
+burst-engine = ["feagi-burst-engine"]
+bdu = ["feagi-bdu"]
+plasticity = ["feagi-plasticity"]
+state-manager = ["feagi-state-manager"]
+serialization = ["feagi-connectome-serialization"]
+pns = ["feagi-pns"]
+agent-sdk = ["feagi-agent-sdk"]
+
+[dependencies]
+# Foundation
+feagi-types = { version = "2.0", path = "crates/feagi-types" }
+
+# Infrastructure
+feagi-state-manager = { version = "2.0", path = "crates/feagi-state-manager", optional = true }
+
+# Algorithms
+feagi-burst-engine = { version = "2.0", path = "crates/feagi-burst-engine", optional = true }
+feagi-bdu = { version = "2.0", path = "crates/feagi-bdu", optional = true }
+feagi-plasticity = { version = "2.0", path = "crates/feagi-plasticity", optional = true }
+feagi-connectome-serialization = { version = "2.0", path = "crates/feagi-connectome-serialization", optional = true }
+
+# I/O (will move to feagi-io later)
+feagi-pns = { version = "2.0", path = "crates/feagi-pns", optional = true }
+feagi-agent-sdk = { version = "2.0", path = "crates/feagi-agent-sdk", optional = true }
+
+# ============================================================================
+# WORKSPACE CONFIGURATION
+# ============================================================================
+
+[workspace]
+resolver = "2"
+members = [
+    # === Foundation Layer ===
+    "crates/feagi-types",              # Core data structures (Neuron, Synapse, etc.)
+    
+    # === Infrastructure Layer ===
+    "crates/feagi-state-manager",      # Runtime state management (NEW)
+    
+    # === Algorithm Layer (Core Neural Computation) ===
+    "crates/feagi-burst-engine",       # NPU execution & inference
+    "crates/feagi-bdu",                # Neurogenesis (brain development)
+    "crates/feagi-plasticity",         # Synaptic learning (STDP, memory)
+    "crates/feagi-connectome-serialization",  # Connectome persistence
+    
+    # === I/O Layer (TODO: Move to feagi-io repo) ===
+    "crates/feagi-pns",                # Peripheral Nervous System (ZMQ/UDP transport)
+    "crates/feagi-agent-sdk",          # Agent SDK (Rust client library)
+    
+    # === Applications ===
+    "crates/feagi-inference-engine",   # Standalone inference binary
+]
+
+[workspace.package]
+version = "2.0.0"
+edition = "2021"
+authors = ["Neuraville Inc. <feagi@neuraville.com>"]
+license = "Apache-2.0"
+repository = "https://github.com/Neuraville/FEAGI-2.0"
 
 [workspace.dependencies]
 # Core dependencies (shared across crates)
