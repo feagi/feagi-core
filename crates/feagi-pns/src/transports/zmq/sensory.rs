@@ -13,6 +13,9 @@ pub struct SensoryReceiveConfig {
     pub linger_ms: i32,
     pub immediate: bool,
     pub poll_timeout_ms: i64,
+    /// Duration in milliseconds to drain stale messages on startup
+    /// Real-time systems MUST discard buffered sensory data from previous sessions
+    pub startup_drain_timeout_ms: u64,
 }
 
 impl Default for SensoryReceiveConfig {
@@ -22,6 +25,7 @@ impl Default for SensoryReceiveConfig {
             linger_ms: 0,
             immediate: false,
             poll_timeout_ms: 1000,
+            startup_drain_timeout_ms: 500, // 500ms drain on startup
         }
     }
 }
@@ -33,6 +37,9 @@ impl SensoryReceiveConfig {
         }
         if self.poll_timeout_ms < 0 {
             return Err("poll_timeout_ms must be >= 0".to_string());
+        }
+        if self.startup_drain_timeout_ms > 10000 {
+            return Err("startup_drain_timeout_ms must be <= 10000ms (10 seconds)".to_string());
         }
         Ok(())
     }
@@ -107,6 +114,10 @@ impl SensoryStream {
 
         println!("🦀 [ZMQ-SENSORY] ✅ Listening on {}", self.bind_address);
 
+        // CRITICAL: Drain stale buffered messages before processing real-time data
+        // Real-time systems must discard residual sensory data from previous sessions
+        self.drain_stale_messages();
+
         // Start processing loop
         self.start_processing_loop();
 
@@ -127,6 +138,69 @@ impl SensoryStream {
 
         *self.socket.lock() = None;
         Ok(())
+    }
+
+    /// Drain all stale buffered messages on startup (real-time requirement)
+    ///
+    /// CRITICAL for real-time systems: Residual sensory data from previous sessions
+    /// or disconnected agents is garbage and must be discarded before processing
+    /// begins. This method drains the ZMQ receive buffer using non-blocking reads
+    /// until the configured timeout expires.
+    fn drain_stale_messages(&self) {
+        let drain_start = std::time::Instant::now();
+        let drain_timeout = std::time::Duration::from_millis(self.config.startup_drain_timeout_ms);
+        let mut drained_count = 0u64;
+
+        println!(
+            "🦀 [ZMQ-SENSORY] 🗑️  Draining stale messages (timeout: {}ms)...",
+            self.config.startup_drain_timeout_ms
+        );
+
+        let sock_guard = self.socket.lock();
+        let sock = match sock_guard.as_ref() {
+            Some(s) => s,
+            None => {
+                eprintln!("🦀 [ZMQ-SENSORY] [ERR] Cannot drain - socket not initialized");
+                return;
+            }
+        };
+
+        // Drain loop: read and discard all buffered messages until timeout
+        loop {
+            // Check timeout
+            if drain_start.elapsed() >= drain_timeout {
+                break;
+            }
+
+            // Non-blocking receive (DONTWAIT flag)
+            let mut msg = zmq::Message::new();
+            match sock.recv(&mut msg, zmq::DONTWAIT) {
+                Ok(()) => {
+                    drained_count += 1;
+                    // Message discarded - we don't process stale data
+                }
+                Err(zmq::Error::EAGAIN) => {
+                    // No more messages available - buffer is empty
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("🦀 [ZMQ-SENSORY] [ERR] Drain error: {}", e);
+                    break;
+                }
+            }
+        }
+
+        drop(sock_guard);
+
+        if drained_count > 0 {
+            println!(
+                "🦀 [ZMQ-SENSORY] 🗑️  Drained {} stale messages ({:.1}ms)",
+                drained_count,
+                drain_start.elapsed().as_secs_f64() * 1000.0
+            );
+        } else {
+            println!("🦀 [ZMQ-SENSORY] ✅ No stale messages found (buffer was clean)");
+        }
     }
 
     /// Start the background processing loop
