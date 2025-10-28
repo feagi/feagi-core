@@ -839,6 +839,7 @@ version = "2.0.0"
 dependencies = [
  "ahash",
  "atomic-polyfill",
+ "bincode",
  "critical-section",
  "crossbeam",
  "heapless",
