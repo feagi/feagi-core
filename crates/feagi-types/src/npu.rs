@@ -765,11 +765,16 @@ mod tests {
         let mut neurons = NeuronArray::new(100);
         let id = neurons
             .add_neuron(
-                1.0, // threshold
-                0.1, // leak_rate
-                5,   // refractory_period
-                1.0, // excitability
-                1,   // cortical_area
+                1.0,    // threshold
+                0.1,    // leak_coefficient
+                0.0,    // resting_potential
+                0,      // neuron_type
+                5,      // refractory_period
+                1.0,    // excitability
+                0,      // consecutive_fire_limit
+                0,      // snooze_period
+                true,   // mp_charge_accumulation
+                1,      // cortical_area
                 10, 5, 3, // x, y, z
             )
             .unwrap();

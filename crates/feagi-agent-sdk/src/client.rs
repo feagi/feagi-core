@@ -143,6 +143,9 @@ impl AgentClient {
 
         // Sensory socket (PUSH - for sending data to FEAGI)
         let sensory_socket = self.context.socket(zmq::PUSH)?;
+        sensory_socket.set_sndhwm(self.config.sensory_send_hwm)?;
+        sensory_socket.set_linger(self.config.sensory_linger_ms)?;
+        sensory_socket.set_immediate(self.config.sensory_immediate)?;
         sensory_socket.connect(&self.config.sensory_endpoint)?;
         self.sensory_socket = Some(sensory_socket);
 

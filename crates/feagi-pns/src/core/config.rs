@@ -1,7 +1,7 @@
 //! PNS configuration
 
 #[cfg(feature = "zmq-transport")]
-use crate::transports::zmq::VisualizationSendConfig;
+use crate::transports::zmq::{SensoryReceiveConfig, VisualizationSendConfig};
 
 #[cfg(feature = "udp-transport")]
 use crate::transports::udp::UdpConfig;
@@ -31,6 +31,8 @@ pub struct PNSConfig {
     pub zmq_sensory_address: String,
     #[cfg(feature = "zmq-transport")]
     pub visualization_stream: VisualizationSendConfig,
+    #[cfg(feature = "zmq-transport")]
+    pub sensory_stream: SensoryReceiveConfig,
 
     // === UDP Configuration ===
     #[cfg(feature = "udp-transport")]
@@ -62,6 +64,8 @@ impl Default for PNSConfig {
             zmq_sensory_address: "tcp://0.0.0.0:5558".to_string(), // Sensory input port
             #[cfg(feature = "zmq-transport")]
             visualization_stream: VisualizationSendConfig::default(),
+            #[cfg(feature = "zmq-transport")]
+            sensory_stream: SensoryReceiveConfig::default(),
 
             // UDP defaults
             #[cfg(feature = "udp-transport")]

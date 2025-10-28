@@ -264,6 +264,7 @@ impl PNS {
                 &self.config.zmq_sensory_address,
                 Arc::clone(&self.registration_handler),
                 self.config.visualization_stream.clone(),
+                self.config.sensory_stream.clone(),
             )?;
 
             zmq_streams.start()?;

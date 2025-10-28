@@ -7,7 +7,7 @@ mod visualization;
 
 pub use motor::MotorStream;
 pub use rest::RestStream;
-pub use sensory::SensoryStream;
+pub use sensory::{SensoryReceiveConfig, SensoryStream};
 pub use visualization::{
     VisualizationOverflowStrategy, VisualizationSendConfig, VisualizationStream,
 };
@@ -32,6 +32,7 @@ impl ZmqStreams {
         sensory_address: &str,
         registration_handler: Arc<Mutex<RegistrationHandler>>,
         viz_config: VisualizationSendConfig,
+        sensory_config: SensoryReceiveConfig,
     ) -> Result<Self, PNSError> {
         let context = Arc::new(zmq::Context::new());
 
@@ -47,8 +48,9 @@ impl ZmqStreams {
         let viz_stream = VisualizationStream::new(Arc::clone(&context), viz_address, viz_config)
             .map_err(|e| PNSError::Zmq(format!("Viz stream: {}", e)))?;
 
-        let sensory_stream = SensoryStream::new(Arc::clone(&context), sensory_address)
-            .map_err(|e| PNSError::Zmq(format!("Sensory stream: {}", e)))?;
+        let sensory_stream =
+            SensoryStream::new(Arc::clone(&context), sensory_address, sensory_config)
+                .map_err(|e| PNSError::Zmq(format!("Sensory stream: {}", e)))?;
 
         Ok(Self {
             rest_stream,

@@ -1209,6 +1209,51 @@ impl RustNPU {
         updated_count
     }
 
+    /// Batch update MP charge accumulation for multiple neurons
+    /// Returns number of neurons updated
+    pub fn batch_update_mp_charge_accumulation(
+        &mut self,
+        neuron_ids: &[u32],
+        values: &[bool],
+    ) -> usize {
+        if neuron_ids.len() != values.len() {
+            return 0;
+        }
+
+        let mut updated_count = 0;
+        for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
+            let idx = *neuron_id as usize;
+            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+                self.neuron_array.mp_charge_accumulation[idx] = *value;
+                updated_count += 1;
+            }
+        }
+
+        updated_count
+    }
+
+    /// Update MP charge accumulation for all neurons in a cortical area
+    /// Returns number of neurons updated
+    pub fn update_cortical_area_mp_charge_accumulation(
+        &mut self,
+        cortical_area: u32,
+        mp_charge_accumulation: bool,
+    ) -> usize {
+        let mut updated_count = 0;
+
+        // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
+        for idx in 0..self.neuron_array.count {
+            if self.neuron_array.valid_mask[idx]
+                && self.neuron_array.cortical_areas[idx] == cortical_area
+            {
+                self.neuron_array.mp_charge_accumulation[idx] = mp_charge_accumulation;
+                updated_count += 1;
+            }
+        }
+
+        updated_count
+    }
+
     /// Delete a neuron (mark as invalid)
     /// Returns true if successful, false if neuron out of bounds
     pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {

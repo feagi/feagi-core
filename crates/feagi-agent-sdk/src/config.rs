@@ -43,6 +43,13 @@ pub struct AgentConfig {
 
     /// Retry backoff base in milliseconds
     pub retry_backoff_ms: u64,
+
+    /// ZMQ PUSH socket high-water-mark for sensory data
+    pub sensory_send_hwm: i32,
+    /// ZMQ PUSH socket linger period when disconnecting
+    pub sensory_linger_ms: i32,
+    /// Whether to enable ZMQ immediate mode on the sensory socket
+    pub sensory_immediate: bool,
 }
 
 impl AgentConfig {
@@ -73,6 +80,9 @@ impl AgentConfig {
             connection_timeout_ms: 5000,
             registration_retries: 3,
             retry_backoff_ms: 1000,
+            sensory_send_hwm: 1000,
+            sensory_linger_ms: 0,
+            sensory_immediate: false,
         }
     }
 
@@ -184,6 +194,19 @@ impl AgentConfig {
     /// Set registration retry attempts
     pub fn with_registration_retries(mut self, retries: u32) -> Self {
         self.registration_retries = retries;
+        self
+    }
+
+    /// Configure sensory socket behaviour (ZMQ PUSH)
+    pub fn with_sensory_socket_config(
+        mut self,
+        send_hwm: i32,
+        linger_ms: i32,
+        immediate: bool,
+    ) -> Self {
+        self.sensory_send_hwm = send_hwm;
+        self.sensory_linger_ms = linger_ms;
+        self.sensory_immediate = immediate;
         self
     }
 
@@ -400,6 +423,12 @@ impl AgentConfig {
                     "visualization_endpoint must start with tcp://".to_string(),
                 ));
             }
+        }
+
+        if self.sensory_send_hwm < 0 {
+            return Err(SdkError::InvalidConfig(
+                "sensory_send_hwm must be >= 0".to_string(),
+            ));
         }
 
         Ok(())

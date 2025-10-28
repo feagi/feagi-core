@@ -6,6 +6,38 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 use std::thread;
 
+/// Runtime configuration for the ZMQ sensory receiver.
+#[derive(Clone, Debug)]
+pub struct SensoryReceiveConfig {
+    pub receive_high_water_mark: i32,
+    pub linger_ms: i32,
+    pub immediate: bool,
+    pub poll_timeout_ms: i64,
+}
+
+impl Default for SensoryReceiveConfig {
+    fn default() -> Self {
+        Self {
+            receive_high_water_mark: 1000,
+            linger_ms: 0,
+            immediate: false,
+            poll_timeout_ms: 1000,
+        }
+    }
+}
+
+impl SensoryReceiveConfig {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.receive_high_water_mark < 0 {
+            return Err("receive_high_water_mark must be >= 0".to_string());
+        }
+        if self.poll_timeout_ms < 0 {
+            return Err("poll_timeout_ms must be >= 0".to_string());
+        }
+        Ok(())
+    }
+}
+
 /// Sensory stream for receiving sensory data from agents
 #[derive(Clone)]
 pub struct SensoryStream {
@@ -13,6 +45,7 @@ pub struct SensoryStream {
     bind_address: String,
     socket: Arc<Mutex<Option<zmq::Socket>>>,
     running: Arc<Mutex<bool>>,
+    config: SensoryReceiveConfig,
     /// Reference to Rust NPU for direct injection (no FFI overhead!)
     npu: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>>>>,
     /// Statistics
@@ -22,12 +55,18 @@ pub struct SensoryStream {
 
 impl SensoryStream {
     /// Create a new sensory stream
-    pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, String> {
+    pub fn new(
+        context: Arc<zmq::Context>,
+        bind_address: &str,
+        config: SensoryReceiveConfig,
+    ) -> Result<Self, String> {
+        config.validate()?;
         Ok(Self {
             context,
             bind_address: bind_address.to_string(),
             socket: Arc::new(Mutex::new(None)),
             running: Arc::new(Mutex::new(false)),
+            config,
             npu: Arc::new(Mutex::new(None)),
             total_messages: Arc::new(Mutex::new(0)),
             total_neurons: Arc::new(Mutex::new(0)),
@@ -51,10 +90,13 @@ impl SensoryStream {
 
         // Set socket options
         socket
-            .set_linger(0) // Don't wait on close
+            .set_linger(self.config.linger_ms)
             .map_err(|e| e.to_string())?;
         socket
-            .set_rcvhwm(1000) // High water mark for receive buffer
+            .set_rcvhwm(self.config.receive_high_water_mark)
+            .map_err(|e| e.to_string())?;
+        socket
+            .set_immediate(self.config.immediate)
             .map_err(|e| e.to_string())?;
 
         // Bind socket
@@ -94,6 +136,7 @@ impl SensoryStream {
         let npu = Arc::clone(&self.npu);
         let total_messages = Arc::clone(&self.total_messages);
         let total_neurons = Arc::clone(&self.total_neurons);
+        let config = self.config.clone();
 
         thread::spawn(move || {
             println!("🦀 [ZMQ-SENSORY] Processing loop started");
@@ -113,7 +156,7 @@ impl SensoryStream {
 
                 // Poll for messages with timeout
                 let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
-                if let Err(e) = zmq::poll(poll_items, 1000) {
+                if let Err(e) = zmq::poll(poll_items, config.poll_timeout_ms) {
                     eprintln!("🦀 [ZMQ-SENSORY] [ERR] Poll error: {}", e);
                     continue;
                 }
@@ -303,7 +346,33 @@ mod tests {
     #[test]
     fn test_sensory_stream_creation() {
         let ctx = Arc::new(zmq::Context::new());
-        let stream = SensoryStream::new(ctx, "tcp://127.0.0.1:5558");
+        let stream =
+            SensoryStream::new(ctx, "tcp://127.0.0.1:5558", SensoryReceiveConfig::default());
         assert!(stream.is_ok());
+    }
+
+    #[test]
+    fn test_sensory_stream_applies_socket_config() {
+        let ctx = Arc::new(zmq::Context::new());
+        let config = SensoryReceiveConfig {
+            receive_high_water_mark: 3,
+            linger_ms: 0,
+            immediate: true,
+            poll_timeout_ms: 10,
+        };
+
+        let stream =
+            SensoryStream::new(Arc::clone(&ctx), "tcp://127.0.0.1:5568", config.clone()).unwrap();
+        stream.start().unwrap();
+
+        {
+            let socket_guard = stream.socket.lock();
+            let socket = socket_guard.as_ref().expect("socket must be initialized");
+            assert_eq!(socket.get_rcvhwm().unwrap(), config.receive_high_water_mark);
+            assert_eq!(socket.get_linger().unwrap(), config.linger_ms);
+            assert_eq!(socket.get_immediate().unwrap(), config.immediate);
+        }
+
+        stream.stop().unwrap();
     }
 }
