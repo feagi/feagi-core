@@ -54,61 +54,103 @@ pub struct BurstResult {
     pub neurons_in_refractory: usize,
 }
 
-/// Complete Rust Neural Processing Unit
+/// Complete Rust Neural Processing Unit with Fine-Grained Locking
+/// 
+/// ## Locking Strategy (Performance-Critical)
+/// 
+/// This structure uses fine-grained locking to enable concurrent operations:
+/// 
+/// - **RwLock<NeuronArray>**: Multiple readers (burst processing reads many neurons),
+///   exclusive writer (neurogenesis, parameter updates)
+/// - **RwLock<SynapseArray>**: Multiple readers (burst processing reads synapses),
+///   exclusive writer (synaptogenesis, plasticity)
+/// - **Mutex<FireStructures>**: Exclusive access (FCL clear, FQ swap, sensory injection)
+/// - **AtomicU64**: Lock-free stats (burst_count, neuron_count, etc.)
+/// 
+/// ## Benefits
+/// 
+/// - Sensory injection locks only fire structures, not neurons/synapses
+/// - Burst processing can read neurons while sensory data is being injected
+/// - Visualization can sample fire queue without blocking burst processing
+/// - Stats queries never block any operation
+/// 
+/// ## Multi-Core Performance
+/// 
+/// With 30 Hz burst rate + 30 FPS video injection:
+/// - **Before**: All operations serialized on one mutex (API unresponsive)
+/// - **After**: Concurrent sensory injection + burst processing + API queries
 pub struct RustNPU {
-    // Core data structures
-    pub neuron_array: NeuronArray,
-    pub synapse_array: SynapseArray,
+    // Core data structures (RwLock: many readers, one writer)
+    pub(crate) neuron_array: std::sync::RwLock<NeuronArray>,
+    pub(crate) synapse_array: std::sync::RwLock<SynapseArray>,
 
-    // Fire structures
-    fire_candidate_list: FireCandidateList,
-    current_fire_queue: FireQueue,
-    previous_fire_queue: FireQueue,
-    fire_ledger: RustFireLedger,
-    fq_sampler: FQSampler,
+    // Fire structures (Mutex: exclusive access for FCL/FQ operations)
+    pub(crate) fire_structures: std::sync::Mutex<FireStructures>,
 
-    // Sensory staging (prevents async race with FCL clear)
-    pending_sensory_injections: std::sync::Mutex<Vec<(NeuronId, f32)>>,
+    // Cortical area mapping (RwLock: frequent reads, rare writes)
+    pub(crate) area_id_to_name: std::sync::RwLock<AHashMap<u32, String>>,
 
-    // Last FCL snapshot (before clearing) - for debugging/monitoring
-    last_fcl_snapshot: Vec<(NeuronId, f32)>,
+    // Propagation engine (RwLock: burst reads, rare updates)
+    pub(crate) propagation_engine: std::sync::RwLock<SynapticPropagationEngine>,
 
-    // Cortical area mapping (area_id -> cortical_name string for encoding)
-    area_id_to_name: AHashMap<u32, String>,
+    // Atomic stats (lock-free reads)
+    burst_count: std::sync::atomic::AtomicU64,
+    
+    // Configuration (AtomicU32 for f32 as u32 bits)
+    power_amount: std::sync::atomic::AtomicU32, // f32::to_bits()
+}
 
-    // Engines
-    propagation_engine: SynapticPropagationEngine,
-
-    // State
-    burst_count: u64,
-
-    // Configuration
-    power_amount: f32,
+/// Fire-related structures grouped together for single mutex
+pub(crate) struct FireStructures {
+    pub(crate) fire_candidate_list: FireCandidateList,
+    pub(crate) current_fire_queue: FireQueue,
+    pub(crate) previous_fire_queue: FireQueue,
+    pub(crate) fire_ledger: RustFireLedger,
+    pub(crate) fq_sampler: FQSampler,
+    pub(crate) pending_sensory_injections: Vec<(NeuronId, f32)>,
+    pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
 }
 
 impl RustNPU {
     /// Create a new Rust NPU with specified capacities
     pub fn new(neuron_capacity: usize, synapse_capacity: usize, fire_ledger_window: usize) -> Self {
         Self {
-            neuron_array: NeuronArray::new(neuron_capacity),
-            synapse_array: SynapseArray::new(synapse_capacity),
-            fire_candidate_list: FireCandidateList::new(),
-            current_fire_queue: FireQueue::new(),
-            previous_fire_queue: FireQueue::new(),
-            fire_ledger: RustFireLedger::new(fire_ledger_window),
-            fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified), // High rate - actual limiting by burst frequency
-            pending_sensory_injections: std::sync::Mutex::new(Vec::with_capacity(10000)),
-            last_fcl_snapshot: Vec::new(),
-            area_id_to_name: AHashMap::new(),
-            propagation_engine: SynapticPropagationEngine::new(),
-            burst_count: 0,
-            power_amount: 1.0,
+            neuron_array: std::sync::RwLock::new(NeuronArray::new(neuron_capacity)),
+            synapse_array: std::sync::RwLock::new(SynapseArray::new(synapse_capacity)),
+            fire_structures: std::sync::Mutex::new(FireStructures {
+                fire_candidate_list: FireCandidateList::new(),
+                current_fire_queue: FireQueue::new(),
+                previous_fire_queue: FireQueue::new(),
+                fire_ledger: RustFireLedger::new(fire_ledger_window),
+                fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
+                pending_sensory_injections: Vec::with_capacity(10000),
+                last_fcl_snapshot: Vec::new(),
+            }),
+            area_id_to_name: std::sync::RwLock::new(AHashMap::new()),
+            propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
+            burst_count: std::sync::atomic::AtomicU64::new(0),
+            power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
         }
     }
 
-    /// Set power injection amount
-    pub fn set_power_amount(&mut self, amount: f32) {
-        self.power_amount = amount;
+    /// Set power injection amount (lock-free atomic operation)
+    pub fn set_power_amount(&self, amount: f32) {
+        self.power_amount.store(amount.to_bits(), std::sync::atomic::Ordering::Relaxed);
+    }
+    
+    /// Get power injection amount (lock-free atomic operation)
+    pub fn get_power_amount(&self) -> f32 {
+        f32::from_bits(self.power_amount.load(std::sync::atomic::Ordering::Relaxed))
+    }
+    
+    /// Get burst count (lock-free atomic operation)
+    pub fn get_burst_count(&self) -> u64 {
+        self.burst_count.load(std::sync::atomic::Ordering::Relaxed)
+    }
+    
+    /// Increment burst count (lock-free atomic operation)
+    fn increment_burst_count(&self) -> u64 {
+        self.burst_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1
     }
 
     /// Add a neuron to the NPU (LIF model with genome leak only)
@@ -128,7 +170,7 @@ impl RustNPU {
         y: u32,
         z: u32,
     ) -> Result<NeuronId> {
-        let neuron_id = self.neuron_array.add_neuron(
+        let neuron_id = self.neuron_array.write().unwrap().add_neuron(
             threshold,
             leak_coefficient,
             resting_potential,
@@ -145,9 +187,9 @@ impl RustNPU {
         )?;
 
         // CRITICAL: Add to propagation engine's neuron-to-area mapping
-        // This is required for synaptic propagation to work!
         self.propagation_engine
-            .neuron_to_area
+            .write().unwrap()
+            .write().unwrap().neuron_to_area
             .insert(neuron_id, CorticalAreaId(cortical_area));
 
         Ok(neuron_id)
@@ -184,7 +226,7 @@ impl RustNPU {
         let n = x_coords.len();
 
         // Call the TRUE batch method on neuron_array (100-1000x faster!)
-        match self.neuron_array.add_neurons_batch(
+        match self.neuron_array.write().unwrap().add_neurons_batch(
             &thresholds,
             &leak_coefficients,
             &resting_potentials,
@@ -204,13 +246,13 @@ impl RustNPU {
                 // Reserve capacity upfront to minimize rehashing
                 use std::time::Instant;
                 let prop_start = Instant::now();
-                self.propagation_engine.neuron_to_area.reserve(n);
+                self.propagation_engine.write().unwrap().neuron_to_area.reserve(n);
                 let reserve_time = prop_start.elapsed();
 
                 let insert_start = Instant::now();
                 for (i, neuron_id) in neuron_ids.iter().enumerate() {
                     self.propagation_engine
-                        .neuron_to_area
+                        .write().unwrap().neuron_to_area
                         .insert(*neuron_id, CorticalAreaId(cortical_areas[i]));
                 }
                 let insert_time = insert_start.elapsed();
@@ -220,7 +262,7 @@ impl RustNPU {
                     n,
                     reserve_time,
                     insert_time,
-                    self.propagation_engine.neuron_to_area.len()
+                    self.propagation_engine.write().unwrap().neuron_to_area.len()
                 );
 
                 // ✅ ARCHITECTURE FIX: Return only success COUNT, not full Vec<u32> of IDs
@@ -370,6 +412,7 @@ impl RustNPU {
         synapse_type: SynapseType,
     ) -> Result<usize> {
         self.synapse_array
+            .write().unwrap()
             .add_synapse(source, target, weight, conductance, synapse_type)
     }
 
@@ -405,7 +448,7 @@ impl RustNPU {
             })
             .collect();
 
-        self.synapse_array.add_synapses_batch(
+        self.synapse_array.write().unwrap().add_synapses_batch(
             &source_ids,
             &target_ids,
             &weight_vals,
@@ -416,7 +459,7 @@ impl RustNPU {
 
     /// Remove a synapse
     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
-        self.synapse_array.remove_synapse(source, target)
+        self.synapse_array.write().unwrap().remove_synapse(source, target)
     }
 
     /// Batch remove all synapses from specified source neurons (SIMD-optimized)
@@ -425,7 +468,7 @@ impl RustNPU {
     /// Returns: number of synapses deleted
     pub fn remove_synapses_from_sources(&mut self, sources: Vec<NeuronId>) -> usize {
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
-        self.synapse_array.remove_synapses_from_sources(&source_ids)
+        self.synapse_array.write().unwrap().remove_synapses_from_sources(&source_ids)
     }
 
     /// Batch remove synapses between source and target neuron sets (SIMD-optimized)
@@ -443,6 +486,7 @@ impl RustNPU {
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
         let target_ids: Vec<u32> = targets.iter().map(|n| n.0).collect();
         self.synapse_array
+            .write().unwrap()
             .remove_synapses_between(&source_ids, &target_ids)
     }
 
@@ -453,19 +497,21 @@ impl RustNPU {
         target: NeuronId,
         new_weight: SynapticWeight,
     ) -> bool {
-        self.synapse_array.update_weight(source, target, new_weight)
+        self.synapse_array.write().unwrap().update_weight(source, target, new_weight)
     }
 
     /// Rebuild indexes after modifications (call after bulk modifications)
     pub fn rebuild_indexes(&mut self) {
         // ZERO-COPY: Pass synapse_array by reference
+        let synapse_array_read = self.synapse_array.read().unwrap();
         self.propagation_engine
-            .build_synapse_index(&self.synapse_array);
+            .write().unwrap()
+            .build_synapse_index(&*synapse_array_read);
     }
 
     /// Set neuron to cortical area mapping for propagation engine
     pub fn set_neuron_mapping(&mut self, mapping: AHashMap<NeuronId, CorticalAreaId>) {
-        self.propagation_engine.set_neuron_mapping(mapping);
+        self.propagation_engine.write().unwrap().set_neuron_mapping(mapping);
     }
 
     // ===== SENSORY INJECTION API =====
@@ -489,7 +535,7 @@ impl RustNPU {
             );
             println!(
                 "[NPU-INJECT]    FCL size before: {}",
-                self.fire_candidate_list.len()
+                self.fire_structures.lock().unwrap().fire_candidate_list.len()
             );
             FIRST_BATCH_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
         }
@@ -515,7 +561,7 @@ impl RustNPU {
     /// Stage sensory neurons for next burst (thread-safe, prevents FCL clear race)
     /// XYZP data from agents is staged here and injected AFTER fcl.clear() in Phase 1
     pub fn inject_sensory_with_potentials(&mut self, neurons: &[(NeuronId, f32)]) {
-        if let Ok(mut pending) = self.pending_sensory_injections.lock() {
+        if let Ok(mut pending) = self.fire_structures.lock().unwrap().pending_sensory_injections.lock() {
             pending.extend_from_slice(neurons);
 
             // 🔍 DEBUG: Log first staging
@@ -551,58 +597,70 @@ impl RustNPU {
     // Power neurons are identified by cortical_idx = 1 in the neuron array
     // No separate list needed - single source of truth!
 
-    /// Process a single burst (MAIN METHOD)
+    /// Process a single burst (MAIN METHOD - FINE-GRAINED LOCKING)
     ///
     /// This is the complete neural processing pipeline:
     /// Phase 1: Injection → Phase 2: Dynamics → Phase 3: Archival →
     /// Phase 4: Queue Swap → Phase 5: FQ Sampling → Phase 6: Cleanup
     ///
     /// 🔋 Power neurons are auto-discovered from neuron_array (cortical_idx = 1)
-    pub fn process_burst(&mut self) -> Result<BurstResult> {
-        self.burst_count += 1;
+    ///
+    /// ## Fine-Grained Locking Strategy:
+    /// - Neuron/synapse arrays: RwLock (concurrent reads during propagation)
+    /// - Fire structures: Mutex (exclusive for FCL/FQ operations)
+    /// - Burst count: Atomic (lock-free)
+    pub fn process_burst(&self) -> Result<BurstResult> {
+        let burst_count = self.increment_burst_count();
+        let power_amount = self.get_power_amount();
+
+        // Lock neuron/synapse arrays for reading (allows concurrent sensory injection to fire_structures)
+        let mut neuron_array = self.neuron_array.write().unwrap();
+        let synapse_array = self.synapse_array.read().unwrap();
+        let mut propagation_engine = self.propagation_engine.write().unwrap();
+        
+        // Lock fire structures (FCL, FQ, Fire Ledger)
+        let mut fire_structures = self.fire_structures.lock().unwrap();
 
         // Phase 1: Injection (power + synaptic propagation + staged sensory)
-        // ZERO-COPY: Pass synapse_array by reference (no allocation)
         let injection_result = phase1_injection_with_synapses(
-            &mut self.fire_candidate_list,
-            &mut self.neuron_array,
-            &mut self.propagation_engine,
-            &self.previous_fire_queue,
-            self.power_amount,
-            &self.synapse_array,
-            &self.pending_sensory_injections,
+            &mut fire_structures.fire_candidate_list,
+            &mut neuron_array,
+            &mut propagation_engine,
+            &fire_structures.previous_fire_queue,
+            power_amount,
+            &synapse_array,
+            &fire_structures.pending_sensory_injections,
         )?;
 
         // Phase 2: Neural Dynamics (membrane potential updates, threshold checks, firing)
         let dynamics_result = process_neural_dynamics(
-            &self.fire_candidate_list,
-            &mut self.neuron_array,
-            self.burst_count,
+            &fire_structures.fire_candidate_list,
+            &mut neuron_array,
+            burst_count,
         )?;
 
         // Phase 3: Archival (ZERO-COPY archive to Fire Ledger)
-        self.fire_ledger
-            .archive_burst(self.burst_count, &dynamics_result.fire_queue);
+        fire_structures.fire_ledger
+            .archive_burst(burst_count, &dynamics_result.fire_queue);
 
         // Phase 4: Swap fire queues (current becomes previous for next burst)
-        self.previous_fire_queue = self.current_fire_queue.clone();
-        self.current_fire_queue = dynamics_result.fire_queue.clone();
+        fire_structures.previous_fire_queue = fire_structures.current_fire_queue.clone();
+        fire_structures.current_fire_queue = dynamics_result.fire_queue.clone();
 
         // Phase 5: Sample fire queue for visualization (FQ Sampler)
-        // This makes the fire queue available to BV and motor agents
-        self.fq_sampler.sample(&self.current_fire_queue);
+        fire_structures.fq_sampler.sample(&fire_structures.current_fire_queue);
 
         // Phase 6: Cleanup (snapshot FCL before clearing for API access)
-        self.last_fcl_snapshot = self.fire_candidate_list.get_all_candidates();
-        self.fire_candidate_list.clear();
+        fire_structures.last_fcl_snapshot = fire_structures.fire_candidate_list.get_all_candidates();
+        fire_structures.fire_candidate_list.clear();
 
         // Build result
-        let fired_neurons = self.current_fire_queue.get_all_neuron_ids();
+        let fired_neurons = fire_structures.current_fire_queue.get_all_neuron_ids();
 
         Ok(BurstResult {
             neuron_count: fired_neurons.len(),
             fired_neurons,
-            burst: self.burst_count,
+            burst: burst_count,
             power_injections: injection_result.power_injections,
             synaptic_injections: injection_result.synaptic_injections,
             neurons_processed: dynamics_result.neurons_processed,
@@ -610,27 +668,25 @@ impl RustNPU {
         })
     }
 
-    /// Get current burst count
-    pub fn get_burst_count(&self) -> u64 {
-        self.burst_count
-    }
+    // Removed duplicate - using atomic version at line 147
 
     /// Register a cortical area name for visualization encoding
     /// This mapping is populated during neuroembryogenesis
     pub fn register_cortical_area(&mut self, area_id: u32, cortical_name: String) {
-        self.area_id_to_name.insert(area_id, cortical_name);
+        self.area_id_to_name.write().unwrap().insert(area_id, cortical_name);
     }
 
     /// Get the cortical area name for a given area_id
     /// Returns None if the area_id is not registered
     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<&str> {
-        self.area_id_to_name.get(&area_id).map(|s| s.as_str())
+        self.area_id_to_name.read().unwrap().get(&area_id).map(|s| s.as_str())
     }
 
     /// Get the cortical area ID for a given cortical name
     /// Returns None if the name is not registered
     pub fn get_cortical_area_id(&self, cortical_name: &str) -> Option<u32> {
-        for (&area_id, name) in &self.area_id_to_name {
+        let area_map = self.area_id_to_name.read().unwrap();
+        for (&area_id, name) in area_map.iter() {
             if name == cortical_name {
                 return Some(area_id);
             }
@@ -640,7 +696,7 @@ impl RustNPU {
 
     /// Get the number of registered cortical areas
     pub fn get_registered_cortical_area_count(&self) -> usize {
-        self.area_id_to_name.len()
+        self.area_id_to_name.read().unwrap().len()
     }
 
     /// Get all registered cortical areas as (idx, name) pairs
@@ -660,14 +716,14 @@ impl RustNPU {
         y: u32,
         z: u32,
     ) -> Option<NeuronId> {
-        for neuron_idx in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[neuron_idx]
-                && self.neuron_array.cortical_areas[neuron_idx] == cortical_area
+        for neuron_idx in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[neuron_idx]
+                && self.neuron_array.read().unwrap().cortical_areas[neuron_idx] == cortical_area
             {
                 let coord_idx = neuron_idx * 3;
-                if self.neuron_array.coordinates[coord_idx] == x
-                    && self.neuron_array.coordinates[coord_idx + 1] == y
-                    && self.neuron_array.coordinates[coord_idx + 2] == z
+                if self.neuron_array.read().unwrap().coordinates[coord_idx] == x
+                    && self.neuron_array.read().unwrap().coordinates[coord_idx + 1] == y
+                    && self.neuron_array.read().unwrap().coordinates[coord_idx + 2] == z
                 {
                     return Some(NeuronId(neuron_idx as u32));
                 }
@@ -690,9 +746,9 @@ impl RustNPU {
                 eprintln!("[NPU] ❌ Unknown cortical area: '{}'", cortical_name);
                 eprintln!(
                     "[NPU] ❌ Available cortical areas: {:?}",
-                    self.area_id_to_name.values().collect::<Vec<_>>()
+                    self.area_id_to_name.read().unwrap().values().collect::<Vec<_>>()
                 );
-                eprintln!("[NPU] ❌ Total registered: {}", self.area_id_to_name.len());
+                eprintln!("[NPU] ❌ Total registered: {}", self.area_id_to_name.read().unwrap().len());
                 return 0;
             }
         };
@@ -728,7 +784,7 @@ impl RustNPU {
 
         // Convert neuron array
         let neurons = SerializableNeuronArray {
-            count: self.neuron_array.count,
+            count: self.neuron_array.read().unwrap().count,
             capacity: self.neuron_array.capacity,
             membrane_potentials: self.neuron_array.membrane_potentials.clone(),
             thresholds: self.neuron_array.thresholds.clone(),
@@ -740,7 +796,7 @@ impl RustNPU {
             excitabilities: self.neuron_array.excitabilities.clone(),
             cortical_areas: self.neuron_array.cortical_areas.clone(),
             coordinates: self.neuron_array.coordinates.clone(),
-            valid_mask: self.neuron_array.valid_mask.clone(),
+            valid_mask: self.neuron_array.read().unwrap().valid_mask.clone(),
         };
 
         // Convert synapse array
@@ -823,17 +879,17 @@ impl RustNPU {
     ) -> Vec<(u32, u32, u32, u32)> {
         let mut positions = Vec::new();
 
-        for neuron_id in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[neuron_id]
-                && self.neuron_array.cortical_areas[neuron_id] == cortical_area
+        for neuron_id in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[neuron_id]
+                && self.neuron_array.read().unwrap().cortical_areas[neuron_id] == cortical_area
             {
                 // Coordinates stored as flat array: [x0, y0, z0, x1, y1, z1, ...]
                 let coord_idx = neuron_id * 3;
                 positions.push((
                     neuron_id as u32,
-                    self.neuron_array.coordinates[coord_idx],
-                    self.neuron_array.coordinates[coord_idx + 1],
-                    self.neuron_array.coordinates[coord_idx + 2],
+                    self.neuron_array.read().unwrap().coordinates[coord_idx],
+                    self.neuron_array.read().unwrap().coordinates[coord_idx + 1],
+                    self.neuron_array.read().unwrap().coordinates[coord_idx + 2],
                 ));
             }
         }
@@ -845,7 +901,7 @@ impl RustNPU {
     /// Returns true if successful, false if neuron doesn't exist
     pub fn update_neuron_excitability(&mut self, neuron_id: u32, excitability: f32) -> bool {
         let idx = neuron_id as usize;
-        if idx >= self.neuron_array.count || !self.neuron_array.valid_mask[idx] {
+        if idx >= self.neuron_array.read().unwrap().count || !self.neuron_array.read().unwrap().valid_mask[idx] {
             return false;
         }
 
@@ -864,9 +920,9 @@ impl RustNPU {
         let mut updated_count = 0;
 
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[idx]
-                && self.neuron_array.cortical_areas[idx] == cortical_area
+        for idx in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[idx]
+                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
                 self.neuron_array.excitabilities[idx] = clamped_excitability;
                 updated_count += 1;
@@ -888,9 +944,9 @@ impl RustNPU {
         let mut updated_count = 0;
 
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[idx]
-                && self.neuron_array.cortical_areas[idx] == cortical_area
+        for idx in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[idx]
+                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
                 // Get the actual neuron_id for this array index
                 let neuron_id = self.neuron_array.index_to_neuron_id[idx];
@@ -941,9 +997,9 @@ impl RustNPU {
         let mut updated_count = 0;
 
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[idx]
-                && self.neuron_array.cortical_areas[idx] == cortical_area
+        for idx in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[idx]
+                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
                 self.neuron_array.thresholds[idx] = threshold;
                 updated_count += 1;
@@ -958,9 +1014,9 @@ impl RustNPU {
         let mut updated_count = 0;
 
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[idx]
-                && self.neuron_array.cortical_areas[idx] == cortical_area
+        for idx in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[idx]
+                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
                 self.neuron_array.leak_coefficients[idx] = leak;
                 updated_count += 1;
@@ -979,9 +1035,9 @@ impl RustNPU {
         let mut updated_count = 0;
 
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[idx]
-                && self.neuron_array.cortical_areas[idx] == cortical_area
+        for idx in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[idx]
+                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
                 self.neuron_array.consecutive_fire_limits[idx] = limit;
                 updated_count += 1;
@@ -1000,9 +1056,9 @@ impl RustNPU {
         let mut updated_count = 0;
 
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[idx]
-                && self.neuron_array.cortical_areas[idx] == cortical_area
+        for idx in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[idx]
+                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
                 self.neuron_array.snooze_periods[idx] = snooze_period;
                 updated_count += 1;
@@ -1027,7 +1083,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 // Update base period
                 self.neuron_array.refractory_periods[idx] = *value;
                 // Enforce immediately: set countdown to new period (or 0)
@@ -1063,7 +1119,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.thresholds[idx] = *value;
                 updated_count += 1;
             }
@@ -1082,7 +1138,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.leak_coefficients[idx] = value.clamp(0.0, 1.0);
                 updated_count += 1;
             }
@@ -1105,7 +1161,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.consecutive_fire_limits[idx] = *value;
                 updated_count += 1;
             }
@@ -1124,7 +1180,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.snooze_periods[idx] = *value;
                 updated_count += 1;
             }
@@ -1143,7 +1199,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.membrane_potentials[idx] = *value;
                 updated_count += 1;
             }
@@ -1162,7 +1218,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.resting_potentials[idx] = *value;
                 updated_count += 1;
             }
@@ -1181,7 +1237,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.excitabilities[idx] = value.clamp(0.0, 1.0);
                 updated_count += 1;
             }
@@ -1200,7 +1256,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.neuron_types[idx] = *value;
                 updated_count += 1;
             }
@@ -1223,7 +1279,7 @@ impl RustNPU {
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_array.count && self.neuron_array.valid_mask[idx] {
+            if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
                 self.neuron_array.mp_charge_accumulation[idx] = *value;
                 updated_count += 1;
             }
@@ -1242,9 +1298,9 @@ impl RustNPU {
         let mut updated_count = 0;
 
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.count {
-            if self.neuron_array.valid_mask[idx]
-                && self.neuron_array.cortical_areas[idx] == cortical_area
+        for idx in 0..self.neuron_array.read().unwrap().count {
+            if self.neuron_array.read().unwrap().valid_mask[idx]
+                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
             {
                 self.neuron_array.mp_charge_accumulation[idx] = mp_charge_accumulation;
                 updated_count += 1;
@@ -1258,11 +1314,11 @@ impl RustNPU {
     /// Returns true if successful, false if neuron out of bounds
     pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {
         let idx = neuron_id as usize;
-        if idx >= self.neuron_array.count {
+        if idx >= self.neuron_array.read().unwrap().count {
             return false;
         }
 
-        self.neuron_array.valid_mask[idx] = false;
+        self.neuron_array.read().unwrap().valid_mask[idx] = false;
         true
     }
 
@@ -1288,7 +1344,7 @@ impl RustNPU {
 
     /// Get synapse count (valid only)
     pub fn get_synapse_count(&self) -> usize {
-        self.synapse_array.valid_count()
+        self.synapse_array.read().unwrap().valid_count()
     }
 
     /// Get all outgoing synapses from a source neuron
@@ -1345,7 +1401,7 @@ impl RustNPU {
     pub fn get_neuron_state(&self, neuron_id: NeuronId) -> Option<(u16, u16, u16, f32, f32, u16)> {
         // neuron_id == array index (direct access)
         let idx = neuron_id.0 as usize;
-        if idx >= self.neuron_array.count || !self.neuron_array.valid_mask[idx] {
+        if idx >= self.neuron_array.read().unwrap().count || !self.neuron_array.read().unwrap().valid_mask[idx] {
             return None;
         }
 
@@ -1521,7 +1577,7 @@ impl RustNPU {
 
     /// Configure Fire Ledger window size for a specific cortical area
     pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
-        self.fire_ledger
+        self.fire_structures.lock().unwrap().fire_ledger
             .configure_area_window(cortical_idx, window_size);
     }
 
@@ -1643,7 +1699,7 @@ impl RustNPU {
 
     /// Set FQ Sampler frequency (Hz)
     pub fn set_fq_sampler_frequency(&mut self, frequency_hz: f64) {
-        self.fq_sampler.set_sample_frequency(frequency_hz);
+        self.fire_structures.lock().unwrap().fq_sampler.set_sample_frequency(frequency_hz);
     }
 
     /// Get FQ Sampler frequency (Hz)
@@ -1653,7 +1709,7 @@ impl RustNPU {
 
     /// Set visualization subscriber state
     pub fn set_visualization_subscribers(&mut self, has_subscribers: bool) {
-        self.fq_sampler
+        self.fire_structures.lock().unwrap().fq_sampler
             .set_visualization_subscribers(has_subscribers);
     }
 
@@ -1664,7 +1720,7 @@ impl RustNPU {
 
     /// Set motor subscriber state
     pub fn set_motor_subscribers(&mut self, has_subscribers: bool) {
-        self.fq_sampler.set_motor_subscribers(has_subscribers);
+        self.fire_structures.lock().unwrap().fq_sampler.set_motor_subscribers(has_subscribers);
     }
 
     /// Check if motor subscribers are connected

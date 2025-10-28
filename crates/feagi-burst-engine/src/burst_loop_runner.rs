@@ -99,6 +99,7 @@ impl BurstLoopRunner {
                     // Batch coordinate lookup
                     let neuron_ids = npu_lock
                         .neuron_array
+                        .read().unwrap()
                         .batch_coordinate_lookup(cortical_area, &coords);
 
                     // 🔍 DEBUG: Log conversion result
@@ -123,7 +124,7 @@ impl BurstLoopRunner {
                     let mut neuron_potential_pairs: Vec<(NeuronId, f32)> =
                         Vec::with_capacity(xyzp_data.len());
                     for (x, y, z, p) in xyzp_data.iter() {
-                        if let Some(neuron_id) = npu_lock.neuron_array.get_neuron_at_coordinate(
+                        if let Some(neuron_id) = npu_lock.neuron_array.read().unwrap().get_neuron_at_coordinate(
                             cortical_area,
                             *x,
                             *y,
