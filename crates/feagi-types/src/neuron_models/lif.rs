@@ -11,16 +11,38 @@
 //! The LIF model is currently implemented in `../npu.rs` as the base `NeuronArray`.
 //! This module provides a type alias for future migration to model-specific arrays.
 //!
-//! ## LIF Model Dynamics
+//! ## LIF Model Dynamics (Standardized Formula)
+//! 
+//! **CRITICAL**: All backends (CPU, GPU) use this EXACT formula.
+//! 
 //! ```text
-//! Membrane Potential Update:
-//!     V(t+1) = V(t) + I_syn - g_leak * (V(t) - V_rest)
+//! Synaptic Contribution (per active synapse):
+//!     contribution = sign × weight × psp
+//!     
+//!     Where:
+//!     - sign = +1.0 (excitatory) or -1.0 (inhibitory)
+//!     - weight = synaptic weight normalized [0, 1] (stored as u8 0-255)
+//!     - psp = postsynaptic potential normalized [0, 1] (from source area's pstcr_)
+//!     
+//!     Result range: -1.0 to +1.0
 //!
-//! Where:
-//!     I_syn = Σ (weight × psp) for all active synapses
-//!     g_leak = leak_coefficient (0-1)
-//!     V_rest = resting_potential
+//! Membrane Potential Update:
+//!     I_syn = Σ contribution for all active synapses
+//!     V(t+1) = V(t) + I_syn - g_leak × (V(t) - V_rest)
+//!
+//!     Where:
+//!     - V = membrane potential
+//!     - g_leak = leak_coefficient (0-1)
+//!     - V_rest = resting_potential
+//!
+//! Firing Check:
+//!     if refractory_countdown > 0:
+//!         Skip (neuron in refractory period)
+//!     else if V(t+1) ≥ threshold:
+//!         FIRE and reset
 //! ```
+//! 
+//! **Example**: Source pstcr_=127 (0.5), weight=255 (1.0) → contribution=0.5
 //!
 //! ## Future Migration
 //! When implementing full multi-model architecture:

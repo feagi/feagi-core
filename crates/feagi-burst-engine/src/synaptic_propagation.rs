@@ -144,20 +144,20 @@ impl SynapticPropagationEngine {
 
                 // Calculate contribution directly from SoA fields (SIMD-friendly)
                 let weight = SynapticWeight(synapse_array.weights[syn_idx]);
-                let conductance = SynapticConductance(synapse_array.conductances[syn_idx]);
+                let psp = SynapticConductance(synapse_array.postsynaptic_potentials[syn_idx]);  // TODO: Rename type
                 let synapse_type = match synapse_array.types[syn_idx] {
                     0 => SynapseType::Excitatory,
                     _ => SynapseType::Inhibitory,
                 };
 
-                // Calculate: weight × conductance × sign
+                // Calculate: weight × psp × sign (standardized LIF formula)
                 let sign = if synapse_type == SynapseType::Excitatory {
                     1.0
                 } else {
                     -1.0
                 };
                 let contribution =
-                    SynapticContribution(weight.to_float() * conductance.to_float() * sign);
+                    SynapticContribution(weight.to_float() * psp.to_float() * sign);
 
                 Some((target_neuron, cortical_area, contribution))
             })

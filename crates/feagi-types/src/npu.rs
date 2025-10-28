@@ -466,8 +466,9 @@ pub struct SynapseArray {
     /// Synaptic weights (0-255)
     pub weights: Vec<u8>,
 
-    /// Synaptic conductances (0-255)
-    pub conductances: Vec<u8>,
+    /// Postsynaptic potentials (0-255) - FEAGI term for synaptic strength
+    /// Represents the source area's pstcr_ (postsynaptic current) value
+    pub postsynaptic_potentials: Vec<u8>,
 
     /// Synapse types (0=excitatory, 1=inhibitory)
     pub types: Vec<u8>,
@@ -488,7 +489,7 @@ impl SynapseArray {
             source_neurons: vec![0; capacity],
             target_neurons: vec![0; capacity],
             weights: vec![0; capacity],
-            conductances: vec![255; capacity],
+            postsynaptic_potentials: vec![255; capacity],
             types: vec![0; capacity],
             valid_mask: vec![false; capacity],
             source_index: AHashMap::new(),
@@ -514,7 +515,7 @@ impl SynapseArray {
         self.source_neurons[idx] = source.0;
         self.target_neurons[idx] = target.0;
         self.weights[idx] = weight.0;
-        self.conductances[idx] = conductance.0;
+        self.postsynaptic_potentials[idx] = conductance.0;
         self.types[idx] = match synapse_type {
             SynapseType::Excitatory => 0,
             SynapseType::Inhibitory => 1,
@@ -598,7 +599,7 @@ impl SynapseArray {
             self.source_neurons[idx] = source;
             self.target_neurons[idx] = target;
             self.weights[idx] = weight;
-            self.conductances[idx] = conductance;
+            self.postsynaptic_potentials[idx] = conductance;
             self.types[idx] = synapse_type;
             self.valid_mask[idx] = true;
 

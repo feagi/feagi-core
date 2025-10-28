@@ -58,12 +58,13 @@ impl ComputeBackend for CPUBackend {
 
                     let target_id = synapse_array.target_neurons[syn_idx];
                     let weight = synapse_array.weights[syn_idx] as f32 / 255.0; // Normalize to [0,1]
-                    let conductance = synapse_array.conductances[syn_idx] as f32 / 255.0;
+                    let psp = synapse_array.postsynaptic_potentials[syn_idx] as f32 / 255.0;
                     let synapse_type = synapse_array.types[syn_idx];
 
-                    // Calculate synaptic contribution
+                    // Calculate synaptic contribution (standardized LIF formula)
+                    // Result range: -1.0 to +1.0 (both weight and psp normalized [0,1])
                     let sign = if synapse_type == 0 { 1.0 } else { -1.0 }; // 0=excitatory, 1=inhibitory
-                    let contribution = sign * weight * conductance * 10.0; // Scale factor
+                    let contribution = sign * weight * psp;
 
                     // Accumulate into FCL
                     fcl.add_candidate(NeuronId(target_id), contribution);

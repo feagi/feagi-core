@@ -5,7 +5,7 @@
 //
 // Algorithm:
 // 1. For each fired neuron, find its outgoing synapses
-// 2. Calculate synaptic contribution (weight × conductance × sign)
+// 2. Calculate synaptic contribution (weight × psp × sign)
 // 3. Accumulate to target neuron membrane potentials
 //
 // Challenge: GPU hash table lookup for synapse indices
@@ -13,9 +13,9 @@
 // Synapse arrays (Structure-of-Arrays, persistent)
 @group(0) @binding(0) var<storage, read> source_neurons: array<u32>;
 @group(0) @binding(1) var<storage, read> target_neurons: array<u32>;
-@group(0) @binding(2) var<storage, read> weights: array<u32>;        // u8 stored as u32
-@group(0) @binding(3) var<storage, read> conductances: array<u32>;   // u8 stored as u32
-@group(0) @binding(4) var<storage, read> synapse_types: array<u32>;  // u8 stored as u32
+@group(0) @binding(2) var<storage, read> weights: array<u32>;                    // u8 stored as u32
+@group(0) @binding(3) var<storage, read> postsynaptic_potentials: array<u32>;    // u8 stored as u32 (FEAGI pstcr_)
+@group(0) @binding(4) var<storage, read> synapse_types: array<u32>;              // u8 stored as u32
 @group(0) @binding(5) var<storage, read> synapse_valid_mask: array<u32>;  // Bitpacked
 
 // Synapse index (GPU hash table)
@@ -114,16 +114,18 @@ fn synaptic_propagation_main(@builtin(global_invocation_id) global_id: vec3<u32>
         // Get synapse properties
         let target_neuron = target_neurons[synapse_idx];
         let weight = weights[synapse_idx];
-        let conductance = conductances[synapse_idx];
+        let psp = postsynaptic_potentials[synapse_idx];
         let synapse_type = synapse_types[synapse_idx];
         
-        // Calculate contribution (weight × conductance × sign)
-        var contribution = f32(weight) * f32(conductance);
+        // Calculate contribution (standardized LIF formula)
+        // Normalize weight and psp to [0,1] range
+        let weight_f32 = f32(weight) / 255.0;
+        let psp_f32 = f32(psp) / 255.0;
         
         // Apply sign (0 = excitatory = +1, 1 = inhibitory = -1)
-        if (synapse_type != 0u) {
-            contribution = -contribution;
-        }
+        let sign = select(-1.0, 1.0, synapse_type == 0u);
+        let contribution = sign * weight_f32 * psp_f32;
+        // Result range: -1.0 to +1.0
         
         // Convert to fixed-point integer (multiply by 1000 for precision)
         let contribution_fixed = i32(contribution * 1000.0);
@@ -178,15 +180,17 @@ fn synaptic_propagation_by_synapse(@builtin(global_invocation_id) global_id: vec
     // (Would need a fired_mask bitfield for efficient checking)
     // For now, skip this optimization
     
-    // Calculate and accumulate contribution
+    // Calculate and accumulate contribution (standardized LIF formula)
     let weight = weights[synapse_idx];
-    let conductance = conductances[synapse_idx];
+    let psp = postsynaptic_potentials[synapse_idx];
     let synapse_type = synapse_types[synapse_idx];
     
-    var contribution = f32(weight) * f32(conductance);
-    if (synapse_type != 0u) {
-        contribution = -contribution;
-    }
+    // Normalize to [0,1] and apply sign
+    let weight_f32 = f32(weight) / 255.0;
+    let psp_f32 = f32(psp) / 255.0;
+    let sign = select(-1.0, 1.0, synapse_type == 0u);
+    let contribution = sign * weight_f32 * psp_f32;
+    // Result range: -1.0 to +1.0
     
     let contribution_fixed = i32(contribution * 1000.0);
     atomicAdd(&membrane_potentials[target_neuron], contribution_fixed);

@@ -389,14 +389,14 @@ impl RustNPU {
         sources: Vec<NeuronId>,
         targets: Vec<NeuronId>,
         weights: Vec<SynapticWeight>,
-        conductances: Vec<SynapticConductance>,
+        postsynaptic_potentials: Vec<SynapticConductance>,  // TODO: Rename type to SynapticPSP
         synapse_types: Vec<SynapseType>,
     ) -> (usize, Vec<usize>) {
         // Convert NeuronId/Weight types to raw u32/u8 for SynapseArray
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
         let target_ids: Vec<u32> = targets.iter().map(|n| n.0).collect();
         let weight_vals: Vec<u8> = weights.iter().map(|w| w.0).collect();
-        let conductance_vals: Vec<u8> = conductances.iter().map(|c| c.0).collect();
+        let psp_vals: Vec<u8> = postsynaptic_potentials.iter().map(|c| c.0).collect();
         let type_vals: Vec<u8> = synapse_types
             .iter()
             .map(|t| match t {
@@ -409,7 +409,7 @@ impl RustNPU {
             &source_ids,
             &target_ids,
             &weight_vals,
-            &conductance_vals,
+            &psp_vals,
             &type_vals,
         )
     }
@@ -750,7 +750,7 @@ impl RustNPU {
             source_neurons: self.synapse_array.source_neurons.clone(),
             target_neurons: self.synapse_array.target_neurons.clone(),
             weights: self.synapse_array.weights.clone(),
-            conductances: self.synapse_array.conductances.clone(),
+            conductances: self.synapse_array.postsynaptic_potentials.clone(),  // TODO: Rename field in snapshot struct
             types: self.synapse_array.types.clone(),
             valid_mask: self.synapse_array.valid_mask.clone(),
             source_index: self.synapse_array.source_index.clone(),
@@ -793,7 +793,7 @@ impl RustNPU {
         synapse_array.source_neurons = snapshot.synapses.source_neurons;
         synapse_array.target_neurons = snapshot.synapses.target_neurons;
         synapse_array.weights = snapshot.synapses.weights;
-        synapse_array.conductances = snapshot.synapses.conductances;
+        synapse_array.postsynaptic_potentials = snapshot.synapses.conductances;  // TODO: Rename field in snapshot
         synapse_array.types = snapshot.synapses.types;
         synapse_array.valid_mask = snapshot.synapses.valid_mask;
         synapse_array.source_index = snapshot.synapses.source_index;
@@ -1308,9 +1308,9 @@ impl RustNPU {
             if syn_idx < self.synapse_array.count && self.synapse_array.valid_mask[syn_idx] {
                 let target = self.synapse_array.target_neurons[syn_idx];
                 let weight = self.synapse_array.weights[syn_idx];
-                let conductance = self.synapse_array.conductances[syn_idx];
+                let psp = self.synapse_array.postsynaptic_potentials[syn_idx];
                 let synapse_type = self.synapse_array.types[syn_idx];
-                outgoing.push((target, weight, conductance, synapse_type));
+                outgoing.push((target, weight, psp, synapse_type));
             }
         }
 
@@ -1331,7 +1331,7 @@ impl RustNPU {
                 synapses.push((
                     self.synapse_array.source_neurons[i],
                     self.synapse_array.weights[i],
-                    self.synapse_array.conductances[i],
+                    self.synapse_array.postsynaptic_potentials[i],
                     self.synapse_array.types[i],
                 ));
             }

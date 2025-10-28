@@ -5,7 +5,7 @@
 //
 // Algorithm:
 // 1. For each fired neuron, find its outgoing synapses (hash table lookup)
-// 2. Calculate synaptic contribution (weight × conductance × sign)
+// 2. Calculate synaptic contribution (weight × psp × sign)
 // 3. Atomically accumulate to FCL potential buffer
 //
 // Output: FCL candidates ready for neural dynamics (all on GPU)
@@ -13,7 +13,7 @@
 // ═══════════════════════════════════════════════════════════
 // SYNAPSE DATA (Consolidated, stride=3)
 // Format: [source_id, target_id, packed_params] per synapse
-// packed_params = (type << 16) | (conductance << 8) | weight
+// packed_params = (type << 16) | (psp << 8) | weight
 // ═══════════════════════════════════════════════════════════
 
 @group(0) @binding(0) var<storage, read> synapse_data: array<u32>;
@@ -116,16 +116,17 @@ fn synaptic_propagation_fcl_main(@builtin(global_invocation_id) global_id: vec3<
         let target_id = synapse_data[data_idx + 1u];
         let packed_params = synapse_data[data_idx + 2u];
         
-        // Unpack params: (type << 16) | (conductance << 8) | weight
+        // Unpack params: (type << 16) | (psp << 8) | weight
         let weight_u8 = packed_params & 0xFFu;
-        let conductance_u8 = (packed_params >> 8u) & 0xFFu;
+        let psp_u8 = (packed_params >> 8u) & 0xFFu;
         let synapse_type = (packed_params >> 16u) & 0xFFu;
         
-        // Calculate synaptic contribution
+        // Calculate synaptic contribution (standardized LIF formula)
+        // Result range: -1.0 to +1.0 (both weight and psp normalized [0,1])
         let weight_f32 = f32(weight_u8) / 255.0;
-        let conductance_f32 = f32(conductance_u8) / 255.0;
+        let psp_f32 = f32(psp_u8) / 255.0;
         let sign = select(-1.0, 1.0, synapse_type == 0u);  // 0=excitatory, 1=inhibitory
-        let contribution = sign * weight_f32 * conductance_f32 * 10.0;  // Scale factor
+        let contribution = sign * weight_f32 * psp_f32;
         
         // Convert to fixed-point i32 (multiply by 1000 for precision)
         let contribution_i32 = i32(contribution * 1000.0);
