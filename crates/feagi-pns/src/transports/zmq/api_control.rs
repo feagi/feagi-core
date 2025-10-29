@@ -169,12 +169,19 @@ impl ApiControlStream {
                 if msg_parts.len() >= 3 {
                     let identity = msg_parts[0].to_vec();
                     let request_json = String::from_utf8_lossy(&msg_parts[2]).to_string();
+                    
+                    println!("🦀 [ZMQ-API-CONTROL] 📨 Received request ({} bytes)", request_json.len());
+                    println!("🦀 [ZMQ-API-CONTROL] 📨 Request: {}", &request_json[..request_json.len().min(200)]);
 
                     let response_json = Self::process_request(&npu, &rpc_callback, &request_json);
+                    
+                    println!("🦀 [ZMQ-API-CONTROL] 📤 Sending response ({} bytes)", response_json.len());
 
                     if let Err(e) = Self::send_response(&socket, identity, response_json) {
                         eprintln!("🦀 [ZMQ-API-CONTROL] [ERR] Failed to send response: {}", e);
                     }
+                } else {
+                    println!("🦀 [ZMQ-API-CONTROL] ⚠️ Received malformed message (parts: {})", msg_parts.len());
                 }
             }
 
