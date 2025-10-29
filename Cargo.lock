@@ -852,6 +852,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-services"
+version = "2.0.0"
+dependencies = [
+ "async-trait",
+ "feagi-bdu",
+ "feagi-burst-engine",
+ "feagi-evo",
+ "feagi-types",
+ "log",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
 name = "feagi-state-manager"
 version = "2.0.0"
 dependencies = [
