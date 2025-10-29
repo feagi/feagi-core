@@ -52,61 +52,26 @@ pub enum BduError {
     Internal(String),
 }
 
-/// 3D dimensions (width, height, depth)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Dimensions {
-    pub width: usize,
-    pub height: usize,
-    pub depth: usize,
-}
-
-impl Dimensions {
-    pub fn new(width: usize, height: usize, depth: usize) -> Self {
-        Self {
-            width,
-            height,
-            depth,
+// Convert from feagi_types::FeagiError
+impl From<feagi_types::FeagiError> for BduError {
+    fn from(err: feagi_types::FeagiError) -> Self {
+        match &err {
+            feagi_types::FeagiError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
+            feagi_types::FeagiError::InvalidRegion(msg) => BduError::InvalidArea(msg.clone()),
+            _ => BduError::Internal(err.to_string()),
         }
     }
+}
 
-    pub fn from_tuple(tuple: (usize, usize, usize)) -> Self {
-        Self::new(tuple.0, tuple.1, tuple.2)
-    }
-
-    pub fn to_tuple(&self) -> (usize, usize, usize) {
-        (self.width, self.height, self.depth)
-    }
-
-    pub fn contains(&self, pos: Position) -> bool {
-        pos.0 >= 0
-            && pos.1 >= 0
-            && pos.2 >= 0
-            && (pos.0 as usize) < self.width
-            && (pos.1 as usize) < self.height
-            && (pos.2 as usize) < self.depth
-    }
-
-    pub fn total_voxels(&self) -> usize {
-        self.width * self.height * self.depth
+// Convert from feagi_evo::EvoError
+impl From<feagi_evo::EvoError> for BduError {
+    fn from(err: feagi_evo::EvoError) -> Self {
+        match &err {
+            feagi_evo::EvoError::InvalidGenome(msg) => BduError::InvalidGenome(msg.clone()),
+            feagi_evo::EvoError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
+            _ => BduError::Internal(err.to_string()),
+        }
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_dimensions_contains() {
-        let dims = Dimensions::new(128, 128, 20);
-        assert!(dims.contains((0, 0, 0)));
-        assert!(dims.contains((127, 127, 19)));
-        assert!(!dims.contains((128, 0, 0)));
-        assert!(!dims.contains((129, 0, 0))); // Out of bounds
-    }
-
-    #[test]
-    fn test_dimensions_total_voxels() {
-        let dims = Dimensions::new(128, 128, 20);
-        assert_eq!(dims.total_voxels(), 128 * 128 * 20);
-    }
-}
+// Note: Dimensions has been moved to feagi-types and is re-exported from feagi-bdu::lib

@@ -10,9 +10,8 @@ Licensed under the Apache License, Version 2.0
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use crate::models::CorticalArea;
-use crate::models::brain_region::BrainRegion;
-use crate::types::{BduError, BduResult};
+use feagi_types::{CorticalArea, BrainRegion, AreaType};
+use crate::types::{EvoError, EvoResult};
 
 /// Genome saver
 pub struct GenomeSaver;
@@ -36,7 +35,7 @@ impl GenomeSaver {
         brain_regions: &HashMap<String, (BrainRegion, Option<String>)>,
         genome_id: Option<String>,
         genome_title: Option<String>,
-    ) -> BduResult<String> {
+    ) -> EvoResult<String> {
         // Build blueprint section
         let mut blueprint = serde_json::Map::new();
         
@@ -58,10 +57,10 @@ impl GenomeSaver {
             
             // Area type
             let cortical_type = match area.area_type {
-                crate::models::cortical_area::AreaType::Sensory => "IPU",
-                crate::models::cortical_area::AreaType::Motor => "OPU",
-                crate::models::cortical_area::AreaType::Memory => "MEMORY",
-                crate::models::cortical_area::AreaType::Custom => "CUSTOM",
+                AreaType::Sensory => "IPU",
+                AreaType::Motor => "OPU",
+                AreaType::Memory => "MEMORY",
+                AreaType::Custom => "CUSTOM",
             };
             area_data.insert("cortical_type".to_string(), json!(cortical_type));
             
@@ -118,16 +117,14 @@ impl GenomeSaver {
         
         // Serialize to pretty JSON
         serde_json::to_string_pretty(&genome)
-            .map_err(|e| BduError::Internal(format!("Failed to serialize genome: {}", e)))
+            .map_err(|e| EvoError::Internal(format!("Failed to serialize genome: {}", e)))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::cortical_area::AreaType;
-    use crate::models::brain_region::RegionType;
-    use crate::types::Dimensions;
+    use feagi_types::{AreaType, RegionType, Dimensions};
     
     #[test]
     fn test_save_minimal_genome() {

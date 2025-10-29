@@ -255,6 +255,10 @@ impl Dimensions {
         self.width * self.height * self.depth
     }
 
+    pub fn total_voxels(&self) -> usize {
+        self.volume()
+    }
+
     pub fn contains(&self, pos: (u32, u32, u32)) -> bool {
         pos.0 < self.width as u32
             && pos.1 < self.height as u32

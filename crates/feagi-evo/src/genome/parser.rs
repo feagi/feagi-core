@@ -42,6 +42,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 
 use crate::types::{EvoError, EvoResult};
+use feagi_types::{BrainRegion, CorticalArea, AreaType, RegionType, Dimensions};
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]
@@ -160,14 +161,14 @@ impl GenomeParser {
     /// - Required fields are missing
     /// - Data types are invalid
     ///
-    pub fn parse(json_str: &str) -> BduResult<ParsedGenome> {
+    pub fn parse(json_str: &str) -> EvoResult<ParsedGenome> {
         // Deserialize raw genome
         let raw: RawGenome = serde_json::from_str(json_str)
-            .map_err(|e| BduError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
+            .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
         
         // Validate version
         if !raw.version.starts_with("2.") {
-            return Err(BduError::InvalidGenome(format!(
+            return Err(EvoError::InvalidGenome(format!(
                 "Unsupported genome version: {}. Expected 2.x",
                 raw.version
             )));
@@ -193,7 +194,7 @@ impl GenomeParser {
     /// Parse cortical areas from blueprint
     fn parse_cortical_areas(
         blueprint: &HashMap<String, RawCorticalArea>,
-    ) -> BduResult<Vec<CorticalArea>> {
+    ) -> EvoResult<Vec<CorticalArea>> {
         let mut areas = Vec::with_capacity(blueprint.len());
         
         for (cortical_id, raw_area) in blueprint.iter() {
@@ -209,7 +210,7 @@ impl GenomeParser {
             
             let dimensions = if let Some(boundaries) = &raw_area.block_boundaries {
                 if boundaries.len() != 3 {
-                    return Err(BduError::InvalidArea(format!(
+                    return Err(EvoError::InvalidArea(format!(
                         "Invalid block_boundaries for {}: expected 3 values, got {}",
                         cortical_id, boundaries.len()
                     )));
@@ -227,7 +228,7 @@ impl GenomeParser {
             
             let position = if let Some(coords) = &raw_area.relative_coordinate {
                 if coords.len() != 3 {
-                    return Err(BduError::InvalidArea(format!(
+                    return Err(EvoError::InvalidArea(format!(
                         "Invalid relative_coordinate for {}: expected 3 values, got {}",
                         cortical_id, coords.len()
                     )));
@@ -347,7 +348,7 @@ impl GenomeParser {
     /// Parse brain regions
     fn parse_brain_regions(
         raw_regions: &HashMap<String, RawBrainRegion>,
-    ) -> BduResult<Vec<(BrainRegion, Option<String>)>> {
+    ) -> EvoResult<Vec<(BrainRegion, Option<String>)>> {
         let mut regions = Vec::with_capacity(raw_regions.len());
         
         for (region_id, raw_region) in raw_regions.iter() {
@@ -399,7 +400,7 @@ impl GenomeParser {
     }
     
     /// Parse area type string to AreaType enum
-    fn parse_area_type(type_str: Option<&str>) -> BduResult<AreaType> {
+    fn parse_area_type(type_str: Option<&str>) -> EvoResult<AreaType> {
         match type_str {
             Some("IPU") => Ok(AreaType::Sensory),
             Some("OPU") => Ok(AreaType::Motor),

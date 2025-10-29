@@ -76,6 +76,7 @@ members = [
     
     # === Infrastructure Layer ===
     "crates/feagi-state-manager",      # Runtime state management (NEW)
+    "crates/feagi-evo",                # Genome I/O and evolution (genotype)
     
     # === Algorithm Layer (Core Neural Computation) ===
     "crates/feagi-burst-engine",       # NPU execution & inference

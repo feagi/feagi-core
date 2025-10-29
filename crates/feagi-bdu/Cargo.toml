@@ -12,6 +12,7 @@ name = "feagi_bdu"
 [dependencies]
 # Core types from existing FEAGI crates
 feagi-types = { path = "../feagi-types" }
+feagi-evo = { path = "../feagi-evo" }
 feagi-burst-engine = { path = "../feagi-burst-engine" }
 
 # Performance (using workspace versions)

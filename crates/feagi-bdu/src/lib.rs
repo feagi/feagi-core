@@ -30,11 +30,10 @@ Licensed under the Apache License, Version 2.0
 
 pub mod connectivity;
 pub mod connectome_manager;
-// pub mod ffi;  // DEPRECATED: Legacy Python-driven synaptogenesis (replaced by NPU-native functions)
-pub mod genome;
-pub mod models;
 pub mod spatial;
 pub mod types;
+
+// Note: models/ and genome/ have been moved to feagi-types and feagi-evo respectively
 
 // Re-export NPU-native synaptogenesis functions (primary API)
 pub use connectivity::{
@@ -50,13 +49,20 @@ pub use connectivity::{
 
 pub use spatial::{morton_decode_3d, morton_encode_3d, MortonSpatialHash, SpatialHashStats};
 
-pub use types::{AreaId, BduError, BduResult, Dimensions, NeuronId, Position, Weight};
+// Re-export local BDU types
+pub use types::{AreaId, BduError, BduResult, NeuronId, Weight};
 
-pub use models::{BrainRegion, BrainRegionHierarchy, CorticalArea};
+// Re-export core types from feagi-types
+pub use feagi_types::{
+    BrainRegion, BrainRegionHierarchy, CorticalArea, AreaType, RegionType,
+    Dimensions, Position
+};
 
+// Re-export genome operations from feagi-evo
+pub use feagi_evo::{GenomeParser, ParsedGenome, GenomeSaver};
+
+// Re-export connectome manager
 pub use connectome_manager::{ConnectomeConfig, ConnectomeManager};
-
-pub use genome::{GenomeParser, ParsedGenome, GenomeSaver};
 
 #[cfg(test)]
 mod tests {

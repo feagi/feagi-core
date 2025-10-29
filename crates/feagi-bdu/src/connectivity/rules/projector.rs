@@ -7,7 +7,8 @@ spatial topology. It's the primary bottleneck in Python (40 seconds for 128×128
 PERFORMANCE TARGET: <100ms for 128×128×3 → 128×128×1 projection (400x faster than Python)
 */
 
-use crate::types::{BduError, BduResult, Dimensions, Position};
+use crate::types::{BduError, BduResult, Position};
+use feagi_types::Dimensions;
 use rayon::prelude::*;
 
 /// Parameters for projection mapping

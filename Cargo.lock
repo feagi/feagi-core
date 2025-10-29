@@ -731,6 +731,7 @@ dependencies = [
  "chrono",
  "criterion",
  "feagi-burst-engine",
+ "feagi-evo",
  "feagi-types",
  "log",
  "ndarray",
@@ -775,6 +776,20 @@ dependencies = [
  "lz4",
  "serde",
  "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "feagi-evo"
+version = "2.0.0"
+dependencies = [
+ "chrono",
+ "env_logger",
+ "feagi-types",
+ "log",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
  "thiserror",
 ]
 

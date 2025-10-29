@@ -27,6 +27,12 @@ pub enum EvoError {
     
     #[error("Internal error: {0}")]
     Internal(String),
+    
+    #[error("Invalid cortical area: {0}")]
+    InvalidArea(String),
+    
+    #[error("Invalid brain region: {0}")]
+    InvalidRegion(String),
 }
 
 // Convert from serde_json::Error
@@ -40,6 +46,17 @@ impl From<serde_json::Error> for EvoError {
 impl From<std::io::Error> for EvoError {
     fn from(err: std::io::Error) -> Self {
         EvoError::IoError(err.to_string())
+    }
+}
+
+// Convert from feagi_types::FeagiError
+impl From<feagi_types::FeagiError> for EvoError {
+    fn from(err: feagi_types::FeagiError) -> Self {
+        match &err {
+            feagi_types::FeagiError::InvalidArea(msg) => EvoError::InvalidArea(msg.clone()),
+            feagi_types::FeagiError::InvalidRegion(msg) => EvoError::InvalidRegion(msg.clone()),
+            _ => EvoError::Internal(err.to_string()),
+        }
     }
 }
 

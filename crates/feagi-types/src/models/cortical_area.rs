@@ -192,28 +192,36 @@ impl CorticalArea {
     ///
     /// Returns error if position is outside this area's bounds
     ///
-    pub fn to_relative_position(&self, pos: (i32, i32, i32)) -> BduResult<Position> {
+    pub fn to_relative_position(&self, pos: (i32, i32, i32)) -> Result<Position> {
         if !self.contains_position(pos) {
             return Err(FeagiError::OutOfBounds {
-                pos: (pos.0 as u32, pos.1 as u32, pos.2 as u32),
-                dims: self.dimensions.to_tuple(),
+                x: pos.0,
+                y: pos.1,
+                z: pos.2,
+                width: self.dimensions.width,
+                height: self.dimensions.height,
+                depth: self.dimensions.depth,
             });
         }
 
         let (ox, oy, oz) = self.position;
         Ok((
-            (pos.0 - ox) as u32,
-            (pos.1 - oy) as u32,
-            (pos.2 - oz) as u32,
+            pos.0 - ox,
+            pos.1 - oy,
+            pos.2 - oz,
         ))
     }
 
     /// Convert relative position within area to absolute brain position
-    pub fn to_absolute_position(&self, rel_pos: Position) -> BduResult<(i32, i32, i32)> {
-        if !self.dimensions.contains(rel_pos) {
+    pub fn to_absolute_position(&self, rel_pos: Position) -> Result<(i32, i32, i32)> {
+        if !self.dimensions.contains((rel_pos.0 as u32, rel_pos.1 as u32, rel_pos.2 as u32)) {
             return Err(FeagiError::OutOfBounds {
-                pos: rel_pos,
-                dims: self.dimensions.to_tuple(),
+                x: rel_pos.0,
+                y: rel_pos.1,
+                z: rel_pos.2,
+                width: self.dimensions.width,
+                height: self.dimensions.height,
+                depth: self.dimensions.depth,
             });
         }
 

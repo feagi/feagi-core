@@ -31,7 +31,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
-use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea};
+use feagi_types::{BrainRegion, BrainRegionHierarchy, CorticalArea};
 use crate::types::{BduError, BduResult, NeuronId};
 
 // NPU integration (optional dependency)
@@ -302,12 +302,12 @@ impl ConnectomeManager {
         region: BrainRegion,
         parent_id: Option<String>,
     ) -> BduResult<()> {
-        self.brain_regions.add_region(region, parent_id)
+        Ok(self.brain_regions.add_region(region, parent_id)?)
     }
     
     /// Remove a brain region
     pub fn remove_brain_region(&mut self, region_id: &str) -> BduResult<()> {
-        self.brain_regions.remove_region(region_id)
+        Ok(self.brain_regions.remove_region(region_id)?)
     }
     
     /// Get a brain region by ID
@@ -565,7 +565,7 @@ impl ConnectomeManager {
         for cortical_id in self.cortical_areas.keys() {
             let count = self.get_neuron_count_in_area(cortical_id);
             if count > 0 {
-                result.push((cortical_id.clone(), count));
+                result.push((cortical_id.to_string(), count));
             }
         }
         
@@ -724,7 +724,7 @@ impl ConnectomeManager {
             let synapse_count = self.get_synapse_count_in_area(cortical_id);
             let density = self.get_neuron_density(cortical_id);
             
-            stats.push((cortical_id.clone(), neuron_count, synapse_count, density));
+            stats.push((cortical_id.to_string(), neuron_count, synapse_count, density));
         }
         
         stats
@@ -786,7 +786,7 @@ impl ConnectomeManager {
     ///
     pub fn load_genome_from_json(&mut self, json_str: &str) -> BduResult<()> {
         // Parse genome
-        let parsed = crate::genome::GenomeParser::parse(json_str)?;
+        let parsed = feagi_evo::GenomeParser::parse(json_str)?;
         
         log::info!("🧬 Loading genome: {} (version {})", 
             parsed.genome_title, parsed.version);
@@ -798,7 +798,7 @@ impl ConnectomeManager {
         self.cortical_id_to_idx.clear();
         self.cortical_idx_to_id.clear();
         self.next_cortical_idx = 0;
-        self.brain_regions = crate::models::BrainRegionHierarchy::new();
+        self.brain_regions = feagi_types::BrainRegionHierarchy::new();
         
         // Add cortical areas
         for area in parsed.cortical_areas {
@@ -850,12 +850,12 @@ impl ConnectomeManager {
         }
         
         // Generate and return JSON
-        crate::genome::GenomeSaver::save_to_json(
+        Ok(feagi_evo::GenomeSaver::save_to_json(
             &self.cortical_areas,
             &brain_regions_with_parents,
             genome_id,
             genome_title,
-        )
+        )?)
     }
 }
 
@@ -875,8 +875,7 @@ impl std::fmt::Debug for ConnectomeManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::cortical_area::AreaType;
-    use crate::types::Dimensions;
+    use feagi_types::{AreaType, Dimensions};
     
     #[test]
     fn test_singleton_instance() {
@@ -1010,7 +1009,7 @@ mod tests {
         let root = BrainRegion::new(
             "root".to_string(),
             "Root".to_string(),
-            crate::models::brain_region::RegionType::Custom,
+            feagi_types::RegionType::Custom,
         )
         .unwrap();
         
