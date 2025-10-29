@@ -1,0 +1,554 @@
+/*!
+ConnectomeManager - Core brain connectivity manager.
+
+This is the central orchestrator for the FEAGI connectome, managing:
+- Cortical areas and their metadata
+- Brain regions and hierarchy
+- Neuron/synapse queries (delegates to NPU for actual data)
+- Genome loading and persistence
+
+## Architecture
+
+The ConnectomeManager is a **metadata manager** that:
+1. Stores cortical area/region definitions
+2. Provides a high-level API for brain structure queries
+3. Delegates neuron/synapse CRUD to the NPU (Structure of Arrays)
+
+## Design Principles
+
+- **Singleton**: One global instance per FEAGI process
+- **Thread-safe**: Uses RwLock for concurrent reads
+- **Performance**: Optimized for hot-path queries (area lookups)
+- **NPU Delegation**: Neuron/synapse data lives in NPU, not here
+
+Copyright 2025 Neuraville Inc.
+Licensed under the Apache License, Version 2.0
+*/
+
+use once_cell::sync::Lazy;
+use parking_lot::RwLock;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea};
+use crate::types::{AreaId, BduError, BduResult, NeuronId};
+
+/// Global singleton instance of ConnectomeManager
+static INSTANCE: Lazy<Arc<RwLock<ConnectomeManager>>> =
+    Lazy::new(|| Arc::new(RwLock::new(ConnectomeManager::new())));
+
+/// Configuration for ConnectomeManager
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConnectomeConfig {
+    /// Maximum number of neurons (for NPU sizing)
+    pub max_neurons: usize,
+    
+    /// Maximum number of synapses (for NPU sizing)
+    pub max_synapses: usize,
+    
+    /// Backend type ("cpu", "cuda", "wgpu")
+    pub backend: String,
+}
+
+impl Default for ConnectomeConfig {
+    fn default() -> Self {
+        Self {
+            max_neurons: 10_000_000,
+            max_synapses: 100_000_000,
+            backend: "cpu".to_string(),
+        }
+    }
+}
+
+/// Central manager for the FEAGI connectome
+///
+/// ## Responsibilities
+///
+/// 1. **Cortical Area Management**: Add, remove, query cortical areas
+/// 2. **Brain Region Management**: Hierarchical organization
+/// 3. **Neuron/Synapse Queries**: High-level API (delegates to NPU)
+/// 4. **Genome I/O**: Load/save brain structure
+///
+/// ## Data Storage
+///
+/// - **Cortical areas**: Stored in HashMap for O(1) lookup
+/// - **Brain regions**: Stored in BrainRegionHierarchy
+/// - **Neuron data**: Lives in NPU (not stored here)
+/// - **Synapse data**: Lives in NPU (not stored here)
+///
+/// ## Thread Safety
+///
+/// Uses `RwLock` for concurrent reads with exclusive writes.
+/// Multiple threads can read simultaneously, but writes block.
+///
+#[derive(Debug)]
+pub struct ConnectomeManager {
+    /// Map of cortical_id -> CorticalArea metadata
+    cortical_areas: HashMap<String, CorticalArea>,
+    
+    /// Map of cortical_id -> cortical_idx (fast reverse lookup)
+    cortical_id_to_idx: HashMap<String, u32>,
+    
+    /// Map of cortical_idx -> cortical_id (fast reverse lookup)
+    cortical_idx_to_id: HashMap<u32, String>,
+    
+    /// Next available cortical index
+    next_cortical_idx: u32,
+    
+    /// Brain region hierarchy
+    brain_regions: BrainRegionHierarchy,
+    
+    /// Configuration
+    config: ConnectomeConfig,
+    
+    /// Is the connectome initialized (has cortical areas)?
+    initialized: bool,
+}
+
+impl ConnectomeManager {
+    /// Create a new ConnectomeManager (private - use `instance()`)
+    fn new() -> Self {
+        Self {
+            cortical_areas: HashMap::new(),
+            cortical_id_to_idx: HashMap::new(),
+            cortical_idx_to_id: HashMap::new(),
+            next_cortical_idx: 0,
+            brain_regions: BrainRegionHierarchy::new(),
+            config: ConnectomeConfig::default(),
+            initialized: false,
+        }
+    }
+    
+    /// Get the global singleton instance
+    ///
+    /// # Returns
+    ///
+    /// Arc to the ConnectomeManager wrapped in RwLock
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use feagi_bdu::ConnectomeManager;
+    ///
+    /// let manager = ConnectomeManager::instance();
+    /// let read_lock = manager.read();
+    /// let area_count = read_lock.get_cortical_area_count();
+    /// ```
+    ///
+    pub fn instance() -> Arc<RwLock<Self>> {
+        Arc::clone(&INSTANCE)
+    }
+    
+    /// Reset the singleton (for testing only)
+    ///
+    /// # Safety
+    ///
+    /// This should only be called in tests to reset state between test runs.
+    /// Calling this in production code will cause all references to the old
+    /// instance to become stale.
+    ///
+    #[cfg(test)]
+    pub fn reset_for_testing() {
+        let mut instance = INSTANCE.write();
+        *instance = Self::new();
+    }
+    
+    // ======================================================================
+    // Cortical Area Management
+    // ======================================================================
+    
+    /// Add a new cortical area
+    ///
+    /// # Arguments
+    ///
+    /// * `area` - The cortical area to add
+    ///
+    /// # Returns
+    ///
+    /// The assigned cortical index
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - An area with the same cortical_id already exists
+    /// - The area's cortical_idx conflicts with an existing area
+    ///
+    pub fn add_cortical_area(&mut self, mut area: CorticalArea) -> BduResult<u32> {
+        // Check if area already exists
+        if self.cortical_areas.contains_key(&area.cortical_id) {
+            return Err(BduError::InvalidArea(format!(
+                "Cortical area {} already exists",
+                area.cortical_id
+            )));
+        }
+        
+        // Assign cortical_idx if not set
+        if area.cortical_idx == 0 {
+            area.cortical_idx = self.next_cortical_idx;
+            self.next_cortical_idx += 1;
+        } else {
+            // Check for index conflict
+            if self.cortical_idx_to_id.contains_key(&area.cortical_idx) {
+                return Err(BduError::InvalidArea(format!(
+                    "Cortical index {} is already in use",
+                    area.cortical_idx
+                )));
+            }
+            
+            // Update next_cortical_idx if needed
+            if area.cortical_idx >= self.next_cortical_idx {
+                self.next_cortical_idx = area.cortical_idx + 1;
+            }
+        }
+        
+        let cortical_id = area.cortical_id.clone();
+        let cortical_idx = area.cortical_idx;
+        
+        // Update lookup maps
+        self.cortical_id_to_idx.insert(cortical_id.clone(), cortical_idx);
+        self.cortical_idx_to_id.insert(cortical_idx, cortical_id.clone());
+        
+        // Store area
+        self.cortical_areas.insert(cortical_id, area);
+        
+        self.initialized = true;
+        
+        Ok(cortical_idx)
+    }
+    
+    /// Remove a cortical area by ID
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - ID of the cortical area to remove
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if removed, error if area doesn't exist
+    ///
+    /// # Note
+    ///
+    /// This does NOT remove neurons from the NPU - that must be done separately.
+    ///
+    pub fn remove_cortical_area(&mut self, cortical_id: &str) -> BduResult<()> {
+        let area = self.cortical_areas.remove(cortical_id).ok_or_else(|| {
+            BduError::InvalidArea(format!("Cortical area {} does not exist", cortical_id))
+        })?;
+        
+        // Remove from lookup maps
+        self.cortical_id_to_idx.remove(cortical_id);
+        self.cortical_idx_to_id.remove(&area.cortical_idx);
+        
+        Ok(())
+    }
+    
+    /// Get a cortical area by ID
+    pub fn get_cortical_area(&self, cortical_id: &str) -> Option<&CorticalArea> {
+        self.cortical_areas.get(cortical_id)
+    }
+    
+    /// Get a mutable reference to a cortical area
+    pub fn get_cortical_area_mut(&mut self, cortical_id: &str) -> Option<&mut CorticalArea> {
+        self.cortical_areas.get_mut(cortical_id)
+    }
+    
+    /// Get cortical index by ID
+    pub fn get_cortical_idx(&self, cortical_id: &str) -> Option<u32> {
+        self.cortical_id_to_idx.get(cortical_id).copied()
+    }
+    
+    /// Get cortical ID by index
+    pub fn get_cortical_id(&self, cortical_idx: u32) -> Option<&String> {
+        self.cortical_idx_to_id.get(&cortical_idx)
+    }
+    
+    /// Get all cortical area IDs
+    pub fn get_cortical_area_ids(&self) -> Vec<&String> {
+        self.cortical_areas.keys().collect()
+    }
+    
+    /// Get the number of cortical areas
+    pub fn get_cortical_area_count(&self) -> usize {
+        self.cortical_areas.len()
+    }
+    
+    /// Check if a cortical area exists
+    pub fn has_cortical_area(&self, cortical_id: &str) -> bool {
+        self.cortical_areas.contains_key(cortical_id)
+    }
+    
+    /// Check if the connectome is initialized (has areas)
+    pub fn is_initialized(&self) -> bool {
+        self.initialized && !self.cortical_areas.is_empty()
+    }
+    
+    // ======================================================================
+    // Brain Region Management
+    // ======================================================================
+    
+    /// Add a brain region
+    pub fn add_brain_region(
+        &mut self,
+        region: BrainRegion,
+        parent_id: Option<String>,
+    ) -> BduResult<()> {
+        self.brain_regions.add_region(region, parent_id)
+    }
+    
+    /// Remove a brain region
+    pub fn remove_brain_region(&mut self, region_id: &str) -> BduResult<()> {
+        self.brain_regions.remove_region(region_id)
+    }
+    
+    /// Get a brain region by ID
+    pub fn get_brain_region(&self, region_id: &str) -> Option<&BrainRegion> {
+        self.brain_regions.get_region(region_id)
+    }
+    
+    /// Get a mutable reference to a brain region
+    pub fn get_brain_region_mut(&mut self, region_id: &str) -> Option<&mut BrainRegion> {
+        self.brain_regions.get_region_mut(region_id)
+    }
+    
+    /// Get all brain region IDs
+    pub fn get_brain_region_ids(&self) -> Vec<&String> {
+        self.brain_regions.get_all_region_ids()
+    }
+    
+    /// Get the brain region hierarchy
+    pub fn get_brain_region_hierarchy(&self) -> &BrainRegionHierarchy {
+        &self.brain_regions
+    }
+    
+    // ======================================================================
+    // Neuron Query Methods (Delegates to NPU)
+    // ======================================================================
+    
+    /// Check if a neuron exists
+    ///
+    /// # Note
+    ///
+    /// This is a placeholder - actual implementation requires NPU integration
+    ///
+    pub fn has_neuron(&self, _neuron_id: NeuronId) -> bool {
+        // TODO: Integrate with NPU
+        false
+    }
+    
+    /// Get neuron count
+    ///
+    /// # Note
+    ///
+    /// This is a placeholder - actual implementation requires NPU integration
+    ///
+    pub fn get_neuron_count(&self) -> usize {
+        // TODO: Integrate with NPU
+        0
+    }
+    
+    /// Get synapse count
+    ///
+    /// # Note
+    ///
+    /// This is a placeholder - actual implementation requires NPU integration
+    ///
+    pub fn get_synapse_count(&self) -> usize {
+        // TODO: Integrate with NPU
+        0
+    }
+    
+    // ======================================================================
+    // Configuration
+    // ======================================================================
+    
+    /// Get the configuration
+    pub fn get_config(&self) -> &ConnectomeConfig {
+        &self.config
+    }
+    
+    /// Update configuration
+    pub fn set_config(&mut self, config: ConnectomeConfig) {
+        self.config = config;
+    }
+    
+    // ======================================================================
+    // Genome I/O Placeholders
+    // ======================================================================
+    
+    /// Load a genome from JSON
+    ///
+    /// # Note
+    ///
+    /// This is a placeholder for Phase 2
+    ///
+    pub fn load_genome_from_json(&mut self, _json_str: &str) -> BduResult<()> {
+        // TODO: Implement genome loading in Phase 2
+        Err(BduError::Internal(
+            "Genome loading not yet implemented".to_string(),
+        ))
+    }
+    
+    /// Save the connectome as a genome JSON
+    ///
+    /// # Note
+    ///
+    /// This is a placeholder for Phase 2
+    ///
+    pub fn save_genome_to_json(&self) -> BduResult<String> {
+        // TODO: Implement genome saving in Phase 2
+        Err(BduError::Internal(
+            "Genome saving not yet implemented".to_string(),
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::cortical_area::AreaType;
+    use crate::types::Dimensions;
+    
+    #[test]
+    fn test_singleton_instance() {
+        let instance1 = ConnectomeManager::instance();
+        let instance2 = ConnectomeManager::instance();
+        
+        // Both should point to the same instance
+        assert_eq!(Arc::strong_count(&instance1), Arc::strong_count(&instance2));
+    }
+    
+    #[test]
+    fn test_add_cortical_area() {
+        ConnectomeManager::reset_for_testing();
+        
+        let instance = ConnectomeManager::instance();
+        let mut manager = instance.write();
+        
+        let area = CorticalArea::new(
+            "iav001".to_string(),
+            0,
+            "Visual Input".to_string(),
+            Dimensions::new(128, 128, 20),
+            (0, 0, 0),
+            AreaType::Sensory,
+        )
+        .unwrap();
+        
+        let cortical_idx = manager.add_cortical_area(area).unwrap();
+        
+        assert_eq!(cortical_idx, 0);
+        assert_eq!(manager.get_cortical_area_count(), 1);
+        assert!(manager.has_cortical_area("iav001"));
+        assert!(manager.is_initialized());
+    }
+    
+    #[test]
+    fn test_cortical_area_lookups() {
+        ConnectomeManager::reset_for_testing();
+        
+        let instance = ConnectomeManager::instance();
+        let mut manager = instance.write();
+        
+        let area = CorticalArea::new(
+            "test01".to_string(),
+            0,
+            "Test Area".to_string(),
+            Dimensions::new(10, 10, 10),
+            (0, 0, 0),
+            AreaType::Custom,
+        )
+        .unwrap();
+        
+        manager.add_cortical_area(area).unwrap();
+        
+        // ID -> idx lookup
+        assert_eq!(manager.get_cortical_idx("test01"), Some(0));
+        
+        // idx -> ID lookup
+        assert_eq!(manager.get_cortical_id(0), Some(&"test01".to_string()));
+        
+        // Get area
+        let retrieved_area = manager.get_cortical_area("test01").unwrap();
+        assert_eq!(retrieved_area.name, "Test Area");
+    }
+    
+    #[test]
+    fn test_remove_cortical_area() {
+        ConnectomeManager::reset_for_testing();
+        
+        let instance = ConnectomeManager::instance();
+        let mut manager = instance.write();
+        
+        let area = CorticalArea::new(
+            "test02".to_string(),
+            0,
+            "Test".to_string(),
+            Dimensions::new(10, 10, 10),
+            (0, 0, 0),
+            AreaType::Custom,
+        )
+        .unwrap();
+        
+        manager.add_cortical_area(area).unwrap();
+        assert_eq!(manager.get_cortical_area_count(), 1);
+        
+        manager.remove_cortical_area("test02").unwrap();
+        assert_eq!(manager.get_cortical_area_count(), 0);
+        assert!(!manager.has_cortical_area("test02"));
+    }
+    
+    #[test]
+    fn test_duplicate_area_error() {
+        ConnectomeManager::reset_for_testing();
+        
+        let instance = ConnectomeManager::instance();
+        let mut manager = instance.write();
+        
+        let area1 = CorticalArea::new(
+            "dup001".to_string(),
+            0,
+            "First".to_string(),
+            Dimensions::new(10, 10, 10),
+            (0, 0, 0),
+            AreaType::Custom,
+        )
+        .unwrap();
+        
+        let area2 = CorticalArea::new(
+            "dup001".to_string(), // Same ID
+            1,
+            "Second".to_string(),
+            Dimensions::new(10, 10, 10),
+            (0, 0, 0),
+            AreaType::Custom,
+        )
+        .unwrap();
+        
+        manager.add_cortical_area(area1).unwrap();
+        let result = manager.add_cortical_area(area2);
+        
+        assert!(result.is_err());
+    }
+    
+    #[test]
+    fn test_brain_region_management() {
+        ConnectomeManager::reset_for_testing();
+        
+        let instance = ConnectomeManager::instance();
+        let mut manager = instance.write();
+        
+        let root = BrainRegion::new(
+            "root".to_string(),
+            "Root".to_string(),
+            crate::models::brain_region::RegionType::Custom,
+        )
+        .unwrap();
+        
+        manager.add_brain_region(root, None).unwrap();
+        
+        assert_eq!(manager.get_brain_region_ids().len(), 1);
+        assert!(manager.get_brain_region("root").is_some());
+    }
+}
+

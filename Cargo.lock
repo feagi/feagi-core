@@ -733,6 +733,8 @@ dependencies = [
  "feagi-types",
  "log",
  "ndarray",
+ "once_cell",
+ "parking_lot",
  "proptest",
  "rand 0.8.5",
  "rayon",
