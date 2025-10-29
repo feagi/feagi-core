@@ -1,0 +1,355 @@
+====================================================================================================
+COMPLETE LIST OF POTENTIALLY UNUSED METHODS IN BDU (114 methods)
+====================================================================================================
+
+  1. add_area
+     File: feagi/bdu/models/brain_region.py
+
+  2. add_connectivity_rule
+     File: feagi/bdu/connectome_manager.py
+
+  3. add_cortical_connection
+     File: feagi/bdu/connectome_manager.py
+
+  4. add_neuron
+     File: feagi/bdu/connectome_manager.py
+     File: feagi/bdu/models/cortical_area.py
+
+  5. add_neurons
+     File: feagi/bdu/connectome_manager.py
+
+  6. add_synapse
+     File: feagi/bdu/connectome_manager.py
+
+  7. apply_connection_weight_change
+     File: feagi/bdu/connectome_manager.py
+
+  8. apply_connectivity_rule
+     File: feagi/bdu/connectome_manager.py
+
+  9. apply_rule_batch
+     File: feagi/bdu/connectome_manager.py
+
+ 10. area_connectivity_matrix
+     File: feagi/bdu/utils/metrics.py
+
+ 11. batch_add_synapses
+     File: feagi/bdu/connectome_manager.py
+
+ 12. batch_get_neuron_properties
+     File: feagi/bdu/connectome_manager.py
+
+ 13. batch_update_neuron_properties
+     File: feagi/bdu/connectome_manager.py
+
+ 14. build_power_connections
+     File: feagi/bdu/utils/mapping_utils.py
+
+ 15. calculate_distance
+     File: feagi/bdu/utils/position.py
+
+ 16. calculate_neuron_density
+     File: feagi/bdu/utils/metrics.py
+
+ 17. check_neuron_index_uniqueness
+     File: feagi/bdu/connectome_manager.py
+
+ 18. classify
+     File: feagi/bdu/embryogenesis/neuroembryogenesis.py
+
+ 19. clear_areas
+     File: feagi/bdu/models/brain_region.py
+
+ 20. clear_neuron_position_cache
+     File: feagi/bdu/connectome_manager.py
+
+ 21. connectivity_density
+     File: feagi/bdu/utils/metrics.py
+
+ 22. construct_genome_from_region
+     File: feagi/bdu/models/brain_region.py
+
+ 23. contains_area
+     File: feagi/bdu/models/brain_region.py
+
+ 24. convert_pattern_element
+     File: feagi/bdu/embryogenesis/neuroembryogenesis.py
+
+ 25. create_neuron
+     File: feagi/bdu/connectome_manager.py
+
+ 26. create_synapse
+     File: feagi/bdu/connectome_manager.py
+
+ 27. debug_cortical_areas
+     File: feagi/bdu/connectome_manager.py
+
+ 28. delete_connectivity_rule
+     File: feagi/bdu/connectome_manager.py
+
+ 29. delete_neurons
+     File: feagi/bdu/connectome_manager.py
+
+ 30. delete_region_with_members
+     File: feagi/bdu/models/brain_region.py
+
+ 31. delete_synapse
+     File: feagi/bdu/connectome_manager.py
+
+ 32. delete_synapses
+     File: feagi/bdu/connectome_manager.py
+
+ 33. delinearize_position
+     File: feagi/bdu/utils/position.py
+
+ 34. depth
+     File: feagi/bdu/models/cortical_area.py
+
+ 35. develop_brain
+     File: feagi/bdu/embryogenesis/neuroembryogenesis.py
+
+ 36. develop_brain_from_genome
+     File: feagi/bdu/embryogenesis/neuroembryogenesis.py
+
+ 37. direct_region_cortical_areas
+     File: feagi/bdu/models/brain_region.py
+
+ 38. generate_cortical_id
+     File: feagi/bdu/models/cortical_area.py
+
+ 39. generate_hash
+     File: feagi/bdu/models/brain_region.py
+
+ 40. get_area_for_neuron
+     File: feagi/bdu/connectome_manager.py
+
+ 41. get_areas_in_region
+     File: feagi/bdu/connectome_manager.py
+
+ 42. get_brain_region
+     File: feagi/bdu/connectome_manager.py
+
+ 43. get_brain_region_by_name
+     File: feagi/bdu/connectome_manager.py
+
+ 44. get_connection_matrix
+     File: feagi/bdu/connectome_manager.py
+
+ 45. get_connection_statistics
+     File: feagi/bdu/connectome_manager.py
+
+ 46. get_connections_by_area
+     File: feagi/bdu/connectome_manager.py
+
+ 47. get_connectivity_rule
+     File: feagi/bdu/connectome_manager.py
+
+ 48. get_connectivity_rules_for_areas
+     File: feagi/bdu/connectome_manager.py
+
+ 49. get_cortical_area_by_name
+     File: feagi/bdu/connectome_manager.py
+
+ 50. get_cortical_connection
+     File: feagi/bdu/connectome_manager.py
+
+ 51. get_detailed_cortical_map
+     File: feagi/bdu/utils/mapping_utils.py
+
+ 52. get_hierarchy_stats
+     File: feagi/bdu/models/brain_region_hierarchy.py
+
+ 53. get_mapping_restrictions_registry
+     File: feagi/bdu/utils/mapping_utils.py
+
+ 54. get_max_allowable_cortical_area_dimensions
+     File: feagi/bdu/connectome_manager.py
+
+ 55. get_max_cortical_area_dimensions
+     File: feagi/bdu/connectome_manager.py
+
+ 56. get_memory_areas
+     File: feagi/bdu/connectome_manager.py
+
+ 57. get_morphologies_registry
+     File: feagi/bdu/embryogenesis/neuroembryogenesis.py
+
+ 58. get_morphology_registry
+     File: feagi/bdu/embryogenesis/neuroembryogenesis.py
+
+ 59. get_neighbors
+     File: feagi/bdu/utils/position.py
+
+ 60. get_neuron
+     File: feagi/bdu/connectome_manager.py
+
+ 61. get_neuron_property
+     File: feagi/bdu/connectome_manager.py
+
+ 62. get_neurons_at_position
+     File: feagi/bdu/connectome_manager.py
+     File: feagi/bdu/models/cortical_area.py
+
+ 63. get_neurons_by_area_list
+     File: feagi/bdu/connectome_manager.py
+
+ 64. get_neurons_by_cortical_idx
+     File: feagi/bdu/connectome_manager.py
+
+ 65. get_neurons_in_region
+     File: feagi/bdu/connectome_manager.py
+
+ 66. get_synapse_weight
+     File: feagi/bdu/connectome_manager.py
+
+ 67. get_upstream_areas_for_memory
+     File: feagi/bdu/connectome_manager.py
+
+ 68. has_synapse
+     File: feagi/bdu/connectome_manager.py
+
+ 69. height
+     File: feagi/bdu/models/cortical_area.py
+
+ 70. is_ancestor
+     File: feagi/bdu/models/brain_region_hierarchy.py
+
+ 71. is_initialized
+     File: feagi/bdu/connectome_manager.py
+
+ 72. linearize_position
+     File: feagi/bdu/utils/position.py
+
+ 73. list_ipu_areas
+     File: feagi/bdu/connectome_manager.py
+
+ 74. list_opu_areas
+     File: feagi/bdu/connectome_manager.py
+
+ 75. max_neurons
+     File: feagi/bdu/connectome_manager.py
+
+ 76. max_synapses
+     File: feagi/bdu/connectome_manager.py
+
+ 77. neighbor_finder
+     File: feagi/bdu/utils/mapping_utils.py
+
+ 78. neuron_array
+     File: feagi/bdu/connectome_manager.py
+     File: feagi/bdu/connectome_manager.py
+
+ 79. neuron_count
+     File: feagi/bdu/connectome_manager.py
+     File: feagi/bdu/models/cortical_area.py
+
+ 80. neuron_density
+     File: feagi/bdu/utils/metrics.py
+
+ 81. next_neuron_index
+     File: feagi/bdu/connectome_manager.py
+
+ 82. plan_clone_cortical_area
+     File: feagi/bdu/connectome_manager.py
+
+ 83. query_neurons_by_area_and_position
+     File: feagi/bdu/connectome_manager.py
+
+ 84. query_neurons_by_threshold_range
+     File: feagi/bdu/connectome_manager.py
+
+ 85. rebuild_cortical_mapping_from_existing_areas
+     File: feagi/bdu/connectome_manager.py
+
+ 86. recursive_region_cortical_areas
+     File: feagi/bdu/models/brain_region.py
+
+ 87. recursive_sub_regions
+     File: feagi/bdu/models/brain_region.py
+
+ 88. region_id_2_title
+     File: feagi/bdu/models/brain_region.py
+
+ 89. region_id_gen
+     File: feagi/bdu/models/brain_region.py
+
+ 90. remove_area
+     File: feagi/bdu/models/brain_region.py
+
+ 91. remove_area_from_region
+     File: feagi/bdu/connectome_manager.py
+
+ 92. remove_by_idx
+     File: feagi/bdu/cortical_mapping.py
+
+ 93. remove_cortical_area_from_region
+     File: feagi/bdu/connectome_manager.py
+
+ 94. remove_memory_area_mapping
+     File: feagi/bdu/connectome_manager.py
+
+ 95. remove_neuron
+     File: feagi/bdu/models/cortical_area.py
+
+ 96. rescan_all_memory_mappings
+     File: feagi/bdu/connectome_manager.py
+
+ 97. reset
+     File: feagi/bdu/utils/metrics.py
+
+ 98. reset_singleton
+     File: feagi/bdu/connectome_manager.py
+
+ 99. synapse_count
+     File: feagi/bdu/connectome_manager.py
+
+100. timing_decorator
+     File: feagi/bdu/utils/metrics.py
+
+101. unregister_memory_area
+     File: feagi/bdu/connectome_manager.py
+
+102. update_connectivity_rule
+     File: feagi/bdu/connectome_manager.py
+
+103. update_cortical_connection
+     File: feagi/bdu/connectome_manager.py
+
+104. update_neuron_position
+     File: feagi/bdu/connectome_manager.py
+     File: feagi/bdu/models/cortical_area.py
+
+105. update_neuron_property
+     File: feagi/bdu/connectome_manager.py
+
+106. update_region
+     File: feagi/bdu/models/brain_region.py
+
+107. update_synapse_count_for_connection
+     File: feagi/bdu/connectome_manager.py
+
+108. update_synapse_weight
+     File: feagi/bdu/connectome_manager.py
+
+109. validate_cortical_area_dimensions_safe
+     File: feagi/bdu/connectome_manager.py
+
+110. validate_position
+     File: feagi/bdu/utils/position.py
+
+111. vectorized_cortical_area_operations
+     File: feagi/bdu/connectome_manager.py
+
+112. volume
+     File: feagi/bdu/models/cortical_area.py
+
+113. width
+     File: feagi/bdu/models/cortical_area.py
+
+114. wrapper
+     File: feagi/bdu/utils/metrics.py
+
+====================================================================================================
+TOTAL: 114 potentially unused methods out of 195 total public methods
+Percentage: 58.5% dead code
+====================================================================================================
