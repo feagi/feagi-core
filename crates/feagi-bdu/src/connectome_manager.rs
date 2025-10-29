@@ -824,12 +824,38 @@ impl ConnectomeManager {
     
     /// Save the connectome as a genome JSON
     ///
-    /// # Note
+    /// # Arguments
     ///
-    /// This is a placeholder for Phase 2.4
+    /// * `genome_id` - Optional custom genome ID (generates timestamp-based ID if None)
+    /// * `genome_title` - Optional custom genome title
     ///
-    pub fn save_genome_to_json(&self) -> BduResult<String> {
-        crate::genome::GenomeSaver::save("TODO")
+    /// # Returns
+    ///
+    /// JSON string representation of the genome
+    ///
+    pub fn save_genome_to_json(
+        &self,
+        genome_id: Option<String>,
+        genome_title: Option<String>,
+    ) -> BduResult<String> {
+        // Build parent map from brain region hierarchy
+        let mut brain_regions_with_parents = std::collections::HashMap::new();
+        
+        for region_id in self.brain_regions.get_all_region_ids() {
+            if let Some(region) = self.brain_regions.get_region(region_id) {
+                let parent_id = self.brain_regions.get_parent(region_id)
+                    .map(|s| s.to_string());
+                brain_regions_with_parents.insert(region_id.to_string(), (region.clone(), parent_id));
+            }
+        }
+        
+        // Generate and return JSON
+        crate::genome::GenomeSaver::save_to_json(
+            &self.cortical_areas,
+            &brain_regions_with_parents,
+            genome_id,
+            genome_title,
+        )
     }
 }
 

@@ -728,6 +728,7 @@ name = "feagi-bdu"
 version = "2.0.0"
 dependencies = [
  "ahash",
+ "chrono",
  "criterion",
  "feagi-burst-engine",
  "feagi-types",
