@@ -221,6 +221,22 @@ impl PNS {
         }
     }
 
+    /// Set RPC callback for generic CoreAPIService method calls
+    pub fn set_api_rpc_callback<F>(&self, callback: F)
+    where
+        F: Fn(&str, serde_json::Value) -> std::result::Result<serde_json::Value, String> + Send + Sync + 'static,
+    {
+        if let Some(streams) = self.zmq_streams.lock().as_mut() {
+            // Wrap callback to ensure it matches the expected signature
+            streams.get_api_control_stream_mut().set_rpc_callback(move |method, payload| {
+                callback(method, payload)
+            });
+            println!("🦀 [PNS] RPC callback registered for CoreAPIService");
+        } else {
+            eprintln!("🦀 [PNS] [ERR] Cannot set RPC callback: ZMQ streams not started");
+        }
+    }
+
     /// Set callback for agent registration events (for Python integration)
     pub fn set_on_agent_registered<F>(&self, callback: F)
     where
