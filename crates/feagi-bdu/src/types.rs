@@ -45,6 +45,9 @@ pub enum BduError {
         dims: (usize, usize, usize),
     },
 
+    #[error("Invalid genome: {0}")]
+    InvalidGenome(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }

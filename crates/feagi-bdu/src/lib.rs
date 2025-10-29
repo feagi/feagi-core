@@ -31,6 +31,7 @@ Licensed under the Apache License, Version 2.0
 pub mod connectivity;
 pub mod connectome_manager;
 // pub mod ffi;  // DEPRECATED: Legacy Python-driven synaptogenesis (replaced by NPU-native functions)
+pub mod genome;
 pub mod models;
 pub mod spatial;
 pub mod types;
@@ -54,6 +55,8 @@ pub use types::{AreaId, BduError, BduResult, Dimensions, NeuronId, Position, Wei
 pub use models::{BrainRegion, BrainRegionHierarchy, CorticalArea};
 
 pub use connectome_manager::{ConnectomeConfig, ConnectomeManager};
+
+pub use genome::{GenomeParser, ParsedGenome, GenomeSaver};
 
 #[cfg(test)]
 mod tests {

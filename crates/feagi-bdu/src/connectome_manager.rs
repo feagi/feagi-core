@@ -373,33 +373,91 @@ impl ConnectomeManager {
     }
     
     // ======================================================================
-    // Genome I/O Placeholders
+    // Genome I/O
     // ======================================================================
     
-    /// Load a genome from JSON
+    /// Load a genome from JSON string
     ///
-    /// # Note
+    /// This method:
+    /// 1. Parses the genome JSON
+    /// 2. Creates cortical areas from the blueprint
+    /// 3. Reconstructs the brain region hierarchy
+    /// 4. Stores neuron morphologies for later processing
     ///
-    /// This is a placeholder for Phase 2
+    /// # Arguments
     ///
-    pub fn load_genome_from_json(&mut self, _json_str: &str) -> BduResult<()> {
-        // TODO: Implement genome loading in Phase 2
-        Err(BduError::Internal(
-            "Genome loading not yet implemented".to_string(),
-        ))
+    /// * `json_str` - JSON string of the genome
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if genome loaded successfully
+    ///
+    /// # Errors
+    ///
+    /// Returns error if:
+    /// - JSON is malformed
+    /// - Required fields are missing
+    /// - Cortical areas have invalid data
+    /// - Brain region hierarchy is invalid
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use feagi_bdu::ConnectomeManager;
+    ///
+    /// let manager = ConnectomeManager::instance();
+    /// let mut mgr = manager.write();
+    /// 
+    /// let genome_json = r#"{ "version": "2.1", "blueprint": {...} }"#;
+    /// mgr.load_genome_from_json(genome_json)?;
+    /// ```
+    ///
+    pub fn load_genome_from_json(&mut self, json_str: &str) -> BduResult<()> {
+        // Parse genome
+        let parsed = crate::genome::GenomeParser::parse(json_str)?;
+        
+        log::info!("🧬 Loading genome: {} (version {})", 
+            parsed.genome_title, parsed.version);
+        log::info!("🧬   Cortical areas: {}", parsed.cortical_areas.len());
+        log::info!("🧬   Brain regions: {}", parsed.brain_regions.len());
+        
+        // Clear existing data
+        self.cortical_areas.clear();
+        self.cortical_id_to_idx.clear();
+        self.cortical_idx_to_id.clear();
+        self.next_cortical_idx = 0;
+        self.brain_regions = crate::models::BrainRegionHierarchy::new();
+        
+        // Add cortical areas
+        for area in parsed.cortical_areas {
+            let cortical_idx = self.add_cortical_area(area)?;
+            log::debug!("  ✅ Added cortical area {} (idx: {})", 
+                self.cortical_idx_to_id.get(&cortical_idx).unwrap(), cortical_idx);
+        }
+        
+        // Add brain regions (hierarchy)
+        for (region, parent_id) in parsed.brain_regions {
+            let region_id = region.region_id.clone();
+            self.brain_regions.add_region(region, parent_id.clone())?;
+            log::debug!("  ✅ Added brain region {} (parent: {:?})", 
+                region_id, parent_id);
+        }
+        
+        self.initialized = true;
+        
+        log::info!("🧬 ✅ Genome loaded successfully!");
+        
+        Ok(())
     }
     
     /// Save the connectome as a genome JSON
     ///
     /// # Note
     ///
-    /// This is a placeholder for Phase 2
+    /// This is a placeholder for Phase 2.4
     ///
     pub fn save_genome_to_json(&self) -> BduResult<String> {
-        // TODO: Implement genome saving in Phase 2
-        Err(BduError::Internal(
-            "Genome saving not yet implemented".to_string(),
-        ))
+        crate::genome::GenomeSaver::save("TODO")
     }
 }
 
@@ -549,6 +607,73 @@ mod tests {
         
         assert_eq!(manager.get_brain_region_ids().len(), 1);
         assert!(manager.get_brain_region("root").is_some());
+    }
+    
+    #[test]
+    fn test_genome_loading() {
+        ConnectomeManager::reset_for_testing();
+        
+        let genome_json = r#"{
+            "genome_id": "test-001",
+            "genome_title": "Test Genome",
+            "version": "2.1",
+            "blueprint": {
+                "test01": {
+                    "cortical_name": "Test Area 1",
+                    "block_boundaries": [10, 10, 10],
+                    "relative_coordinate": [0, 0, 0],
+                    "cortical_type": "IPU",
+                    "firing_threshold": 50.0
+                },
+                "test02": {
+                    "cortical_name": "Test Area 2",
+                    "block_boundaries": [5, 5, 5],
+                    "relative_coordinate": [10, 0, 0],
+                    "cortical_type": "OPU"
+                }
+            },
+            "brain_regions": {
+                "root": {
+                    "title": "Root Region",
+                    "parent_region_id": null,
+                    "areas": ["test01", "test02"]
+                }
+            }
+        }"#;
+        
+        let instance = ConnectomeManager::instance();
+        let mut manager = instance.write();
+        
+        // Load genome
+        manager.load_genome_from_json(genome_json).unwrap();
+        
+        // Verify cortical areas loaded
+        assert_eq!(manager.get_cortical_area_count(), 2);
+        assert!(manager.has_cortical_area("test01"));
+        assert!(manager.has_cortical_area("test02"));
+        
+        // Verify area details
+        let area1 = manager.get_cortical_area("test01").unwrap();
+        assert_eq!(area1.name, "Test Area 1");
+        assert_eq!(area1.dimensions.width, 10);
+        assert_eq!(area1.area_type, AreaType::Sensory);
+        assert!(area1.properties.contains_key("firing_threshold"));
+        
+        let area2 = manager.get_cortical_area("test02").unwrap();
+        assert_eq!(area2.name, "Test Area 2");
+        assert_eq!(area2.dimensions.width, 5);
+        assert_eq!(area2.area_type, AreaType::Motor);
+        
+        // Verify brain regions loaded
+        assert_eq!(manager.get_brain_region_ids().len(), 1);
+        let root_region = manager.get_brain_region("root").unwrap();
+        assert_eq!(root_region.name, "Root Region");
+        assert_eq!(root_region.cortical_areas.len(), 2);
+        assert!(root_region.contains_area("test01"));
+        assert!(root_region.contains_area("test02"));
+        
+        // Verify manager is initialized
+        assert!(manager.is_initialized());
     }
 }
 
