@@ -28,6 +28,7 @@ use std::fmt;
 
 pub mod fire_structures;
 pub mod npu;
+pub mod models;
 
 // Multi-model neuron architecture (Phase 0: ID management only)
 // See: feagi-core/docs/MULTI_MODEL_NEURON_ARCHITECTURE.md
@@ -39,6 +40,9 @@ pub use npu::*;
 
 // Export ID management types for multi-model architecture
 pub use id_manager::NeuronArrayType;
+
+// Export brain architecture models
+pub use models::{CorticalArea, BrainRegion, BrainRegionHierarchy, AreaType, RegionType};
 
 /// Neuron ID (globally unique across the entire brain)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -195,10 +199,71 @@ pub enum FeagiError {
 
     #[error("Invalid backend: {0}")]
     InvalidBackend(String),
+    
+    #[error("Invalid cortical area: {0}")]
+    InvalidArea(String),
+    
+    #[error("Out of bounds: position ({x}, {y}, {z}) exceeds dimensions ({width}, {height}, {depth})")]
+    OutOfBounds {
+        x: i32,
+        y: i32,
+        z: i32,
+        width: usize,
+        height: usize,
+        depth: usize,
+    },
+    
+    #[error("Invalid brain region: {0}")]
+    InvalidRegion(String),
+    
+    #[error("Region not found: {0}")]
+    RegionNotFound(String),
+    
+    #[error("Circular dependency detected: {0}")]
+    CircularDependency(String),
 }
 
 pub type Result<T> = std::result::Result<T, FeagiError>;
 pub type Error = FeagiError;
+
+/// 3D dimensions for cortical areas
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Dimensions {
+    pub width: usize,
+    pub height: usize,
+    pub depth: usize,
+}
+
+impl Dimensions {
+    pub fn new(width: usize, height: usize, depth: usize) -> Self {
+        Self {
+            width,
+            height,
+            depth,
+        }
+    }
+
+    pub fn from_tuple(tuple: (usize, usize, usize)) -> Self {
+        Self::new(tuple.0, tuple.1, tuple.2)
+    }
+
+    pub fn to_tuple(&self) -> (usize, usize, usize) {
+        (self.width, self.height, self.depth)
+    }
+
+    pub fn volume(&self) -> usize {
+        self.width * self.height * self.depth
+    }
+
+    pub fn contains(&self, pos: (u32, u32, u32)) -> bool {
+        pos.0 < self.width as u32
+            && pos.1 < self.height as u32
+            && pos.2 < self.depth as u32
+    }
+}
+
+/// 3D position (x, y, z) in brain space
+pub type Position = (i32, i32, i32);
 
 #[cfg(test)]
 mod tests {

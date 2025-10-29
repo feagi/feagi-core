@@ -1,0 +1,38 @@
+[package]
+name = "feagi-evo"
+version = "2.0.0"
+edition = "2021"
+authors = ["FEAGI Team"]
+description = "Evolution and Genome Management - Genotype operations for FEAGI"
+license = "Apache-2.0"
+
+[lib]
+crate-type = ["rlib"]
+name = "feagi_evo"
+
+[dependencies]
+# Core types from existing FEAGI crates  
+feagi-types = { path = "../feagi-types" }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error handling
+thiserror = { workspace = true }
+
+# Logging
+log = "0.4"
+
+# Timestamp generation for genome IDs
+chrono = "0.4"
+
+# Random number generation (for evolution)
+rand = "0.8"
+
+[dev-dependencies]
+# Testing
+env_logger = "0.11"
+
+# Profile configuration is inherited from workspace root
+
