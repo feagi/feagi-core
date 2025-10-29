@@ -29,10 +29,13 @@ use once_cell::sync::Lazy;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea};
-use crate::types::{AreaId, BduError, BduResult, NeuronId};
+use crate::types::{BduError, BduResult, NeuronId};
+
+// NPU integration (optional dependency)
+use feagi_burst_engine::RustNPU;
 
 /// Global singleton instance of ConnectomeManager
 static INSTANCE: Lazy<Arc<RwLock<ConnectomeManager>>> =
@@ -82,7 +85,6 @@ impl Default for ConnectomeConfig {
 /// Uses `RwLock` for concurrent reads with exclusive writes.
 /// Multiple threads can read simultaneously, but writes block.
 ///
-#[derive(Debug)]
 pub struct ConnectomeManager {
     /// Map of cortical_id -> CorticalArea metadata
     cortical_areas: HashMap<String, CorticalArea>,
@@ -102,6 +104,12 @@ pub struct ConnectomeManager {
     /// Configuration
     config: ConnectomeConfig,
     
+    /// Optional reference to the Rust NPU for neuron/synapse queries
+    /// 
+    /// This is set by the Python process manager after NPU initialization.
+    /// All neuron/synapse data queries delegate to the NPU.
+    npu: Option<Arc<Mutex<RustNPU>>>,
+    
     /// Is the connectome initialized (has cortical areas)?
     initialized: bool,
 }
@@ -116,6 +124,7 @@ impl ConnectomeManager {
             next_cortical_idx: 0,
             brain_regions: BrainRegionHierarchy::new(),
             config: ConnectomeConfig::default(),
+            npu: None,
             initialized: false,
         }
     }
@@ -322,40 +331,212 @@ impl ConnectomeManager {
     }
     
     // ======================================================================
+    // NPU Integration
+    // ======================================================================
+    
+    /// Set the NPU reference for neuron/synapse queries
+    ///
+    /// This should be called once during FEAGI initialization after the NPU is created.
+    ///
+    /// # Arguments
+    ///
+    /// * `npu` - Arc to the Rust NPU
+    ///
+    pub fn set_npu(&mut self, npu: Arc<Mutex<RustNPU>>) {
+        self.npu = Some(npu);
+        log::info!("🔗 ConnectomeManager: NPU reference set");
+    }
+    
+    /// Check if NPU is connected
+    pub fn has_npu(&self) -> bool {
+        self.npu.is_some()
+    }
+    
+    // ======================================================================
     // Neuron Query Methods (Delegates to NPU)
     // ======================================================================
     
     /// Check if a neuron exists
     ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - The neuron ID to check
+    ///
+    /// # Returns
+    ///
+    /// `true` if the neuron exists in the NPU, `false` otherwise
+    ///
     /// # Note
     ///
-    /// This is a placeholder - actual implementation requires NPU integration
+    /// Returns `false` if NPU is not connected
     ///
-    pub fn has_neuron(&self, _neuron_id: NeuronId) -> bool {
-        // TODO: Integrate with NPU
-        false
+    pub fn has_neuron(&self, neuron_id: NeuronId) -> bool {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                let count = npu_lock.get_neuron_count();
+                (neuron_id as u32) < count as u32
+            } else {
+                false
+            }
+        } else {
+            false
+        }
     }
     
-    /// Get neuron count
+    /// Get total number of active neurons
     ///
-    /// # Note
+    /// # Returns
     ///
-    /// This is a placeholder - actual implementation requires NPU integration
+    /// The total number of neurons in the NPU, or 0 if NPU is not connected
     ///
     pub fn get_neuron_count(&self) -> usize {
-        // TODO: Integrate with NPU
-        0
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                npu_lock.get_neuron_count()
+            } else {
+                0
+            }
+        } else {
+            0
+        }
     }
     
-    /// Get synapse count
+    /// Get total number of synapses
     ///
-    /// # Note
+    /// # Returns
     ///
-    /// This is a placeholder - actual implementation requires NPU integration
+    /// The total number of synapses in the NPU, or 0 if NPU is not connected
     ///
     pub fn get_synapse_count(&self) -> usize {
-        // TODO: Integrate with NPU
-        0
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                npu_lock.get_synapse_count()
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+    
+    /// Get neuron coordinates (x, y, z)
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - The neuron ID to query
+    ///
+    /// # Returns
+    ///
+    /// Coordinates as (x, y, z), or (0, 0, 0) if neuron doesn't exist or NPU not connected
+    ///
+    pub fn get_neuron_coordinates(&self, neuron_id: NeuronId) -> (u32, u32, u32) {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                npu_lock.get_neuron_coordinates(neuron_id as u32)
+            } else {
+                (0, 0, 0)
+            }
+        } else {
+            (0, 0, 0)
+        }
+    }
+    
+    /// Get the cortical area index for a neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - The neuron ID to query
+    ///
+    /// # Returns
+    ///
+    /// Cortical area index, or 0 if neuron doesn't exist or NPU not connected
+    ///
+    pub fn get_neuron_cortical_idx(&self, neuron_id: NeuronId) -> u32 {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                npu_lock.get_neuron_cortical_area(neuron_id as u32)
+            } else {
+                0
+            }
+        } else {
+            0
+        }
+    }
+    
+    /// Get all neuron IDs in a specific cortical area
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID (string)
+    ///
+    /// # Returns
+    ///
+    /// Vec of neuron IDs in the area, or empty vec if area doesn't exist or NPU not connected
+    ///
+    pub fn get_neurons_in_area(&self, cortical_id: &str) -> Vec<NeuronId> {
+        // Get cortical_idx from cortical_id
+        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
+            Some(idx) => *idx,
+            None => return Vec::new(),
+        };
+        
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                // Convert Vec<u32> to Vec<u64>
+                npu_lock.get_neurons_in_cortical_area(cortical_idx)
+                    .into_iter()
+                    .map(|id| id as u64)
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        }
+    }
+    
+    /// Get all outgoing synapses from a source neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `source_neuron_id` - The source neuron ID
+    ///
+    /// # Returns
+    ///
+    /// Vec of (target_neuron_id, weight, conductance, synapse_type), or empty if NPU not connected
+    ///
+    pub fn get_outgoing_synapses(&self, source_neuron_id: NeuronId) -> Vec<(u32, u8, u8, u8)> {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                npu_lock.get_outgoing_synapses(source_neuron_id as u32)
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        }
+    }
+    
+    /// Get all incoming synapses to a target neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `target_neuron_id` - The target neuron ID
+    ///
+    /// # Returns
+    ///
+    /// Vec of (source_neuron_id, weight, conductance, synapse_type), or empty if NPU not connected
+    ///
+    pub fn get_incoming_synapses(&self, target_neuron_id: NeuronId) -> Vec<(u32, u8, u8, u8)> {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                npu_lock.get_incoming_synapses(target_neuron_id as u32)
+            } else {
+                Vec::new()
+            }
+        } else {
+            Vec::new()
+        }
     }
     
     // ======================================================================
@@ -458,6 +639,19 @@ impl ConnectomeManager {
     ///
     pub fn save_genome_to_json(&self) -> BduResult<String> {
         crate::genome::GenomeSaver::save("TODO")
+    }
+}
+
+// Manual Debug implementation (RustNPU doesn't implement Debug)
+impl std::fmt::Debug for ConnectomeManager {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectomeManager")
+            .field("cortical_areas", &self.cortical_areas.len())
+            .field("next_cortical_idx", &self.next_cortical_idx)
+            .field("brain_regions", &self.brain_regions)
+            .field("npu", &if self.npu.is_some() { "Connected" } else { "Not connected" })
+            .field("initialized", &self.initialized)
+            .finish()
     }
 }
 
