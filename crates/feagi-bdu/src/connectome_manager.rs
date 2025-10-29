@@ -539,6 +539,197 @@ impl ConnectomeManager {
         }
     }
     
+    /// Get neuron count for a specific cortical area
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID (string)
+    ///
+    /// # Returns
+    ///
+    /// Number of neurons in the area, or 0 if area doesn't exist or NPU not connected
+    ///
+    pub fn get_neuron_count_in_area(&self, cortical_id: &str) -> usize {
+        self.get_neurons_in_area(cortical_id).len()
+    }
+    
+    /// Get all cortical areas that have neurons
+    ///
+    /// # Returns
+    ///
+    /// Vec of (cortical_id, neuron_count) for areas with at least one neuron
+    ///
+    pub fn get_populated_areas(&self) -> Vec<(String, usize)> {
+        let mut result = Vec::new();
+        
+        for cortical_id in self.cortical_areas.keys() {
+            let count = self.get_neuron_count_in_area(cortical_id);
+            if count > 0 {
+                result.push((cortical_id.clone(), count));
+            }
+        }
+        
+        result
+    }
+    
+    /// Check if a cortical area has any neurons
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// `true` if the area has at least one neuron, `false` otherwise
+    ///
+    pub fn is_area_populated(&self, cortical_id: &str) -> bool {
+        self.get_neuron_count_in_area(cortical_id) > 0
+    }
+    
+    /// Get total synapse count for a specific cortical area (outgoing only)
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// Total number of outgoing synapses from neurons in this area
+    ///
+    pub fn get_synapse_count_in_area(&self, cortical_id: &str) -> usize {
+        let neurons = self.get_neurons_in_area(cortical_id);
+        let mut total = 0;
+        
+        for neuron_id in neurons {
+            total += self.get_outgoing_synapses(neuron_id).len();
+        }
+        
+        total
+    }
+    
+    /// Check if two neurons are connected (source → target)
+    ///
+    /// # Arguments
+    ///
+    /// * `source_neuron_id` - The source neuron ID
+    /// * `target_neuron_id` - The target neuron ID
+    ///
+    /// # Returns
+    ///
+    /// `true` if there is a synapse from source to target, `false` otherwise
+    ///
+    pub fn are_neurons_connected(&self, source_neuron_id: NeuronId, target_neuron_id: NeuronId) -> bool {
+        let synapses = self.get_outgoing_synapses(source_neuron_id);
+        synapses.iter().any(|(target, _, _, _)| *target == target_neuron_id as u32)
+    }
+    
+    /// Get connection strength (weight) between two neurons
+    ///
+    /// # Arguments
+    ///
+    /// * `source_neuron_id` - The source neuron ID
+    /// * `target_neuron_id` - The target neuron ID
+    ///
+    /// # Returns
+    ///
+    /// Synapse weight (0-255), or None if no connection exists
+    ///
+    pub fn get_connection_weight(&self, source_neuron_id: NeuronId, target_neuron_id: NeuronId) -> Option<u8> {
+        let synapses = self.get_outgoing_synapses(source_neuron_id);
+        synapses.iter()
+            .find(|(target, _, _, _)| *target == target_neuron_id as u32)
+            .map(|(_, weight, _, _)| *weight)
+    }
+    
+    /// Get connectivity statistics for a cortical area
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// (neuron_count, total_synapses, avg_synapses_per_neuron)
+    ///
+    pub fn get_area_connectivity_stats(&self, cortical_id: &str) -> (usize, usize, f32) {
+        let neurons = self.get_neurons_in_area(cortical_id);
+        let neuron_count = neurons.len();
+        
+        if neuron_count == 0 {
+            return (0, 0, 0.0);
+        }
+        
+        let mut total_synapses = 0;
+        for neuron_id in neurons {
+            total_synapses += self.get_outgoing_synapses(neuron_id).len();
+        }
+        
+        let avg_synapses = total_synapses as f32 / neuron_count as f32;
+        
+        (neuron_count, total_synapses, avg_synapses)
+    }
+    
+    /// Get the cortical area ID (string) for a neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - The neuron ID
+    ///
+    /// # Returns
+    ///
+    /// The cortical area ID string, or None if neuron doesn't exist
+    ///
+    pub fn get_neuron_cortical_id(&self, neuron_id: NeuronId) -> Option<String> {
+        let cortical_idx = self.get_neuron_cortical_idx(neuron_id);
+        self.cortical_idx_to_id.get(&cortical_idx).cloned()
+    }
+    
+    /// Get neuron density (neurons per voxel) for a cortical area
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// Neuron density (neurons per voxel), or 0.0 if area doesn't exist
+    ///
+    pub fn get_neuron_density(&self, cortical_id: &str) -> f32 {
+        let area = match self.cortical_areas.get(cortical_id) {
+            Some(a) => a,
+            None => return 0.0,
+        };
+        
+        let neuron_count = self.get_neuron_count_in_area(cortical_id);
+        let volume = area.dimensions.width * area.dimensions.height * area.dimensions.depth;
+        
+        if volume == 0 {
+            return 0.0;
+        }
+        
+        neuron_count as f32 / volume as f32
+    }
+    
+    /// Get all cortical areas with connectivity statistics
+    ///
+    /// # Returns
+    ///
+    /// Vec of (cortical_id, neuron_count, synapse_count, density)
+    ///
+    pub fn get_all_area_stats(&self) -> Vec<(String, usize, usize, f32)> {
+        let mut stats = Vec::new();
+        
+        for cortical_id in self.cortical_areas.keys() {
+            let neuron_count = self.get_neuron_count_in_area(cortical_id);
+            let synapse_count = self.get_synapse_count_in_area(cortical_id);
+            let density = self.get_neuron_density(cortical_id);
+            
+            stats.push((cortical_id.clone(), neuron_count, synapse_count, density));
+        }
+        
+        stats
+    }
+    
     // ======================================================================
     // Configuration
     // ======================================================================
