@@ -861,6 +861,7 @@ dependencies = [
  "feagi-evo",
  "feagi-types",
  "log",
+ "parking_lot",
  "serde",
  "serde_json",
  "thiserror",

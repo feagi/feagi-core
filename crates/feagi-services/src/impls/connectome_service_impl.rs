@@ -10,15 +10,16 @@ use crate::types::*;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
 use feagi_types::{AreaType, BrainRegion, CorticalArea, Dimensions, RegionType};
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
-    connectome: Arc<ConnectomeManager>,
+    connectome: Arc<RwLock<ConnectomeManager>>,
 }
 
 impl ConnectomeServiceImpl {
-    pub fn new(connectome: Arc<ConnectomeManager>) -> Self {
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
         Self { connectome }
     }
     
@@ -98,6 +99,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         
         // Add to connectome
         self.connectome
+            .write()
             .add_cortical_area(area)
             .map_err(ServiceError::from)?;
         
@@ -109,6 +111,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         log::info!("Deleting cortical area: {}", cortical_id);
         
         self.connectome
+            .write()
             .remove_cortical_area(cortical_id)
             .map_err(ServiceError::from)?;
         
@@ -118,21 +121,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
         log::debug!("Getting cortical area: {}", cortical_id);
         
-        let area = self.connectome
+        let manager = self.connectome.read();
+        
+        let area = manager
             .get_cortical_area(cortical_id)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
         
-        let cortical_idx = self.connectome
+        let cortical_idx = manager
             .get_cortical_idx(cortical_id)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
         
-        let neuron_count = self.connectome.get_neuron_count_in_area(cortical_id);
+        let neuron_count = manager.get_neuron_count_in_area(cortical_id);
         
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
@@ -149,7 +154,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn list_cortical_areas(&self) -> ServiceResult<Vec<CorticalAreaInfo>> {
         log::debug!("Listing all cortical areas");
         
-        let cortical_ids = self.connectome.get_cortical_area_ids();
+        let cortical_ids: Vec<String> = {
+            let manager = self.connectome.read();
+            manager.get_cortical_area_ids().into_iter().cloned().collect()
+        };
         
         let mut areas = Vec::new();
         for cortical_id in cortical_ids {
@@ -163,12 +171,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
     async fn get_cortical_area_ids(&self) -> ServiceResult<Vec<String>> {
         log::debug!("Getting cortical area IDs");
-        Ok(self.connectome.get_cortical_area_ids())
+        Ok(self.connectome.read().get_cortical_area_ids().into_iter().cloned().collect())
     }
 
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {
         log::debug!("Checking if cortical area exists: {}", cortical_id);
-        Ok(self.connectome.has_cortical_area(cortical_id))
+        Ok(self.connectome.read().has_cortical_area(cortical_id))
     }
 
     // ========================================================================
@@ -193,6 +201,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         
         // Add to connectome
         self.connectome
+            .write()
             .add_brain_region(region, params.parent_id.clone())
             .map_err(ServiceError::from)?;
         
@@ -204,6 +213,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         log::info!("Deleting brain region: {}", region_id);
         
         self.connectome
+            .write()
             .remove_brain_region(region_id)
             .map_err(ServiceError::from)?;
         
@@ -213,14 +223,16 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn get_brain_region(&self, region_id: &str) -> ServiceResult<BrainRegionInfo> {
         log::debug!("Getting brain region: {}", region_id);
         
-        let region = self.connectome
+        let manager = self.connectome.read();
+        
+        let region = manager
             .get_brain_region(region_id)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "BrainRegion".to_string(),
                 id: region_id.to_string(),
             })?;
         
-        let hierarchy = self.connectome.get_brain_region_hierarchy();
+        let hierarchy = manager.get_brain_region_hierarchy();
         let parent_id = hierarchy.get_parent(region_id).map(|s| s.to_string());
         
         Ok(BrainRegionInfo {
@@ -236,7 +248,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn list_brain_regions(&self) -> ServiceResult<Vec<BrainRegionInfo>> {
         log::debug!("Listing all brain regions");
         
-        let region_ids = self.connectome.get_brain_region_ids();
+        let region_ids: Vec<String> = {
+            let manager = self.connectome.read();
+            manager.get_brain_region_ids().into_iter().map(|s| s.to_string()).collect()
+        };
         
         let mut regions = Vec::new();
         for region_id in region_ids {
@@ -250,12 +265,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
     async fn get_brain_region_ids(&self) -> ServiceResult<Vec<String>> {
         log::debug!("Getting brain region IDs");
-        Ok(self.connectome.get_brain_region_ids().into_iter().map(|s| s.to_string()).collect())
+        Ok(self.connectome.read().get_brain_region_ids().into_iter().map(|s| s.to_string()).collect())
     }
 
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool> {
         log::debug!("Checking if brain region exists: {}", region_id);
-        Ok(self.connectome.get_brain_region(region_id).is_some())
+        Ok(self.connectome.read().get_brain_region(region_id).is_some())
     }
 }
 

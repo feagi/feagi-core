@@ -9,15 +9,16 @@ use crate::traits::NeuronService;
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Default implementation of NeuronService
 pub struct NeuronServiceImpl {
-    connectome: Arc<ConnectomeManager>,
+    connectome: Arc<RwLock<ConnectomeManager>>,
 }
 
 impl NeuronServiceImpl {
-    pub fn new(connectome: Arc<ConnectomeManager>) -> Self {
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
         Self { connectome }
     }
 }
@@ -56,23 +57,29 @@ impl NeuronService for NeuronServiceImpl {
         log::debug!("Listing neurons in area: {}", cortical_id);
         
         // Get neurons from ConnectomeManager
-        let neuron_ids = self.connectome.get_neurons_in_area(cortical_id);
+        let manager = self.connectome.read();
+        let neuron_ids = manager.get_neurons_in_area(cortical_id);
         
         let neurons: Vec<NeuronInfo> = neuron_ids
             .iter()
             .take(limit.unwrap_or(usize::MAX))
             .filter_map(|&id| {
                 // Get coordinates and cortical idx
-                let coords = self.connectome.get_neuron_coordinates(id)?;
-                let cortical_idx = self.connectome.get_neuron_cortical_idx(id)?;
+                let coordinates = manager.get_neuron_coordinates(id);
+                let cortical_idx = manager.get_neuron_cortical_idx(id);
                 
-                Some(NeuronInfo {
-                    id,
-                    cortical_id: cortical_id.to_string(),
-                    cortical_idx,
-                    coordinates: coords,
-                    properties: std::collections::HashMap::new(),  // TODO: Get properties
-                })
+                // Return None if neuron doesn't exist (coordinates are (0,0,0) or cortical_idx is 0)
+                if coordinates == (0, 0, 0) || cortical_idx == 0 {
+                    None
+                } else {
+                    Some(NeuronInfo {
+                        id,
+                        cortical_id: cortical_id.to_string(),
+                        cortical_idx,
+                        coordinates,
+                        properties: std::collections::HashMap::new(),  // TODO: Get properties
+                    })
+                }
             })
             .collect();
         
@@ -83,6 +90,7 @@ impl NeuronService for NeuronServiceImpl {
         log::debug!("Getting neuron count for area: {}", cortical_id);
         
         let count = self.connectome
+            .read()
             .get_neuron_count_in_area(cortical_id);
         
         Ok(count)
@@ -91,7 +99,7 @@ impl NeuronService for NeuronServiceImpl {
     async fn neuron_exists(&self, neuron_id: u64) -> ServiceResult<bool> {
         log::debug!("Checking if neuron exists: {}", neuron_id);
         
-        let exists = self.connectome.has_neuron(neuron_id)?;
+        let exists = self.connectome.read().has_neuron(neuron_id);
         
         Ok(exists)
     }

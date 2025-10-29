@@ -43,6 +43,7 @@ impl GenomeService for GenomeServiceImpl {
         
         // Delegate to ConnectomeManager
         let json_str = self.connectome
+            .read()
             .save_genome_to_json(params.genome_id, params.genome_title)
             .map_err(ServiceError::from)?;
         
@@ -52,8 +53,9 @@ impl GenomeService for GenomeServiceImpl {
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
         log::debug!("Getting genome info");
         
-        let cortical_area_count = self.connectome.get_cortical_area_count();
-        let brain_region_count = self.connectome.get_brain_region_ids().len();
+        let manager = self.connectome.read();
+        let cortical_area_count = manager.get_cortical_area_count();
+        let brain_region_count = manager.get_brain_region_ids().len();
         
         Ok(GenomeInfo {
             genome_id: "current".to_string(),  // TODO: Track genome_id
@@ -82,17 +84,17 @@ impl GenomeService for GenomeServiceImpl {
         
         // TODO: Implement proper connectome reset
         // For now, remove all cortical areas and brain regions manually
-        let cortical_ids: Vec<String> = self.connectome.get_cortical_area_ids();
+        let cortical_ids: Vec<String> = self.connectome.read().get_cortical_area_ids().into_iter().cloned().collect();
         for cortical_id in cortical_ids {
-            let _ = self.connectome.remove_cortical_area(&cortical_id);
+            let _ = self.connectome.write().remove_cortical_area(&cortical_id);
         }
         
-        let region_ids: Vec<String> = self.connectome.get_brain_region_ids()
+        let region_ids: Vec<String> = self.connectome.read().get_brain_region_ids()
             .into_iter()
             .map(|s| s.to_string())
             .collect();
         for region_id in region_ids {
-            let _ = self.connectome.remove_brain_region(&region_id);
+            let _ = self.connectome.write().remove_brain_region(&region_id);
         }
         
         Ok(())

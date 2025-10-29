@@ -9,15 +9,16 @@ use crate::traits::AnalyticsService;
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
+use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Default implementation of AnalyticsService
 pub struct AnalyticsServiceImpl {
-    connectome: Arc<ConnectomeManager>,
+    connectome: Arc<RwLock<ConnectomeManager>>,
 }
 
 impl AnalyticsServiceImpl {
-    pub fn new(connectome: Arc<ConnectomeManager>) -> Self {
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
         Self { connectome }
     }
 }
@@ -28,11 +29,12 @@ impl AnalyticsService for AnalyticsServiceImpl {
         log::debug!("Getting system health");
         
         let neuron_count = self.get_total_neuron_count().await?;
-        let cortical_area_count = self.connectome.get_cortical_area_count();
+        let manager = self.connectome.read();
+        let cortical_area_count = manager.get_cortical_area_count();
         let brain_initialized = cortical_area_count > 0;
         
         // TODO: Get actual burst engine status
-        let burst_engine_active = self.connectome.has_npu();
+        let burst_engine_active = manager.has_npu();
         
         Ok(SystemHealth {
             burst_engine_active,
@@ -49,9 +51,10 @@ impl AnalyticsService for AnalyticsServiceImpl {
     ) -> ServiceResult<CorticalAreaStats> {
         log::debug!("Getting cortical area stats: {}", cortical_id);
         
-        let neuron_count = self.connectome.get_neuron_count_in_area(cortical_id);
-        let synapse_count = self.connectome.get_synapse_count_in_area(cortical_id);
-        let density = self.connectome.get_neuron_density(cortical_id);
+        let manager = self.connectome.read();
+        let neuron_count = manager.get_neuron_count_in_area(cortical_id);
+        let synapse_count = manager.get_synapse_count_in_area(cortical_id);
+        let density = manager.get_neuron_density(cortical_id);
         let populated = neuron_count > 0;
         
         Ok(CorticalAreaStats {
@@ -66,7 +69,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
     async fn get_all_cortical_area_stats(&self) -> ServiceResult<Vec<CorticalAreaStats>> {
         log::debug!("Getting all cortical area stats");
         
-        let all_stats = self.connectome.get_all_area_stats();
+        let all_stats = self.connectome.read().get_all_area_stats();
         
         let stats: Vec<CorticalAreaStats> = all_stats
             .into_iter()
@@ -110,42 +113,42 @@ impl AnalyticsService for AnalyticsServiceImpl {
     async fn get_total_neuron_count(&self) -> ServiceResult<usize> {
         log::debug!("Getting total neuron count");
         
-        let count = self.connectome.get_neuron_count();
+        let count = self.connectome.read().get_neuron_count();
         Ok(count)
     }
 
     async fn get_total_synapse_count(&self) -> ServiceResult<usize> {
         log::debug!("Getting total synapse count");
         
-        let count = self.connectome.get_synapse_count();
+        let count = self.connectome.read().get_synapse_count();
         Ok(count)
     }
 
     async fn get_populated_areas(&self) -> ServiceResult<Vec<(String, usize)>> {
         log::debug!("Getting populated areas");
         
-        let areas = self.connectome.get_populated_areas();
+        let areas = self.connectome.read().get_populated_areas();
         Ok(areas)
     }
 
     async fn get_neuron_density(&self, cortical_id: &str) -> ServiceResult<f32> {
         log::debug!("Getting neuron density for area: {}", cortical_id);
         
-        let density = self.connectome.get_neuron_density(cortical_id);
+        let density = self.connectome.read().get_neuron_density(cortical_id);
         Ok(density)
     }
 
     async fn is_brain_initialized(&self) -> ServiceResult<bool> {
         log::debug!("Checking if brain is initialized");
         
-        let initialized = self.connectome.is_initialized();
+        let initialized = self.connectome.read().is_initialized();
         Ok(initialized)
     }
 
     async fn is_burst_engine_ready(&self) -> ServiceResult<bool> {
         log::debug!("Checking if burst engine is ready");
         
-        let ready = self.connectome.has_npu();
+        let ready = self.connectome.read().has_npu();
         Ok(ready)
     }
 }
