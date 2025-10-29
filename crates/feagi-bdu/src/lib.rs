@@ -30,6 +30,7 @@ Licensed under the Apache License, Version 2.0
 
 pub mod connectivity;
 // pub mod ffi;  // DEPRECATED: Legacy Python-driven synaptogenesis (replaced by NPU-native functions)
+pub mod models;
 pub mod spatial;
 pub mod types;
 
@@ -47,7 +48,9 @@ pub use connectivity::{
 
 pub use spatial::{morton_decode_3d, morton_encode_3d, MortonSpatialHash, SpatialHashStats};
 
-pub use types::{AreaId, NeuronId, Position, Weight};
+pub use types::{AreaId, BduError, BduResult, Dimensions, NeuronId, Position, Weight};
+
+pub use models::{BrainRegion, BrainRegionHierarchy, CorticalArea};
 
 #[cfg(test)]
 mod tests {

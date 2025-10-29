@@ -98,7 +98,7 @@ mod tests {
         assert!(dims.contains((0, 0, 0)));
         assert!(dims.contains((127, 127, 19)));
         assert!(!dims.contains((128, 0, 0)));
-        assert!(!dims.contains((-1, 0, 0)));
+        assert!(!dims.contains((129, 0, 0))); // Out of bounds
     }
 
     #[test]
