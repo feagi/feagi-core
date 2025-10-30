@@ -16,63 +16,55 @@ struct Args {
     #[arg(short, long)]
     connectome: PathBuf,
 
-    /// Burst frequency in Hz (default: 50)
-    #[arg(long, default_value_t = 50)]
-    burst_hz: u64,
+    /// Path to feagi_configuration.toml (required unless --help)
+    #[arg(short = 'f', long)]
+    config: Option<PathBuf>,
 
-    /// Auto-save on shutdown
-    #[arg(long, default_value_t = true)]
-    auto_save: bool,
+    /// Burst frequency in Hz (overrides config if provided)
+    #[arg(long)]
+    burst_hz: Option<u64>,
 
-    /// Checkpoint interval in seconds (0 = disabled)
-    #[arg(long, default_value_t = 0)]
-    checkpoint_interval: u64,
+    /// Auto-save on shutdown (overrides config if provided)
+    #[arg(long)]
+    auto_save: Option<bool>,
+
+    /// Checkpoint interval in seconds (overrides config if provided, 0 = disabled)
+    #[arg(long)]
+    checkpoint_interval: Option<u64>,
 
     /// Enable verbose logging
-    #[arg(short, long, default_value_t = false)]
+    #[arg(short, long)]
     verbose: bool,
 
-    /// ZMQ registration endpoint (default: tcp://*:5000)
-    #[arg(long, default_value = "tcp://*:5000")]
-    registration_endpoint: String,
-
-    /// ZMQ sensory input endpoint (default: tcp://*:5555)
-    #[arg(long, default_value = "tcp://*:5555")]
-    sensory_endpoint: String,
-
-    /// ZMQ motor output endpoint (default: tcp://*:5556)
-    #[arg(long, default_value = "tcp://*:5556")]
-    motor_endpoint: String,
-
-    /// Maximum number of agents (default: 100)
-    #[arg(long, default_value_t = 100)]
-    max_agents: usize,
-
-    /// Agent inactivity timeout in milliseconds (default: 60000)
-    #[arg(long, default_value_t = 60000)]
-    agent_timeout_ms: u64,
-    
-    /// Path to feagi_configuration.toml (optional, will search if not provided)
+    /// ZMQ registration endpoint (overrides config if provided, e.g., tcp://*:30001)
     #[arg(long)]
-    config: Option<PathBuf>,
+    registration_endpoint: Option<String>,
+
+    /// ZMQ sensory input endpoint (overrides config if provided, e.g., tcp://*:5558)
+    #[arg(long)]
+    sensory_endpoint: Option<String>,
+
+    /// ZMQ motor output endpoint (overrides config if provided, e.g., tcp://*:5564)
+    #[arg(long)]
+    motor_endpoint: Option<String>,
+
+    /// Maximum number of agents (overrides config if provided)
+    #[arg(long)]
+    max_agents: Option<usize>,
+
+    /// Agent inactivity timeout in milliseconds (overrides config if provided)
+    #[arg(long)]
+    agent_timeout_ms: Option<u64>,
 }
 
 /// Main entry point
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Parse CLI arguments first to get verbose flag
+    // Parse CLI arguments
     let args = Args::parse();
 
-    // Load FEAGI configuration (optional, with fallback to CLI args)
-    let feagi_config = match load_config(args.config.as_deref(), None) {
-        Ok(config) => {
-            validate_config(&config)?;
-            Some(config)
-        }
-        Err(e) => {
-            eprintln!("Note: Could not load FEAGI configuration ({}). Using CLI arguments and defaults.", e);
-            None
-        }
-    };
+    // Load FEAGI configuration (REQUIRED - no hardcoded fallbacks)
+    let config = load_config(args.config.as_deref(), None)?;
+    validate_config(&config)?;
 
     // Initialize logger
     env_logger::Builder::from_default_env()
@@ -87,15 +79,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     print_banner();
     
     // Log configuration source
-    if let Some(config) = &feagi_config {
-        info!("Using FEAGI configuration from feagi_configuration.toml");
-        info!("  ZMQ Host: {}", config.zmq.host);
-        info!("  Ports - Sensory: {}, Motor: {}", 
-              config.ports.zmq_sensory_port, 
-              config.ports.zmq_motor_port);
-    } else {
-        info!("Using CLI arguments and defaults");
-    }
+    info!("✓ FEAGI configuration loaded from feagi_configuration.toml");
+    info!("  ZMQ Host: {}", config.zmq.host);
+    info!("  Ports - Registration: {}, Sensory: {}, Motor: {}", 
+          config.agent.registration_port,
+          config.ports.zmq_sensory_port, 
+          config.ports.zmq_motor_port);
 
     // Load connectome
     info!("Loading connectome from: {}", args.connectome.display());
@@ -117,23 +106,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut npu = feagi_burst_engine::RustNPU::import_connectome(connectome);
     info!("✓ NPU initialized successfully!");
 
+    // Resolve runtime parameters (CLI overrides config)
+    let max_agents = args.max_agents.unwrap_or(100); // Sensible default if not in config
+    let agent_timeout_ms = args.agent_timeout_ms.unwrap_or(config.zmq.inactive_client_timeout);
+    let burst_hz = args.burst_hz.unwrap_or_else(|| {
+        // Calculate from config's burst_engine_timestep (milliseconds)
+        (1000.0 / config.neural.burst_engine_timestep) as u64
+    });
+    
+    // Build ZMQ endpoints from config with CLI overrides
+    let registration_endpoint = args.registration_endpoint.unwrap_or_else(|| {
+        format!("tcp://{}:{}", config.agent.host, config.agent.registration_port)
+    });
+    let sensory_endpoint = args.sensory_endpoint.unwrap_or_else(|| {
+        format!("tcp://{}:{}", config.zmq.host, config.ports.zmq_sensory_port)
+    });
+    let motor_endpoint = args.motor_endpoint.unwrap_or_else(|| {
+        format!("tcp://{}:{}", config.zmq.host, config.ports.zmq_motor_port)
+    });
+    
+    let auto_save = args.auto_save.unwrap_or(true);
+    let checkpoint_interval = args.checkpoint_interval.unwrap_or(0);
+
     // Initialize agent registry
     info!("Initializing agent registry...");
     let registry = Arc::new(std::sync::RwLock::new(
-        feagi_pns::agent_registry::AgentRegistry::new(args.max_agents, args.agent_timeout_ms),
+        feagi_pns::agent_registry::AgentRegistry::new(max_agents, agent_timeout_ms),
     ));
     info!(
         "✓ Agent registry initialized (max_agents={}, timeout={}ms)",
-        args.max_agents, args.agent_timeout_ms
+        max_agents, agent_timeout_ms
     );
 
-    // Note: ZMQ transport functionality integrated directly into main loop
-    info!(
-        "✓ ZMQ registration endpoint: {}",
-        args.registration_endpoint
-    );
-    info!("  ZMQ sensory input endpoint: {}", args.sensory_endpoint);
-    info!("  ZMQ motor output endpoint: {}", args.motor_endpoint);
+    // Log ZMQ endpoints
+    info!("✓ ZMQ registration endpoint: {}", registration_endpoint);
+    info!("  ZMQ sensory input endpoint: {}", sensory_endpoint);
+    info!("  ZMQ motor output endpoint: {}", motor_endpoint);
 
     // Setup signal handler
     let running = Arc::new(AtomicBool::new(true));
@@ -144,9 +152,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     })?;
 
     // Run engine (registration handling integrated into main loop)
-    info!("🚀 Starting inference engine ({}Hz)", args.burst_hz);
+    info!("🚀 Starting inference engine ({}Hz)", burst_hz);
 
-    run_engine(&mut npu, &args, running, Arc::clone(&registry))?;
+    run_engine(
+        &mut npu,
+        burst_hz,
+        &sensory_endpoint,
+        &motor_endpoint,
+        auto_save,
+        checkpoint_interval,
+        running,
+        Arc::clone(&registry),
+    )?;
 
     info!("✅ Inference engine shutdown complete!");
     Ok(())
@@ -157,11 +174,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Run the inference engine loop
 fn run_engine(
     npu: &mut feagi_burst_engine::RustNPU,
-    args: &Args,
+    burst_hz: u64,
+    sensory_endpoint: &str,
+    motor_endpoint: &str,
+    _auto_save: bool,
+    _checkpoint_interval: u64,
     running: Arc<AtomicBool>,
     registry: Arc<std::sync::RwLock<feagi_pns::agent_registry::AgentRegistry>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let burst_interval = std::time::Duration::from_millis(1000 / args.burst_hz);
+    let burst_interval = std::time::Duration::from_millis(1000 / burst_hz);
     let mut burst_count: u64 = 0;
     let mut last_prune = std::time::Instant::now();
 
@@ -170,18 +191,18 @@ fn run_engine(
 
     // Sensory input socket (PULL pattern - agents PUSH data to us)
     let sensory_socket = ctx.socket(zmq::PULL)?;
-    sensory_socket.bind(&args.sensory_endpoint)?;
+    sensory_socket.bind(sensory_endpoint)?;
     sensory_socket.set_rcvtimeo(10)?; // 10ms timeout for non-blocking
-    info!("✓ Sensory input bound to: {}", args.sensory_endpoint);
+    info!("✓ Sensory input bound to: {}", sensory_endpoint);
 
     // Motor output socket (PUB pattern - we PUBLISH motor data to agents)
     let motor_socket = ctx.socket(zmq::PUB)?;
-    motor_socket.bind(&args.motor_endpoint)?;
-    info!("✓ Motor output bound to: {}", args.motor_endpoint);
+    motor_socket.bind(motor_endpoint)?;
+    info!("✓ Motor output bound to: {}", motor_endpoint);
 
     info!("🔄 Engine running (Press Ctrl+C to stop)...");
-    info!("  Agents send sensory data to: {}", args.sensory_endpoint);
-    info!("  Motor output published to: {}", args.motor_endpoint);
+    info!("  Agents send sensory data to: {}", sensory_endpoint);
+    info!("  Motor output published to: {}", motor_endpoint);
 
     while running.load(Ordering::Relaxed) {
         let start = std::time::Instant::now();
