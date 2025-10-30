@@ -8,7 +8,35 @@ use utoipa::openapi::security::{SecurityScheme, ApiKey, ApiKeyValue};
 
 use crate::{
     common::{ApiError, ApiResponse},
-    v1::dtos::{HealthCheckResponseV1, ReadinessCheckResponseV1, ComponentReadiness},
+    v1::{
+        // Health DTOs
+        HealthCheckResponseV1, ReadinessCheckResponseV1, ComponentReadiness,
+        
+        // Cortical area DTOs
+        CorticalAreaSummary, CorticalAreaDetail, CorticalAreaListResponse,
+        CreateCorticalAreaRequest, UpdateCorticalAreaRequest,
+        Coordinates3D, Dimensions3D,
+        
+        // Brain region DTOs
+        BrainRegionSummary, BrainRegionDetail, BrainRegionListResponse,
+        CreateBrainRegionRequest,
+        
+        // Genome DTOs
+        GenomeInfoResponse, LoadGenomeRequest, SaveGenomeRequest,
+        SaveGenomeResponse, ValidateGenomeRequest, ValidateGenomeResponse,
+        
+        // Neuron DTOs
+        NeuronInfoResponse, CreateNeuronRequest, NeuronListResponse,
+        NeuronCountResponse,
+        
+        // Runtime DTOs
+        RuntimeStatusResponse, SetFrequencyRequest, BurstCountResponse,
+        
+        // Analytics DTOs
+        SystemHealthResponse, CorticalAreaStatsResponse, ConnectivityStatsResponse,
+        ConnectomeAnalyticsResponse, PopulatedAreasResponse, PopulatedAreaInfo,
+        NeuronDensityResponse,
+    },
 };
 
 /// OpenAPI documentation for FEAGI REST API
@@ -33,15 +61,111 @@ use crate::{
         (url = "http://localhost:8000", description = "Python FastAPI compatibility")
     ),
     paths(
+        // Health endpoints
         crate::endpoints::health::health_check,
         crate::endpoints::health::readiness_check,
+        
+        // Cortical area endpoints
+        crate::endpoints::cortical_areas::list_cortical_areas,
+        crate::endpoints::cortical_areas::get_cortical_area,
+        crate::endpoints::cortical_areas::create_cortical_area,
+        crate::endpoints::cortical_areas::update_cortical_area,
+        crate::endpoints::cortical_areas::delete_cortical_area,
+        
+        // Brain region endpoints
+        crate::endpoints::brain_regions::list_brain_regions,
+        crate::endpoints::brain_regions::get_brain_region,
+        crate::endpoints::brain_regions::create_brain_region,
+        crate::endpoints::brain_regions::delete_brain_region,
+        
+        // Genome endpoints
+        crate::endpoints::genome::get_genome_info,
+        crate::endpoints::genome::load_genome,
+        crate::endpoints::genome::save_genome,
+        crate::endpoints::genome::validate_genome,
+        crate::endpoints::genome::reset_connectome,
+        crate::endpoints::genome::load_barebones_genome,
+        crate::endpoints::genome::load_essential_genome,
+        
+        // Neuron endpoints
+        crate::endpoints::neurons::list_neurons,
+        crate::endpoints::neurons::get_neuron,
+        crate::endpoints::neurons::create_neuron,
+        crate::endpoints::neurons::delete_neuron,
+        crate::endpoints::neurons::get_neuron_count,
+        
+        // Runtime endpoints
+        crate::endpoints::runtime::get_runtime_status,
+        crate::endpoints::runtime::start_runtime,
+        crate::endpoints::runtime::stop_runtime,
+        crate::endpoints::runtime::pause_runtime,
+        crate::endpoints::runtime::resume_runtime,
+        crate::endpoints::runtime::step_runtime,
+        crate::endpoints::runtime::set_frequency,
+        crate::endpoints::runtime::get_burst_count,
+        crate::endpoints::runtime::reset_burst_count,
+        
+        // Analytics endpoints
+        crate::endpoints::analytics::get_system_health,
+        crate::endpoints::analytics::get_cortical_area_stats,
+        crate::endpoints::analytics::get_all_cortical_area_stats,
+        crate::endpoints::analytics::get_connectivity_stats,
+        crate::endpoints::analytics::get_connectome_stats,
+        crate::endpoints::analytics::get_populated_areas,
+        crate::endpoints::analytics::get_neuron_density,
     ),
     components(
         schemas(
+            // Common
+            ApiError,
+            
+            // Health
             HealthCheckResponseV1,
             ReadinessCheckResponseV1,
             ComponentReadiness,
-            ApiError,
+            
+            // Cortical Areas
+            CorticalAreaSummary,
+            CorticalAreaDetail,
+            CorticalAreaListResponse,
+            CreateCorticalAreaRequest,
+            UpdateCorticalAreaRequest,
+            Coordinates3D,
+            Dimensions3D,
+            
+            // Brain Regions
+            BrainRegionSummary,
+            BrainRegionDetail,
+            BrainRegionListResponse,
+            CreateBrainRegionRequest,
+            
+            // Genome
+            GenomeInfoResponse,
+            LoadGenomeRequest,
+            SaveGenomeRequest,
+            SaveGenomeResponse,
+            ValidateGenomeRequest,
+            ValidateGenomeResponse,
+            
+            // Neurons
+            NeuronInfoResponse,
+            CreateNeuronRequest,
+            NeuronListResponse,
+            NeuronCountResponse,
+            
+            // Runtime
+            RuntimeStatusResponse,
+            SetFrequencyRequest,
+            BurstCountResponse,
+            
+            // Analytics
+            SystemHealthResponse,
+            CorticalAreaStatsResponse,
+            ConnectivityStatsResponse,
+            ConnectomeAnalyticsResponse,
+            PopulatedAreasResponse,
+            PopulatedAreaInfo,
+            NeuronDensityResponse,
         )
     ),
     tags(

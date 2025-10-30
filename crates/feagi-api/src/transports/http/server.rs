@@ -99,6 +99,8 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/genome/save", axum::routing::post(save_genome_handler))
         .route("/genome/validate", axum::routing::post(validate_genome_handler))
         .route("/genome/reset", axum::routing::post(reset_connectome_handler))
+        .route("/genome/upload/barebones", axum::routing::post(load_barebones_genome_handler))
+        .route("/genome/upload/essential", axum::routing::post(load_essential_genome_handler))
         
         // Neuron operations
         .route("/neurons", get(list_neurons_handler).post(create_neuron_handler))
@@ -350,6 +352,30 @@ async fn reset_connectome_handler(
     
     match endpoints::genome::reset_connectome(&auth_ctx, state.genome_service).await {
         Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Connectome reset successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Load barebones genome
+async fn load_barebones_genome_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::genome::load_barebones_genome(&auth_ctx, state.genome_service).await {
+        Ok(response) => (StatusCode::OK, Json(ApiResponse::success(response))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Load essential genome
+async fn load_essential_genome_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::genome::load_essential_genome(&auth_ctx, state.genome_service).await {
+        Ok(response) => (StatusCode::OK, Json(ApiResponse::success(response))).into_response(),
         Err(error) => error.into_response(),
     }
 }

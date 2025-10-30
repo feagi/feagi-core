@@ -221,3 +221,134 @@ pub async fn reset_connectome(
     Ok(())
 }
 
+/// Load the barebones genome
+///
+/// Loads the pre-configured barebones genome template from the defaults directory.
+/// This is a minimal genome with only core areas.
+#[utoipa::path(
+    post,
+    path = "/api/v1/genome/upload/barebones",
+    tag = "Genome",
+    responses(
+        (status = 200, description = "Barebones genome loaded successfully", body = GenomeInfoResponse),
+        (status = 500, description = "Internal server error", body = ApiError)
+    )
+)]
+pub async fn load_barebones_genome(
+    _auth_ctx: &AuthContext,
+    genome_service: Arc<dyn GenomeService + Send + Sync>,
+) -> ApiResult<GenomeInfoResponse> {
+    // Load barebones genome from defaults
+    let genome_json = load_default_genome_file("barebones")?;
+    
+    // Use the load_genome service method
+    let params = feagi_services::LoadGenomeParams {
+        json_str: genome_json,
+    };
+    
+    genome_service
+        .load_genome(params)
+        .await
+        .map_err(|e| ApiError::internal(&format!("Failed to load barebones genome: {}", e)))?;
+    
+    // Get updated genome info
+    let genome_info = genome_service
+        .get_genome_info()
+        .await
+        .map_err(|e| ApiError::internal(&format!("Failed to get genome info: {}", e)))?;
+    
+    // Map service DTO to API DTO
+    Ok(GenomeInfoResponse {
+        genome_id: Some(genome_info.genome_id),
+        title: Some(genome_info.genome_title),
+        version: Some(genome_info.version),
+        cortical_area_count: genome_info.cortical_area_count,
+        brain_region_count: genome_info.brain_region_count,
+        created_at: None,
+        modified_at: None,
+    })
+}
+
+/// Load the essential genome
+///
+/// Loads the pre-configured essential genome template from the defaults directory.
+/// This genome includes basic sensory and motor areas for general-purpose use.
+#[utoipa::path(
+    post,
+    path = "/api/v1/genome/upload/essential",
+    tag = "Genome",
+    responses(
+        (status = 200, description = "Essential genome loaded successfully", body = GenomeInfoResponse),
+        (status = 500, description = "Internal server error", body = ApiError)
+    )
+)]
+pub async fn load_essential_genome(
+    _auth_ctx: &AuthContext,
+    genome_service: Arc<dyn GenomeService + Send + Sync>,
+) -> ApiResult<GenomeInfoResponse> {
+    // Load essential genome from defaults
+    let genome_json = load_default_genome_file("essential")?;
+    
+    // Use the load_genome service method
+    let params = feagi_services::LoadGenomeParams {
+        json_str: genome_json,
+    };
+    
+    genome_service
+        .load_genome(params)
+        .await
+        .map_err(|e| ApiError::internal(&format!("Failed to load essential genome: {}", e)))?;
+    
+    // Get updated genome info
+    let genome_info = genome_service
+        .get_genome_info()
+        .await
+        .map_err(|e| ApiError::internal(&format!("Failed to get genome info: {}", e)))?;
+    
+    // Map service DTO to API DTO
+    Ok(GenomeInfoResponse {
+        genome_id: Some(genome_info.genome_id),
+        title: Some(genome_info.genome_title),
+        version: Some(genome_info.version),
+        cortical_area_count: genome_info.cortical_area_count,
+        brain_region_count: genome_info.brain_region_count,
+        created_at: None,
+        modified_at: None,
+    })
+}
+
+/// Helper function to load default genome files from the defaults directory
+fn load_default_genome_file(genome_name: &str) -> ApiResult<String> {
+    use std::path::PathBuf;
+    use std::fs;
+    
+    let filename = format!("{}_genome.json", genome_name);
+    
+    // Search paths for genome files (in order of preference)
+    let mut search_paths = vec![
+        PathBuf::from("../feagi-py/feagi/evo/defaults/genome"),  // Relative to feagi binary
+        PathBuf::from("feagi-py/feagi/evo/defaults/genome"),      // From workspace root
+        PathBuf::from("feagi/evo/defaults/genome"),                // Alt location
+    ];
+    
+    // Also check FEAGI_GENOME_PATH environment variable
+    if let Ok(genome_path) = std::env::var("FEAGI_GENOME_PATH") {
+        search_paths.insert(0, PathBuf::from(genome_path));
+    }
+    
+    // Find the genome file
+    for base_path in &search_paths {
+        let genome_path = base_path.join(&filename);
+        if genome_path.exists() {
+            // Read and return the genome JSON
+            return fs::read_to_string(&genome_path)
+                .map_err(|e| ApiError::internal(&format!("Failed to read genome file {}: {}", filename, e)));
+        }
+    }
+    
+    Err(ApiError::not_found(
+        "Default genome",
+        &format!("{} (searched in: {:?})", genome_name, search_paths)
+    ))
+}
+
