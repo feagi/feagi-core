@@ -111,6 +111,15 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/runtime/frequency", axum::routing::post(set_frequency_handler))
         .route("/runtime/burst-count", get(get_burst_count_handler))
         .route("/runtime/reset-count", axum::routing::post(reset_burst_count_handler))
+        
+        // Analytics & Statistics
+        .route("/analytics/health", get(get_system_health_handler))
+        .route("/analytics/areas/stats", get(get_all_cortical_area_stats_handler))
+        .route("/analytics/areas/populated", get(get_populated_areas_handler))
+        .route("/analytics/areas/:id/stats", get(get_cortical_area_stats_handler))
+        .route("/analytics/areas/:id/density", get(get_neuron_density_handler))
+        .route("/analytics/connectivity/:source/:target", get(get_connectivity_stats_handler))
+        .route("/analytics/connectome/stats", get(get_connectome_stats_handler))
 }
 
 /// OpenAPI spec handler
@@ -532,6 +541,97 @@ async fn reset_burst_count_handler(
     
     match endpoints::runtime::reset_burst_count(&auth_ctx, state.runtime_service).await {
         Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Burst count reset successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+// ============================================================================
+// ANALYTICS HANDLERS
+// ============================================================================
+
+/// Get system health
+async fn get_system_health_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::analytics::get_system_health(&auth_ctx, state.analytics_service).await {
+        Ok(health) => (StatusCode::OK, Json(ApiResponse::success(health))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get cortical area stats
+async fn get_cortical_area_stats_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::analytics::get_cortical_area_stats(&auth_ctx, state.analytics_service, id).await {
+        Ok(stats) => (StatusCode::OK, Json(ApiResponse::success(stats))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get all cortical area stats
+async fn get_all_cortical_area_stats_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::analytics::get_all_cortical_area_stats(&auth_ctx, state.analytics_service).await {
+        Ok(stats) => (StatusCode::OK, Json(ApiResponse::success(stats))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get connectivity stats
+async fn get_connectivity_stats_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path((source, target)): axum::extract::Path<(String, String)>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::analytics::get_connectivity_stats(&auth_ctx, state.analytics_service, source, target).await {
+        Ok(stats) => (StatusCode::OK, Json(ApiResponse::success(stats))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get connectome stats
+async fn get_connectome_stats_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::analytics::get_connectome_stats(&auth_ctx, state.analytics_service).await {
+        Ok(stats) => (StatusCode::OK, Json(ApiResponse::success(stats))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get populated areas
+async fn get_populated_areas_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::analytics::get_populated_areas(&auth_ctx, state.analytics_service).await {
+        Ok(areas) => (StatusCode::OK, Json(ApiResponse::success(areas))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get neuron density
+async fn get_neuron_density_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::analytics::get_neuron_density(&auth_ctx, state.analytics_service, id).await {
+        Ok(density) => (StatusCode::OK, Json(ApiResponse::success(density))).into_response(),
         Err(error) => error.into_response(),
     }
 }
