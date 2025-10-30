@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
-use feagi_data_structures::{sensor_definition, FeagiDataError};
+use feagi_data_structures::{sensor_definition, FeagiDataError, FeagiSignal};
 use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth, CorticalChannelCount};
 use feagi_data_structures::genomic::SensorCorticalType;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
@@ -2374,6 +2374,8 @@ pub(crate) struct SensorDeviceCache {
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
+    neurons_encoded_signal: FeagiSignal<CorticalMappedXYZPNeuronVoxels>,
+    bytes_encoded_signal: FeagiSignal<FeagiByteContainer>,
 }
 
 impl SensorDeviceCache {
@@ -2385,10 +2387,16 @@ impl SensorDeviceCache {
             neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
+            neurons_encoded_signal: FeagiSignal::new(),
+            bytes_encoded_signal: FeagiSignal::new(),
         }
     }
 
-    
+    //region Callbacks
+
+
+
+    //endregion
     
     //region Devices
 
