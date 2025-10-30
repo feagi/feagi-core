@@ -40,9 +40,19 @@ Licensed under the Apache License, Version 2.0
 // Core modules
 pub mod genome;
 pub mod types;
+pub mod runtime;
 
 // Re-export commonly used types
 pub use types::{EvoError, EvoResult};
-pub use genome::{GenomeParser, GenomeSaver, ParsedGenome};
+pub use genome::{
+    GenomeParser, GenomeSaver, ParsedGenome,
+    load_genome_from_file, load_genome_from_json,
+    save_genome_to_file, save_genome_to_json,
+};
+pub use runtime::{
+    RuntimeGenome, GenomeMetadata, MorphologyRegistry, Morphology, 
+    MorphologyType, MorphologyParameters, PatternElement,
+    PhysiologyConfig, GenomeSignatures, GenomeStats,
+};
 
 
