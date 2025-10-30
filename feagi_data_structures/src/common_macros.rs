@@ -1,4 +1,4 @@
-// Region Index / Count
+//region Index / Count
 
 /// Creates a strongly-typed index wrapper around an integer type.
 /// 
