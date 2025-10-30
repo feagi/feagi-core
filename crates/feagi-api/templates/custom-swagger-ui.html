@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FEAGI API Documentation</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui.css"/>
+  
+  <style>
+    /* FEAGI Dark Theme */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary-color: #19b6b5;
+        --primary-color-light: #55dada;
+        --background-dark: #121417;
+        --background-medium: #1f2426;
+        --background-light: #2c3133;
+        --text-primary: #f1f1f1;
+        --text-secondary: #a0a5ab;
+        --method-get: #44d9d8;
+        --method-post: #5fe3e3;
+        --method-put: #7feeee;
+        --method-delete: #a2f9f9;
+        --border-color: #3b3f42;
+        --header-bg: #222;
+        --header-text: #fff;
+        --filter-bg: #333;
+        --filter-text: #fff;
+      }
+      body { background-color: var(--background-dark); color: var(--text-primary); }
+      .swagger-ui { background-color: var(--background-dark); color: var(--text-primary); }
+      .swagger-ui .topbar { background-color: var(--background-medium); border-bottom: 1px solid var(--border-color); }
+      .swagger-ui .opblock { background-color: var(--background-medium); border: 1px solid var(--border-color); border-radius: 10px; }
+      .swagger-ui .opblock .opblock-summary { border-bottom: 1px solid var(--border-color); }
+      .swagger-ui .info .title { color: var(--primary-color); }
+      .custom-filter-input { background-color: #444; color: #fff; border-color: #007acc; }
+    }
+    
+    /* FEAGI Light Theme */
+    @media (prefers-color-scheme: light) {
+      :root {
+        --primary-color: #007b8a;
+        --background-light: #f9fafa;
+        --background-medium: #e9eff1;
+        --text-primary: #1e2b33;
+        --text-secondary: #5c6b74;
+        --method-get: #00b894;
+        --method-post: #0984e3;
+        --method-put: #fdcb6e;
+        --method-delete: #d63031;
+        --border-color: #d0d6da;
+        --header-bg: #f9f9f9;
+        --header-text: #000;
+        --filter-bg: #f0f0f0;
+        --filter-text: #333;
+      }
+      body { background-color: #ffffff; color: var(--text-primary); }
+      .swagger-ui .opblock { background-color: var(--background-light); border: 1px solid var(--border-color); border-radius: 10px; }
+    }
+    
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    
+    .custom-header {
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      border-bottom: 1px solid #ccc;
+      background: var(--header-bg, #f9f9f9);
+    }
+    
+    .custom-header h1 {
+      font-size: 1.5em;
+      margin: 0;
+      flex: 1 1 auto;
+      color: var(--header-text, #000);
+    }
+    
+    .header-actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    
+    .header-button {
+      border: none;
+      padding: 8px 14px;
+      border-radius: 6px;
+      background-color: #007acc;
+      color: white;
+      cursor: pointer;
+      font-size: 0.9em;
+      transition: background-color 0.2s;
+    }
+    
+    .header-button:hover { background-color: #005fa3; }
+    .header-button.load-essential { background-color: #dc3545; }
+    .header-button.load-essential:hover { background-color: #c82333; }
+    .header-button.load-barebones { background-color: #28a745; }
+    .header-button.load-barebones:hover { background-color: #218838; }
+    
+    .theme-selector {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .theme-selector-label {
+      font-weight: 600;
+      font-size: 0.9em;
+    }
+    
+    .theme-selector select {
+      padding: 6px 28px 6px 10px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      border: 1px solid #ccc;
+    }
+    
+    .custom-filter-container {
+      width: 100%;
+      padding: 10px 20px;
+      background: var(--filter-bg, #f0f0f0);
+      border-bottom: 1px solid #ccc;
+      display: flex;
+      align-items: center;
+    }
+    
+    .custom-filter-input {
+      width: 300px;
+      padding: 8px 12px;
+      border-radius: 4px;
+      border: 2px solid #007acc;
+      font-size: 14px;
+      background-color: white;
+      color: #333;
+      transition: all 0.2s ease;
+    }
+    
+    .custom-filter-input:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.3);
+    }
+    
+    .custom-filter-label {
+      font-weight: 600;
+      margin-right: 10px;
+      color: var(--filter-text, #333);
+    }
+  </style>
+</head>
+<body>
+  <div class="custom-header">
+    <h1>FEAGI API Documentation - Rust Edition</h1>
+    <div class="header-actions">
+      <button class="header-button" id="expand-all">Expand All</button>
+      <button class="header-button" id="collapse-all">Collapse All</button>
+      <div class="theme-selector">
+        <span class="theme-selector-label">Theme:</span>
+        <select id="theme-select">
+          <option value="system">System</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="custom-filter-container">
+    <span class="custom-filter-label">Filter:</span>
+    <input type="text" class="custom-filter-input" id="custom-filter-input" placeholder="Filter by tag, operation, or path...">
+  </div>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+  <script>
+    function getSystemTheme() {
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+
+    function setTheme(theme) {
+      const themeSelect = document.getElementById('theme-select');
+      themeSelect.value = theme;
+
+      if (theme === 'system') {
+        localStorage.removeItem('feagi-theme');
+      } else {
+        localStorage.setItem('feagi-theme', theme);
+      }
+
+      // Force apply theme via CSS media query manipulation
+      document.documentElement.setAttribute('data-theme', theme === 'system' ? getSystemTheme() : theme);
+    }
+
+    document.getElementById('theme-select').addEventListener('change', (e) => {
+      setTheme(e.target.value);
+    });
+
+    window.onload = function() {
+      console.log('FEAGI Swagger UI: Initializing...');
+
+      const savedTheme = localStorage.getItem('feagi-theme') || 'system';
+      setTheme(savedTheme);
+
+      if (typeof SwaggerUIBundle === 'undefined') {
+        alert('SwaggerUIBundle failed to load. Check your network connection.');
+        return;
+      }
+
+      const ui = SwaggerUIBundle({
+        url: "/api-docs/openapi.json",
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIBundle.SwaggerUIStandalonePreset
+        ],
+        layout: "BaseLayout",
+        docExpansion: "none",
+        filter: false,
+        persistAuthorization: true,
+        tryItOutEnabled: true
+      });
+
+      window.ui = ui;
+
+      // Expand/collapse functionality
+      document.getElementById('expand-all').addEventListener('click', () => {
+        document.querySelectorAll('.opblock-tag-section').forEach(tag => {
+          if (!tag.classList.contains('is-open')) {
+            tag.querySelector('.opblock-tag').click();
+          }
+        });
+      });
+
+      document.getElementById('collapse-all').addEventListener('click', () => {
+        document.querySelectorAll('.opblock-tag-section.is-open').forEach(tag => {
+          tag.querySelector('.opblock-tag').click();
+        });
+      });
+
+      // Custom filter functionality
+      setTimeout(() => {
+        const filterInput = document.getElementById('custom-filter-input');
+        
+        filterInput.addEventListener('input', function(e) {
+          const searchTerm = e.target.value.trim().toLowerCase();
+
+          if (!searchTerm) {
+            document.querySelectorAll('.opblock-tag-section, .opblock').forEach(el => {
+              el.style.display = '';
+            });
+            return;
+          }
+
+          document.querySelectorAll('.opblock-tag-section:not(.is-open)').forEach(tagSection => {
+            const tagButton = tagSection.querySelector('.opblock-tag');
+            if (tagButton) tagButton.click();
+          });
+
+          document.querySelectorAll('.opblock').forEach(opblock => {
+            const pathEl = opblock.querySelector('.opblock-summary-path');
+            const methodEl = opblock.querySelector('.opblock-summary-method');
+            const descEl = opblock.querySelector('.opblock-summary-description');
+            
+            const pathText = pathEl ? pathEl.textContent.trim().toLowerCase() : '';
+            const methodText = methodEl ? methodEl.textContent.trim().toLowerCase() : '';
+            const descText = descEl ? descEl.textContent.trim().toLowerCase() : '';
+            
+            const isMatch = pathText.includes(searchTerm) || methodText.includes(searchTerm) || descText.includes(searchTerm);
+            opblock.style.display = isMatch ? '' : 'none';
+          });
+
+          document.querySelectorAll('.opblock-tag-section').forEach(tagSection => {
+            const tagEl = tagSection.querySelector('.opblock-tag');
+            const tagText = tagEl ? tagEl.textContent.trim().toLowerCase() : '';
+            const tagMatches = tagText.includes(searchTerm);
+            const hasVisibleOps = Array.from(tagSection.querySelectorAll('.opblock')).some(op => op.style.display !== 'none');
+            
+            tagSection.style.display = (tagMatches || hasVisibleOps) ? '' : 'none';
+            
+            if (tagMatches) {
+              tagSection.querySelectorAll('.opblock').forEach(op => { op.style.display = ''; });
+            }
+          });
+        });
+      }, 1000);
+
+      console.log('FEAGI Swagger UI: Initialization complete');
+    };
+  </script>
+</body>
+</html>
+

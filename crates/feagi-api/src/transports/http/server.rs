@@ -6,10 +6,11 @@
 use axum::{
     extract::State,
     http::StatusCode,
-    response::{IntoResponse, Json, Redirect, Response},
+    response::{Html, IntoResponse, Json, Redirect, Response},
     routing::get,
     Router,
 };
+use tower_http::services::ServeDir;
 use std::sync::Arc;
 use tower_http::{
     cors::{Any, CorsLayer},
@@ -40,14 +41,16 @@ pub struct ApiState {
 /// Create the main HTTP server application
 pub fn create_http_server(state: ApiState) -> Router {
     Router::new()
-        // Root redirect to Swagger UI
+        // Root redirect to custom Swagger UI
         .route("/", get(root_redirect))
         
-        // Swagger UI at /swagger-ui/
-        .merge(
-            SwaggerUi::new("/swagger-ui")
-                .url("/api-docs/openapi.json", ApiDoc::openapi())
-        )
+        // Custom Swagger UI with FEAGI branding at /swagger-ui/
+        .route("/swagger-ui/", get(custom_swagger_ui))
+        
+        // OpenAPI spec endpoint
+        .route("/api-docs/openapi.json", get(|| async {
+            Json(ApiDoc::openapi())
+        }))
         
         // Version-agnostic health endpoints (for backward compatibility)
         .route("/health", get(health_check_handler))
@@ -653,4 +656,11 @@ fn create_cors_layer() -> CorsLayer {
 /// Root redirect handler - redirects to Swagger UI
 async fn root_redirect() -> Redirect {
     Redirect::permanent("/swagger-ui/")
+}
+
+// Custom Swagger UI with FEAGI branding and dark/light themes
+// Embedded from templates/custom-swagger-ui.html at compile time
+async fn custom_swagger_ui() -> Html<&'static str> {
+    const CUSTOM_SWAGGER_HTML: &str = include_str!("../../../templates/custom-swagger-ui.html");
+    Html(CUSTOM_SWAGGER_HTML)
 }
