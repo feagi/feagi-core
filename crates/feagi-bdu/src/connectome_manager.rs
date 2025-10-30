@@ -1848,6 +1848,430 @@ impl ConnectomeManager {
         
         Ok(())
     }
+    
+    // ========================================================================
+    // NEURON QUERY METHODS (P6)
+    // ========================================================================
+    
+    /// Get neuron by 3D coordinates within a cortical area
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - Cortical area ID
+    /// * `x` - X coordinate
+    /// * `y` - Y coordinate
+    /// * `z` - Z coordinate
+    ///
+    /// # Returns
+    ///
+    /// `Some(neuron_id)` if found, `None` otherwise
+    ///
+    pub fn get_neuron_by_coordinates(
+        &self,
+        cortical_id: &str,
+        x: u32,
+        y: u32,
+        z: u32,
+    ) -> Option<u64> {
+        // Get cortical area to get its index
+        let area = self.get_cortical_area(cortical_id)?;
+        let cortical_idx = area.cortical_idx;
+        
+        // Query NPU via public method
+        let npu = self.npu.as_ref()?;
+        let npu_lock = npu.lock().ok()?;
+        
+        npu_lock.get_neuron_id_at_coordinate(cortical_idx, x, y, z)
+            .map(|id| id as u64)
+    }
+    
+    /// Get the position (coordinates) of a neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - Neuron ID
+    ///
+    /// # Returns
+    ///
+    /// `Some((x, y, z))` if found, `None` otherwise
+    ///
+    pub fn get_neuron_position(&self, neuron_id: u64) -> Option<(u32, u32, u32)> {
+        let npu = self.npu.as_ref()?;
+        let npu_lock = npu.lock().ok()?;
+        
+        // Verify neuron exists and get coordinates
+        let neuron_count = npu_lock.get_neuron_count();
+        if (neuron_id as usize) >= neuron_count {
+            return None;
+        }
+        
+        Some(npu_lock.get_neuron_coordinates(neuron_id as u32))
+    }
+    
+    /// Get which cortical area contains a specific neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - Neuron ID
+    ///
+    /// # Returns
+    ///
+    /// `Some(cortical_id)` if found, `None` otherwise
+    ///
+    pub fn get_cortical_area_for_neuron(&self, neuron_id: u64) -> Option<String> {
+        let npu = self.npu.as_ref()?;
+        let npu_lock = npu.lock().ok()?;
+        
+        // Verify neuron exists
+        let neuron_count = npu_lock.get_neuron_count();
+        if (neuron_id as usize) >= neuron_count {
+            return None;
+        }
+        
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
+        
+        // Look up cortical_id from index
+        self.cortical_areas.values()
+            .find(|area| area.cortical_idx == cortical_idx)
+            .map(|area| area.cortical_id.clone())
+    }
+    
+    /// Get all properties of a neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - Neuron ID
+    ///
+    /// # Returns
+    ///
+    /// `Some(properties)` if found, `None` otherwise
+    ///
+    pub fn get_neuron_properties(&self, neuron_id: u64) -> Option<std::collections::HashMap<String, serde_json::Value>> {
+        let npu = self.npu.as_ref()?;
+        let npu_lock = npu.lock().ok()?;
+        
+        let neuron_id_u32 = neuron_id as u32;
+        let idx = neuron_id as usize;
+        
+        // Verify neuron exists
+        let neuron_count = npu_lock.get_neuron_count();
+        if idx >= neuron_count {
+            return None;
+        }
+        
+        let mut properties = std::collections::HashMap::new();
+        
+        // Basic info
+        properties.insert("neuron_id".to_string(), serde_json::json!(neuron_id));
+        
+        // Get coordinates
+        let (x, y, z) = npu_lock.get_neuron_coordinates(neuron_id_u32);
+        properties.insert("x".to_string(), serde_json::json!(x));
+        properties.insert("y".to_string(), serde_json::json!(y));
+        properties.insert("z".to_string(), serde_json::json!(z));
+        
+        // Get cortical area
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id_u32);
+        properties.insert("cortical_area".to_string(), serde_json::json!(cortical_idx));
+        
+        // Get neuron state (returns: consecutive_fire_count, consecutive_fire_limit, snooze_period, membrane_potential, threshold, refractory_countdown)
+        if let Some((consec_count, consec_limit, snooze, mp, threshold, refract_countdown)) = 
+            npu_lock.get_neuron_state(feagi_types::NeuronId(neuron_id_u32)) {
+            properties.insert("consecutive_fire_count".to_string(), serde_json::json!(consec_count));
+            properties.insert("consecutive_fire_limit".to_string(), serde_json::json!(consec_limit));
+            properties.insert("snooze_period".to_string(), serde_json::json!(snooze));
+            properties.insert("membrane_potential".to_string(), serde_json::json!(mp));
+            properties.insert("threshold".to_string(), serde_json::json!(threshold));
+            properties.insert("refractory_countdown".to_string(), serde_json::json!(refract_countdown));
+        }
+        
+        // Get other properties via get_neuron_property_by_index
+        if let Some(leak) = npu_lock.get_neuron_property_by_index(idx, "leak_coefficient") {
+            properties.insert("leak_coefficient".to_string(), serde_json::json!(leak));
+        }
+        if let Some(resting) = npu_lock.get_neuron_property_by_index(idx, "resting_potential") {
+            properties.insert("resting_potential".to_string(), serde_json::json!(resting));
+        }
+        if let Some(excit) = npu_lock.get_neuron_property_by_index(idx, "excitability") {
+            properties.insert("excitability".to_string(), serde_json::json!(excit));
+        }
+        
+        // Get u16 properties
+        if let Some(refract_period) = npu_lock.get_neuron_property_u16_by_index(idx, "refractory_period") {
+            properties.insert("refractory_period".to_string(), serde_json::json!(refract_period));
+        }
+        
+        Some(properties)
+    }
+    
+    /// Get a specific property of a neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - Neuron ID
+    /// * `property_name` - Name of the property to retrieve
+    ///
+    /// # Returns
+    ///
+    /// `Some(value)` if found, `None` otherwise
+    ///
+    pub fn get_neuron_property(&self, neuron_id: u64, property_name: &str) -> Option<serde_json::Value> {
+        self.get_neuron_properties(neuron_id)?
+            .get(property_name)
+            .cloned()
+    }
+    
+    // ========================================================================
+    // CORTICAL AREA LIST/QUERY METHODS (P6)
+    // ========================================================================
+    
+    /// Get all cortical area IDs
+    ///
+    /// # Returns
+    ///
+    /// Vector of all cortical area IDs
+    ///
+    pub fn get_all_cortical_ids(&self) -> Vec<String> {
+        self.cortical_areas.keys().cloned().collect()
+    }
+    
+    /// Get all cortical area indices
+    ///
+    /// # Returns
+    ///
+    /// Vector of all cortical area indices
+    ///
+    pub fn get_all_cortical_indices(&self) -> Vec<u32> {
+        self.cortical_areas.values()
+            .map(|area| area.cortical_idx)
+            .collect()
+    }
+    
+    /// Get all cortical area names
+    ///
+    /// # Returns
+    ///
+    /// Vector of all cortical area names
+    ///
+    pub fn get_cortical_area_names(&self) -> Vec<String> {
+        self.cortical_areas.values()
+            .map(|area| area.name.clone())
+            .collect()
+    }
+    
+    /// List all input (IPU/sensory) cortical areas
+    ///
+    /// # Returns
+    ///
+    /// Vector of IPU/sensory area IDs
+    ///
+    pub fn list_ipu_areas(&self) -> Vec<String> {
+        self.cortical_areas.values()
+            .filter(|area| area.area_type == feagi_types::AreaType::Sensory)
+            .map(|area| area.cortical_id.clone())
+            .collect()
+    }
+    
+    /// List all output (OPU/motor) cortical areas
+    ///
+    /// # Returns
+    ///
+    /// Vector of OPU/motor area IDs
+    ///
+    pub fn list_opu_areas(&self) -> Vec<String> {
+        self.cortical_areas.values()
+            .filter(|area| area.area_type == feagi_types::AreaType::Motor)
+            .map(|area| area.cortical_id.clone())
+            .collect()
+    }
+    
+    /// Get maximum dimensions across all cortical areas
+    ///
+    /// # Returns
+    ///
+    /// (max_width, max_height, max_depth)
+    ///
+    pub fn get_max_cortical_area_dimensions(&self) -> (usize, usize, usize) {
+        self.cortical_areas.values()
+            .fold((0, 0, 0), |(max_w, max_h, max_d), area| {
+                (
+                    max_w.max(area.dimensions.width),
+                    max_h.max(area.dimensions.height),
+                    max_d.max(area.dimensions.depth),
+                )
+            })
+    }
+    
+    /// Get all properties of a cortical area as a JSON-serializable map
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - Cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// `Some(properties)` if found, `None` otherwise
+    ///
+    pub fn get_cortical_area_properties(&self, cortical_id: &str) -> Option<std::collections::HashMap<String, serde_json::Value>> {
+        let area = self.get_cortical_area(cortical_id)?;
+        
+        let mut properties = std::collections::HashMap::new();
+        properties.insert("cortical_id".to_string(), serde_json::json!(area.cortical_id));
+        properties.insert("cortical_idx".to_string(), serde_json::json!(area.cortical_idx));
+        properties.insert("name".to_string(), serde_json::json!(area.name));
+        properties.insert("area_type".to_string(), serde_json::json!(format!("{:?}", area.area_type)));
+        properties.insert("dimensions".to_string(), serde_json::json!({
+            "width": area.dimensions.width,
+            "height": area.dimensions.height,
+            "depth": area.dimensions.depth,
+        }));
+        properties.insert("position".to_string(), serde_json::json!(area.position));
+        properties.insert("visible".to_string(), serde_json::json!(area.visible));
+        properties.insert("sub_group".to_string(), serde_json::json!(area.sub_group));
+        properties.insert("neurons_per_voxel".to_string(), serde_json::json!(area.neurons_per_voxel));
+        properties.insert("postsynaptic_current".to_string(), serde_json::json!(area.postsynaptic_current));
+        properties.insert("plasticity_constant".to_string(), serde_json::json!(area.plasticity_constant));
+        properties.insert("degeneration".to_string(), serde_json::json!(area.degeneration));
+        properties.insert("psp_uniform_distribution".to_string(), serde_json::json!(area.psp_uniform_distribution));
+        properties.insert("firing_threshold_increment".to_string(), serde_json::json!(area.firing_threshold_increment));
+        properties.insert("firing_threshold_limit".to_string(), serde_json::json!(area.firing_threshold_limit));
+        properties.insert("consecutive_fire_count".to_string(), serde_json::json!(area.consecutive_fire_count));
+        properties.insert("snooze_period".to_string(), serde_json::json!(area.snooze_period));
+        properties.insert("refractory_period".to_string(), serde_json::json!(area.refractory_period));
+        properties.insert("leak_coefficient".to_string(), serde_json::json!(area.leak_coefficient));
+        properties.insert("leak_variability".to_string(), serde_json::json!(area.leak_variability));
+        properties.insert("burst_engine_active".to_string(), serde_json::json!(area.burst_engine_active));
+        
+        // Add custom properties
+        properties.extend(area.properties.clone());
+        
+        Some(properties)
+    }
+    
+    /// Get properties of all cortical areas
+    ///
+    /// # Returns
+    ///
+    /// Vector of property maps for all areas
+    ///
+    pub fn get_all_cortical_area_properties(&self) -> Vec<std::collections::HashMap<String, serde_json::Value>> {
+        self.cortical_areas.keys()
+            .filter_map(|id| self.get_cortical_area_properties(id))
+            .collect()
+    }
+    
+    // ========================================================================
+    // BRAIN REGION QUERY METHODS (P6)
+    // ========================================================================
+    
+    /// Get all brain region IDs
+    ///
+    /// # Returns
+    ///
+    /// Vector of all brain region IDs
+    ///
+    pub fn get_all_brain_region_ids(&self) -> Vec<String> {
+        self.brain_regions.get_all_region_ids()
+            .into_iter()
+            .map(|s| s.clone())
+            .collect()
+    }
+    
+    /// Get all brain region names
+    ///
+    /// # Returns
+    ///
+    /// Vector of all brain region names
+    ///
+    pub fn get_brain_region_names(&self) -> Vec<String> {
+        self.brain_regions.get_all_region_ids()
+            .iter()
+            .filter_map(|id| {
+                self.brain_regions.get_region(id)
+                    .map(|region| region.name.clone())
+            })
+            .collect()
+    }
+    
+    /// Get properties of a brain region
+    ///
+    /// # Arguments
+    ///
+    /// * `region_id` - Brain region ID
+    ///
+    /// # Returns
+    ///
+    /// `Some(properties)` if found, `None` otherwise
+    ///
+    pub fn get_brain_region_properties(&self, region_id: &str) -> Option<std::collections::HashMap<String, serde_json::Value>> {
+        let region = self.brain_regions.get_region(region_id)?;
+        
+        let mut properties = std::collections::HashMap::new();
+        properties.insert("region_id".to_string(), serde_json::json!(region.region_id));
+        properties.insert("name".to_string(), serde_json::json!(region.name));
+        properties.insert("region_type".to_string(), serde_json::json!(format!("{:?}", region.region_type)));
+        properties.insert("cortical_areas".to_string(), serde_json::json!(region.cortical_areas.iter().collect::<Vec<_>>()));
+        
+        // Add custom properties
+        properties.extend(region.properties.clone());
+        
+        Some(properties)
+    }
+    
+    /// Check if a cortical area exists
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - Cortical area ID to check
+    ///
+    /// # Returns
+    ///
+    /// `true` if area exists, `false` otherwise
+    ///
+    pub fn cortical_area_exists(&self, cortical_id: &str) -> bool {
+        self.cortical_areas.contains_key(cortical_id)
+    }
+    
+    /// Check if a brain region exists
+    ///
+    /// # Arguments
+    ///
+    /// * `region_id` - Brain region ID to check
+    ///
+    /// # Returns
+    ///
+    /// `true` if region exists, `false` otherwise
+    ///
+    pub fn brain_region_exists(&self, region_id: &str) -> bool {
+        self.brain_regions.get_region(region_id).is_some()
+    }
+    
+    /// Get the total number of brain regions
+    ///
+    /// # Returns
+    ///
+    /// Number of brain regions
+    ///
+    pub fn get_brain_region_count(&self) -> usize {
+        self.brain_regions.region_count()
+    }
+    
+    /// Get neurons by cortical area (alias for get_neurons_in_area for API compatibility)
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - Cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// Vector of neuron IDs in the area
+    ///
+    pub fn get_neurons_by_cortical_area(&self, cortical_id: &str) -> Vec<u64> {
+        // This is an alias for get_neurons_in_area, which already exists
+        // Keeping it for Python API compatibility
+        // Note: The signature says Vec<NeuronId> but implementation returns Vec<u64>
+        self.get_neurons_in_area(cortical_id)
+    }
 }
 
 // Manual Debug implementation (RustNPU doesn't implement Debug)
