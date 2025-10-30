@@ -46,6 +46,14 @@ pub enum ServiceError {
     /// State inconsistency
     #[error("State error: {0}")]
     StateError(String),
+
+    /// Invalid state for operation (e.g., trying to pause when not running)
+    #[error("Invalid state: {0}")]
+    InvalidState(String),
+
+    /// Not yet implemented
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
 }
 
 /// Result type for service operations

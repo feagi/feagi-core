@@ -6,9 +6,9 @@ pub mod cortical_areas;
 pub mod brain_regions;
 pub mod genome;
 pub mod neurons;
+pub mod runtime;
 
 // TODO: Add more endpoint modules
 // pub mod mappings;
 // pub mod analytics;
-// pub mod runtime;
 

@@ -90,7 +90,7 @@ pub mod types;
 
 // Re-export main API
 pub use traits::{
-    AnalyticsService, ConnectomeService, GenomeService, NeuronService,
+    AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
 };
 
 pub use types::{
@@ -98,7 +98,7 @@ pub use types::{
     BrainRegionInfo, ConnectivityStats, CorticalAreaInfo, CorticalAreaStats,
     CreateBrainRegionParams, CreateCorticalAreaParams, UpdateCorticalAreaParams,
     CreateNeuronParams, CreateSynapseParams, GenomeInfo, LoadGenomeParams, NeuronInfo,
-    SaveGenomeParams, SynapseInfo, SystemHealth,
+    SaveGenomeParams, SynapseInfo, SystemHealth, RuntimeStatus,
     // Errors
     ServiceError, ServiceResult,
 };
@@ -106,5 +106,6 @@ pub use types::{
 // Re-export implementations (optional - adapters can use their own)
 pub use impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
+    RuntimeServiceImpl,
 };
 

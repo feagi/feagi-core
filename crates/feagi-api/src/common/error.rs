@@ -19,6 +19,7 @@ pub enum ApiErrorCode {
     Conflict = 409,
     UnprocessableEntity = 422,
     Internal = 500,
+    NotImplemented = 501,
 }
 
 /// API error response
@@ -82,6 +83,11 @@ impl ApiError {
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(message).with_code(ApiErrorCode::Forbidden)
     }
+    
+    /// Create a "not implemented" error
+    pub fn not_implemented(message: impl Into<String>) -> Self {
+        Self::new(message).with_code(ApiErrorCode::NotImplemented)
+    }
 }
 
 /// Convert from service layer errors
@@ -110,6 +116,12 @@ impl From<ServiceError> for ApiError {
             }
             ServiceError::StateError(msg) => {
                 ApiError::new(msg).with_code(ApiErrorCode::Internal)
+            }
+            ServiceError::InvalidState(msg) => {
+                ApiError::new(msg).with_code(ApiErrorCode::Conflict)
+            }
+            ServiceError::NotImplemented(msg) => {
+                ApiError::new(msg).with_code(ApiErrorCode::NotImplemented)
             }
         }
     }

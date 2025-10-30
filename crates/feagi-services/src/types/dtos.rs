@@ -227,3 +227,32 @@ pub struct SystemHealth {
     pub burst_count: u64,
 }
 
+// ============================================================================
+// RUNTIME DTOs
+// ============================================================================
+
+/// Runtime status information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeStatus {
+    /// Whether the burst engine is running
+    pub is_running: bool,
+    
+    /// Whether the burst engine is paused
+    pub is_paused: bool,
+    
+    /// Current burst frequency (Hz)
+    pub frequency_hz: f64,
+    
+    /// Total burst count since start
+    pub burst_count: u64,
+    
+    /// Current burst rate (bursts per second, measured)
+    pub current_rate_hz: f64,
+    
+    /// Total neurons fired in last burst
+    pub last_burst_neuron_count: usize,
+    
+    /// Average processing time per burst (milliseconds)
+    pub avg_burst_time_ms: f64,
+}
+

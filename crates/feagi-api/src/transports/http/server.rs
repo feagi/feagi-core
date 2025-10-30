@@ -25,7 +25,7 @@ use crate::{
     security::AuthContext,
     v1::dtos::{HealthCheckResponseV1, ReadinessCheckResponseV1},
 };
-use feagi_services::{AnalyticsService, ConnectomeService, GenomeService, NeuronService};
+use feagi_services::{AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService};
 
 /// Application state shared across all HTTP handlers
 #[derive(Clone)]
@@ -34,6 +34,7 @@ pub struct ApiState {
     pub connectome_service: Arc<dyn ConnectomeService + Send + Sync>,
     pub genome_service: Arc<dyn GenomeService + Send + Sync>,
     pub neuron_service: Arc<dyn NeuronService + Send + Sync>,
+    pub runtime_service: Arc<dyn RuntimeService + Send + Sync>,
 }
 
 /// Create the main HTTP server application
@@ -99,6 +100,17 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/neurons", get(list_neurons_handler).post(create_neuron_handler))
         .route("/neurons/count", get(get_neuron_count_handler))
         .route("/neurons/:id", get(get_neuron_handler).delete(delete_neuron_handler))
+        
+        // Runtime control
+        .route("/runtime/status", get(get_runtime_status_handler))
+        .route("/runtime/start", axum::routing::post(start_runtime_handler))
+        .route("/runtime/stop", axum::routing::post(stop_runtime_handler))
+        .route("/runtime/pause", axum::routing::post(pause_runtime_handler))
+        .route("/runtime/resume", axum::routing::post(resume_runtime_handler))
+        .route("/runtime/step", axum::routing::post(step_runtime_handler))
+        .route("/runtime/frequency", axum::routing::post(set_frequency_handler))
+        .route("/runtime/burst-count", get(get_burst_count_handler))
+        .route("/runtime/reset-count", axum::routing::post(reset_burst_count_handler))
 }
 
 /// OpenAPI spec handler
@@ -407,6 +419,119 @@ async fn get_neuron_count_handler(
     
     match endpoints::neurons::get_neuron_count(&auth_ctx, state.neuron_service, cortical_area).await {
         Ok(count) => (StatusCode::OK, Json(ApiResponse::success(count))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+// ============================================================================
+// RUNTIME HANDLERS
+// ============================================================================
+
+/// Get runtime status
+async fn get_runtime_status_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::get_runtime_status(&auth_ctx, state.runtime_service).await {
+        Ok(status) => (StatusCode::OK, Json(ApiResponse::success(status))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Start runtime
+async fn start_runtime_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::start_runtime(&auth_ctx, state.runtime_service).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Burst engine started successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Stop runtime
+async fn stop_runtime_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::stop_runtime(&auth_ctx, state.runtime_service).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Burst engine stopped successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Pause runtime
+async fn pause_runtime_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::pause_runtime(&auth_ctx, state.runtime_service).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Burst engine paused successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Resume runtime
+async fn resume_runtime_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::resume_runtime(&auth_ctx, state.runtime_service).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Burst engine resumed successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Step runtime
+async fn step_runtime_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::step_runtime(&auth_ctx, state.runtime_service).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Burst step executed successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Set frequency
+async fn set_frequency_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::SetFrequencyRequest>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::set_frequency(&auth_ctx, state.runtime_service, request).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Frequency set successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get burst count
+async fn get_burst_count_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::get_burst_count(&auth_ctx, state.runtime_service).await {
+        Ok(count) => (StatusCode::OK, Json(ApiResponse::success(count))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Reset burst count
+async fn reset_burst_count_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::runtime::reset_burst_count(&auth_ctx, state.runtime_service).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Burst count reset successfully")))).into_response(),
         Err(error) => error.into_response(),
     }
 }
