@@ -78,6 +78,7 @@ members = [
     "crates/feagi-state-manager",      # Runtime state management (NEW)
     "crates/feagi-evo",                # Genome I/O and evolution (genotype)
     "crates/feagi-services",           # Service layer (stable application boundary)
+    "crates/feagi-api",                # REST API layer (HTTP + ZMQ transports)
     
     # === Algorithm Layer (Core Neural Computation) ===
     "crates/feagi-burst-engine",       # NPU execution & inference
