@@ -970,6 +970,42 @@ impl RustNPU {
         self.neuron_array.write().unwrap().excitabilities[idx] = excitability.clamp(0.0, 1.0);
         true
     }
+    
+    /// Update firing threshold for a specific neuron
+    /// Returns true if successful, false if neuron doesn't exist
+    pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: f32) -> bool {
+        let idx = neuron_id as usize;
+        if idx >= self.neuron_array.read().unwrap().count || !self.neuron_array.read().unwrap().valid_mask[idx] {
+            return false;
+        }
+
+        self.neuron_array.write().unwrap().thresholds[idx] = threshold;
+        true
+    }
+    
+    /// Update leak coefficient for a specific neuron
+    /// Returns true if successful, false if neuron doesn't exist
+    pub fn update_neuron_leak(&mut self, neuron_id: u32, leak_coefficient: f32) -> bool {
+        let idx = neuron_id as usize;
+        if idx >= self.neuron_array.read().unwrap().count || !self.neuron_array.read().unwrap().valid_mask[idx] {
+            return false;
+        }
+
+        self.neuron_array.write().unwrap().leak_coefficients[idx] = leak_coefficient.clamp(0.0, 1.0);
+        true
+    }
+    
+    /// Update resting potential for a specific neuron
+    /// Returns true if successful, false if neuron doesn't exist
+    pub fn update_neuron_resting_potential(&mut self, neuron_id: u32, resting_potential: f32) -> bool {
+        let idx = neuron_id as usize;
+        if idx >= self.neuron_array.read().unwrap().count || !self.neuron_array.read().unwrap().valid_mask[idx] {
+            return false;
+        }
+
+        self.neuron_array.write().unwrap().resting_potentials[idx] = resting_potential;
+        true
+    }
 
     /// Update excitability for all neurons in a cortical area (for bulk parameter changes)
     /// Returns number of neurons updated

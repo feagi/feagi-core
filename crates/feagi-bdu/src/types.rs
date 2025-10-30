@@ -48,6 +48,12 @@ pub enum BduError {
     #[error("Invalid genome: {0}")]
     InvalidGenome(String),
 
+    #[error("Invalid neuron: {0}")]
+    InvalidNeuron(String),
+
+    #[error("Invalid synapse: {0}")]
+    InvalidSynapse(String),
+
     #[error("Internal error: {0}")]
     Internal(String),
 }

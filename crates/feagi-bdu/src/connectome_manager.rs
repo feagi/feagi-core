@@ -1300,6 +1300,554 @@ impl ConnectomeManager {
         
         Ok(())
     }
+    
+    // ========================================================================
+    // SYNAPSE OPERATIONS
+    // ========================================================================
+    
+    /// Create a synapse between two neurons
+    ///
+    /// # Arguments
+    ///
+    /// * `source_neuron_id` - Source neuron ID
+    /// * `target_neuron_id` - Target neuron ID
+    /// * `weight` - Synapse weight (0-255)
+    /// * `conductance` - Synapse conductance (0-255)
+    /// * `synapse_type` - Synapse type (0=excitatory, 1=inhibitory)
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if synapse created successfully
+    ///
+    pub fn create_synapse(
+        &mut self,
+        source_neuron_id: u64,
+        target_neuron_id: u64,
+        weight: u8,
+        conductance: u8,
+        synapse_type: u8,
+    ) -> BduResult<()> {
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        // Verify both neurons exist
+        let source_exists = (source_neuron_id as u32) < npu_lock.get_neuron_count() as u32;
+        let target_exists = (target_neuron_id as u32) < npu_lock.get_neuron_count() as u32;
+        
+        if !source_exists {
+            return Err(BduError::InvalidNeuron(format!("Source neuron {} not found", source_neuron_id)));
+        }
+        if !target_exists {
+            return Err(BduError::InvalidNeuron(format!("Target neuron {} not found", target_neuron_id)));
+        }
+        
+        // Create synapse via NPU
+        let syn_type = if synapse_type == 0 {
+            feagi_types::SynapseType::Excitatory
+        } else {
+            feagi_types::SynapseType::Inhibitory
+        };
+        
+        let synapse_idx = npu_lock.add_synapse(
+            feagi_types::NeuronId(source_neuron_id as u32),
+            feagi_types::NeuronId(target_neuron_id as u32),
+            feagi_types::SynapticWeight(weight),
+            feagi_types::SynapticConductance(conductance),
+            syn_type,
+        ).map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
+        
+        log::debug!("Created synapse: {} -> {} (weight: {}, conductance: {}, type: {}, idx: {})", 
+            source_neuron_id, target_neuron_id, weight, conductance, synapse_type, synapse_idx);
+        
+        Ok(())
+    }
+    
+    /// Get synapse information between two neurons
+    ///
+    /// # Arguments
+    ///
+    /// * `source_neuron_id` - Source neuron ID
+    /// * `target_neuron_id` - Target neuron ID
+    ///
+    /// # Returns
+    ///
+    /// `Some((weight, conductance, type))` if synapse exists, `None` otherwise
+    ///
+    pub fn get_synapse(
+        &self,
+        source_neuron_id: u64,
+        target_neuron_id: u64,
+    ) -> Option<(u8, u8, u8)> {
+        // Get NPU
+        let npu = self.npu.as_ref()?;
+        let npu_lock = npu.lock().ok()?;
+        
+        // Use get_incoming_synapses and filter by source
+        // (This does O(n) scan of synapse_array, but works even when propagation engine isn't updated)
+        let incoming = npu_lock.get_incoming_synapses(target_neuron_id as u32);
+        
+        // Find the synapse from our specific source
+        for (source_id, weight, conductance, synapse_type) in incoming {
+            if source_id == source_neuron_id as u32 {
+                return Some((weight, conductance, synapse_type));
+            }
+        }
+        
+        None
+    }
+    
+    /// Update the weight of an existing synapse
+    ///
+    /// # Arguments
+    ///
+    /// * `source_neuron_id` - Source neuron ID
+    /// * `target_neuron_id` - Target neuron ID
+    /// * `new_weight` - New synapse weight (0-255)
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if synapse updated, `Err` if synapse not found
+    ///
+    pub fn update_synapse_weight(
+        &mut self,
+        source_neuron_id: u64,
+        target_neuron_id: u64,
+        new_weight: u8,
+    ) -> BduResult<()> {
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        // Update synapse weight via NPU
+        let updated = npu_lock.update_synapse_weight(
+            feagi_types::NeuronId(source_neuron_id as u32),
+            feagi_types::NeuronId(target_neuron_id as u32),
+            feagi_types::SynapticWeight(new_weight),
+        );
+        
+        if updated {
+            log::debug!("Updated synapse weight: {} -> {} = {}", source_neuron_id, target_neuron_id, new_weight);
+            Ok(())
+        } else {
+            Err(BduError::InvalidSynapse(format!(
+                "Synapse {} -> {} not found", 
+                source_neuron_id, 
+                target_neuron_id
+            )))
+        }
+    }
+    
+    /// Remove a synapse between two neurons
+    ///
+    /// # Arguments
+    ///
+    /// * `source_neuron_id` - Source neuron ID
+    /// * `target_neuron_id` - Target neuron ID
+    ///
+    /// # Returns
+    ///
+    /// `Ok(true)` if synapse removed, `Ok(false)` if synapse didn't exist
+    ///
+    pub fn remove_synapse(
+        &mut self,
+        source_neuron_id: u64,
+        target_neuron_id: u64,
+    ) -> BduResult<bool> {
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        // Remove synapse via NPU
+        let removed = npu_lock.remove_synapse(
+            feagi_types::NeuronId(source_neuron_id as u32),
+            feagi_types::NeuronId(target_neuron_id as u32),
+        );
+        
+        if removed {
+            log::debug!("Removed synapse: {} -> {}", source_neuron_id, target_neuron_id);
+        }
+        
+        Ok(removed)
+    }
+    
+    // ========================================================================
+    // BATCH OPERATIONS
+    // ========================================================================
+    
+    /// Batch create multiple neurons at once (SIMD-optimized)
+    ///
+    /// This is significantly faster than calling `add_neuron()` in a loop
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - Target cortical area
+    /// * `neurons` - Vector of neuron parameters (x, y, z, firing_threshold, leak, resting_potential, etc.)
+    ///
+    /// # Returns
+    ///
+    /// Vector of created neuron IDs
+    ///
+    pub fn batch_create_neurons(
+        &mut self,
+        cortical_id: &str,
+        neurons: Vec<(u32, u32, u32, f32, f32, f32, i32, u16, f32, u16, u16, bool)>,
+    ) -> BduResult<Vec<u64>> {
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        // Get cortical area to verify it exists and get its index
+        let area = self.get_cortical_area(cortical_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Cortical area {} not found", cortical_id)))?;
+        let cortical_idx = area.cortical_idx;
+        
+        let count = neurons.len();
+        
+        // Extract parameters into separate vectors for batch operation
+        let mut x_coords = Vec::with_capacity(count);
+        let mut y_coords = Vec::with_capacity(count);
+        let mut z_coords = Vec::with_capacity(count);
+        let mut firing_thresholds = Vec::with_capacity(count);
+        let mut leak_coeffs = Vec::with_capacity(count);
+        let mut resting_potentials = Vec::with_capacity(count);
+        let mut neuron_types = Vec::with_capacity(count);
+        let mut refractory_periods = Vec::with_capacity(count);
+        let mut excitabilities = Vec::with_capacity(count);
+        let mut consec_fire_limits = Vec::with_capacity(count);
+        let mut snooze_lengths = Vec::with_capacity(count);
+        let mut mp_accums = Vec::with_capacity(count);
+        let mut cortical_areas = Vec::with_capacity(count);
+        
+        for (x, y, z, threshold, leak, resting, ntype, refract, excit, consec_limit, snooze, mp_accum) in neurons {
+            x_coords.push(x);
+            y_coords.push(y);
+            z_coords.push(z);
+            firing_thresholds.push(threshold);
+            leak_coeffs.push(leak);
+            resting_potentials.push(resting);
+            neuron_types.push(ntype);
+            refractory_periods.push(refract);
+            excitabilities.push(excit);
+            consec_fire_limits.push(consec_limit);
+            snooze_lengths.push(snooze);
+            mp_accums.push(mp_accum);
+            cortical_areas.push(cortical_idx);
+        }
+        
+        // Call NPU batch creation (SIMD-optimized)
+        // Signature: (thresholds, leak_coeffs, resting_pots, neuron_types, refract, excit, consec_limits, snooze, mp_accums, cortical_areas, x, y, z)
+        let (neurons_created, _indices) = npu_lock.add_neurons_batch(
+            firing_thresholds,
+            leak_coeffs,
+            resting_potentials,
+            neuron_types,
+            refractory_periods,
+            excitabilities,
+            consec_fire_limits,
+            snooze_lengths,
+            mp_accums,
+            cortical_areas,
+            x_coords,
+            y_coords,
+            z_coords,
+        );
+        
+        // Generate neuron IDs (they are sequential starting from the first created)
+        let first_neuron_id = neurons_created;
+        let mut neuron_ids = Vec::with_capacity(count);
+        for i in 0..count as u32 {
+            neuron_ids.push((first_neuron_id + i) as u64);
+        }
+        
+        log::info!("Batch created {} neurons in cortical area {}", count, cortical_id);
+        
+        Ok(neuron_ids)
+    }
+    
+    /// Delete multiple neurons at once (batch operation)
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_ids` - Vector of neuron IDs to delete
+    ///
+    /// # Returns
+    ///
+    /// Number of neurons actually deleted
+    ///
+    pub fn delete_neurons_batch(
+        &mut self,
+        neuron_ids: Vec<u64>,
+    ) -> BduResult<usize> {
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        let mut deleted_count = 0;
+        
+        // Delete each neuron
+        // Note: Could be optimized with a batch delete method in NPU if needed
+        for neuron_id in neuron_ids {
+            if npu_lock.delete_neuron(neuron_id as u32) {
+                deleted_count += 1;
+            }
+        }
+        
+        log::info!("Batch deleted {} neurons", deleted_count);
+        
+        Ok(deleted_count)
+    }
+    
+    // ========================================================================
+    // NEURON UPDATE OPERATIONS
+    // ========================================================================
+    
+    /// Update properties of an existing neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - Target neuron ID
+    /// * `firing_threshold` - Optional new firing threshold
+    /// * `leak_coefficient` - Optional new leak coefficient
+    /// * `resting_potential` - Optional new resting potential
+    /// * `excitability` - Optional new excitability
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if neuron updated successfully
+    ///
+    pub fn update_neuron_properties(
+        &mut self,
+        neuron_id: u64,
+        firing_threshold: Option<f32>,
+        leak_coefficient: Option<f32>,
+        resting_potential: Option<f32>,
+        excitability: Option<f32>,
+    ) -> BduResult<()> {
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        let neuron_id_u32 = neuron_id as u32;
+        
+        // Verify neuron exists by trying to update at least one property
+        let mut updated = false;
+        
+        // Update properties if provided
+        if let Some(threshold) = firing_threshold {
+            if npu_lock.update_neuron_threshold(neuron_id_u32, threshold) {
+                updated = true;
+                log::debug!("Updated neuron {} firing_threshold = {}", neuron_id, threshold);
+            } else if !updated {
+                return Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)));
+            }
+        }
+        
+        if let Some(leak) = leak_coefficient {
+            if npu_lock.update_neuron_leak(neuron_id_u32, leak) {
+                updated = true;
+                log::debug!("Updated neuron {} leak_coefficient = {}", neuron_id, leak);
+            } else if !updated {
+                return Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)));
+            }
+        }
+        
+        if let Some(resting) = resting_potential {
+            if npu_lock.update_neuron_resting_potential(neuron_id_u32, resting) {
+                updated = true;
+                log::debug!("Updated neuron {} resting_potential = {}", neuron_id, resting);
+            } else if !updated {
+                return Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)));
+            }
+        }
+        
+        if let Some(excit) = excitability {
+            if npu_lock.update_neuron_excitability(neuron_id_u32, excit) {
+                updated = true;
+                log::debug!("Updated neuron {} excitability = {}", neuron_id, excit);
+            } else if !updated {
+                return Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)));
+            }
+        }
+        
+        if !updated {
+            return Err(BduError::Internal("No properties provided for update".to_string()));
+        }
+        
+        log::info!("Updated properties for neuron {}", neuron_id);
+        
+        Ok(())
+    }
+    
+    /// Update the firing threshold of a specific neuron
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - Target neuron ID
+    /// * `new_threshold` - New firing threshold value
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if threshold updated successfully
+    ///
+    pub fn set_neuron_firing_threshold(
+        &mut self,
+        neuron_id: u64,
+        new_threshold: f32,
+    ) -> BduResult<()> {
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        // Update threshold via NPU
+        if npu_lock.update_neuron_threshold(neuron_id as u32, new_threshold) {
+            log::debug!("Set neuron {} firing threshold = {}", neuron_id, new_threshold);
+            Ok(())
+        } else {
+            Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)))
+        }
+    }
+    
+    // ========================================================================
+    // AREA MANAGEMENT & QUERIES
+    // ========================================================================
+    
+    /// Get cortical area by name (alternative to ID lookup)
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Human-readable area name
+    ///
+    /// # Returns
+    ///
+    /// `Some(CorticalArea)` if found, `None` otherwise
+    ///
+    pub fn get_cortical_area_by_name(&self, name: &str) -> Option<feagi_types::CorticalArea> {
+        self.cortical_areas.values()
+            .find(|area| area.name == name)
+            .cloned()
+    }
+    
+    /// Resize a cortical area (changes dimensions, may require neuron reallocation)
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - Target cortical area ID
+    /// * `new_dimensions` - New dimensions (width, height, depth)
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if resized successfully
+    ///
+    /// # Note
+    ///
+    /// This does NOT automatically create/delete neurons. It only updates metadata.
+    /// Caller must handle neuron population separately.
+    ///
+    pub fn resize_cortical_area(
+        &mut self,
+        cortical_id: &str,
+        new_dimensions: feagi_types::Dimensions,
+    ) -> BduResult<()> {
+        // Validate dimensions
+        if new_dimensions.width == 0 || new_dimensions.height == 0 || new_dimensions.depth == 0 {
+            return Err(BduError::InvalidArea(format!(
+                "Invalid dimensions: {:?} (all must be > 0)",
+                new_dimensions
+            )));
+        }
+        
+        // Get and update area
+        let area = self.cortical_areas.get_mut(cortical_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Cortical area {} not found", cortical_id)))?;
+        
+        let old_dimensions = area.dimensions;
+        area.dimensions = new_dimensions;
+        
+        log::info!(
+            "Resized cortical area {} from {:?} to {:?}",
+            cortical_id,
+            old_dimensions,
+            new_dimensions
+        );
+        
+        Ok(())
+    }
+    
+    /// Get all cortical areas in a brain region
+    ///
+    /// # Arguments
+    ///
+    /// * `region_id` - Brain region ID
+    ///
+    /// # Returns
+    ///
+    /// Vector of cortical area IDs in the region
+    ///
+    pub fn get_areas_in_region(&self, region_id: &str) -> BduResult<Vec<String>> {
+        let region = self.brain_regions.get_region(region_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Brain region {} not found", region_id)))?;
+        
+        Ok(region.cortical_areas.iter().cloned().collect())
+    }
+    
+    /// Update brain region properties
+    ///
+    /// # Arguments
+    ///
+    /// * `region_id` - Target region ID
+    /// * `new_name` - Optional new name
+    /// * `new_description` - Optional new description
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if updated successfully
+    ///
+    pub fn update_brain_region(
+        &mut self,
+        region_id: &str,
+        new_name: Option<String>,
+        new_description: Option<String>,
+    ) -> BduResult<()> {
+        let region = self.brain_regions.get_region_mut(region_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Brain region {} not found", region_id)))?;
+        
+        if let Some(name) = new_name {
+            region.name = name;
+            log::debug!("Updated brain region {} name", region_id);
+        }
+        
+        if let Some(desc) = new_description {
+            // BrainRegion doesn't have a description field in the struct, so we'll store it in properties
+            region.properties.insert("description".to_string(), serde_json::json!(desc));
+            log::debug!("Updated brain region {} description", region_id);
+        }
+        
+        log::info!("Updated brain region {}", region_id);
+        
+        Ok(())
+    }
 }
 
 // Manual Debug implementation (RustNPU doesn't implement Debug)
@@ -1527,6 +2075,102 @@ mod tests {
         
         // Verify manager is initialized
         assert!(manager.is_initialized());
+    }
+    
+    #[test]
+    fn test_synapse_operations() {
+        use std::sync::{Arc, Mutex};
+        use feagi_burst_engine::npu::RustNPU;
+        
+        // Get ConnectomeManager singleton
+        let manager_arc = ConnectomeManager::instance();
+        
+        // Create and attach NPU
+        let npu = Arc::new(Mutex::new(RustNPU::new(100, 1000, 10)));
+        {
+            let mut manager = manager_arc.write();
+            manager.set_npu(npu.clone());
+        }
+        
+        let mut manager = manager_arc.write();
+        
+        // First create a cortical area to add neurons to
+        let area = feagi_types::CorticalArea::new(
+            "test01".to_string(),
+            0, // cortical_idx
+            "Test Area".to_string(),
+            feagi_types::Dimensions { width: 10, height: 10, depth: 1 },
+            (0, 0, 0), // position
+            feagi_types::AreaType::Sensory,
+        ).unwrap();
+        manager.add_cortical_area(area).unwrap();
+        
+        // Create two neurons
+        let neuron1_id = manager.add_neuron(
+            "test01", 
+            0, 0, 0, // coordinates
+            100.0, // firing_threshold
+            0.1, // leak_coefficient
+            -60.0, // resting_potential
+            0, // neuron_type
+            2, // refractory_period
+            1.0, // excitability
+            5, // consecutive_fire_limit
+            10, // snooze_length
+            false, // mp_charge_accumulation
+        ).unwrap();
+        
+        let neuron2_id = manager.add_neuron(
+            "test01",
+            1, 0, 0, // coordinates
+            100.0,
+            0.1,
+            -60.0,
+            0,
+            2,
+            1.0,
+            5,
+            10,
+            false,
+        ).unwrap();
+        
+        // Test create_synapse
+        manager.create_synapse(
+            neuron1_id,
+            neuron2_id,
+            128, // weight
+            64, // conductance
+            0,  // excitatory
+        ).unwrap();
+        
+        // Test get_synapse
+        let synapse_info = manager.get_synapse(neuron1_id, neuron2_id);
+        assert!(synapse_info.is_some(), "Synapse not found");
+        let (weight, conductance, syn_type) = synapse_info.unwrap();
+        assert_eq!(weight, 128);
+        assert_eq!(conductance, 64);
+        assert_eq!(syn_type, 0); // excitatory
+        
+        // Test update_synapse_weight
+        manager.update_synapse_weight(neuron1_id, neuron2_id, 200).unwrap();
+        
+        // Verify weight updated
+        let synapse_info = manager.get_synapse(neuron1_id, neuron2_id);
+        assert!(synapse_info.is_some());
+        let (weight, _, _) = synapse_info.unwrap();
+        assert_eq!(weight, 200);
+        
+        // Test remove_synapse
+        let removed = manager.remove_synapse(neuron1_id, neuron2_id).unwrap();
+        assert!(removed);
+        
+        // Verify synapse removed
+        let synapse_info = manager.get_synapse(neuron1_id, neuron2_id);
+        assert!(synapse_info.is_none());
+        
+        // Test remove non-existent synapse
+        let removed = manager.remove_synapse(neuron1_id, neuron2_id).unwrap();
+        assert!(!removed);
     }
 }
 
