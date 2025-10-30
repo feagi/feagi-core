@@ -9,17 +9,25 @@ use crate::traits::AnalyticsService;
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
+use feagi_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
 
 /// Default implementation of AnalyticsService
 pub struct AnalyticsServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
+    burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
 }
 
 impl AnalyticsServiceImpl {
-    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
-        Self { connectome }
+    pub fn new(
+        connectome: Arc<RwLock<ConnectomeManager>>,
+        burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
+    ) -> Self {
+        Self {
+            connectome,
+            burst_runner,
+        }
     }
 }
 
@@ -33,15 +41,20 @@ impl AnalyticsService for AnalyticsServiceImpl {
         let cortical_area_count = manager.get_cortical_area_count();
         let brain_initialized = cortical_area_count > 0;
         
-        // TODO: Get actual burst engine status
-        let burst_engine_active = manager.has_npu();
+        // Get burst engine status from BurstLoopRunner
+        let (burst_engine_active, burst_count) = if let Some(ref runner) = self.burst_runner {
+            let runner_lock = runner.read();
+            (runner_lock.is_running(), runner_lock.get_burst_count())
+        } else {
+            (false, 0)
+        };
         
         Ok(SystemHealth {
             burst_engine_active,
             brain_readiness: brain_initialized,
             neuron_count,
             cortical_area_count,
-            burst_count: 0,  // TODO: Get from burst engine
+            burst_count,
         })
     }
 
@@ -96,17 +109,66 @@ impl AnalyticsService for AnalyticsServiceImpl {
             target_area
         );
         
-        // TODO: Implement proper connectivity stats between two areas
-        // For now, return placeholder data
-        log::warn!("Connectivity stats between areas not yet fully implemented");
+        let manager = self.connectome.read();
+        
+        // Verify both areas exist
+        if !manager.has_cortical_area(source_area) {
+            return Err(ServiceError::NotFound {
+                resource: "CorticalArea".to_string(),
+                id: source_area.to_string(),
+            });
+        }
+        if !manager.has_cortical_area(target_area) {
+            return Err(ServiceError::NotFound {
+                resource: "CorticalArea".to_string(),
+                id: target_area.to_string(),
+            });
+        }
+        
+        // Get all neurons in source area
+        let source_neurons = manager.get_neurons_in_area(source_area);
+        
+        // Count synapses going from source to target
+        let mut synapse_count = 0;
+        let mut total_weight: u64 = 0;
+        let mut excitatory_count = 0;
+        let mut inhibitory_count = 0;
+        
+        for source_neuron_id in source_neurons {
+            // Get outgoing synapses from this neuron
+            let outgoing = manager.get_outgoing_synapses(source_neuron_id);
+            
+            for (target_neuron_id, weight, _conductance, synapse_type) in outgoing {
+                // Check if target neuron is in target area
+                if let Some(target_cortical_id) = manager.get_neuron_cortical_id(target_neuron_id as u64) {
+                    if target_cortical_id == target_area {
+                        synapse_count += 1;
+                        total_weight += weight as u64;
+                        
+                        // synapse_type: 0 = excitatory, 1 = inhibitory (from feagi-types)
+                        if synapse_type == 0 {
+                            excitatory_count += 1;
+                        } else {
+                            inhibitory_count += 1;
+                        }
+                    }
+                }
+            }
+        }
+        
+        let avg_weight = if synapse_count > 0 {
+            (total_weight as f64 / synapse_count as f64) as f32
+        } else {
+            0.0
+        };
         
         Ok(ConnectivityStats {
             source_area: source_area.to_string(),
             target_area: target_area.to_string(),
-            synapse_count: 0,
-            avg_weight: 0.0,
-            excitatory_count: 0,
-            inhibitory_count: 0,
+            synapse_count,
+            avg_weight,
+            excitatory_count,
+            inhibitory_count,
         })
     }
 

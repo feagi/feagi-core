@@ -282,6 +282,11 @@ impl BurstLoopRunner {
     pub fn get_burst_count(&self) -> u64 {
         self.npu.lock().unwrap().get_burst_count()
     }
+
+    /// Get configured burst frequency in Hz
+    pub fn get_frequency(&self) -> f64 {
+        self.frequency_hz
+    }
 }
 
 impl Drop for BurstLoopRunner {

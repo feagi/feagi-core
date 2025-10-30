@@ -125,16 +125,18 @@ impl RuntimeService for RuntimeServiceImpl {
         let burst_count = runner.get_burst_count();
         let is_paused = *self.paused.read();
         
-        // TODO: Get actual metrics from BurstLoopRunner
-        // For now, return basic status with placeholder values
+        // Note: Some metrics not yet available from BurstLoopRunner
+        // - current_rate_hz: Would require tracking actual execution rate
+        // - last_burst_neuron_count: Not tracked by BurstLoopRunner
+        // - avg_burst_time_ms: Not tracked by BurstLoopRunner
         Ok(RuntimeStatus {
             is_running,
             is_paused,
-            frequency_hz: 30.0, // TODO: Get from runner
+            frequency_hz: runner.get_frequency(),
             burst_count,
-            current_rate_hz: if is_running { 30.0 } else { 0.0 }, // TODO: Calculate actual rate
-            last_burst_neuron_count: 0, // TODO: Get from runner
-            avg_burst_time_ms: 0.0,     // TODO: Get from runner
+            current_rate_hz: if is_running { runner.get_frequency() } else { 0.0 },
+            last_burst_neuron_count: 0, // Not yet tracked
+            avg_burst_time_ms: 0.0,     // Not yet tracked
         })
     }
 

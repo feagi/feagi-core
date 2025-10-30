@@ -450,6 +450,108 @@ impl ConnectomeManager {
         Ok(neuron_count)
     }
     
+    /// Add a single neuron to a cortical area
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - Cortical area ID
+    /// * `x` - X coordinate
+    /// * `y` - Y coordinate
+    /// * `z` - Z coordinate
+    /// * `firing_threshold` - Firing threshold
+    /// * `leak_coefficient` - Leak coefficient
+    /// * `resting_potential` - Resting membrane potential
+    /// * `neuron_type` - Neuron type (0=excitatory, 1=inhibitory)
+    /// * `refractory_period` - Refractory period
+    /// * `excitability` - Excitability multiplier
+    /// * `consecutive_fire_limit` - Maximum consecutive fires
+    /// * `snooze_length` - Snooze duration after consecutive fire limit
+    /// * `mp_charge_accumulation` - Whether membrane potential accumulates
+    ///
+    /// # Returns
+    ///
+    /// The newly created neuron ID
+    ///
+    pub fn add_neuron(
+        &mut self,
+        cortical_id: &str,
+        x: u32,
+        y: u32,
+        z: u32,
+        firing_threshold: f32,
+        leak_coefficient: f32,
+        resting_potential: f32,
+        neuron_type: u8,
+        refractory_period: u16,
+        excitability: f32,
+        consecutive_fire_limit: u16,
+        snooze_length: u16,
+        mp_charge_accumulation: bool,
+    ) -> BduResult<u64> {
+        // Validate cortical area exists
+        if !self.cortical_areas.contains_key(cortical_id) {
+            return Err(BduError::InvalidArea(format!("Cortical area {} not found", cortical_id)));
+        }
+        
+        let cortical_idx = *self.cortical_id_to_idx.get(cortical_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("No index for {}", cortical_id)))?;
+        
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        // Add neuron via NPU
+        let neuron_id = npu_lock.add_neuron(
+            firing_threshold,
+            leak_coefficient,
+            resting_potential,
+            neuron_type as i32,
+            refractory_period,
+            excitability,
+            consecutive_fire_limit,
+            snooze_length,
+            mp_charge_accumulation,
+            cortical_idx,
+            x,
+            y,
+            z,
+        ).map_err(|e| BduError::Internal(format!("Failed to add neuron: {}", e)))?;
+        
+        log::debug!("Created neuron {} in area {} at ({}, {}, {})", neuron_id.0, cortical_id, x, y, z);
+        
+        Ok(neuron_id.0 as u64)
+    }
+    
+    /// Delete a neuron by ID
+    ///
+    /// # Arguments
+    ///
+    /// * `neuron_id` - Global neuron ID
+    ///
+    /// # Returns
+    ///
+    /// `true` if the neuron was deleted, `false` if it didn't exist
+    ///
+    pub fn delete_neuron(&mut self, neuron_id: u64) -> BduResult<bool> {
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        let deleted = npu_lock.delete_neuron(neuron_id as u32);
+        
+        if deleted {
+            log::debug!("Deleted neuron {}", neuron_id);
+        }
+        
+        Ok(deleted)
+    }
+    
     /// Apply cortical mapping rules (dstmap) to create synapses
     ///
     /// This parses the destination mapping rules from a source area and

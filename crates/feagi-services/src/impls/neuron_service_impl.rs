@@ -25,28 +25,170 @@ impl NeuronServiceImpl {
 
 #[async_trait]
 impl NeuronService for NeuronServiceImpl {
-    async fn create_neuron(&self, _params: CreateNeuronParams) -> ServiceResult<NeuronInfo> {
-        // TODO: Implement neuron creation
-        Err(ServiceError::Internal("Not yet implemented".to_string()))
+    async fn create_neuron(&self, params: CreateNeuronParams) -> ServiceResult<NeuronInfo> {
+        log::debug!("Creating neuron in area {} at {:?}", params.cortical_id, params.coordinates);
+        
+        let mut manager = self.connectome.write();
+        
+        // Extract neural parameters from properties or use defaults
+        let props = params.properties.as_ref();
+        
+        let firing_threshold = props
+            .and_then(|p| p.get("firing_threshold"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0) as f32;
+        
+        let leak_coefficient = props
+            .and_then(|p| p.get("leak_coefficient"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+        
+        let resting_potential = props
+            .and_then(|p| p.get("resting_potential"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+        
+        let is_inhibitory = props
+            .and_then(|p| p.get("is_inhibitory"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        
+        let refractory_period = props
+            .and_then(|p| p.get("refractory_period"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as u16;
+        
+        let excitability = props
+            .and_then(|p| p.get("excitability"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0) as f32;
+        
+        let consecutive_fire_limit = props
+            .and_then(|p| p.get("consecutive_fire_limit"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(100) as u16;
+        
+        let snooze_length = props
+            .and_then(|p| p.get("snooze_length"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as u16;
+        
+        let mp_charge_accumulation = props
+            .and_then(|p| p.get("mp_charge_accumulation"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        
+        // Add neuron via ConnectomeManager
+        let neuron_id = manager.add_neuron(
+            &params.cortical_id,
+            params.coordinates.0,
+            params.coordinates.1,
+            params.coordinates.2,
+            firing_threshold,
+            leak_coefficient,
+            resting_potential,
+            if is_inhibitory { 1 } else { 0 },
+            refractory_period,
+            excitability,
+            consecutive_fire_limit,
+            snooze_length,
+            mp_charge_accumulation,
+        ).map_err(ServiceError::from)?;
+        
+        let cortical_idx = manager.get_cortical_idx(&params.cortical_id)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "CorticalArea".to_string(),
+                id: params.cortical_id.clone(),
+            })?;
+        
+        Ok(NeuronInfo {
+            id: neuron_id,
+            cortical_id: params.cortical_id.clone(),
+            cortical_idx,
+            coordinates: params.coordinates,
+            properties: params.properties.unwrap_or_default(),
+        })
     }
 
-    async fn delete_neuron(&self, _neuron_id: u64) -> ServiceResult<()> {
-        // TODO: Implement neuron deletion
-        Err(ServiceError::Internal("Not yet implemented".to_string()))
+    async fn delete_neuron(&self, neuron_id: u64) -> ServiceResult<()> {
+        log::debug!("Deleting neuron {}", neuron_id);
+        
+        let mut manager = self.connectome.write();
+        let deleted = manager.delete_neuron(neuron_id).map_err(ServiceError::from)?;
+        
+        if !deleted {
+            return Err(ServiceError::NotFound {
+                resource: "Neuron".to_string(),
+                id: neuron_id.to_string(),
+            });
+        }
+        
+        Ok(())
     }
 
-    async fn get_neuron(&self, _neuron_id: u64) -> ServiceResult<NeuronInfo> {
-        // TODO: Implement neuron retrieval
-        Err(ServiceError::Internal("Not yet implemented".to_string()))
+    async fn get_neuron(&self, neuron_id: u64) -> ServiceResult<NeuronInfo> {
+        log::debug!("Getting neuron {}", neuron_id);
+        
+        let manager = self.connectome.read();
+        
+        // Check if neuron exists
+        if !manager.has_neuron(neuron_id) {
+            return Err(ServiceError::NotFound {
+                resource: "Neuron".to_string(),
+                id: neuron_id.to_string(),
+            });
+        }
+        
+        let coordinates = manager.get_neuron_coordinates(neuron_id);
+        let cortical_idx = manager.get_neuron_cortical_idx(neuron_id);
+        let cortical_id = manager.get_neuron_cortical_id(neuron_id)
+            .unwrap_or_else(|| "unknown".to_string());
+        
+        Ok(NeuronInfo {
+            id: neuron_id,
+            cortical_id,
+            cortical_idx,
+            coordinates,
+            properties: std::collections::HashMap::new(),
+        })
     }
 
     async fn get_neuron_at_coordinates(
         &self,
-        _cortical_id: &str,
-        _coordinates: (u32, u32, u32),
+        cortical_id: &str,
+        coordinates: (u32, u32, u32),
     ) -> ServiceResult<Option<NeuronInfo>> {
-        // TODO: Implement coordinate-based lookup
-        Err(ServiceError::Internal("Not yet implemented".to_string()))
+        log::debug!("Looking up neuron in area {} at {:?}", cortical_id, coordinates);
+        
+        let manager = self.connectome.read();
+        
+        // Verify area exists
+        if !manager.has_cortical_area(cortical_id) {
+            return Err(ServiceError::NotFound {
+                resource: "CorticalArea".to_string(),
+                id: cortical_id.to_string(),
+            });
+        }
+        
+        // Get all neurons in the area and find one at coordinates
+        let neurons = manager.get_neurons_in_area(cortical_id);
+        
+        for neuron_id in neurons {
+            let neuron_coords = manager.get_neuron_coordinates(neuron_id);
+            if neuron_coords == coordinates {
+                let cortical_idx = manager.get_neuron_cortical_idx(neuron_id);
+                return Ok(Some(NeuronInfo {
+                    id: neuron_id,
+                    cortical_id: cortical_id.to_string(),
+                    cortical_idx,
+                    coordinates,
+                    properties: std::collections::HashMap::new(),
+                }));
+            }
+        }
+        
+        // No neuron at these coordinates
+        Ok(None)
     }
 
     async fn list_neurons_in_area(
