@@ -6,6 +6,8 @@ use std::sync::Arc;
 extern crate serde_json;
 extern crate zmq;
 
+use feagi_config::{load_config, validate_config};
+
 /// FEAGI Inference Engine - Standalone neural processing engine with online learning
 #[derive(Parser, Debug)]
 #[command(name = "feagi-inference-engine", version, author, long_about = None)]
@@ -49,12 +51,28 @@ struct Args {
     /// Agent inactivity timeout in milliseconds (default: 60000)
     #[arg(long, default_value_t = 60000)]
     agent_timeout_ms: u64,
+    
+    /// Path to feagi_configuration.toml (optional, will search if not provided)
+    #[arg(long)]
+    config: Option<PathBuf>,
 }
 
 /// Main entry point
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Parse CLI arguments first to get verbose flag
     let args = Args::parse();
+
+    // Load FEAGI configuration (optional, with fallback to CLI args)
+    let feagi_config = match load_config(args.config.as_deref(), None) {
+        Ok(config) => {
+            validate_config(&config)?;
+            Some(config)
+        }
+        Err(e) => {
+            eprintln!("Note: Could not load FEAGI configuration ({}). Using CLI arguments and defaults.", e);
+            None
+        }
+    };
 
     // Initialize logger
     env_logger::Builder::from_default_env()
@@ -67,6 +85,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Banner
     print_banner();
+    
+    // Log configuration source
+    if let Some(config) = &feagi_config {
+        info!("Using FEAGI configuration from feagi_configuration.toml");
+        info!("  ZMQ Host: {}", config.zmq.host);
+        info!("  Ports - Sensory: {}, Motor: {}", 
+              config.ports.zmq_sensory_port, 
+              config.ports.zmq_motor_port);
+    } else {
+        info!("Using CLI arguments and defaults");
+    }
 
     // Load connectome
     info!("Loading connectome from: {}", args.connectome.display());

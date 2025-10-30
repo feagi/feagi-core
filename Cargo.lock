@@ -1104,6 +1104,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-config"
+version = "2.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.69",
+ "toml",
+]
+
+[[package]]
 name = "feagi-connectome-serialization"
 version = "2.0.0"
 dependencies = [
@@ -1141,6 +1152,7 @@ dependencies = [
  "ctrlc",
  "env_logger",
  "feagi-burst-engine",
+ "feagi-config",
  "feagi-connectome-serialization",
  "feagi-pns",
  "feagi-types",

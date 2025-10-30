@@ -73,6 +73,7 @@ resolver = "2"
 members = [
     # === Foundation Layer ===
     "crates/feagi-types",              # Core data structures (Neuron, Synapse, etc.)
+    "crates/feagi-config",             # Configuration loader (TOML + overrides)
     
     # === Infrastructure Layer ===
     "crates/feagi-state-manager",      # Runtime state management (NEW)

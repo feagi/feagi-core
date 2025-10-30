@@ -1420,6 +1420,13 @@ impl RustNPU {
         true
     }
 
+    /// Check if a neuron exists and is valid (not deleted)
+    pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
+        let idx = neuron_id as usize;
+        let neuron_array = self.neuron_array.read().unwrap();
+        idx < neuron_array.count && neuron_array.valid_mask[idx]
+    }
+
     /// Get neuron coordinates (x, y, z)
     pub fn get_neuron_coordinates(&self, neuron_id: u32) -> (u32, u32, u32) {
         self.neuron_array.read().unwrap().get_coordinates(NeuronId(neuron_id))

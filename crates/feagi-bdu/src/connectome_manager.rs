@@ -742,8 +742,8 @@ impl ConnectomeManager {
     pub fn has_neuron(&self, neuron_id: NeuronId) -> bool {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
-                let count = npu_lock.get_neuron_count();
-                (neuron_id as u32) < count as u32
+                // Check if neuron exists AND is valid (not deleted)
+                npu_lock.is_neuron_valid(neuron_id as u32)
             } else {
                 false
             }
@@ -1599,6 +1599,9 @@ impl ConnectomeManager {
             cortical_areas.push(cortical_idx);
         }
         
+        // Get the current neuron count - this will be the first ID of our batch
+        let first_neuron_id = npu_lock.get_neuron_count() as u32;
+        
         // Call NPU batch creation (SIMD-optimized)
         // Signature: (thresholds, leak_coeffs, resting_pots, neuron_types, refract, excit, consec_limits, snooze, mp_accums, cortical_areas, x, y, z)
         let (neurons_created, _indices) = npu_lock.add_neurons_batch(
@@ -1617,10 +1620,9 @@ impl ConnectomeManager {
             z_coords,
         );
         
-        // Generate neuron IDs (they are sequential starting from the first created)
-        let first_neuron_id = neurons_created;
+        // Generate neuron IDs (they are sequential starting from first_neuron_id)
         let mut neuron_ids = Vec::with_capacity(count);
-        for i in 0..count as u32 {
+        for i in 0..neurons_created {
             neuron_ids.push((first_neuron_id + i) as u64);
         }
         
