@@ -6,6 +6,7 @@
 pub mod common;
 pub mod endpoints;
 pub mod middleware;
+pub mod openapi;
 pub mod security;
 pub mod transports;
 pub mod v1;

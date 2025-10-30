@@ -1,24 +1,21 @@
+// API response types
+
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use super::ApiError;
-
-/// Generic API response wrapper
+/// Standard API response wrapper
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ApiResponse<T> {
-    /// Whether the request was successful
+    /// Whether the operation succeeded
     pub success: bool,
     
-    /// Response data (present on success)
+    /// Response data (present if success = true)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
     
-    /// Error details (present on failure)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<ApiError>,
-    
-    /// Response timestamp (ISO 8601)
+    /// ISO 8601 timestamp
     pub timestamp: String,
 }
 
@@ -28,45 +25,31 @@ impl<T> ApiResponse<T> {
         Self {
             success: true,
             data: Some(data),
-            error: None,
             timestamp: Utc::now().to_rfc3339(),
         }
     }
-
-    /// Create an error response
-    pub fn error(error: ApiError) -> Self {
-        Self {
+    
+    /// Create an error response (no data)
+    pub fn error() -> ApiResponse<()> {
+        ApiResponse {
             success: false,
             data: None,
-            error: Some(error),
             timestamp: Utc::now().to_rfc3339(),
         }
     }
 }
 
-/// Convert Result to ApiResponse
-impl<T> From<Result<T, ApiError>> for ApiResponse<T> {
-    fn from(result: Result<T, ApiError>) -> Self {
-        match result {
-            Ok(data) => ApiResponse::success(data),
-            Err(error) => ApiResponse::error(error),
+/// Empty response for operations that return no data
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct EmptyResponse {
+    /// Operation message
+    pub message: String,
+}
+
+impl EmptyResponse {
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
         }
     }
 }
-
-/// Empty response for operations that don't return data
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-pub struct EmptyResponse {}
-
-impl EmptyResponse {
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl Default for EmptyResponse {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-

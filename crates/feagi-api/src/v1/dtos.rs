@@ -2,72 +2,101 @@
 // These DTOs must match Python FastAPI response structures exactly for backward compatibility
 
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use utoipa::ToSchema;
 
 /// Health check response (must match Python FastAPI format exactly)
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[schema(example = json!({
+    "status": "healthy",
+    "brain_readiness": true,
+    "burst_engine": true,
+    "neuron_count": 1000,
+    "synapse_count": 5000,
+    "cortical_area_count": 10,
+    "genome_validity": true,
+    "influxdb_availability": false,
+    "connectome_path": "/path/to/connectome",
+    "genome_timestamp": "2025-10-29T12:34:56Z",
+    "change_state": "saved",
+    "changes_saved_externally": false
+}))]
 pub struct HealthCheckResponseV1 {
     /// Overall system status
-    #[schema(example = "healthy")]
     pub status: String,
     
-    /// Brain is ready to process
+    /// Is the brain ready to process data?
     pub brain_readiness: bool,
     
-    /// Burst engine is running
+    /// Is the burst engine running?
     pub burst_engine: bool,
     
-    /// Total neuron count
-    pub neuron_count: u64,
+    /// Total number of neurons
+    pub neuron_count: usize,
     
-    /// Total synapse count
-    pub synapse_count: u64,
+    /// Total number of synapses
+    /// TODO: Get from NPU when available
+    pub synapse_count: usize,
     
     /// Number of cortical areas
     pub cortical_area_count: usize,
     
-    /// Genome is valid
+    /// Is the genome valid?
+    /// TODO: Get from genome validator
     pub genome_validity: bool,
     
-    /// InfluxDB is available
+    /// Is InfluxDB available?
+    /// TODO: Get from analytics service
     pub influxdb_availability: bool,
     
-    /// Path to connectome
+    /// Path to connectome file
+    /// TODO: Get from state manager
     pub connectome_path: String,
     
-    /// Genome timestamp (ISO 8601)
+    /// Genome last modified timestamp
+    /// TODO: Get from genome service
     pub genome_timestamp: String,
     
-    /// Change state
-    #[schema(example = "modified")]
+    /// Change tracking state
+    /// TODO: Get from state manager
     pub change_state: String,
     
-    /// Changes saved externally
+    /// Are changes saved externally?
+    /// TODO: Get from state manager
     pub changes_saved_externally: bool,
 }
 
 /// Readiness check response
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[schema(example = json!({
+    "ready": true,
+    "components": {
+        "api": true,
+        "burst_engine": true,
+        "state_manager": true,
+        "connectome": true
+    }
+}))]
 pub struct ReadinessCheckResponseV1 {
-    /// Whether the system is ready to accept requests
+    /// Is the system ready?
     pub ready: bool,
     
-    /// Detailed component readiness
+    /// Component readiness details
     pub components: ComponentReadiness,
 }
 
-/// Component readiness details
+/// Component readiness status
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ComponentReadiness {
-    /// API server is ready
+    /// API server ready
     pub api: bool,
     
-    /// Burst engine is ready
+    /// Burst engine ready
     pub burst_engine: bool,
     
-    /// State manager is ready
+    /// State manager ready
     pub state_manager: bool,
     
-    /// Connectome manager is ready
+    /// Connectome loaded
     pub connectome: bool,
 }
