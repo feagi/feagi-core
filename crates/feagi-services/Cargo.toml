@@ -35,6 +35,9 @@ thiserror.workspace = true
 # Logging
 log = "0.4"
 
+# Time/date
+chrono = "0.4"
+
 [features]
 default = ["std"]
 std = ["tokio"]  # Enable async for server deployments

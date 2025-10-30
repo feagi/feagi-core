@@ -43,6 +43,7 @@ pub mod types;
 pub mod runtime;
 pub mod validator;
 pub mod converter_flat;
+pub mod converter_flat_full;
 pub mod templates;
 
 // Re-export commonly used types
@@ -59,6 +60,7 @@ pub use runtime::{
 };
 pub use validator::{validate_genome, ValidationResult};
 pub use converter_flat::convert_flat_to_hierarchical;
+pub use converter_flat_full::convert_flat_to_hierarchical_full;
 pub use templates::{create_minimal_genome, create_genome_with_core_morphologies, add_core_morphologies};
 
 

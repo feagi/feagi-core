@@ -256,3 +256,88 @@ pub struct RuntimeStatus {
     pub avg_burst_time_ms: f64,
 }
 
+// ============================================================================
+// SYSTEM SERVICE DTOs
+// ============================================================================
+
+/// Component health status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ComponentHealth {
+    pub name: String,
+    pub status: String, // "healthy", "degraded", "unhealthy"
+    pub message: Option<String>,
+}
+
+/// Overall system health
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HealthStatus {
+    pub overall_status: String, // "healthy", "degraded", "unhealthy"
+    pub components: Vec<ComponentHealth>,
+    pub timestamp: String, // ISO 8601 timestamp
+}
+
+/// Comprehensive system status
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemStatus {
+    pub is_initialized: bool,
+    pub burst_engine_running: bool,
+    pub burst_count: u64,
+    pub neuron_count: usize,
+    pub synapse_count: usize,
+    pub cortical_area_count: usize,
+    pub brain_region_count: usize,
+    pub uptime_seconds: u64,
+    pub current_burst_rate_hz: f64,
+    pub avg_burst_time_ms: f64,
+}
+
+/// Version information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionInfo {
+    pub feagi_core_version: String,
+    pub feagi_bdu_version: String,
+    pub feagi_burst_engine_version: String,
+    pub feagi_evo_version: String,
+    pub feagi_types_version: String,
+    pub build_timestamp: String,
+    pub rust_version: String,
+}
+
+/// Runtime statistics
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuntimeStats {
+    pub total_bursts: u64,
+    pub total_neurons_fired: u64,
+    pub total_processing_time_ms: u64,
+    pub avg_burst_time_ms: f64,
+    pub avg_neurons_per_burst: f64,
+    pub current_rate_hz: f64,
+    pub peak_rate_hz: f64,
+    pub uptime_seconds: u64,
+}
+
+/// Memory usage information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryUsage {
+    pub npu_neurons_bytes: usize,
+    pub npu_synapses_bytes: usize,
+    pub npu_total_bytes: usize,
+    pub connectome_metadata_bytes: usize,
+    pub total_allocated_bytes: usize,
+    pub system_total_bytes: usize,
+    pub system_available_bytes: usize,
+}
+
+/// Capacity information
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CapacityInfo {
+    pub current_neurons: usize,
+    pub max_neurons: usize,
+    pub neuron_utilization_percent: f64,
+    pub current_synapses: usize,
+    pub max_synapses: usize,
+    pub synapse_utilization_percent: f64,
+    pub current_cortical_areas: usize,
+    pub max_cortical_areas: usize,
+}
+

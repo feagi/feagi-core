@@ -353,6 +353,221 @@ impl ConnectomeManager {
     }
     
     // ======================================================================
+    // Neuron/Synapse Creation Methods (Delegates to NPU)
+    // ======================================================================
+    
+    /// Create neurons for a cortical area
+    ///
+    /// This delegates to the NPU's optimized batch creation function.
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - Cortical area ID (6-character string)
+    ///
+    /// # Returns
+    ///
+    /// Number of neurons created
+    ///
+    pub fn create_neurons_for_area(&mut self, cortical_id: &str) -> BduResult<u32> {
+        // Get cortical area
+        let area = self.cortical_areas.get(cortical_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Cortical area {} not found", cortical_id)))?
+            .clone();
+        
+        // Get cortical index
+        let cortical_idx = self.cortical_id_to_idx.get(cortical_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("No index for cortical area {}", cortical_id)))?;
+        
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        // Extract neural parameters from area properties
+        let per_voxel_cnt = area.properties
+            .get("per_voxel_neuron_cnt")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(1) as u32;
+        
+        let firing_threshold = area.properties
+            .get("firing_threshold")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0) as f32;
+        
+        let leak_coefficient = area.properties
+            .get("leak_coefficient")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+        
+        let excitability = area.properties
+            .get("neuron_excitability")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(1.0) as f32;
+        
+        let refractory_period = area.properties
+            .get("refractory_period")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as u16;
+        
+        let consecutive_fire_limit = area.properties
+            .get("consecutive_fire_cnt_max")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(100) as u16;
+        
+        let snooze_length = area.properties
+            .get("snooze_length")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as u16;
+        
+        let mp_charge_accumulation = area.properties
+            .get("mp_charge_accumulation")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        
+        // Call NPU to create neurons
+        let mut npu_lock = npu.lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+        
+        let neuron_count = npu_lock.create_cortical_area_neurons(
+            *cortical_idx,
+            area.dimensions.width as u32,
+            area.dimensions.height as u32,
+            area.dimensions.depth as u32,
+            per_voxel_cnt,
+            firing_threshold,
+            leak_coefficient,
+            0.0, // resting_potential (LIF default)
+            0, // neuron_type (excitatory)
+            refractory_period,
+            excitability,
+            consecutive_fire_limit,
+            snooze_length,
+            mp_charge_accumulation,
+        )
+        .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
+        
+        log::info!("Created {} neurons for area {} via NPU", neuron_count, cortical_id);
+        
+        Ok(neuron_count)
+    }
+    
+    /// Apply cortical mapping rules (dstmap) to create synapses
+    ///
+    /// This parses the destination mapping rules from a source area and
+    /// creates synapses using the NPU's synaptogenesis functions.
+    ///
+    /// # Arguments
+    ///
+    /// * `src_cortical_id` - Source cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// Number of synapses created
+    ///
+    pub fn apply_cortical_mapping(&mut self, src_cortical_id: &str) -> BduResult<u32> {
+        // Get source area
+        let src_area = self.cortical_areas.get(src_cortical_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Source area {} not found", src_cortical_id)))?
+            .clone();
+        
+        // Get dstmap from area properties
+        let dstmap = match src_area.properties.get("cortical_mapping_dst") {
+            Some(serde_json::Value::Object(map)) if !map.is_empty() => map,
+            _ => return Ok(0), // No mappings
+        };
+        
+        let src_cortical_idx = *self.cortical_id_to_idx.get(src_cortical_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("No index for {}", src_cortical_id)))?;
+        
+        // Get NPU
+        let npu = self.npu.as_ref()
+            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
+        
+        let mut total_synapses = 0u32;
+        
+        // Process each destination area
+        for (dst_cortical_id, rules) in dstmap {
+            let rules_array = match rules.as_array() {
+                Some(arr) => arr,
+                None => continue,
+            };
+            
+            let dst_cortical_idx = match self.cortical_id_to_idx.get(dst_cortical_id) {
+                Some(idx) => *idx,
+                None => {
+                    log::warn!("Destination area {} not found, skipping", dst_cortical_id);
+                    continue;
+                }
+            };
+            
+            // Apply each morphology rule
+            for rule in rules_array {
+                let rule_obj = match rule.as_object() {
+                    Some(obj) => obj,
+                    None => continue,
+                };
+                
+                let morphology_id = rule_obj.get("morphology_id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                
+                let weight = (rule_obj.get("postSynapticCurrent_multiplier")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0) * 255.0).min(255.0) as u8;
+                
+                let conductance = 255u8; // Default
+                let synapse_attractivity = 100u8; // Default: always create
+                
+                // Call NPU synaptogenesis based on morphology type
+                let mut npu_lock = npu.lock()
+                    .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+                
+                let scalar = rule_obj.get("morphology_scalar")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(1) as u32;
+                
+                let synapse_count = match morphology_id {
+                    "projector" => {
+                        crate::connectivity::synaptogenesis::apply_projector_morphology(
+                            &mut *npu_lock,
+                            src_cortical_idx,
+                            dst_cortical_idx,
+                            None, // transpose
+                            None, // project_last_layer_of
+                            weight,
+                            conductance,
+                            synapse_attractivity,
+                        )?
+                    }
+                    "block_to_block" => {
+                        crate::connectivity::synaptogenesis::apply_block_connection_morphology(
+                            &mut *npu_lock,
+                            src_cortical_idx,
+                            dst_cortical_idx,
+                            scalar, // scaling_factor
+                            weight,
+                            conductance,
+                            synapse_attractivity,
+                        )?
+                    }
+                    _ => {
+                        log::debug!("Morphology {} not yet implemented, skipping", morphology_id);
+                        0
+                    }
+                };
+                
+                total_synapses += synapse_count;
+                
+                log::debug!("Applied {} morphology: {} -> {} = {} synapses",
+                    morphology_id, src_cortical_id, dst_cortical_id, synapse_count);
+            }
+        }
+        
+        log::info!("Created {} synapses for area {} via NPU", total_synapses, src_cortical_id);
+        
+        Ok(total_synapses)
+    }
+    
+    // ======================================================================
     // Neuron Query Methods (Delegates to NPU)
     // ======================================================================
     
@@ -856,6 +1071,132 @@ impl ConnectomeManager {
             genome_id,
             genome_title,
         )?)
+    }
+    
+    /// Load genome from file and develop brain
+    ///
+    /// This is a high-level convenience method that:
+    /// 1. Loads genome from JSON file
+    /// 2. Prepares for new genome (clears existing state)
+    /// 3. Runs neuroembryogenesis to develop the brain
+    ///
+    /// # Arguments
+    ///
+    /// * `genome_path` - Path to genome JSON file
+    ///
+    /// # Returns
+    ///
+    /// Development progress information
+    ///
+    pub fn load_from_genome_file<P: AsRef<std::path::Path>>(
+        &mut self,
+        genome_path: P,
+    ) -> BduResult<crate::neuroembryogenesis::DevelopmentProgress> {
+        use feagi_evo::load_genome_from_file;
+        
+        log::info!("Loading genome from: {:?}", genome_path.as_ref());
+        let genome = load_genome_from_file(genome_path)?;
+        
+        self.load_from_genome(genome)
+    }
+    
+    /// Load genome and develop brain
+    ///
+    /// This is the core genome loading method that:
+    /// 1. Prepares for new genome (clears existing state)
+    /// 2. Runs neuroembryogenesis to develop the brain
+    ///
+    /// # Arguments
+    ///
+    /// * `genome` - RuntimeGenome to load
+    ///
+    /// # Returns
+    ///
+    /// Development progress information
+    ///
+    pub fn load_from_genome(
+        &mut self,
+        genome: feagi_evo::RuntimeGenome,
+    ) -> BduResult<crate::neuroembryogenesis::DevelopmentProgress> {
+        // Prepare for new genome (clear existing state)
+        self.prepare_for_new_genome()?;
+        
+        // Calculate and resize memory if needed
+        self.resize_for_genome(&genome)?;
+        
+        // Run neuroembryogenesis
+        let manager_arc = ConnectomeManager::instance();
+        let mut neuro = crate::neuroembryogenesis::Neuroembryogenesis::new(manager_arc);
+        neuro.develop_from_genome(&genome)?;
+        
+        Ok(neuro.get_progress())
+    }
+    
+    /// Prepare for loading a new genome
+    ///
+    /// Clears all existing cortical areas, brain regions, and resets state.
+    /// This is typically called before loading a new genome.
+    ///
+    pub fn prepare_for_new_genome(&mut self) -> BduResult<()> {
+        log::info!("Preparing for new genome (clearing existing state)");
+        
+        // Clear cortical areas
+        self.cortical_areas.clear();
+        self.cortical_id_to_idx.clear();
+        self.cortical_idx_to_id.clear();
+        self.next_cortical_idx = 0;
+        
+        // Clear brain regions
+        self.brain_regions = BrainRegionHierarchy::new();
+        
+        // Reset NPU if present
+        // TODO: Add reset() method to RustNPU
+        // if let Some(ref npu) = self.npu {
+        //     let mut npu_lock = npu.lock().unwrap();
+        //     npu_lock.reset();
+        // }
+        
+        log::info!("✅ Connectome cleared and ready for new genome");
+        Ok(())
+    }
+    
+    /// Calculate and resize memory for a genome
+    ///
+    /// Analyzes the genome to determine memory requirements and
+    /// prepares the NPU for the expected neuron/synapse counts.
+    ///
+    /// # Arguments
+    ///
+    /// * `genome` - Genome to analyze for memory requirements
+    ///
+    pub fn resize_for_genome(&mut self, genome: &feagi_evo::RuntimeGenome) -> BduResult<()> {
+        // Calculate required capacity from genome stats
+        let required_neurons = genome.stats.innate_neuron_count;
+        let required_synapses = genome.stats.innate_synapse_count;
+        
+        log::info!(
+            "Genome requires: {} neurons, {} synapses",
+            required_neurons,
+            required_synapses
+        );
+        
+        // Calculate total voxels from all cortical areas
+        let mut total_voxels = 0;
+        for area in genome.cortical_areas.values() {
+            total_voxels += area.dimensions.width * area.dimensions.height * area.dimensions.depth;
+        }
+        
+        log::info!(
+            "Genome has {} cortical areas with {} total voxels",
+            genome.cortical_areas.len(),
+            total_voxels
+        );
+        
+        // TODO: Resize NPU if needed
+        // For now, we assume NPU has sufficient capacity
+        // In the future, we may want to dynamically resize the NPU based on genome requirements
+        
+        Ok(())
     }
 }
 

@@ -13,6 +13,7 @@ pub mod connectome_service;
 pub mod genome_service;
 pub mod neuron_service;
 pub mod runtime_service;
+pub mod system_service;
 
 // Re-export for convenience
 pub use analytics_service::AnalyticsService;
@@ -20,5 +21,6 @@ pub use connectome_service::ConnectomeService;
 pub use genome_service::GenomeService;
 pub use neuron_service::NeuronService;
 pub use runtime_service::RuntimeService;
+pub use system_service::SystemService;
 
 

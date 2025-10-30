@@ -97,54 +97,54 @@ impl ConnectomeService for ConnectomeServiceImpl {
             area_type,
         ).map_err(ServiceError::from)?;
         
-        // Apply all neural parameters from params (using builder pattern)
+        // Apply all neural parameters from params (direct field assignment)
         if let Some(visible) = params.visible {
-            area = area.with_visible(visible);
+            area.visible = visible;
         }
         if let Some(sub_group) = params.sub_group {
-            area = area.with_sub_group(Some(sub_group));
+            area.sub_group = Some(sub_group);
         }
         if let Some(neurons_per_voxel) = params.neurons_per_voxel {
-            area = area.with_neurons_per_voxel(neurons_per_voxel);
+            area.neurons_per_voxel = neurons_per_voxel;
         }
         if let Some(postsynaptic_current) = params.postsynaptic_current {
-            area = area.with_postsynaptic_current(postsynaptic_current);
+            area.postsynaptic_current = postsynaptic_current;
         }
         if let Some(plasticity_constant) = params.plasticity_constant {
-            area = area.with_plasticity_constant(plasticity_constant);
+            area.plasticity_constant = plasticity_constant;
         }
         if let Some(degeneration) = params.degeneration {
-            area = area.with_degeneration(degeneration);
+            area.degeneration = degeneration;
         }
         if let Some(psp_uniform_distribution) = params.psp_uniform_distribution {
-            area = area.with_psp_uniform_distribution(psp_uniform_distribution);
+            area.psp_uniform_distribution = psp_uniform_distribution;
         }
         if let Some(firing_threshold_increment) = params.firing_threshold_increment {
-            area = area.with_firing_threshold_increment(firing_threshold_increment);
+            area.firing_threshold_increment = firing_threshold_increment;
         }
         if let Some(firing_threshold_limit) = params.firing_threshold_limit {
-            area = area.with_firing_threshold_limit(firing_threshold_limit);
+            area.firing_threshold_limit = firing_threshold_limit;
         }
         if let Some(consecutive_fire_count) = params.consecutive_fire_count {
-            area = area.with_consecutive_fire_count(consecutive_fire_count);
+            area.consecutive_fire_count = consecutive_fire_count;
         }
         if let Some(snooze_period) = params.snooze_period {
-            area = area.with_snooze_period(snooze_period);
+            area.snooze_period = snooze_period;
         }
         if let Some(refractory_period) = params.refractory_period {
-            area = area.with_refractory_period(refractory_period);
+            area.refractory_period = refractory_period;
         }
         if let Some(leak_coefficient) = params.leak_coefficient {
-            area = area.with_leak_coefficient(leak_coefficient);
+            area.leak_coefficient = leak_coefficient;
         }
         if let Some(leak_variability) = params.leak_variability {
-            area = area.with_leak_variability(leak_variability);
+            area.leak_variability = leak_variability;
         }
         if let Some(burst_engine_active) = params.burst_engine_active {
-            area = area.with_burst_engine_active(burst_engine_active);
+            area.burst_engine_active = burst_engine_active;
         }
         if let Some(properties) = params.properties {
-            area = area.with_properties(properties);
+            area.properties = properties;
         }
         
         // Add to connectome

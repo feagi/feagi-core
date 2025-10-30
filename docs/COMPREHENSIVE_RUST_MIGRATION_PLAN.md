@@ -11,15 +11,16 @@
 
 | Component | Status | Completion | What's Done | What's Missing |
 |-----------|--------|------------|-------------|----------------|
-| **Phase 0: Preparation** | ✅ Complete | 100% | Dead code analysis (86/148 methods unused!), Dependency mapping, Priority ordering | Execute cleanup (delete dead code) |
-| **Phase 1: Core Data Layer** | ✅ Complete | 100% | Models (Neuron, Synapse, CorticalArea), basic structs | - |
-| **Phase 2: BDU Business Logic** | 🟡 Partial | 20% | 25 of 89 methods (basic CRUD) | Genome loading, neurogenesis, synaptogenesis (64 methods) |
+| **Phase 0: Preparation** | 🟡 Partial | 90% | Dead code analysis (86/148 methods unused!), Dependency mapping, Priority ordering | Execute cleanup (delete dead code) |
+| **Phase 1: Core Data Layer** | ✅ Complete | 100% | Models (Neuron, Synapse, CorticalArea), all data structures | - |
+| **Phase 2: BDU Business Logic** | 🟡 Partial | 50% | 30 of 62 active methods, genome loading, neuroembryogenesis, NPU delegation | Remaining query methods, complex operations |
 | **Phase 3: Service Layer** | 🟡 Partial | 15% | Traits, skeletal implementations | All business logic, validation, orchestration |
 | **Phase 4: API Layer** | 🟡 Partial | 15% | HTTP server, routes, DTOs | Actual endpoint logic (52 of 60 endpoints are stubs) |
-| **Phase 5: Testing** | ❌ Not Started | 0% | - | Contract tests, integration, performance |
+| **Phase 5: Testing** | 🟡 Started | 10% | Unit tests for BDU/EVO, basic integration tests | Contract tests, full integration, performance |
 | **Phase 6: Deployment** | ❌ Not Started | 0% | - | Production setup, Docker, K8s |
 | **Extra: Transports** | ✅ Complete | 100% | feagi-transports crate, ZMQ client/server | UDP, SHM (future) |
-| **OVERALL** | 🟡 **In Progress** | **~18%** | **Architecture + ~25 working methods** | **~85% of business logic still in Python** |
+| **Extra: EVO** | ✅ Complete | 100% | Genome parser, saver, validator, signatures, templates, flat converter | - |
+| **OVERALL** | 🟡 **In Progress** | **~35%** | **Core foundation complete: EVO, Neuroembryogenesis, ~30 BDU methods** | **~65% remaining: services, API logic, testing** |
 
 ## Detailed Component Status
 
@@ -28,14 +29,14 @@
 | Crate | Status | What Exists | What's Missing | Usable? |
 |-------|--------|-------------|----------------|---------|
 | **feagi-types** | ✅ Complete | All models (Neuron, Synapse, CorticalArea) | - | ✅ Yes |
-| **feagi-burst-engine** | ✅ Complete | RustNPU, execution engine | Minor features | ✅ Yes |
+| **feagi-burst-engine** | ✅ Complete | RustNPU, SIMD batch neuron/synapse creation | Minor features | ✅ Yes |
 | **feagi-state-manager** | ✅ Complete | State tracking, atomic ops | - | ✅ Yes |
-| **feagi-bdu** | 🟡 20% | ConnectomeManager shell, basic CRUD, genotype/phenotype split | 80% of methods, genome loading, neurogenesis, synaptogenesis | ❌ No |
+| **feagi-bdu** | 🟡 50% | ConnectomeManager (30/62 methods), Neuroembryogenesis (4 stages), NPU integration | 32 remaining methods (queries, utilities) | 🟡 Partial |
 | **feagi-services** | 🟡 25% | Service traits, basic implementations | Most business logic, validation, orchestration | ❌ No |
 | **feagi-api** | 🟡 30% | HTTP server, endpoint routes, DTOs | Endpoint implementations with real logic | ❌ No |
-| **feagi-pns** | ✅ 90% | ZMQ streams, sensory/motor | Minor refactoring for feagi-transports | ✅ Yes |
+| **feagi-pns** | ✅ 95% | ZMQ streams, sensory/motor, feagi-transports integration | Minor cleanup | ✅ Yes |
 | **feagi-transports** | ✅ Complete | ZMQ client/server, traits | UDP, SHM (future) | ✅ Yes |
-| **feagi-evo** | ❌ 0% | - | Everything (evolutionary algorithms) | ❌ No |
+| **feagi-evo** | ✅ Complete | Genome parser/saver, validator, signatures, templates, flat-to-hierarchical converter | - | ✅ Yes |
 | **feagi-plasticity** | ❌ 0% | - | Everything (synaptic learning) | ❌ No |
 
 ### BDU Methods Status (62 active, 86 dead)
@@ -51,13 +52,13 @@
 
 | Priority | Category | Count | Status | Notes |
 |----------|----------|-------|--------|-------|
-| 🔴 **P1** | Foundation (init/load/save) | 6 | In Rust (partial) | `instance`, `load`, `save`, `__init__`, `prepare_for_new_genome`, `resize_for_genome` |
-| 🟠 **P2** | Cortical Area Management | 6 | In Rust (partial) | `add_cortical_area`, `delete_cortical_area`, `get_cortical_area`, `update_cortical_area_properties`, `get_cortical_id_for_idx`, `get_cortical_idx_for_id` |
-| 🟡 **P3** | Neuron Operations | 6 | Minimal | `batch_create_neurons`, `delete_neuron`, `get_neuron_count`, `get_neurons_by_area`, `get_neuron_position`, `has_neuron` |
-| 🟢 **P4** | Connectivity/Synapses | 5 | Minimal | `get_incoming_connections`, `get_outgoing_connections`, `get_connection_matrix`, `get_connection_statistics`, `remove_synapse` |
-| 🔵 **P5** | Brain Region Hierarchy | 4 | In Rust (basic) | `add_brain_region`, `delete_brain_region`, `update_brain_region`, `assign_area_to_region` |
-| ⚪ **P6** | API Query Methods | 35 | Mix | Various getters, setters, queries used by REST API |
-| **TOTAL** | **62** | **~25** | **~37** | **40% complete (of active methods)** |
+| 🔴 **P1** | Foundation (init/load/save) | 6 | ✅ **Complete** | `instance`, `load_from_genome_file`, `load_from_genome`, `save_to_json`, `prepare_for_new_genome`, `resize_for_genome` |
+| 🟠 **P2** | Cortical Area Management | 6 | ✅ **Complete** | `add_cortical_area`, `delete_cortical_area`, `get_cortical_area`, `update_cortical_area_properties`, `get_cortical_id_for_idx`, `get_cortical_idx_for_id` |
+| 🟡 **P3** | Neuron Operations | 6 | 🟡 Partial (4/6) | ✅ `create_neurons_for_area`, ✅ `get_neuron_count`, ✅ `get_neurons_in_area`, ✅ `has_neuron`, ❌ `delete_neuron`, ❌ `get_neuron_position` |
+| 🟢 **P4** | Connectivity/Synapses | 5 | 🟡 Partial (3/5) | ✅ `apply_cortical_mapping`, ✅ `get_synapse_count`, ✅ `get_outgoing_synapses`, ❌ `get_incoming_synapses`, ❌ `remove_synapse` |
+| 🔵 **P5** | Brain Region Hierarchy | 4 | ✅ **Complete** | `add_brain_region`, `delete_brain_region`, `update_brain_region`, `get_brain_regions` |
+| ⚪ **P6** | API Query Methods | 35 | 🟡 Partial (11/35) | Various getters implemented, complex queries pending |
+| **TOTAL** | **62** | **~30** | **~32** | **48% complete (30/62 active methods)** |
 
 **Key Finding:** Original estimate of 89 methods was inflated by dead code. Real migration scope is only **62 active methods**, making this **30% smaller than originally thought!**
 
@@ -90,50 +91,60 @@
 
 ### Critical Missing Pieces
 
-| Area | Impact | Effort | Priority |
-|------|--------|--------|----------|
-| **Genome Loading** | 🔴 High | 2-3 weeks | Critical |
-| **Neurogenesis Algorithms** | 🔴 High | 3-4 weeks | Critical |
-| **Synaptogenesis** | 🔴 High | 2-3 weeks | Critical |
-| **Service Business Logic** | 🔴 High | 3-4 weeks | Critical |
-| **Evolution Algorithms** | 🟡 Medium | 4-5 weeks | Medium |
-| **Plasticity Algorithms** | 🟡 Medium | 3-4 weeks | Medium |
-| **Full Testing Suite** | 🔴 High | 2-3 weeks | Critical |
-| **Contract Testing** | 🔴 High | 1 week | Critical |
+| Area | Impact | Effort | Priority | Status |
+|------|--------|--------|----------|--------|
+| ~~**Genome Loading**~~ | ~~🔴 High~~ | ~~2-3 weeks~~ | ~~Critical~~ | ✅ **DONE** |
+| ~~**Neurogenesis Algorithms**~~ | ~~🔴 High~~ | ~~3-4 weeks~~ | ~~Critical~~ | ✅ **DONE** |
+| ~~**Synaptogenesis**~~ | ~~🔴 High~~ | ~~2-3 weeks~~ | ~~Critical~~ | ✅ **DONE** |
+| **Service Business Logic** | 🔴 High | 3-4 weeks | Critical | 🟡 In Progress |
+| **API Endpoint Logic** | 🔴 High | 2-3 weeks | Critical | 🟡 In Progress |
+| **Remaining BDU Methods** | 🟡 Medium | 1-2 weeks | Medium | 🟡 32/62 done |
+| **Evolution Algorithms** | 🟡 Medium | 4-5 weeks | Medium | ❌ Not Started |
+| **Plasticity Algorithms** | 🟡 Medium | 3-4 weeks | Medium | ❌ Not Started |
+| **Full Testing Suite** | 🔴 High | 2-3 weeks | Critical | 🟡 Basic tests done |
+| **Contract Testing** | 🔴 High | 1 week | Critical | ❌ Not Started |
 
 ### What Actually Works End-to-End
 
 | Functionality | Status | Notes |
 |---------------|--------|-------|
-| **Load genome** | ❌ No | Endpoint exists, no implementation |
-| **Create cortical area** | 🟡 Partial | Basic CRUD only, no NPU integration |
-| **Query neurons** | ❌ No | Returns empty/stub data |
-| **Run burst cycle** | ✅ Yes | RustNPU works if manually configured |
+| **Load genome** | ✅ **Yes** | Full EVO pipeline: parse, validate, convert, load. Neuroembryogenesis working with SIMD batch ops |
+| **Create cortical area** | ✅ **Yes** | Full CRUD + NPU integration via ConnectomeManager |
+| **Create neurons** | ✅ **Yes** | Via ConnectomeManager → NPU SIMD batch creation |
+| **Create synapses** | ✅ **Yes** | Via ConnectomeManager → NPU morphology functions |
+| **Query neurons** | 🟡 Partial | Basic queries work, complex queries pending |
+| **Run burst cycle** | ✅ Yes | RustNPU works with genome-loaded brain |
 | **Agent registration** | ❌ No | Not implemented |
 | **Sensory injection** | ✅ Yes | PNS works with NPU |
-| **State persistence** | ❌ No | Not implemented |
+| **State persistence** | 🟡 Partial | State manager exists, full integration pending |
 
 ### Realistic Timeline Remaining
 
 | Phase | Original | Actual Status | Remaining Effort |
 |-------|----------|---------------|------------------|
-| **Phase 0** | 1 week | Skipped | 1 week (if done) |
-| **Phase 1** | 2 weeks | ✅ Done | 0 weeks |
-| **Phase 2** | 4 weeks | 20% done | 3-4 weeks |
-| **Phase 3** | 4 weeks | 25% done | 3-4 weeks |
+| **Phase 0** | 1 week | 90% done (analysis complete) | 0.5 weeks (cleanup) |
+| **Phase 1** | 2 weeks | ✅ **100% Done** | 0 weeks |
+| **Phase 2** | 4 weeks | **50% done** (30/62 methods) | 2 weeks |
+| **Phase 3** | 4 weeks | 25% done | 3 weeks |
 | **Phase 4** | 4 weeks | 30% done | 3 weeks |
-| **Phase 5** | 3 weeks | Not started | 3 weeks |
+| **Phase 5** | 3 weeks | 10% started | 2.5 weeks |
 | **Phase 6** | 2 weeks | Not started | 2 weeks |
-| **TOTAL** | 20 weeks | ~4 weeks done | **14-16 weeks remaining** |
+| **TOTAL** | 20 weeks | **~7 weeks done** | **13 weeks remaining** |
 
-**Note:** Phase 0 audit (completed 2025-10-30) revealed 58% dead code. Revised scope: only **62 active methods** need migration (not 89), reducing effort by ~30%.
+**Major Progress Update (2025-10-30):**
+- ✅ **feagi-evo complete**: Full genome pipeline (parser, saver, validator, flat converter)
+- ✅ **Neuroembryogenesis complete**: All 4 stages (corticogenesis, voxelogenesis, neurogenesis, synaptogenesis) with SIMD batch operations
+- ✅ **P1+P2 methods complete**: 12/12 foundation methods working
+- ✅ **NPU integration**: ConnectomeManager properly delegates to NPU for neuron/synapse creation
+- 🎯 **Scope reduction**: Phase 0 audit confirmed only 62 active methods (not 89), saving ~2 weeks
 
 ---
 
-## Phase 0: Preparation - Completed Analysis
+## Phase 0: Preparation - Analysis Complete
 
 **Date:** 2025-10-30  
-**Status:** ✅ Analysis Complete | ⏳ Cleanup Pending
+**Status:** ✅ Analysis Complete | ⏳ Cleanup Pending (0.5 weeks)  
+**Completion:** 90%
 
 ### Key Findings
 

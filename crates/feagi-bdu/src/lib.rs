@@ -32,6 +32,7 @@ pub mod connectivity;
 pub mod connectome_manager;
 pub mod spatial;
 pub mod types;
+pub mod neuroembryogenesis;
 
 // Note: models/ and genome/ have been moved to feagi-types and feagi-evo respectively
 
@@ -63,6 +64,9 @@ pub use feagi_evo::{GenomeParser, ParsedGenome, GenomeSaver};
 
 // Re-export connectome manager
 pub use connectome_manager::{ConnectomeConfig, ConnectomeManager};
+
+// Re-export neuroembryogenesis
+pub use neuroembryogenesis::{Neuroembryogenesis, DevelopmentStage, DevelopmentProgress};
 
 #[cfg(test)]
 mod tests {

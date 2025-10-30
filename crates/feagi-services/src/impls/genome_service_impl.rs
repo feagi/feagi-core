@@ -28,11 +28,22 @@ impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
         log::info!("Loading genome from JSON");
         
-        // Delegate to ConnectomeManager
-        self.connectome
+        // Parse genome using feagi-evo
+        let genome = feagi_evo::load_genome_from_json(&params.json_str)
+            .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
+        
+        // Load into connectome via ConnectomeManager
+        let progress = self.connectome
             .write()
-            .load_genome_from_json(&params.json_str)
+            .load_from_genome(genome)
             .map_err(ServiceError::from)?;
+        
+        log::info!(
+            "Genome loaded: {} cortical areas, {} neurons, {} synapses created",
+            progress.cortical_areas_created,
+            progress.neurons_created,
+            progress.synapses_created
+        );
         
         // Return genome info
         self.get_genome_info().await
@@ -44,7 +55,10 @@ impl GenomeService for GenomeServiceImpl {
         // Delegate to ConnectomeManager
         let json_str = self.connectome
             .read()
-            .save_genome_to_json(params.genome_id, params.genome_title)
+            .save_genome_to_json(
+                params.genome_id,
+                params.genome_title,
+            )
             .map_err(ServiceError::from)?;
         
         Ok(json_str)
@@ -58,7 +72,7 @@ impl GenomeService for GenomeServiceImpl {
         let brain_region_count = manager.get_brain_region_ids().len();
         
         Ok(GenomeInfo {
-            genome_id: "current".to_string(),  // TODO: Track genome_id
+            genome_id: "current".to_string(),  // TODO: Track genome_id in ConnectomeManager
             genome_title: "Current Genome".to_string(),
             version: "2.1".to_string(),
             cortical_area_count,
@@ -69,34 +83,35 @@ impl GenomeService for GenomeServiceImpl {
     async fn validate_genome(&self, json_str: String) -> ServiceResult<bool> {
         log::debug!("Validating genome JSON");
         
-        // Try to parse genome without loading it
-        match feagi_evo::GenomeParser::parse(&json_str) {
-            Ok(_) => Ok(true),
-            Err(e) => Err(ServiceError::InvalidInput(format!(
-                "Invalid genome: {}",
-                e
-            ))),
+        // Parse genome
+        let genome = feagi_evo::load_genome_from_json(&json_str)
+            .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
+        
+        // Validate genome structure
+        let validation = feagi_evo::validate_genome(&genome);
+        
+        if !validation.errors.is_empty() {
+            return Err(ServiceError::InvalidInput(format!(
+                "Genome validation failed: {} errors, {} warnings. First error: {}",
+                validation.errors.len(),
+                validation.warnings.len(),
+                validation.errors.first().unwrap_or(&"Unknown error".to_string())
+            )));
         }
+        
+        Ok(true)
     }
 
     async fn reset_connectome(&self) -> ServiceResult<()> {
         log::info!("Resetting connectome");
         
-        // TODO: Implement proper connectome reset
-        // For now, remove all cortical areas and brain regions manually
-        let cortical_ids: Vec<String> = self.connectome.read().get_cortical_area_ids().into_iter().cloned().collect();
-        for cortical_id in cortical_ids {
-            let _ = self.connectome.write().remove_cortical_area(&cortical_id);
-        }
+        // Use ConnectomeManager's prepare_for_new_genome method
+        self.connectome
+            .write()
+            .prepare_for_new_genome()
+            .map_err(ServiceError::from)?;
         
-        let region_ids: Vec<String> = self.connectome.read().get_brain_region_ids()
-            .into_iter()
-            .map(|s| s.to_string())
-            .collect();
-        for region_id in region_ids {
-            let _ = self.connectome.write().remove_brain_region(&region_id);
-        }
-        
+        log::info!("Connectome reset complete");
         Ok(())
     }
 }
