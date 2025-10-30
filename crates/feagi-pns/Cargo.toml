@@ -15,6 +15,7 @@ all-transports = ["zmq-transport", "udp-transport", "shm-transport"]
 
 [dependencies]
 feagi-burst-engine = { path = "../feagi-burst-engine" }
+feagi-transports = { path = "../feagi-transports", features = ["zmq-server"] }
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi_data_structures.workspace = true
 feagi_data_serialization.workspace = true
@@ -28,8 +29,8 @@ parking_lot = "0.12"
 thiserror = "1.0"
 lz4 = "1.28"  # LZ4 compression (used by multiple transports)
 
-# Optional transport-specific dependencies
-zmq = { version = "0.10", optional = true }
+# Optional transport-specific dependencies (now via feagi-transports)
+zmq = { version = "0.10", optional = true }  # Still needed for context creation
 tokio = { version = "1.0", features = ["full"], optional = true }
 async-trait = { version = "0.1", optional = true }
 num_cpus = { version = "1.16", optional = true }
