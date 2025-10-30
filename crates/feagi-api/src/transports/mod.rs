@@ -1,6 +1,7 @@
 // Transport adapters for HTTP and ZMQ
 
 pub mod http;
-pub mod zmq;
+// TODO: Fix ZMQ adapter compilation issues (incomplete implementation)
+// pub mod zmq;
 
 
