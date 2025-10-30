@@ -377,6 +377,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
         
         let hierarchy = manager.get_brain_region_hierarchy();
         let parent_id = hierarchy.get_parent(region_id).map(|s| s.to_string());
+        let child_regions: Vec<String> = hierarchy
+            .get_children(region_id)
+            .into_iter()
+            .cloned()
+            .collect();
         
         Ok(BrainRegionInfo {
             region_id: region_id.to_string(),
@@ -384,6 +389,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             region_type: Self::region_type_to_string(&region.region_type),
             parent_id,
             cortical_areas: region.cortical_areas.iter().cloned().collect(),
+            child_regions,
             properties: region.properties.clone(),
         })
     }

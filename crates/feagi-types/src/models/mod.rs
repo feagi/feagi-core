@@ -30,3 +30,4 @@ pub use cortical_area::{CorticalArea, AreaType};
 pub use brain_region::{BrainRegion, RegionType};
 pub use brain_region_hierarchy::BrainRegionHierarchy;
 
+

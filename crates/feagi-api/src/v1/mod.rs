@@ -2,10 +2,18 @@
 
 pub mod dtos;
 pub mod cortical_area_dtos;
+pub mod brain_region_dtos;
+pub mod mapping_dtos;
+pub mod genome_dtos;
+pub mod neuron_dtos;
 
 // Re-export for convenience
 pub use dtos::*;
 pub use cortical_area_dtos::*;
+pub use brain_region_dtos::*;
+pub use mapping_dtos::*;
+pub use genome_dtos::*;
+pub use neuron_dtos::*;
 
 // TODO: Add mapping module
 // pub mod mapping;

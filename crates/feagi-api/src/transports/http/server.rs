@@ -19,21 +19,21 @@ use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    common::{ApiError, ApiResponse},
+    common::{ApiError, ApiResponse, EmptyResponse},
     endpoints,
     openapi::ApiDoc,
     security::AuthContext,
     v1::dtos::{HealthCheckResponseV1, ReadinessCheckResponseV1},
 };
-use feagi_services::AnalyticsService;
+use feagi_services::{AnalyticsService, ConnectomeService, GenomeService, NeuronService};
 
 /// Application state shared across all HTTP handlers
 #[derive(Clone)]
 pub struct ApiState {
     pub analytics_service: Arc<dyn AnalyticsService + Send + Sync>,
-    // TODO: Add more services as they're implemented
-    // pub cortical_area_service: Arc<dyn CorticalAreaService + Send + Sync>,
-    // pub genome_service: Arc<dyn GenomeService + Send + Sync>,
+    pub connectome_service: Arc<dyn ConnectomeService + Send + Sync>,
+    pub genome_service: Arc<dyn GenomeService + Send + Sync>,
+    pub neuron_service: Arc<dyn NeuronService + Send + Sync>,
 }
 
 /// Create the main HTTP server application
@@ -74,9 +74,31 @@ fn create_v1_router() -> Router<ApiState> {
     Router::new()
         .route("/health", get(health_check_handler))
         .route("/ready", get(readiness_check_handler))
-        // TODO: Add more V1 endpoints
-        // .route("/cortical-areas", get(list_cortical_areas).post(create_cortical_area))
-        // .route("/cortical-areas/:id", get(get_cortical_area).put(update_cortical_area).delete(delete_cortical_area))
+        
+        // Cortical areas
+        .route("/cortical-areas", get(list_cortical_areas_handler).post(create_cortical_area_handler))
+        .route("/cortical-areas/:id", 
+            get(get_cortical_area_handler)
+            .put(update_cortical_area_handler)
+            .delete(delete_cortical_area_handler))
+        
+        // Brain regions
+        .route("/brain-regions", get(list_brain_regions_handler).post(create_brain_region_handler))
+        .route("/brain-regions/:id", 
+            get(get_brain_region_handler)
+            .delete(delete_brain_region_handler))
+        
+        // Genome operations
+        .route("/genome", get(get_genome_info_handler))
+        .route("/genome/load", axum::routing::post(load_genome_handler))
+        .route("/genome/save", axum::routing::post(save_genome_handler))
+        .route("/genome/validate", axum::routing::post(validate_genome_handler))
+        .route("/genome/reset", axum::routing::post(reset_connectome_handler))
+        
+        // Neuron operations
+        .route("/neurons", get(list_neurons_handler).post(create_neuron_handler))
+        .route("/neurons/count", get(get_neuron_count_handler))
+        .route("/neurons/:id", get(get_neuron_handler).delete(delete_neuron_handler))
 }
 
 /// OpenAPI spec handler
@@ -112,6 +134,279 @@ async fn readiness_check_handler(
         Ok(readiness_data) => {
             (StatusCode::OK, Json(ApiResponse::success(readiness_data))).into_response()
         }
+        Err(error) => error.into_response(),
+    }
+}
+
+// ============================================================================
+// CORTICAL AREA HANDLERS
+// ============================================================================
+
+/// List cortical areas
+async fn list_cortical_areas_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::cortical_areas::list_cortical_areas(&auth_ctx, state.connectome_service).await {
+        Ok(areas) => (StatusCode::OK, Json(ApiResponse::success(areas))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get cortical area by ID
+async fn get_cortical_area_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::cortical_areas::get_cortical_area(&auth_ctx, state.connectome_service, id).await {
+        Ok(area) => (StatusCode::OK, Json(ApiResponse::success(area))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Create cortical area
+async fn create_cortical_area_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::CreateCorticalAreaRequest>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::cortical_areas::create_cortical_area(&auth_ctx, state.connectome_service, request).await {
+        Ok(area) => (StatusCode::CREATED, Json(ApiResponse::success(area))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Update cortical area
+async fn update_cortical_area_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(request): Json<crate::v1::UpdateCorticalAreaRequest>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::cortical_areas::update_cortical_area(&auth_ctx, state.connectome_service, id, request).await {
+        Ok(area) => (StatusCode::OK, Json(ApiResponse::success(area))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Delete cortical area
+async fn delete_cortical_area_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::cortical_areas::delete_cortical_area(&auth_ctx, state.connectome_service, id).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Cortical area deleted successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+// ============================================================================
+// BRAIN REGION HANDLERS
+// ============================================================================
+
+/// List brain regions
+async fn list_brain_regions_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::brain_regions::list_brain_regions(&auth_ctx, state.connectome_service).await {
+        Ok(regions) => (StatusCode::OK, Json(ApiResponse::success(regions))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get brain region by ID
+async fn get_brain_region_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::brain_regions::get_brain_region(&auth_ctx, state.connectome_service, id).await {
+        Ok(region) => (StatusCode::OK, Json(ApiResponse::success(region))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Create brain region
+async fn create_brain_region_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::CreateBrainRegionRequest>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::brain_regions::create_brain_region(&auth_ctx, state.connectome_service, request).await {
+        Ok(region) => (StatusCode::CREATED, Json(ApiResponse::success(region))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Delete brain region
+async fn delete_brain_region_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::brain_regions::delete_brain_region(&auth_ctx, state.connectome_service, id).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Brain region deleted successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+// ============================================================================
+// GENOME HANDLERS
+// ============================================================================
+
+/// Get genome info
+async fn get_genome_info_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::genome::get_genome_info(&auth_ctx, state.genome_service).await {
+        Ok(info) => (StatusCode::OK, Json(ApiResponse::success(info))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Load genome
+async fn load_genome_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::LoadGenomeRequest>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::genome::load_genome(&auth_ctx, state.genome_service, request).await {
+        Ok(info) => (StatusCode::OK, Json(ApiResponse::success(info))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Save genome
+async fn save_genome_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::SaveGenomeRequest>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::genome::save_genome(&auth_ctx, state.genome_service, request).await {
+        Ok(response) => (StatusCode::OK, Json(ApiResponse::success(response))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Validate genome
+async fn validate_genome_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::ValidateGenomeRequest>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::genome::validate_genome(&auth_ctx, state.genome_service, request).await {
+        Ok(response) => (StatusCode::OK, Json(ApiResponse::success(response))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Reset connectome
+async fn reset_connectome_handler(
+    State(state): State<ApiState>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::genome::reset_connectome(&auth_ctx, state.genome_service).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Connectome reset successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+// ============================================================================
+// NEURON HANDLERS
+// ============================================================================
+
+/// List neurons
+async fn list_neurons_handler(
+    State(state): State<ApiState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    let cortical_area = params.get("cortical_area").cloned().unwrap_or_default();
+    let limit = params.get("limit").and_then(|s| s.parse().ok());
+    
+    if cortical_area.is_empty() {
+        return ApiError::invalid_input("cortical_area query parameter is required").into_response();
+    }
+    
+    match endpoints::neurons::list_neurons(&auth_ctx, state.neuron_service, cortical_area, limit).await {
+        Ok(neurons) => (StatusCode::OK, Json(ApiResponse::success(neurons))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get neuron by ID
+async fn get_neuron_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::neurons::get_neuron(&auth_ctx, state.neuron_service, id).await {
+        Ok(neuron) => (StatusCode::OK, Json(ApiResponse::success(neuron))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Create neuron
+async fn create_neuron_handler(
+    State(state): State<ApiState>,
+    Json(request): Json<crate::v1::CreateNeuronRequest>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::neurons::create_neuron(&auth_ctx, state.neuron_service, request).await {
+        Ok(neuron) => (StatusCode::CREATED, Json(ApiResponse::success(neuron))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Delete neuron
+async fn delete_neuron_handler(
+    State(state): State<ApiState>,
+    axum::extract::Path(id): axum::extract::Path<u64>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    match endpoints::neurons::delete_neuron(&auth_ctx, state.neuron_service, id).await {
+        Ok(_) => (StatusCode::OK, Json(ApiResponse::success(EmptyResponse::new("Neuron deleted successfully")))).into_response(),
+        Err(error) => error.into_response(),
+    }
+}
+
+/// Get neuron count
+async fn get_neuron_count_handler(
+    State(state): State<ApiState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Response {
+    let auth_ctx = AuthContext::anonymous();
+    
+    let cortical_area = params.get("cortical_area").cloned().unwrap_or_default();
+    
+    if cortical_area.is_empty() {
+        return ApiError::invalid_input("cortical_area query parameter is required").into_response();
+    }
+    
+    match endpoints::neurons::get_neuron_count(&auth_ctx, state.neuron_service, cortical_area).await {
+        Ok(count) => (StatusCode::OK, Json(ApiResponse::success(count))).into_response(),
         Err(error) => error.into_response(),
     }
 }

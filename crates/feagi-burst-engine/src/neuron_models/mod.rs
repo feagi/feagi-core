@@ -35,3 +35,4 @@ pub use traits::{NeuronModel, ModelParameters};
 pub use lif::{LIFModel, LIFParameters};
 
 
+

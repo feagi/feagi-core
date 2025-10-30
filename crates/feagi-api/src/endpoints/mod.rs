@@ -3,10 +3,12 @@
 
 pub mod health;
 pub mod cortical_areas;
+pub mod brain_regions;
+pub mod genome;
+pub mod neurons;
 
 // TODO: Add more endpoint modules
-// pub mod cortical_areas;
-// pub mod brain_regions;
-// pub mod genome;
+// pub mod mappings;
 // pub mod analytics;
+// pub mod runtime;
 

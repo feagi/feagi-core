@@ -189,3 +189,4 @@ Contract tests should run in CI:
 - Set up CI pipeline for contract testing
 - Document all response format changes
 
+

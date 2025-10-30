@@ -59,3 +59,4 @@ impl std::fmt::Display for EncryptionError {
 
 impl std::error::Error for EncryptionError {}
 
+

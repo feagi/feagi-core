@@ -193,3 +193,4 @@ feagi-core/
 **Ready for**: Publishing to crates.io  
 **Version**: 2.0.0 (all crates synchronized)
 
+

@@ -127,6 +127,7 @@ pub struct BrainRegionInfo {
     pub region_type: String, // "Sensory", "Motor", "Association", "Custom"
     pub parent_id: Option<String>,
     pub cortical_areas: Vec<String>,
+    pub child_regions: Vec<String>,
     pub properties: HashMap<String, serde_json::Value>,
 }
 
