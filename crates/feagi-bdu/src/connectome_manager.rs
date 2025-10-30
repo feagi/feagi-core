@@ -149,6 +149,58 @@ impl ConnectomeManager {
         Arc::clone(&INSTANCE)
     }
     
+    /// Create a new isolated instance for testing
+    ///
+    /// This bypasses the singleton pattern and creates a fresh instance.
+    /// Use this in tests to avoid conflicts between parallel test runs.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let manager = ConnectomeManager::new_for_testing();
+    /// // Use manager in isolated test
+    /// ```
+    pub fn new_for_testing() -> Self {
+        Self {
+            cortical_areas: HashMap::new(),
+            cortical_id_to_idx: HashMap::new(),
+            cortical_idx_to_id: HashMap::new(),
+            next_cortical_idx: 0,
+            brain_regions: BrainRegionHierarchy::new(),
+            config: ConnectomeConfig::default(),
+            npu: None,
+            initialized: false,
+        }
+    }
+    
+    /// Create a new isolated instance for testing with NPU
+    ///
+    /// This bypasses the singleton pattern and creates a fresh instance with NPU connected.
+    /// Use this in tests to avoid conflicts between parallel test runs.
+    ///
+    /// # Arguments
+    ///
+    /// * `npu` - Arc<Mutex<RustNPU>> to connect to this manager
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// let npu = Arc::new(Mutex::new(RustNPU::new(1_000_000, 10_000_000, 10)));
+    /// let manager = ConnectomeManager::new_for_testing_with_npu(npu);
+    /// ```
+    pub fn new_for_testing_with_npu(npu: Arc<Mutex<feagi_burst_engine::RustNPU>>) -> Self {
+        Self {
+            cortical_areas: HashMap::new(),
+            cortical_id_to_idx: HashMap::new(),
+            cortical_idx_to_id: HashMap::new(),
+            next_cortical_idx: 0,
+            brain_regions: BrainRegionHierarchy::new(),
+            config: ConnectomeConfig::default(),
+            npu: Some(npu),
+            initialized: false,
+        }
+    }
+    
     /// Reset the singleton (for testing only)
     ///
     /// # Safety
