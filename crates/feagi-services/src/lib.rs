@@ -96,8 +96,8 @@ pub use traits::{
 pub use types::{
     // DTOs
     BrainRegionInfo, ConnectivityStats, CorticalAreaInfo, CorticalAreaStats,
-    CreateBrainRegionParams, CreateCorticalAreaParams, CreateNeuronParams,
-    CreateSynapseParams, GenomeInfo, LoadGenomeParams, NeuronInfo,
+    CreateBrainRegionParams, CreateCorticalAreaParams, UpdateCorticalAreaParams,
+    CreateNeuronParams, CreateSynapseParams, GenomeInfo, LoadGenomeParams, NeuronInfo,
     SaveGenomeParams, SynapseInfo, SystemHealth,
     // Errors
     ServiceError, ServiceResult,

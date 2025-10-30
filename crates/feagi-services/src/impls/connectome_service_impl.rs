@@ -88,7 +88,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let area_type = Self::string_to_area_type(&params.area_type)?;
         
         // Create CorticalArea (cortical_idx=0 will be auto-assigned by ConnectomeManager)
-        let area = CorticalArea::new(
+        let mut area = CorticalArea::new(
             params.cortical_id.clone(),
             0,  // Auto-assigned by ConnectomeManager
             params.name.clone(),
@@ -96,6 +96,56 @@ impl ConnectomeService for ConnectomeServiceImpl {
             params.position,
             area_type,
         ).map_err(ServiceError::from)?;
+        
+        // Apply all neural parameters from params (using builder pattern)
+        if let Some(visible) = params.visible {
+            area = area.with_visible(visible);
+        }
+        if let Some(sub_group) = params.sub_group {
+            area = area.with_sub_group(Some(sub_group));
+        }
+        if let Some(neurons_per_voxel) = params.neurons_per_voxel {
+            area = area.with_neurons_per_voxel(neurons_per_voxel);
+        }
+        if let Some(postsynaptic_current) = params.postsynaptic_current {
+            area = area.with_postsynaptic_current(postsynaptic_current);
+        }
+        if let Some(plasticity_constant) = params.plasticity_constant {
+            area = area.with_plasticity_constant(plasticity_constant);
+        }
+        if let Some(degeneration) = params.degeneration {
+            area = area.with_degeneration(degeneration);
+        }
+        if let Some(psp_uniform_distribution) = params.psp_uniform_distribution {
+            area = area.with_psp_uniform_distribution(psp_uniform_distribution);
+        }
+        if let Some(firing_threshold_increment) = params.firing_threshold_increment {
+            area = area.with_firing_threshold_increment(firing_threshold_increment);
+        }
+        if let Some(firing_threshold_limit) = params.firing_threshold_limit {
+            area = area.with_firing_threshold_limit(firing_threshold_limit);
+        }
+        if let Some(consecutive_fire_count) = params.consecutive_fire_count {
+            area = area.with_consecutive_fire_count(consecutive_fire_count);
+        }
+        if let Some(snooze_period) = params.snooze_period {
+            area = area.with_snooze_period(snooze_period);
+        }
+        if let Some(refractory_period) = params.refractory_period {
+            area = area.with_refractory_period(refractory_period);
+        }
+        if let Some(leak_coefficient) = params.leak_coefficient {
+            area = area.with_leak_coefficient(leak_coefficient);
+        }
+        if let Some(leak_variability) = params.leak_variability {
+            area = area.with_leak_variability(leak_variability);
+        }
+        if let Some(burst_engine_active) = params.burst_engine_active {
+            area = area.with_burst_engine_active(burst_engine_active);
+        }
+        if let Some(properties) = params.properties {
+            area = area.with_properties(properties);
+        }
         
         // Add to connectome
         self.connectome
@@ -116,6 +166,81 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .map_err(ServiceError::from)?;
         
         Ok(())
+    }
+
+    async fn update_cortical_area(
+        &self,
+        cortical_id: &str,
+        params: UpdateCorticalAreaParams,
+    ) -> ServiceResult<CorticalAreaInfo> {
+        log::info!("Updating cortical area: {}", cortical_id);
+        
+        // Get mutable access to the cortical area
+        {
+            let mut manager = self.connectome.write();
+            let area = manager
+                .get_cortical_area_mut(cortical_id)
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: cortical_id.to_string(),
+                })?;
+            
+            // Update only the fields that are provided
+            if let Some(name) = params.name {
+                area.name = name;
+            }
+            if let Some(position) = params.position {
+                area.position = position;
+            }
+            if let Some(dimensions) = params.dimensions {
+                area.dimensions = Dimensions::new(dimensions.0, dimensions.1, dimensions.2);
+            }
+            if let Some(area_type_str) = params.area_type {
+                area.area_type = Self::string_to_area_type(&area_type_str)?;
+            }
+            if let Some(visible) = params.visible {
+                area.visible = visible;
+            }
+            if let Some(postsynaptic_current) = params.postsynaptic_current {
+                area.postsynaptic_current = postsynaptic_current;
+            }
+            if let Some(plasticity_constant) = params.plasticity_constant {
+                area.plasticity_constant = plasticity_constant;
+            }
+            if let Some(degeneration) = params.degeneration {
+                area.degeneration = degeneration;
+            }
+            if let Some(psp_uniform_distribution) = params.psp_uniform_distribution {
+                area.psp_uniform_distribution = psp_uniform_distribution;
+            }
+            if let Some(firing_threshold_increment) = params.firing_threshold_increment {
+                area.firing_threshold_increment = firing_threshold_increment;
+            }
+            if let Some(firing_threshold_limit) = params.firing_threshold_limit {
+                area.firing_threshold_limit = firing_threshold_limit;
+            }
+            if let Some(consecutive_fire_count) = params.consecutive_fire_count {
+                area.consecutive_fire_count = consecutive_fire_count;
+            }
+            if let Some(snooze_period) = params.snooze_period {
+                area.snooze_period = snooze_period;
+            }
+            if let Some(refractory_period) = params.refractory_period {
+                area.refractory_period = refractory_period;
+            }
+            if let Some(leak_coefficient) = params.leak_coefficient {
+                area.leak_coefficient = leak_coefficient;
+            }
+            if let Some(leak_variability) = params.leak_variability {
+                area.leak_variability = leak_variability;
+            }
+            if let Some(burst_engine_active) = params.burst_engine_active {
+                area.burst_engine_active = burst_engine_active;
+            }
+        } // Release write lock
+        
+        // Return updated area info
+        self.get_cortical_area(cortical_id).await
     }
 
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
@@ -139,6 +264,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
         
         let neuron_count = manager.get_neuron_count_in_area(cortical_id);
         
+        // TODO: Get synapse count from NPU (requires NPU integration)
+        let synapse_count = 0;
+        
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
             cortical_idx,
@@ -147,6 +275,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
             position: area.position,
             area_type: Self::area_type_to_string(&area.area_type),
             neuron_count,
+            synapse_count,
+            // All neural parameters now come from the actual CorticalArea struct
+            visible: area.visible,
+            sub_group: area.sub_group.clone(),
+            neurons_per_voxel: area.neurons_per_voxel,
+            postsynaptic_current: area.postsynaptic_current,
+            plasticity_constant: area.plasticity_constant,
+            degeneration: area.degeneration,
+            psp_uniform_distribution: area.psp_uniform_distribution,
+            firing_threshold_increment: area.firing_threshold_increment,
+            firing_threshold_limit: area.firing_threshold_limit,
+            consecutive_fire_count: area.consecutive_fire_count,
+            snooze_period: area.snooze_period,
+            refractory_period: area.refractory_period,
+            leak_coefficient: area.leak_coefficient,
+            leak_variability: area.leak_variability,
+            burst_engine_active: area.burst_engine_active,
             properties: area.properties.clone(),
         })
     }

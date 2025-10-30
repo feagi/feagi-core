@@ -38,6 +38,7 @@ pub struct CreateNeuronParams {
 // ============================================================================
 
 /// Information about a cortical area
+/// This structure matches the Python FEAGI API for full compatibility
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalAreaInfo {
     pub cortical_id: String,
@@ -47,6 +48,22 @@ pub struct CorticalAreaInfo {
     pub position: (i32, i32, i32),
     pub area_type: String, // "Sensory", "Motor", "Memory", "Custom"
     pub neuron_count: usize,
+    pub synapse_count: usize,
+    pub visible: bool,
+    pub sub_group: Option<String>,
+    pub neurons_per_voxel: u32,
+    pub postsynaptic_current: f64,
+    pub plasticity_constant: f64,
+    pub degeneration: f64,
+    pub psp_uniform_distribution: bool,
+    pub firing_threshold_increment: f64,
+    pub firing_threshold_limit: f64,
+    pub consecutive_fire_count: u32,
+    pub snooze_period: u32,
+    pub refractory_period: u32,
+    pub leak_coefficient: f64,
+    pub leak_variability: f64,
+    pub burst_engine_active: bool,
     pub properties: HashMap<String, serde_json::Value>,
 }
 
@@ -58,7 +75,44 @@ pub struct CreateCorticalAreaParams {
     pub dimensions: (usize, usize, usize),
     pub position: (i32, i32, i32),
     pub area_type: String,
+    pub visible: Option<bool>,
+    pub sub_group: Option<String>,
+    pub neurons_per_voxel: Option<u32>,
+    pub postsynaptic_current: Option<f64>,
+    pub plasticity_constant: Option<f64>,
+    pub degeneration: Option<f64>,
+    pub psp_uniform_distribution: Option<bool>,
+    pub firing_threshold_increment: Option<f64>,
+    pub firing_threshold_limit: Option<f64>,
+    pub consecutive_fire_count: Option<u32>,
+    pub snooze_period: Option<u32>,
+    pub refractory_period: Option<u32>,
+    pub leak_coefficient: Option<f64>,
+    pub leak_variability: Option<f64>,
+    pub burst_engine_active: Option<bool>,
     pub properties: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Parameters for updating a cortical area
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCorticalAreaParams {
+    pub name: Option<String>,
+    pub position: Option<(i32, i32, i32)>,
+    pub dimensions: Option<(usize, usize, usize)>,
+    pub area_type: Option<String>,
+    pub visible: Option<bool>,
+    pub postsynaptic_current: Option<f64>,
+    pub plasticity_constant: Option<f64>,
+    pub degeneration: Option<f64>,
+    pub psp_uniform_distribution: Option<bool>,
+    pub firing_threshold_increment: Option<f64>,
+    pub firing_threshold_limit: Option<f64>,
+    pub consecutive_fire_count: Option<u32>,
+    pub snooze_period: Option<u32>,
+    pub refractory_period: Option<u32>,
+    pub leak_coefficient: Option<f64>,
+    pub leak_variability: Option<f64>,
+    pub burst_engine_active: Option<bool>,
 }
 
 // ============================================================================

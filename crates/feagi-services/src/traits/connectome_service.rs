@@ -34,6 +34,22 @@ pub trait ConnectomeService: Send + Sync {
         params: CreateCorticalAreaParams,
     ) -> ServiceResult<CorticalAreaInfo>;
 
+    /// Update a cortical area
+    ///
+    /// # Arguments
+    /// * `cortical_id` - Cortical area identifier
+    /// * `params` - Update parameters
+    ///
+    /// # Errors
+    /// * `ServiceError::NotFound` - Cortical area not found
+    /// * `ServiceError::InvalidInput` - Invalid parameters
+    ///
+    async fn update_cortical_area(
+        &self,
+        cortical_id: &str,
+        params: UpdateCorticalAreaParams,
+    ) -> ServiceResult<CorticalAreaInfo>;
+
     /// Delete a cortical area
     ///
     /// # Arguments

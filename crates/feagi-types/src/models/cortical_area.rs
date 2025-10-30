@@ -76,6 +76,70 @@ pub struct CorticalArea {
 
     /// Functional type of this area
     pub area_type: AreaType,
+    
+    // ========================================================================
+    // NEURAL PARAMETERS (Python API compatibility)
+    // ========================================================================
+    
+    /// Is this cortical area visible in visualization?
+    #[serde(default = "default_visible")]
+    pub visible: bool,
+    
+    /// Sub-group name for hierarchical organization
+    #[serde(default)]
+    pub sub_group: Option<String>,
+    
+    /// Number of neurons per voxel (default: 1)
+    #[serde(default = "default_neurons_per_voxel")]
+    pub neurons_per_voxel: u32,
+    
+    /// Postsynaptic current strength
+    #[serde(default = "default_postsynaptic_current")]
+    pub postsynaptic_current: f64,
+    
+    /// Plasticity constant for synaptic learning
+    #[serde(default = "default_plasticity_constant")]
+    pub plasticity_constant: f64,
+    
+    /// Degeneration rate (0.0 = no degeneration)
+    #[serde(default)]
+    pub degeneration: f64,
+    
+    /// Use uniform PSP distribution?
+    #[serde(default)]
+    pub psp_uniform_distribution: bool,
+    
+    /// Firing threshold increment per spike
+    #[serde(default = "default_firing_threshold_increment")]
+    pub firing_threshold_increment: f64,
+    
+    /// Maximum firing threshold limit
+    #[serde(default = "default_firing_threshold_limit")]
+    pub firing_threshold_limit: f64,
+    
+    /// Number of consecutive fires allowed
+    #[serde(default = "default_consecutive_fire_count")]
+    pub consecutive_fire_count: u32,
+    
+    /// Snooze period (refractory cooldown) in ticks
+    #[serde(default = "default_snooze_period")]
+    pub snooze_period: u32,
+    
+    /// Refractory period (absolute) in ticks
+    #[serde(default = "default_refractory_period")]
+    pub refractory_period: u32,
+    
+    /// Leak coefficient for membrane potential decay
+    #[serde(default = "default_leak_coefficient")]
+    pub leak_coefficient: f64,
+    
+    /// Leak variability (randomness in leak)
+    #[serde(default)]
+    pub leak_variability: f64,
+    
+    /// Is burst engine active for this area?
+    #[serde(default = "default_burst_engine_active")]
+    pub burst_engine_active: bool,
 
     /// Additional user-defined properties
     /// Stored as JSON for flexibility
@@ -83,8 +147,53 @@ pub struct CorticalArea {
     pub properties: HashMap<String, serde_json::Value>,
 }
 
+// Default value functions for serde
+fn default_visible() -> bool {
+    true
+}
+
+fn default_neurons_per_voxel() -> u32 {
+    1
+}
+
+fn default_postsynaptic_current() -> f64 {
+    1.0
+}
+
+fn default_plasticity_constant() -> f64 {
+    0.5
+}
+
+fn default_firing_threshold_increment() -> f64 {
+    0.1
+}
+
+fn default_firing_threshold_limit() -> f64 {
+    10.0
+}
+
+fn default_consecutive_fire_count() -> u32 {
+    3
+}
+
+fn default_snooze_period() -> u32 {
+    5
+}
+
+fn default_refractory_period() -> u32 {
+    2
+}
+
+fn default_leak_coefficient() -> f64 {
+    0.01
+}
+
+fn default_burst_engine_active() -> bool {
+    true
+}
+
 impl CorticalArea {
-    /// Create a new cortical area with validation
+    /// Create a new cortical area with validation and default neural parameters
     ///
     /// # Arguments
     ///
@@ -140,6 +249,22 @@ impl CorticalArea {
             dimensions,
             position,
             area_type,
+            // Neural parameters with sensible defaults
+            visible: default_visible(),
+            sub_group: None,
+            neurons_per_voxel: default_neurons_per_voxel(),
+            postsynaptic_current: default_postsynaptic_current(),
+            plasticity_constant: default_plasticity_constant(),
+            degeneration: 0.0,
+            psp_uniform_distribution: false,
+            firing_threshold_increment: default_firing_threshold_increment(),
+            firing_threshold_limit: default_firing_threshold_limit(),
+            consecutive_fire_count: default_consecutive_fire_count(),
+            snooze_period: default_snooze_period(),
+            refractory_period: default_refractory_period(),
+            leak_coefficient: default_leak_coefficient(),
+            leak_variability: 0.0,
+            burst_engine_active: default_burst_engine_active(),
             properties: HashMap::new(),
         })
     }
@@ -153,6 +278,100 @@ impl CorticalArea {
     /// Add a single property
     pub fn add_property(mut self, key: String, value: serde_json::Value) -> Self {
         self.properties.insert(key, value);
+        self
+    }
+    
+    // ========================================================================
+    // NEURAL PARAMETER SETTERS (Builder Pattern)
+    // ========================================================================
+    
+    /// Set visibility for visualization
+    pub fn with_visible(mut self, visible: bool) -> Self {
+        self.visible = visible;
+        self
+    }
+    
+    /// Set sub-group name
+    pub fn with_sub_group(mut self, sub_group: Option<String>) -> Self {
+        self.sub_group = sub_group;
+        self
+    }
+    
+    /// Set neurons per voxel
+    pub fn with_neurons_per_voxel(mut self, count: u32) -> Self {
+        self.neurons_per_voxel = count;
+        self
+    }
+    
+    /// Set postsynaptic current
+    pub fn with_postsynaptic_current(mut self, current: f64) -> Self {
+        self.postsynaptic_current = current;
+        self
+    }
+    
+    /// Set plasticity constant
+    pub fn with_plasticity_constant(mut self, constant: f64) -> Self {
+        self.plasticity_constant = constant;
+        self
+    }
+    
+    /// Set degeneration rate
+    pub fn with_degeneration(mut self, rate: f64) -> Self {
+        self.degeneration = rate;
+        self
+    }
+    
+    /// Set PSP uniform distribution
+    pub fn with_psp_uniform_distribution(mut self, uniform: bool) -> Self {
+        self.psp_uniform_distribution = uniform;
+        self
+    }
+    
+    /// Set firing threshold increment
+    pub fn with_firing_threshold_increment(mut self, increment: f64) -> Self {
+        self.firing_threshold_increment = increment;
+        self
+    }
+    
+    /// Set firing threshold limit
+    pub fn with_firing_threshold_limit(mut self, limit: f64) -> Self {
+        self.firing_threshold_limit = limit;
+        self
+    }
+    
+    /// Set consecutive fire count
+    pub fn with_consecutive_fire_count(mut self, count: u32) -> Self {
+        self.consecutive_fire_count = count;
+        self
+    }
+    
+    /// Set snooze period
+    pub fn with_snooze_period(mut self, period: u32) -> Self {
+        self.snooze_period = period;
+        self
+    }
+    
+    /// Set refractory period
+    pub fn with_refractory_period(mut self, period: u32) -> Self {
+        self.refractory_period = period;
+        self
+    }
+    
+    /// Set leak coefficient
+    pub fn with_leak_coefficient(mut self, coefficient: f64) -> Self {
+        self.leak_coefficient = coefficient;
+        self
+    }
+    
+    /// Set leak variability
+    pub fn with_leak_variability(mut self, variability: f64) -> Self {
+        self.leak_variability = variability;
+        self
+    }
+    
+    /// Set burst engine active state
+    pub fn with_burst_engine_active(mut self, active: bool) -> Self {
+        self.burst_engine_active = active;
         self
     }
 
