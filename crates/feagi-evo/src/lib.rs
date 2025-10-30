@@ -42,6 +42,8 @@ pub mod genome;
 pub mod types;
 pub mod runtime;
 pub mod validator;
+pub mod converter_flat;
+pub mod templates;
 
 // Re-export commonly used types
 pub use types::{EvoError, EvoResult};
@@ -56,5 +58,7 @@ pub use runtime::{
     PhysiologyConfig, GenomeSignatures, GenomeStats,
 };
 pub use validator::{validate_genome, ValidationResult};
+pub use converter_flat::convert_flat_to_hierarchical;
+pub use templates::{create_minimal_genome, create_genome_with_core_morphologies, add_core_morphologies};
 
 
