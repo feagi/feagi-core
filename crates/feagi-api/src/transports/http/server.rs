@@ -6,7 +6,7 @@
 use axum::{
     extract::State,
     http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::{IntoResponse, Json, Redirect, Response},
     routing::get,
     Router,
 };
@@ -40,13 +40,14 @@ pub struct ApiState {
 /// Create the main HTTP server application
 pub fn create_http_server(state: ApiState) -> Router {
     Router::new()
+        // Root redirect to Swagger UI
+        .route("/", get(root_redirect))
+        
         // Swagger UI at /swagger-ui/
         .merge(
             SwaggerUi::new("/swagger-ui")
-                .url("/openapi.json", ApiDoc::openapi())
+                .url("/api-docs/openapi.json", ApiDoc::openapi())
         )
-        // OpenAPI spec endpoint
-        .route("/openapi.json", get(openapi_spec))
         
         // Version-agnostic health endpoints (for backward compatibility)
         .route("/health", get(health_check_handler))
@@ -647,4 +648,9 @@ fn create_cors_layer() -> CorsLayer {
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any)
+}
+
+/// Root redirect handler - redirects to Swagger UI
+async fn root_redirect() -> Redirect {
+    Redirect::permanent("/swagger-ui/")
 }
