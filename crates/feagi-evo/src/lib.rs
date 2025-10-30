@@ -41,6 +41,7 @@ Licensed under the Apache License, Version 2.0
 pub mod genome;
 pub mod types;
 pub mod runtime;
+pub mod validator;
 
 // Re-export commonly used types
 pub use types::{EvoError, EvoResult};
@@ -54,5 +55,6 @@ pub use runtime::{
     MorphologyType, MorphologyParameters, PatternElement,
     PhysiologyConfig, GenomeSignatures, GenomeStats,
 };
+pub use validator::{validate_genome, ValidationResult};
 
 
