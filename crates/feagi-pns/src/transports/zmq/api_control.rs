@@ -1,9 +1,10 @@
-// API Control stream for serving FastAPI process via ZMQ
-// Uses ROUTER socket pattern for request-reply with API process identity tracking
-//
-// This stream allows the FastAPI process to run in a separate Python process
-// and communicate with FEAGI core via ZMQ, eliminating Python GIL contention.
+//! API Control stream using feagi-transports
+//!
+//! This is a refactored version using the feagi-transports abstraction layer.
+//! Domain logic (request routing, NPU queries, RPC) is preserved, but transport
+//! primitives are now provided by feagi-transports.
 
+use feagi_transports::prelude::*;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -31,9 +32,8 @@ pub type RpcCallback = Arc<Mutex<Option<Box<dyn Fn(&str, serde_json::Value) -> R
 /// API Control stream managing API process communication
 #[derive(Clone)]
 pub struct ApiControlStream {
-    context: Arc<zmq::Context>,
-    bind_address: String,
-    socket: Arc<Mutex<Option<zmq::Socket>>>,
+    /// ZMQ Router transport from feagi-transports
+    router: Arc<Mutex<Option<ZmqRouter>>>,
     running: Arc<Mutex<bool>>,
     /// Reference to Rust NPU for direct queries (no Python overhead!)
     npu: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>>>>,
@@ -44,10 +44,24 @@ pub struct ApiControlStream {
 impl ApiControlStream {
     /// Create a new API control stream
     pub fn new(context: Arc<zmq::Context>, bind_address: &str) -> Result<Self, String> {
+        // Create transport config
+        let config = ServerConfig::new(bind_address)
+            .base
+            .with_recv_hwm(10000)
+            .with_send_hwm(10000);
+        
+        let server_config = ServerConfig {
+            base: config,
+            max_connections: 0,
+            track_connections: true,
+        };
+        
+        // Create ZMQ router using feagi-transports
+        let router = ZmqRouter::new(context, server_config)
+            .map_err(|e| format!("Failed to create router: {}", e))?;
+        
         Ok(Self {
-            context,
-            bind_address: bind_address.to_string(),
-            socket: Arc::new(Mutex::new(None)),
+            router: Arc::new(Mutex::new(Some(router))),
             running: Arc::new(Mutex::new(false)),
             npu: Arc::new(Mutex::new(None)),
             rpc_callback: Arc::new(Mutex::new(None)),
@@ -75,29 +89,18 @@ impl ApiControlStream {
             return Err("API control stream already running".to_string());
         }
 
-        // Create ROUTER socket
-        let socket = self
-            .context
-            .socket(zmq::ROUTER)
-            .map_err(|e| e.to_string())?;
+        // Start the router transport
+        let mut router_guard = self.router.lock();
+        if let Some(router) = router_guard.as_mut() {
+            router.start().map_err(|e| e.to_string())?;
+        } else {
+            return Err("Router not initialized".to_string());
+        }
+        drop(router_guard);
 
-        socket.set_linger(1000).map_err(|e| e.to_string())?;
-        socket
-            .set_router_mandatory(false)
-            .map_err(|e| e.to_string())?;
-        socket
-            .set_rcvhwm(10000) // High water mark for receive buffer
-            .map_err(|e| e.to_string())?;
-        socket
-            .set_sndhwm(10000) // High water mark for send buffer
-            .map_err(|e| e.to_string())?;
-
-        socket.bind(&self.bind_address).map_err(|e| e.to_string())?;
-
-        *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
 
-        println!("🦀 [ZMQ-API-CONTROL] Listening on {}", self.bind_address);
+        println!("🦀 [ZMQ-API-CONTROL] Listening (via feagi-transports)");
 
         // Start processing loop
         self.start_processing_loop();
@@ -108,13 +111,19 @@ impl ApiControlStream {
     /// Stop the API control stream
     pub fn stop(&self) -> Result<(), String> {
         *self.running.lock() = false;
-        *self.socket.lock() = None;
+        
+        let mut router_guard = self.router.lock();
+        if let Some(router) = router_guard.as_mut() {
+            router.stop().map_err(|e| e.to_string())?;
+        }
+        *router_guard = None;
+        
         Ok(())
     }
 
     /// Start the background processing loop
     fn start_processing_loop(&self) {
-        let socket = Arc::clone(&self.socket);
+        let router = Arc::clone(&self.router);
         let running = Arc::clone(&self.running);
         let npu = Arc::clone(&self.npu);
         let rpc_callback = Arc::clone(&self.rpc_callback);
@@ -123,65 +132,39 @@ impl ApiControlStream {
             println!("🦀 [ZMQ-API-CONTROL] Processing loop started");
 
             while *running.lock() {
-                let sock_guard = socket.lock();
-                let sock = match sock_guard.as_ref() {
-                    Some(s) => s,
-                    None => {
-                        drop(sock_guard);
-                        thread::sleep(std::time::Duration::from_millis(100));
+                // Try to receive request with timeout
+                let router_guard = router.lock();
+                let result = if let Some(ref r) = *router_guard {
+                    r.receive_timeout(100)
+                } else {
+                    drop(router_guard);
+                    thread::sleep(std::time::Duration::from_millis(100));
+                    continue;
+                };
+                drop(router_guard);
+
+                match result {
+                    Ok((request_data, reply_handle)) => {
+                        let request_json = String::from_utf8_lossy(&request_data).to_string();
+                        
+                        println!("🦀 [ZMQ-API-CONTROL] 📨 Received request ({} bytes)", request_json.len());
+                        println!("🦀 [ZMQ-API-CONTROL] 📨 Request: {}", &request_json[..request_json.len().min(200)]);
+
+                        let response_json = Self::process_request(&npu, &rpc_callback, &request_json);
+                        
+                        println!("🦀 [ZMQ-API-CONTROL] 📤 Sending response ({} bytes)", response_json.len());
+
+                        if let Err(e) = reply_handle.send(response_json.as_bytes()) {
+                            eprintln!("🦀 [ZMQ-API-CONTROL] [ERR] Failed to send response: {}", e);
+                        }
+                    }
+                    Err(TransportError::Timeout) => {
+                        // Timeout is normal, just continue
                         continue;
                     }
-                };
-
-                // Poll for messages
-                let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
-                if let Err(e) = zmq::poll(poll_items, 100) {
-                    eprintln!("🦀 [ZMQ-API-CONTROL] [ERR] Poll error: {}", e);
-                    continue;
-                }
-
-                if !poll_items[0].is_readable() {
-                    drop(sock_guard);
-                    continue;
-                }
-
-                // Receive multipart message: [identity, delimiter, request_json]
-                let mut msg_parts = Vec::new();
-                let mut more = true;
-
-                while more {
-                    let mut msg = zmq::Message::new();
-                    match sock.recv(&mut msg, 0) {
-                        Ok(()) => {
-                            msg_parts.push(msg);
-                            more = sock.get_rcvmore().unwrap_or(false);
-                        }
-                        Err(e) => {
-                            eprintln!("🦀 [ZMQ-API-CONTROL] [ERR] Receive error: {}", e);
-                            break;
-                        }
+                    Err(e) => {
+                        eprintln!("🦀 [ZMQ-API-CONTROL] [ERR] Receive error: {}", e);
                     }
-                }
-
-                drop(sock_guard);
-
-                // Process request
-                if msg_parts.len() >= 3 {
-                    let identity = msg_parts[0].to_vec();
-                    let request_json = String::from_utf8_lossy(&msg_parts[2]).to_string();
-                    
-                    println!("🦀 [ZMQ-API-CONTROL] 📨 Received request ({} bytes)", request_json.len());
-                    println!("🦀 [ZMQ-API-CONTROL] 📨 Request: {}", &request_json[..request_json.len().min(200)]);
-
-                    let response_json = Self::process_request(&npu, &rpc_callback, &request_json);
-                    
-                    println!("🦀 [ZMQ-API-CONTROL] 📤 Sending response ({} bytes)", response_json.len());
-
-                    if let Err(e) = Self::send_response(&socket, identity, response_json) {
-                        eprintln!("🦀 [ZMQ-API-CONTROL] [ERR] Failed to send response: {}", e);
-                    }
-                } else {
-                    println!("🦀 [ZMQ-API-CONTROL] ⚠️ Received malformed message (parts: {})", msg_parts.len());
                 }
             }
 
@@ -189,7 +172,7 @@ impl ApiControlStream {
         });
     }
 
-    /// Process a request using the NPU
+    /// Process a request using the NPU (domain logic - unchanged)
     fn process_request(
         npu_mutex: &Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>>>>,
         rpc_callback: &RpcCallback,
@@ -225,7 +208,7 @@ impl ApiControlStream {
         response.to_string()
     }
 
-    /// Route API request to appropriate handler
+    /// Route API request to appropriate handler (domain logic - unchanged)
     fn route_request(
         npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>,
         rpc_callback: &RpcCallback,
@@ -238,7 +221,7 @@ impl ApiControlStream {
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
-        // Route to handlers
+        // Route to handlers (domain logic preserved)
         match (request.method.as_str(), request.path.as_str()) {
             // Direct Rust queries (optimal performance, no Python)
             ("GET", "/v1/npu/stats") => Self::handle_npu_stats(npu),
@@ -264,7 +247,8 @@ impl ApiControlStream {
         }
     }
 
-    /// Handle NPU stats query
+    // All handler methods below are domain logic - unchanged from original
+
     fn handle_npu_stats(npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         
@@ -278,7 +262,6 @@ impl ApiControlStream {
         })
     }
 
-    /// Handle cortical areas list query
     fn handle_cortical_areas(npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         let area_count = npu_lock.get_registered_cortical_area_count();
@@ -292,7 +275,6 @@ impl ApiControlStream {
         })
     }
 
-    /// Handle cortical area info query
     fn handle_cortical_area_info(_npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>, path: &str) -> serde_json::Value {
         let area_name = path.strip_prefix("/v1/npu/cortical_area/").unwrap_or("");
         
@@ -304,7 +286,6 @@ impl ApiControlStream {
         })
     }
 
-    /// Handle fire queue query
     fn handle_fire_queue(_npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) -> serde_json::Value {
         serde_json::json!({
             "status": 501,
@@ -312,7 +293,6 @@ impl ApiControlStream {
         })
     }
 
-    /// Handle health check
     fn handle_health_check() -> serde_json::Value {
         serde_json::json!({
             "status": 200,
@@ -323,10 +303,8 @@ impl ApiControlStream {
         })
     }
 
-    /// Handle brain readiness query
     fn handle_brain_readiness(npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
-        // Brain is ready if burst loop has started (burst_count > 0) or neurons exist
         let is_ready = npu_lock.get_burst_count() > 0 || npu_lock.get_neuron_count() > 0;
         serde_json::json!({
             "status": 200,
@@ -334,10 +312,8 @@ impl ApiControlStream {
         })
     }
 
-    /// Handle burst engine state query
     fn handle_burst_engine_state(npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
-        // 0=NOT_STARTED, 2=READY (if burst count > 0 or neurons exist)
         let state = if npu_lock.get_burst_count() > 0 || npu_lock.get_neuron_count() > 0 { 2 } else { 0 };
         serde_json::json!({
             "status": 200,
@@ -345,17 +321,15 @@ impl ApiControlStream {
         })
     }
 
-    /// Handle genome state query
     fn handle_genome_state(npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
-        let state = if npu_lock.get_registered_cortical_area_count() > 0 { 2 } else { 0 }; // 0=NOT_LOADED, 2=LOADED
+        let state = if npu_lock.get_registered_cortical_area_count() > 0 { 2 } else { 0 };
         serde_json::json!({
             "status": 200,
             "body": {"value": state}
         })
     }
 
-    /// Handle brain stats query
     fn handle_brain_stats(npu: &Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         serde_json::json!({
@@ -364,17 +338,15 @@ impl ApiControlStream {
                 "neuron_count": npu_lock.get_neuron_count(),
                 "synapse_count": npu_lock.get_synapse_count(),
                 "cortical_area_count": npu_lock.get_registered_cortical_area_count(),
-                "memory_neuron_count": 0, // TODO: Track memory neurons
+                "memory_neuron_count": 0,
                 "non_memory_neuron_count": npu_lock.get_neuron_count(),
             }
         })
     }
 
-    /// Handle generic RPC call to Python CoreAPIService
     fn handle_rpc(rpc_callback: &RpcCallback, request: &ApiRequest) -> serde_json::Value {
         println!("🦀 [API-CONTROL-RPC] Received RPC request");
         
-        // Extract RPC payload from request body
         let rpc_payload = match &request.body {
             Some(body) => {
                 println!("🦀 [API-CONTROL-RPC] Request has body: {:?}", body);
@@ -389,7 +361,6 @@ impl ApiControlStream {
             }
         };
 
-        // Extract method name from RPC payload
         let method_name = match rpc_payload.get("method").and_then(|m| m.as_str()) {
             Some(m) => {
                 println!("🦀 [API-CONTROL-RPC] Method name: {}", m);
@@ -404,7 +375,6 @@ impl ApiControlStream {
             }
         };
 
-        // Get callback
         let callback_guard = rpc_callback.lock();
         let callback = match callback_guard.as_ref() {
             Some(cb) => {
@@ -420,7 +390,6 @@ impl ApiControlStream {
             }
         };
 
-        // Call Python CoreAPIService via callback
         println!("🦀 [API-CONTROL-RPC] Invoking Python handler for method: {}", method_name);
         match callback(&method_name, rpc_payload) {
             Ok(result) => {
@@ -438,28 +407,6 @@ impl ApiControlStream {
                 })
             }
         }
-    }
-
-    /// Send response
-    fn send_response(
-        socket_mutex: &Arc<Mutex<Option<zmq::Socket>>>,
-        identity: Vec<u8>,
-        response_json: String,
-    ) -> Result<(), String> {
-        let sock_guard = socket_mutex.lock();
-        let sock = match sock_guard.as_ref() {
-            Some(s) => s,
-            None => return Err("Socket not available".to_string()),
-        };
-
-        sock.send(&identity, zmq::SNDMORE)
-            .map_err(|e| e.to_string())?;
-        sock.send(&Vec::<u8>::new(), zmq::SNDMORE)
-            .map_err(|e| e.to_string())?;
-        sock.send(response_json.as_bytes(), 0)
-            .map_err(|e| e.to_string())?;
-
-        Ok(())
     }
 }
 
