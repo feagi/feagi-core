@@ -263,9 +263,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             })?;
         
         let neuron_count = manager.get_neuron_count_in_area(cortical_id);
-        
-        // TODO: Get synapse count from NPU (requires NPU integration)
-        let synapse_count = 0;
+        let synapse_count = manager.get_synapse_count_in_area(cortical_id);
         
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
@@ -276,7 +274,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             area_type: Self::area_type_to_string(&area.area_type),
             neuron_count,
             synapse_count,
-            // All neural parameters now come from the actual CorticalArea struct
+            // All neural parameters come from the actual CorticalArea struct
             visible: area.visible,
             sub_group: area.sub_group.clone(),
             neurons_per_voxel: area.neurons_per_voxel,
