@@ -1,5 +1,6 @@
 // API Version 1 - DTOs and mappings
 
+pub mod agent_dtos;
 pub mod dtos;
 pub mod cortical_area_dtos;
 pub mod brain_region_dtos;
@@ -10,6 +11,7 @@ pub mod runtime_dtos;
 pub mod analytics_dtos;
 
 // Re-export for convenience
+pub use agent_dtos::*;
 pub use dtos::*;
 pub use cortical_area_dtos::*;
 pub use brain_region_dtos::*;

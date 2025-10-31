@@ -61,58 +61,19 @@ use crate::{
         (url = "http://localhost:8000", description = "Python FastAPI compatibility")
     ),
     paths(
-        // Health endpoints
-        crate::endpoints::health::health_check,
-        crate::endpoints::health::readiness_check,
+        // Agent endpoints (P0 for brain-visualizer) - ONLY IMPLEMENTED ENDPOINTS
+        crate::endpoints::agent::register_agent,
+        crate::endpoints::agent::heartbeat,
+        crate::endpoints::agent::list_agents,
+        crate::endpoints::agent::get_agent_properties,
+        crate::endpoints::agent::get_shared_memory,
+        crate::endpoints::agent::deregister_agent,
+        crate::endpoints::agent::manual_stimulation,
         
-        // Cortical area endpoints
-        crate::endpoints::cortical_areas::list_cortical_areas,
-        crate::endpoints::cortical_areas::get_cortical_area,
-        crate::endpoints::cortical_areas::create_cortical_area,
-        crate::endpoints::cortical_areas::update_cortical_area,
-        crate::endpoints::cortical_areas::delete_cortical_area,
-        
-        // Brain region endpoints
-        crate::endpoints::brain_regions::list_brain_regions,
-        crate::endpoints::brain_regions::get_brain_region,
-        crate::endpoints::brain_regions::create_brain_region,
-        crate::endpoints::brain_regions::delete_brain_region,
-        
-        // Genome endpoints
-        crate::endpoints::genome::get_genome_info,
-        crate::endpoints::genome::load_genome,
-        crate::endpoints::genome::save_genome,
-        crate::endpoints::genome::validate_genome,
-        crate::endpoints::genome::reset_connectome,
-        crate::endpoints::genome::load_barebones_genome,
-        crate::endpoints::genome::load_essential_genome,
-        
-        // Neuron endpoints
-        crate::endpoints::neurons::list_neurons,
-        crate::endpoints::neurons::get_neuron,
-        crate::endpoints::neurons::create_neuron,
-        crate::endpoints::neurons::delete_neuron,
-        crate::endpoints::neurons::get_neuron_count,
-        
-        // Runtime endpoints
-        crate::endpoints::runtime::get_runtime_status,
-        crate::endpoints::runtime::start_runtime,
-        crate::endpoints::runtime::stop_runtime,
-        crate::endpoints::runtime::pause_runtime,
-        crate::endpoints::runtime::resume_runtime,
-        crate::endpoints::runtime::step_runtime,
-        crate::endpoints::runtime::set_frequency,
-        crate::endpoints::runtime::get_burst_count,
-        crate::endpoints::runtime::reset_burst_count,
-        
-        // Analytics endpoints
-        crate::endpoints::analytics::get_system_health,
-        crate::endpoints::analytics::get_cortical_area_stats,
-        crate::endpoints::analytics::get_all_cortical_area_stats,
-        crate::endpoints::analytics::get_connectivity_stats,
-        crate::endpoints::analytics::get_connectome_stats,
-        crate::endpoints::analytics::get_populated_areas,
-        crate::endpoints::analytics::get_neuron_density,
+        // NOTE: All other P0 endpoints (cortical_area, morphology, region, etc.) 
+        // are registered in the router but not yet documented in OpenAPI.
+        // They return 501 Not Implemented placeholders.
+        // OpenAPI docs will be added as each endpoint is implemented.
     ),
     components(
         schemas(
@@ -123,6 +84,18 @@ use crate::{
             HealthCheckResponseV1,
             ReadinessCheckResponseV1,
             ComponentReadiness,
+            
+            // Agent (P0 for brain-visualizer)
+            crate::v1::AgentRegistrationRequest,
+            crate::v1::AgentRegistrationResponse,
+            crate::v1::HeartbeatRequest,
+            crate::v1::HeartbeatResponse,
+            crate::v1::AgentListResponse,
+            crate::v1::AgentPropertiesResponse,
+            crate::v1::AgentDeregistrationRequest,
+            crate::v1::SuccessResponse,
+            crate::v1::ManualStimulationRequest,
+            crate::v1::ManualStimulationResponse,
             
             // Cortical Areas
             CorticalAreaSummary,

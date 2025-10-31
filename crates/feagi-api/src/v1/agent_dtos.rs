@@ -1,0 +1,118 @@
+// Copyright 2025 Neuraville Inc.
+// Licensed under the Apache License, Version 2.0
+
+//! Agent API DTOs - Exact port from Python schemas
+
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use utoipa::ToSchema;
+
+/// Agent registration request
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentRegistrationRequest {
+    /// Type of agent (e.g., "brain_visualizer", "video_agent")
+    pub agent_type: String,
+    
+    /// Unique identifier for the agent
+    pub agent_id: String,
+    
+    /// Port the agent is listening on for data
+    pub agent_data_port: u16,
+    
+    /// Version of the agent software
+    pub agent_version: String,
+    
+    /// Version of the controller
+    pub controller_version: String,
+    
+    /// Agent capabilities (sensory, motor, visualization, etc.)
+    pub capabilities: HashMap<String, serde_json::Value>,
+    
+    /// Optional: Agent IP address (extracted from request if not provided)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent_ip: Option<String>,
+    
+    /// Optional: Additional metadata
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<HashMap<String, serde_json::Value>>,
+}
+
+/// Agent registration response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentRegistrationResponse {
+    pub status: String,
+    pub message: String,
+    pub success: bool,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transport: Option<HashMap<String, serde_json::Value>>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rates: Option<HashMap<String, HashMap<String, f64>>>,
+}
+
+/// Heartbeat request
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct HeartbeatRequest {
+    pub agent_id: String,
+}
+
+/// Heartbeat response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct HeartbeatResponse {
+    pub message: String,
+    pub success: bool,
+}
+
+/// Agent list response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentListResponse {
+    /// List of agent IDs
+    #[serde(flatten)]
+    pub agent_ids: Vec<String>,
+}
+
+/// Agent properties response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentPropertiesResponse {
+    pub agent_type: String,
+    pub agent_ip: String,
+    pub agent_data_port: u16,
+    pub agent_router_address: String,
+    pub agent_version: String,
+    pub controller_version: String,
+    pub capabilities: HashMap<String, serde_json::Value>,
+}
+
+/// Agent deregistration request
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AgentDeregistrationRequest {
+    pub agent_id: String,
+}
+
+/// Success response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct SuccessResponse {
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub success: Option<bool>,
+}
+
+/// Manual stimulation request
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ManualStimulationRequest {
+    /// Map of cortical area IDs to lists of coordinates [[x, y, z], ...]
+    pub stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
+}
+
+/// Manual stimulation response
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ManualStimulationResponse {
+    pub success: bool,
+    pub total_coordinates: usize,
+    pub successful_areas: usize,
+    pub failed_areas: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
