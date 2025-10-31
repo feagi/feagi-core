@@ -17,6 +17,7 @@ pub use visualization::{
 use crate::core::{PNSError, RegistrationHandler};
 use parking_lot::Mutex;
 use std::sync::Arc;
+use tracing::{debug, info, warn, error};
 
 /// ZMQ Streams coordinator
 pub struct ZmqStreams {
@@ -76,7 +77,7 @@ impl ZmqStreams {
         self.api_control_stream
             .start()
             .map_err(|e| PNSError::Zmq(format!("API control start: {}", e)))?;
-        println!("🦀 [ZMQ-STREAMS] ✅ Control streams started (REST + API Control)");
+        info!("🦀 [ZMQ-STREAMS] ✅ Control streams started (REST + API Control)");
         Ok(())
     }
 
@@ -91,7 +92,7 @@ impl ZmqStreams {
         self.sensory_stream
             .start()
             .map_err(|e| PNSError::Zmq(format!("Sensory start: {}", e)))?;
-        println!("🦀 [ZMQ-STREAMS] ✅ Data streams started (sensory/motor/viz)");
+        info!("🦀 [ZMQ-STREAMS] ✅ Data streams started (sensory/motor/viz)");
         Ok(())
     }
 
@@ -135,7 +136,7 @@ impl ZmqStreams {
     pub fn publish_visualization(&self, data: &[u8]) -> Result<(), PNSError> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-            eprintln!(
+            debug!(
                 "[ZMQ-STREAMS] 🔍 TRACE: Forwarding {} bytes to viz_stream.publish()",
                 data.len()
             );

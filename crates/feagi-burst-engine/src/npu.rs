@@ -34,6 +34,7 @@ use crate::neural_dynamics::*;
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
 use feagi_types::*;
+use tracing::{debug, info, warn, error};
 
 /// Burst processing result
 #[derive(Debug, Clone)]
@@ -257,7 +258,7 @@ impl RustNPU {
                 }
                 let insert_time = insert_start.elapsed();
 
-                eprintln!(
+                warn!(
                     "🦀🦀🦀 [PROP-ENGINE] n={}, reserve={:?}, inserts={:?}, size={}",
                     n,
                     reserve_time,
@@ -324,7 +325,7 @@ impl RustNPU {
         let total_neurons = (width * height * depth * neurons_per_voxel) as usize;
 
         // ✅ GUARANTEED UNCONDITIONAL LOG - Will ALWAYS print
-        eprintln!(
+        warn!(
             "🦀🦀🦀 [RUST-ENTRY] create_cortical_area_neurons called: area={}, n={}",
             cortical_idx, total_neurons
         );
@@ -389,7 +390,7 @@ impl RustNPU {
         let total_time = fn_start.elapsed();
 
         // ✅ ALWAYS LOG (removed conditional for debugging)
-        eprintln!("🦀🦀🦀 [RUST-EXIT] create_cortical_area_neurons: n={}, alloc={:?}, batch={:?}, TOTAL={:?}", 
+        warn!("🦀🦀🦀 [RUST-EXIT] create_cortical_area_neurons: n={}, alloc={:?}, batch={:?}, TOTAL={:?}", 
             total_neurons, alloc_time, batch_time, total_time);
 
         if !failed.is_empty() {
@@ -524,16 +525,16 @@ impl RustNPU {
             std::sync::atomic::AtomicBool::new(false);
         if !FIRST_BATCH_LOGGED.load(std::sync::atomic::Ordering::Relaxed) && !neuron_ids.is_empty()
         {
-            println!(
+            debug!(
                 "[NPU-INJECT] 🔍 First batch: count={}, potential={}",
                 neuron_ids.len(),
                 potential
             );
-            println!(
+            info!(
                 "[NPU-INJECT]    First 5 NeuronIds: {:?}",
                 &neuron_ids[0..neuron_ids.len().min(5)]
             );
-            println!(
+            info!(
                 "[NPU-INJECT]    FCL size before: {}",
                 self.fire_structures.lock().unwrap().fire_candidate_list.len()
             );
@@ -550,7 +551,7 @@ impl RustNPU {
         if !FIRST_BATCH_AFTER_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
             && !neuron_ids.is_empty()
         {
-            println!(
+            info!(
                 "[NPU-INJECT]    FCL size after: {}",
                 self.fire_structures.lock().unwrap().fire_candidate_list.len()
             );
@@ -571,8 +572,8 @@ impl RustNPU {
             if !FIRST_STAGING_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
                 && !neurons.is_empty()
             {
-                println!("[NPU-STAGE] 🎯 Staged {} sensory neurons for next burst (prevents FCL clear race)", neurons.len());
-                println!(
+                info!("[NPU-STAGE] 🎯 Staged {} sensory neurons for next burst (prevents FCL clear race)", neurons.len());
+                info!(
                     "[NPU-STAGE]    Queue now has {} pending injections",
                     pending.len()
                 );
@@ -799,12 +800,12 @@ impl RustNPU {
         let cortical_area = match self.get_cortical_area_id(cortical_name) {
             Some(id) => id,
             None => {
-                eprintln!("[NPU] ❌ Unknown cortical area: '{}'", cortical_name);
-                eprintln!(
+                error!("[NPU] ❌ Unknown cortical area: '{}'", cortical_name);
+                error!(
                     "[NPU] ❌ Available cortical areas: {:?}",
                     self.area_id_to_name.read().unwrap().values().collect::<Vec<_>>()
                 );
-                eprintln!("[NPU] ❌ Total registered: {}", self.area_id_to_name.read().unwrap().len());
+                error!("[NPU] ❌ Total registered: {}", self.area_id_to_name.read().unwrap().len());
                 return 0;
             }
         };
@@ -1036,7 +1037,7 @@ impl RustNPU {
         cortical_area: u32,
         refractory_period: u16,
     ) -> usize {
-        println!("[RUST-UPDATE] update_cortical_area_refractory_period: cortical_area={}, refractory_period={}", 
+        info!("[RUST-UPDATE] update_cortical_area_refractory_period: cortical_area={}, refractory_period={}", 
                  cortical_area, refractory_period);
 
         let mut updated_count = 0;
@@ -1079,7 +1080,7 @@ impl RustNPU {
 
                 // Log first few neurons (show actual neuron_id, not array index!)
                 if updated_count <= 3 {
-                    println!(
+                    info!(
                         "[RUST-BATCH-UPDATE]   Neuron {}: refractory_period={}, countdown={}",
                         neuron_id, refractory_period, self.neuron_array.read().unwrap().refractory_countdowns[idx]
                     );
@@ -1169,7 +1170,7 @@ impl RustNPU {
     /// Batch update refractory period for multiple neurons
     /// Returns number of neurons updated
     pub fn batch_update_refractory_period(&mut self, neuron_ids: &[u32], values: &[u16]) -> usize {
-        println!(
+        info!(
             "[RUST-BATCH-UPDATE] batch_update_refractory_period: {} neurons",
             neuron_ids.len()
         );
@@ -1196,7 +1197,7 @@ impl RustNPU {
 
                 // Log first few neurons and any that match our monitored neuron 16438
                 if updated_count <= 3 || *neuron_id == 16438 {
-                    println!(
+                    info!(
                         "[RUST-BATCH-UPDATE]   Neuron {}: refractory_period={}, countdown={}",
                         neuron_id, value, self.neuron_array.read().unwrap().refractory_countdowns[idx]
                     );
@@ -1575,13 +1576,13 @@ fn phase1_injection_with_synapses(
             // 🔍 DEBUG: Log first sensory injection
             static FIRST_SENSORY_LOG: std::sync::Once = std::sync::Once::new();
             FIRST_SENSORY_LOG.call_once(|| {
-                println!("╔══════════════════════════════════════════════════════════════");
-                println!("║ [SENSORY-INJECTION] 🎬 DRAINING STAGED SENSORY DATA");
-                println!(
+                info!("╔══════════════════════════════════════════════════════════════");
+                info!("║ [SENSORY-INJECTION] 🎬 DRAINING STAGED SENSORY DATA");
+                info!(
                     "║ Injecting {} neurons AFTER FCL clear (prevents race)",
                     pending.len()
                 );
-                println!("╚══════════════════════════════════════════════════════════════");
+                info!("╚══════════════════════════════════════════════════════════════");
             });
 
             for (neuron_id, potential) in pending.drain(..) {
@@ -1594,10 +1595,10 @@ fn phase1_injection_with_synapses(
     // 1. Power Injection - Scan neuron array for cortical_idx = 1
     static FIRST_LOG: std::sync::Once = std::sync::Once::new();
     FIRST_LOG.call_once(|| {
-        println!("╔══════════════════════════════════════════════════════════════");
-        println!("║ [POWER-INJECTION] 🔋 AUTO-DISCOVERING POWER NEURONS");
-        println!("║ Scanning neuron array for cortical_idx = 1 (_power area)");
-        println!("╚══════════════════════════════════════════════════════════════");
+        info!("╔══════════════════════════════════════════════════════════════");
+        info!("║ [POWER-INJECTION] 🔋 AUTO-DISCOVERING POWER NEURONS");
+        info!("║ Scanning neuron array for cortical_idx = 1 (_power area)");
+        info!("╚══════════════════════════════════════════════════════════════");
     });
 
     // Scan all neurons for _power cortical area (cortical_idx = 1)
@@ -1620,7 +1621,7 @@ fn phase1_injection_with_synapses(
     static LAST_POWER_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     if !FIRST_INJECTION.load(Ordering::Relaxed) && power_count > 0 {
-        println!(
+        info!(
             "[POWER-INJECTION] ✅ Injected {} power neurons into FCL",
             power_count
         );
@@ -1629,13 +1630,13 @@ fn phase1_injection_with_synapses(
     } else if power_count == 0 && FIRST_INJECTION.load(Ordering::Relaxed) {
         // Power neurons disappeared after working!
         let last_count = LAST_POWER_COUNT.load(Ordering::Relaxed);
-        println!(
+        error!(
             "[POWER-INJECTION] ❌ ERROR: Power neurons DISAPPEARED! (was {}, now 0)",
             last_count
         );
         LAST_POWER_COUNT.store(0, Ordering::Relaxed);
     } else if power_count == 0 && !FIRST_INJECTION.load(Ordering::Relaxed) {
-        println!("[POWER-INJECTION] ⚠️ WARNING: No neurons found with cortical_idx=1");
+        warn!("[POWER-INJECTION] ⚠️ WARNING: No neurons found with cortical_idx=1");
         FIRST_INJECTION.store(true, Ordering::Relaxed);
     }
 

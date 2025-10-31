@@ -12,6 +12,7 @@
 
 use super::ComputeBackend;
 use feagi_types::*;
+use tracing::info;
 
 /// WGPU backend for GPU acceleration
 pub struct WGPUBackend {
@@ -186,7 +187,7 @@ impl WGPUBackend {
             },
         ));
 
-        println!("✅ Neural dynamics shader loaded (legacy)");
+        info!("✅ Neural dynamics shader loaded (legacy)");
 
         // Load FCL-aware neural dynamics shader (sparse processing)
         let fcl_neural_dynamics_shader =
@@ -207,7 +208,7 @@ impl WGPUBackend {
             },
         ));
 
-        println!("✅ FCL neural dynamics shader loaded (sparse)");
+        info!("✅ FCL neural dynamics shader loaded (sparse)");
 
         // Load FCL-aware synaptic propagation shader (GPU→GPU, consolidated, Metal-compatible)
         let fcl_synaptic_propagation_shader =
@@ -228,7 +229,7 @@ impl WGPUBackend {
             },
         ));
 
-        println!("✅ FCL synaptic propagation shader loaded (7 bindings - Metal compatible!)");
+        info!("✅ FCL synaptic propagation shader loaded (7 bindings - Metal compatible!)");
 
         Ok(())
     }
@@ -371,7 +372,7 @@ impl WGPUBackend {
     fn upload_synapse_arrays(&mut self, synapse_array: &SynapseArray) -> Result<()> {
         let synapse_count = synapse_array.count;
 
-        println!(
+        info!(
             "📤 Uploading {} synapses to GPU (consolidated, Metal-compatible)...",
             synapse_count
         );
@@ -489,13 +490,13 @@ impl WGPUBackend {
         // Store hash capacity for later use
         self.synapse_hash_capacity = capacity;
 
-        println!(
+        info!(
             "✅ GPU hash table built: {} entries, {} capacity, {} total synapses",
             source_map.len(),
             capacity,
             synapse_count
         );
-        println!(
+        info!(
             "   Load factor: {:.1}%, Average synapses/neuron: {:.1}",
             (source_map.len() as f32 / capacity as f32) * 100.0,
             synapse_count as f32 / source_map.len() as f32
@@ -607,7 +608,7 @@ impl WGPUBackend {
         self.neural_dynamics_bind_group = Some(neural_dynamics_bind_group);
         self.buffers.fired_neurons_output = Some(fired_mask_buffer);
 
-        println!("✅ Neural dynamics bind group created (7 bindings - Metal compatible!)");
+        info!("✅ Neural dynamics bind group created (7 bindings - Metal compatible!)");
 
         // Note: Synaptic propagation bind group needs GPU hash table first
         // Will be created separately once hash table is built
@@ -782,7 +783,7 @@ impl WGPUBackend {
         // Calculate workgroups (256 fired neurons per workgroup)
         let workgroup_count = (fired_count as u32 + 255) / 256;
 
-        println!(
+        info!(
             "  🚀 Dispatching {} workgroups for {} fired neurons (7 bindings - Metal OK!)",
             workgroup_count, fired_count
         );
@@ -943,7 +944,7 @@ impl WGPUBackend {
         // Calculate workgroups for FCL candidates only (not all neurons!)
         let workgroup_count = (fcl_count as u32 + 255) / 256;
 
-        println!(
+        info!(
             "  Dispatching {} workgroups for {} FCL neurons (vs {} for all neurons)",
             workgroup_count,
             fcl_count,
@@ -1201,7 +1202,7 @@ impl ComputeBackend for WGPUBackend {
             return Ok(0);
         }
 
-        println!(
+        info!(
             "🚀 GPU synaptic propagation: {} fired neurons",
             fired_neurons.len()
         );
@@ -1234,7 +1235,7 @@ impl ComputeBackend for WGPUBackend {
         // Wait for GPU to complete
         self.device.poll(wgpu::Maintain::Wait);
 
-        println!("✅ GPU synaptic propagation complete");
+        info!("✅ GPU synaptic propagation complete");
 
         // Return estimated synapse count
         // Note: FCL results stay on GPU for neural dynamics (full GPU→GPU pipeline)
@@ -1261,7 +1262,7 @@ impl ComputeBackend for WGPUBackend {
             .map(|(neuron_id, potential)| (neuron_id.0, *potential))
             .collect();
 
-        println!(
+        info!(
             "🎯 GPU processing {} FCL candidates (out of {} total neurons)",
             fcl_count, self.current_neuron_count
         );
@@ -1311,7 +1312,7 @@ impl ComputeBackend for WGPUBackend {
             .write_buffer(&atomic_buffer, 0, &vec![0u8; neuron_count * 4]);
         self.buffers.fcl_potentials_atomic = Some(atomic_buffer);
 
-        println!(
+        info!(
             "✅ FCL atomic accumulation buffer created ({} neurons)",
             neuron_count
         );
@@ -1322,7 +1323,7 @@ impl ComputeBackend for WGPUBackend {
         // Create bind groups (connect buffers to shaders)
         self.create_bind_groups()?;
 
-        println!(
+        info!(
             "✅ GPU initialized: {} neurons, {} synapses uploaded",
             neuron_array.count, synapse_array.count
         );
@@ -1344,7 +1345,7 @@ impl ComputeBackend for WGPUBackend {
         self.current_neuron_count = 0;
         self.synapse_hash_capacity = 0;
 
-        println!("🔄 GPU state invalidated due to genome change");
+        info!("🔄 GPU state invalidated due to genome change");
 
         Ok(())
     }

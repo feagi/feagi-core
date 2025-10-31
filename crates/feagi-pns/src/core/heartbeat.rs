@@ -5,6 +5,7 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use tracing::{debug, info, warn, error};
 
 /// Heartbeat Tracker
 pub struct HeartbeatTracker {
@@ -36,7 +37,7 @@ impl HeartbeatTracker {
         let poll_interval = self.poll_interval;
 
         let handle = thread::spawn(move || {
-            println!("🦀 [HEARTBEAT] Monitoring started (timeout: {:?})", timeout);
+            info!("🦀 [HEARTBEAT] Monitoring started (timeout: {:?})", timeout);
 
             while *running.read() {
                 thread::sleep(poll_interval);
@@ -49,13 +50,13 @@ impl HeartbeatTracker {
                 let stale_agents = agent_registry.read().get_stale_agents();
 
                 if !stale_agents.is_empty() {
-                    println!("🦀 [HEARTBEAT] Found {} stale agent(s)", stale_agents.len());
+                    info!("🦀 [HEARTBEAT] Found {} stale agent(s)", stale_agents.len());
 
                     // Deregister stale agents
                     for agent_id in stale_agents {
-                        println!("🦀 [HEARTBEAT] Deregistering stale agent: {}", agent_id);
+                        info!("🦀 [HEARTBEAT] Deregistering stale agent: {}", agent_id);
                         if let Err(e) = agent_registry.write().deregister(&agent_id) {
-                            eprintln!(
+                            error!(
                                 "🦀 [HEARTBEAT] [ERR] Failed to deregister {}: {}",
                                 agent_id, e
                             );
@@ -64,7 +65,7 @@ impl HeartbeatTracker {
                 }
             }
 
-            println!("🦀 [HEARTBEAT] Monitoring stopped");
+            info!("🦀 [HEARTBEAT] Monitoring stopped");
         });
 
         self.thread_handle = Some(handle);

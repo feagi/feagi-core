@@ -35,6 +35,7 @@ use tokio::runtime::Runtime;
 // Import NonBlockingTransport trait for UDP transport methods
 #[cfg(feature = "udp-transport")]
 use crate::nonblocking::transport::NonBlockingTransport;
+use tracing::{debug, info, warn, error};
 
 // Core modules (shared across all transports)
 pub mod blocking;
@@ -188,7 +189,7 @@ impl PNS {
         self.registration_handler
             .lock()
             .set_sensory_agent_manager(manager);
-        println!("🦀 [PNS] Sensory agent manager connected for SHM I/O");
+        info!("🦀 [PNS] Sensory agent manager connected for SHM I/O");
     }
 
     /// Connect the Rust NPU to the sensory stream for direct injection
@@ -200,9 +201,9 @@ impl PNS {
     ) {
         if let Some(streams) = self.zmq_streams.lock().as_ref() {
             streams.get_sensory_stream().set_npu(npu);
-            println!("🦀 [PNS] NPU connected to sensory stream for direct injection");
+            info!("🦀 [PNS] NPU connected to sensory stream for direct injection");
         } else {
-            eprintln!("🦀 [PNS] [ERR] Cannot connect NPU: ZMQ streams not started");
+            info!("🦀 [PNS] [ERR] Cannot connect NPU: ZMQ streams not started");
         }
     }
 
@@ -215,9 +216,9 @@ impl PNS {
     ) {
         if let Some(streams) = self.zmq_streams.lock().as_mut() {
             streams.get_api_control_stream_mut().set_npu(npu);
-            println!("🦀 [PNS] NPU connected to API control stream for direct queries");
+            info!("🦀 [PNS] NPU connected to API control stream for direct queries");
         } else {
-            eprintln!("🦀 [PNS] [ERR] Cannot connect NPU: ZMQ streams not started");
+            info!("🦀 [PNS] [ERR] Cannot connect NPU: ZMQ streams not started");
         }
     }
 
@@ -231,9 +232,9 @@ impl PNS {
             streams.get_api_control_stream_mut().set_rpc_callback(move |method, payload| {
                 callback(method, payload)
             });
-            println!("🦀 [PNS] RPC callback registered for CoreAPIService");
+            info!("🦀 [PNS] RPC callback registered for CoreAPIService");
         } else {
-            eprintln!("🦀 [PNS] [ERR] Cannot set RPC callback: ZMQ streams not started");
+            info!("🦀 [PNS] [ERR] Cannot set RPC callback: ZMQ streams not started");
         }
     }
 
@@ -268,7 +269,7 @@ impl PNS {
             return Err(PNSError::Agent("PNS already running".to_string()));
         }
 
-        println!("🦀 [PNS] Starting control streams (REST/registration)...");
+        info!("🦀 [PNS] Starting control streams (REST/registration)...");
 
         // Initialize ZMQ streams but only start control streams
         #[cfg(feature = "zmq-transport")]
@@ -294,8 +295,8 @@ impl PNS {
             .start(Arc::clone(&self.agent_registry));
 
         *self.running.write() = true;
-        println!("🦀 [PNS] ✅ Control streams started - ready for agent registration");
-        println!("🦀 [PNS] ⏸️  Data streams (sensory/motor/viz) NOT started - waiting for burst engine");
+        info!("🦀 [PNS] ✅ Control streams started - ready for agent registration");
+        info!("🦀 [PNS] ⏸️  Data streams (sensory/motor/viz) NOT started - waiting for burst engine");
 
         Ok(())
     }
@@ -311,7 +312,7 @@ impl PNS {
             ));
         }
 
-        println!("🦀 [PNS] Starting data streams (sensory/motor/viz)...");
+        info!("🦀 [PNS] Starting data streams (sensory/motor/viz)...");
 
         // Initialize async runtime if needed for UDP transports
         #[cfg(feature = "udp-transport")]
@@ -329,7 +330,7 @@ impl PNS {
                         PNSError::Transport(format!("Failed to create async runtime: {}", e))
                     })?;
                 *self.async_runtime.lock() = Some(Arc::new(runtime));
-                println!("🦀 [PNS] Async runtime initialized");
+                info!("🦀 [PNS] Async runtime initialized");
             }
         }
 
@@ -361,7 +362,7 @@ impl PNS {
                         .map_err(|e| PNSError::Transport(format!("UDP viz start failed: {}", e)))?;
 
                     *self.udp_viz_transport.lock() = Some(udp_viz);
-                    println!("🦀 [PNS] UDP visualization transport started");
+                    info!("🦀 [PNS] UDP visualization transport started");
                 }
             }
 
@@ -379,12 +380,12 @@ impl PNS {
                     })?;
 
                     *self.udp_sensory_transport.lock() = Some(udp_sensory);
-                    println!("🦀 [PNS] UDP sensory transport started");
+                    info!("🦀 [PNS] UDP sensory transport started");
                 }
             }
         }
 
-        println!("🦀 [PNS] ✅ Data streams started - sensory data will now be processed");
+        info!("🦀 [PNS] ✅ Data streams started - sensory data will now be processed");
 
         Ok(())
     }
@@ -405,7 +406,7 @@ impl PNS {
             return Ok(());
         }
 
-        println!("🦀 [PNS] Stopping all services...");
+        info!("🦀 [PNS] Stopping all services...");
         *self.running.write() = false;
 
         // Stop ZMQ streams
@@ -424,7 +425,7 @@ impl PNS {
                     runtime
                         .block_on(udp_viz.stop())
                         .map_err(|e| PNSError::Transport(format!("UDP viz stop failed: {}", e)))?;
-                    println!("🦀 [PNS] UDP visualization transport stopped");
+                    info!("🦀 [PNS] UDP visualization transport stopped");
                 }
 
                 // Stop UDP sensory transport
@@ -432,7 +433,7 @@ impl PNS {
                     runtime.block_on(udp_sensory.stop()).map_err(|e| {
                         PNSError::Transport(format!("UDP sensory stop failed: {}", e))
                     })?;
-                    println!("🦀 [PNS] UDP sensory transport stopped");
+                    info!("🦀 [PNS] UDP sensory transport stopped");
                 }
             }
 
@@ -442,10 +443,10 @@ impl PNS {
                 match Arc::try_unwrap(runtime_arc) {
                     Ok(runtime) => {
                         runtime.shutdown_timeout(std::time::Duration::from_secs(2));
-                        println!("🦀 [PNS] Async runtime shutdown");
+                        info!("🦀 [PNS] Async runtime shutdown");
                     }
                     Err(_) => {
-                        println!(
+                        warn!(
                             "🦀 [PNS] ⚠️  Async runtime has outstanding references, skipping shutdown"
                         );
                     }
@@ -456,7 +457,7 @@ impl PNS {
         // Stop heartbeat monitoring
         self.heartbeat_tracker.lock().stop();
 
-        println!("🦀 [PNS] ✅ All services stopped");
+        info!("🦀 [PNS] ✅ All services stopped");
         Ok(())
     }
 
@@ -475,7 +476,7 @@ impl PNS {
     pub fn publish_visualization(&self, data: &[u8]) -> Result<()> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-            eprintln!(
+            debug!(
                 "[PNS] 🔍 TRACE: publish_visualization() called with {} bytes via {:?}",
                 data.len(),
                 self.config.visualization_transport
@@ -490,7 +491,7 @@ impl PNS {
                     streams.publish_visualization(data)?;
                     Ok(())
                 } else {
-                    eprintln!("[PNS] ❌ CRITICAL: ZMQ streams not started!");
+                    error!("[PNS] ❌ CRITICAL: ZMQ streams not started!");
                     Err(PNSError::NotRunning("ZMQ streams not started".to_string()))
                 }
             }
@@ -515,13 +516,13 @@ impl PNS {
                             })?;
                         Ok(())
                     } else {
-                        eprintln!("[PNS] ❌ CRITICAL: UDP visualization transport not started!");
+                        error!("[PNS] ❌ CRITICAL: UDP visualization transport not started!");
                         Err(PNSError::NotRunning(
                             "UDP viz transport not started".to_string(),
                         ))
                     }
                 } else {
-                    eprintln!("[PNS] ❌ CRITICAL: Async runtime not available for UDP!");
+                    error!("[PNS] ❌ CRITICAL: Async runtime not available for UDP!");
                     Err(PNSError::NotRunning(
                         "Async runtime not available".to_string(),
                     ))

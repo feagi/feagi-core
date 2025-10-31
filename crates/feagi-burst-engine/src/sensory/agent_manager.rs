@@ -19,6 +19,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use tracing::{debug, info, warn, error};
 
 /// Agent registration info
 #[derive(Debug, Clone)]
@@ -162,7 +163,7 @@ fn agent_polling_loop(
     stop_flag: Arc<AtomicBool>,
     injection_callback: FclInjectionCallback,
 ) {
-    println!(
+    info!(
         "[SENSORY-{}] Thread started, attempting to open SHM at {:?}",
         config.agent_id, config.shm_path
     );
@@ -176,7 +177,7 @@ fn agent_polling_loop(
         for attempt in 1..=max_retries {
             match ShmReader::open(&config.shm_path) {
                 Ok(r) => {
-                    println!(
+                    info!(
                         "[SENSORY-{}] Successfully opened SHM on attempt {}",
                         config.agent_id, attempt
                     );
@@ -186,7 +187,7 @@ fn agent_polling_loop(
                 Err(e) => {
                     last_error = Some(e.to_string());
                     if attempt == 1 || attempt % 10 == 0 {
-                        println!(
+                        info!(
                             "[SENSORY-{}] Retry {}/{}: {}",
                             config.agent_id, attempt, max_retries, e
                         );
@@ -202,7 +203,7 @@ fn agent_polling_loop(
         match reader_opt {
             Some(r) => r,
             None => {
-                eprintln!(
+                error!(
                     "[SENSORY-{}] Failed to open SHM after {} retries: {}",
                     config.agent_id,
                     max_retries,
@@ -216,7 +217,7 @@ fn agent_polling_loop(
     // Create rate limiter
     let mut rate_limiter = RateLimiter::new(config.rate_hz);
 
-    println!(
+    info!(
         "[SENSORY-{}] Polling started at {:.1} Hz from {:?}",
         config.agent_id, config.rate_hz, config.shm_path
     );
@@ -226,7 +227,7 @@ fn agent_polling_loop(
     while !stop_flag.load(Ordering::Acquire) {
         poll_count += 1;
         if poll_count == 1 || poll_count % 100 == 0 {
-            println!(
+            info!(
                 "[SENSORY-{}] Poll #{}: attempting read...",
                 config.agent_id, poll_count
             );
@@ -250,7 +251,7 @@ fn agent_polling_loop(
                 static FIRST_READ_LOGGED: std::sync::atomic::AtomicBool =
                     std::sync::atomic::AtomicBool::new(false);
                 if !FIRST_READ_LOGGED.load(Ordering::Relaxed) {
-                    println!(
+                    info!(
                         "[SENSORY-{}] ✅ First SHM read: {} bytes",
                         config.agent_id,
                         data.data.len()
@@ -265,7 +266,7 @@ fn agent_polling_loop(
                     std::sync::atomic::AtomicU64::new(0);
                 let count = NO_DATA_COUNT.fetch_add(1, Ordering::Relaxed);
                 if count < 5 || count % 1000 == 0 {
-                    println!(
+                    info!(
                         "[SENSORY-{}] read_latest() returned None (count={})",
                         config.agent_id, count
                     );
@@ -283,21 +284,21 @@ fn agent_polling_loop(
         static FIRST_BYTES_LOGGED: std::sync::atomic::AtomicBool =
             std::sync::atomic::AtomicBool::new(false);
         if !FIRST_BYTES_LOGGED.load(Ordering::Relaxed) && data_vec.len() >= 20 {
-            eprintln!(
+            debug!(
                 "[SENSORY-{}] 🔍 First 20 bytes: {:?}",
                 config.agent_id,
                 &data_vec[0..20]
             );
-            eprintln!(
+            warn!(
                 "[SENSORY-{}]    byte[0] (version): {}",
                 config.agent_id, data_vec[0]
             );
-            eprintln!(
+            warn!(
                 "[SENSORY-{}]    byte[1-2] (increment): {:?}",
                 config.agent_id,
                 &data_vec[1..3]
             );
-            eprintln!(
+            warn!(
                 "[SENSORY-{}]    byte[3] (struct_count): {}",
                 config.agent_id, data_vec[3]
             );
@@ -308,16 +309,16 @@ fn agent_polling_loop(
             std::mem::swap(bytes, &mut data_vec);
             Ok(())
         }) {
-            eprintln!(
+            error!(
                 "[SENSORY-{}] ❌ Failed to load bytes: {:?}",
                 config.agent_id, e
             );
-            eprintln!(
+            warn!(
                 "[SENSORY-{}]    Total bytes loaded: {}",
                 config.agent_id,
                 byte_container.get_number_of_bytes_used()
             );
-            eprintln!(
+            warn!(
                 "[SENSORY-{}]    Container valid: {}",
                 config.agent_id,
                 byte_container.is_valid()
@@ -325,11 +326,11 @@ fn agent_polling_loop(
             continue;
         }
 
-        eprintln!(
+        info!(
             "[SENSORY-{}] ✅ Bytes loaded successfully, container is valid",
             config.agent_id
         );
-        eprintln!(
+        debug!(
             "[SENSORY-{}] 🔍 Pre-check: is_valid()={}, bytes.len()={}",
             config.agent_id,
             byte_container.is_valid(),
@@ -338,15 +339,15 @@ fn agent_polling_loop(
 
         let num_structures = match byte_container.try_get_number_contained_structures() {
             Ok(n) => {
-                eprintln!("[SENSORY-{}] ✅ Got struct count: {}", config.agent_id, n);
+                info!("[SENSORY-{}] ✅ Got struct count: {}", config.agent_id, n);
                 n
             }
             Err(e) => {
-                eprintln!(
+                error!(
                     "[SENSORY-{}] ❌ Failed to get structure count: {:?}",
                     config.agent_id, e
                 );
-                eprintln!(
+                error!(
                     "[SENSORY-{}]    Post-error: is_valid()={}, bytes.len()={}",
                     config.agent_id,
                     byte_container.is_valid(),
@@ -360,7 +361,7 @@ fn agent_polling_loop(
         static FIRST_DECODE_LOGGED: std::sync::atomic::AtomicBool =
             std::sync::atomic::AtomicBool::new(false);
         if !FIRST_DECODE_LOGGED.load(Ordering::Relaxed) {
-            println!(
+            info!(
                 "[SENSORY-{}] ✅ First decode: {} structures",
                 config.agent_id, num_structures
             );
@@ -373,7 +374,7 @@ fn agent_polling_loop(
                 match byte_container.try_create_new_struct_from_index(struct_idx as u8) {
                     Ok(s) => s,
                     Err(e) => {
-                        eprintln!(
+                        error!(
                             "[SENSORY-{}] Failed to extract structure {}: {:?}",
                             config.agent_id, struct_idx, e
                         );
@@ -389,7 +390,7 @@ fn agent_polling_loop(
             {
                 Some(cm) => cm,
                 None => {
-                    eprintln!(
+                    warn!(
                         "[SENSORY-{}] Structure {} is not CorticalMappedXYZPNeuronData",
                         config.agent_id, struct_idx
                     );
@@ -405,7 +406,7 @@ fn agent_polling_loop(
                 let cortical_idx = match config.area_mapping.get(&area_id) {
                     Some(&idx) => idx,
                     None => {
-                        eprintln!("[SENSORY-{}] Unknown area '{}'", config.agent_id, area_id);
+                        warn!("[SENSORY-{}] Unknown area '{}'", config.agent_id, area_id);
                         continue;
                     }
                 };
@@ -428,7 +429,7 @@ fn agent_polling_loop(
                 static FIRST_COORD_DEBUG: std::sync::atomic::AtomicBool =
                     std::sync::atomic::AtomicBool::new(false);
                 if !FIRST_COORD_DEBUG.load(Ordering::Relaxed) && xyzp_data.len() >= 5 {
-                    eprintln!(
+                    debug!(
                         "[SENSORY-{}] 🔍 First 5 XYZP: {:?}",
                         config.agent_id,
                         &xyzp_data[0..5]
@@ -440,9 +441,9 @@ fn agent_polling_loop(
                 static FIRST_INJECTION_LOGGED: std::sync::atomic::AtomicBool =
                     std::sync::atomic::AtomicBool::new(false);
                 if !FIRST_INJECTION_LOGGED.load(Ordering::Relaxed) && !xyzp_data.is_empty() {
-                    println!("[SENSORY-{}] ✅ First injection: area='{}', cortical_area={}, neuron_count={}", 
+                    info!("[SENSORY-{}] ✅ First injection: area='{}', cortical_area={}, neuron_count={}", 
                         config.agent_id, area_id, cortical_idx, xyzp_data.len());
-                    println!(
+                    info!(
                         "[SENSORY-{}]    First 3 XYZP: {:?}",
                         config.agent_id,
                         &xyzp_data[0..xyzp_data.len().min(3)]
@@ -458,7 +459,7 @@ fn agent_polling_loop(
         }
     }
 
-    println!("[SENSORY-{}] Polling stopped", config.agent_id);
+    info!("[SENSORY-{}] Polling stopped", config.agent_id);
 }
 
 #[cfg(test)]

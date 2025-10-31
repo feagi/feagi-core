@@ -9,6 +9,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
+use tracing::{debug, info, warn, error};
 
 /// API request from FastAPI process
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,7 +72,7 @@ impl ApiControlStream {
     /// Set the Rust NPU reference for direct queries
     pub fn set_npu(&mut self, npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) {
         *self.npu.lock() = Some(npu);
-        println!("🦀 [API-CONTROL] NPU connected for direct queries");
+        info!("🦀 [API-CONTROL] NPU connected for direct queries");
     }
 
     /// Set RPC callback for generic CoreAPIService method calls
@@ -80,7 +81,7 @@ impl ApiControlStream {
         F: Fn(&str, serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync + 'static,
     {
         *self.rpc_callback.lock() = Some(Box::new(callback));
-        println!("🦀 [API-CONTROL] RPC callback registered for CoreAPIService");
+        info!("🦀 [API-CONTROL] RPC callback registered for CoreAPIService");
     }
 
     /// Start the API control stream
@@ -100,7 +101,7 @@ impl ApiControlStream {
 
         *self.running.lock() = true;
 
-        println!("🦀 [ZMQ-API-CONTROL] Listening (via feagi-transports)");
+        info!("🦀 [ZMQ-API-CONTROL] Listening (via feagi-transports)");
 
         // Start processing loop
         self.start_processing_loop();
@@ -129,7 +130,7 @@ impl ApiControlStream {
         let rpc_callback = Arc::clone(&self.rpc_callback);
 
         thread::spawn(move || {
-            println!("🦀 [ZMQ-API-CONTROL] Processing loop started");
+            info!("🦀 [ZMQ-API-CONTROL] Processing loop started");
 
             while *running.lock() {
                 // Try to receive request with timeout
@@ -147,15 +148,15 @@ impl ApiControlStream {
                     Ok((request_data, reply_handle)) => {
                         let request_json = String::from_utf8_lossy(&request_data).to_string();
                         
-                        println!("🦀 [ZMQ-API-CONTROL] 📨 Received request ({} bytes)", request_json.len());
-                        println!("🦀 [ZMQ-API-CONTROL] 📨 Request: {}", &request_json[..request_json.len().min(200)]);
+                        info!("🦀 [ZMQ-API-CONTROL] 📨 Received request ({} bytes)", request_json.len());
+                        info!("🦀 [ZMQ-API-CONTROL] 📨 Request: {}", &request_json[..request_json.len().min(200)]);
 
                         let response_json = Self::process_request(&npu, &rpc_callback, &request_json);
                         
-                        println!("🦀 [ZMQ-API-CONTROL] 📤 Sending response ({} bytes)", response_json.len());
+                        info!("🦀 [ZMQ-API-CONTROL] 📤 Sending response ({} bytes)", response_json.len());
 
                         if let Err(e) = reply_handle.send(response_json.as_bytes()) {
-                            eprintln!("🦀 [ZMQ-API-CONTROL] [ERR] Failed to send response: {}", e);
+                            error!("🦀 [ZMQ-API-CONTROL] [ERR] Failed to send response: {}", e);
                         }
                     }
                     Err(TransportError::Timeout) => {
@@ -163,12 +164,12 @@ impl ApiControlStream {
                         continue;
                     }
                     Err(e) => {
-                        eprintln!("🦀 [ZMQ-API-CONTROL] [ERR] Receive error: {}", e);
+                        error!("🦀 [ZMQ-API-CONTROL] [ERR] Receive error: {}", e);
                     }
                 }
             }
 
-            println!("🦀 [ZMQ-API-CONTROL] Processing loop stopped");
+            info!("🦀 [ZMQ-API-CONTROL] Processing loop stopped");
         });
     }
 
@@ -217,7 +218,7 @@ impl ApiControlStream {
         // Log high-level request (for debugging)
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-            println!("🦀 [API-CONTROL] First request: {} {}", request.method, request.path);
+            info!("🦀 [API-CONTROL] First request: {} {}", request.method, request.path);
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
@@ -345,15 +346,15 @@ impl ApiControlStream {
     }
 
     fn handle_rpc(rpc_callback: &RpcCallback, request: &ApiRequest) -> serde_json::Value {
-        println!("🦀 [API-CONTROL-RPC] Received RPC request");
+        info!("🦀 [API-CONTROL-RPC] Received RPC request");
         
         let rpc_payload = match &request.body {
             Some(body) => {
-                println!("🦀 [API-CONTROL-RPC] Request has body: {:?}", body);
+                info!("🦀 [API-CONTROL-RPC] Request has body: {:?}", body);
                 body.clone()
             }
             None => {
-                println!("🦀 [API-CONTROL-RPC] ERROR: Request missing body");
+                error!("🦀 [API-CONTROL-RPC] ERROR: Request missing body");
                 return serde_json::json!({
                     "status": 400,
                     "body": {"error": "RPC request missing body"}
@@ -363,11 +364,11 @@ impl ApiControlStream {
 
         let method_name = match rpc_payload.get("method").and_then(|m| m.as_str()) {
             Some(m) => {
-                println!("🦀 [API-CONTROL-RPC] Method name: {}", m);
+                info!("🦀 [API-CONTROL-RPC] Method name: {}", m);
                 m.to_string()
             }
             None => {
-                println!("🦀 [API-CONTROL-RPC] ERROR: Payload missing 'method' field");
+                error!("🦀 [API-CONTROL-RPC] ERROR: Payload missing 'method' field");
                 return serde_json::json!({
                     "status": 400,
                     "body": {"error": "RPC payload missing 'method' field"}
@@ -378,11 +379,11 @@ impl ApiControlStream {
         let callback_guard = rpc_callback.lock();
         let callback = match callback_guard.as_ref() {
             Some(cb) => {
-                println!("🦀 [API-CONTROL-RPC] Callback registered, calling Python handler");
+                info!("🦀 [API-CONTROL-RPC] Callback registered, calling Python handler");
                 cb
             }
             None => {
-                println!("🦀 [API-CONTROL-RPC] ERROR: No RPC callback registered");
+                error!("🦀 [API-CONTROL-RPC] ERROR: No RPC callback registered");
                 return serde_json::json!({
                     "status": 503,
                     "body": {"error": "RPC callback not registered"}
@@ -390,17 +391,17 @@ impl ApiControlStream {
             }
         };
 
-        println!("🦀 [API-CONTROL-RPC] Invoking Python handler for method: {}", method_name);
+        info!("🦀 [API-CONTROL-RPC] Invoking Python handler for method: {}", method_name);
         match callback(&method_name, rpc_payload) {
             Ok(result) => {
-                println!("🦀 [API-CONTROL-RPC] Python handler returned success");
+                info!("🦀 [API-CONTROL-RPC] Python handler returned success");
                 serde_json::json!({
                     "status": 200,
                     "body": result
                 })
             }
             Err(e) => {
-                println!("🦀 [API-CONTROL-RPC] Python handler returned error: {}", e);
+                error!("🦀 [API-CONTROL-RPC] Python handler returned error: {}", e);
                 serde_json::json!({
                     "status": 500,
                     "body": {"error": e}

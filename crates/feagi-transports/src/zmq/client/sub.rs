@@ -7,7 +7,7 @@ use crate::common::{ClientConfig, TransportError, TransportResult};
 use crate::traits::{Subscriber, Transport};
 use parking_lot::Mutex;
 use std::sync::Arc;
-
+use tracing::info;
 /// ZMQ SUB socket implementation (subscriber)
 pub struct ZmqSub {
     context: Arc<zmq::Context>,
@@ -59,7 +59,7 @@ impl Transport for ZmqSub {
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
         
-        println!(
+        info!(
             "🦀 [ZMQ-SUB] Connected to {}",
             self.config.base.address
         );

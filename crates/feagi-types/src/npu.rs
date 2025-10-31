@@ -17,6 +17,7 @@
 
 use crate::*;
 use ahash::AHashMap;
+use tracing::warn;
 
 /// Complete neuron array with all properties
 ///
@@ -147,7 +148,7 @@ impl NeuronArray {
     ) -> Result<NeuronId> {
         // ⚠️ WARNING: This is the SLOW single-neuron creation path!
         // Should only be called for individual neurons, NOT during bulk neurogenesis
-        eprintln!("⚠️  [RUST-NPU] WARNING: add_neuron() called (SLOW path) - cortical_area={}, total_neurons={}", 
+        warn!("⚠️  [RUST-NPU] WARNING: add_neuron() called (SLOW path) - cortical_area={}, total_neurons={}", 
             cortical_area, self.count);
 
         if self.count >= self.capacity {
@@ -294,7 +295,7 @@ impl NeuronArray {
             neuron_ids.push(NeuronId(neuron_id));
         }
         let coord_time = coord_start.elapsed();
-        eprintln!("🦀🦀🦀 [COORD-LOOP] n={}, time={:?}", n, coord_time);
+        warn!("🦀🦀🦀 [COORD-LOOP] n={}, time={:?}", n, coord_time);
 
         // ✅ SPATIAL HASH ONLY (for coordinate→neuron_id lookups during sensory injection)
         // neuron_id_to_index HashMap eliminated - it was storing id→id and never read!
@@ -313,7 +314,7 @@ impl NeuronArray {
         }
         let insert_time = insert_start.elapsed();
 
-        eprintln!(
+        warn!(
             "🦀🦀🦀 [SPATIAL-HASH] n={}, reserve={:?}, inserts={:?}, hash_size={}",
             n,
             reserve_time,
@@ -428,7 +429,7 @@ impl NeuronArray {
             .collect();
 
         let elapsed = start.elapsed();
-        eprintln!(
+        warn!(
             "[RUST-SIMD-SCAN] Area {} → {} neurons in {:?} (scanned {} neurons)",
             cortical_idx,
             result.len(),

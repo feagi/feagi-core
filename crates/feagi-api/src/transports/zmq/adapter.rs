@@ -72,7 +72,7 @@ impl ZmqApiAdapter {
         
         *self.running.lock() = true;
         
-        println!("🦀 [ZMQ-API] Adapter started (using feagi-transports)");
+        info!("🦀 [ZMQ-API] Adapter started (using feagi-transports)");
         
         // Start request handling loop
         self.start_request_loop();
@@ -90,7 +90,7 @@ impl ZmqApiAdapter {
         }
         *router_guard = None;
         
-        println!("🦀 [ZMQ-API] Adapter stopped");
+        info!("🦀 [ZMQ-API] Adapter stopped");
         
         Ok(())
     }
@@ -102,7 +102,7 @@ impl ZmqApiAdapter {
         let running = Arc::clone(&self.running);
         
         thread::spawn(move || {
-            println!("🦀 [ZMQ-API] Request loop started");
+            info!("🦀 [ZMQ-API] Request loop started");
             
             while *running.lock() {
                 // Receive request with timeout
@@ -132,7 +132,7 @@ impl ZmqApiAdapter {
                             }
                         };
                         
-                        println!("🦀 [ZMQ-API] {} {}", api_request.method, api_request.path);
+                        info!("🦀 [ZMQ-API] {} {}", api_request.method, api_request.path);
                         
                         // Route to endpoint handlers
                         let api_response = Self::route_request(&api_request, &state);
@@ -141,11 +141,11 @@ impl ZmqApiAdapter {
                         match serde_json::to_vec(&api_response) {
                             Ok(response_json) => {
                                 if let Err(e) = reply_handle.send(&response_json) {
-                                    eprintln!("🦀 [ZMQ-API] [ERR] Failed to send response: {}", e);
+                                    error!("🦀 [ZMQ-API] [ERR] Failed to send response: {}", e);
                                 }
                             }
                             Err(e) => {
-                                eprintln!("🦀 [ZMQ-API] [ERR] Failed to serialize response: {}", e);
+                                error!("🦀 [ZMQ-API] [ERR] Failed to serialize response: {}", e);
                             }
                         }
                     }
@@ -154,12 +154,12 @@ impl ZmqApiAdapter {
                         continue;
                     }
                     Err(e) => {
-                        eprintln!("🦀 [ZMQ-API] [ERR] Receive error: {}", e);
+                        error!("🦀 [ZMQ-API] [ERR] Receive error: {}", e);
                     }
                 }
             }
             
-            println!("🦀 [ZMQ-API] Request loop stopped");
+            info!("🦀 [ZMQ-API] Request loop stopped");
         });
     }
     

@@ -6,6 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tracing::{debug, info, warn, error};
 
 /// Type of agent based on I/O direction and purpose
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -214,7 +215,7 @@ impl AgentRegistry {
     /// * `max_agents` - Maximum number of concurrent agents (default: 100)
     /// * `timeout_ms` - Inactivity timeout in milliseconds (default: 60000)
     pub fn new(max_agents: usize, timeout_ms: u64) -> Self {
-        println!(
+        info!(
             "🦀 [REGISTRY] Initialized (max_agents={}, timeout_ms={})",
             max_agents, timeout_ms
         );
@@ -240,7 +241,7 @@ impl AgentRegistry {
         // Check if already registered (allow re-registration)
         let is_reregistration = self.agents.contains_key(&agent_id);
         if is_reregistration {
-            println!(
+            warn!(
                 "⚠️ [REGISTRY] Agent re-registering (updating existing entry): {}",
                 agent_id
             );
@@ -255,7 +256,7 @@ impl AgentRegistry {
             }
         }
 
-        println!(
+        info!(
             "🦀 [REGISTRY] Registered agent: {} (type: {}, total: {})",
             agent_id,
             agent_info.agent_type,
@@ -268,7 +269,7 @@ impl AgentRegistry {
     /// Deregister an agent
     pub fn deregister(&mut self, agent_id: &str) -> Result<(), String> {
         if self.agents.remove(agent_id).is_some() {
-            println!(
+            info!(
                 "🦀 [REGISTRY] Deregistered agent: {} (total: {})",
                 agent_id,
                 self.agents.len()
@@ -323,11 +324,11 @@ impl AgentRegistry {
         let count = inactive.len();
         for agent_id in &inactive {
             self.agents.remove(agent_id);
-            println!("🦀 [REGISTRY] Pruned inactive agent: {}", agent_id);
+            info!("🦀 [REGISTRY] Pruned inactive agent: {}", agent_id);
         }
 
         if count > 0 {
-            println!(
+            info!(
                 "🦀 [REGISTRY] Pruned {} inactive agents (total: {})",
                 count,
                 self.agents.len()

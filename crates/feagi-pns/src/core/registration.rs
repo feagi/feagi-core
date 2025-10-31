@@ -8,6 +8,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::{debug, info, warn, error};
 
 /// Registration request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -61,7 +62,7 @@ impl RegistrationHandler {
         manager: Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>,
     ) {
         *self.sensory_agent_manager.lock() = Some(manager);
-        println!("🦀 [REGISTRATION] Sensory agent manager connected");
+        info!("🦀 [REGISTRATION] Sensory agent manager connected");
     }
 
     /// Set callback for agent registration events (for Python integration)
@@ -70,7 +71,7 @@ impl RegistrationHandler {
         F: Fn(String, String, String) + Send + Sync + 'static,
     {
         *self.on_agent_registered.lock() = Some(Box::new(callback));
-        println!("🦀 [REGISTRATION] Agent registration callback set");
+        info!("🦀 [REGISTRATION] Agent registration callback set");
     }
 
     /// Set callback for agent deregistration events (for Python integration)
@@ -79,7 +80,7 @@ impl RegistrationHandler {
         F: Fn(String) + Send + Sync + 'static,
     {
         *self.on_agent_deregistered.lock() = Some(Box::new(callback));
-        println!("🦀 [REGISTRATION] Agent deregistration callback set");
+        info!("🦀 [REGISTRATION] Agent deregistration callback set");
     }
 
     /// Process a registration request
@@ -87,7 +88,7 @@ impl RegistrationHandler {
         &self,
         request: RegistrationRequest,
     ) -> Result<RegistrationResponse, String> {
-        println!(
+        info!(
             "🦀 [REGISTRATION] Processing registration for agent: {} (type: {})",
             request.agent_id, request.agent_type
         );
@@ -159,7 +160,7 @@ impl RegistrationHandler {
         if let Some(ref sensory) = agent_info.capabilities.sensory {
             if let Some(sensory_mgr_lock) = self.sensory_agent_manager.lock().as_ref() {
                 if let Some(shm_path) = &sensory.shm_path {
-                    println!(
+                    info!(
                         "🦀 [REGISTRATION] Registering {} with burst engine: {} @ {}Hz",
                         request.agent_id, shm_path, sensory.rate_hz
                     );
@@ -175,15 +176,15 @@ impl RegistrationHandler {
                         .register_agent(config)
                         .map_err(|e| format!("Failed to register with burst engine: {}", e))?;
 
-                    println!(
+                    info!(
                         "🦀 [REGISTRATION] ✅ Agent {} registered with burst engine",
                         request.agent_id
                     );
                 } else {
-                    println!("🦀 [REGISTRATION] ⚠️  Sensory capability exists but no SHM path");
+                    warn!("🦀 [REGISTRATION] ⚠️  Sensory capability exists but no SHM path");
                 }
             } else {
-                println!("🦀 [REGISTRATION] ⚠️  Sensory agent manager not connected - skipping burst engine registration");
+                warn!("🦀 [REGISTRATION] ⚠️  Sensory agent manager not connected - skipping burst engine registration");
             }
         }
 
@@ -193,7 +194,7 @@ impl RegistrationHandler {
             let caps_json =
                 serde_json::to_string(&request.capabilities).unwrap_or_else(|_| "{}".to_string());
 
-            println!(
+            info!(
                 "🦀 [REGISTRATION] Invoking Python callback for agent: {}",
                 request.agent_id
             );
@@ -301,12 +302,12 @@ impl RegistrationHandler {
         if let Some(sensory_mgr_lock) = self.sensory_agent_manager.lock().as_ref() {
             let sensory_mgr = sensory_mgr_lock.lock().unwrap();
             if let Err(e) = sensory_mgr.deregister_agent(agent_id) {
-                println!(
+                error!(
                     "🦀 [REGISTRATION] ⚠️  Failed to deregister {} from burst engine: {}",
                     agent_id, e
                 );
             } else {
-                println!(
+                info!(
                     "🦀 [REGISTRATION] ✅ Agent {} deregistered from burst engine",
                     agent_id
                 );
@@ -323,7 +324,7 @@ impl RegistrationHandler {
         // Invoke Python callback if deregistration was successful
         if result.is_ok() {
             if let Some(ref callback) = *self.on_agent_deregistered.lock() {
-                println!(
+                info!(
                     "🦀 [REGISTRATION] Invoking Python deregistration callback for agent: {}",
                     agent_id
                 );

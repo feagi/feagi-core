@@ -7,7 +7,7 @@ use crate::common::{ClientConfig, TransportError, TransportResult};
 use crate::traits::{Push, Transport};
 use parking_lot::Mutex;
 use std::sync::Arc;
-
+use tracing::info;
 /// ZMQ PUSH socket implementation (sender)
 pub struct ZmqPush {
     context: Arc<zmq::Context>,
@@ -59,7 +59,7 @@ impl Transport for ZmqPush {
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
         
-        println!(
+        info!(
             "🦀 [ZMQ-PUSH] Connected to {}",
             self.config.base.address
         );

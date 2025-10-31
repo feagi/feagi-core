@@ -24,6 +24,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
 use tokio::sync::RwLock;
+use tracing::{debug, info, warn, error};
 
 /// Maximum UDP payload size (conservative, accounts for IP/UDP headers)
 const MAX_UDP_PAYLOAD: usize = 1400;
@@ -284,7 +285,7 @@ impl NonBlockingTransport for UdpTransport {
             .await
             .map_err(|e| PNSError::Transport(format!("Failed to bind UDP socket: {}", e)))?;
 
-        println!(
+        info!(
             "🦀 [UDP] Bound to {} (peer: {})",
             self.config.bind_address, self.config.peer_address
         );
@@ -296,7 +297,7 @@ impl NonBlockingTransport for UdpTransport {
     async fn stop(&mut self) -> Result<()> {
         self.socket = None;
         self.reassembly_buffer.write().await.clear();
-        println!("🦀 [UDP] Transport stopped");
+        info!("🦀 [UDP] Transport stopped");
         Ok(())
     }
 

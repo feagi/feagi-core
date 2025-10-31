@@ -5,6 +5,7 @@ use feagi_data_serialization::FeagiSerializable;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::thread;
+use tracing::{debug, info, warn, error};
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]
@@ -83,7 +84,7 @@ impl SensoryStream {
     /// Set the Rust NPU reference for direct injection
     pub fn set_npu(&self, npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) {
         *self.npu.lock() = Some(npu);
-        println!("🦀 [SENSORY-STREAM] NPU connected for direct injection");
+        info!("🦀 [SENSORY-STREAM] NPU connected for direct injection");
     }
 
     /// Start the sensory stream
@@ -112,7 +113,7 @@ impl SensoryStream {
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
 
-        println!("🦀 [ZMQ-SENSORY] ✅ Listening on {}", self.bind_address);
+        info!("🦀 [ZMQ-SENSORY] ✅ Listening on {}", self.bind_address);
 
         // CRITICAL: Drain stale buffered messages before processing real-time data
         // Real-time systems must discard residual sensory data from previous sessions
@@ -131,7 +132,7 @@ impl SensoryStream {
         // Log final statistics
         let total_msg = *self.total_messages.lock();
         let total_neurons = *self.total_neurons.lock();
-        println!(
+        info!(
             "🦀 [ZMQ-SENSORY] Stopped. Total: {} messages, {} neurons",
             total_msg, total_neurons
         );
@@ -151,7 +152,7 @@ impl SensoryStream {
         let drain_timeout = std::time::Duration::from_millis(self.config.startup_drain_timeout_ms);
         let mut drained_count = 0u64;
 
-        println!(
+        info!(
             "🦀 [ZMQ-SENSORY] 🗑️  Draining stale messages (timeout: {}ms)...",
             self.config.startup_drain_timeout_ms
         );
@@ -160,7 +161,7 @@ impl SensoryStream {
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
             None => {
-                eprintln!("🦀 [ZMQ-SENSORY] [ERR] Cannot drain - socket not initialized");
+                warn!("🦀 [ZMQ-SENSORY] [ERR] Cannot drain - socket not initialized");
                 return;
             }
         };
@@ -184,7 +185,7 @@ impl SensoryStream {
                     break;
                 }
                 Err(e) => {
-                    eprintln!("🦀 [ZMQ-SENSORY] [ERR] Drain error: {}", e);
+                    error!("🦀 [ZMQ-SENSORY] [ERR] Drain error: {}", e);
                     break;
                 }
             }
@@ -193,13 +194,13 @@ impl SensoryStream {
         drop(sock_guard);
 
         if drained_count > 0 {
-            println!(
+            info!(
                 "🦀 [ZMQ-SENSORY] 🗑️  Drained {} stale messages ({:.1}ms)",
                 drained_count,
                 drain_start.elapsed().as_secs_f64() * 1000.0
             );
         } else {
-            println!("🦀 [ZMQ-SENSORY] ✅ No stale messages found (buffer was clean)");
+            info!("🦀 [ZMQ-SENSORY] ✅ No stale messages found (buffer was clean)");
         }
     }
 
@@ -213,7 +214,7 @@ impl SensoryStream {
         let config = self.config.clone();
 
         thread::spawn(move || {
-            println!("🦀 [ZMQ-SENSORY] Processing loop started");
+            info!("🦀 [ZMQ-SENSORY] Processing loop started");
 
             let mut message_count = 0u64;
 
@@ -231,7 +232,7 @@ impl SensoryStream {
                 // Poll for messages with timeout
                 let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
                 if let Err(e) = zmq::poll(poll_items, config.poll_timeout_ms) {
-                    eprintln!("🦀 [ZMQ-SENSORY] [ERR] Poll error: {}", e);
+                    error!("🦀 [ZMQ-SENSORY] [ERR] Poll error: {}", e);
                     continue;
                 }
 
@@ -261,7 +262,7 @@ impl SensoryStream {
                                 if message_count % 100 == 0 {
                                     let total_msg = *total_messages.lock();
                                     let total_n = *total_neurons.lock();
-                                    println!(
+                                    info!(
                                         "🦀 [ZMQ-SENSORY] Stats: {} messages, {} neurons total",
                                         total_msg, total_n
                                     );
@@ -269,11 +270,11 @@ impl SensoryStream {
                             }
                             Err(e) => {
                                 if message_count <= 5 {
-                                    eprintln!(
+                                    error!(
                                         "🦀 [ZMQ-SENSORY] [ERR] Failed to process sensory data: {}",
                                         e
                                     );
-                                    eprintln!(
+                                    warn!(
                                         "🦀 [ZMQ-SENSORY] Message size: {} bytes",
                                         message_bytes.len()
                                     );
@@ -282,12 +283,12 @@ impl SensoryStream {
                         }
                     }
                     Err(e) => {
-                        eprintln!("🦀 [ZMQ-SENSORY] [ERR] Receive error: {}", e);
+                        error!("🦀 [ZMQ-SENSORY] [ERR] Receive error: {}", e);
                     }
                 }
             }
 
-            println!("🦀 [ZMQ-SENSORY] Processing loop stopped");
+            info!("🦀 [ZMQ-SENSORY] Processing loop stopped");
         });
     }
 
@@ -365,7 +366,7 @@ impl SensoryStream {
             let cortical_idx = match npu.get_cortical_area_id(&cortical_name) {
                 Some(idx) => idx,
                 None => {
-                    eprintln!(
+                    warn!(
                         "[ZMQ-SENSORY] Warning: Unknown cortical area '{}'",
                         cortical_name
                     );

@@ -6,6 +6,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
+use tracing::{debug, info, warn, error};
 
 /// REST request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -71,7 +72,7 @@ impl RestStream {
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
 
-        println!("🦀 [ZMQ-REST] Listening on {}", self.bind_address);
+        info!("🦀 [ZMQ-REST] Listening on {}", self.bind_address);
 
         // Start processing loop
         self.start_processing_loop();
@@ -93,7 +94,7 @@ impl RestStream {
         let registration_handler = Arc::clone(&self.registration_handler);
 
         thread::spawn(move || {
-            println!("🦀 [ZMQ-REST] Processing loop started");
+            info!("🦀 [ZMQ-REST] Processing loop started");
 
             while *running.lock() {
                 let sock_guard = socket.lock();
@@ -109,7 +110,7 @@ impl RestStream {
                 // Poll for messages
                 let poll_items = &mut [sock.as_poll_item(zmq::POLLIN)];
                 if let Err(e) = zmq::poll(poll_items, 100) {
-                    eprintln!("🦀 [ZMQ-REST] [ERR] Poll error: {}", e);
+                    error!("🦀 [ZMQ-REST] [ERR] Poll error: {}", e);
                     continue;
                 }
 
@@ -130,7 +131,7 @@ impl RestStream {
                             more = sock.get_rcvmore().unwrap_or(false);
                         }
                         Err(e) => {
-                            eprintln!("🦀 [ZMQ-REST] [ERR] Receive error: {}", e);
+                            error!("🦀 [ZMQ-REST] [ERR] Receive error: {}", e);
                             break;
                         }
                     }
@@ -146,12 +147,12 @@ impl RestStream {
                     let response_json = Self::process_request(&registration_handler, &request_json);
 
                     if let Err(e) = Self::send_response(&socket, identity, response_json) {
-                        eprintln!("🦀 [ZMQ-REST] [ERR] Failed to send response: {}", e);
+                        error!("🦀 [ZMQ-REST] [ERR] Failed to send response: {}", e);
                     }
                 }
             }
 
-            println!("🦀 [ZMQ-REST] Processing loop stopped");
+            info!("🦀 [ZMQ-REST] Processing loop stopped");
         });
     }
 
@@ -184,7 +185,7 @@ impl RestStream {
             }
         };
 
-        println!("🦀 [ZMQ-REST] {} {}", request.method, request.path);
+        info!("🦀 [ZMQ-REST] {} {}", request.method, request.path);
 
         // Route request
         let response = match (request.method.as_str(), request.path.as_str()) {
@@ -257,7 +258,7 @@ impl RestStream {
             Ok(_) => {
                 let count = HEARTBEAT_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
                 if count == 1 || count % 30 == 0 {
-                    println!(
+                    info!(
                         "🦀 [PNS] 💓 Heartbeat #{} received from {}",
                         count, agent_id
                     );
@@ -268,7 +269,7 @@ impl RestStream {
                 })
             }
             Err(e) => {
-                eprintln!("🦀 [PNS] Heartbeat failed for {}: {}", agent_id, e);
+                error!("🦀 [PNS] Heartbeat failed for {}: {}", agent_id, e);
                 serde_json::json!({
                     "status": 404,
                     "body": {"error": e}

@@ -109,7 +109,7 @@ impl VizSHMWriter {
         
         mmap.flush()?;
         
-        println!("✅ Created Viz SHM Writer: {:?} (FEAGIVIS ring buffer: {} slots x {} bytes = {} MB)", 
+        info!("✅ Created Viz SHM Writer: {:?} (FEAGIVIS ring buffer: {} slots x {} bytes = {} MB)", 
             shm_path, num_slots, slot_size, total_size / 1024 / 1024);
         
         Ok(Self {
@@ -135,7 +135,7 @@ impl VizSHMWriter {
         // Check payload size
         if binary_data.len() + 4 > self.slot_size {
             // Truncate if too large (should not happen with proper encoding)
-            eprintln!("[VIZ-SHM] Warning: payload {} bytes exceeds slot size {} bytes, truncating", 
+            warn!("[VIZ-SHM] Warning: payload {} bytes exceeds slot size {} bytes, truncating", 
                 binary_data.len(), self.slot_size);
             let truncated = &binary_data[0..(self.slot_size - 4)];
             self.write_to_ring_slot(truncated)?;
@@ -257,7 +257,7 @@ impl VizSHMWriter {
 
 impl Drop for VizSHMWriter {
     fn drop(&mut self) {
-        println!("🗑️  Dropping Viz SHM Writer: {:?} (wrote {} samples)", self.shm_path, self.total_writes);
+        info!("🗑️  Dropping Viz SHM Writer: {:?} (wrote {} samples)", self.shm_path, self.total_writes);
     }
 }
 

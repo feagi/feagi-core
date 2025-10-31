@@ -28,6 +28,7 @@ crossbeam = "0.8"
 parking_lot = "0.12"
 thiserror = "1.0"
 lz4 = "1.28"  # LZ4 compression (used by multiple transports)
+tracing = { workspace = true }  # Structured logging
 
 # Optional transport-specific dependencies (now via feagi-transports)
 zmq = { version = "0.10", optional = true }  # Still needed for context creation

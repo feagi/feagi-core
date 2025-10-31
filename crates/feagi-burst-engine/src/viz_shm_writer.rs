@@ -38,6 +38,7 @@ use std::fs::OpenOptions;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
+use tracing::{info, warn};
 
 const MAGIC: &[u8; 8] = b"FEAGIVIS"; // Ring buffer magic (BV expects this!)
 const VERSION: u32 = 1;
@@ -123,7 +124,7 @@ impl VizSHMWriter {
 
         mmap.flush()?;
 
-        println!(
+        info!(
             "✅ Created Viz SHM Writer: {:?} (FEAGIVIS ring buffer: {} slots x {} bytes = {} MB)",
             shm_path,
             num_slots,
@@ -154,14 +155,14 @@ impl VizSHMWriter {
         // Check payload size
         if payload.len() + 4 > self.slot_size {
             // Truncate if too large (should not happen with proper encoding)
-            eprintln!(
+            warn!(
                 "⚠️  [VIZ-SHM] WARNING: Payload {} bytes exceeds slot size {} bytes - DATA WILL BE TRUNCATED!",
                 payload.len(), self.slot_size
             );
-            eprintln!(
+            warn!(
                 "⚠️  [VIZ-SHM] This should NOT happen! Shared memory mode may not be fully supported yet."
             );
-            eprintln!(
+            warn!(
                 "⚠️  [VIZ-SHM] Recommendation: Run FEAGI without --shared-mem flag to use ZMQ mode instead."
             );
             let truncated = &payload[0..(self.slot_size - 4)];
@@ -223,7 +224,7 @@ impl VizSHMWriter {
 
 impl Drop for VizSHMWriter {
     fn drop(&mut self) {
-        println!(
+        info!(
             "🗑️  Dropping Viz SHM Writer: {:?} (wrote {} frames)",
             self.shm_path, self.total_writes
         );

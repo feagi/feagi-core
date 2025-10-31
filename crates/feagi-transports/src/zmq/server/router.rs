@@ -8,7 +8,7 @@ use crate::common::{ReplyHandle, ServerConfig, TransportError, TransportResult};
 use crate::traits::{RequestReplyServer, Transport};
 use parking_lot::Mutex;
 use std::sync::Arc;
-
+use tracing::info;
 /// ZMQ ROUTER socket implementation (server-side)
 pub struct ZmqRouter {
     context: Arc<zmq::Context>,
@@ -66,7 +66,7 @@ impl Transport for ZmqRouter {
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
         
-        println!(
+        info!(
             "🦀 [ZMQ-ROUTER] Listening on {}",
             self.config.base.address
         );

@@ -3,6 +3,7 @@
 
 use parking_lot::Mutex;
 use std::sync::Arc;
+use tracing::{debug, info, warn, error};
 
 /// Motor stream for publishing motor commands
 #[derive(Clone)]
@@ -50,7 +51,7 @@ impl MotorStream {
         *self.socket.lock() = Some(socket);
         *self.running.lock() = true;
 
-        println!("🦀 [ZMQ-MOTOR] Listening on {}", self.bind_address);
+        info!("🦀 [ZMQ-MOTOR] Listening on {}", self.bind_address);
 
         Ok(())
     }

@@ -20,6 +20,7 @@ pub use cpu::CPUBackend;
 pub use wgpu_backend::WGPUBackend;
 
 use feagi_types::*;
+use tracing::info;
 
 /// Result of processing a burst on any backend
 #[derive(Debug, Clone)]
@@ -400,12 +401,12 @@ pub fn create_backend(
     let actual_type = if backend_type == BackendType::Auto {
         // Count will be updated later, use capacity as estimate
         let decision = select_backend(neuron_capacity, synapse_capacity, config);
-        println!(
+        info!(
             "🎯 Backend auto-selection: {} ({})",
             decision.backend_type, decision.reason
         );
         if decision.estimated_speedup > 1.0 {
-            println!("   Estimated speedup: {:.1}x", decision.estimated_speedup);
+            info!("   Estimated speedup: {:.1}x", decision.estimated_speedup);
         }
         decision.backend_type
     } else {
@@ -414,12 +415,12 @@ pub fn create_backend(
 
     match actual_type {
         BackendType::CPU => {
-            println!("🖥️  Using CPU backend (SIMD optimized)");
+            info!("🖥️  Using CPU backend (SIMD optimized)");
             Ok(Box::new(CPUBackend::new()))
         }
         #[cfg(feature = "gpu")]
         BackendType::WGPU => {
-            println!("🎮 Using WGPU backend (GPU accelerated)");
+            info!("🎮 Using WGPU backend (GPU accelerated)");
             Ok(Box::new(WGPUBackend::new(
                 neuron_capacity,
                 synapse_capacity,

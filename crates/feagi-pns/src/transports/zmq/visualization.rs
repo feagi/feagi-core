@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
+use tracing::{debug, info, warn, error};
 
 /// Overflow handling strategy when the visualization queue is saturated.
 #[derive(Clone, Copy, Debug)]
@@ -167,7 +168,7 @@ impl VisualizationStream {
 
         self.spawn_worker();
 
-        println!("🦀 [ZMQ-VIZ] Listening on {}", self.bind_address);
+        info!("🦀 [ZMQ-VIZ] Listening on {}", self.bind_address);
 
         Ok(())
     }
@@ -178,7 +179,7 @@ impl VisualizationStream {
 
         if let Some(handle) = self.worker_thread.lock().take() {
             if let Err(err) = handle.join() {
-                eprintln!("[ZMQ-VIZ] Worker thread join error: {:?}", err);
+                error!("[ZMQ-VIZ] Worker thread join error: {:?}", err);
             }
         }
 
@@ -192,7 +193,7 @@ impl VisualizationStream {
     pub fn publish(&self, data: &[u8]) -> Result<(), String> {
         static FIRST_LOG: AtomicBool = AtomicBool::new(false);
         if !FIRST_LOG.load(Ordering::Relaxed) {
-            eprintln!(
+            debug!(
                 "[VIZ-STREAM] 🔍 TRACE: publish() called with {} bytes (BEFORE compression)",
                 data.len()
             );
@@ -203,7 +204,7 @@ impl VisualizationStream {
             match lz4::block::compress(data, Some(lz4::block::CompressionMode::FAST(1)), true) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("[VIZ-STREAM] ❌ LZ4 FAILED: {:?}", e);
+                    error!("[VIZ-STREAM] ❌ LZ4 FAILED: {:?}", e);
                     return Err(format!("LZ4 compression failed: {}", e));
                 }
             };
@@ -231,7 +232,7 @@ impl VisualizationStream {
             match self.queue.push(current) {
                 Ok(()) => {
                     self.stats.record_enqueue(self.queue.len());
-                    eprintln!(
+                    warn!(
                         "[ZMQ-VIZ] enqueue success: queue_len={} hwm={} waits={} drops={}",
                         self.queue.len(),
                         self.stats.queue_high_watermark.load(Ordering::Relaxed),
@@ -245,11 +246,11 @@ impl VisualizationStream {
                     let backpressure_count = self.stats.record_backpressure_wait();
 
                     if backpressure_count == 1 || backpressure_count % 100 == 0 {
-                        eprintln!(
+                        warn!(
                             "⚠️  [ZMQ-VIZ] Backpressure active - queue full (waits: {})",
                             backpressure_count
                         );
-                        eprintln!(
+                        warn!(
                             "[ZMQ-VIZ] queue snapshot: len={} hwm={} drops={} waits={}",
                             self.queue.len(),
                             self.stats.queue_high_watermark.load(Ordering::Relaxed),
@@ -260,7 +261,7 @@ impl VisualizationStream {
 
                     if self.shutdown.load(Ordering::Relaxed) {
                         let dropped = self.stats.record_drop();
-                        eprintln!(
+                        warn!(
                             "⚠️  [ZMQ-VIZ] Shutdown while queue saturated - dropping frame ({} total drops)",
                             dropped
                         );
@@ -320,7 +321,7 @@ impl VisualizationStream {
 
         loop {
             if let Err(e) = sock.send(&item.topic, zmq::SNDMORE) {
-                eprintln!("❌ [ZMQ-VIZ] Topic send failed: {}", e);
+                error!("❌ [ZMQ-VIZ] Topic send failed: {}", e);
                 stats.record_send_failure();
                 return;
             }
@@ -331,18 +332,18 @@ impl VisualizationStream {
                     static SEND_COUNTER: AtomicU64 = AtomicU64::new(0);
                     let count = SEND_COUNTER.fetch_add(1, Ordering::Relaxed);
                     if count % 30 == 0 {  // Log every 30 sends
-                        eprintln!("[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)", count, item.payload.len());
+                        info!("[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)", count, item.payload.len());
                     }
                     break;
                 }
                 Err(zmq::Error::EAGAIN) => {
                     let waits = stats.record_backpressure_wait();
                     if waits == 1 || waits % 100 == 0 {
-                        eprintln!(
+                        warn!(
                             "⚠️  [ZMQ-VIZ] Send backpressure from ZMQ socket (waits: {})",
                             waits
                         );
-                        eprintln!(
+                        warn!(
                             "[ZMQ-VIZ] send loop snapshot: waits={} drops={} failures={}",
                             waits,
                             stats.dropped.load(Ordering::Relaxed),
@@ -351,11 +352,11 @@ impl VisualizationStream {
                     }
                     if shutdown.load(Ordering::Relaxed) {
                         let drops = stats.record_drop();
-                        eprintln!(
+                        warn!(
                             "⚠️  [ZMQ-VIZ] Shutdown during send - dropping frame ({} drops)",
                             drops
                         );
-                        eprintln!(
+                        warn!(
                             "[ZMQ-VIZ] send loop exit due to shutdown (drops={} waits={})",
                             drops, waits
                         );
@@ -364,9 +365,9 @@ impl VisualizationStream {
                     thread::sleep(retry_sleep);
                 }
                 Err(other) => {
-                    eprintln!("❌ [ZMQ-VIZ] Payload send failed: {}", other);
+                    error!("❌ [ZMQ-VIZ] Payload send failed: {}", other);
                     stats.record_send_failure();
-                    eprintln!(
+                    warn!(
                         "[ZMQ-VIZ] send failure snapshot: drops={} failures={} waits={}",
                         stats.dropped.load(Ordering::Relaxed),
                         stats.send_failures.load(Ordering::Relaxed),

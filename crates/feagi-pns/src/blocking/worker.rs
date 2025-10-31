@@ -8,6 +8,7 @@ use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
+use tracing::{debug, info, warn, error};
 
 /// A worker thread that processes items from a queue
 ///
@@ -64,7 +65,7 @@ impl<T: Send + 'static> WorkerThread<T> {
                     match rx.recv_timeout(std::time::Duration::from_millis(100)) {
                         Ok(item) => {
                             if let Err(e) = handler(item) {
-                                eprintln!("[Worker:{}] Handler error: {}", name_clone, e);
+                                error!("[Worker:{}] Handler error: {}", name_clone, e);
                             }
                         }
                         Err(crossbeam::channel::RecvTimeoutError::Timeout) => {
@@ -93,7 +94,7 @@ impl<T: Send + 'static> WorkerThread<T> {
         self.shutdown.store(true, Ordering::Relaxed);
         if let Some(handle) = self.handle.take() {
             if let Err(e) = handle.join() {
-                eprintln!("[Worker:{}] Join error: {:?}", self.name, e);
+                error!("[Worker:{}] Join error: {:?}", self.name, e);
             }
         }
     }

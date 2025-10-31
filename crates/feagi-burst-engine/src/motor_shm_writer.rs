@@ -36,6 +36,7 @@ use std::fs::OpenOptions;
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::PathBuf;
+use tracing::{info, warn};
 
 const MAGIC: &[u8; 8] = b"FEAGIMOT"; // Ring buffer magic (motor agents expect this!)
 const VERSION: u32 = 1;
@@ -124,7 +125,7 @@ impl MotorSHMWriter {
         // Flush to disk
         mmap.flush()?;
 
-        println!(
+        info!(
             "✅ Created Motor SHM Writer: {:?} (FEAGIMOT ring buffer: {} slots x {} bytes = {} MB)",
             shm_path,
             num_slots,
@@ -154,7 +155,7 @@ impl MotorSHMWriter {
 
         // Truncate if needed (4 bytes reserved for length prefix)
         if payload.len() + 4 > self.slot_size {
-            eprintln!(
+            warn!(
                 "[MOTOR-SHM] Warning: payload {} bytes exceeds slot size {} bytes, truncating",
                 payload.len(),
                 self.slot_size
@@ -227,7 +228,7 @@ impl Drop for MotorSHMWriter {
         if let Some(mmap) = self.mmap.take() {
             let _ = mmap.flush();
         }
-        println!(
+        info!(
             "[MOTOR-SHM] Writer closed after {} frames written",
             self.frame_seq
         );
