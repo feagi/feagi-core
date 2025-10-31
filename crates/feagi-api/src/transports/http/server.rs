@@ -75,6 +75,15 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::agent::*;
     use crate::endpoints::system;
     use crate::endpoints::cortical_area;
+    use crate::endpoints::morphology;
+    use crate::endpoints::genome;
+    use crate::endpoints::cortical_mapping;
+    use crate::endpoints::region;
+    use crate::endpoints::connectome;
+    use crate::endpoints::burst_engine;
+    use crate::endpoints::insight;
+    use crate::endpoints::neuroplasticity;
+    use crate::endpoints::input;
     
     Router::new()
         // ===== AGENT MODULE (7 endpoints) =====
@@ -122,62 +131,62 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/cortical_area/reset", put(cortical_area::put_reset))
         
         // ===== MORPHOLOGY MODULE (9 endpoints) =====
-        .route("/morphology/morphology_list", get(placeholder_handler))
-        .route("/morphology/morphology_types", get(placeholder_handler))
-        .route("/morphology/list/types", get(placeholder_handler))
-        .route("/morphology/morphologies", get(placeholder_handler))
+        .route("/morphology/morphology_list", get(morphology::get_morphology_list))
+        .route("/morphology/morphology_types", get(morphology::get_morphology_types))
+        .route("/morphology/list/types", get(morphology::get_list_types))
+        .route("/morphology/morphologies", get(morphology::get_morphologies))
         .route("/morphology/morphology",
-            axum::routing::post(placeholder_handler)
-            .put(placeholder_handler)
-            .delete(placeholder_handler))
-        .route("/morphology/morphology_properties", axum::routing::post(placeholder_handler))
-        .route("/morphology/morphology_usage", axum::routing::post(placeholder_handler))
+            axum::routing::post(morphology::post_morphology)
+            .put(morphology::put_morphology)
+            .delete(morphology::delete_morphology))
+        .route("/morphology/morphology_properties", axum::routing::post(morphology::post_morphology_properties))
+        .route("/morphology/morphology_usage", axum::routing::post(morphology::post_morphology_usage))
         
         // ===== REGION MODULE (7 endpoints) =====
-        .route("/region/regions_members", get(placeholder_handler))
+        .route("/region/regions_members", get(region::get_regions_members))
         .route("/region/region",
-            axum::routing::post(placeholder_handler)
-            .put(placeholder_handler)
-            .delete(placeholder_handler))
-        .route("/region/clone", axum::routing::post(placeholder_handler))
-        .route("/region/relocate_members", put(placeholder_handler))
-        .route("/region/region_and_members", axum::routing::delete(placeholder_handler))
+            axum::routing::post(region::post_region)
+            .put(region::put_region)
+            .delete(region::delete_region))
+        .route("/region/clone", axum::routing::post(region::post_clone))
+        .route("/region/relocate_members", put(region::put_relocate_members))
+        .route("/region/region_and_members", axum::routing::delete(region::delete_region_and_members))
         
         // ===== CORTICAL_MAPPING MODULE (4 endpoints) =====
-        .route("/cortical_mapping/afferents", axum::routing::post(placeholder_handler))
-        .route("/cortical_mapping/efferents", axum::routing::post(placeholder_handler))
+        .route("/cortical_mapping/afferents", axum::routing::post(cortical_mapping::post_afferents))
+        .route("/cortical_mapping/efferents", axum::routing::post(cortical_mapping::post_efferents))
         .route("/cortical_mapping/mapping_properties",
-            axum::routing::post(placeholder_handler).put(placeholder_handler))
+            axum::routing::post(cortical_mapping::post_mapping_properties).put(cortical_mapping::put_mapping_properties))
         
         // ===== CONNECTOME MODULE (3 endpoints) =====
-        .route("/connectome/cortical_areas/list/detailed", get(placeholder_handler))
-        .route("/connectome/properties/dimensions", get(placeholder_handler))
-        .route("/connectome/properties/mappings", get(placeholder_handler))
+        .route("/connectome/cortical_areas/list/detailed", get(connectome::get_cortical_areas_list_detailed))
+        .route("/connectome/properties/dimensions", get(connectome::get_properties_dimensions))
+        .route("/connectome/properties/mappings", get(connectome::get_properties_mappings))
         
         // ===== BURST_ENGINE MODULE (2 endpoints) =====
         .route("/burst_engine/simulation_timestep",
-            get(placeholder_handler).post(placeholder_handler))
+            get(burst_engine::get_simulation_timestep).post(burst_engine::post_simulation_timestep))
         
-        // ===== GENOME MODULE (4 endpoints) =====
-        .route("/genome/file_name", get(placeholder_handler))
-        .route("/genome/circuits", get(placeholder_handler))
-        .route("/genome/amalgamation_destination", axum::routing::post(placeholder_handler))
-        .route("/genome/amalgamation_cancellation", axum::routing::delete(placeholder_handler))
-        .route("/feagi/genome/append", axum::routing::post(placeholder_handler))
+        // ===== GENOME MODULE (5 endpoints) =====
+        .route("/genome/file_name", get(genome::get_file_name))
+        .route("/genome/circuits", get(genome::get_circuits))
+        .route("/genome/amalgamation_destination", axum::routing::post(genome::post_amalgamation_destination))
+        .route("/genome/amalgamation_cancellation", axum::routing::delete(genome::delete_amalgamation_cancellation))
+        .route("/feagi/genome/append", axum::routing::post(genome::post_genome_append))
         
         // ===== NEUROPLASTICITY MODULE (2 endpoints) =====
         .route("/neuroplasticity/plasticity_queue_depth",
-            get(placeholder_handler).put(placeholder_handler))
+            get(neuroplasticity::get_plasticity_queue_depth).put(neuroplasticity::put_plasticity_queue_depth))
         
         // ===== INSIGHT MODULE (4 endpoints) =====
-        .route("/insight/neurons/membrane_potential_status", axum::routing::post(placeholder_handler))
-        .route("/insight/neuron/synaptic_potential_status", axum::routing::post(placeholder_handler))
-        .route("/insight/neurons/membrane_potential_set", axum::routing::post(placeholder_handler))
-        .route("/insight/neuron/synaptic_potential_set", axum::routing::post(placeholder_handler))
+        .route("/insight/neurons/membrane_potential_status", axum::routing::post(insight::post_neurons_membrane_potential_status))
+        .route("/insight/neuron/synaptic_potential_status", axum::routing::post(insight::post_neuron_synaptic_potential_status))
+        .route("/insight/neurons/membrane_potential_set", axum::routing::post(insight::post_neurons_membrane_potential_set))
+        .route("/insight/neuron/synaptic_potential_set", axum::routing::post(insight::post_neuron_synaptic_potential_set))
         
         // ===== INPUT MODULE (2 endpoints) =====
         .route("/input/vision",
-            get(placeholder_handler).post(placeholder_handler))
+            get(input::get_vision).post(input::post_vision))
 }
 
 /// OpenAPI spec handler
