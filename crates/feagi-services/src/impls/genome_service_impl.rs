@@ -34,15 +34,29 @@ impl GenomeService for GenomeServiceImpl {
         
         // Load into connectome via ConnectomeManager
         // This involves synaptogenesis which can be CPU-intensive, so run it on a blocking thread
+        // CRITICAL: Add timeout to prevent hanging during shutdown
+        // Note: spawn_blocking tasks cannot be cancelled, but timeout ensures we don't wait forever
         let connectome_clone = self.connectome.clone();
-        let progress = tokio::task::spawn_blocking(move || {
+        let blocking_handle = tokio::task::spawn_blocking(move || {
             connectome_clone
                 .write()
                 .load_from_genome(genome)
                 .map_err(ServiceError::from)
-        })
-        .await
-        .map_err(|e| ServiceError::Backend(format!("Failed to spawn blocking task: {}", e)))??;
+        });
+        
+        // Wait with timeout - if timeout expires, abort the blocking task
+        let progress = match tokio::time::timeout(
+            tokio::time::Duration::from_secs(300), // 5 minute timeout
+            blocking_handle
+        ).await {
+            Ok(Ok(result)) => result?,
+            Ok(Err(e)) => return Err(ServiceError::Backend(format!("Blocking task panicked: {}", e))),
+            Err(_) => {
+                // Timeout expired - abort the task (though it may continue running)
+                log::warn!("Genome loading timed out after 5 minutes - aborting");
+                return Err(ServiceError::Backend("Genome loading timed out after 5 minutes".to_string()));
+            }
+        };
         
         log::info!(
             "Genome loaded: {} cortical areas, {} neurons, {} synapses created",

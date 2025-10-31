@@ -1,0 +1,43 @@
+[package]
+name = "feagi-observability"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Unified observability infrastructure for FEAGI (logging, telemetry, profiling)"
+
+[dependencies]
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Errors
+anyhow = "1.0"
+thiserror.workspace = true
+
+# Metrics
+prometheus = "0.13"
+
+# Utilities
+chrono = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+
+# Optional: OpenTelemetry support
+opentelemetry = { version = "0.21", optional = true }
+opentelemetry_sdk = { version = "0.21", optional = true }
+opentelemetry-otlp = { version = "0.14", optional = true }
+tracing-opentelemetry = { version = "0.21", optional = true }
+
+# Profiling
+tracing-chrome = { version = "0.6", optional = true }
+pprof = { version = "0.12", optional = true }
+
+[features]
+default = []
+opentelemetry = [
+    "dep:opentelemetry",
+    "dep:opentelemetry_sdk",
+    "dep:opentelemetry-otlp",
+    "dep:tracing-opentelemetry"
+]
+profiling = ["dep:tracing-chrome", "dep:pprof"]

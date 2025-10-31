@@ -21,7 +21,7 @@ use crate::transports::http::server::ApiState;
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CorticalAreaIdListResponse {
-    pub cortical_id_list: Vec<String>,
+    pub cortical_ids: Vec<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
@@ -70,7 +70,7 @@ pub async fn get_opu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String
 pub async fn get_cortical_area_id_list(State(state): State<ApiState>) -> ApiResult<Json<CorticalAreaIdListResponse>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.get_cortical_area_ids().await {
-        Ok(ids) => Ok(Json(CorticalAreaIdListResponse { cortical_id_list: ids })),
+        Ok(ids) => Ok(Json(CorticalAreaIdListResponse { cortical_ids: ids })),
         Err(e) => Err(ApiError::internal(format!("Failed to get cortical IDs: {}", e))),
     }
 }

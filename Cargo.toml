@@ -80,6 +80,7 @@ members = [
     "crates/feagi-evo",                # Genome I/O and evolution (genotype)
     "crates/feagi-services",           # Service layer (stable application boundary)
     "crates/feagi-api",                # REST API layer (HTTP + ZMQ transports)
+    "crates/feagi-observability",      # Unified observability (logging, telemetry, profiling)
     
     # === Algorithm Layer (Core Neural Computation) ===
     "crates/feagi-burst-engine",       # NPU execution & inference
@@ -120,6 +121,7 @@ feagi_data_serialization = "0.0.50-beta.50"
 
 # Workspace-internal crates
 feagi-connectome-serialization = { path = "crates/feagi-connectome-serialization" }
+feagi-observability = { path = "crates/feagi-observability" }
 
 # PyO3 for Python bindings
 pyo3 = { version = "0.22", features = ["extension-module"] }

@@ -1,0 +1,70 @@
+//! # feagi-observability
+//!
+//! Unified observability infrastructure for FEAGI (logging, telemetry, profiling).
+//!
+//! Provides consistent observability patterns across all FEAGI crates with
+//! per-crate debug flag support.
+
+pub mod cli;
+pub mod config;
+
+// Placeholder modules - to be implemented
+pub mod context {
+    //! Correlation IDs and context propagation
+    // TODO: Implement
+}
+
+pub mod errors {
+    //! Error handling and reporting
+    // TODO: Implement
+}
+
+pub mod init {
+    //! Unified initialization
+    // TODO: Implement
+}
+
+pub mod logging {
+    //! Structured logging with spans
+    // TODO: Implement
+}
+
+pub mod metrics {
+    //! Prometheus metrics
+    // TODO: Implement
+}
+
+pub mod profiling {
+    //! CPU/Memory profiling
+    // TODO: Implement
+}
+
+pub mod telemetry {
+    //! Unified telemetry collection
+    // TODO: Implement
+}
+
+pub mod tracing {
+    //! Distributed tracing (OpenTelemetry)
+    // TODO: Implement
+}
+
+// Re-export commonly used items
+pub use cli::*;
+pub use config::*;
+
+/// Known FEAGI crate names for debug flags
+pub const KNOWN_CRATES: &[&str] = &[
+    "feagi-api",
+    "feagi-burst-engine",
+    "feagi-bdu",
+    "feagi-services",
+    "feagi-evo",
+    "feagi-config",
+    "feagi-pns",
+    "feagi-transports",
+    "feagi-agent-sdk",
+    "feagi-state-manager",
+    "feagi-plasticity",
+    "feagi-connectome-serialization",
+];
