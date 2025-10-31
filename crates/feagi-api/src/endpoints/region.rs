@@ -10,13 +10,26 @@ use crate::transports::http::server::ApiState;
 
 /// GET /v1/region/regions_members
 #[utoipa::path(get, path = "/v1/region/regions_members", tag = "region")]
-pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_brain_regions().await {
         Ok(regions) => {
             let mut result = HashMap::new();
             for region in regions {
-                result.insert(region.region_id, region.cortical_areas);
+                result.insert(
+                    region.region_id.clone(),
+                    serde_json::json!({
+                        "title": region.name,
+                        "description": "",  // TODO: Add description field to BrainRegionInfo
+                        "parent_region_id": region.parent_id,
+                        "coordinate_2d": [0, 0],  // TODO: Get from region properties
+                        "coordinate_3d": [0, 0, 0],  // TODO: Get from region properties
+                        "areas": region.cortical_areas,
+                        "regions": region.child_regions,
+                        "inputs": [],  // TODO: Calculate input areas
+                        "outputs": []  // TODO: Calculate output areas
+                    })
+                );
             }
             Ok(Json(result))
         },

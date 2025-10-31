@@ -162,12 +162,55 @@ impl Neuroembryogenesis {
             debug!(target: "feagi-bdu","  ✓ Created cortical area: {} ({})", cortical_id, area.name);
         }
         
+        // Ensure brain regions structure exists (auto-generate if missing)
+        // This matches Python's normalize_brain_region_membership() behavior
+        let brain_regions_to_add = if genome.brain_regions.is_empty() {
+            info!(target: "feagi-bdu","  No brain_regions in genome - auto-generating default root region");
+            
+            // Collect all cortical area IDs
+            let all_cortical_ids: Vec<String> = genome.cortical_areas.keys().cloned().collect();
+            
+            // Classify areas into inputs/outputs based on their AreaType
+            let mut auto_inputs = Vec::new();
+            let mut auto_outputs = Vec::new();
+            
+            for (area_id, area) in genome.cortical_areas.iter() {
+                match area.area_type {
+                    feagi_types::AreaType::Sensory => auto_inputs.push(area_id.clone()),
+                    feagi_types::AreaType::Motor => auto_outputs.push(area_id.clone()),
+                    _ => {} // Memory, Custom go to root but not classified as I/O
+                }
+            }
+            
+            // Create default root region
+            use feagi_types::{BrainRegion, RegionType};
+            let root_region = BrainRegion::new(
+                "root".to_string(),
+                "Root Brain Region".to_string(),
+                RegionType::Custom,  // Root is a custom organizational container
+            )
+            .expect("Failed to create root region")
+            .with_areas(all_cortical_ids.clone());
+            
+            // TODO: Store inputs/outputs in BrainRegion properties when schema is expanded
+            
+            let mut regions_map = std::collections::HashMap::new();
+            regions_map.insert("root".to_string(), root_region);
+            
+            info!(target: "feagi-bdu","  ✅ Auto-generated root region with {} cortical areas ({} inputs, {} outputs)",
+                  all_cortical_ids.len(), auto_inputs.len(), auto_outputs.len());
+            
+            regions_map
+        } else {
+            genome.brain_regions.clone()
+        };
+        
         // Add brain regions - minimize lock scope
         {
             let mut manager = self.connectome_manager.write();
-            let brain_region_count = genome.brain_regions.len();
+            let brain_region_count = brain_regions_to_add.len();
             info!(target: "feagi-bdu","  Adding {} brain regions from genome", brain_region_count);
-            for (region_id, region) in genome.brain_regions.iter() {
+            for (region_id, region) in brain_regions_to_add.iter() {
                 // TODO: Track parent relationships from genome
                 manager.add_brain_region(region.clone(), None)?;
                 debug!(target: "feagi-bdu","    ✓ Added brain region: {} ({})", region_id, region.name);

@@ -266,6 +266,16 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let neuron_count = manager.get_neuron_count_in_area(cortical_id);
         let synapse_count = manager.get_synapse_count_in_area(cortical_id);
         
+        // Derive cortical_group from area_type (matching Python logic)
+        // Python logic: cortical_group = str(raw_group).upper() if raw_group else "CUSTOM"
+        // Maps: Sensory → IPU, Motor → OPU, Memory → MEMORY, Custom → CUSTOM
+        let cortical_group = match area.area_type {
+            feagi_types::AreaType::Sensory => "IPU",
+            feagi_types::AreaType::Motor => "OPU",
+            feagi_types::AreaType::Memory => "MEMORY",
+            feagi_types::AreaType::Custom => "CUSTOM",
+        }.to_string();
+        
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
             cortical_idx,
@@ -273,6 +283,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             dimensions: area.dimensions.to_tuple(),
             position: area.position,
             area_type: Self::area_type_to_string(&area.area_type),
+            cortical_group,
             neuron_count,
             synapse_count,
             // All neural parameters come from the actual CorticalArea struct

@@ -174,6 +174,10 @@ pub async fn get_cortical_locations_2d(State(state): State<ApiState>) -> ApiResu
 }
 
 /// GET /v1/cortical_area/cortical_area/geometry
+/// 
+/// Returns FULL cortical area data in Godot-compatible format (not just geometry!)
+/// Despite the name, this endpoint returns complete cortical area properties
+/// to match Python behavior and support Brain Visualizer genome loading
 #[utoipa::path(get, path = "/v1/cortical_area/cortical_area/geometry", tag = "cortical_area")]
 pub async fn get_cortical_area_geometry(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
@@ -181,7 +185,20 @@ pub async fn get_cortical_area_geometry(State(state): State<ApiState>) -> ApiRes
         Ok(areas) => {
             let geometry: HashMap<String, serde_json::Value> = areas.into_iter()
                 .map(|area| {
-                    let geo = serde_json::json!({
+                    // Return FULL cortical area data (matching Python format)
+                    // This is what Brain Visualizer expects for genome loading
+                    let data = serde_json::json!({
+                        "cortical_id": area.cortical_id,
+                        "cortical_name": area.name,
+                        "cortical_group": area.cortical_group,
+                        "cortical_sub_group": area.sub_group.as_ref().unwrap_or(&String::new()),  // Return empty string instead of null
+                        "coordinates_3d": [area.position.0, area.position.1, area.position.2],
+                        "coordinates_2d": [0, 0],  // TODO: Extract from properties when available
+                        "cortical_dimensions": [area.dimensions.0, area.dimensions.1, area.dimensions.2],
+                        "cortical_neuron_per_vox_count": area.neurons_per_voxel,
+                        "visualization": area.visible,
+                        "visible": area.visible,
+                        // Also include dictionary-style for backward compatibility
                         "dimensions": {
                             "x": area.dimensions.0,
                             "y": area.dimensions.1,
@@ -191,9 +208,17 @@ pub async fn get_cortical_area_geometry(State(state): State<ApiState>) -> ApiRes
                             "x": area.position.0,
                             "y": area.position.1,
                             "z": area.position.2
-                        }
+                        },
+                        // Neural parameters
+                        "neuron_post_synaptic_potential": area.postsynaptic_current,
+                        "neuron_fire_threshold": area.firing_threshold_limit,
+                        "plasticity_constant": area.plasticity_constant,
+                        "degeneration": area.degeneration,
+                        "leak_coefficient": area.leak_coefficient,
+                        "refractory_period": area.refractory_period,
+                        "snooze_period": area.snooze_period,
                     });
-                    (area.cortical_id, geo)
+                    (area.cortical_id.clone(), data)
                 })
                 .collect();
             Ok(Json(geometry))

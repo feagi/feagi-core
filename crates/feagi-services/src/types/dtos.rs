@@ -47,6 +47,7 @@ pub struct CorticalAreaInfo {
     pub dimensions: (usize, usize, usize),
     pub position: (i32, i32, i32),
     pub area_type: String, // "Sensory", "Motor", "Memory", "Custom"
+    pub cortical_group: String, // "IPU", "OPU", "CORE", "CUSTOM", "MEMORY" - uppercase classification
     pub neuron_count: usize,
     pub synapse_count: usize,
     pub visible: bool,
