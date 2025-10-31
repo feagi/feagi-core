@@ -17,6 +17,7 @@ feagi-types = { path = "../feagi-types" }
 feagi-evo = { path = "../feagi-evo" }
 feagi-bdu = { path = "../feagi-bdu" }
 feagi-burst-engine = { path = "../feagi-burst-engine" }
+feagi-pns = { path = "../feagi-pns" }
 
 # Async runtime (optional for embedded)
 async-trait = "0.1"

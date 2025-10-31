@@ -5,9 +5,11 @@
 
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{Request, StatusCode},
     response::{Html, IntoResponse, Json, Redirect, Response},
     routing::{get, put},
+    middleware::{self, Next},
+    body::Body,
     Router,
 };
 use std::sync::Arc;
@@ -16,6 +18,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 use utoipa::OpenApi;
+use http_body_util::BodyExt;
 
 use crate::openapi::ApiDoc;
 use feagi_services::{AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService};
@@ -59,6 +62,7 @@ pub fn create_http_server(state: ApiState) -> Router {
         .with_state(state)
         
         // Add middleware
+        .layer(middleware::from_fn(log_request_response_bodies))
         .layer(create_cors_layer())
         .layer(
             TraceLayer::new_for_http()
@@ -240,6 +244,67 @@ fn create_cors_layer() -> CorsLayer {
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any)
+}
+
+/// Middleware to log request and response bodies for debugging
+async fn log_request_response_bodies(
+    request: Request<Body>,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let (parts, body) = request.into_parts();
+    
+    // Only log bodies for POST/PUT/PATCH requests
+    let should_log_request = matches!(
+        parts.method.as_str(),
+        "POST" | "PUT" | "PATCH"
+    );
+    
+    let body_bytes = if should_log_request {
+        // Collect body bytes
+        match body.collect().await {
+            Ok(collected) => {
+                let bytes = collected.to_bytes();
+                // Log request body if it's JSON
+                if let Ok(body_str) = String::from_utf8(bytes.to_vec()) {
+                    if !body_str.is_empty() {
+                        tracing::debug!(target: "feagi-api", "📥 Request body: {}", body_str);
+                    }
+                }
+                bytes
+            }
+            Err(_) => {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    } else {
+        axum::body::Bytes::new()
+    };
+    
+    // Reconstruct request with original body
+    let request = Request::from_parts(parts, Body::from(body_bytes));
+    
+    // Call the next handler
+    let response = next.run(request).await;
+    
+    // Log response body
+    let (parts, body) = response.into_parts();
+    
+    match body.collect().await {
+        Ok(collected) => {
+            let bytes = collected.to_bytes();
+            // Log response body if it's JSON and not too large
+            if bytes.len() < 10000 {  // Only log responses < 10KB
+                if let Ok(body_str) = String::from_utf8(bytes.to_vec()) {
+                    if !body_str.is_empty() && body_str.starts_with('{') {
+                        tracing::debug!(target: "feagi-api", "📤 Response body: {}", body_str);
+                    }
+                }
+            }
+            // Reconstruct response
+            Ok(Response::from_parts(parts, Body::from(bytes)))
+        }
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
 }
 
 // ============================================================================

@@ -40,7 +40,6 @@ impl AnalyticsService for AnalyticsServiceImpl {
         let neuron_count = self.get_total_neuron_count().await?;
         let manager = self.connectome.read();
         let cortical_area_count = manager.get_cortical_area_count();
-        let brain_initialized = cortical_area_count > 0;
         
         // Get burst engine status from BurstLoopRunner
         let (burst_engine_active, burst_count) = if let Some(ref runner) = self.burst_runner {
@@ -50,9 +49,13 @@ impl AnalyticsService for AnalyticsServiceImpl {
             (false, 0)
         };
         
+        // Brain is ready ONLY if genome is loaded AND burst engine is actively running
+        // This prevents the Brain Visualizer from exiting loading screen prematurely
+        let brain_readiness = cortical_area_count > 0 && burst_engine_active;
+        
         Ok(SystemHealth {
             burst_engine_active,
-            brain_readiness: brain_initialized,
+            brain_readiness,
             neuron_count,
             cortical_area_count,
             burst_count,

@@ -589,7 +589,7 @@ fn burst_loop(
                             static FIRST_PUBLISH_LOGGED: std::sync::atomic::AtomicBool =
                                 std::sync::atomic::AtomicBool::new(false);
                             if !FIRST_PUBLISH_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                error!("[BURST-LOOP] 🔍 CRITICAL: Calling publisher.publish_visualization() with {} bytes", buffer.len());
+                                debug!("[BURST-LOOP] First visualization publish: {} bytes", buffer.len());
                                 FIRST_PUBLISH_LOGGED
                                     .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
@@ -599,7 +599,7 @@ fn burst_loop(
                             
                             let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             if count % 30 == 0 {  // Log every 30 publishes (~1 second at 30Hz)
-                                info!("[BURST-LOOP] 📊 VIZ PUBLISH #{}: {} bytes/frame", count, buffer.len());
+                                debug!("[BURST-LOOP] Viz publish #{}: {} bytes/frame", count, buffer.len());
                             }
 
                             match publisher.publish_visualization(&buffer) {
@@ -607,7 +607,7 @@ fn burst_loop(
                                     static SUCCESS_LOGGED: std::sync::atomic::AtomicBool =
                                         std::sync::atomic::AtomicBool::new(false);
                                     if !SUCCESS_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                        error!("[BURST-LOOP] ✅ CRITICAL: publish_visualization() SUCCESS!");
+                                        debug!("[BURST-LOOP] Visualization publisher connected and working");
                                         SUCCESS_LOGGED
                                             .store(true, std::sync::atomic::Ordering::Relaxed);
                                     }

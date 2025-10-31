@@ -3,25 +3,37 @@
 
 //! Agent service implementation
 //!
-//! This implementation delegates all agent management to the Registration Manager
-//! in feagi-pns, ensuring centralized coordination.
+//! This implementation delegates all agent management to the PNS AgentRegistry,
+//! ensuring centralized coordination consistent with the Python implementation.
 
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::{info, warn};
 
 use crate::traits::agent_service::*;
 use feagi_bdu::ConnectomeManager;
+use feagi_pns::{
+    AgentRegistry, AgentInfo, AgentType, AgentCapabilities, AgentTransport,
+    SensoryCapability, VisualizationCapability, MotorCapability,
+};
 
 /// Implementation of the Agent service
 pub struct AgentServiceImpl {
     connectome_manager: Arc<RwLock<ConnectomeManager>>,
+    agent_registry: Arc<RwLock<AgentRegistry>>,
 }
 
 impl AgentServiceImpl {
-    pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager>>) -> Self {
-        Self { connectome_manager }
+    pub fn new(
+        connectome_manager: Arc<RwLock<ConnectomeManager>>,
+        agent_registry: Arc<RwLock<AgentRegistry>>,
+    ) -> Self {
+        Self {
+            connectome_manager,
+            agent_registry,
+        }
     }
 }
 
@@ -29,58 +41,179 @@ impl AgentServiceImpl {
 impl AgentService for AgentServiceImpl {
     async fn register_agent(
         &self,
-        _registration: AgentRegistration,
+        registration: AgentRegistration,
     ) -> AgentResult<AgentRegistrationResponse> {
-        // This will delegate to feagi-pns Registration Manager
-        // For now, return a placeholder to allow compilation
-        // TODO: Implement integration with feagi-pns::RegistrationManager
+        info!("🦀 [AGENT-SERVICE] Registering agent: {} (type: {})",
+              registration.agent_id, registration.agent_type);
         
-        Err(AgentError::ServiceUnavailable(
-            "Agent registration requires feagi-pns::RegistrationManager integration - pending".to_string()
-        ))
+        // Parse agent type
+        let agent_type = match registration.agent_type.as_str() {
+            "visualization" | "brain_visualizer" => AgentType::Visualization,
+            "sensory" | "video_agent" | "camera_agent" => AgentType::Sensory,
+            "motor" | "motor_agent" => AgentType::Motor,
+            "both" | "sensorimotor" => AgentType::Both,
+            "infrastructure" | "bridge" | "proxy" => AgentType::Infrastructure,
+            other => {
+                warn!("Unknown agent type '{}', defaulting to Sensory", other);
+                AgentType::Sensory
+            }
+        };
+        
+        // Convert capabilities to PNS format
+        let mut capabilities = AgentCapabilities::default();
+        
+        // Populate structured capabilities based on agent type to satisfy validation
+        match agent_type {
+            AgentType::Visualization => {
+                // Brain Visualizer requires visualization capability
+                capabilities.visualization = Some(VisualizationCapability {
+                    visualization_type: "3d_brain".to_string(),
+                    resolution: None,
+                    refresh_rate: None,
+                    bridge_proxy: false,
+                });
+            }
+            AgentType::Sensory => {
+                // Sensory agents require sensory capability
+                capabilities.sensory = Some(SensoryCapability {
+                    rate_hz: 30.0,
+                    shm_path: None,
+                    cortical_mappings: std::collections::HashMap::new(),
+                });
+            }
+            AgentType::Motor => {
+                // Motor agents require motor capability
+                capabilities.motor = Some(MotorCapability {
+                    modality: "generic".to_string(),
+                    output_count: 0,
+                    source_cortical_areas: vec![],
+                });
+            }
+            AgentType::Both => {
+                // Sensorimotor agents need both sensory and motor capabilities
+                capabilities.sensory = Some(SensoryCapability {
+                    rate_hz: 30.0,
+                    shm_path: None,
+                    cortical_mappings: std::collections::HashMap::new(),
+                });
+                capabilities.motor = Some(MotorCapability {
+                    modality: "generic".to_string(),
+                    output_count: 0,
+                    source_cortical_areas: vec![],
+                });
+            }
+            AgentType::Infrastructure => {
+                // Infrastructure agents can proxy any type, use visualization as default
+                capabilities.visualization = Some(VisualizationCapability {
+                    visualization_type: "bridge".to_string(),
+                    resolution: None,
+                    refresh_rate: None,
+                    bridge_proxy: true,
+                });
+            }
+        }
+        
+        // Store all raw capabilities in custom field
+        capabilities.custom = registration.capabilities.iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        
+        // Create agent info
+        let mut agent_info = AgentInfo::new(
+            registration.agent_id.clone(),
+            agent_type,
+            capabilities,
+            AgentTransport::Zmq, // Default to ZMQ
+        );
+        
+        // Store metadata
+        if let Some(meta) = registration.metadata {
+            agent_info.metadata.extend(meta.iter().map(|(k, v)| (k.clone(), v.clone())));
+        }
+        if let Some(ip) = registration.agent_ip {
+            agent_info.metadata.insert("agent_ip".to_string(), serde_json::json!(ip));
+        }
+        agent_info.metadata.insert("agent_data_port".to_string(), serde_json::json!(registration.agent_data_port));
+        agent_info.metadata.insert("agent_version".to_string(), serde_json::json!(registration.agent_version));
+        agent_info.metadata.insert("controller_version".to_string(), serde_json::json!(registration.controller_version));
+        
+        // Register in agent registry
+        self.agent_registry.write().register(agent_info)
+            .map_err(|e| AgentError::RegistrationFailed(e))?;
+        
+        info!("✅ [AGENT-SERVICE] Agent '{}' registered successfully", registration.agent_id);
+        
+        Ok(AgentRegistrationResponse {
+            status: "success".to_string(),
+            message: format!("Agent {} registered successfully", registration.agent_id),
+            success: true,
+            transport: None, // TODO: Add transport negotiation
+            rates: None,     // TODO: Add rate negotiation
+        })
     }
     
-    async fn heartbeat(&self, _request: HeartbeatRequest) -> AgentResult<()> {
-        // This will delegate to feagi-pns Registration Manager
-        // For now, return a placeholder to allow compilation
-        // TODO: Implement integration with feagi-pns::RegistrationManager
-        
-        Err(AgentError::ServiceUnavailable(
-            "Agent heartbeat requires feagi-pns::RegistrationManager integration - pending".to_string()
-        ))
+    async fn heartbeat(&self, request: HeartbeatRequest) -> AgentResult<()> {
+        self.agent_registry.write().heartbeat(&request.agent_id)
+            .map_err(|e| AgentError::NotFound(e))?;
+        Ok(())
     }
     
     async fn list_agents(&self) -> AgentResult<Vec<String>> {
-        // This will delegate to feagi-pns Registration Manager
-        // For now, return empty list to allow compilation
-        // TODO: Implement integration with feagi-pns::RegistrationManager
-        
-        Ok(vec![])
+        let registry = self.agent_registry.read();
+        let agents = registry.get_all();
+        Ok(agents.iter().map(|a| a.agent_id.clone()).collect())
     }
     
-    async fn get_agent_properties(&self, _agent_id: &str) -> AgentResult<AgentProperties> {
-        // This will delegate to feagi-pns Registration Manager
-        // For now, return error to allow compilation
-        // TODO: Implement integration with feagi-pns::RegistrationManager
+    async fn get_agent_properties(&self, agent_id: &str) -> AgentResult<AgentProperties> {
+        let registry = self.agent_registry.read();
+        let agent = registry.get(agent_id)
+            .ok_or_else(|| AgentError::NotFound(format!("Agent {} not found", agent_id)))?;
         
-        Err(AgentError::NotFound(
-            "Agent property lookup requires feagi-pns::RegistrationManager integration - pending".to_string()
-        ))
+        // Extract properties from agent info
+        let agent_ip = agent.metadata.get("agent_ip")
+            .and_then(|v| v.as_str())
+            .unwrap_or("127.0.0.1")
+            .to_string();
+        
+        let agent_data_port = agent.metadata.get("agent_data_port")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u16;
+        
+        let agent_version = agent.metadata.get("agent_version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        
+        let controller_version = agent.metadata.get("controller_version")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        
+        let agent_router_address = format!("tcp://{}:{}", agent_ip, agent_data_port);
+        
+        Ok(AgentProperties {
+            agent_type: agent.agent_type.to_string(),
+            agent_ip,
+            agent_data_port,
+            agent_router_address,
+            agent_version,
+            controller_version,
+            capabilities: agent.capabilities.custom.iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect(),
+        })
     }
     
     async fn get_shared_memory_info(&self) -> AgentResult<HashMap<String, HashMap<String, serde_json::Value>>> {
-        // This will delegate to feagi-pns Registration Manager or State Manager
-        // For now, return empty map to allow compilation
-        // TODO: Implement integration with feagi-pns::RegistrationManager
-        
+        // TODO: Implement shared memory tracking in agent registry
         Ok(HashMap::new())
     }
     
-    async fn deregister_agent(&self, _agent_id: &str) -> AgentResult<()> {
-        // This will delegate to feagi-pns Registration Manager
-        // For now, return success to allow compilation (idempotent)
-        // TODO: Implement integration with feagi-pns::RegistrationManager
+    async fn deregister_agent(&self, agent_id: &str) -> AgentResult<()> {
+        self.agent_registry.write().deregister(agent_id)
+            .map_err(|e| AgentError::NotFound(e))?;
         
+        info!("✅ [AGENT-SERVICE] Agent '{}' deregistered successfully", agent_id);
         Ok(())
     }
     

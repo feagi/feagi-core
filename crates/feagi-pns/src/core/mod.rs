@@ -18,7 +18,7 @@ pub mod types;
 // Re-export commonly used types
 pub use agent_registry::{
     AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-    VisionCapability, VisualizationCapability,
+    SensoryCapability, VisionCapability, VisualizationCapability,
 };
 pub use config::{PNSConfig, TransportMode};
 pub use events::{
