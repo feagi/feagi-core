@@ -256,6 +256,10 @@ impl BurstLoopRunner {
     }
 
     /// Stop the burst loop gracefully
+    /// 
+    /// This method sets the shutdown flag and waits up to 2 seconds for the thread to finish.
+    /// If the thread doesn't finish within the timeout, it's considered non-responsive
+    /// and we proceed with shutdown anyway.
     pub fn stop(&mut self) {
         if !self.running.load(Ordering::Acquire) {
             return; // Already stopped
@@ -265,10 +269,39 @@ impl BurstLoopRunner {
         self.running.store(false, Ordering::Release);
 
         if let Some(handle) = self.thread_handle.take() {
-            if handle.join().is_err() {
-                eprintln!("[BURST-RUNNER] ⚠️ Burst loop thread panicked during shutdown");
-            } else {
-                println!("[BURST-RUNNER] ✅ Burst loop stopped cleanly");
+            // Use a timeout to prevent blocking indefinitely
+            // The burst loop checks the flag every 50ms, so 2 seconds should be plenty
+            let stop_timeout = std::time::Duration::from_secs(2);
+            let start = std::time::Instant::now();
+            
+            // Poll join with timeout using a simple loop
+            // Note: Rust's std::thread::JoinHandle doesn't have a timeout method,
+            // so we'll use a different approach: spawn a thread that waits for join
+            let handle_clone = handle;
+            let (tx, rx) = std::sync::mpsc::channel();
+            
+            std::thread::spawn(move || {
+                let result = handle_clone.join();
+                let _ = tx.send(result);
+            });
+            
+            match rx.recv_timeout(stop_timeout) {
+                Ok(Ok(_)) => {
+                    println!("[BURST-RUNNER] ✅ Burst loop stopped cleanly");
+                }
+                Ok(Err(_)) => {
+                    eprintln!("[BURST-RUNNER] ⚠️ Burst loop thread panicked during shutdown");
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    let elapsed = start.elapsed();
+                    eprintln!(
+                        "[BURST-RUNNER] ⚠️ Burst loop did not stop within {:?}, proceeding with shutdown",
+                        elapsed
+                    );
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    eprintln!("[BURST-RUNNER] ⚠️ Join thread disconnected unexpectedly");
+                }
             }
         }
     }
@@ -351,27 +384,36 @@ fn burst_loop(
 
         // Process burst (THE HOT PATH!)
         // 🔋 Power neurons auto-discovered from neuron array - 100% Rust!
-        let _fired_count = {
+        // CRITICAL: Check shutdown flag before acquiring expensive locks
+        if !running.load(Ordering::Relaxed) {
+            break;
+        }
+        
+        let should_exit = {
             let mut npu_lock = npu.lock().unwrap();
-            match npu_lock.process_burst() {
-                Ok(result) => {
-                    total_neurons_fired += result.neuron_count;
-                    result.neuron_count
-                }
-                Err(e) => {
-                    let timestamp = get_timestamp();
-                    eprintln!(
-                        "[{}] [BURST-LOOP] ❌ Burst processing error: {}",
-                        timestamp, e
-                    );
-                    0
+            // Check flag again after acquiring lock (in case shutdown happened during lock wait)
+            if !running.load(Ordering::Relaxed) {
+                true // Signal to exit
+            } else {
+                match npu_lock.process_burst() {
+                    Ok(result) => {
+                        total_neurons_fired += result.neuron_count;
+                        false // Continue processing
+                    }
+                    Err(e) => {
+                        let timestamp = get_timestamp();
+                        eprintln!(
+                            "[{}] [BURST-LOOP] ❌ Burst processing error: {}",
+                            timestamp, e
+                        );
+                        false // Continue despite error
+                    }
                 }
             }
-        }; // Drop lock immediately
-
-        // CRITICAL: Check shutdown flag immediately after burst processing
-        // Exit early if shutdown was requested during burst processing
-        if !running.load(Ordering::Relaxed) {
+        };
+        
+        // Exit if shutdown was requested
+        if should_exit || !running.load(Ordering::Relaxed) {
             break;
         }
 

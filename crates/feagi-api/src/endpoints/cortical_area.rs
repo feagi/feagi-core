@@ -66,7 +66,15 @@ pub async fn get_opu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String
 }
 
 /// GET /v1/cortical_area/cortical_area_id_list
-#[utoipa::path(get, path = "/v1/cortical_area/cortical_area_id_list", tag = "cortical_area")]
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/cortical_area_id_list",
+    responses(
+        (status = 200, description = "Cortical area IDs retrieved successfully", body = CorticalAreaIdListResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "cortical_area"
+)]
 pub async fn get_cortical_area_id_list(State(state): State<ApiState>) -> ApiResult<Json<CorticalAreaIdListResponse>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.get_cortical_area_ids().await {
@@ -76,7 +84,15 @@ pub async fn get_cortical_area_id_list(State(state): State<ApiState>) -> ApiResu
 }
 
 /// GET /v1/cortical_area/cortical_area_name_list
-#[utoipa::path(get, path = "/v1/cortical_area/cortical_area_name_list", tag = "cortical_area")]
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/cortical_area_name_list",
+    responses(
+        (status = 200, description = "Cortical area names retrieved successfully", body = CorticalAreaNameListResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "cortical_area"
+)]
 pub async fn get_cortical_area_name_list(State(state): State<ApiState>) -> ApiResult<Json<CorticalAreaNameListResponse>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {
