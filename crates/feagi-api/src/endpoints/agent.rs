@@ -11,7 +11,6 @@ use axum::{
     response::Json,
 };
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use crate::common::{ApiError, ApiResult};
 use crate::transports::http::server::ApiState;

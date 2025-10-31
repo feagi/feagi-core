@@ -5,7 +5,7 @@ use feagi_data_serialization::FeagiSerializable;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::thread;
-use tracing::{debug, info, warn, error};
+use tracing::{info, warn, error};
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]

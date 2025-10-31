@@ -7,7 +7,7 @@ use utoipa::OpenApi;
 use utoipa::openapi::security::{SecurityScheme, ApiKey, ApiKeyValue};
 
 use crate::{
-    common::{ApiError, ApiResponse},
+    common::ApiError,
     v1::{
         // Health DTOs
         HealthCheckResponseV1, ReadinessCheckResponseV1, ComponentReadiness,

@@ -3,7 +3,6 @@
 // These DTOs must match Python FastAPI response structures exactly.
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use utoipa::ToSchema;
 
 /// Genome information

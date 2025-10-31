@@ -24,7 +24,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::net::UdpSocket;
 use tokio::sync::RwLock;
-use tracing::{debug, info, warn, error};
+use tracing::info;
 
 /// Maximum UDP payload size (conservative, accounts for IP/UDP headers)
 const MAX_UDP_PAYLOAD: usize = 1400;
@@ -36,6 +36,7 @@ const HEADER_SIZE: usize = 12;
 const MAX_CHUNK_DATA: usize = MAX_UDP_PAYLOAD - HEADER_SIZE;
 
 /// Timeout for incomplete message reassembly
+#[allow(dead_code)]  // In development - will be used for chunk reassembly
 const REASSEMBLY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Configuration for UDP transport
@@ -78,7 +79,8 @@ impl PacketHeader {
         bytes[8..12].copy_from_slice(&self.total_chunks.to_be_bytes());
         bytes
     }
-
+    
+    #[allow(dead_code)]  // In development - will be used for decoding received packets
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() < HEADER_SIZE {
             return None;
@@ -92,6 +94,7 @@ impl PacketHeader {
 }
 
 /// Incomplete message being reassembled
+#[allow(dead_code)]  // In development - will be used for multi-chunk reassembly
 struct IncompleteMessage {
     chunks: HashMap<u32, Vec<u8>>,
     total_chunks: u32,
@@ -102,6 +105,7 @@ struct IncompleteMessage {
 pub struct UdpTransport {
     config: UdpConfig,
     socket: Option<Arc<UdpSocket>>,
+    #[allow(dead_code)]  // In development - will be used for async operations
     runtime: RuntimeHandle,
     message_id_counter: Arc<RwLock<u32>>,
     /// Reassembly buffer for incoming chunked messages
@@ -184,6 +188,7 @@ impl UdpTransport {
     }
 
     /// Receive and reassemble chunked messages
+    #[allow(dead_code)]  // In development - will be used for multi-chunk UDP receiving
     async fn receive_chunked(&self) -> Result<Vec<u8>> {
         let socket = self
             .socket

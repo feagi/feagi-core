@@ -5,7 +5,7 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tracing::{debug, info, warn, error};
+use tracing::{info, error};
 
 /// Heartbeat Tracker
 pub struct HeartbeatTracker {

@@ -4,7 +4,6 @@ Core types for BDU operations.
 These types match the Python API for seamless integration.
 */
 
-use serde::{Deserialize, Serialize};
 
 /// Cortical area identifier (6-character string in Python)
 pub type AreaId = String;

@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{debug, info, warn, error};
+use tracing::{info, warn, error};
 
 /// Registration request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]

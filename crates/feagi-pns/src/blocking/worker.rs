@@ -8,7 +8,7 @@ use std::marker::PhantomData;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use tracing::{debug, info, warn, error};
+use tracing::error;
 
 /// A worker thread that processes items from a queue
 ///

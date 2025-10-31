@@ -32,7 +32,7 @@ use crate::connectivity::rules::patterns::Pattern3D;
 use crate::connectivity::rules::{
     apply_vector_offset, match_patterns_batch, syn_block_connection, syn_expander, syn_projector,
 };
-use crate::types::{BduError, BduResult, Position};
+use crate::types::BduResult;
 use feagi_types::{NeuronId, SynapseType, SynapticConductance, SynapticWeight};
 use feagi_burst_engine::npu::RustNPU;
 

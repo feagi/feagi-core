@@ -2,7 +2,6 @@
 // These DTOs must match Python FastAPI response structures exactly for backward compatibility
 
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use utoipa::ToSchema;
 
 /// Health check response (must match Python FastAPI format exactly)

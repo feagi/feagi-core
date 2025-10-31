@@ -7,25 +7,17 @@ use axum::{
     extract::State,
     http::StatusCode,
     response::{Html, IntoResponse, Json, Redirect, Response},
-    routing::{delete, get, post, put},
+    routing::{get, put},
     Router,
 };
-use tower_http::services::ServeDir;
 use std::sync::Arc;
 use tower_http::{
     cors::{Any, CorsLayer},
     trace::TraceLayer,
 };
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
 
-use crate::{
-    common::{ApiError, ApiResponse, EmptyResponse},
-    endpoints,
-    openapi::ApiDoc,
-    security::AuthContext,
-    v1::dtos::{HealthCheckResponseV1, ReadinessCheckResponseV1},
-};
+use crate::openapi::ApiDoc;
 use feagi_services::{AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService};
 use feagi_services::traits::AgentService;
 
@@ -228,6 +220,7 @@ fn create_v1_router() -> Router<ApiState> {
 }
 
 /// OpenAPI spec handler
+#[allow(dead_code)]  // In development - will be wired to OpenAPI route
 async fn openapi_spec() -> Json<utoipa::openapi::OpenApi> {
     Json(ApiDoc::openapi())
 }
@@ -271,6 +264,7 @@ async fn custom_swagger_ui() -> Html<&'static str> {
 
 /// Placeholder handler for unimplemented endpoints
 /// Returns 501 Not Implemented with a clear message
+#[allow(dead_code)]  // In development - will be used for placeholder routes
 async fn placeholder_handler(
     State(_state): State<ApiState>,
 ) -> Response {
@@ -284,6 +278,7 @@ async fn placeholder_handler(
 }
 
 /// Placeholder health check - returns basic response
+#[allow(dead_code)]  // In development - will be used for basic health route
 async fn placeholder_health_check(
     State(_state): State<ApiState>,
 ) -> Response {

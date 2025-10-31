@@ -19,6 +19,7 @@ use crate::transports::http::server::ApiState;
 // REQUEST/RESPONSE MODELS (matching Python schemas exactly)
 // ============================================================================
 
+#[allow(non_snake_case)]  // Field name matches Python API for compatibility
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct HealthCheckResponse {
     pub burst_engine: bool,
@@ -79,7 +80,7 @@ pub async fn get_health_check(
         .map(|status| status.is_running)
         .unwrap_or(false);
 
-    let burst_count = state.runtime_service
+    let _burst_count = state.runtime_service  // Will be used in response when wired
         .get_burst_count()
         .await
         .ok();
@@ -96,6 +97,7 @@ pub async fn get_health_check(
     let fitness = None; // TODO: Get from evolution service
     let memory_neuron_count = None; // TODO: Get from NPU when available
     let regular_neuron_count = None; // TODO: Get from NPU when available
+    #[allow(non_snake_case)]  // Matching Python API field name for compatibility
     let estimated_brain_size_in_MB = None; // TODO: Calculate from NPU
     let genome_num = None; // TODO: Get from genome service
     let genome_timestamp = None; // TODO: Get from genome service

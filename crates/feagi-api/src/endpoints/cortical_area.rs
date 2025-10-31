@@ -219,6 +219,7 @@ pub async fn get_cortical_visibility(State(state): State<ApiState>) -> ApiResult
 
 /// POST /v1/cortical_area/cortical_name_location
 #[utoipa::path(post, path = "/v1/cortical_area/cortical_name_location", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn post_cortical_name_location(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, String>>,
@@ -234,6 +235,7 @@ pub async fn post_cortical_name_location(
 
 /// POST /v1/cortical_area/cortical_area_properties
 #[utoipa::path(post, path = "/v1/cortical_area/cortical_area_properties", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn post_cortical_area_properties(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, String>>,
@@ -249,6 +251,7 @@ pub async fn post_cortical_area_properties(
 
 /// POST /v1/cortical_area/multi/cortical_area_properties
 #[utoipa::path(post, path = "/v1/cortical_area/multi/cortical_area_properties", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn post_multi_cortical_area_properties(
     State(state): State<ApiState>,
     Json(request): Json<Vec<String>>,
@@ -266,6 +269,7 @@ pub async fn post_multi_cortical_area_properties(
 
 /// POST /v1/cortical_area/cortical_area
 #[utoipa::path(post, path = "/v1/cortical_area/cortical_area", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development - parameters will be used when implemented
 pub async fn post_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
@@ -277,6 +281,7 @@ pub async fn post_cortical_area(
 
 /// PUT /v1/cortical_area/cortical_area
 #[utoipa::path(put, path = "/v1/cortical_area/cortical_area", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development - parameters will be used when implemented
 pub async fn put_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
@@ -288,6 +293,7 @@ pub async fn put_cortical_area(
 
 /// DELETE /v1/cortical_area/cortical_area
 #[utoipa::path(delete, path = "/v1/cortical_area/cortical_area", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development - parameters will be used when implemented
 pub async fn delete_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, String>>,
@@ -303,6 +309,7 @@ pub async fn delete_cortical_area(
 
 /// POST /v1/cortical_area/custom_cortical_area
 #[utoipa::path(post, path = "/v1/cortical_area/custom_cortical_area", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn post_custom_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
@@ -313,6 +320,7 @@ pub async fn post_custom_cortical_area(
 
 /// POST /v1/cortical_area/clone
 #[utoipa::path(post, path = "/v1/cortical_area/clone", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn post_clone(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
@@ -323,6 +331,7 @@ pub async fn post_clone(
 
 /// PUT /v1/cortical_area/multi/cortical_area
 #[utoipa::path(put, path = "/v1/cortical_area/multi/cortical_area", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn put_multi_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
@@ -333,6 +342,7 @@ pub async fn put_multi_cortical_area(
 
 /// DELETE /v1/cortical_area/multi/cortical_area
 #[utoipa::path(delete, path = "/v1/cortical_area/multi/cortical_area", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn delete_multi_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<Vec<String>>,
@@ -343,6 +353,7 @@ pub async fn delete_multi_cortical_area(
 
 /// PUT /v1/cortical_area/coord_2d
 #[utoipa::path(put, path = "/v1/cortical_area/coord_2d", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn put_coord_2d(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
@@ -353,6 +364,7 @@ pub async fn put_coord_2d(
 
 /// PUT /v1/cortical_area/suppress_cortical_visibility
 #[utoipa::path(put, path = "/v1/cortical_area/suppress_cortical_visibility", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn put_suppress_cortical_visibility(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
@@ -363,6 +375,7 @@ pub async fn put_suppress_cortical_visibility(
 
 /// PUT /v1/cortical_area/reset
 #[utoipa::path(put, path = "/v1/cortical_area/reset", tag = "cortical_area")]
+#[allow(unused_variables)]  // In development
 pub async fn put_reset(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, String>>,

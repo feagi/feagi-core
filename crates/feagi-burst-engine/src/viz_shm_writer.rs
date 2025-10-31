@@ -49,6 +49,7 @@ const DEFAULT_SLOT_SIZE: usize = 1 * 1024 * 1024; // 1 MB per slot
 /// Visualization SHM Writer (Ring Buffer Format)
 pub struct VizSHMWriter {
     /// SHM file path
+    #[allow(dead_code)]  // In development - will be used for error messages/logging
     shm_path: PathBuf,
 
     /// Memory-mapped file

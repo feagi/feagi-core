@@ -97,7 +97,7 @@ impl MotorExtractor {
         for (area_id, (id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data.iter() {
             // Check if this is a motor area
             let area_name = npu.get_cortical_area_name(*area_id);
-            let is_motor_area = if let Some(name) = area_name {
+            let is_motor_area = if let Some(ref name) = area_name {
                 self.motor_areas.contains_key(name)
             } else {
                 false
@@ -116,7 +116,7 @@ impl MotorExtractor {
 
             // Create CorticalID from area name
             // CorticalID expects exactly 6 bytes
-            let area_name_str = area_name.unwrap_or("unknown");
+            let area_name_str = area_name.as_ref().map(|s| s.as_str()).unwrap_or("unknown");
             let area_bytes = area_name_str.as_bytes();
             let mut cortical_id_bytes = [0u8; 6]; // CorticalID::CORTICAL_ID_LENGTH
             let copy_len = area_bytes.len().min(6);
@@ -145,7 +145,7 @@ impl MotorExtractor {
 
                     // Print motor output if verbose
                     if self.verbose && self.total_extractions % 10 == 0 {
-                        let area_name_str = area_name.unwrap_or("unknown");
+                        let area_name_str = area_name.unwrap_or("unknown".to_string());
                         info!(
                             "🎮 Motor Output #{}: area='{}' (id={}), {} neurons firing",
                             self.total_extractions, area_name_str, area_id, neuron_count

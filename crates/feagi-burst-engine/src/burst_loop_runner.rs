@@ -391,7 +391,7 @@ fn burst_loop(
         }
         
         let should_exit = {
-            let mut npu_lock = npu.lock().unwrap();
+            let npu_lock = npu.lock().unwrap();
             // Check flag again after acquiring lock (in case shutdown happened during lock wait)
             if !running.load(Ordering::Relaxed) {
                 true // Signal to exit
@@ -456,6 +456,7 @@ fn burst_loop(
             if let Some(fire_data) = fire_data_opt {
                 // Debug: Log first successful viz write (for migration debugging)
                 // Warning about unused static is expected - kept for development debugging
+                #[allow(dead_code)]  // In development - used for debugging first viz write
                 static FIRST_VIZ_WRITE_LOGGED: std::sync::atomic::AtomicBool =
                     std::sync::atomic::AtomicBool::new(false);
 

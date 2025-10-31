@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tracing::{debug, info, warn, error};
+use tracing::{info, warn};
 
 /// Type of agent based on I/O direction and purpose
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

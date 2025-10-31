@@ -25,7 +25,7 @@ pub async fn get_cortical_areas_list_detailed(State(state): State<ApiState>) -> 
 
 /// GET /v1/connectome/properties/dimensions
 #[utoipa::path(get, path = "/v1/connectome/properties/dimensions", tag = "connectome")]
-pub async fn get_properties_dimensions(State(state): State<ApiState>) -> ApiResult<Json<(usize, usize, usize)>> {
+pub async fn get_properties_dimensions(State(_state): State<ApiState>) -> ApiResult<Json<(usize, usize, usize)>> {  // Will use state when wired to NPU
     // TODO: Get max dimensions from connectome manager
     Ok(Json((0, 0, 0)))
 }

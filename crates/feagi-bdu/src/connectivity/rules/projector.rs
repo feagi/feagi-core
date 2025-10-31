@@ -115,6 +115,7 @@ pub fn syn_projector(
         for &y in &dst_voxels[1] {
             for &z in &dst_voxels[2] {
                 // Bounds check (should always pass if calculate_axis_projection is correct)
+                #[allow(unused_comparisons)]  // Keep for future signed coordinate support
                 if x >= 0
                     && y >= 0
                     && z >= 0

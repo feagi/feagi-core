@@ -563,7 +563,7 @@ impl RustNPU {
     /// XYZP data from agents is staged here and injected AFTER fcl.clear() in Phase 1
     pub fn inject_sensory_with_potentials(&mut self, neurons: &[(NeuronId, f32)]) {
         let mut fire_structures = self.fire_structures.lock().unwrap();
-        if let Some(mut pending) = Some(&mut fire_structures.pending_sensory_injections) {
+        if let Some(pending) = Some(&mut fire_structures.pending_sensory_injections) {
             pending.extend_from_slice(neurons);
 
             // 🔍 DEBUG: Log first staging
@@ -1529,6 +1529,7 @@ impl RustNPU {
 /// and debugging once telemetry system is migrated from Python.
 /// Warning about unused struct is expected during migration.
 #[derive(Debug)]
+#[allow(dead_code)]  // In development - used for monitoring/debugging
 struct InjectionResult {
     power_injections: usize,
     synaptic_injections: usize,

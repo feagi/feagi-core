@@ -4,7 +4,6 @@
 //! Genome API Endpoints - Exact port from Python `/v1/genome/*`
 
 use axum::{extract::State, response::Json};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use crate::common::{ApiError, ApiResult};

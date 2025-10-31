@@ -3,7 +3,7 @@
 
 use parking_lot::Mutex;
 use std::sync::Arc;
-use tracing::{debug, info, warn, error};
+use tracing::info;
 
 /// Motor stream for publishing motor commands
 #[derive(Clone)]

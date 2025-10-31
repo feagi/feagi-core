@@ -17,7 +17,7 @@ pub use visualization::{
 use crate::core::{PNSError, RegistrationHandler};
 use parking_lot::Mutex;
 use std::sync::Arc;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, info};
 
 /// ZMQ Streams coordinator
 pub struct ZmqStreams {

@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
-use tracing::{debug, info, warn, error};
+use tracing::{info, error};
 
 /// REST request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]

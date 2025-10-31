@@ -25,6 +25,7 @@ use tracing::{debug, info, warn, error};
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
     pub agent_id: String,
+    #[allow(dead_code)]  // In development - will be used for SHM-based agents
     pub shm_path: PathBuf,
     pub rate_hz: f64,
     /// Cortical area ID → cortical_idx mapping (for coordinate lookup)
@@ -40,6 +41,7 @@ pub type FclInjectionCallback = Arc<dyn Fn(u32, Vec<(u32, u32, u32, f32)>) + Sen
 /// Migration status: Agent management being migrated from Python. The agent_id field
 /// will be used for logging and debugging once full agent lifecycle management is ported.
 /// Warning about unused field is expected during migration.
+#[allow(dead_code)]  // In development - agent_id will be used for logging
 struct AgentThread {
     agent_id: String,
     handle: JoinHandle<()>,
