@@ -119,6 +119,8 @@ use crate::{
         crate::endpoints::genome::post_amalgamation_destination,
         crate::endpoints::genome::delete_amalgamation_cancellation,
         crate::endpoints::genome::post_genome_append,
+        crate::endpoints::genome::post_upload_barebones_genome,
+        crate::endpoints::genome::post_upload_essential_genome,
         
         // Cortical Mapping endpoints
         crate::endpoints::cortical_mapping::post_afferents,

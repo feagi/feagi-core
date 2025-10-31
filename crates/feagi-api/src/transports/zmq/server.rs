@@ -20,7 +20,7 @@ pub struct ZmqRequest {
     /// HTTP method (GET, POST, PUT, DELETE, etc.)
     pub method: String,
     
-    /// Request path (e.g., "/api/v1/health")
+    /// Request path (e.g., "/v1/system/health_check")
     pub path: String,
     
     /// Request body as JSON (optional)
@@ -58,17 +58,17 @@ pub async fn route_zmq_request(
     // Route based on method and path
     match (request.method.as_str(), request.path.as_str()) {
         // Health check endpoints
-        ("GET", "/health") | ("GET", "/api/v1/health") | ("GET", "/api/health") => {
+        ("GET", "/health") | ("GET", "/v1/system/health_check") => {
             handle_health_check(&auth_ctx, state).await
         }
         
-        ("GET", "/ready") | ("GET", "/api/v1/ready") | ("GET", "/api/ready") => {
+        ("GET", "/ready") | ("GET", "/v1/system/readiness_check") => {
             handle_readiness_check(&auth_ctx, state).await
         }
         
         // TODO: Add more endpoint routes
-        // ("GET", path) if path.starts_with("/api/v1/cortical-areas") => { ... }
-        // ("POST", "/api/v1/cortical-areas") => { ... }
+        // ("GET", path) if path.starts_with("/v1/cortical_area") => { ... }
+        // ("POST", "/v1/cortical_area") => { ... }
         
         // Not found
         _ => {

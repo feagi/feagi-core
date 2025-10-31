@@ -7,7 +7,7 @@ pub struct ApiRequest {
     /// HTTP method (GET, POST, PUT, DELETE, etc.)
     pub method: String,
     
-    /// Request path (e.g., "/api/v1/cortical-areas/vis_l0")
+    /// Request path (e.g., "/v1/cortical_area/ipu")
     pub path: String,
     
     /// Query parameters

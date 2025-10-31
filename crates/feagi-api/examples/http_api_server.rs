@@ -111,12 +111,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("║                                                           ║");
     println!("║  Available Endpoints:                                     ║");
     println!("║    - GET  /health                                         ║");
-    println!("║    - GET  /api/v1/genome                                  ║");
-    println!("║    - POST /api/v1/genome/load                             ║");
-    println!("║    - GET  /api/v1/cortical-areas                          ║");
-    println!("║    - GET  /api/v1/neurons                                 ║");
-    println!("║    - GET  /api/v1/runtime/status                          ║");
-    println!("║    - GET  /api/v1/analytics/health                        ║");
+    println!("║    - GET  /v1/genome/file_name                            ║");
+    println!("║    - POST /v1/genome/upload/barebones                    ║");
+    println!("║    - GET  /v1/cortical_area/ipu                           ║");
+    println!("║    - GET  /v1/cortical_area/cortical_area_id_list         ║");
+    println!("║    - GET  /v1/system/health_check                         ║");
+    println!("║    - GET  /v1/system/readiness_check                      ║");
     println!("║    ...and 50+ more endpoints                              ║");
     println!("║                                                           ║");
     println!("╚═══════════════════════════════════════════════════════════╝\n");

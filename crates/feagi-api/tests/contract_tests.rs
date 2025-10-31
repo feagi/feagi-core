@@ -139,7 +139,7 @@ async fn request_json(
 async fn test_health_endpoint() {
     let app = create_test_server().await;
     
-    let (status, response) = request_json(app, "GET", "/api/v1/health", None).await;
+    let (status, response) = request_json(app, "GET", "/v1/system/health_check", None).await;
     
     assert_eq!(status, StatusCode::OK);
     assert!(response["status"].is_string() || !response.is_null());
@@ -149,7 +149,7 @@ async fn test_health_endpoint() {
 async fn test_system_status() {
     let app = create_test_server().await;
     
-    let (status, response) = request_json(app, "GET", "/api/v1/system/status", None).await;
+    let (status, response) = request_json(app, "GET", "/v1/system/readiness_check", None).await;
     
     assert_eq!(status, StatusCode::OK);
     // Response should have burst_engine_active field
@@ -175,7 +175,7 @@ async fn test_create_cortical_area_success() {
         "area_type": "memory"
     });
     
-    let (status, response) = request_json(app, "POST", "/api/v1/connectome/areas", Some(create_request)).await;
+    let (status, response) = request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
     
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(response["cortical_id"], "test01");
@@ -198,7 +198,7 @@ async fn test_create_cortical_area_invalid_id() {
         "area_type": "memory"
     });
     
-    let (status, _response) = request_json(app, "POST", "/api/v1/connectome/areas", Some(create_request)).await;
+    let (status, _response) = request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
     
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
@@ -207,7 +207,7 @@ async fn test_create_cortical_area_invalid_id() {
 async fn test_get_cortical_area_not_found() {
     let app = create_test_server().await;
     
-    let (status, _response) = request_json(app, "GET", "/api/v1/connectome/areas/notfnd", None).await;
+    let (status, _response) = request_json(app, "GET", "/v1/connectome/areas/notfnd", None).await;
     
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
@@ -216,7 +216,7 @@ async fn test_get_cortical_area_not_found() {
 async fn test_list_cortical_areas_empty() {
     let app = create_test_server().await;
     
-    let (status, response) = request_json(app, "GET", "/api/v1/connectome/areas", None).await;
+    let (status, response) = request_json(app, "GET", "/v1/connectome/areas", None).await;
     
     assert_eq!(status, StatusCode::OK);
     assert!(response.is_array());
@@ -235,12 +235,12 @@ async fn test_create_and_get_cortical_area() {
         "area_type": "memory"
     });
     
-    let (status, _) = request_json(app, "POST", "/api/v1/connectome/areas", Some(create_request)).await;
+    let (status, _) = request_json(app, "POST", "/v1/connectome/areas", Some(create_request)).await;
     assert_eq!(status, StatusCode::CREATED);
     
     // Get - need to recreate app because oneshot consumes it
     app = create_test_server().await;
-    let (status2, response2) = request_json(app, "GET", "/api/v1/connectome/areas/area01", None).await;
+    let (status2, response2) = request_json(app, "GET", "/v1/connectome/areas/area01", None).await;
     
     // This will fail because each test gets a fresh manager
     // This demonstrates the isolation - which is good for parallel testing
@@ -265,7 +265,7 @@ async fn test_genome_validate_minimal() {
     let (status, response) = request_json(
         app,
         "POST",
-        "/api/v1/genome/validate",
+        "/v1/genome/validate",
         Some(json!({ "genome_json": genome.to_string() })),
     ).await;
     
@@ -283,7 +283,7 @@ async fn test_error_format_consistency() {
     let app = create_test_server().await;
     
     // All error responses should have consistent format
-    let (status, response) = request_json(app, "GET", "/api/v1/connectome/areas/notfnd", None).await;
+    let (status, response) = request_json(app, "GET", "/v1/connectome/areas/notfnd", None).await;
     
     assert_eq!(status, StatusCode::NOT_FOUND);
     // Should have some error information

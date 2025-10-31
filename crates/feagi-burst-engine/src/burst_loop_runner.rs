@@ -343,6 +343,12 @@ fn burst_loop(
         }
         last_burst_time = Some(burst_start);
 
+        // CRITICAL: Check shutdown flag immediately after burst processing
+        // This ensures we exit as soon as shutdown is requested, even mid-burst
+        if !running.load(Ordering::Relaxed) {
+            break;
+        }
+
         // Process burst (THE HOT PATH!)
         // 🔋 Power neurons auto-discovered from neuron array - 100% Rust!
         let _fired_count = {
@@ -362,6 +368,12 @@ fn burst_loop(
                 }
             }
         }; // Drop lock immediately
+
+        // CRITICAL: Check shutdown flag immediately after burst processing
+        // Exit early if shutdown was requested during burst processing
+        if !running.load(Ordering::Relaxed) {
+            break;
+        }
 
         burst_num += 1;
         // Note: NPU.process_burst() already incremented its internal burst_count
@@ -618,8 +630,16 @@ fn burst_loop(
             total_neurons_fired = 0;
         }
 
+        // CRITICAL: Check shutdown flag before entering sleep
+        // Exit immediately if shutdown was requested during visualization/stats
+        if !running.load(Ordering::Relaxed) {
+            break;
+        }
+
         // Adaptive sleep (RTOS-friendly timing)
-        // Strategy: <5Hz = simple sleep, 5-100Hz = hybrid, >100Hz = busy-wait
+        // Strategy: <5Hz = chunked sleep, 5-100Hz = hybrid, >100Hz = busy-wait
+        // CRITICAL: Break sleep into chunks to allow responsive shutdown
+        // Maximum sleep chunk: 50ms to ensure shutdown responds within ~50ms
         let interval_sec = 1.0 / frequency_hz;
         let target_time = burst_start + Duration::from_secs_f64(interval_sec);
         let now = Instant::now();
@@ -628,17 +648,52 @@ fn burst_loop(
             let remaining = target_time - now;
 
             if frequency_hz < 5.0 {
-                // Low frequency: simple sleep
-                thread::sleep(remaining);
+                // Low frequency: sleep in small chunks to allow shutdown
+                // Check shutdown flag every 50ms for responsive shutdown (<100ms response time)
+                let chunk_size = Duration::from_millis(50);
+                let mut remaining_sleep = remaining;
+                while remaining_sleep.as_millis() > 0 && running.load(Ordering::Relaxed) {
+                    let sleep_duration = remaining_sleep.min(chunk_size);
+                    thread::sleep(sleep_duration);
+                    // Check flag immediately after sleep
+                    if !running.load(Ordering::Relaxed) {
+                        break;
+                    }
+                    let elapsed = Instant::now();
+                    remaining_sleep = if elapsed < target_time {
+                        target_time - elapsed
+                    } else {
+                        Duration::ZERO
+                    };
+                }
             } else if frequency_hz > 100.0 {
-                // High frequency: pure busy-wait
+                // High frequency: pure busy-wait (always responsive)
                 while Instant::now() < target_time && running.load(Ordering::Relaxed) {}
             } else {
                 // Medium frequency: hybrid (sleep 80%, busy-wait 20%)
                 let sleep_duration = remaining.mul_f64(0.8);
                 if sleep_duration.as_micros() > 100 {
-                    thread::sleep(sleep_duration);
+                    // Break sleep into chunks for responsive shutdown
+                    let chunk_size = Duration::from_millis(50); // Check every 50ms for faster shutdown
+                    let mut remaining_sleep = sleep_duration;
+                    while remaining_sleep.as_millis() > 0 && running.load(Ordering::Relaxed) {
+                        let sleep_chunk = remaining_sleep.min(chunk_size);
+                        thread::sleep(sleep_chunk);
+                        // Check flag immediately after sleep
+                        if !running.load(Ordering::Relaxed) {
+                            break;
+                        }
+                        let elapsed = Instant::now();
+                        let elapsed_sleep = elapsed.duration_since(burst_start);
+                        let target_sleep = Duration::from_secs_f64(interval_sec * 0.8);
+                        remaining_sleep = if elapsed_sleep < target_sleep {
+                            target_sleep - elapsed_sleep
+                        } else {
+                            Duration::ZERO
+                        };
+                    }
                 }
+                // Busy-wait remainder (responsive to shutdown flag)
                 while Instant::now() < target_time && running.load(Ordering::Relaxed) {}
             }
         }

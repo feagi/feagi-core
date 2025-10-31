@@ -259,7 +259,9 @@
         if (!confirm('Load Essential genome? This will replace the current genome.')) return;
         
         try {
-          const response = await fetch('/api/v1/genome/upload/essential', {
+          // Use window.location to build absolute URL (handles any base path)
+          const baseUrl = window.location.origin + window.location.pathname.split('/swagger-ui')[0];
+          const response = await fetch(baseUrl + '/v1/genome/upload/essential', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
           });
@@ -284,7 +286,9 @@
         if (!confirm('Load Barebones genome? This will replace the current genome.')) return;
         
         try {
-          const response = await fetch('/api/v1/genome/upload/barebones', {
+          // Use window.location to build absolute URL (handles any base path)
+          const baseUrl = window.location.origin + window.location.pathname.split('/swagger-ui')[0];
+          const response = await fetch(baseUrl + '/v1/genome/upload/barebones', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
           });

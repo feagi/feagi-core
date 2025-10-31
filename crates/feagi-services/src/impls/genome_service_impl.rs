@@ -28,15 +28,21 @@ impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
         log::info!("Loading genome from JSON");
         
-        // Parse genome using feagi-evo
+        // Parse genome using feagi-evo (this is CPU-bound, but relatively fast)
         let genome = feagi_evo::load_genome_from_json(&params.json_str)
             .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
         
         // Load into connectome via ConnectomeManager
-        let progress = self.connectome
-            .write()
-            .load_from_genome(genome)
-            .map_err(ServiceError::from)?;
+        // This involves synaptogenesis which can be CPU-intensive, so run it on a blocking thread
+        let connectome_clone = self.connectome.clone();
+        let progress = tokio::task::spawn_blocking(move || {
+            connectome_clone
+                .write()
+                .load_from_genome(genome)
+                .map_err(ServiceError::from)
+        })
+        .await
+        .map_err(|e| ServiceError::Backend(format!("Failed to spawn blocking task: {}", e)))??;
         
         log::info!(
             "Genome loaded: {} cortical areas, {} neurons, {} synapses created",

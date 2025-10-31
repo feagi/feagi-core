@@ -167,12 +167,14 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/burst_engine/simulation_timestep",
             get(burst_engine::get_simulation_timestep).post(burst_engine::post_simulation_timestep))
         
-        // ===== GENOME MODULE (5 endpoints) =====
+        // ===== GENOME MODULE (7 endpoints) =====
         .route("/genome/file_name", get(genome::get_file_name))
         .route("/genome/circuits", get(genome::get_circuits))
         .route("/genome/amalgamation_destination", axum::routing::post(genome::post_amalgamation_destination))
         .route("/genome/amalgamation_cancellation", axum::routing::delete(genome::delete_amalgamation_cancellation))
         .route("/feagi/genome/append", axum::routing::post(genome::post_genome_append))
+        .route("/genome/upload/barebones", axum::routing::post(genome::post_upload_barebones_genome))
+        .route("/genome/upload/essential", axum::routing::post(genome::post_upload_essential_genome))
         
         // ===== NEUROPLASTICITY MODULE (2 endpoints) =====
         .route("/neuroplasticity/plasticity_queue_depth",
