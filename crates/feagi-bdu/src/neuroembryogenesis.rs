@@ -255,11 +255,12 @@ impl Neuroembryogenesis {
             });
         }
         
-        // Verify against genome stats
+        // Compare with genome stats (info only - stats may count only innate neurons while we create all voxels)
         if expected_neurons > 0 && total_neurons_created != expected_neurons {
-            warn!(target: "feagi-bdu",
-                "Neuron count mismatch: created {} but genome stats expected {}",
-                total_neurons_created, expected_neurons
+            debug!(target: "feagi-bdu",
+                created_neurons = total_neurons_created,
+                genome_stats_innate = expected_neurons,
+                "Neuron creation complete (genome stats may only count innate neurons)"
             );
         }
         

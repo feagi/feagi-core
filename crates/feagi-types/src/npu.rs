@@ -17,7 +17,7 @@
 
 use crate::*;
 use ahash::AHashMap;
-use tracing::warn;
+use tracing::{debug, warn};
 
 /// Complete neuron array with all properties
 ///
@@ -295,7 +295,7 @@ impl NeuronArray {
             neuron_ids.push(NeuronId(neuron_id));
         }
         let coord_time = coord_start.elapsed();
-        warn!("🦀🦀🦀 [COORD-LOOP] n={}, time={:?}", n, coord_time);
+        debug!("[COORD-LOOP] n={}, time={:?}", n, coord_time);
 
         // ✅ SPATIAL HASH ONLY (for coordinate→neuron_id lookups during sensory injection)
         // neuron_id_to_index HashMap eliminated - it was storing id→id and never read!
@@ -314,12 +314,12 @@ impl NeuronArray {
         }
         let insert_time = insert_start.elapsed();
 
-        warn!(
-            "🦀🦀🦀 [SPATIAL-HASH] n={}, reserve={:?}, inserts={:?}, hash_size={}",
+        debug!(
             n,
-            reserve_time,
-            insert_time,
-            self.spatial_hash.len()
+            reserve_ns = reserve_time.as_nanos(),
+            inserts_ns = insert_time.as_nanos(),
+            hash_size = self.spatial_hash.len(),
+            "[SPATIAL-HASH] Coordinate hash updated"
         );
 
         self.count += n;
@@ -429,12 +429,12 @@ impl NeuronArray {
             .collect();
 
         let elapsed = start.elapsed();
-        warn!(
-            "[RUST-SIMD-SCAN] Area {} → {} neurons in {:?} (scanned {} neurons)",
+        debug!(
             cortical_idx,
-            result.len(),
-            elapsed,
-            self.count
+            found_neurons = result.len(),
+            elapsed_ms = elapsed.as_millis(),
+            total_scanned = self.count,
+            "[SIMD-SCAN] Neuron area scan complete"
         );
 
         result

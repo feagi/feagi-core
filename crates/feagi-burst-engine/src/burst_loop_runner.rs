@@ -426,12 +426,12 @@ fn burst_loop(
         let has_shm_writer = viz_shm_writer.lock().unwrap().is_some();
         let has_viz_publisher = viz_publisher.is_some();
 
-        // 🔍 CRITICAL DEBUG: Log what's available
+        // Log visualization transport availability (debug info only)
         static DEBUG_LOGGED: std::sync::atomic::AtomicBool =
             std::sync::atomic::AtomicBool::new(false);
         if !DEBUG_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-            error!(
-                "[BURST-LOOP] 🔍 CRITICAL: has_shm_writer={}, has_viz_publisher={}",
+            debug!(
+                "[BURST-LOOP] Visualization transports: SHM writer={}, publisher={}",
                 has_shm_writer, has_viz_publisher
             );
             DEBUG_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -642,7 +642,7 @@ fn burst_loop(
                     static SKIP_LOGGED: std::sync::atomic::AtomicBool =
                         std::sync::atomic::AtomicBool::new(false);
                     if !SKIP_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                        warn!("[BURST-LOOP] ⚠️ Skipping viz - no cortical areas yet");
+                        debug!("[BURST-LOOP] Skipping visualization - no cortical areas yet (genome not loaded)");
                         SKIP_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
                 }

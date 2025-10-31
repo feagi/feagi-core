@@ -258,12 +258,12 @@ impl RustNPU {
                 }
                 let insert_time = insert_start.elapsed();
 
-                warn!(
-                    "🦀🦀🦀 [PROP-ENGINE] n={}, reserve={:?}, inserts={:?}, size={}",
+                debug!(
                     n,
-                    reserve_time,
-                    insert_time,
-                    self.propagation_engine.write().unwrap().neuron_to_area.len()
+                    reserve_ns = reserve_time.as_nanos(),
+                    inserts_ns = insert_time.as_nanos(),
+                    mapping_size = self.propagation_engine.write().unwrap().neuron_to_area.len(),
+                    "[PROP-ENGINE] Neuron-to-area mapping updated"
                 );
 
                 // ✅ ARCHITECTURE FIX: Return only success COUNT, not full Vec<u32> of IDs
@@ -324,10 +324,11 @@ impl RustNPU {
         // Calculate total neurons
         let total_neurons = (width * height * depth * neurons_per_voxel) as usize;
 
-        // ✅ GUARANTEED UNCONDITIONAL LOG - Will ALWAYS print
-        warn!(
-            "🦀🦀🦀 [RUST-ENTRY] create_cortical_area_neurons called: area={}, n={}",
-            cortical_idx, total_neurons
+        // Performance diagnostic - only visible with --debug flag
+        debug!(
+            cortical_idx,
+            total_neurons,
+            "[NEUROGENESIS] Creating neurons for cortical area"
         );
 
         if total_neurons == 0 {
@@ -389,9 +390,14 @@ impl RustNPU {
         let batch_time = batch_start.elapsed();
         let total_time = fn_start.elapsed();
 
-        // ✅ ALWAYS LOG (removed conditional for debugging)
-        warn!("🦀🦀🦀 [RUST-EXIT] create_cortical_area_neurons: n={}, alloc={:?}, batch={:?}, TOTAL={:?}", 
-            total_neurons, alloc_time, batch_time, total_time);
+        // Performance metrics - only visible with --debug flag
+        debug!(
+            total_neurons,
+            alloc_us = alloc_time.as_micros(),
+            batch_us = batch_time.as_micros(),
+            total_us = total_time.as_micros(),
+            "[NEUROGENESIS] Neuron creation timing"
+        );
 
         if !failed.is_empty() {
             return Err(FeagiError::ComputationError(format!(
