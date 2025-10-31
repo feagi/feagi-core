@@ -12,6 +12,7 @@ use feagi_bdu::ConnectomeManager;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{info, warn, debug};
+use feagi_bdu::neuroembryogenesis::Neuroembryogenesis;
 
 /// Default implementation of GenomeService
 pub struct GenomeServiceImpl {
@@ -37,12 +38,32 @@ impl GenomeService for GenomeServiceImpl {
         // This involves synaptogenesis which can be CPU-intensive, so run it on a blocking thread
         // CRITICAL: Add timeout to prevent hanging during shutdown
         // Note: spawn_blocking tasks cannot be cancelled, but timeout ensures we don't wait forever
+        // CRITICAL FIX: Don't hold write lock during entire operation - let neuroembryogenesis manage locks
+        // This prevents deadlock when neuroembryogenesis tries to acquire its own write locks
         let connectome_clone = self.connectome.clone();
-        let blocking_handle = tokio::task::spawn_blocking(move || {
-            connectome_clone
-                .write()
-                .load_from_genome(genome)
-                .map_err(ServiceError::from)
+        let blocking_handle = tokio::task::spawn_blocking(move || -> Result<feagi_bdu::neuroembryogenesis::DevelopmentProgress, ServiceError> {
+            // Acquire write lock only for prepare/resize operations
+            let genome_clone = genome;
+            let (prepare_result, resize_result) = {
+                let mut manager = connectome_clone.write();
+                let prepare_result = manager.prepare_for_new_genome();
+                let resize_result = prepare_result.as_ref().ok().map(|_| manager.resize_for_genome(&genome_clone));
+                (prepare_result, resize_result)
+            }; // Lock released here
+            
+            prepare_result.map_err(ServiceError::from)?;
+            if let Some(resize_result) = resize_result {
+                resize_result.map_err(ServiceError::from)?;
+            }
+            
+            // Now call develop_from_genome without holding the lock
+            // It will acquire its own locks internally
+            let manager_arc = feagi_bdu::ConnectomeManager::instance();
+            let mut neuro = Neuroembryogenesis::new(manager_arc);
+            neuro.develop_from_genome(&genome_clone)
+                .map_err(|e| ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e)))?;
+            
+            Ok(neuro.get_progress())
         });
         
         // Wait with timeout - if timeout expires, abort the blocking task
@@ -89,9 +110,16 @@ impl GenomeService for GenomeServiceImpl {
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
         debug!(target: "feagi-services", "Getting genome info");
         
-        let manager = self.connectome.read();
-        let cortical_area_count = manager.get_cortical_area_count();
-        let brain_region_count = manager.get_brain_region_ids().len();
+        // CRITICAL: Minimize lock scope - drop lock immediately after reading values
+        let (cortical_area_count, brain_region_count) = {
+            let manager = self.connectome.read();
+            let cortical_area_count = manager.get_cortical_area_count();
+            let brain_region_ids = manager.get_brain_region_ids();
+            let brain_region_count = brain_region_ids.len();
+            info!(target: "feagi-services", "Reading genome info: {} cortical areas, {} brain regions", cortical_area_count, brain_region_count);
+            info!(target: "feagi-services", "Brain region IDs: {:?}", brain_region_ids.iter().take(10).collect::<Vec<_>>());
+            (cortical_area_count, brain_region_count)
+        }; // Lock dropped here
         
         Ok(GenomeInfo {
             genome_id: "current".to_string(),  // TODO: Track genome_id in ConnectomeManager

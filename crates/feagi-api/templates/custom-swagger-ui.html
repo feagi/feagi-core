@@ -272,8 +272,8 @@
 
           const result = await response.json();
           alert('Essential genome loaded successfully!\n\n' + 
-                'Cortical areas: ' + (result.data?.cortical_area_count || 'N/A') + '\n' +
-                'Brain regions: ' + (result.data?.brain_region_count || 'N/A'));
+                'Cortical areas: ' + (result.cortical_area_count ?? 'N/A') + '\n' +
+                'Brain regions: ' + (result.brain_region_count ?? 'N/A'));
           console.log('Essential genome loaded:', result);
         } catch (error) {
           console.error('Error loading essential genome:', error);
@@ -299,8 +299,8 @@
 
           const result = await response.json();
           alert('Barebones genome loaded successfully!\n\n' + 
-                'Cortical areas: ' + (result.data?.cortical_area_count || 'N/A') + '\n' +
-                'Brain regions: ' + (result.data?.brain_region_count || 'N/A'));
+                'Cortical areas: ' + (result.cortical_area_count ?? 'N/A') + '\n' +
+                'Brain regions: ' + (result.brain_region_count ?? 'N/A'));
           console.log('Barebones genome loaded:', result);
         } catch (error) {
           console.error('Error loading barebones genome:', error);

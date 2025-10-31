@@ -12,7 +12,7 @@ use feagi_bdu::ConnectomeManager;
 use feagi_types::{AreaType, BrainRegion, CorticalArea, Dimensions, RegionType};
 use parking_lot::RwLock;
 use std::sync::Arc;
-use tracing::{info, debug};
+use tracing::{info, debug, warn};
 
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
@@ -315,7 +315,26 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
     async fn get_cortical_area_ids(&self) -> ServiceResult<Vec<String>> {
         debug!(target: "feagi-services","Getting cortical area IDs");
-        Ok(self.connectome.read().get_cortical_area_ids().into_iter().cloned().collect())
+        
+        // CRITICAL: Use try_read() instead of read() to avoid blocking forever
+        // If write lock is held (e.g., during genome loading), return error instead of hanging
+        let ids: Vec<String> = {
+            let manager = match self.connectome.try_read() {
+                Some(guard) => guard,
+                None => {
+                    warn!(target: "feagi-services", "⚠️ ConnectomeManager write lock is held - cannot read cortical area IDs");
+                    return Err(ServiceError::Backend("ConnectomeManager is currently being modified (e.g., genome loading in progress). Please try again in a moment.".to_string()));
+                }
+            };
+            
+            let area_count = manager.get_cortical_area_count();
+            let ids_refs = manager.get_cortical_area_ids();
+            info!(target: "feagi-services", "Found {} cortical areas in ConnectomeManager", area_count);
+            info!(target: "feagi-services", "Cortical area IDs (references): {:?}", ids_refs.iter().take(10).collect::<Vec<_>>());
+            ids_refs.into_iter().cloned().collect()
+        }; // Lock dropped here
+        info!(target: "feagi-services", "Returning {} cortical area IDs: {:?}", ids.len(), ids.iter().take(10).collect::<Vec<_>>());
+        Ok(ids)
     }
 
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {

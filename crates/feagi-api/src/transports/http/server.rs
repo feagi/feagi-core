@@ -57,6 +57,12 @@ pub fn create_http_server(state: ApiState) -> Router {
         // Python-compatible paths: /v1/* (ONLY this, matching Python exactly)
         .nest("/v1", create_v1_router())
         
+        // Catch-all route for debugging unmatched requests
+        .fallback(|| async {
+            tracing::warn!(target: "feagi-api", "⚠️ Unmatched request - 404 Not Found");
+            (StatusCode::NOT_FOUND, "404 Not Found")
+        })
+        
         // Add state
         .with_state(state)
         
@@ -64,8 +70,38 @@ pub fn create_http_server(state: ApiState) -> Router {
         .layer(create_cors_layer())
         .layer(
             TraceLayer::new_for_http()
-                .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(tracing::Level::INFO))
-                .on_response(tower_http::trace::DefaultOnResponse::new().level(tracing::Level::INFO))
+                .make_span_with(|request: &axum::http::Request<_>| {
+                    tracing::span!(
+                        target: "feagi-api",
+                        tracing::Level::DEBUG,
+                        "request",
+                        method = %request.method(),
+                        uri = %request.uri(),
+                        version = ?request.version(),
+                    )
+                })
+                .on_request(|request: &axum::http::Request<_>, _span: &tracing::Span| {
+                    tracing::debug!(target: "feagi-api", "📥 Incoming request: {} {}", request.method(), request.uri());
+                })
+                .on_response(|response: &axum::http::Response<_>, latency: std::time::Duration, span: &tracing::Span| {
+                    tracing::debug!(
+                        target: "feagi-api",
+                        "📤 Response: status={}, latency={:?}",
+                        response.status(),
+                        latency
+                    );
+                    span.record("status", response.status().as_u16());
+                    span.record("latency_ms", latency.as_millis());
+                })
+                .on_body_chunk(|chunk: &axum::body::Bytes, latency: std::time::Duration, _span: &tracing::Span| {
+                    tracing::trace!(target: "feagi-api", "Response chunk: {} bytes, latency={:?}", chunk.len(), latency);
+                })
+                .on_eos(|_trailers: Option<&axum::http::HeaderMap>, stream_duration: std::time::Duration, _span: &tracing::Span| {
+                    tracing::trace!(target: "feagi-api", "Stream ended, duration={:?}", stream_duration);
+                })
+                .on_failure(|_error: tower_http::classify::ServerErrorsFailureClass, latency: std::time::Duration, _span: &tracing::Span| {
+                    tracing::error!(target: "feagi-api", "❌ Request failed, latency={:?}", latency);
+                })
         )
 }
 

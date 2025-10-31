@@ -245,22 +245,44 @@ impl ConnectomeManager {
             )));
         }
         
-        // Assign cortical_idx if not set
-        if area.cortical_idx == 0 {
-            area.cortical_idx = self.next_cortical_idx;
-            self.next_cortical_idx += 1;
-        } else {
-            // Check for index conflict
-            if self.cortical_idx_to_id.contains_key(&area.cortical_idx) {
-                return Err(BduError::InvalidArea(format!(
-                    "Cortical index {} is already in use",
-                    area.cortical_idx
-                )));
+        // CRITICAL: Special handling for _power area - it MUST get cortical_idx=1
+        // This is required for power injection auto-discovery in the burst engine
+        if area.cortical_id == "_power" {
+            area.cortical_idx = 1;
+            // If cortical_idx=1 is already taken by another area, reassign that area
+            if let Some(existing_id) = self.cortical_idx_to_id.get(&1).cloned() {
+                if existing_id != "_power" {
+                    // Reassign the existing area to next available index
+                    let new_idx = self.next_cortical_idx;
+                    self.next_cortical_idx += 1;
+                    
+                    // Update the existing area's index
+                    if let Some(existing_area) = self.cortical_areas.get_mut(&existing_id) {
+                        existing_area.cortical_idx = new_idx;
+                    }
+                    self.cortical_id_to_idx.insert(existing_id.clone(), new_idx);
+                    self.cortical_idx_to_id.remove(&1);
+                    self.cortical_idx_to_id.insert(new_idx, existing_id);
+                }
             }
-            
-            // Update next_cortical_idx if needed
-            if area.cortical_idx >= self.next_cortical_idx {
-                self.next_cortical_idx = area.cortical_idx + 1;
+        } else {
+            // Assign cortical_idx if not set
+            if area.cortical_idx == 0 {
+                area.cortical_idx = self.next_cortical_idx;
+                self.next_cortical_idx += 1;
+            } else {
+                // Check for index conflict
+                if self.cortical_idx_to_id.contains_key(&area.cortical_idx) {
+                    return Err(BduError::InvalidArea(format!(
+                        "Cortical index {} is already in use",
+                        area.cortical_idx
+                    )));
+                }
+                
+                // Update next_cortical_idx if needed
+                if area.cortical_idx >= self.next_cortical_idx {
+                    self.next_cortical_idx = area.cortical_idx + 1;
+                }
             }
         }
         
@@ -497,6 +519,9 @@ impl ConnectomeManager {
             mp_charge_accumulation,
         )
         .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
+        
+        // CRITICAL: Register cortical area name in NPU for visualization/burst loop lookups
+        npu_lock.register_cortical_area(*cortical_idx, cortical_id.to_string());
         
         info!(target: "feagi-bdu","Created {} neurons for area {} via NPU", neuron_count, cortical_id);
         
@@ -1279,8 +1304,48 @@ impl ConnectomeManager {
         // Calculate and resize memory if needed
         self.resize_for_genome(&genome)?;
         
-        // Run neuroembryogenesis
+        // CRITICAL FIX: This function is called with write lock already held from spawn_blocking.
+        // We CANNOT call ConnectomeManager::instance() here because it would try to get ANOTHER
+        // write lock on the same RwLock, causing a deadlock!
+        // Instead, create neuroembryogenesis using the singleton instance directly.
+        // BUT: We need to pass self's Arc reference, not create a new one.
+        // Since we're inside a method that already has &mut self, we need to work with the singleton.
+        // The solution: Call instance() but use it correctly - we're already holding the write lock
+        // from the caller, so we need to ensure neuroembryogenesis uses the SAME Arc reference.
+        
+        // Get the singleton instance (same Arc as self.connectome in GenomeServiceImpl)
         let manager_arc = ConnectomeManager::instance();
+        
+        // CRITICAL: We're already holding a write lock from spawn_blocking.
+        // Neuroembryogenesis will try to acquire its own write locks.
+        // This is OK because parking_lot::RwLock allows nested write locks from the same thread!
+        // But wait - we're in spawn_blocking, which is a different thread...
+        // Actually, the issue is that neuroembryogenesis will try to acquire write locks
+        // on the SAME Arc<RwLock<>>, which will deadlock if we're already holding a write lock.
+        
+        // SOLUTION: Don't hold the write lock during develop_from_genome.
+        // Instead, release it and let neuroembryogenesis acquire its own locks.
+        // But we can't do that because we're in a &mut self method...
+        
+        // ACTUAL SOLUTION: Create a temporary Arc wrapper for neuroembryogenesis
+        // that uses the same underlying ConnectomeManager, but allows it to acquire its own locks.
+        // OR: Refactor neuroembryogenesis to not need its own Arc.
+        
+        // For now, let's try a different approach: pass self directly to neuroembryogenesis
+        // But neuroembryogenesis expects Arc<RwLock<ConnectomeManager>>...
+        
+        // TEMPORARY FIX: Use the singleton instance. This should work because parking_lot
+        // allows multiple write locks from the same thread (reentrant).
+        // But we're in spawn_blocking, so it's a different thread...
+        
+        // Let me check if parking_lot supports reentrant locks...
+        // Actually, parking_lot::RwLock is NOT reentrant by default.
+        
+        // REAL FIX: Refactor so that load_from_genome doesn't need to hold the write lock
+        // throughout the entire operation. Instead, release it and let neuroembryogenesis
+        // manage its own locks.
+        
+        // For now, let's ensure we're using the same instance and that locks are properly scoped.
         let mut neuro = crate::neuroembryogenesis::Neuroembryogenesis::new(manager_arc);
         neuro.develop_from_genome(&genome)?;
         

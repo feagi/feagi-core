@@ -71,15 +71,32 @@ pub async fn get_opu(State(state): State<ApiState>) -> ApiResult<Json<Vec<String
     path = "/v1/cortical_area/cortical_area_id_list",
     responses(
         (status = 200, description = "Cortical area IDs retrieved successfully", body = CorticalAreaIdListResponse),
-        (status = 500, description = "Internal server error")
+        (status = 500, description = "Internal server error", body = ApiError)
     ),
     tag = "cortical_area"
 )]
 pub async fn get_cortical_area_id_list(State(state): State<ApiState>) -> ApiResult<Json<CorticalAreaIdListResponse>> {
+    tracing::debug!(target: "feagi-api", "🔍 GET /v1/cortical_area/cortical_area_id_list - handler called");
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.get_cortical_area_ids().await {
-        Ok(ids) => Ok(Json(CorticalAreaIdListResponse { cortical_ids: ids })),
-        Err(e) => Err(ApiError::internal(format!("Failed to get cortical IDs: {}", e))),
+        Ok(ids) => {
+            tracing::info!(target: "feagi-api", "✅ GET /v1/cortical_area/cortical_area_id_list - success, returning {} IDs", ids.len());
+            tracing::debug!(target: "feagi-api", "📋 Cortical area IDs: {:?}", ids.iter().take(20).collect::<Vec<_>>());
+            let response = CorticalAreaIdListResponse { cortical_ids: ids.clone() };
+            match serde_json::to_string(&response) {
+                Ok(json_str) => {
+                    tracing::debug!(target: "feagi-api", "📤 Response JSON: {}", json_str);
+                }
+                Err(e) => {
+                    tracing::warn!(target: "feagi-api", "⚠️ Failed to serialize response: {}", e);
+                }
+            }
+            Ok(Json(response))
+        },
+        Err(e) => {
+            tracing::error!(target: "feagi-api", "❌ GET /v1/cortical_area/cortical_area_id_list - error: {}", e);
+            Err(ApiError::internal(format!("Failed to get cortical IDs: {}", e)))
+        },
     }
 }
 

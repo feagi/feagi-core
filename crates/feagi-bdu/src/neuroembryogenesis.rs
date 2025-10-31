@@ -142,14 +142,17 @@ impl Neuroembryogenesis {
         self.update_stage(DevelopmentStage::Corticogenesis, 0);
         info!(target: "feagi-bdu","🧠 Stage 1: Corticogenesis - Creating {} cortical areas", genome.cortical_areas.len());
         
-        let mut manager = self.connectome_manager.write();
         let total_areas = genome.cortical_areas.len();
         
+        // CRITICAL: Minimize lock scope - only hold lock when actually adding areas
         for (idx, (cortical_id, area)) in genome.cortical_areas.iter().enumerate() {
-            // Add cortical area to connectome
-            manager.add_cortical_area(area.clone())?;
+            // Add cortical area to connectome - lock held only during this operation
+            {
+                let mut manager = self.connectome_manager.write();
+                manager.add_cortical_area(area.clone())?;
+            } // Lock released immediately after adding
             
-            // Update progress
+            // Update progress (doesn't need lock)
             let progress_pct = ((idx + 1) * 100 / total_areas.max(1)) as u8;
             self.update_progress(|p| {
                 p.cortical_areas_created = idx + 1;
@@ -159,11 +162,18 @@ impl Neuroembryogenesis {
             debug!(target: "feagi-bdu","  ✓ Created cortical area: {} ({})", cortical_id, area.name);
         }
         
-        // Add brain regions
-        for (_region_id, region) in genome.brain_regions.iter() {
-            // TODO: Track parent relationships from genome
-            manager.add_brain_region(region.clone(), None)?;
-        }
+        // Add brain regions - minimize lock scope
+        {
+            let mut manager = self.connectome_manager.write();
+            let brain_region_count = genome.brain_regions.len();
+            info!(target: "feagi-bdu","  Adding {} brain regions from genome", brain_region_count);
+            for (region_id, region) in genome.brain_regions.iter() {
+                // TODO: Track parent relationships from genome
+                manager.add_brain_region(region.clone(), None)?;
+                debug!(target: "feagi-bdu","    ✓ Added brain region: {} ({})", region_id, region.name);
+            }
+            info!(target: "feagi-bdu","  Total brain regions in ConnectomeManager: {}", manager.get_brain_region_ids().len());
+        } // Lock released
         
         self.update_stage(DevelopmentStage::Corticogenesis, 100);
         info!(target: "feagi-bdu","  ✅ Corticogenesis complete: {} cortical areas created", total_areas);
@@ -215,13 +225,17 @@ impl Neuroembryogenesis {
             }
             
             // Call ConnectomeManager to create neurons (delegates to NPU)
-            let manager_arc = self.connectome_manager.clone();
-            let mut manager = manager_arc.write();
+            // CRITICAL: Minimize lock scope - only hold lock during neuron creation
+            let neurons_created = {
+                let manager_arc = self.connectome_manager.clone();
+                let mut manager = manager_arc.write();
+                manager.create_neurons_for_area(cortical_id)
+            }; // Lock released immediately
             
-            match manager.create_neurons_for_area(cortical_id) {
-                Ok(neurons_created) => {
-                    total_neurons_created += neurons_created as usize;
-                    info!(target: "feagi-bdu","  Created {} neurons for area {}", neurons_created, cortical_id);
+            match neurons_created {
+                Ok(count) => {
+                    total_neurons_created += count as usize;
+                    info!(target: "feagi-bdu","  Created {} neurons for area {}", count, cortical_id);
                 }
                 Err(e) => {
                     // If NPU not connected, calculate expected count
@@ -285,13 +299,17 @@ impl Neuroembryogenesis {
             }
             
             // Call ConnectomeManager to apply cortical mappings (delegates to NPU)
-            let manager_arc = self.connectome_manager.clone();
-            let mut manager = manager_arc.write();
+            // CRITICAL: Minimize lock scope - only hold lock during synapse creation
+            let synapses_created = {
+                let manager_arc = self.connectome_manager.clone();
+                let mut manager = manager_arc.write();
+                manager.apply_cortical_mapping(src_cortical_id)
+            }; // Lock released immediately
             
-            match manager.apply_cortical_mapping(src_cortical_id) {
-                Ok(synapses_created) => {
-                    total_synapses_created += synapses_created as usize;
-                    info!(target: "feagi-bdu","  Created {} synapses for area {}", synapses_created, src_cortical_id);
+            match synapses_created {
+                Ok(count) => {
+                    total_synapses_created += count as usize;
+                    info!(target: "feagi-bdu","  Created {} synapses for area {}", count, src_cortical_id);
                 }
                 Err(e) => {
                     // If NPU not connected, estimate count
