@@ -98,3 +98,4 @@ opentelemetry = ["opentelemetry", "opentelemetry-sdk", "opentelemetry-otlp", "tr
 3. **Enforcement**: Can check for direct `tracing::*!` usage in CI
 4. **Evolution**: Easy to add new logging patterns/metrics
 
+

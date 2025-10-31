@@ -109,6 +109,7 @@ thiserror = "1.0.50"
 rayon = "1.10"
 ndarray = "0.16"
 ahash = { version = "0.8", features = ["serde"] }  # Fast non-cryptographic hashing
+tracing = "0.1"  # Structured logging and diagnostics
 
 # GPU acceleration (WGPU - cross-platform native GPU library)
 wgpu = "0.19"

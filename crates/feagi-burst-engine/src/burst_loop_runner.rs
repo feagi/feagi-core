@@ -22,6 +22,7 @@ use feagi_types::NeuronId;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use tracing::{debug, info, warn, error};
 
 use std::thread;
 
@@ -78,12 +79,12 @@ impl BurstLoopRunner {
                 if !FIRST_CALLBACK_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
                     && !xyzp_data.is_empty()
                 {
-                    println!(
+                    debug!(
                         "[FCL-INJECT] 🔍 First callback: cortical_area={}, neuron_count={}",
                         cortical_area,
                         xyzp_data.len()
                     );
-                    println!(
+                    info!(
                         "[FCL-INJECT]    First 3 XYZP: {:?}",
                         &xyzp_data[0..xyzp_data.len().min(3)]
                     );
@@ -108,12 +109,12 @@ impl BurstLoopRunner {
                     if !FIRST_CONVERSION_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
                         && !neuron_ids.is_empty()
                     {
-                        println!(
+                        info!(
                             "[FCL-INJECT]    Converted {} coords → {} valid neurons",
                             xyzp_data.len(),
                             neuron_ids.len()
                         );
-                        println!(
+                        info!(
                             "[FCL-INJECT]    First 5 neuron IDs: {:?}",
                             &neuron_ids[0..neuron_ids.len().min(5)]
                         );
@@ -140,11 +141,11 @@ impl BurstLoopRunner {
                     if !FIRST_POTENTIALS_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
                         && !neuron_potential_pairs.is_empty()
                     {
-                        println!("[FCL-INJECT]    First 5 potentials from data:");
+                        info!("[FCL-INJECT]    First 5 potentials from data:");
                         for (_idx, (neuron_id, p)) in
                             neuron_potential_pairs.iter().take(5).enumerate()
                         {
-                            println!("[FCL-INJECT]      [{:?}] p={:.3}", neuron_id, p);
+                            info!("[FCL-INJECT]      [{:?}] p={:.3}", neuron_id, p);
                         }
                         FIRST_POTENTIALS_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
@@ -156,7 +157,7 @@ impl BurstLoopRunner {
                     static FIRST_SUMMARY_LOGGED: std::sync::atomic::AtomicBool =
                         std::sync::atomic::AtomicBool::new(false);
                     if !FIRST_SUMMARY_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                        println!(
+                        info!(
                             "[FCL-INJECT]    ✅ Injected {} neurons with actual P values from data",
                             neuron_potential_pairs.len()
                         );
@@ -220,7 +221,7 @@ impl BurstLoopRunner {
     /// Set burst frequency (can be called while running)
     pub fn set_frequency(&mut self, frequency_hz: f64) {
         self.frequency_hz = frequency_hz;
-        println!("[BURST-RUNNER] Frequency set to {:.2} Hz", frequency_hz);
+        info!("[BURST-RUNNER] Frequency set to {:.2} Hz", frequency_hz);
     }
 
     /// Start the burst loop in a background thread
@@ -231,7 +232,7 @@ impl BurstLoopRunner {
             return Err("Burst loop already running".to_string());
         }
 
-        println!("[BURST-RUNNER] Starting burst loop at {:.2} Hz (power neurons auto-discovered from cortical_idx=1)", 
+        info!("[BURST-RUNNER] Starting burst loop at {:.2} Hz (power neurons auto-discovered from cortical_idx=1)", 
                  self.frequency_hz);
 
         self.running.store(true, Ordering::Release);
@@ -251,7 +252,7 @@ impl BurstLoopRunner {
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
         );
 
-        println!("[BURST-RUNNER] ✅ Burst loop started successfully");
+        info!("[BURST-RUNNER] ✅ Burst loop started successfully");
         Ok(())
     }
 
@@ -265,7 +266,7 @@ impl BurstLoopRunner {
             return; // Already stopped
         }
 
-        println!("[BURST-RUNNER] Stopping burst loop...");
+        info!("[BURST-RUNNER] Stopping burst loop...");
         self.running.store(false, Ordering::Release);
 
         if let Some(handle) = self.thread_handle.take() {
@@ -287,20 +288,20 @@ impl BurstLoopRunner {
             
             match rx.recv_timeout(stop_timeout) {
                 Ok(Ok(_)) => {
-                    println!("[BURST-RUNNER] ✅ Burst loop stopped cleanly");
+                    info!("[BURST-RUNNER] ✅ Burst loop stopped cleanly");
                 }
                 Ok(Err(_)) => {
-                    eprintln!("[BURST-RUNNER] ⚠️ Burst loop thread panicked during shutdown");
+                    warn!("[BURST-RUNNER] ⚠️ Burst loop thread panicked during shutdown");
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     let elapsed = start.elapsed();
-                    eprintln!(
+                    warn!(
                         "[BURST-RUNNER] ⚠️ Burst loop did not stop within {:?}, proceeding with shutdown",
                         elapsed
                     );
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    eprintln!("[BURST-RUNNER] ⚠️ Join thread disconnected unexpectedly");
+                    warn!("[BURST-RUNNER] ⚠️ Join thread disconnected unexpectedly");
                 }
             }
         }
@@ -352,7 +353,7 @@ fn burst_loop(
     viz_publisher: Option<Arc<dyn VisualizationPublisher>>, // Trait object for visualization (NO PYTHON CALLBACKS!)
 ) {
     let timestamp = get_timestamp();
-    println!(
+    info!(
         "[{}] [BURST-LOOP] 🚀 Starting main loop at {:.2} Hz",
         timestamp, frequency_hz
     );
@@ -402,7 +403,7 @@ fn burst_loop(
                     }
                     Err(e) => {
                         let timestamp = get_timestamp();
-                        eprintln!(
+                        error!(
                             "[{}] [BURST-LOOP] ❌ Burst processing error: {}",
                             timestamp, e
                         );
@@ -429,7 +430,7 @@ fn burst_loop(
         static DEBUG_LOGGED: std::sync::atomic::AtomicBool =
             std::sync::atomic::AtomicBool::new(false);
         if !DEBUG_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-            eprintln!(
+            error!(
                 "[BURST-LOOP] 🔍 CRITICAL: has_shm_writer={}, has_viz_publisher={}",
                 has_shm_writer, has_viz_publisher
             );
@@ -444,10 +445,10 @@ fn burst_loop(
                 std::sync::atomic::AtomicBool::new(false);
             if !FIRST_CHECK_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
                 if has_shm_writer {
-                    println!("[BURST-LOOP] 🔍 Viz SHM writer is attached");
+                    debug!("[BURST-LOOP] 🔍 Viz SHM writer is attached");
                 }
                 if has_viz_publisher {
-                    println!("[BURST-LOOP] 🔍 Visualization publisher is attached (Rust-to-Rust, NO PYTHON!)");
+                    debug!("[BURST-LOOP] 🔍 Visualization publisher is attached (Rust-to-Rust, NO PYTHON!)");
                 }
                 FIRST_CHECK_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
             }
@@ -483,7 +484,7 @@ fn burst_loop(
                             .unwrap()
                             .get_cortical_area_name(area_id)
                             .map(|s| s.to_string());
-                        eprintln!(
+                        debug!(
                             "[BURST-LOOP] 🔍 Area {} ({}): {} neurons",
                             area_id,
                             area_name.as_deref().unwrap_or("unknown"),
@@ -508,13 +509,13 @@ fn burst_loop(
                             match CorticalID::from_bytes(&bytes) {
                                 Ok(id) => id,
                                 Err(e) => {
-                                    eprintln!("[BURST-LOOP] ❌ Failed to create CorticalID for '{}': {:?}", name, e);
+                                    error!("[BURST-LOOP] ❌ Failed to create CorticalID for '{}': {:?}", name, e);
                                     continue;
                                 }
                             }
                         }
                         None => {
-                            eprintln!(
+                            error!(
                                 "[BURST-LOOP] ❌ No cortical area name registered for area_id {}",
                                 area_id
                             );
@@ -533,7 +534,7 @@ fn burst_loop(
                             cortical_mapped.insert(cortical_id, neuron_arrays);
                         }
                         Err(e) => {
-                            eprintln!("[BURST-LOOP] ❌ Failed to create neuron arrays: {:?}", e);
+                            error!("[BURST-LOOP] ❌ Failed to create neuron arrays: {:?}", e);
                             continue;
                         }
                     }
@@ -547,7 +548,7 @@ fn burst_loop(
                     static FIRST_SIZE_LOG: std::sync::atomic::AtomicBool =
                         std::sync::atomic::AtomicBool::new(false);
                     if !FIRST_SIZE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                        eprintln!(
+                        debug!(
                             "[BURST-LOOP] 🔍 SERIALIZE: bytes_needed={}, buffer.len()={}",
                             bytes_needed,
                             buffer.len()
@@ -559,7 +560,7 @@ fn burst_loop(
                         static FIRST_ACTUAL_SIZE_LOG: std::sync::atomic::AtomicBool =
                             std::sync::atomic::AtomicBool::new(false);
                         if !FIRST_ACTUAL_SIZE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                            eprintln!("[BURST-LOOP] 🔍 SERIALIZE: Actual serialized buffer.len()={}, first 8 bytes: {:02x?}", buffer.len(), &buffer[..8.min(buffer.len())]);
+                            debug!("[BURST-LOOP] 🔍 SERIALIZE: Actual serialized buffer.len()={}, first 8 bytes: {:02x?}", buffer.len(), &buffer[..8.min(buffer.len())]);
                             FIRST_ACTUAL_SIZE_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
                         }
                         // Write to SHM if writer is attached (uncompressed - local IPC)
@@ -572,7 +573,7 @@ fn burst_loop(
                                     }
                                     Err(e) => {
                                         let timestamp = get_timestamp();
-                                        eprintln!(
+                                        error!(
                                             "[{}] [BURST-LOOP] ❌ Failed to write viz SHM: {}",
                                             timestamp, e
                                         );
@@ -587,7 +588,7 @@ fn burst_loop(
                             static FIRST_PUBLISH_LOGGED: std::sync::atomic::AtomicBool =
                                 std::sync::atomic::AtomicBool::new(false);
                             if !FIRST_PUBLISH_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                eprintln!("[BURST-LOOP] 🔍 CRITICAL: Calling publisher.publish_visualization() with {} bytes", buffer.len());
+                                error!("[BURST-LOOP] 🔍 CRITICAL: Calling publisher.publish_visualization() with {} bytes", buffer.len());
                                 FIRST_PUBLISH_LOGGED
                                     .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
@@ -597,7 +598,7 @@ fn burst_loop(
                             
                             let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                             if count % 30 == 0 {  // Log every 30 publishes (~1 second at 30Hz)
-                                eprintln!("[BURST-LOOP] 📊 VIZ PUBLISH #{}: {} bytes/frame", count, buffer.len());
+                                info!("[BURST-LOOP] 📊 VIZ PUBLISH #{}: {} bytes/frame", count, buffer.len());
                             }
 
                             match publisher.publish_visualization(&buffer) {
@@ -605,20 +606,20 @@ fn burst_loop(
                                     static SUCCESS_LOGGED: std::sync::atomic::AtomicBool =
                                         std::sync::atomic::AtomicBool::new(false);
                                     if !SUCCESS_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                        eprintln!("[BURST-LOOP] ✅ CRITICAL: publish_visualization() SUCCESS!");
+                                        error!("[BURST-LOOP] ✅ CRITICAL: publish_visualization() SUCCESS!");
                                         SUCCESS_LOGGED
                                             .store(true, std::sync::atomic::Ordering::Relaxed);
                                     }
                                 }
                                 Err(e) => {
-                                    eprintln!("[BURST-LOOP] ❌ VIZ PUBLISH ERROR: {}", e);
+                                    error!("[BURST-LOOP] ❌ VIZ PUBLISH ERROR: {}", e);
                                 }
                             }
                         } else {
                             static NO_PUBLISHER_LOGGED: std::sync::atomic::AtomicBool =
                                 std::sync::atomic::AtomicBool::new(false);
                             if !NO_PUBLISHER_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                eprintln!("[BURST-LOOP] ⚠️ CRITICAL: viz_publisher is None!");
+                                error!("[BURST-LOOP] ⚠️ CRITICAL: viz_publisher is None!");
                                 NO_PUBLISHER_LOGGED
                                     .store(true, std::sync::atomic::Ordering::Relaxed);
                             }
@@ -628,7 +629,7 @@ fn burst_loop(
                             std::sync::atomic::AtomicBool::new(false);
                         if !SERIALIZE_ERROR_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
                             let timestamp = get_timestamp();
-                            eprintln!(
+                            error!(
                                 "[{}] [BURST-LOOP] ❌ Failed to serialize - skipping viz writes",
                                 timestamp
                             );
@@ -640,7 +641,7 @@ fn burst_loop(
                     static SKIP_LOGGED: std::sync::atomic::AtomicBool =
                         std::sync::atomic::AtomicBool::new(false);
                     if !SKIP_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                        eprintln!("[BURST-LOOP] ⚠️ Skipping viz - no cortical areas yet");
+                        warn!("[BURST-LOOP] ⚠️ Skipping viz - no cortical areas yet");
                         SKIP_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
                 }
@@ -655,16 +656,14 @@ fn burst_loop(
                     burst_times.iter().sum::<Duration>() / burst_times.len() as u32;
                 let actual_hz = 1.0 / avg_interval.as_secs_f64();
                 let avg_neurons = total_neurons_fired / burst_times.len();
-                let timestamp = get_timestamp();
 
-                println!(
-                    "[{}] [BURST-LOOP] 📊 Stats: Burst #{} | Desired: {:.2} Hz | Actual: {:.2} Hz ({:.1}%) | Avg neurons: {}",
-                    timestamp,
+                debug!(
                     burst_num,
-                    frequency_hz,
+                    desired_hz = frequency_hz,
                     actual_hz,
-                    (actual_hz / frequency_hz * 100.0),
-                    avg_neurons
+                    accuracy_percent = (actual_hz / frequency_hz * 100.0),
+                    avg_neurons,
+                    "📊 Burst loop stats"
                 );
             }
 
@@ -742,7 +741,7 @@ fn burst_loop(
     }
 
     let timestamp = get_timestamp();
-    println!(
+    info!(
         "[{}] [BURST-LOOP] 🛑 Main loop stopped after {} bursts",
         timestamp, burst_num
     );

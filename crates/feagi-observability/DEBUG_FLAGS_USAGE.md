@@ -197,3 +197,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 3. **Flexibility**: Use CLI flags or environment variables
 4. **Consistency**: Same pattern across all FEAGI binaries
 
+

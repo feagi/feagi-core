@@ -23,6 +23,7 @@ chrono = "0.4"   # Timestamp formatting
 
 # Observability
 feagi-observability = { workspace = true }
+tracing = { workspace = true }
 
 # GPU acceleration (optional feature)
 wgpu = { workspace = true, optional = true }

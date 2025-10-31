@@ -38,3 +38,4 @@ pub async fn get_properties_mappings(State(_state): State<ApiState>) -> ApiResul
 }
 
 
+
