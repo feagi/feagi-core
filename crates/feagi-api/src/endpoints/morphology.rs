@@ -35,7 +35,15 @@ pub async fn get_list_types(State(_state): State<ApiState>) -> ApiResult<Json<Ha
 }
 
 /// GET /v1/morphology/morphologies
-#[utoipa::path(get, path = "/v1/morphology/morphologies", tag = "morphology")]
+#[utoipa::path(
+    get, 
+    path = "/v1/morphology/morphologies",
+    tag = "morphology",
+    responses(
+        (status = 200, description = "All morphology definitions", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_morphologies(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Get all morphologies
     Ok(Json(HashMap::new()))

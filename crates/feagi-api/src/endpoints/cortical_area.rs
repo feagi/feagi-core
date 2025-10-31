@@ -144,7 +144,15 @@ pub async fn get_cortical_types(State(_state): State<ApiState>) -> ApiResult<Jso
 }
 
 /// GET /v1/cortical_area/cortical_map_detailed
-#[utoipa::path(get, path = "/v1/cortical_area/cortical_map_detailed", tag = "cortical_area")]
+#[utoipa::path(
+    get, 
+    path = "/v1/cortical_area/cortical_map_detailed",
+    tag = "cortical_area",
+    responses(
+        (status = 200, description = "Detailed cortical area mapping data", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_cortical_map_detailed(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {

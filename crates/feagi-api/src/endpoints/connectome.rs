@@ -9,7 +9,15 @@ use crate::common::{ApiError, ApiResult};
 use crate::transports::http::server::ApiState;
 
 /// GET /v1/connectome/cortical_areas/list/detailed
-#[utoipa::path(get, path = "/v1/connectome/cortical_areas/list/detailed", tag = "connectome")]
+#[utoipa::path(
+    get, 
+    path = "/v1/connectome/cortical_areas/list/detailed",
+    tag = "connectome",
+    responses(
+        (status = 200, description = "Detailed cortical areas list", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_cortical_areas_list_detailed(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {

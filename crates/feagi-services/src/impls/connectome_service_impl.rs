@@ -430,16 +430,27 @@ impl ConnectomeService for ConnectomeServiceImpl {
         
         let region_ids: Vec<String> = {
             let manager = self.connectome.read();
-            manager.get_brain_region_ids().into_iter().map(|s| s.to_string()).collect()
+            let ids = manager.get_brain_region_ids();
+            debug!(target: "feagi-services","  Found {} brain region IDs from ConnectomeManager", ids.len());
+            ids.into_iter().map(|s| s.to_string()).collect()
         };
         
+        debug!(target: "feagi-services","  Processing {} regions...", region_ids.len());
         let mut regions = Vec::new();
         for region_id in region_ids {
-            if let Ok(region_info) = self.get_brain_region(&region_id).await {
-                regions.push(region_info);
+            debug!(target: "feagi-services","    Getting region: {}", region_id);
+            match self.get_brain_region(&region_id).await {
+                Ok(region_info) => {
+                    debug!(target: "feagi-services","      ✓ Got region: {} with {} areas", region_info.name, region_info.cortical_areas.len());
+                    regions.push(region_info);
+                }
+                Err(e) => {
+                    warn!(target: "feagi-services","      ✗ Failed to get region {}: {}", region_id, e);
+                }
             }
         }
         
+        debug!(target: "feagi-services","  Returning {} brain regions", regions.len());
         Ok(regions)
     }
 

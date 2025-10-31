@@ -57,8 +57,8 @@ use crate::{
         )
     ),
     servers(
-        (url = "http://localhost:8080", description = "Local development server"),
-        (url = "http://localhost:8000", description = "Python FastAPI compatibility")
+        (url = "http://localhost:8000", description = "Default FEAGI server"),
+        (url = "http://localhost:8080", description = "Alternative port")
     ),
     paths(
         // Agent endpoints

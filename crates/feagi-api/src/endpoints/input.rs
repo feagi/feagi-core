@@ -9,14 +9,30 @@ use crate::common::{ApiError, ApiResult};
 use crate::transports::http::server::ApiState;
 
 /// GET /v1/input/vision
-#[utoipa::path(get, path = "/v1/input/vision", tag = "input")]
+#[utoipa::path(
+    get, 
+    path = "/v1/input/vision",
+    tag = "input",
+    responses(
+        (status = 200, description = "Vision input configuration", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
 pub async fn get_vision(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Get vision input configuration
     Ok(Json(HashMap::new()))
 }
 
 /// POST /v1/input/vision
-#[utoipa::path(post, path = "/v1/input/vision", tag = "input")]
+#[utoipa::path(
+    post, 
+    path = "/v1/input/vision",
+    tag = "input",
+    responses(
+        (status = 200, description = "Vision input updated", content_type = "application/json"),
+        (status = 500, description = "Not yet implemented")
+    )
+)]
 pub async fn post_vision(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }

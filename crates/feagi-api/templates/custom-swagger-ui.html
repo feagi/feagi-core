@@ -222,6 +222,11 @@
         return;
       }
 
+      // Force Swagger UI to use the current server (window.location.origin)
+      // This ensures all API calls go to the same server that's serving Swagger UI
+      const currentServerUrl = window.location.origin;
+      console.log('FEAGI Swagger UI: Using server URL:', currentServerUrl);
+      
       const ui = SwaggerUIBundle({
         url: "/api-docs/openapi.json",
         dom_id: '#swagger-ui',
@@ -234,6 +239,11 @@
         docExpansion: "none",
         filter: false,
         persistAuthorization: true,
+        // CRITICAL: Override server URL to always use current origin
+        onComplete: function() {
+          console.log('FEAGI Swagger UI: Loaded successfully');
+          console.log('FEAGI Swagger UI: Server URL set to:', currentServerUrl);
+        },
         tryItOutEnabled: true,
         // Add response interceptor for debugging
         responseInterceptor: (response) => {
