@@ -1629,16 +1629,24 @@ fn phase1_injection_with_synapses(
         FIRST_INJECTION.store(true, Ordering::Relaxed);
         LAST_POWER_COUNT.store(power_count, Ordering::Relaxed);
     } else if power_count == 0 && FIRST_INJECTION.load(Ordering::Relaxed) {
-        // Power neurons disappeared after working!
+        // Power neurons disappeared after working - BUT only log error if we actually had power neurons before
         let last_count = LAST_POWER_COUNT.load(Ordering::Relaxed);
-        error!(
-            "[POWER-INJECTION] ❌ ERROR: Power neurons DISAPPEARED! (was {}, now 0)",
-            last_count
-        );
-        LAST_POWER_COUNT.store(0, Ordering::Relaxed);
+        if last_count > 0 {
+            error!(
+                "[POWER-INJECTION] ❌ ERROR: Power neurons DISAPPEARED! (was {}, now 0)",
+                last_count
+            );
+            LAST_POWER_COUNT.store(0, Ordering::Relaxed);
+        }
+        // If last_count was also 0, we never had power neurons - this is expected for genomes without _power area
     } else if power_count == 0 && !FIRST_INJECTION.load(Ordering::Relaxed) {
-        warn!("[POWER-INJECTION] ⚠️ WARNING: No neurons found with cortical_idx=1");
+        // Only warn ONCE on first burst if no power neurons found
+        warn!("[POWER-INJECTION] ⚠️ No power neurons found (cortical_idx=1 '_power' area missing or empty)");
         FIRST_INJECTION.store(true, Ordering::Relaxed);
+        LAST_POWER_COUNT.store(0, Ordering::Relaxed);
+    } else if power_count != LAST_POWER_COUNT.load(Ordering::Relaxed) {
+        // Power neuron count changed (not 0 -> 0, but some other change)
+        LAST_POWER_COUNT.store(power_count, Ordering::Relaxed);
     }
 
     // 2. Synaptic Propagation
