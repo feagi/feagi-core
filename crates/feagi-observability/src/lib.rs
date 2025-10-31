@@ -7,6 +7,7 @@
 
 pub mod cli;
 pub mod config;
+pub mod init;
 
 // Placeholder modules - to be implemented
 pub mod context {
@@ -16,11 +17,6 @@ pub mod context {
 
 pub mod errors {
     //! Error handling and reporting
-    // TODO: Implement
-}
-
-pub mod init {
-    //! Unified initialization
     // TODO: Implement
 }
 
@@ -52,6 +48,7 @@ pub mod tracing {
 // Re-export commonly used items
 pub use cli::*;
 pub use config::*;
+pub use init::*;
 
 /// Known FEAGI crate names for debug flags
 pub const KNOWN_CRATES: &[&str] = &[

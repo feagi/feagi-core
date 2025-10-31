@@ -10,6 +10,7 @@ description = "Unified observability infrastructure for FEAGI (logging, telemetr
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing-appender = "0.2"  # File rotation and appending
 
 # Errors
 anyhow = "1.0"

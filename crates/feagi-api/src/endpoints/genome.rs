@@ -130,7 +130,7 @@ async fn load_default_genome(
             &format!("Default genome '{}' not found. Searched: {:?}", genome_name, possible_paths)
         ))?;
     
-    tracing::info!(target: "feagi-api",target: "feagi-api", "Loading {} genome from: {}", genome_name, genome_path.display());
+    tracing::info!(target: "feagi-api", "Loading {} genome from: {}", genome_name, genome_path.display());
     
     // Read genome file
     let genome_json = std::fs::read_to_string(genome_path)
