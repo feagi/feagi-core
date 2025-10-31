@@ -234,7 +234,35 @@
         docExpansion: "none",
         filter: false,
         persistAuthorization: true,
-        tryItOutEnabled: true
+        tryItOutEnabled: true,
+        // Add response interceptor for debugging
+        responseInterceptor: (response) => {
+          console.log('Swagger UI Response:', response);
+          // Ensure response is properly formatted
+          if (response && response.body) {
+            try {
+              const parsed = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+              console.log('Parsed response:', parsed);
+            } catch (e) {
+              console.error('Failed to parse response body:', e);
+            }
+          }
+          return response;
+        },
+        // Add request interceptor for debugging
+        requestInterceptor: (request) => {
+          console.log('Swagger UI Request:', request);
+          return request;
+        },
+        // Add error handler
+        onFailure: (error) => {
+          console.error('Swagger UI Error:', error);
+          alert('Swagger UI failed to load. Check browser console for details.');
+        },
+        // Add completion handler
+        onComplete: () => {
+          console.log('Swagger UI loaded successfully');
+        }
       });
 
       window.ui = ui;
