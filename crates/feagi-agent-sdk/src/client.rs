@@ -5,7 +5,7 @@ use crate::error::{Result, SdkError};
 use crate::heartbeat::HeartbeatService;
 use crate::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_pns::AgentType;
-use log::{debug, error, info, warn};
+use tracing::{debug, error, info, warn};
 use std::sync::{Arc, Mutex};
 
 /// Main FEAGI Agent Client

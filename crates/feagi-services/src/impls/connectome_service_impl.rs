@@ -12,6 +12,7 @@ use feagi_bdu::ConnectomeManager;
 use feagi_types::{AreaType, BrainRegion, CorticalArea, Dimensions, RegionType};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tracing::{info, debug};
 
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
@@ -82,7 +83,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         &self,
         params: CreateCorticalAreaParams,
     ) -> ServiceResult<CorticalAreaInfo> {
-        log::info!("Creating cortical area: {}", params.cortical_id);
+        info!(target: "feagi-services","Creating cortical area: {}", params.cortical_id);
         
         // Convert string to AreaType
         let area_type = Self::string_to_area_type(&params.area_type)?;
@@ -158,7 +159,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn delete_cortical_area(&self, cortical_id: &str) -> ServiceResult<()> {
-        log::info!("Deleting cortical area: {}", cortical_id);
+        info!(target: "feagi-services","Deleting cortical area: {}", cortical_id);
         
         self.connectome
             .write()
@@ -173,7 +174,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         cortical_id: &str,
         params: UpdateCorticalAreaParams,
     ) -> ServiceResult<CorticalAreaInfo> {
-        log::info!("Updating cortical area: {}", cortical_id);
+        info!(target: "feagi-services","Updating cortical area: {}", cortical_id);
         
         // Get mutable access to the cortical area
         {
@@ -244,7 +245,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
-        log::debug!("Getting cortical area: {}", cortical_id);
+        debug!(target: "feagi-services","Getting cortical area: {}", cortical_id);
         
         let manager = self.connectome.read();
         
@@ -295,7 +296,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn list_cortical_areas(&self) -> ServiceResult<Vec<CorticalAreaInfo>> {
-        log::debug!("Listing all cortical areas");
+        debug!(target: "feagi-services","Listing all cortical areas");
         
         let cortical_ids: Vec<String> = {
             let manager = self.connectome.read();
@@ -313,12 +314,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn get_cortical_area_ids(&self) -> ServiceResult<Vec<String>> {
-        log::debug!("Getting cortical area IDs");
+        debug!(target: "feagi-services","Getting cortical area IDs");
         Ok(self.connectome.read().get_cortical_area_ids().into_iter().cloned().collect())
     }
 
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {
-        log::debug!("Checking if cortical area exists: {}", cortical_id);
+        debug!(target: "feagi-services","Checking if cortical area exists: {}", cortical_id);
         Ok(self.connectome.read().has_cortical_area(cortical_id))
     }
 
@@ -330,7 +331,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         &self,
         params: CreateBrainRegionParams,
     ) -> ServiceResult<BrainRegionInfo> {
-        log::info!("Creating brain region: {}", params.region_id);
+        info!(target: "feagi-services","Creating brain region: {}", params.region_id);
         
         // Convert string to RegionType
         let region_type = Self::string_to_region_type(&params.region_type)?;
@@ -353,7 +354,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn delete_brain_region(&self, region_id: &str) -> ServiceResult<()> {
-        log::info!("Deleting brain region: {}", region_id);
+        info!(target: "feagi-services","Deleting brain region: {}", region_id);
         
         self.connectome
             .write()
@@ -364,7 +365,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn get_brain_region(&self, region_id: &str) -> ServiceResult<BrainRegionInfo> {
-        log::debug!("Getting brain region: {}", region_id);
+        debug!(target: "feagi-services","Getting brain region: {}", region_id);
         
         let manager = self.connectome.read();
         
@@ -395,7 +396,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn list_brain_regions(&self) -> ServiceResult<Vec<BrainRegionInfo>> {
-        log::debug!("Listing all brain regions");
+        debug!(target: "feagi-services","Listing all brain regions");
         
         let region_ids: Vec<String> = {
             let manager = self.connectome.read();
@@ -413,12 +414,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn get_brain_region_ids(&self) -> ServiceResult<Vec<String>> {
-        log::debug!("Getting brain region IDs");
+        debug!(target: "feagi-services","Getting brain region IDs");
         Ok(self.connectome.read().get_brain_region_ids().into_iter().map(|s| s.to_string()).collect())
     }
 
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool> {
-        log::debug!("Checking if brain region exists: {}", region_id);
+        debug!(target: "feagi-services","Checking if brain region exists: {}", region_id);
         Ok(self.connectome.read().get_brain_region(region_id).is_some())
     }
 }

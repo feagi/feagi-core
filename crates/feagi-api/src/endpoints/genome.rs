@@ -130,13 +130,13 @@ async fn load_default_genome(
             &format!("Default genome '{}' not found. Searched: {:?}", genome_name, possible_paths)
         ))?;
     
-    tracing::info!("Loading {} genome from: {}", genome_name, genome_path.display());
+    tracing::info!(target: "feagi-api",target: "feagi-api", "Loading {} genome from: {}", genome_name, genome_path.display());
     
     // Read genome file
     let genome_json = std::fs::read_to_string(genome_path)
         .map_err(|e| ApiError::internal(format!("Failed to read genome file {}: {}", genome_path.display(), e)))?;
     
-    tracing::info!("Read {} bytes of genome JSON, starting conversion...", genome_json.len());
+    tracing::info!(target: "feagi-api","Read {} bytes of genome JSON, starting conversion...", genome_json.len());
     
     // Load genome via service
     let genome_service = state.genome_service.as_ref();
@@ -144,13 +144,13 @@ async fn load_default_genome(
         json_str: genome_json,
     };
     
-    tracing::info!("Calling genome service load_genome...");
+    tracing::info!(target: "feagi-api","Calling genome service load_genome...");
     let genome_info = genome_service
         .load_genome(params)
         .await
         .map_err(|e| ApiError::internal(format!("Failed to load genome: {}", e)))?;
     
-    tracing::info!("Successfully loaded {} genome: {} cortical areas, {} brain regions", 
+    tracing::info!(target: "feagi-api","Successfully loaded {} genome: {} cortical areas, {} brain regions", 
                genome_name, genome_info.cortical_area_count, genome_info.brain_region_count);
     
     // Return response matching Python format

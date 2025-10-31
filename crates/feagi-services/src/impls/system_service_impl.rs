@@ -13,6 +13,7 @@ use feagi_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::SystemTime;
+use tracing::debug;
 
 /// Default implementation of SystemService
 pub struct SystemServiceImpl {
@@ -50,7 +51,7 @@ impl SystemServiceImpl {
 #[async_trait]
 impl SystemService for SystemServiceImpl {
     async fn get_health(&self) -> ServiceResult<HealthStatus> {
-        log::debug!("Getting system health");
+        debug!(target: "feagi-services","Getting system health");
 
         let mut components = Vec::new();
 
@@ -123,7 +124,7 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_status(&self) -> ServiceResult<SystemStatus> {
-        log::debug!("Getting system status");
+        debug!(target: "feagi-services","Getting system status");
 
         let manager = self.connectome.read();
 
@@ -161,7 +162,7 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_version(&self) -> ServiceResult<VersionInfo> {
-        log::debug!("Getting version information");
+        debug!(target: "feagi-services","Getting version information");
 
         Ok(VersionInfo {
             feagi_core_version: env!("CARGO_PKG_VERSION").to_string(),
@@ -179,12 +180,12 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn is_initialized(&self) -> ServiceResult<bool> {
-        log::debug!("Checking if system is initialized");
+        debug!(target: "feagi-services","Checking if system is initialized");
         Ok(self.connectome.read().is_initialized())
     }
 
     async fn get_burst_count(&self) -> ServiceResult<u64> {
-        log::debug!("Getting burst count");
+        debug!(target: "feagi-services","Getting burst count");
 
         if let Some(ref runner) = self.burst_runner {
             Ok(runner.read().get_burst_count())
@@ -194,7 +195,7 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_runtime_stats(&self) -> ServiceResult<RuntimeStats> {
-        log::debug!("Getting runtime statistics");
+        debug!(target: "feagi-services","Getting runtime statistics");
 
         let burst_count = if let Some(ref runner) = self.burst_runner {
             runner.read().get_burst_count()
@@ -217,7 +218,7 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_memory_usage(&self) -> ServiceResult<MemoryUsage> {
-        log::debug!("Getting memory usage");
+        debug!(target: "feagi-services","Getting memory usage");
 
         // TODO: Implement actual memory tracking
         // For now, estimate based on neuron/synapse counts
@@ -251,7 +252,7 @@ impl SystemService for SystemServiceImpl {
     }
 
     async fn get_capacity(&self) -> ServiceResult<CapacityInfo> {
-        log::debug!("Getting capacity information");
+        debug!(target: "feagi-services","Getting capacity information");
 
         let manager = self.connectome.read();
         let config = manager.get_config();

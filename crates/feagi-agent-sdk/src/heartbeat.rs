@@ -1,7 +1,7 @@
 //! Heartbeat service for maintaining agent liveness
 
 use crate::error::{Result, SdkError};
-use log::{debug, warn};
+use tracing::{debug, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};

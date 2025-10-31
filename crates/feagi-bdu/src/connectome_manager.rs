@@ -30,6 +30,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use tracing::{info, warn, debug};
 
 use feagi_types::{BrainRegion, BrainRegionHierarchy, CorticalArea};
 use crate::types::{BduError, BduResult, NeuronId};
@@ -396,7 +397,7 @@ impl ConnectomeManager {
     ///
     pub fn set_npu(&mut self, npu: Arc<Mutex<RustNPU>>) {
         self.npu = Some(npu);
-        log::info!("🔗 ConnectomeManager: NPU reference set");
+        info!(target: "feagi-bdu","🔗 ConnectomeManager: NPU reference set");
     }
     
     /// Check if NPU is connected
@@ -497,7 +498,7 @@ impl ConnectomeManager {
         )
         .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
         
-        log::info!("Created {} neurons for area {} via NPU", neuron_count, cortical_id);
+        info!(target: "feagi-bdu","Created {} neurons for area {} via NPU", neuron_count, cortical_id);
         
         Ok(neuron_count)
     }
@@ -572,7 +573,7 @@ impl ConnectomeManager {
             z,
         ).map_err(|e| BduError::Internal(format!("Failed to add neuron: {}", e)))?;
         
-        log::debug!("Created neuron {} in area {} at ({}, {}, {})", neuron_id.0, cortical_id, x, y, z);
+        debug!(target: "feagi-bdu", "Created neuron {} in area {} at ({}, {}, {})", neuron_id.0, cortical_id, x, y, z);
         
         Ok(neuron_id.0 as u64)
     }
@@ -598,7 +599,7 @@ impl ConnectomeManager {
         let deleted = npu_lock.delete_neuron(neuron_id as u32);
         
         if deleted {
-            log::debug!("Deleted neuron {}", neuron_id);
+            debug!(target: "feagi-bdu","Deleted neuron {}", neuron_id);
         }
         
         Ok(deleted)
@@ -648,7 +649,7 @@ impl ConnectomeManager {
             let dst_cortical_idx = match self.cortical_id_to_idx.get(dst_cortical_id) {
                 Some(idx) => *idx,
                 None => {
-                    log::warn!("Destination area {} not found, skipping", dst_cortical_id);
+                    warn!(target: "feagi-bdu","Destination area {} not found, skipping", dst_cortical_id);
                     continue;
                 }
             };
@@ -704,19 +705,19 @@ impl ConnectomeManager {
                         )?
                     }
                     _ => {
-                        log::debug!("Morphology {} not yet implemented, skipping", morphology_id);
+                        debug!(target: "feagi-bdu","Morphology {} not yet implemented, skipping", morphology_id);
                         0
                     }
                 };
                 
                 total_synapses += synapse_count;
                 
-                log::debug!("Applied {} morphology: {} -> {} = {} synapses",
+                debug!(target: "feagi-bdu","Applied {} morphology: {} -> {} = {} synapses",
                     morphology_id, src_cortical_id, dst_cortical_id, synapse_count);
             }
         }
         
-        log::info!("Created {} synapses for area {} via NPU", total_synapses, src_cortical_id);
+        info!(target: "feagi-bdu","Created {} synapses for area {} via NPU", total_synapses, src_cortical_id);
         
         Ok(total_synapses)
     }
@@ -1157,10 +1158,10 @@ impl ConnectomeManager {
         // Parse genome
         let parsed = feagi_evo::GenomeParser::parse(json_str)?;
         
-        log::info!("🧬 Loading genome: {} (version {})", 
+        info!(target: "feagi-bdu","🧬 Loading genome: {} (version {})", 
             parsed.genome_title, parsed.version);
-        log::info!("🧬   Cortical areas: {}", parsed.cortical_areas.len());
-        log::info!("🧬   Brain regions: {}", parsed.brain_regions.len());
+        info!(target: "feagi-bdu","🧬   Cortical areas: {}", parsed.cortical_areas.len());
+        info!(target: "feagi-bdu","🧬   Brain regions: {}", parsed.brain_regions.len());
         
         // Clear existing data
         self.cortical_areas.clear();
@@ -1172,7 +1173,7 @@ impl ConnectomeManager {
         // Add cortical areas
         for area in parsed.cortical_areas {
             let cortical_idx = self.add_cortical_area(area)?;
-            log::debug!("  ✅ Added cortical area {} (idx: {})", 
+            debug!(target: "feagi-bdu","  ✅ Added cortical area {} (idx: {})", 
                 self.cortical_idx_to_id.get(&cortical_idx).unwrap(), cortical_idx);
         }
         
@@ -1180,13 +1181,13 @@ impl ConnectomeManager {
         for (region, parent_id) in parsed.brain_regions {
             let region_id = region.region_id.clone();
             self.brain_regions.add_region(region, parent_id.clone())?;
-            log::debug!("  ✅ Added brain region {} (parent: {:?})", 
+            debug!(target: "feagi-bdu","  ✅ Added brain region {} (parent: {:?})", 
                 region_id, parent_id);
         }
         
         self.initialized = true;
         
-        log::info!("🧬 ✅ Genome loaded successfully!");
+        info!(target: "feagi-bdu","🧬 ✅ Genome loaded successfully!");
         
         Ok(())
     }
@@ -1248,7 +1249,7 @@ impl ConnectomeManager {
     ) -> BduResult<crate::neuroembryogenesis::DevelopmentProgress> {
         use feagi_evo::load_genome_from_file;
         
-        log::info!("Loading genome from: {:?}", genome_path.as_ref());
+        info!(target: "feagi-bdu","Loading genome from: {:?}", genome_path.as_ref());
         let genome = load_genome_from_file(genome_path)?;
         
         self.load_from_genome(genome)
@@ -1292,7 +1293,7 @@ impl ConnectomeManager {
     /// This is typically called before loading a new genome.
     ///
     pub fn prepare_for_new_genome(&mut self) -> BduResult<()> {
-        log::info!("Preparing for new genome (clearing existing state)");
+        info!(target: "feagi-bdu","Preparing for new genome (clearing existing state)");
         
         // Clear cortical areas
         self.cortical_areas.clear();
@@ -1310,7 +1311,7 @@ impl ConnectomeManager {
         //     npu_lock.reset();
         // }
         
-        log::info!("✅ Connectome cleared and ready for new genome");
+        info!(target: "feagi-bdu","✅ Connectome cleared and ready for new genome");
         Ok(())
     }
     
@@ -1328,7 +1329,7 @@ impl ConnectomeManager {
         let required_neurons = genome.stats.innate_neuron_count;
         let required_synapses = genome.stats.innate_synapse_count;
         
-        log::info!(
+        info!(target: "feagi-bdu",
             "Genome requires: {} neurons, {} synapses",
             required_neurons,
             required_synapses
@@ -1340,7 +1341,7 @@ impl ConnectomeManager {
             total_voxels += area.dimensions.width * area.dimensions.height * area.dimensions.depth;
         }
         
-        log::info!(
+        info!(target: "feagi-bdu",
             "Genome has {} cortical areas with {} total voxels",
             genome.cortical_areas.len(),
             total_voxels
@@ -1412,7 +1413,7 @@ impl ConnectomeManager {
             syn_type,
         ).map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
         
-        log::debug!("Created synapse: {} -> {} (weight: {}, conductance: {}, type: {}, idx: {})", 
+        debug!(target: "feagi-bdu", "Created synapse: {} -> {} (weight: {}, conductance: {}, type: {}, idx: {})", 
             source_neuron_id, target_neuron_id, weight, conductance, synapse_type, synapse_idx);
         
         Ok(())
@@ -1485,7 +1486,7 @@ impl ConnectomeManager {
         );
         
         if updated {
-            log::debug!("Updated synapse weight: {} -> {} = {}", source_neuron_id, target_neuron_id, new_weight);
+            debug!(target: "feagi-bdu","Updated synapse weight: {} -> {} = {}", source_neuron_id, target_neuron_id, new_weight);
             Ok(())
         } else {
             Err(BduError::InvalidSynapse(format!(
@@ -1526,7 +1527,7 @@ impl ConnectomeManager {
         );
         
         if removed {
-            log::debug!("Removed synapse: {} -> {}", source_neuron_id, target_neuron_id);
+            debug!(target: "feagi-bdu","Removed synapse: {} -> {}", source_neuron_id, target_neuron_id);
         }
         
         Ok(removed)
@@ -1626,7 +1627,7 @@ impl ConnectomeManager {
             neuron_ids.push((first_neuron_id + i) as u64);
         }
         
-        log::info!("Batch created {} neurons in cortical area {}", count, cortical_id);
+        info!(target: "feagi-bdu","Batch created {} neurons in cortical area {}", count, cortical_id);
         
         Ok(neuron_ids)
     }
@@ -1662,7 +1663,7 @@ impl ConnectomeManager {
             }
         }
         
-        log::info!("Batch deleted {} neurons", deleted_count);
+        info!(target: "feagi-bdu","Batch deleted {} neurons", deleted_count);
         
         Ok(deleted_count)
     }
@@ -1709,7 +1710,7 @@ impl ConnectomeManager {
         if let Some(threshold) = firing_threshold {
             if npu_lock.update_neuron_threshold(neuron_id_u32, threshold) {
                 updated = true;
-                log::debug!("Updated neuron {} firing_threshold = {}", neuron_id, threshold);
+                debug!(target: "feagi-bdu","Updated neuron {} firing_threshold = {}", neuron_id, threshold);
             } else if !updated {
                 return Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)));
             }
@@ -1718,7 +1719,7 @@ impl ConnectomeManager {
         if let Some(leak) = leak_coefficient {
             if npu_lock.update_neuron_leak(neuron_id_u32, leak) {
                 updated = true;
-                log::debug!("Updated neuron {} leak_coefficient = {}", neuron_id, leak);
+                debug!(target: "feagi-bdu","Updated neuron {} leak_coefficient = {}", neuron_id, leak);
             } else if !updated {
                 return Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)));
             }
@@ -1727,7 +1728,7 @@ impl ConnectomeManager {
         if let Some(resting) = resting_potential {
             if npu_lock.update_neuron_resting_potential(neuron_id_u32, resting) {
                 updated = true;
-                log::debug!("Updated neuron {} resting_potential = {}", neuron_id, resting);
+                debug!(target: "feagi-bdu","Updated neuron {} resting_potential = {}", neuron_id, resting);
             } else if !updated {
                 return Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)));
             }
@@ -1736,7 +1737,7 @@ impl ConnectomeManager {
         if let Some(excit) = excitability {
             if npu_lock.update_neuron_excitability(neuron_id_u32, excit) {
                 updated = true;
-                log::debug!("Updated neuron {} excitability = {}", neuron_id, excit);
+                debug!(target: "feagi-bdu","Updated neuron {} excitability = {}", neuron_id, excit);
             } else if !updated {
                 return Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)));
             }
@@ -1746,7 +1747,7 @@ impl ConnectomeManager {
             return Err(BduError::Internal("No properties provided for update".to_string()));
         }
         
-        log::info!("Updated properties for neuron {}", neuron_id);
+        info!(target: "feagi-bdu","Updated properties for neuron {}", neuron_id);
         
         Ok(())
     }
@@ -1776,7 +1777,7 @@ impl ConnectomeManager {
         
         // Update threshold via NPU
         if npu_lock.update_neuron_threshold(neuron_id as u32, new_threshold) {
-            log::debug!("Set neuron {} firing threshold = {}", neuron_id, new_threshold);
+            debug!(target: "feagi-bdu","Set neuron {} firing threshold = {}", neuron_id, new_threshold);
             Ok(())
         } else {
             Err(BduError::InvalidNeuron(format!("Neuron {} not found", neuron_id)))
@@ -1839,7 +1840,7 @@ impl ConnectomeManager {
         let old_dimensions = area.dimensions;
         area.dimensions = new_dimensions;
         
-        log::info!(
+        info!(target: "feagi-bdu",
             "Resized cortical area {} from {:?} to {:?}",
             cortical_id,
             old_dimensions,
@@ -1889,16 +1890,16 @@ impl ConnectomeManager {
         
         if let Some(name) = new_name {
             region.name = name;
-            log::debug!("Updated brain region {} name", region_id);
+            debug!(target: "feagi-bdu","Updated brain region {} name", region_id);
         }
         
         if let Some(desc) = new_description {
             // BrainRegion doesn't have a description field in the struct, so we'll store it in properties
             region.properties.insert("description".to_string(), serde_json::json!(desc));
-            log::debug!("Updated brain region {} description", region_id);
+            debug!(target: "feagi-bdu","Updated brain region {} description", region_id);
         }
         
-        log::info!("Updated brain region {}", region_id);
+        info!(target: "feagi-bdu","Updated brain region {}", region_id);
         
         Ok(())
     }

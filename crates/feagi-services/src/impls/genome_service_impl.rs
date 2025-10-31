@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tracing::{info, warn, debug};
 
 /// Default implementation of GenomeService
 pub struct GenomeServiceImpl {
@@ -26,7 +27,7 @@ impl GenomeServiceImpl {
 #[async_trait]
 impl GenomeService for GenomeServiceImpl {
     async fn load_genome(&self, params: LoadGenomeParams) -> ServiceResult<GenomeInfo> {
-        log::info!("Loading genome from JSON");
+        info!(target: "feagi-services", "Loading genome from JSON");
         
         // Parse genome using feagi-evo (this is CPU-bound, but relatively fast)
         let genome = feagi_evo::load_genome_from_json(&params.json_str)
@@ -53,12 +54,13 @@ impl GenomeService for GenomeServiceImpl {
             Ok(Err(e)) => return Err(ServiceError::Backend(format!("Blocking task panicked: {}", e))),
             Err(_) => {
                 // Timeout expired - abort the task (though it may continue running)
-                log::warn!("Genome loading timed out after 5 minutes - aborting");
+                warn!(target: "feagi-services", "Genome loading timed out after 5 minutes - aborting");
                 return Err(ServiceError::Backend("Genome loading timed out after 5 minutes".to_string()));
             }
         };
         
-        log::info!(
+        info!(
+            target: "feagi-services",
             "Genome loaded: {} cortical areas, {} neurons, {} synapses created",
             progress.cortical_areas_created,
             progress.neurons_created,
@@ -70,7 +72,7 @@ impl GenomeService for GenomeServiceImpl {
     }
 
     async fn save_genome(&self, params: SaveGenomeParams) -> ServiceResult<String> {
-        log::info!("Saving genome to JSON");
+        info!(target: "feagi-services", "Saving genome to JSON");
         
         // Delegate to ConnectomeManager
         let json_str = self.connectome
@@ -85,7 +87,7 @@ impl GenomeService for GenomeServiceImpl {
     }
 
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
-        log::debug!("Getting genome info");
+        debug!(target: "feagi-services", "Getting genome info");
         
         let manager = self.connectome.read();
         let cortical_area_count = manager.get_cortical_area_count();
@@ -101,7 +103,7 @@ impl GenomeService for GenomeServiceImpl {
     }
 
     async fn validate_genome(&self, json_str: String) -> ServiceResult<bool> {
-        log::debug!("Validating genome JSON");
+        debug!(target: "feagi-services", "Validating genome JSON");
         
         // Parse genome
         let genome = feagi_evo::load_genome_from_json(&json_str)
@@ -123,7 +125,7 @@ impl GenomeService for GenomeServiceImpl {
     }
 
     async fn reset_connectome(&self) -> ServiceResult<()> {
-        log::info!("Resetting connectome");
+        info!(target: "feagi-services", "Resetting connectome");
         
         // Use ConnectomeManager's prepare_for_new_genome method
         self.connectome
@@ -131,7 +133,7 @@ impl GenomeService for GenomeServiceImpl {
             .prepare_for_new_genome()
             .map_err(ServiceError::from)?;
         
-        log::info!("Connectome reset complete");
+        info!(target: "feagi-services", "Connectome reset complete");
         Ok(())
     }
 }

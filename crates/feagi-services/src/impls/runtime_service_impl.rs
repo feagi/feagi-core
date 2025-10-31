@@ -10,6 +10,7 @@ Licensed under the Apache License, Version 2.0
 use async_trait::async_trait;
 use feagi_burst_engine::BurstLoopRunner;
 use std::sync::{Arc, Mutex};
+use tracing::{info, warn};
 
 use crate::traits::RuntimeService;
 use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
@@ -35,7 +36,7 @@ impl RuntimeServiceImpl {
 #[async_trait]
 impl RuntimeService for RuntimeServiceImpl {
     async fn start(&self) -> ServiceResult<()> {
-        log::info!("Starting burst engine");
+        info!(target: "feagi-services", "Starting burst engine");
         
         let mut runner = self.burst_runner.lock().unwrap();
         
@@ -50,7 +51,7 @@ impl RuntimeService for RuntimeServiceImpl {
     }
 
     async fn stop(&self) -> ServiceResult<()> {
-        log::info!("Stopping burst engine");
+        info!(target: "feagi-services", "Stopping burst engine");
         
         let mut runner = self.burst_runner.lock().unwrap();
         runner.stop();
@@ -62,7 +63,7 @@ impl RuntimeService for RuntimeServiceImpl {
     }
 
     async fn pause(&self) -> ServiceResult<()> {
-        log::info!("Pausing burst engine");
+        info!(target: "feagi-services", "Pausing burst engine");
         
         let runner = self.burst_runner.lock().unwrap();
         if !runner.is_running() {
@@ -76,13 +77,13 @@ impl RuntimeService for RuntimeServiceImpl {
         
         // TODO: Implement actual pause mechanism in BurstLoopRunner
         // For now, we just track the paused state
-        log::warn!("Pause not yet implemented in BurstLoopRunner - using flag only");
+        warn!(target: "feagi-services", "Pause not yet implemented in BurstLoopRunner - using flag only");
         
         Ok(())
     }
 
     async fn resume(&self) -> ServiceResult<()> {
-        log::info!("Resuming burst engine");
+        info!(target: "feagi-services", "Resuming burst engine");
         
         let paused = *self.paused.read();
         if !paused {
@@ -95,13 +96,13 @@ impl RuntimeService for RuntimeServiceImpl {
         *self.paused.write() = false;
         
         // TODO: Implement actual resume mechanism in BurstLoopRunner
-        log::warn!("Resume not yet implemented in BurstLoopRunner - using flag only");
+        warn!(target: "feagi-services", "Resume not yet implemented in BurstLoopRunner - using flag only");
         
         Ok(())
     }
 
     async fn step(&self) -> ServiceResult<()> {
-        log::info!("Executing single burst step");
+        info!(target: "feagi-services", "Executing single burst step");
         
         let runner = self.burst_runner.lock().unwrap();
         if runner.is_running() {
@@ -111,7 +112,7 @@ impl RuntimeService for RuntimeServiceImpl {
         }
         
         // TODO: Implement single-step execution in BurstLoopRunner
-        log::warn!("Single-step execution not yet implemented in BurstLoopRunner");
+        warn!(target: "feagi-services", "Single-step execution not yet implemented in BurstLoopRunner");
         
         Err(ServiceError::NotImplemented(
             "Single-step execution not yet implemented".to_string(),
@@ -146,7 +147,7 @@ impl RuntimeService for RuntimeServiceImpl {
             ));
         }
         
-        log::info!("Setting burst frequency to {} Hz", frequency_hz);
+        info!(target: "feagi-services", "Setting burst frequency to {} Hz", frequency_hz);
         
         let mut runner = self.burst_runner.lock().unwrap();
         runner.set_frequency(frequency_hz);
@@ -160,10 +161,10 @@ impl RuntimeService for RuntimeServiceImpl {
     }
 
     async fn reset_burst_count(&self) -> ServiceResult<()> {
-        log::info!("Resetting burst count");
+        info!(target: "feagi-services", "Resetting burst count");
         
         // TODO: Implement burst count reset in BurstLoopRunner
-        log::warn!("Burst count reset not yet implemented in BurstLoopRunner");
+        warn!(target: "feagi-services", "Burst count reset not yet implemented in BurstLoopRunner");
         
         Err(ServiceError::NotImplemented(
             "Burst count reset not yet implemented".to_string(),

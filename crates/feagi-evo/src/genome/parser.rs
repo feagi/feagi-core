@@ -40,6 +40,7 @@ Licensed under the Apache License, Version 2.0
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
+use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
 use feagi_types::{BrainRegion, CorticalArea, AreaType, RegionType, Dimensions};
@@ -200,7 +201,7 @@ impl GenomeParser {
         for (cortical_id, raw_area) in blueprint.iter() {
             // Skip invalid IDs
             if cortical_id.is_empty() || cortical_id.len() != 6 {
-                log::warn!("Skipping invalid cortical_id: {}", cortical_id);
+                warn!(target: "feagi-evo","Skipping invalid cortical_id: {}", cortical_id);
                 continue;
             }
             
@@ -222,7 +223,7 @@ impl GenomeParser {
                 )
             } else {
                 // Default to 1x1x1 if not specified (should not happen in valid genomes)
-                log::warn!("Cortical area {} missing block_boundaries, defaulting to 1x1x1", cortical_id);
+                warn!(target: "feagi-evo","Cortical area {} missing block_boundaries, defaulting to 1x1x1", cortical_id);
                 Dimensions::new(1, 1, 1)
             };
             
@@ -236,7 +237,7 @@ impl GenomeParser {
                 (coords[0], coords[1], coords[2])
             } else {
                 // Default to origin if not specified
-                log::warn!("Cortical area {} missing relative_coordinate, defaulting to (0,0,0)", cortical_id);
+                warn!(target: "feagi-evo","Cortical area {} missing relative_coordinate, defaulting to (0,0,0)", cortical_id);
                 (0, 0, 0)
             };
             
@@ -408,7 +409,7 @@ impl GenomeParser {
             Some("CORE") => Ok(AreaType::Custom), // CORE maps to Custom for now
             Some("CUSTOM") | None => Ok(AreaType::Custom),
             Some(other) => {
-                log::warn!("Unknown cortical_type '{}', defaulting to Custom", other);
+                warn!(target: "feagi-evo","Unknown cortical_type '{}', defaulting to Custom", other);
                 Ok(AreaType::Custom)
             }
         }

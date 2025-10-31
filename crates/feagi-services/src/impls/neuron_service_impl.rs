@@ -11,6 +11,7 @@ use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
 use parking_lot::RwLock;
 use std::sync::Arc;
+use tracing::debug;
 
 /// Default implementation of NeuronService
 pub struct NeuronServiceImpl {
@@ -26,7 +27,7 @@ impl NeuronServiceImpl {
 #[async_trait]
 impl NeuronService for NeuronServiceImpl {
     async fn create_neuron(&self, params: CreateNeuronParams) -> ServiceResult<NeuronInfo> {
-        log::debug!("Creating neuron in area {} at {:?}", params.cortical_id, params.coordinates);
+        debug!(target: "feagi-services", "Creating neuron in area {} at {:?}", params.cortical_id, params.coordinates);
         
         let mut manager = self.connectome.write();
         
@@ -111,7 +112,7 @@ impl NeuronService for NeuronServiceImpl {
     }
 
     async fn delete_neuron(&self, neuron_id: u64) -> ServiceResult<()> {
-        log::debug!("Deleting neuron {}", neuron_id);
+        debug!(target: "feagi-services","Deleting neuron {}", neuron_id);
         
         let mut manager = self.connectome.write();
         let deleted = manager.delete_neuron(neuron_id).map_err(ServiceError::from)?;
@@ -127,7 +128,7 @@ impl NeuronService for NeuronServiceImpl {
     }
 
     async fn get_neuron(&self, neuron_id: u64) -> ServiceResult<NeuronInfo> {
-        log::debug!("Getting neuron {}", neuron_id);
+        debug!(target: "feagi-services","Getting neuron {}", neuron_id);
         
         let manager = self.connectome.read();
         
@@ -158,7 +159,7 @@ impl NeuronService for NeuronServiceImpl {
         cortical_id: &str,
         coordinates: (u32, u32, u32),
     ) -> ServiceResult<Option<NeuronInfo>> {
-        log::debug!("Looking up neuron in area {} at {:?}", cortical_id, coordinates);
+        debug!(target: "feagi-services","Looking up neuron in area {} at {:?}", cortical_id, coordinates);
         
         let manager = self.connectome.read();
         
@@ -196,7 +197,7 @@ impl NeuronService for NeuronServiceImpl {
         cortical_id: &str,
         limit: Option<usize>,
     ) -> ServiceResult<Vec<NeuronInfo>> {
-        log::debug!("Listing neurons in area: {}", cortical_id);
+        debug!(target: "feagi-services","Listing neurons in area: {}", cortical_id);
         
         // Get neurons from ConnectomeManager
         let manager = self.connectome.read();
@@ -229,7 +230,7 @@ impl NeuronService for NeuronServiceImpl {
     }
 
     async fn get_neuron_count(&self, cortical_id: &str) -> ServiceResult<usize> {
-        log::debug!("Getting neuron count for area: {}", cortical_id);
+        debug!(target: "feagi-services","Getting neuron count for area: {}", cortical_id);
         
         let count = self.connectome
             .read()
@@ -239,7 +240,7 @@ impl NeuronService for NeuronServiceImpl {
     }
 
     async fn neuron_exists(&self, neuron_id: u64) -> ServiceResult<bool> {
-        log::debug!("Checking if neuron exists: {}", neuron_id);
+        debug!(target: "feagi-services","Checking if neuron exists: {}", neuron_id);
         
         let exists = self.connectome.read().has_neuron(neuron_id);
         

@@ -15,6 +15,7 @@ Licensed under the Apache License, Version 2.0
 use std::collections::{HashMap, HashSet};
 use serde_json::{json, Value};
 use crate::{EvoResult, EvoError};
+use tracing::warn;
 
 /// Complete genome_2_to_1 property mapping
 const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
@@ -357,7 +358,7 @@ fn process_dstmap(
             
             // Validate minimum required elements
             if rule_array.len() < 4 {
-                log::warn!(
+                warn!(target: "feagi-evo",
                     "Invalid mapping recipe format (need at least 4 elements): {:?}",
                     rule_array
                 );

@@ -21,6 +21,9 @@ ahash.workspace = true
 memmap2 = "0.9"  # Memory-mapped file I/O for SHM
 chrono = "0.4"   # Timestamp formatting
 
+# Observability
+feagi-observability = { workspace = true }
+
 # GPU acceleration (optional feature)
 wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }

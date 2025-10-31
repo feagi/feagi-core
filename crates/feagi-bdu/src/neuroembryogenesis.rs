@@ -20,6 +20,7 @@ use parking_lot::RwLock;
 use feagi_evo::RuntimeGenome;
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
+use tracing::{info, warn, debug};
 
 /// Development stage tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,7 +105,7 @@ impl Neuroembryogenesis {
     ///
     /// This is the main entry point that orchestrates all development stages.
     pub fn develop_from_genome(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
-        log::info!("🧬 Starting neuroembryogenesis for genome: {}", genome.metadata.genome_id);
+        info!(target: "feagi-bdu","🧬 Starting neuroembryogenesis for genome: {}", genome.metadata.genome_id);
         
         // Update stage: Initialization
         self.update_stage(DevelopmentStage::Initialization, 0);
@@ -125,7 +126,7 @@ impl Neuroembryogenesis {
         self.update_stage(DevelopmentStage::Completed, 100);
         
         let progress = self.progress.read();
-        log::info!(
+        info!(target: "feagi-bdu",
             "✅ Neuroembryogenesis completed in {}ms: {} cortical areas, {} neurons, {} synapses",
             progress.duration_ms,
             progress.cortical_areas_created,
@@ -139,7 +140,7 @@ impl Neuroembryogenesis {
     /// Stage 1: Corticogenesis - Create cortical area structures
     fn corticogenesis(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         self.update_stage(DevelopmentStage::Corticogenesis, 0);
-        log::info!("🧠 Stage 1: Corticogenesis - Creating {} cortical areas", genome.cortical_areas.len());
+        info!(target: "feagi-bdu","🧠 Stage 1: Corticogenesis - Creating {} cortical areas", genome.cortical_areas.len());
         
         let mut manager = self.connectome_manager.write();
         let total_areas = genome.cortical_areas.len();
@@ -155,7 +156,7 @@ impl Neuroembryogenesis {
                 p.progress = progress_pct;
             });
             
-            log::debug!("  ✓ Created cortical area: {} ({})", cortical_id, area.name);
+            debug!(target: "feagi-bdu","  ✓ Created cortical area: {} ({})", cortical_id, area.name);
         }
         
         // Add brain regions
@@ -165,7 +166,7 @@ impl Neuroembryogenesis {
         }
         
         self.update_stage(DevelopmentStage::Corticogenesis, 100);
-        log::info!("  ✅ Corticogenesis complete: {} cortical areas created", total_areas);
+        info!(target: "feagi-bdu","  ✅ Corticogenesis complete: {} cortical areas created", total_areas);
         
         Ok(())
     }
@@ -173,13 +174,13 @@ impl Neuroembryogenesis {
     /// Stage 2: Voxelogenesis - Establish spatial framework
     fn voxelogenesis(&mut self, _genome: &RuntimeGenome) -> BduResult<()> {
         self.update_stage(DevelopmentStage::Voxelogenesis, 0);
-        log::info!("📐 Stage 2: Voxelogenesis - Establishing spatial framework");
+        info!(target: "feagi-bdu","📐 Stage 2: Voxelogenesis - Establishing spatial framework");
         
         // Spatial framework is implicitly established by cortical area dimensions
         // The Morton spatial hash in ConnectomeManager handles the actual indexing
         
         self.update_stage(DevelopmentStage::Voxelogenesis, 100);
-        log::info!("  ✅ Voxelogenesis complete: Spatial framework established");
+        info!(target: "feagi-bdu","  ✅ Voxelogenesis complete: Spatial framework established");
         
         Ok(())
     }
@@ -191,10 +192,10 @@ impl Neuroembryogenesis {
     /// ALL neurons for that area in one vectorized operation (not a loop).
     fn neurogenesis(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         self.update_stage(DevelopmentStage::Neurogenesis, 0);
-        log::info!("🔬 Stage 3: Neurogenesis - Generating neurons (SIMD-optimized batches)");
+        info!(target: "feagi-bdu","🔬 Stage 3: Neurogenesis - Generating neurons (SIMD-optimized batches)");
         
         let expected_neurons = genome.stats.innate_neuron_count;
-        log::info!("  Expected innate neurons from genome: {}", expected_neurons);
+        info!(target: "feagi-bdu","  Expected innate neurons from genome: {}", expected_neurons);
         
         let mut total_neurons_created = 0;
         let total_areas = genome.cortical_areas.len();
@@ -209,7 +210,7 @@ impl Neuroembryogenesis {
                 .unwrap_or(1);
             
             if per_voxel_count == 0 {
-                log::debug!("  Skipping area {} - per_voxel_neuron_cnt is 0", cortical_id);
+                debug!(target: "feagi-bdu","  Skipping area {} - per_voxel_neuron_cnt is 0", cortical_id);
                 continue;
             }
             
@@ -220,11 +221,11 @@ impl Neuroembryogenesis {
             match manager.create_neurons_for_area(cortical_id) {
                 Ok(neurons_created) => {
                     total_neurons_created += neurons_created as usize;
-                    log::info!("  Created {} neurons for area {}", neurons_created, cortical_id);
+                    info!(target: "feagi-bdu","  Created {} neurons for area {}", neurons_created, cortical_id);
                 }
                 Err(e) => {
                     // If NPU not connected, calculate expected count
-                    log::warn!("  Failed to create neurons for {}: {} (NPU may not be connected)", 
+                    warn!(target: "feagi-bdu","  Failed to create neurons for {}: {} (NPU may not be connected)", 
                         cortical_id, e);
                     let total_voxels = area.dimensions.width * area.dimensions.height * area.dimensions.depth;
                     let expected = total_voxels * per_voxel_count as usize;
@@ -242,14 +243,14 @@ impl Neuroembryogenesis {
         
         // Verify against genome stats
         if expected_neurons > 0 && total_neurons_created != expected_neurons {
-            log::warn!(
+            warn!(target: "feagi-bdu",
                 "Neuron count mismatch: created {} but genome stats expected {}",
                 total_neurons_created, expected_neurons
             );
         }
         
         self.update_stage(DevelopmentStage::Neurogenesis, 100);
-        log::info!("  ✅ Neurogenesis complete: {} neurons created", total_neurons_created);
+        info!(target: "feagi-bdu","  ✅ Neurogenesis complete: {} neurons created", total_neurons_created);
         
         Ok(())
     }
@@ -261,10 +262,10 @@ impl Neuroembryogenesis {
     /// from the source area and creates ALL synapses in one SIMD-optimized batch operation.
     fn synaptogenesis(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         self.update_stage(DevelopmentStage::Synaptogenesis, 0);
-        log::info!("🔗 Stage 4: Synaptogenesis - Forming synaptic connections (SIMD-optimized batches)");
+        info!(target: "feagi-bdu","🔗 Stage 4: Synaptogenesis - Forming synaptic connections (SIMD-optimized batches)");
         
         let expected_synapses = genome.stats.innate_synapse_count;
-        log::info!("  Expected innate synapses from genome: {}", expected_synapses);
+        info!(target: "feagi-bdu","  Expected innate synapses from genome: {}", expected_synapses);
         
         let mut total_synapses_created = 0;
         let total_areas = genome.cortical_areas.len();
@@ -279,7 +280,7 @@ impl Neuroembryogenesis {
                 .unwrap_or(false);
             
             if !has_dstmap {
-                log::debug!("  No dstmap for area {}", src_cortical_id);
+                debug!(target: "feagi-bdu","  No dstmap for area {}", src_cortical_id);
                 continue;
             }
             
@@ -290,11 +291,11 @@ impl Neuroembryogenesis {
             match manager.apply_cortical_mapping(src_cortical_id) {
                 Ok(synapses_created) => {
                     total_synapses_created += synapses_created as usize;
-                    log::info!("  Created {} synapses for area {}", synapses_created, src_cortical_id);
+                    info!(target: "feagi-bdu","  Created {} synapses for area {}", synapses_created, src_cortical_id);
                 }
                 Err(e) => {
                     // If NPU not connected, estimate count
-                    log::warn!("  Failed to create synapses for {}: {} (NPU may not be connected)", 
+                    warn!(target: "feagi-bdu","  Failed to create synapses for {}: {} (NPU may not be connected)", 
                         src_cortical_id, e);
                     let estimated = estimate_synapses_for_area(src_area, genome);
                     total_synapses_created += estimated;
@@ -315,12 +316,12 @@ impl Neuroembryogenesis {
             let diff_pct = (diff as f64 / expected_synapses.max(1) as f64) * 100.0;
             
             if diff_pct > 10.0 {
-                log::warn!(
+                warn!(target: "feagi-bdu",
                     "Synapse count variance: created {} but genome stats expected {} ({:.1}% difference)",
                     total_synapses_created, expected_synapses, diff_pct
                 );
             } else {
-                log::info!(
+                info!(target: "feagi-bdu",
                     "Synapse count matches genome stats within {:.1}% ({} vs {})",
                     diff_pct, total_synapses_created, expected_synapses
                 );
@@ -328,7 +329,7 @@ impl Neuroembryogenesis {
         }
         
         self.update_stage(DevelopmentStage::Synaptogenesis, 100);
-        log::info!("  ✅ Synaptogenesis complete: {} synapses created", total_synapses_created);
+        info!(target: "feagi-bdu","  ✅ Synaptogenesis complete: {} synapses created", total_synapses_created);
         
         Ok(())
     }
