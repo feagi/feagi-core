@@ -9,7 +9,8 @@ Licensed under the Apache License, Version 2.0
 
 use async_trait::async_trait;
 use feagi_burst_engine::BurstLoopRunner;
-use std::sync::{Arc, Mutex};
+use parking_lot::RwLock;
+use std::sync::Arc;
 use tracing::{info, warn};
 
 use crate::traits::RuntimeService;
@@ -19,16 +20,16 @@ use crate::types::{RuntimeStatus, ServiceError, ServiceResult};
 ///
 /// Wraps the BurstLoopRunner and provides async interface for runtime control.
 pub struct RuntimeServiceImpl {
-    burst_runner: Arc<Mutex<BurstLoopRunner>>,
-    paused: Arc<parking_lot::RwLock<bool>>,
+    burst_runner: Arc<RwLock<BurstLoopRunner>>,
+    paused: Arc<RwLock<bool>>,
 }
 
 impl RuntimeServiceImpl {
     /// Create a new RuntimeServiceImpl
-    pub fn new(burst_runner: Arc<Mutex<BurstLoopRunner>>) -> Self {
+    pub fn new(burst_runner: Arc<RwLock<BurstLoopRunner>>) -> Self {
         Self {
             burst_runner,
-            paused: Arc::new(parking_lot::RwLock::new(false)),
+            paused: Arc::new(RwLock::new(false)),
         }
     }
 }
@@ -38,7 +39,7 @@ impl RuntimeService for RuntimeServiceImpl {
     async fn start(&self) -> ServiceResult<()> {
         info!(target: "feagi-services", "Starting burst engine");
         
-        let mut runner = self.burst_runner.lock().unwrap();
+        let mut runner = self.burst_runner.write();
         
         runner
             .start()
@@ -53,7 +54,7 @@ impl RuntimeService for RuntimeServiceImpl {
     async fn stop(&self) -> ServiceResult<()> {
         info!(target: "feagi-services", "Stopping burst engine");
         
-        let mut runner = self.burst_runner.lock().unwrap();
+        let mut runner = self.burst_runner.write();
         runner.stop();
         
         // Clear paused flag
@@ -65,7 +66,7 @@ impl RuntimeService for RuntimeServiceImpl {
     async fn pause(&self) -> ServiceResult<()> {
         info!(target: "feagi-services", "Pausing burst engine");
         
-        let runner = self.burst_runner.lock().unwrap();
+        let runner = self.burst_runner.read();
         if !runner.is_running() {
             return Err(ServiceError::InvalidState(
                 "Burst engine is not running".to_string(),
@@ -104,7 +105,7 @@ impl RuntimeService for RuntimeServiceImpl {
     async fn step(&self) -> ServiceResult<()> {
         info!(target: "feagi-services", "Executing single burst step");
         
-        let runner = self.burst_runner.lock().unwrap();
+        let runner = self.burst_runner.read();
         if runner.is_running() {
             return Err(ServiceError::InvalidState(
                 "Cannot step while burst engine is running in continuous mode".to_string(),
@@ -120,7 +121,7 @@ impl RuntimeService for RuntimeServiceImpl {
     }
 
     async fn get_status(&self) -> ServiceResult<RuntimeStatus> {
-        let runner = self.burst_runner.lock().unwrap();
+        let runner = self.burst_runner.read();
         let is_running = runner.is_running();
         let burst_count = runner.get_burst_count();
         let is_paused = *self.paused.read();
@@ -149,14 +150,14 @@ impl RuntimeService for RuntimeServiceImpl {
         
         info!(target: "feagi-services", "Setting burst frequency to {} Hz", frequency_hz);
         
-        let mut runner = self.burst_runner.lock().unwrap();
+        let mut runner = self.burst_runner.write();
         runner.set_frequency(frequency_hz);
         
         Ok(())
     }
 
     async fn get_burst_count(&self) -> ServiceResult<u64> {
-        let runner = self.burst_runner.lock().unwrap();
+        let runner = self.burst_runner.read();
         Ok(runner.get_burst_count())
     }
 
