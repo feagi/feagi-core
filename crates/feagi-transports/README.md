@@ -230,3 +230,4 @@ Apache-2.0
 - `feagi-api`: REST API layer (uses server features)
 - `feagi-agent-sdk`: Rust agent library (uses client features)
 
+

@@ -61,7 +61,7 @@ use crate::{
         (url = "http://localhost:8000", description = "Python FastAPI compatibility")
     ),
     paths(
-        // Agent endpoints (P0 for brain-visualizer) - ONLY IMPLEMENTED ENDPOINTS
+        // Agent endpoints
         crate::endpoints::agent::register_agent,
         crate::endpoints::agent::heartbeat,
         crate::endpoints::agent::list_agents,
@@ -70,10 +70,93 @@ use crate::{
         crate::endpoints::agent::deregister_agent,
         crate::endpoints::agent::manual_stimulation,
         
-        // NOTE: All other P0 endpoints (cortical_area, morphology, region, etc.) 
-        // are registered in the router but not yet documented in OpenAPI.
-        // They return 501 Not Implemented placeholders.
-        // OpenAPI docs will be added as each endpoint is implemented.
+        // System endpoints
+        crate::endpoints::system::get_health_check,
+        crate::endpoints::system::get_cortical_area_visualization_skip_rate,
+        crate::endpoints::system::set_cortical_area_visualization_skip_rate,
+        crate::endpoints::system::get_cortical_area_visualization_suppression_threshold,
+        crate::endpoints::system::set_cortical_area_visualization_suppression_threshold,
+        
+        // Cortical Area endpoints
+        crate::endpoints::cortical_area::get_ipu,
+        crate::endpoints::cortical_area::get_opu,
+        crate::endpoints::cortical_area::get_cortical_area_id_list,
+        crate::endpoints::cortical_area::get_cortical_area_name_list,
+        crate::endpoints::cortical_area::get_cortical_id_name_mapping,
+        crate::endpoints::cortical_area::get_cortical_types,
+        crate::endpoints::cortical_area::get_cortical_map_detailed,
+        crate::endpoints::cortical_area::get_cortical_locations_2d,
+        crate::endpoints::cortical_area::get_cortical_area_geometry,
+        crate::endpoints::cortical_area::get_cortical_visibility,
+        crate::endpoints::cortical_area::post_cortical_name_location,
+        crate::endpoints::cortical_area::post_cortical_area_properties,
+        crate::endpoints::cortical_area::post_multi_cortical_area_properties,
+        crate::endpoints::cortical_area::post_cortical_area,
+        crate::endpoints::cortical_area::put_cortical_area,
+        crate::endpoints::cortical_area::delete_cortical_area,
+        crate::endpoints::cortical_area::post_custom_cortical_area,
+        crate::endpoints::cortical_area::post_clone,
+        crate::endpoints::cortical_area::put_multi_cortical_area,
+        crate::endpoints::cortical_area::delete_multi_cortical_area,
+        crate::endpoints::cortical_area::put_coord_2d,
+        crate::endpoints::cortical_area::put_suppress_cortical_visibility,
+        crate::endpoints::cortical_area::put_reset,
+        
+        // Morphology endpoints
+        crate::endpoints::morphology::get_morphology_list,
+        crate::endpoints::morphology::get_morphology_types,
+        crate::endpoints::morphology::get_list_types,
+        crate::endpoints::morphology::get_morphologies,
+        crate::endpoints::morphology::post_morphology,
+        crate::endpoints::morphology::put_morphology,
+        crate::endpoints::morphology::delete_morphology,
+        crate::endpoints::morphology::post_morphology_properties,
+        crate::endpoints::morphology::post_morphology_usage,
+        
+        // Genome endpoints
+        crate::endpoints::genome::get_file_name,
+        crate::endpoints::genome::get_circuits,
+        crate::endpoints::genome::post_amalgamation_destination,
+        crate::endpoints::genome::delete_amalgamation_cancellation,
+        crate::endpoints::genome::post_genome_append,
+        
+        // Cortical Mapping endpoints
+        crate::endpoints::cortical_mapping::post_afferents,
+        crate::endpoints::cortical_mapping::post_efferents,
+        crate::endpoints::cortical_mapping::post_mapping_properties,
+        crate::endpoints::cortical_mapping::put_mapping_properties,
+        
+        // Region endpoints
+        crate::endpoints::region::get_regions_members,
+        crate::endpoints::region::post_region,
+        crate::endpoints::region::put_region,
+        crate::endpoints::region::delete_region,
+        crate::endpoints::region::post_clone,
+        crate::endpoints::region::put_relocate_members,
+        crate::endpoints::region::delete_region_and_members,
+        
+        // Connectome endpoints
+        crate::endpoints::connectome::get_cortical_areas_list_detailed,
+        crate::endpoints::connectome::get_properties_dimensions,
+        crate::endpoints::connectome::get_properties_mappings,
+        
+        // Burst Engine endpoints
+        crate::endpoints::burst_engine::get_simulation_timestep,
+        crate::endpoints::burst_engine::post_simulation_timestep,
+        
+        // Insight endpoints
+        crate::endpoints::insight::post_neurons_membrane_potential_status,
+        crate::endpoints::insight::post_neuron_synaptic_potential_status,
+        crate::endpoints::insight::post_neurons_membrane_potential_set,
+        crate::endpoints::insight::post_neuron_synaptic_potential_set,
+        
+        // Neuroplasticity endpoints
+        crate::endpoints::neuroplasticity::get_plasticity_queue_depth,
+        crate::endpoints::neuroplasticity::put_plasticity_queue_depth,
+        
+        // Input endpoints
+        crate::endpoints::input::get_vision,
+        crate::endpoints::input::post_vision,
     ),
     components(
         schemas(
@@ -85,7 +168,7 @@ use crate::{
             ReadinessCheckResponseV1,
             ComponentReadiness,
             
-            // Agent (P0 for brain-visualizer)
+            // Agent
             crate::v1::AgentRegistrationRequest,
             crate::v1::AgentRegistrationResponse,
             crate::v1::HeartbeatRequest,
@@ -96,6 +179,16 @@ use crate::{
             crate::v1::SuccessResponse,
             crate::v1::ManualStimulationRequest,
             crate::v1::ManualStimulationResponse,
+            
+            // System
+            crate::endpoints::system::HealthCheckResponse,
+            
+            // Cortical Area
+            crate::endpoints::cortical_area::CorticalAreaIdListResponse,
+            crate::endpoints::cortical_area::CorticalAreaNameListResponse,
+            
+            // Morphology
+            crate::endpoints::morphology::MorphologyListResponse,
             
             // Cortical Areas
             CorticalAreaSummary,
@@ -142,12 +235,18 @@ use crate::{
         )
     ),
     tags(
-        (name = "Health", description = "System health and readiness endpoints"),
-        (name = "Cortical Areas", description = "Cortical area management (CRUD)"),
-        (name = "Brain Regions", description = "Brain region management (CRUD)"),
-        (name = "Genome", description = "Genome operations (load, save, validate)"),
-        (name = "Analytics", description = "System analytics and metrics"),
-        (name = "Agents", description = "Agent registration and heartbeat"),
+        (name = "agent", description = "Agent registration and heartbeat"),
+        (name = "system", description = "System health and configuration"),
+        (name = "cortical_area", description = "Cortical area management"),
+        (name = "morphology", description = "Morphology management"),
+        (name = "genome", description = "Genome operations"),
+        (name = "cortical_mapping", description = "Cortical mapping operations"),
+        (name = "region", description = "Brain region management"),
+        (name = "connectome", description = "Connectome operations"),
+        (name = "burst_engine", description = "Burst engine configuration"),
+        (name = "insight", description = "Neuron insight operations"),
+        (name = "neuroplasticity", description = "Neuroplasticity configuration"),
+        (name = "input", description = "Input operations"),
     ),
     modifiers(&SecurityAddon)
 )]

@@ -272,3 +272,4 @@ With foundation in place, we can proceed to:
 
 **Recommendation:** Start with JSON-only, add pickle support later if needed. Use `feagi_configuration.toml` for system config, genome files for brain structure.
 
+

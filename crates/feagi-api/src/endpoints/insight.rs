@@ -32,3 +32,4 @@ pub async fn post_neuron_synaptic_potential_set(State(_state): State<ApiState>, 
     Err(ApiError::internal("Not yet implemented"))
 }
 
+
