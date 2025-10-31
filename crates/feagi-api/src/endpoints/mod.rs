@@ -3,6 +3,7 @@
 
 pub mod agent;  // ✅ COMPLETE - /v1/agent/* (7 endpoints)
 pub mod system; // ✅ COMPLETE - /v1/system/* (5 endpoints)
+pub mod cortical_area; // ✅ COMPLETE - /v1/cortical_area/* (23 endpoints)
 
 // TODO: Implement remaining modules using agent.rs as the pattern:
 // - system (health_check, preferences, etc.)

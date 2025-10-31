@@ -74,6 +74,7 @@ pub fn create_http_server(state: ApiState) -> Router {
 fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::agent::*;
     use crate::endpoints::system;
+    use crate::endpoints::cortical_area;
     
     Router::new()
         // ===== AGENT MODULE (7 endpoints) =====
@@ -95,30 +96,30 @@ fn create_v1_router() -> Router<ApiState> {
             .put(system::set_cortical_area_visualization_suppression_threshold))
         
         // ===== CORTICAL_AREA MODULE (23 endpoints) =====
-        .route("/cortical_area/ipu", get(placeholder_handler))
-        .route("/cortical_area/opu", get(placeholder_handler))
-        .route("/cortical_area/cortical_area_id_list", get(placeholder_handler))
-        .route("/cortical_area/cortical_area_name_list", get(placeholder_handler))
-        .route("/cortical_area/cortical_id_name_mapping", get(placeholder_handler))
-        .route("/cortical_area/cortical_types", get(placeholder_handler))
-        .route("/cortical_area/cortical_map_detailed", get(placeholder_handler))
-        .route("/cortical_area/cortical_locations_2d", get(placeholder_handler))
-        .route("/cortical_area/cortical_area/geometry", get(placeholder_handler))
-        .route("/cortical_area/cortical_visibility", get(placeholder_handler))
-        .route("/cortical_area/cortical_name_location", axum::routing::post(placeholder_handler))
-        .route("/cortical_area/cortical_area_properties", axum::routing::post(placeholder_handler))
-        .route("/cortical_area/multi/cortical_area_properties", axum::routing::post(placeholder_handler))
+        .route("/cortical_area/ipu", get(cortical_area::get_ipu))
+        .route("/cortical_area/opu", get(cortical_area::get_opu))
+        .route("/cortical_area/cortical_area_id_list", get(cortical_area::get_cortical_area_id_list))
+        .route("/cortical_area/cortical_area_name_list", get(cortical_area::get_cortical_area_name_list))
+        .route("/cortical_area/cortical_id_name_mapping", get(cortical_area::get_cortical_id_name_mapping))
+        .route("/cortical_area/cortical_types", get(cortical_area::get_cortical_types))
+        .route("/cortical_area/cortical_map_detailed", get(cortical_area::get_cortical_map_detailed))
+        .route("/cortical_area/cortical_locations_2d", get(cortical_area::get_cortical_locations_2d))
+        .route("/cortical_area/cortical_area/geometry", get(cortical_area::get_cortical_area_geometry))
+        .route("/cortical_area/cortical_visibility", get(cortical_area::get_cortical_visibility))
+        .route("/cortical_area/cortical_name_location", axum::routing::post(cortical_area::post_cortical_name_location))
+        .route("/cortical_area/cortical_area_properties", axum::routing::post(cortical_area::post_cortical_area_properties))
+        .route("/cortical_area/multi/cortical_area_properties", axum::routing::post(cortical_area::post_multi_cortical_area_properties))
         .route("/cortical_area/cortical_area",
-            axum::routing::post(placeholder_handler)
-            .put(placeholder_handler)
-            .delete(placeholder_handler))
-        .route("/cortical_area/custom_cortical_area", axum::routing::post(placeholder_handler))
-        .route("/cortical_area/clone", axum::routing::post(placeholder_handler))
+            axum::routing::post(cortical_area::post_cortical_area)
+            .put(cortical_area::put_cortical_area)
+            .delete(cortical_area::delete_cortical_area))
+        .route("/cortical_area/custom_cortical_area", axum::routing::post(cortical_area::post_custom_cortical_area))
+        .route("/cortical_area/clone", axum::routing::post(cortical_area::post_clone))
         .route("/cortical_area/multi/cortical_area",
-            put(placeholder_handler).delete(placeholder_handler))
-        .route("/cortical_area/coord_2d", put(placeholder_handler))
-        .route("/cortical_area/suppress_cortical_visibility", put(placeholder_handler))
-        .route("/cortical_area/reset", put(placeholder_handler))
+            put(cortical_area::put_multi_cortical_area).delete(cortical_area::delete_multi_cortical_area))
+        .route("/cortical_area/coord_2d", put(cortical_area::put_coord_2d))
+        .route("/cortical_area/suppress_cortical_visibility", put(cortical_area::put_suppress_cortical_visibility))
+        .route("/cortical_area/reset", put(cortical_area::put_reset))
         
         // ===== MORPHOLOGY MODULE (9 endpoints) =====
         .route("/morphology/morphology_list", get(placeholder_handler))
