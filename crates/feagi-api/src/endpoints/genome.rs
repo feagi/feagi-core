@@ -5,7 +5,6 @@
 
 use axum::{extract::State, response::Json};
 use std::collections::HashMap;
-use std::path::PathBuf;
 use crate::common::{ApiError, ApiResult};
 use crate::transports::http::server::ApiState;
 use feagi_services::types::LoadGenomeParams;
@@ -78,69 +77,32 @@ pub async fn post_upload_essential_genome(
     load_default_genome(state, "essential").await
 }
 
-/// Helper function to load a default genome by name
+/// Helper function to load a default genome by name from embedded Rust genomes
 async fn load_default_genome(
     state: ApiState,
     genome_name: &str,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    // Find genome file path
-    // Try multiple possible locations:
-    // 1. Relative to current working directory
-    // 2. Relative to FEAGI workspace root (if running from feagi-core or feagi directory)
-    // 3. Using environment variable FEAGI_WORKSPACE_ROOT if set
-    let genome_filename = format!("{}_genome.json", genome_name);
+    tracing::info!(target: "feagi-api", "Loading {} genome from embedded Rust genomes", genome_name);
     
-    let workspace_root = std::env::var("FEAGI_WORKSPACE_ROOT")
-        .ok()
-        .map(PathBuf::from)
-        .or_else(|| {
-            // Try to find workspace root by looking for feagi-py directory
-            let current_dir = std::env::current_dir().ok()?;
-            let mut path = current_dir.clone();
-            
-            // Walk up the directory tree looking for feagi-py
-            for _ in 0..5 {
-                if path.join("feagi-py").exists() {
-                    return Some(path);
-                }
-                path = path.parent()?.to_path_buf();
-            }
-            None
-        });
-    
-    let possible_paths = if let Some(root) = workspace_root {
-        vec![
-            root.join("feagi-py").join("feagi").join("evo").join("defaults").join("genome").join(&genome_filename),
-            PathBuf::from(&genome_filename), // Current directory fallback
-        ]
-    } else {
-        vec![
-            PathBuf::from(format!("../feagi-py/feagi/evo/defaults/genome/{}", genome_filename)),
-            PathBuf::from(format!("../../feagi-py/feagi/evo/defaults/genome/{}", genome_filename)),
-            PathBuf::from(format!("../../../feagi-py/feagi/evo/defaults/genome/{}", genome_filename)),
-            PathBuf::from(&genome_filename), // Current directory fallback
-        ]
+    // Load genome from embedded Rust templates (no file I/O!)
+    let genome_json = match genome_name {
+        "barebones" => feagi_evo::BAREBONES_GENOME_JSON,
+        "essential" => feagi_evo::ESSENTIAL_GENOME_JSON,
+        "test" => feagi_evo::TEST_GENOME_JSON,
+        "vision" => feagi_evo::VISION_GENOME_JSON,
+        _ => return Err(ApiError::invalid_input(&format!(
+            "Unknown genome name '{}'. Available: barebones, essential, test, vision", 
+            genome_name
+        ))),
     };
     
-    let genome_path = possible_paths.iter()
-        .find(|p| p.exists())
-        .ok_or_else(|| ApiError::not_found(
-            "Genome file",
-            &format!("Default genome '{}' not found. Searched: {:?}", genome_name, possible_paths)
-        ))?;
+    tracing::info!(target: "feagi-api","Using embedded {} genome ({} bytes), starting conversion...", 
+                   genome_name, genome_json.len());
     
-    tracing::info!(target: "feagi-api", "Loading {} genome from: {}", genome_name, genome_path.display());
-    
-    // Read genome file
-    let genome_json = std::fs::read_to_string(genome_path)
-        .map_err(|e| ApiError::internal(format!("Failed to read genome file {}: {}", genome_path.display(), e)))?;
-    
-    tracing::info!(target: "feagi-api","Read {} bytes of genome JSON, starting conversion...", genome_json.len());
-    
-    // Load genome via service
+    // Load genome via service (which will automatically ensure core components)
     let genome_service = state.genome_service.as_ref();
     let params = LoadGenomeParams {
-        json_str: genome_json,
+        json_str: genome_json.to_string(),
     };
     
     tracing::info!(target: "feagi-api","Calling genome service load_genome...");
@@ -493,9 +455,16 @@ pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<
 }
 
 /// GET /v1/genome/defaults/files
+/// 
+/// Returns list of available embedded default genomes
 #[utoipa::path(get, path = "/v1/genome/defaults/files", tag = "genome")]
 pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
-    Ok(Json(vec!["barebones".to_string(), "essential".to_string()]))
+    Ok(Json(vec![
+        "barebones".to_string(), 
+        "essential".to_string(),
+        "test".to_string(),
+        "vision".to_string(),
+    ]))
 }
 
 /// GET /v1/genome/download_region

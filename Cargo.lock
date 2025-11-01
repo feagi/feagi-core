@@ -1121,6 +1121,7 @@ dependencies = [
  "chrono",
  "feagi-bdu",
  "feagi-burst-engine",
+ "feagi-evo",
  "feagi-observability",
  "feagi-pns",
  "feagi-services",
