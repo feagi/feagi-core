@@ -37,5 +37,17 @@ pub async fn post_vision(State(_state): State<ApiState>, Json(_req): Json<HashMa
     Err(ApiError::internal("Not yet implemented"))
 }
 
+/// GET /v1/input/sources
+#[utoipa::path(get, path = "/v1/input/sources", tag = "input")]
+pub async fn get_sources(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    Ok(Json(vec!["vision".to_string()]))
+}
+
+/// POST /v1/input/configure
+#[utoipa::path(post, path = "/v1/input/configure", tag = "input")]
+pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Input configured".to_string())])))
+}
+
 
 

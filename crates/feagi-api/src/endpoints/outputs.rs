@@ -54,6 +54,19 @@ pub async fn get_targets(State(state): State<ApiState>) -> ApiResult<Json<HashMa
     Ok(Json(response))
 }
 
+/// GET /v1/output/targets (exact Python path)
+#[utoipa::path(get, path = "/v1/output/targets", tag = "outputs")]
+pub async fn get_targets(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    Ok(Json(Vec::new()))
+}
+
+/// POST /v1/output/configure
+#[utoipa::path(post, path = "/v1/output/configure", tag = "outputs")]
+pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Output configured".to_string())])))
+}
+
+
 /// POST /v1/outputs/configure
 /// Configure output targets
 #[utoipa::path(

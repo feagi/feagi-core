@@ -377,46 +377,59 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/neuroplasticity/enable/:area_id", axum::routing::post(neuroplasticity::post_enable_area))
         .route("/neuroplasticity/disable/:area_id", axum::routing::post(neuroplasticity::post_disable_area))
         
-        // ===== INSIGHT MODULE (4 endpoints) =====
+        // ===== INSIGHT MODULE (6 endpoints) =====
         .route("/insight/neurons/membrane_potential_status", axum::routing::post(insight::post_neurons_membrane_potential_status))
         .route("/insight/neuron/synaptic_potential_status", axum::routing::post(insight::post_neuron_synaptic_potential_status))
         .route("/insight/neurons/membrane_potential_set", axum::routing::post(insight::post_neurons_membrane_potential_set))
         .route("/insight/neuron/synaptic_potential_set", axum::routing::post(insight::post_neuron_synaptic_potential_set))
+        .route("/insight/analytics", get(insight::get_analytics))
+        .route("/insight/data", get(insight::get_data))
         
-        // ===== INPUT MODULE (2 endpoints) =====
+        // ===== INPUT MODULE (4 endpoints) =====
         .route("/input/vision",
             get(input::get_vision).post(input::post_vision))
+        .route("/input/sources", get(input::get_sources))
+        .route("/input/configure", axum::routing::post(input::post_configure))
         
-        // ===== OUTPUTS MODULE (2 endpoints) =====
+        // ===== OUTPUTS MODULE (4 endpoints) =====
         .route("/outputs/targets", get(outputs::get_targets))
         .route("/outputs/configure", axum::routing::post(outputs::post_configure))
+        .route("/output/targets", get(outputs::get_targets))
+        .route("/output/configure", axum::routing::post(outputs::post_configure))
         
         // ===== PHYSIOLOGY MODULE (2 endpoints) =====
         .route("/physiology/",
             get(physiology::get_physiology).put(physiology::put_physiology))
         
-        // ===== SIMULATION MODULE (5 endpoints) =====
+        // ===== SIMULATION MODULE (6 endpoints) =====
         .route("/simulation/upload/string", axum::routing::post(simulation::post_stimulation_upload))
         .route("/simulation/reset", axum::routing::post(simulation::post_reset))
         .route("/simulation/status", get(simulation::get_status))
         .route("/simulation/stats", get(simulation::get_stats))
         .route("/simulation/config", axum::routing::post(simulation::post_config))
+        .route("/simulation/configure", axum::routing::post(simulation::post_configure))
         
-        // ===== TRAINING MODULE (17 endpoints) =====
+        // ===== TRAINING MODULE (25 endpoints) =====
         .route("/training/shock", axum::routing::post(training::post_shock))
         .route("/training/shock/options", get(training::get_shock_options))
         .route("/training/shock/status", get(training::get_shock_status))
+        .route("/training/shock/activate", axum::routing::post(training::post_shock_activate))
         .route("/training/reward/intensity", axum::routing::post(training::post_reward_intensity))
+        .route("/training/reward", axum::routing::post(training::post_reward))
         .route("/training/punishment/intensity", axum::routing::post(training::post_punishment_intensity))
+        .route("/training/punishment", axum::routing::post(training::post_punishment))
         .route("/training/gameover", axum::routing::post(training::post_gameover))
         .route("/training/brain_fitness", get(training::get_brain_fitness))
         .route("/training/fitness_criteria",
-            get(training::get_fitness_criteria).put(training::put_fitness_criteria))
-        .route("/training/fitness_stats", get(training::get_fitness_stats))
+            get(training::get_fitness_criteria).put(training::put_fitness_criteria).post(training::post_fitness_criteria))
+        .route("/training/fitness_stats",
+            get(training::get_fitness_stats).put(training::put_fitness_stats).delete(training::delete_fitness_stats))
+        .route("/training/reset_fitness_stats", axum::routing::delete(training::delete_reset_fitness_stats))
         .route("/training/training_report", get(training::get_training_report))
         .route("/training/status", get(training::get_status))
         .route("/training/stats", get(training::get_stats))
         .route("/training/config", axum::routing::post(training::post_config))
+        .route("/training/configure", axum::routing::post(training::post_configure))
         
         // ===== VISUALIZATION MODULE (4 endpoints) =====
         .route("/visualization/register_client", axum::routing::post(visualization::post_register_client))
@@ -424,16 +437,18 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/visualization/heartbeat", axum::routing::post(visualization::post_heartbeat))
         .route("/visualization/status", get(visualization::get_status))
         
-        // ===== MONITORING MODULE (3 endpoints) =====
+        // ===== MONITORING MODULE (4 endpoints) =====
         .route("/monitoring/status", get(monitoring::get_status))
         .route("/monitoring/metrics", get(monitoring::get_metrics))
         .route("/monitoring/data", get(monitoring::get_data))
+        .route("/monitoring/performance", get(monitoring::get_performance))
         
-        // ===== EVOLUTION MODULE (2 endpoints) =====
+        // ===== EVOLUTION MODULE (3 endpoints) =====
         .route("/evolution/status", get(evolution::get_status))
         .route("/evolution/config", axum::routing::post(evolution::post_config))
+        .route("/evolution/configure", axum::routing::post(evolution::post_configure))
         
-        // ===== SNAPSHOT MODULE (7 endpoints) =====
+        // ===== SNAPSHOT MODULE (12 endpoints) =====
         .route("/snapshot/create", axum::routing::post(snapshot::post_create))
         .route("/snapshot/restore", axum::routing::post(snapshot::post_restore))
         .route("/snapshot/", get(snapshot::get_list))
@@ -441,10 +456,17 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/snapshot/:snapshot_id/artifact/:fmt", get(snapshot::get_artifact))
         .route("/snapshot/compare", axum::routing::post(snapshot::post_compare))
         .route("/snapshot/upload", axum::routing::post(snapshot::post_upload))
+        // Python uses /v1/snapshots/* (note the S)
+        .route("/snapshots/connectome", axum::routing::post(snapshot::post_snapshots_connectome))
+        .route("/snapshots/connectome/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_connectome_restore))
+        .route("/snapshots/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_restore))
+        .route("/snapshots/:snapshot_id", axum::routing::delete(snapshot::delete_snapshots_by_id))
+        .route("/snapshots/:snapshot_id/artifact/:fmt", get(snapshot::get_snapshots_artifact))
         
-        // ===== NETWORK MODULE (2 endpoints) =====
+        // ===== NETWORK MODULE (3 endpoints) =====
         .route("/network/status", get(network::get_status))
         .route("/network/config", axum::routing::post(network::post_config))
+        .route("/network/configure", axum::routing::post(network::post_configure))
 }
 
 /// OpenAPI spec handler

@@ -32,5 +32,17 @@ pub async fn post_neuron_synaptic_potential_set(State(_state): State<ApiState>, 
     Err(ApiError::internal("Not yet implemented"))
 }
 
+/// GET /v1/insight/analytics
+#[utoipa::path(get, path = "/v1/insight/analytics", tag = "insight")]
+pub async fn get_analytics(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    Ok(Json(HashMap::new()))
+}
+
+/// GET /v1/insight/data
+#[utoipa::path(get, path = "/v1/insight/data", tag = "insight")]
+pub async fn get_data(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    Ok(Json(HashMap::new()))
+}
+
 
 

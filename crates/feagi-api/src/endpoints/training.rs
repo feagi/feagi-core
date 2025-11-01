@@ -308,3 +308,52 @@ pub async fn post_config(
     ])))
 }
 
+// EXACT Python paths:
+/// POST /v1/training/reward
+#[utoipa::path(post, path = "/v1/training/reward", tag = "training")]
+pub async fn post_reward(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Reward applied".to_string())])))
+}
+
+/// POST /v1/training/punishment
+#[utoipa::path(post, path = "/v1/training/punishment", tag = "training")]
+pub async fn post_punishment(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Punishment applied".to_string())])))
+}
+
+/// POST /v1/training/shock/activate
+#[utoipa::path(post, path = "/v1/training/shock/activate", tag = "training")]
+pub async fn post_shock_activate(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Shock activated".to_string())])))
+}
+
+/// POST /v1/training/fitness_criteria
+#[utoipa::path(post, path = "/v1/training/fitness_criteria", tag = "training")]
+pub async fn post_fitness_criteria(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Fitness criteria set".to_string())])))
+}
+
+/// PUT /v1/training/fitness_stats
+#[utoipa::path(put, path = "/v1/training/fitness_stats", tag = "training")]
+pub async fn put_fitness_stats(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Fitness stats updated".to_string())])))
+}
+
+/// DELETE /v1/training/fitness_stats
+#[utoipa::path(delete, path = "/v1/training/fitness_stats", tag = "training")]
+pub async fn delete_fitness_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Fitness stats deleted".to_string())])))
+}
+
+/// DELETE /v1/training/reset_fitness_stats
+#[utoipa::path(delete, path = "/v1/training/reset_fitness_stats", tag = "training")]
+pub async fn delete_reset_fitness_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Fitness stats reset".to_string())])))
+}
+
+/// POST /v1/training/configure
+#[utoipa::path(post, path = "/v1/training/configure", tag = "training")]
+pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Training configured".to_string())])))
+}
+

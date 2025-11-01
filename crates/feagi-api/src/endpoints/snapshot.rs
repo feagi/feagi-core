@@ -216,3 +216,34 @@ pub async fn post_upload(
     Ok(Json(response))
 }
 
+// EXACT Python paths (note: /v1/snapshots with S, not /v1/snapshot)
+/// POST /v1/snapshots/connectome
+#[utoipa::path(post, path = "/v1/snapshots/connectome", tag = "snapshot")]
+pub async fn post_snapshots_connectome(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// POST /v1/snapshots/connectome/{snapshot_id}/restore
+#[utoipa::path(post, path = "/v1/snapshots/connectome/{snapshot_id}/restore", tag = "snapshot")]
+pub async fn post_snapshots_connectome_restore(State(_state): State<ApiState>, axum::extract::Path(_id): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// POST /v1/snapshots/{snapshot_id}/restore
+#[utoipa::path(post, path = "/v1/snapshots/{snapshot_id}/restore", tag = "snapshot")]
+pub async fn post_snapshots_restore(State(_state): State<ApiState>, axum::extract::Path(_id): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// DELETE /v1/snapshots/{snapshot_id}
+#[utoipa::path(delete, path = "/v1/snapshots/{snapshot_id}", tag = "snapshot")]
+pub async fn delete_snapshots_by_id(State(_state): State<ApiState>, axum::extract::Path(_id): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// GET /v1/snapshots/{snapshot_id}/artifact/{fmt}
+#[utoipa::path(get, path = "/v1/snapshots/{snapshot_id}/artifact/{fmt}", tag = "snapshot")]
+pub async fn get_snapshots_artifact(State(_state): State<ApiState>, axum::extract::Path((_id, _fmt)): axum::extract::Path<(String, String)>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    Ok(Json(HashMap::new()))
+}
+

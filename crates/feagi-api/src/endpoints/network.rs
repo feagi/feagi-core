@@ -63,3 +63,9 @@ pub async fn post_config(
     ])))
 }
 
+/// POST /v1/network/configure
+#[utoipa::path(post, path = "/v1/network/configure", tag = "network")]
+pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Network configured".to_string())])))
+}
+

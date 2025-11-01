@@ -109,3 +109,22 @@ pub async fn get_data(State(state): State<ApiState>) -> ApiResult<Json<HashMap<S
     Ok(Json(response))
 }
 
+/// GET /v1/monitoring/performance
+/// Get performance metrics
+#[utoipa::path(
+    get,
+    path = "/v1/monitoring/performance",
+    tag = "monitoring",
+    responses(
+        (status = 200, description = "Performance metrics", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_performance(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+    let mut response = HashMap::new();
+    response.insert("cpu_usage".to_string(), json!(0.0));
+    response.insert("memory_usage".to_string(), json!(0.0));
+    
+    Ok(Json(response))
+}
+

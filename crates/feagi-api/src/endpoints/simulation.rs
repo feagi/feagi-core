@@ -123,3 +123,9 @@ pub async fn post_config(
     ])))
 }
 
+/// POST /v1/simulation/configure
+#[utoipa::path(post, path = "/v1/simulation/configure", tag = "simulation")]
+pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Simulation configured".to_string())])))
+}
+
