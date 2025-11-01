@@ -125,7 +125,8 @@ impl ConnectomeManager {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
             cortical_idx_to_id: HashMap::new(),
-            next_cortical_idx: 0,
+            // CRITICAL: Reserve indices 0 (_death) and 1 (_power) - start regular areas at 2
+            next_cortical_idx: 2,
             brain_regions: BrainRegionHierarchy::new(),
             morphology_registry: feagi_evo::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
@@ -251,34 +252,28 @@ impl ConnectomeManager {
             )));
         }
         
-        // CRITICAL: Special handling for _power area - it MUST get cortical_idx=1
-        // This is required for power injection auto-discovery in the burst engine
-        if area.cortical_id == "_power" {
+        // CRITICAL: Reserve cortical_idx 0 for _death, 1 for _power
+        if area.cortical_id == "_death" {
+            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=0 to _death area");
+            area.cortical_idx = 0;
+        } else if area.cortical_id == "_power" {
+            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=1 to _power area");
             area.cortical_idx = 1;
-            // If cortical_idx=1 is already taken by another area, reassign that area
-            if let Some(existing_id) = self.cortical_idx_to_id.get(&1).cloned() {
-                if existing_id != "_power" {
-                    // Reassign the existing area to next available index
-                    let new_idx = self.next_cortical_idx;
-                    self.next_cortical_idx += 1;
-                    
-                    // Update the existing area's index
-                    if let Some(existing_area) = self.cortical_areas.get_mut(&existing_id) {
-                        existing_area.cortical_idx = new_idx;
-                    }
-                    self.cortical_id_to_idx.insert(existing_id.clone(), new_idx);
-                    self.cortical_idx_to_id.remove(&1);
-                    self.cortical_idx_to_id.insert(new_idx, existing_id);
-                }
-            }
         } else {
-            // Assign cortical_idx if not set
+            // Regular areas: assign cortical_idx if not set (will be ≥2 due to next_cortical_idx=2 initialization)
             if area.cortical_idx == 0 {
                 area.cortical_idx = self.next_cortical_idx;
                 self.next_cortical_idx += 1;
+                info!("📍 [REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be ≥2)", area.cortical_idx, area.cortical_id);
             } else {
-                // Check for index conflict
-                if self.cortical_idx_to_id.contains_key(&area.cortical_idx) {
+                // Check for reserved index collision
+                if area.cortical_idx == 0 || area.cortical_idx == 1 {
+                    warn!("❌ Regular area '{}' attempted to use RESERVED cortical_idx={}! Reassigning to next available.", 
+                        area.cortical_id, area.cortical_idx);
+                    area.cortical_idx = self.next_cortical_idx;
+                    self.next_cortical_idx += 1;
+                    info!("   Reassigned '{}' to cortical_idx={}", area.cortical_id, area.cortical_idx);
+                } else if self.cortical_idx_to_id.contains_key(&area.cortical_idx) {
                     return Err(BduError::InvalidArea(format!(
                         "Cortical index {} is already in use",
                         area.cortical_idx
@@ -1467,7 +1462,9 @@ impl ConnectomeManager {
         self.cortical_areas.clear();
         self.cortical_id_to_idx.clear();
         self.cortical_idx_to_id.clear();
-        self.next_cortical_idx = 0;
+        // CRITICAL: Reserve indices 0 (_death) and 1 (_power)
+        self.next_cortical_idx = 2;
+        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 2 (reserves 0=_death, 1=_power)");
         self.brain_regions = feagi_types::BrainRegionHierarchy::new();
         
         // Add cortical areas
@@ -1639,7 +1636,9 @@ impl ConnectomeManager {
         self.cortical_areas.clear();
         self.cortical_id_to_idx.clear();
         self.cortical_idx_to_id.clear();
-        self.next_cortical_idx = 0;
+        // CRITICAL: Reserve indices 0 (_death) and 1 (_power)
+        self.next_cortical_idx = 2;
+        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 2 (reserves 0=_death, 1=_power)");
         
         // Clear brain regions
         self.brain_regions = BrainRegionHierarchy::new();

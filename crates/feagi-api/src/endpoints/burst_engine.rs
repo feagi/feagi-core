@@ -69,15 +69,16 @@ pub async fn get_fcl(State(state): State<ApiState>) -> ApiResult<Json<HashMap<St
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
     
-    // Get FCL snapshot from RuntimeService (Vec<(neuron_id, potential)>)
-    let fcl_data = runtime_service.get_fcl_snapshot().await
+    // CRITICAL FIX: Get FCL snapshot WITH cortical_idx from NPU (not extracted from neuron_id bits!)
+    // Old code was doing (neuron_id >> 32) which is WRONG - neuron_id is u32, not packed!
+    let fcl_data = runtime_service.get_fcl_snapshot_with_cortical_idx().await
         .map_err(|e| ApiError::internal(format!("Failed to get FCL snapshot: {}", e)))?;
     
     // Get burst count for timestep
     let timestep = runtime_service.get_burst_count().await
         .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
     
-    // Get all cortical areas to map neuron IDs to cortical_id
+    // Get all cortical areas to map cortical_idx -> cortical_id
     let areas = connectome_service.list_cortical_areas().await
         .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
     
@@ -91,21 +92,15 @@ pub async fn get_fcl(State(state): State<ApiState>) -> ApiResult<Json<HashMap<St
     // Use BTreeMap for consistent ordering in JSON output
     let mut cortical_areas: BTreeMap<String, Vec<u64>> = BTreeMap::new();
     
-    for (neuron_id, _potential) in &fcl_data {
-        // Extract cortical_idx from neuron_id (upper 32 bits)
-        let cortical_idx = (neuron_id >> 32) as u32;
+    for (neuron_id, cortical_idx, _potential) in &fcl_data {
+        // Map cortical_idx to cortical_id using actual stored values
+        let cortical_id = idx_to_id.get(cortical_idx)
+            .cloned()
+            .unwrap_or_else(|| format!("area_{}", cortical_idx));
         
-        // Map to cortical_id
-        if let Some(cortical_id) = idx_to_id.get(&cortical_idx) {
-            cortical_areas.entry(cortical_id.clone())
-                .or_insert_with(Vec::new)
-                .push(*neuron_id);
-        } else {
-            // Fallback: use cortical_idx as string if not found
-            cortical_areas.entry(format!("area_{}", cortical_idx))
-                .or_insert_with(Vec::new)
-                .push(*neuron_id);
-        }
+        cortical_areas.entry(cortical_id)
+            .or_insert_with(Vec::new)
+            .push(*neuron_id);
     }
     
     // Limit to first 20 neuron IDs per area (matching Python behavior for network efficiency)
@@ -145,7 +140,7 @@ pub async fn get_fire_queue(State(state): State<ApiState>) -> ApiResult<Json<Has
     use tracing::debug;
     
     let runtime_service = state.runtime_service.as_ref();
-    let _connectome_service = state.connectome_service.as_ref();
+    let connectome_service = state.connectome_service.as_ref();
     
     // Get Fire Queue sample from RuntimeService
     let fq_sample = runtime_service.get_fire_queue_sample().await
@@ -155,14 +150,24 @@ pub async fn get_fire_queue(State(state): State<ApiState>) -> ApiResult<Json<Has
     let timestep = runtime_service.get_burst_count().await
         .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
     
-    // Convert cortical_idx to cortical_id using ConnectomeService
+    // CRITICAL FIX: Build cortical_idx -> cortical_id mapping from ConnectomeService
+    // This uses the actual stored cortical_idx values instead of fabricating names
+    let areas = connectome_service.list_cortical_areas().await
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+    
+    let idx_to_id: HashMap<u32, String> = areas.iter()
+        .map(|a| (a.cortical_idx, a.cortical_id.clone()))
+        .collect();
+    
+    // Convert cortical_idx to cortical_id
     let mut cortical_areas: HashMap<String, Vec<u64>> = HashMap::new();
     let mut total_fired = 0;
     
     for (cortical_idx, (neuron_ids, _, _, _, _)) in fq_sample {
-        // TODO: Map cortical_idx to cortical_id using ConnectomeService
-        // For now, use cortical_idx as string
-        let cortical_id = format!("area_{}", cortical_idx);
+        // Use actual cortical_id from mapping, fallback to area_{idx} if not found
+        let cortical_id = idx_to_id.get(&cortical_idx)
+            .cloned()
+            .unwrap_or_else(|| format!("area_{}", cortical_idx));
         
         let ids_u64: Vec<u64> = neuron_ids.iter().map(|&id| id as u64).collect();
         total_fired += ids_u64.len();
@@ -289,16 +294,29 @@ pub async fn put_fire_ledger_default_window_size(
 )]
 pub async fn get_fire_ledger_areas_window_config(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
+    let connectome_service = state.connectome_service.as_ref();
     
     // Get Fire Ledger configurations from RuntimeService
     let configs = runtime_service.get_fire_ledger_configs().await
         .map_err(|e| ApiError::internal(format!("Failed to get fire ledger configs: {}", e)))?;
     
-    // Convert to area_id -> window_size HashMap
-    // TODO: Map cortical_idx to cortical_id using ConnectomeService
+    // CRITICAL FIX: Build cortical_idx -> cortical_id mapping from ConnectomeService
+    // This uses the actual stored cortical_idx values instead of fabricating names
+    let cortical_areas_list = connectome_service.list_cortical_areas().await
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+    
+    let idx_to_id: HashMap<u32, String> = cortical_areas_list.iter()
+        .map(|a| (a.cortical_idx, a.cortical_id.clone()))
+        .collect();
+    
+    // Convert to area_id -> window_size HashMap using actual cortical_id
     let mut areas: HashMap<String, usize> = HashMap::new();
     for (cortical_idx, window_size) in configs {
-        areas.insert(format!("area_{}", cortical_idx), window_size);
+        // Use actual cortical_id from mapping, fallback to area_{idx} if not found
+        let cortical_id = idx_to_id.get(&cortical_idx)
+            .cloned()
+            .unwrap_or_else(|| format!("area_{}", cortical_idx));
+        areas.insert(cortical_id, window_size);
     }
     
     let mut response = HashMap::new();

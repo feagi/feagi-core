@@ -184,6 +184,22 @@ impl RuntimeService for RuntimeServiceImpl {
         Ok(result)
     }
     
+    async fn get_fcl_snapshot_with_cortical_idx(&self) -> ServiceResult<Vec<(u64, u32, f32)>> {
+        let runner = self.burst_runner.read();
+        let fcl_data = runner.get_fcl_snapshot();
+        let npu = runner.get_npu();
+        
+        // Query cortical_area for each neuron from NPU (single source of truth)
+        let result: Vec<(u64, u32, f32)> = fcl_data.iter()
+            .map(|(neuron_id, potential)| {
+                let cortical_idx = npu.lock().unwrap().get_neuron_cortical_area(neuron_id.0);
+                (neuron_id.0 as u64, cortical_idx, *potential)
+            })
+            .collect();
+        
+        Ok(result)
+    }
+    
     async fn get_fire_queue_sample(&self) -> ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
         let mut runner = self.burst_runner.write();
         

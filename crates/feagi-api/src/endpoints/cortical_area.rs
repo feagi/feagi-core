@@ -491,7 +491,8 @@ pub async fn post_voxel_neurons(State(_state): State<ApiState>, Json(_req): Json
 pub async fn get_cortical_area_index_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<u32>>> {
     let connectome_service = state.connectome_service.as_ref();
     let areas = connectome_service.list_cortical_areas().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
-    let indices: Vec<u32> = (0..areas.len() as u32).collect();
+    // CRITICAL FIX: Return the actual cortical_idx values, not fabricated sequential indices
+    let indices: Vec<u32> = areas.iter().map(|a| a.cortical_idx).collect();
     Ok(Json(indices))
 }
 
@@ -500,7 +501,8 @@ pub async fn get_cortical_area_index_list(State(state): State<ApiState>) -> ApiR
 pub async fn get_cortical_idx_mapping(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, u32>>> {
     let connectome_service = state.connectome_service.as_ref();
     let areas = connectome_service.list_cortical_areas().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
-    let mapping: HashMap<String, u32> = areas.iter().enumerate().map(|(idx, a)| (a.cortical_id.clone(), idx as u32)).collect();
+    // CRITICAL FIX: Use the actual cortical_idx from CorticalArea, NOT enumerate() which ignores reserved indices!
+    let mapping: HashMap<String, u32> = areas.iter().map(|a| (a.cortical_id.clone(), a.cortical_idx)).collect();
     Ok(Json(mapping))
 }
 
@@ -512,16 +514,33 @@ pub async fn get_mapping_restrictions_query(State(_state): State<ApiState>, axum
 
 /// GET /v1/cortical_area/{cortical_id}/memory_usage
 #[utoipa::path(get, path = "/v1/cortical_area/{cortical_id}/memory_usage", tag = "cortical_area")]
-pub async fn get_memory_usage(State(_state): State<ApiState>, axum::extract::Path(_id): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, i64>>> {
+pub async fn get_memory_usage(State(state): State<ApiState>, axum::extract::Path(cortical_id): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, i64>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    // CRITICAL FIX: Calculate actual memory usage based on neuron count instead of hardcoded 0
+    let area_info = connectome_service.get_cortical_area(&cortical_id).await
+        .map_err(|_| ApiError::not_found("CorticalArea", &cortical_id))?;
+    
+    // Calculate memory usage: neuron_count × bytes per neuron
+    // Each neuron in NeuronArray uses ~48 bytes (membrane_potential, threshold, refractory, etc.)
+    const BYTES_PER_NEURON: i64 = 48;
+    let memory_bytes = (area_info.neuron_count as i64) * BYTES_PER_NEURON;
+    
     let mut response = HashMap::new();
-    response.insert("memory_bytes".to_string(), 0);
+    response.insert("memory_bytes".to_string(), memory_bytes);
     Ok(Json(response))
 }
 
 /// GET /v1/cortical_area/{cortical_id}/neuron_count
 #[utoipa::path(get, path = "/v1/cortical_area/{cortical_id}/neuron_count", tag = "cortical_area")]
-pub async fn get_area_neuron_count(State(_state): State<ApiState>, axum::extract::Path(_id): axum::extract::Path<String>) -> ApiResult<Json<i64>> {
-    Ok(Json(0))
+pub async fn get_area_neuron_count(State(state): State<ApiState>, axum::extract::Path(cortical_id): axum::extract::Path<String>) -> ApiResult<Json<i64>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    // CRITICAL FIX: Get actual neuron count from ConnectomeService instead of hardcoded 0
+    let area_info = connectome_service.get_cortical_area(&cortical_id).await
+        .map_err(|_| ApiError::not_found("CorticalArea", &cortical_id))?;
+    
+    Ok(Json(area_info.neuron_count as i64))
 }
 
 /// POST /v1/cortical_area/cortical_type_options

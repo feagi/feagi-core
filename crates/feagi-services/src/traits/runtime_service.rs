@@ -108,6 +108,16 @@ pub trait RuntimeService: Send + Sync {
     ///
     async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>>;
     
+    /// Get Fire Candidate List snapshot with cortical area information
+    ///
+    /// Returns the last FCL snapshot with cortical_idx for each neuron.
+    /// This avoids the need to query cortical_area for each neuron separately.
+    ///
+    /// # Returns
+    /// * `Vec<(u64, u32, f32)>` - (neuron_id, cortical_idx, membrane_potential) tuples
+    ///
+    async fn get_fcl_snapshot_with_cortical_idx(&self) -> ServiceResult<Vec<(u64, u32, f32)>>;
+    
     /// Get Fire Queue sample for monitoring
     ///
     /// Returns neurons that actually fired in the last burst, organized by cortical area

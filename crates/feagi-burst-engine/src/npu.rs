@@ -1705,6 +1705,24 @@ fn phase1_injection_with_synapses(
         info!("╚══════════════════════════════════════════════════════════════");
     });
 
+    // 🔍 DIAGNOSTIC: Log neuron array state on first scan with neurons
+    static DIAGNOSTIC_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    if !DIAGNOSTIC_LOGGED.load(Ordering::Relaxed) && neuron_array.count > 0 {
+        info!("[POWER-DIAGNOSTIC] Neuron array has {} neurons", neuron_array.count);
+        
+        // Sample first 20 neurons to see their cortical_areas
+        let sample_count = neuron_array.count.min(20);
+        let mut cortical_area_counts: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
+        for i in 0..sample_count {
+            if neuron_array.valid_mask[i] {
+                let cortical_area = neuron_array.cortical_areas[i];
+                *cortical_area_counts.entry(cortical_area).or_insert(0) += 1;
+            }
+        }
+        info!("[POWER-DIAGNOSTIC] First {} neurons cortical_area distribution: {:?}", sample_count, cortical_area_counts);
+        DIAGNOSTIC_LOGGED.store(true, Ordering::Relaxed);
+    }
+
     // Scan all neurons for _power cortical area (cortical_idx = 1)
     for array_idx in 0..neuron_array.count {
         let neuron_id = neuron_array.index_to_neuron_id[array_idx];
@@ -1719,36 +1737,46 @@ fn phase1_injection_with_synapses(
         }
     }
 
-    // Log first injection and EVERY time power neurons disappear
+    // Log first injection and track power neuron count changes
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
     static FIRST_INJECTION: AtomicBool = AtomicBool::new(false);
     static LAST_POWER_COUNT: AtomicUsize = AtomicUsize::new(0);
 
+    let last_count = LAST_POWER_COUNT.load(Ordering::Relaxed);
+
     if !FIRST_INJECTION.load(Ordering::Relaxed) && power_count > 0 {
+        // First burst with power neurons found
         info!(
             "[POWER-INJECTION] ✅ Injected {} power neurons into FCL",
             power_count
         );
         FIRST_INJECTION.store(true, Ordering::Relaxed);
         LAST_POWER_COUNT.store(power_count, Ordering::Relaxed);
-    } else if power_count == 0 && FIRST_INJECTION.load(Ordering::Relaxed) {
-        // Power neurons disappeared after working - BUT only log error if we actually had power neurons before
-        let last_count = LAST_POWER_COUNT.load(Ordering::Relaxed);
-        if last_count > 0 {
-            error!(
-                "[POWER-INJECTION] ❌ ERROR: Power neurons DISAPPEARED! (was {}, now 0)",
-                last_count
-            );
-            LAST_POWER_COUNT.store(0, Ordering::Relaxed);
-        }
-        // If last_count was also 0, we never had power neurons - this is expected for genomes without _power area
+    } else if power_count == 0 && FIRST_INJECTION.load(Ordering::Relaxed) && last_count > 0 {
+        // Power neurons disappeared after working
+        error!(
+            "[POWER-INJECTION] ❌ ERROR: Power neurons DISAPPEARED! (was {}, now 0)",
+            last_count
+        );
+        LAST_POWER_COUNT.store(0, Ordering::Relaxed);
     } else if power_count == 0 && !FIRST_INJECTION.load(Ordering::Relaxed) {
-        // Only warn ONCE on first burst if no power neurons found
-        warn!("[POWER-INJECTION] ⚠️ No power neurons found (cortical_idx=1 '_power' area missing or empty)");
+        // First burst with no power neurons (pre-embryogenesis)
+        warn!("[POWER-INJECTION] ⚠️ No power neurons found yet (cortical_idx=1 '_power' area not created or empty) - will auto-discover after genome load");
         FIRST_INJECTION.store(true, Ordering::Relaxed);
         LAST_POWER_COUNT.store(0, Ordering::Relaxed);
-    } else if power_count != LAST_POWER_COUNT.load(Ordering::Relaxed) {
-        // Power neuron count changed (not 0 -> 0, but some other change)
+    } else if power_count > 0 && last_count == 0 {
+        // Power neurons APPEARED after being absent (0→N transition) - CRITICAL LOG
+        info!(
+            "[POWER-INJECTION] ✅ Power neurons NOW ACTIVE! Injected {} neurons into FCL (was 0, genome loaded successfully)",
+            power_count
+        );
+        LAST_POWER_COUNT.store(power_count, Ordering::Relaxed);
+    } else if power_count != last_count && power_count > 0 && last_count > 0 {
+        // Power neuron count changed (N→M transition where both are non-zero)
+        info!(
+            "[POWER-INJECTION] ℹ️  Power neuron count changed: {} → {} neurons",
+            last_count, power_count
+        );
         LAST_POWER_COUNT.store(power_count, Ordering::Relaxed);
     }
 
@@ -2287,6 +2315,32 @@ mod tests {
         let result = npu.process_burst().unwrap();
 
         assert_eq!(result.power_injections, 0);
+    }
+
+    #[test]
+    fn test_power_injection_zero_to_n_transition() {
+        // Test the startup race condition: burst loop starts before genome load
+        // This simulates what happens in production when burst engine starts before embryogenesis
+        let mut npu = RustNPU::new(100, 1000, 10);
+        npu.set_power_amount(0.5);
+
+        // Burst 1: No power neurons yet (pre-embryogenesis)
+        let result1 = npu.process_burst().unwrap();
+        assert_eq!(result1.power_injections, 0, "No power neurons before embryogenesis");
+
+        // Simulate genome load: Add power neurons
+        for i in 0..10 {
+            npu.add_neuron(0.5, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+                .unwrap();
+        }
+
+        // Burst 2: Power neurons now present (0→N transition) - should log and inject!
+        let result2 = npu.process_burst().unwrap();
+        assert_eq!(result2.power_injections, 10, "Should inject all 10 power neurons after genome load");
+
+        // Burst 3: Should still inject power neurons consistently
+        let result3 = npu.process_burst().unwrap();
+        assert_eq!(result3.power_injections, 10, "Should continue injecting power neurons on every burst");
     }
 
     // ═══════════════════════════════════════════════════════════
