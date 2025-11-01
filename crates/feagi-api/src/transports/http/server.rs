@@ -116,6 +116,15 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::insight;
     use crate::endpoints::neuroplasticity;
     use crate::endpoints::input;
+    use crate::endpoints::outputs;
+    use crate::endpoints::physiology;
+    use crate::endpoints::simulation;
+    use crate::endpoints::training;
+    use crate::endpoints::visualization;
+    use crate::endpoints::monitoring;
+    use crate::endpoints::evolution;
+    use crate::endpoints::snapshot;
+    use crate::endpoints::network;
     
     Router::new()
         // ===== AGENT MODULE (7 endpoints) =====
@@ -195,9 +204,21 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/connectome/properties/dimensions", get(connectome::get_properties_dimensions))
         .route("/connectome/properties/mappings", get(connectome::get_properties_mappings))
         
-        // ===== BURST_ENGINE MODULE (2 endpoints) =====
+        // ===== BURST_ENGINE MODULE (14 endpoints) =====
         .route("/burst_engine/simulation_timestep",
             get(burst_engine::get_simulation_timestep).post(burst_engine::post_simulation_timestep))
+        .route("/burst_engine/fcl", get(burst_engine::get_fcl))
+        .route("/burst_engine/fire_queue", get(burst_engine::get_fire_queue))
+        .route("/burst_engine/fcl_reset", axum::routing::post(burst_engine::post_fcl_reset))
+        .route("/burst_engine/fcl_status", get(burst_engine::get_fcl_status))
+        .route("/burst_engine/fire_ledger/default_window_size",
+            get(burst_engine::get_fire_ledger_default_window_size)
+            .put(burst_engine::put_fire_ledger_default_window_size))
+        .route("/burst_engine/fire_ledger/areas_window_config", 
+            get(burst_engine::get_fire_ledger_areas_window_config))
+        .route("/burst_engine/stats", get(burst_engine::get_stats))
+        .route("/burst_engine/status", get(burst_engine::get_status))
+        .route("/burst_engine/control", axum::routing::post(burst_engine::post_control))
         
         // ===== GENOME MODULE (7 endpoints) =====
         .route("/genome/file_name", get(genome::get_file_name))
@@ -221,6 +242,65 @@ fn create_v1_router() -> Router<ApiState> {
         // ===== INPUT MODULE (2 endpoints) =====
         .route("/input/vision",
             get(input::get_vision).post(input::post_vision))
+        
+        // ===== OUTPUTS MODULE (2 endpoints) =====
+        .route("/outputs/targets", get(outputs::get_targets))
+        .route("/outputs/configure", axum::routing::post(outputs::post_configure))
+        
+        // ===== PHYSIOLOGY MODULE (2 endpoints) =====
+        .route("/physiology/",
+            get(physiology::get_physiology).put(physiology::put_physiology))
+        
+        // ===== SIMULATION MODULE (5 endpoints) =====
+        .route("/simulation/upload/string", axum::routing::post(simulation::post_stimulation_upload))
+        .route("/simulation/reset", axum::routing::post(simulation::post_reset))
+        .route("/simulation/status", get(simulation::get_status))
+        .route("/simulation/stats", get(simulation::get_stats))
+        .route("/simulation/config", axum::routing::post(simulation::post_config))
+        
+        // ===== TRAINING MODULE (17 endpoints) =====
+        .route("/training/shock", axum::routing::post(training::post_shock))
+        .route("/training/shock/options", get(training::get_shock_options))
+        .route("/training/shock/status", get(training::get_shock_status))
+        .route("/training/reward/intensity", axum::routing::post(training::post_reward_intensity))
+        .route("/training/punishment/intensity", axum::routing::post(training::post_punishment_intensity))
+        .route("/training/gameover", axum::routing::post(training::post_gameover))
+        .route("/training/brain_fitness", get(training::get_brain_fitness))
+        .route("/training/fitness_criteria",
+            get(training::get_fitness_criteria).put(training::put_fitness_criteria))
+        .route("/training/fitness_stats", get(training::get_fitness_stats))
+        .route("/training/training_report", get(training::get_training_report))
+        .route("/training/status", get(training::get_status))
+        .route("/training/stats", get(training::get_stats))
+        .route("/training/config", axum::routing::post(training::post_config))
+        
+        // ===== VISUALIZATION MODULE (4 endpoints) =====
+        .route("/visualization/register_client", axum::routing::post(visualization::post_register_client))
+        .route("/visualization/unregister_client", axum::routing::post(visualization::post_unregister_client))
+        .route("/visualization/heartbeat", axum::routing::post(visualization::post_heartbeat))
+        .route("/visualization/status", get(visualization::get_status))
+        
+        // ===== MONITORING MODULE (3 endpoints) =====
+        .route("/monitoring/status", get(monitoring::get_status))
+        .route("/monitoring/metrics", get(monitoring::get_metrics))
+        .route("/monitoring/data", get(monitoring::get_data))
+        
+        // ===== EVOLUTION MODULE (2 endpoints) =====
+        .route("/evolution/status", get(evolution::get_status))
+        .route("/evolution/config", axum::routing::post(evolution::post_config))
+        
+        // ===== SNAPSHOT MODULE (7 endpoints) =====
+        .route("/snapshot/create", axum::routing::post(snapshot::post_create))
+        .route("/snapshot/restore", axum::routing::post(snapshot::post_restore))
+        .route("/snapshot/", get(snapshot::get_list))
+        .route("/snapshot/:snapshot_id", axum::routing::delete(snapshot::delete_snapshot))
+        .route("/snapshot/:snapshot_id/artifact/:fmt", get(snapshot::get_artifact))
+        .route("/snapshot/compare", axum::routing::post(snapshot::post_compare))
+        .route("/snapshot/upload", axum::routing::post(snapshot::post_upload))
+        
+        // ===== NETWORK MODULE (2 endpoints) =====
+        .route("/network/status", get(network::get_status))
+        .route("/network/config", axum::routing::post(network::post_config))
 }
 
 /// OpenAPI spec handler

@@ -142,9 +142,19 @@ use crate::{
         crate::endpoints::connectome::get_properties_dimensions,
         crate::endpoints::connectome::get_properties_mappings,
         
-        // Burst Engine endpoints
+        // Burst Engine endpoints (14 total)
         crate::endpoints::burst_engine::get_simulation_timestep,
         crate::endpoints::burst_engine::post_simulation_timestep,
+        crate::endpoints::burst_engine::get_fcl,
+        crate::endpoints::burst_engine::get_fire_queue,
+        crate::endpoints::burst_engine::post_fcl_reset,
+        crate::endpoints::burst_engine::get_fcl_status,
+        crate::endpoints::burst_engine::get_fire_ledger_default_window_size,
+        crate::endpoints::burst_engine::put_fire_ledger_default_window_size,
+        crate::endpoints::burst_engine::get_fire_ledger_areas_window_config,
+        crate::endpoints::burst_engine::get_stats,
+        crate::endpoints::burst_engine::get_status,
+        crate::endpoints::burst_engine::post_control,
         
         // Insight endpoints
         crate::endpoints::insight::post_neurons_membrane_potential_status,
@@ -159,6 +169,65 @@ use crate::{
         // Input endpoints
         crate::endpoints::input::get_vision,
         crate::endpoints::input::post_vision,
+        
+        // Outputs endpoints
+        crate::endpoints::outputs::get_targets,
+        crate::endpoints::outputs::post_configure,
+        
+        // Physiology endpoints
+        crate::endpoints::physiology::get_physiology,
+        crate::endpoints::physiology::put_physiology,
+        
+        // Simulation endpoints
+        crate::endpoints::simulation::post_stimulation_upload,
+        crate::endpoints::simulation::post_reset,
+        crate::endpoints::simulation::get_status,
+        crate::endpoints::simulation::get_stats,
+        crate::endpoints::simulation::post_config,
+        
+        // Training endpoints
+        crate::endpoints::training::post_shock,
+        crate::endpoints::training::get_shock_options,
+        crate::endpoints::training::get_shock_status,
+        crate::endpoints::training::post_reward_intensity,
+        crate::endpoints::training::post_punishment_intensity,
+        crate::endpoints::training::post_gameover,
+        crate::endpoints::training::get_brain_fitness,
+        crate::endpoints::training::get_fitness_criteria,
+        crate::endpoints::training::put_fitness_criteria,
+        crate::endpoints::training::get_fitness_stats,
+        crate::endpoints::training::get_training_report,
+        crate::endpoints::training::get_status,
+        crate::endpoints::training::get_stats,
+        crate::endpoints::training::post_config,
+        
+        // Visualization endpoints
+        crate::endpoints::visualization::post_register_client,
+        crate::endpoints::visualization::post_unregister_client,
+        crate::endpoints::visualization::post_heartbeat,
+        crate::endpoints::visualization::get_status,
+        
+        // Monitoring endpoints
+        crate::endpoints::monitoring::get_status,
+        crate::endpoints::monitoring::get_metrics,
+        crate::endpoints::monitoring::get_data,
+        
+        // Evolution endpoints
+        crate::endpoints::evolution::get_status,
+        crate::endpoints::evolution::post_config,
+        
+        // Snapshot endpoints
+        crate::endpoints::snapshot::post_create,
+        crate::endpoints::snapshot::post_restore,
+        crate::endpoints::snapshot::get_list,
+        crate::endpoints::snapshot::delete_snapshot,
+        crate::endpoints::snapshot::get_artifact,
+        crate::endpoints::snapshot::post_compare,
+        crate::endpoints::snapshot::post_upload,
+        
+        // Network endpoints
+        crate::endpoints::network::get_status,
+        crate::endpoints::network::post_config,
     ),
     components(
         schemas(

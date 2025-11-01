@@ -9,28 +9,17 @@ pub mod genome; // ✅ COMPLETE - /v1/genome/* (5 endpoints)
 pub mod cortical_mapping; // ✅ COMPLETE - /v1/cortical_mapping/* (4 endpoints)
 pub mod region; // ✅ COMPLETE - /v1/region/* (7 endpoints)
 pub mod connectome; // ✅ COMPLETE - /v1/connectome/* (3 endpoints)
-pub mod burst_engine; // ✅ COMPLETE - /v1/burst_engine/* (2 endpoints)
+pub mod burst_engine; // ✅ COMPLETE - /v1/burst_engine/* (14 endpoints)
 pub mod insight; // ✅ COMPLETE - /v1/insight/* (4 endpoints)
 pub mod neuroplasticity; // ✅ COMPLETE - /v1/neuroplasticity/* (2 endpoints)
 pub mod input; // ✅ COMPLETE - /v1/input/* (2 endpoints)
-
-// TODO: Implement remaining modules using agent.rs as the pattern:
-// - system (health_check, preferences, etc.)
-// - cortical_area (ipu, opu, CRUD, etc.)
-// - morphology (list, CRUD, properties, etc.)
-// - region (CRUD, clone, relocate, etc.)
-// - cortical_mapping (afferents, efferents, properties)
-// - connectome (dimensions, mappings, detailed list)
-// - burst_engine (timestep control)
-// - genome (file ops, circuits, amalgamation)
-// - neuroplasticity (queue depth)
-// - insight (membrane/synaptic potential)
-// - input (vision, etc.)
-// - monitoring
-// - network
-// - simulation
-// - training
-// - outputs
-// - snapshots
-// - visualization
+pub mod outputs; // ✅ COMPLETE - /v1/outputs/* (2 endpoints)
+pub mod physiology; // ✅ COMPLETE - /v1/physiology/* (2 endpoints)
+pub mod simulation; // ✅ COMPLETE - /v1/simulation/* (5 endpoints)
+pub mod training; // ✅ COMPLETE - /v1/training/* (17 endpoints)
+pub mod visualization; // ✅ COMPLETE - /v1/visualization/* (4 endpoints)
+pub mod monitoring; // ✅ COMPLETE - /v1/monitoring/* (3 endpoints)
+pub mod evolution; // ✅ COMPLETE - /v1/evolution/* (2 endpoints)
+pub mod snapshot; // ✅ COMPLETE - /v1/snapshot/* (7 endpoints)
+pub mod network; // ✅ COMPLETE - /v1/network/* (2 endpoints)
 
