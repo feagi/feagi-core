@@ -160,5 +160,125 @@ pub async fn put_mapping_properties(
     Ok(Json(response))
 }
 
+/// GET /v1/cortical_mapping/mapping
+/// Get specific cortical mapping between two areas
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_mapping/mapping",
+    tag = "cortical_mapping",
+    params(
+        ("src_cortical_area" = String, Query, description = "Source cortical area ID"),
+        ("dst_cortical_area" = String, Query, description = "Destination cortical area ID")
+    ),
+    responses(
+        (status = 200, description = "Mapping properties", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_mapping(
+    State(state): State<ApiState>,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let src_area = params.get("src_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("src_cortical_area required"))?;
+    let dst_area = params.get("dst_cortical_area")
+        .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?;
+    
+    // Delegate to post_mapping_properties
+    post_mapping_properties(State(state), Json(HashMap::from([
+        ("src_cortical_area".to_string(), src_area.clone()),
+        ("dst_cortical_area".to_string(), dst_area.clone()),
+    ]))).await
+}
+
+/// GET /v1/cortical_mapping/mapping_list
+/// Get list of all cortical mappings
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_mapping/mapping_list",
+    tag = "cortical_mapping",
+    responses(
+        (status = 200, description = "List of all mappings", body = Vec<Vec<String>>)
+    )
+)]
+pub async fn get_mapping_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<Vec<String>>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    let areas = connectome_service.list_cortical_areas().await
+        .map_err(|e| ApiError::internal(format!("Failed to list areas: {}", e)))?;
+    
+    let mut mappings = Vec::new();
+    
+    // Scan all cortical_mapping_dst properties
+    for area in &areas {
+        if let Ok(area_detail) = connectome_service.get_cortical_area(&area.cortical_id).await {
+            if let Some(mapping_dst) = area_detail.properties.get("cortical_mapping_dst") {
+                if let Some(dst_map) = mapping_dst.as_object() {
+                    for dst_area_id in dst_map.keys() {
+                        mappings.push(vec![area.cortical_id.clone(), dst_area_id.clone()]);
+                    }
+                }
+            }
+        }
+    }
+    
+    Ok(Json(mappings))
+}
+
+/// DELETE /v1/cortical_mapping/mapping
+/// Delete a cortical mapping
+#[utoipa::path(
+    delete,
+    path = "/v1/cortical_mapping/mapping",
+    tag = "cortical_mapping",
+    responses(
+        (status = 200, description = "Mapping deleted", body = HashMap<String, String>)
+    )
+)]
+pub async fn delete_mapping(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    // TODO: Implement mapping deletion
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Mapping deletion not yet implemented".to_string())
+    ])))
+}
+
+/// POST /v1/cortical_mapping/batch_update
+/// Batch update multiple cortical mappings
+#[utoipa::path(
+    post,
+    path = "/v1/cortical_mapping/batch_update",
+    tag = "cortical_mapping",
+    responses(
+        (status = 200, description = "Batch update completed", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn post_batch_update(
+    State(_state): State<ApiState>,
+    Json(_request): Json<Vec<HashMap<String, String>>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    // TODO: Implement batch update
+    let mut response = HashMap::new();
+    response.insert("message".to_string(), serde_json::json!("Batch update not yet implemented"));
+    response.insert("updated_count".to_string(), serde_json::json!(0));
+    
+    Ok(Json(response))
+}
+
+// EXACT Python paths:
+/// POST /v1/cortical_mapping/mapping
+#[utoipa::path(post, path = "/v1/cortical_mapping/mapping", tag = "cortical_mapping")]
+pub async fn post_mapping(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// PUT /v1/cortical_mapping/mapping
+#[utoipa::path(put, path = "/v1/cortical_mapping/mapping", tag = "cortical_mapping")]
+pub async fn put_mapping(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+
 
 

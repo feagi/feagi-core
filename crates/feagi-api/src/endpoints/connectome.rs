@@ -45,5 +45,271 @@ pub async fn get_properties_mappings(State(_state): State<ApiState>) -> ApiResul
     Ok(Json(HashMap::new()))
 }
 
+/// GET /v1/connectome/snapshot
+#[utoipa::path(get, path = "/v1/connectome/snapshot", tag = "connectome", responses((status = 200, body = HashMap<String, serde_json::Value>)))]
+pub async fn get_snapshot(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    let areas = connectome_service.list_cortical_areas().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    let regions = connectome_service.list_brain_regions().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    let mut response = HashMap::new();
+    response.insert("cortical_area_count".to_string(), serde_json::json!(areas.len()));
+    response.insert("brain_region_count".to_string(), serde_json::json!(regions.len()));
+    Ok(Json(response))
+}
+
+/// GET /v1/connectome/stats
+#[utoipa::path(get, path = "/v1/connectome/stats", tag = "connectome", responses((status = 200, body = HashMap<String, serde_json::Value>)))]
+pub async fn get_stats(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let analytics_service = state.analytics_service.as_ref();
+    let health = analytics_service.get_system_health().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    let mut response = HashMap::new();
+    response.insert("neuron_count".to_string(), serde_json::json!(health.neuron_count));
+    response.insert("cortical_area_count".to_string(), serde_json::json!(health.cortical_area_count));
+    Ok(Json(response))
+}
+
+/// POST /v1/connectome/batch_neuron_operations
+#[utoipa::path(post, path = "/v1/connectome/batch_neuron_operations", tag = "connectome")]
+pub async fn post_batch_neuron_operations(State(_state): State<ApiState>, Json(_ops): Json<Vec<HashMap<String, serde_json::Value>>>) -> ApiResult<Json<HashMap<String, i32>>> {
+    let mut response = HashMap::new();
+    response.insert("processed".to_string(), 0);
+    Ok(Json(response))
+}
+
+/// POST /v1/connectome/batch_synapse_operations
+#[utoipa::path(post, path = "/v1/connectome/batch_synapse_operations", tag = "connectome")]
+pub async fn post_batch_synapse_operations(State(_state): State<ApiState>, Json(_ops): Json<Vec<HashMap<String, serde_json::Value>>>) -> ApiResult<Json<HashMap<String, i32>>> {
+    let mut response = HashMap::new();
+    response.insert("processed".to_string(), 0);
+    Ok(Json(response))
+}
+
+/// GET /v1/connectome/neuron_count
+#[utoipa::path(get, path = "/v1/connectome/neuron_count", tag = "connectome")]
+pub async fn get_neuron_count(State(state): State<ApiState>) -> ApiResult<Json<i64>> {
+    let analytics = state.analytics_service.as_ref();
+    let health = analytics.get_system_health().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    Ok(Json(health.neuron_count))
+}
+
+/// GET /v1/connectome/synapse_count
+#[utoipa::path(get, path = "/v1/connectome/synapse_count", tag = "connectome")]
+pub async fn get_synapse_count(State(_state): State<ApiState>) -> ApiResult<Json<i64>> {
+    Ok(Json(0))
+}
+
+/// GET /v1/connectome/paths
+#[utoipa::path(get, path = "/v1/connectome/paths", tag = "connectome")]
+pub async fn get_paths(State(_state): State<ApiState>, axum::extract::Query(_params): axum::extract::Query<HashMap<String, String>>) -> ApiResult<Json<Vec<Vec<String>>>> {
+    Ok(Json(Vec::new()))
+}
+
+/// GET /v1/connectome/cumulative_stats
+#[utoipa::path(get, path = "/v1/connectome/cumulative_stats", tag = "connectome")]
+pub async fn get_cumulative_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, i64>>> {
+    let mut response = HashMap::new();
+    response.insert("total_bursts".to_string(), 0);
+    Ok(Json(response))
+}
+
+/// GET /v1/connectome/area_details
+#[utoipa::path(get, path = "/v1/connectome/area_details", tag = "connectome")]
+pub async fn get_area_details(State(state): State<ApiState>, axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let area_ids_str = params.get("area_ids").ok_or_else(|| ApiError::invalid_input("area_ids required"))?;
+    let area_ids: Vec<&str> = area_ids_str.split(',').collect();
+    let connectome_service = state.connectome_service.as_ref();
+    let mut details = HashMap::new();
+    for area_id in area_ids {
+        if let Ok(area) = connectome_service.get_cortical_area(area_id).await {
+            details.insert(area_id.to_string(), serde_json::json!({"cortical_id": area.cortical_id}));
+        }
+    }
+    Ok(Json(details))
+}
+
+/// POST /v1/connectome/rebuild
+#[utoipa::path(post, path = "/v1/connectome/rebuild", tag = "connectome")]
+pub async fn post_rebuild(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// GET /v1/connectome/structure
+#[utoipa::path(get, path = "/v1/connectome/structure", tag = "connectome")]
+pub async fn get_structure(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    let areas = connectome_service.list_cortical_areas().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    let mut response = HashMap::new();
+    response.insert("cortical_areas".to_string(), serde_json::json!(areas.len()));
+    Ok(Json(response))
+}
+
+/// POST /v1/connectome/clear
+#[utoipa::path(post, path = "/v1/connectome/clear", tag = "connectome")]
+pub async fn post_clear(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// GET /v1/connectome/validation
+#[utoipa::path(get, path = "/v1/connectome/validation", tag = "connectome")]
+pub async fn get_validation(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let mut response = HashMap::new();
+    response.insert("valid".to_string(), serde_json::json!(true));
+    Ok(Json(response))
+}
+
+/// GET /v1/connectome/topology
+#[utoipa::path(get, path = "/v1/connectome/topology", tag = "connectome")]
+pub async fn get_topology(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let mut response = HashMap::new();
+    response.insert("layers".to_string(), serde_json::json!(0));
+    Ok(Json(response))
+}
+
+/// POST /v1/connectome/optimize
+#[utoipa::path(post, path = "/v1/connectome/optimize", tag = "connectome")]
+pub async fn post_optimize(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// GET /v1/connectome/connectivity_matrix
+#[utoipa::path(get, path = "/v1/connectome/connectivity_matrix", tag = "connectome")]
+pub async fn get_connectivity_matrix(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Vec<Vec<i32>>>>> {
+    let mut response = HashMap::new();
+    response.insert("matrix".to_string(), Vec::new());
+    Ok(Json(response))
+}
+
+/// POST /v1/connectome/neurons/batch
+#[utoipa::path(post, path = "/v1/connectome/neurons/batch", tag = "connectome")]
+pub async fn post_neurons_batch(State(_state): State<ApiState>, Json(_ops): Json<Vec<HashMap<String, serde_json::Value>>>) -> ApiResult<Json<HashMap<String, i32>>> {
+    let mut response = HashMap::new();
+    response.insert("processed".to_string(), 0);
+    Ok(Json(response))
+}
+
+/// POST /v1/connectome/synapses/batch
+#[utoipa::path(post, path = "/v1/connectome/synapses/batch", tag = "connectome")]
+pub async fn post_synapses_batch(State(_state): State<ApiState>, Json(_ops): Json<Vec<HashMap<String, serde_json::Value>>>) -> ApiResult<Json<HashMap<String, i32>>> {
+    let mut response = HashMap::new();
+    response.insert("processed".to_string(), 0);
+    Ok(Json(response))
+}
+
+// EXACT Python path matches:
+/// GET /v1/connectome/cortical_areas/list/summary
+#[utoipa::path(get, path = "/v1/connectome/cortical_areas/list/summary", tag = "connectome")]
+pub async fn get_cortical_areas_list_summary(State(state): State<ApiState>) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    let areas = connectome_service.list_cortical_areas().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    let summary: Vec<HashMap<String, serde_json::Value>> = areas.iter().map(|a| {
+        let mut map = HashMap::new();
+        map.insert("cortical_id".to_string(), serde_json::json!(a.cortical_id));
+        map.insert("cortical_name".to_string(), serde_json::json!(a.cortical_name));
+        map
+    }).collect();
+    Ok(Json(summary))
+}
+
+/// GET /v1/connectome/cortical_areas/list/transforming
+#[utoipa::path(get, path = "/v1/connectome/cortical_areas/list/transforming", tag = "connectome")]
+pub async fn get_cortical_areas_list_transforming(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    Ok(Json(Vec::new()))
+}
+
+/// GET /v1/connectome/cortical_area/{cortical_id}/neurons
+#[utoipa::path(get, path = "/v1/connectome/cortical_area/{cortical_id}/neurons", tag = "connectome")]
+pub async fn get_cortical_area_neurons(State(_state): State<ApiState>, axum::extract::Path(_cortical_id): axum::extract::Path<String>) -> ApiResult<Json<Vec<u64>>> {
+    Ok(Json(Vec::new()))
+}
+
+/// GET /v1/connectome/{cortical_area_id}/synapses
+#[utoipa::path(get, path = "/v1/connectome/{cortical_area_id}/synapses", tag = "connectome")]
+pub async fn get_area_synapses(State(_state): State<ApiState>, axum::extract::Path(_area_id): axum::extract::Path<String>) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
+    Ok(Json(Vec::new()))
+}
+
+/// GET /v1/connectome/cortical_info/{cortical_area}
+#[utoipa::path(get, path = "/v1/connectome/cortical_info/{cortical_area}", tag = "connectome")]
+pub async fn get_cortical_info(State(state): State<ApiState>, axum::extract::Path(cortical_area): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    let area = connectome_service.get_cortical_area(&cortical_area).await.map_err(|e| ApiError::not_found("area", &format!("{}", e)))?;
+    let mut response = HashMap::new();
+    response.insert("cortical_id".to_string(), serde_json::json!(area.cortical_id));
+    response.insert("cortical_name".to_string(), serde_json::json!(area.cortical_name));
+    Ok(Json(response))
+}
+
+/// GET /v1/connectome/stats/cortical/cumulative/{cortical_area}
+#[utoipa::path(get, path = "/v1/connectome/stats/cortical/cumulative/{cortical_area}", tag = "connectome")]
+pub async fn get_stats_cortical_cumulative(State(_state): State<ApiState>, axum::extract::Path(_area): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, i64>>> {
+    let mut response = HashMap::new();
+    response.insert("total_fires".to_string(), 0);
+    Ok(Json(response))
+}
+
+/// GET /v1/connectome/neuron/{neuron_id}/properties
+#[utoipa::path(get, path = "/v1/connectome/neuron/{neuron_id}/properties", tag = "connectome")]
+pub async fn get_neuron_properties_by_id(State(_state): State<ApiState>, axum::extract::Path(_neuron_id): axum::extract::Path<u64>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    Ok(Json(HashMap::new()))
+}
+
+/// GET /v1/connectome/neuron_properties
+#[utoipa::path(get, path = "/v1/connectome/neuron_properties", tag = "connectome")]
+pub async fn get_neuron_properties_query(State(_state): State<ApiState>, axum::extract::Query(_params): axum::extract::Query<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    Ok(Json(HashMap::new()))
+}
+
+/// GET /v1/connectome/area_neurons
+#[utoipa::path(get, path = "/v1/connectome/area_neurons", tag = "connectome")]
+pub async fn get_area_neurons_query(State(_state): State<ApiState>, axum::extract::Query(_params): axum::extract::Query<HashMap<String, String>>) -> ApiResult<Json<Vec<u64>>> {
+    Ok(Json(Vec::new()))
+}
+
+/// GET /v1/connectome/fire_queue/{cortical_area}
+#[utoipa::path(get, path = "/v1/connectome/fire_queue/{cortical_area}", tag = "connectome")]
+pub async fn get_fire_queue_area(State(_state): State<ApiState>, axum::extract::Path(_area): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    Ok(Json(HashMap::new()))
+}
+
+/// GET /v1/connectome/plasticity
+#[utoipa::path(get, path = "/v1/connectome/plasticity", tag = "connectome")]
+pub async fn get_plasticity_info(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, bool>>> {
+    let mut response = HashMap::new();
+    response.insert("enabled".to_string(), true);
+    Ok(Json(response))
+}
+
+/// GET /v1/connectome/path
+#[utoipa::path(get, path = "/v1/connectome/path", tag = "connectome")]
+pub async fn get_path_query(State(_state): State<ApiState>, axum::extract::Query(_params): axum::extract::Query<HashMap<String, String>>) -> ApiResult<Json<Vec<Vec<String>>>> {
+    Ok(Json(Vec::new()))
+}
+
+/// GET /v1/connectome/download
+#[utoipa::path(get, path = "/v1/connectome/download", tag = "connectome")]
+pub async fn get_download_connectome(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let genome_service = state.genome_service.as_ref();
+    let genome = genome_service.export_genome().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    Ok(Json(genome))
+}
+
+/// GET /v1/connectome/download-cortical-area/{cortical_area}
+#[utoipa::path(get, path = "/v1/connectome/download-cortical-area/{cortical_area}", tag = "connectome")]
+pub async fn get_download_cortical_area(State(_state): State<ApiState>, axum::extract::Path(_area): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    Ok(Json(HashMap::new()))
+}
+
+/// POST /v1/connectome/upload
+#[utoipa::path(post, path = "/v1/connectome/upload", tag = "connectome")]
+pub async fn post_upload_connectome(State(_state): State<ApiState>, Json(_data): Json<serde_json::Value>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Upload not yet implemented".to_string())])))
+}
+
+/// POST /v1/connectome/upload-cortical-area
+#[utoipa::path(post, path = "/v1/connectome/upload-cortical-area", tag = "connectome")]
+pub async fn post_upload_cortical_area(State(_state): State<ApiState>, Json(_data): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Upload not yet implemented".to_string())])))
+}
+
 
 

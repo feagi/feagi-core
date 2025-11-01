@@ -211,5 +211,35 @@ impl RuntimeService for RuntimeServiceImpl {
         
         Ok(())
     }
+    
+    async fn get_fcl_sampler_config(&self) -> ServiceResult<(f64, u32)> {
+        let runner = self.burst_runner.read();
+        Ok(runner.get_fcl_sampler_config())
+    }
+    
+    async fn set_fcl_sampler_config(&self, frequency: Option<f64>, consumer: Option<u32>) -> ServiceResult<()> {
+        let runner = self.burst_runner.read();
+        runner.set_fcl_sampler_config(frequency, consumer);
+        Ok(())
+    }
+    
+    async fn get_area_fcl_sample_rate(&self, area_id: u32) -> ServiceResult<f64> {
+        let runner = self.burst_runner.read();
+        Ok(runner.get_area_fcl_sample_rate(area_id))
+    }
+    
+    async fn set_area_fcl_sample_rate(&self, area_id: u32, sample_rate: f64) -> ServiceResult<()> {
+        if sample_rate <= 0.0 || sample_rate > 1000.0 {
+            return Err(ServiceError::InvalidInput(
+                "Sample rate must be between 0 and 1000 Hz".to_string()
+            ));
+        }
+        
+        let runner = self.burst_runner.read();
+        runner.set_area_fcl_sample_rate(area_id, sample_rate);
+        
+        info!(target: "feagi-services", "Set FCL sample rate for area {} to {}Hz", area_id, sample_rate);
+        Ok(())
+    }
 }
 

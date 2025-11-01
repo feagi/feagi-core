@@ -131,6 +131,39 @@ pub trait RuntimeService: Send + Sync {
     /// * `window_size` - Number of bursts to retain in history
     ///
     async fn configure_fire_ledger_window(&self, cortical_idx: u32, window_size: usize) -> ServiceResult<()>;
+    
+    /// Get FCL/FQ sampler configuration
+    ///
+    /// # Returns
+    /// * `(f64, u32)` - (frequency_hz, consumer_type) where consumer: 1=viz, 2=motor, 3=both
+    ///
+    async fn get_fcl_sampler_config(&self) -> ServiceResult<(f64, u32)>;
+    
+    /// Set FCL/FQ sampler configuration
+    ///
+    /// # Arguments
+    /// * `frequency` - Optional sampling frequency in Hz
+    /// * `consumer` - Optional consumer type (1=viz, 2=motor, 3=both)
+    ///
+    async fn set_fcl_sampler_config(&self, frequency: Option<f64>, consumer: Option<u32>) -> ServiceResult<()>;
+    
+    /// Get FCL sample rate for a specific cortical area
+    ///
+    /// # Arguments
+    /// * `area_id` - Cortical area ID (cortical_idx)
+    ///
+    /// # Returns
+    /// * `f64` - Sample rate in Hz
+    ///
+    async fn get_area_fcl_sample_rate(&self, area_id: u32) -> ServiceResult<f64>;
+    
+    /// Set FCL sample rate for a specific cortical area
+    ///
+    /// # Arguments
+    /// * `area_id` - Cortical area ID (cortical_idx)
+    /// * `sample_rate` - Sample rate in Hz
+    ///
+    async fn set_area_fcl_sample_rate(&self, area_id: u32, sample_rate: f64) -> ServiceResult<()>;
 }
 
 

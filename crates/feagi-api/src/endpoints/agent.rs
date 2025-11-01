@@ -297,3 +297,226 @@ pub async fn manual_stimulation(
     }
 }
 
+/// GET /v1/agent/fq_sampler_status
+///
+/// Get comprehensive FQ sampler coordination status
+#[utoipa::path(
+    get,
+    path = "/v1/agent/fq_sampler_status",
+    responses(
+        (status = 200, description = "FQ sampler status", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Failed to get FQ sampler status")
+    ),
+    tag = "agent"
+)]
+pub async fn get_fq_sampler_status(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let agent_service = state
+        .agent_service
+        .as_ref()
+        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+    
+    let runtime_service = state.runtime_service.as_ref();
+    
+    // Get all agents
+    let agent_ids = agent_service.list_agents().await
+        .map_err(|e| ApiError::internal(format!("Failed to list agents: {}", e)))?;
+    
+    // Get FCL sampler config from RuntimeService
+    let (fcl_frequency, fcl_consumer) = runtime_service.get_fcl_sampler_config().await
+        .map_err(|e| ApiError::internal(format!("Failed to get sampler config: {}", e)))?;
+    
+    // Build response matching Python structure
+    let mut visualization_agents = Vec::new();
+    let mut motor_agents = Vec::new();
+    
+    for agent_id in &agent_ids {
+        if let Ok(props) = agent_service.get_agent_properties(agent_id).await {
+            if props.capabilities.contains_key("visualization") {
+                visualization_agents.push(agent_id.clone());
+            }
+            if props.capabilities.contains_key("motor") {
+                motor_agents.push(agent_id.clone());
+            }
+        }
+    }
+    
+    let mut fq_coordination = HashMap::new();
+    
+    let mut viz_sampler = HashMap::new();
+    viz_sampler.insert("enabled".to_string(), serde_json::json!(!visualization_agents.is_empty()));
+    viz_sampler.insert("reason".to_string(), serde_json::json!(
+        if visualization_agents.is_empty() {
+            "No visualization agents connected"
+        } else {
+            format!("{} visualization agent(s) connected", visualization_agents.len())
+        }
+    ));
+    viz_sampler.insert("agents_requiring".to_string(), serde_json::json!(visualization_agents));
+    viz_sampler.insert("frequency_hz".to_string(), serde_json::json!(fcl_frequency));
+    fq_coordination.insert("visualization_fq_sampler".to_string(), serde_json::json!(viz_sampler));
+    
+    let mut motor_sampler = HashMap::new();
+    motor_sampler.insert("enabled".to_string(), serde_json::json!(!motor_agents.is_empty()));
+    motor_sampler.insert("reason".to_string(), serde_json::json!(
+        if motor_agents.is_empty() {
+            "No motor agents connected"
+        } else {
+            format!("{} motor agent(s) connected", motor_agents.len())
+        }
+    ));
+    motor_sampler.insert("agents_requiring".to_string(), serde_json::json!(motor_agents));
+    motor_sampler.insert("frequency_hz".to_string(), serde_json::json!(100.0));
+    fq_coordination.insert("motor_fq_sampler".to_string(), serde_json::json!(motor_sampler));
+    
+    let mut response = HashMap::new();
+    response.insert("fq_sampler_coordination".to_string(), serde_json::json!(fq_coordination));
+    response.insert("agent_registry".to_string(), serde_json::json!({
+        "total_agents": agent_ids.len(),
+        "agent_ids": agent_ids
+    }));
+    response.insert("system_status".to_string(), serde_json::json!("coordinated_via_registration_manager"));
+    response.insert("fcl_sampler_consumer".to_string(), serde_json::json!(fcl_consumer));
+    
+    Ok(Json(response))
+}
+
+/// GET /v1/agent/capabilities
+///
+/// List all supported agent capabilities
+#[utoipa::path(
+    get,
+    path = "/v1/agent/capabilities",
+    responses(
+        (status = 200, description = "List of capabilities", body = HashMap<String, Vec<String>>),
+        (status = 500, description = "Failed to get capabilities")
+    ),
+    tag = "agent"
+)]
+pub async fn get_capabilities(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+    let mut response = HashMap::new();
+    response.insert("agent_types".to_string(), vec![
+        "sensory".to_string(),
+        "motor".to_string(),
+        "both".to_string(),
+        "visualization".to_string(),
+        "infrastructure".to_string(),
+    ]);
+    response.insert("capability_types".to_string(), vec![
+        "vision".to_string(),
+        "motor".to_string(),
+        "visualization".to_string(),
+        "sensory".to_string(),
+    ]);
+    
+    Ok(Json(response))
+}
+
+/// GET /v1/agent/info/{agent_id}
+///
+/// Get detailed agent information
+#[utoipa::path(
+    get,
+    path = "/v1/agent/info/{agent_id}",
+    params(
+        ("agent_id" = String, Path, description = "Agent ID")
+    ),
+    responses(
+        (status = 200, description = "Agent detailed info", body = HashMap<String, serde_json::Value>),
+        (status = 404, description = "Agent not found"),
+        (status = 500, description = "Failed to get agent info")
+    ),
+    tag = "agent"
+)]
+pub async fn get_agent_info(
+    State(state): State<ApiState>,
+    axum::extract::Path(agent_id): axum::extract::Path<String>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let agent_service = state
+        .agent_service
+        .as_ref()
+        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+    
+    let properties = agent_service.get_agent_properties(&agent_id).await
+        .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
+    
+    let mut response = HashMap::new();
+    response.insert("agent_id".to_string(), serde_json::json!(agent_id));
+    response.insert("agent_type".to_string(), serde_json::json!(properties.agent_type));
+    response.insert("agent_ip".to_string(), serde_json::json!(properties.agent_ip));
+    response.insert("agent_data_port".to_string(), serde_json::json!(properties.agent_data_port));
+    response.insert("capabilities".to_string(), serde_json::json!(properties.capabilities));
+    response.insert("agent_version".to_string(), serde_json::json!(properties.agent_version));
+    response.insert("controller_version".to_string(), serde_json::json!(properties.controller_version));
+    response.insert("status".to_string(), serde_json::json!("active"));
+    
+    Ok(Json(response))
+}
+
+/// GET /v1/agent/properties/{agent_id}
+///
+/// Get agent properties (path parameter version)
+#[utoipa::path(
+    get,
+    path = "/v1/agent/properties/{agent_id}",
+    params(
+        ("agent_id" = String, Path, description = "Agent ID")
+    ),
+    responses(
+        (status = 200, description = "Agent properties", body = AgentPropertiesResponse),
+        (status = 404, description = "Agent not found"),
+        (status = 500, description = "Failed to get agent properties")
+    ),
+    tag = "agent"
+)]
+pub async fn get_agent_properties_path(
+    State(state): State<ApiState>,
+    axum::extract::Path(agent_id): axum::extract::Path<String>,
+) -> ApiResult<Json<AgentPropertiesResponse>> {
+    let agent_service = state
+        .agent_service
+        .as_ref()
+        .ok_or_else(|| ApiError::internal("Agent service not available"))?;
+
+    match agent_service.get_agent_properties(&agent_id).await {
+        Ok(properties) => Ok(Json(AgentPropertiesResponse {
+            agent_type: properties.agent_type,
+            agent_ip: properties.agent_ip,
+            agent_data_port: properties.agent_data_port,
+            agent_router_address: properties.agent_router_address,
+            agent_version: properties.agent_version,
+            controller_version: properties.controller_version,
+            capabilities: properties.capabilities,
+        })),
+        Err(e) => Err(ApiError::not_found("agent", &format!("{}", e))),
+    }
+}
+
+/// POST /v1/agent/configure
+///
+/// Configure agent parameters
+#[utoipa::path(
+    post,
+    path = "/v1/agent/configure",
+    responses(
+        (status = 200, description = "Agent configured", body = HashMap<String, String>),
+        (status = 400, description = "Invalid input"),
+        (status = 500, description = "Failed to configure agent")
+    ),
+    tag = "agent"
+)]
+pub async fn post_configure(
+    State(_state): State<ApiState>,
+    Json(config): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    tracing::info!(target: "feagi-api", "Agent configuration requested: {} params", config.len());
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Agent configuration updated".to_string()),
+        ("status".to_string(), "not_yet_implemented".to_string())
+    ])))
+}
+

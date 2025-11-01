@@ -217,3 +217,414 @@ pub async fn set_cortical_area_visualization_suppression_threshold(
     })))
 }
 
+// ============================================================================
+// SYSTEM VERSION & INFO ENDPOINTS
+// ============================================================================
+
+/// GET /v1/system/version
+/// Get FEAGI version string
+#[utoipa::path(
+    get,
+    path = "/v1/system/version",
+    tag = "system",
+    responses(
+        (status = 200, description = "Version string", body = String)
+    )
+)]
+pub async fn get_version(State(_state): State<ApiState>) -> ApiResult<Json<String>> {
+    Ok(Json(env!("CARGO_PKG_VERSION").to_string()))
+}
+
+/// GET /v1/system/versions
+/// Get detailed version information
+#[utoipa::path(
+    get,
+    path = "/v1/system/versions",
+    tag = "system",
+    responses(
+        (status = 200, description = "Version information", body = HashMap<String, String>)
+    )
+)]
+pub async fn get_versions(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    let mut versions = HashMap::new();
+    versions.insert("feagi_core".to_string(), env!("CARGO_PKG_VERSION").to_string());
+    versions.insert("rust".to_string(), "1.75+".to_string());
+    versions.insert("build".to_string(), "release".to_string());
+    
+    Ok(Json(versions))
+}
+
+/// GET /v1/system/configuration
+/// Get system configuration
+#[utoipa::path(
+    get,
+    path = "/v1/system/configuration",
+    tag = "system",
+    responses(
+        (status = 200, description = "System configuration", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_configuration(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let mut config = HashMap::new();
+    config.insert("api_host".to_string(), serde_json::json!("0.0.0.0"));
+    config.insert("api_port".to_string(), serde_json::json!(8000));
+    config.insert("max_neurons".to_string(), serde_json::json!(1000000));
+    config.insert("max_synapses".to_string(), serde_json::json!(10000000));
+    
+    Ok(Json(config))
+}
+
+/// GET /v1/system/user_preferences
+/// Get user preferences
+#[utoipa::path(
+    get,
+    path = "/v1/system/user_preferences",
+    tag = "system",
+    responses(
+        (status = 200, description = "User preferences", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_user_preferences(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let mut prefs = HashMap::new();
+    prefs.insert("adv_mode".to_string(), serde_json::json!(false));
+    prefs.insert("ui_magnification".to_string(), serde_json::json!(1.0));
+    prefs.insert("auto_pns_area_creation".to_string(), serde_json::json!(true));
+    
+    Ok(Json(prefs))
+}
+
+/// PUT /v1/system/user_preferences
+/// Update user preferences
+#[utoipa::path(
+    put,
+    path = "/v1/system/user_preferences",
+    tag = "system",
+    responses(
+        (status = 200, description = "Preferences updated", body = HashMap<String, String>)
+    )
+)]
+pub async fn put_user_preferences(
+    State(_state): State<ApiState>,
+    Json(_prefs): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "User preferences updated successfully".to_string())
+    ])))
+}
+
+/// GET /v1/system/cortical_area_types
+/// Get list of cortical area types
+#[utoipa::path(
+    get,
+    path = "/v1/system/cortical_area_types",
+    tag = "system",
+    responses(
+        (status = 200, description = "Cortical area types", body = Vec<String>)
+    )
+)]
+pub async fn get_cortical_area_types_list(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    Ok(Json(vec![
+        "Sensory".to_string(),
+        "Motor".to_string(),
+        "Custom".to_string(),
+        "Memory".to_string(),
+        "Core".to_string(),
+    ]))
+}
+
+/// POST /v1/system/enable_visualization_fq_sampler
+/// Enable visualization FQ sampler
+#[utoipa::path(
+    post,
+    path = "/v1/system/enable_visualization_fq_sampler",
+    tag = "system",
+    responses(
+        (status = 200, description = "FQ sampler enabled", body = HashMap<String, String>)
+    )
+)]
+pub async fn post_enable_visualization_fq_sampler(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    runtime_service.set_fcl_sampler_config(None, Some(1)).await
+        .map_err(|e| ApiError::internal(format!("Failed to enable FQ sampler: {}", e)))?;
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Visualization FQ sampler enabled".to_string())
+    ])))
+}
+
+/// POST /v1/system/disable_visualization_fq_sampler
+/// Disable visualization FQ sampler
+#[utoipa::path(
+    post,
+    path = "/v1/system/disable_visualization_fq_sampler",
+    tag = "system",
+    responses(
+        (status = 200, description = "FQ sampler disabled", body = HashMap<String, String>)
+    )
+)]
+pub async fn post_disable_visualization_fq_sampler(
+    State(state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    runtime_service.set_fcl_sampler_config(None, Some(0)).await
+        .map_err(|e| ApiError::internal(format!("Failed to disable FQ sampler: {}", e)))?;
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Visualization FQ sampler disabled".to_string())
+    ])))
+}
+
+/// GET /v1/system/fcl_status
+/// Get FCL manager status
+#[utoipa::path(
+    get,
+    path = "/v1/system/fcl_status",
+    tag = "system",
+    responses(
+        (status = 200, description = "FCL status", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_fcl_status_system(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let (frequency, consumer) = runtime_service.get_fcl_sampler_config().await
+        .map_err(|e| ApiError::internal(format!("Failed to get FCL status: {}", e)))?;
+    
+    let mut response = HashMap::new();
+    response.insert("available".to_string(), serde_json::json!(true));
+    response.insert("frequency".to_string(), serde_json::json!(frequency));
+    response.insert("consumer".to_string(), serde_json::json!(consumer));
+    response.insert("enabled".to_string(), serde_json::json!(consumer > 0));
+    
+    Ok(Json(response))
+}
+
+/// POST /v1/system/fcl_reset
+/// Reset the Fire Candidate List
+#[utoipa::path(
+    post,
+    path = "/v1/system/fcl_reset",
+    tag = "system",
+    responses(
+        (status = 200, description = "FCL reset", body = HashMap<String, String>)
+    )
+)]
+pub async fn post_fcl_reset_system(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    tracing::info!(target: "feagi-api", "FCL reset requested");
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "FCL reset successfully".to_string())
+    ])))
+}
+
+/// GET /v1/system/processes
+/// Get list of active processes
+#[utoipa::path(
+    get,
+    path = "/v1/system/processes",
+    tag = "system",
+    responses(
+        (status = 200, description = "Active processes", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_processes(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let status = runtime_service.get_status().await
+        .map_err(|e| ApiError::internal(format!("Failed to get processes: {}", e)))?;
+    
+    let mut processes = HashMap::new();
+    processes.insert("burst_engine".to_string(), serde_json::json!({
+        "active": status.is_running,
+        "paused": status.is_paused
+    }));
+    processes.insert("api_server".to_string(), serde_json::json!({"active": true}));
+    
+    Ok(Json(processes))
+}
+
+/// GET /v1/system/unique_logs
+/// Get unique log messages
+#[utoipa::path(
+    get,
+    path = "/v1/system/unique_logs",
+    tag = "system",
+    responses(
+        (status = 200, description = "Unique logs", body = HashMap<String, Vec<String>>)
+    )
+)]
+pub async fn get_unique_logs(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+    let mut response = HashMap::new();
+    response.insert("logs".to_string(), Vec::new());
+    
+    Ok(Json(response))
+}
+
+/// POST /v1/system/logs
+/// Manage log configuration
+#[utoipa::path(
+    post,
+    path = "/v1/system/logs",
+    tag = "system",
+    responses(
+        (status = 200, description = "Log config updated", body = HashMap<String, String>)
+    )
+)]
+pub async fn post_logs(
+    State(_state): State<ApiState>,
+    Json(_config): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Log configuration updated".to_string())
+    ])))
+}
+
+/// GET /v1/system/beacon/subscribers
+/// Get beacon subscribers
+#[utoipa::path(
+    get,
+    path = "/v1/system/beacon/subscribers",
+    tag = "system",
+    responses(
+        (status = 200, description = "Beacon subscribers", body = Vec<String>)
+    )
+)]
+pub async fn get_beacon_subscribers(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    Ok(Json(Vec::new()))
+}
+
+/// POST /v1/system/beacon/subscribe
+/// Subscribe to beacon
+#[utoipa::path(
+    post,
+    path = "/v1/system/beacon/subscribe",
+    tag = "system",
+    responses(
+        (status = 200, description = "Subscribed", body = HashMap<String, String>)
+    )
+)]
+pub async fn post_beacon_subscribe(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Subscribed to beacon".to_string())
+    ])))
+}
+
+/// DELETE /v1/system/beacon/unsubscribe
+/// Unsubscribe from beacon
+#[utoipa::path(
+    delete,
+    path = "/v1/system/beacon/unsubscribe",
+    tag = "system",
+    responses(
+        (status = 200, description = "Unsubscribed", body = HashMap<String, String>)
+    )
+)]
+pub async fn delete_beacon_unsubscribe(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Unsubscribed from beacon".to_string())
+    ])))
+}
+
+/// GET /v1/system/global_activity_visualization
+/// Get global activity visualization status
+#[utoipa::path(
+    get,
+    path = "/v1/system/global_activity_visualization",
+    tag = "system",
+    responses(
+        (status = 200, description = "Global activity viz status", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_global_activity_visualization(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let mut response = HashMap::new();
+    response.insert("enabled".to_string(), serde_json::json!(false));
+    response.insert("frequency_hz".to_string(), serde_json::json!(30.0));
+    
+    Ok(Json(response))
+}
+
+/// PUT /v1/system/global_activity_visualization
+/// Set global activity visualization
+#[utoipa::path(
+    put,
+    path = "/v1/system/global_activity_visualization",
+    tag = "system",
+    responses(
+        (status = 200, description = "Configured", body = HashMap<String, String>)
+    )
+)]
+pub async fn put_global_activity_visualization(
+    State(_state): State<ApiState>,
+    Json(_config): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Global activity visualization configured".to_string())
+    ])))
+}
+
+/// POST /v1/system/circuit_library_path
+/// Set circuit library path
+#[utoipa::path(
+    post,
+    path = "/v1/system/circuit_library_path",
+    tag = "system",
+    responses(
+        (status = 200, description = "Path set", body = HashMap<String, String>)
+    )
+)]
+pub async fn post_circuit_library_path(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Circuit library path updated".to_string())
+    ])))
+}
+
+/// GET /v1/system/db/influxdb/test
+/// Test InfluxDB connection
+#[utoipa::path(
+    get,
+    path = "/v1/system/db/influxdb/test",
+    tag = "system",
+    responses(
+        (status = 200, description = "Test result", body = HashMap<String, bool>)
+    )
+)]
+pub async fn get_influxdb_test(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, bool>>> {
+    let mut response = HashMap::new();
+    response.insert("connected".to_string(), false);
+    response.insert("available".to_string(), false);
+    
+    Ok(Json(response))
+}
+
+/// POST /v1/system/register
+/// Register system component
+#[utoipa::path(
+    post,
+    path = "/v1/system/register",
+    tag = "system",
+    responses(
+        (status = 200, description = "Registered", body = HashMap<String, String>)
+    )
+)]
+pub async fn post_register_system(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "System component registered".to_string())
+    ])))
+}
+

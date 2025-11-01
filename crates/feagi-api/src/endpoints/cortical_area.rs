@@ -417,3 +417,134 @@ pub async fn put_reset(
     Err(ApiError::internal("Not yet implemented"))
 }
 
+/// GET /v1/cortical_area/visualization
+#[utoipa::path(get, path = "/v1/cortical_area/visualization", tag = "cortical_area")]
+pub async fn get_visualization(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, bool>>> {
+    let mut response = HashMap::new();
+    response.insert("enabled".to_string(), true);
+    Ok(Json(response))
+}
+
+/// POST /v1/cortical_area/batch_operations
+#[utoipa::path(post, path = "/v1/cortical_area/batch_operations", tag = "cortical_area")]
+pub async fn post_batch_operations(State(_state): State<ApiState>, Json(_ops): Json<Vec<HashMap<String, serde_json::Value>>>) -> ApiResult<Json<HashMap<String, i32>>> {
+    let mut response = HashMap::new();
+    response.insert("processed".to_string(), 0);
+    Ok(Json(response))
+}
+
+/// GET /v1/cortical_area/ipu/list
+#[utoipa::path(get, path = "/v1/cortical_area/ipu/list", tag = "cortical_area")]
+pub async fn get_ipu_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    get_ipu(State(state)).await
+}
+
+/// GET /v1/cortical_area/opu/list
+#[utoipa::path(get, path = "/v1/cortical_area/opu/list", tag = "cortical_area")]
+pub async fn get_opu_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    get_opu(State(state)).await
+}
+
+/// PUT /v1/cortical_area/coordinates_3d
+#[utoipa::path(put, path = "/v1/cortical_area/coordinates_3d", tag = "cortical_area")]
+pub async fn put_coordinates_3d(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// DELETE /v1/cortical_area/bulk_delete
+#[utoipa::path(delete, path = "/v1/cortical_area/bulk_delete", tag = "cortical_area")]
+pub async fn delete_bulk(State(_state): State<ApiState>, Json(_ids): Json<Vec<String>>) -> ApiResult<Json<HashMap<String, i32>>> {
+    let mut response = HashMap::new();
+    response.insert("deleted_count".to_string(), 0);
+    Ok(Json(response))
+}
+
+/// POST /v1/cortical_area/clone
+#[utoipa::path(post, path = "/v1/cortical_area/clone", tag = "cortical_area")]
+pub async fn post_clone_area(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// POST /v1/cortical_area/resize
+#[utoipa::path(post, path = "/v1/cortical_area/resize", tag = "cortical_area")]
+pub async fn post_resize(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// POST /v1/cortical_area/reposition
+#[utoipa::path(post, path = "/v1/cortical_area/reposition", tag = "cortical_area")]
+pub async fn post_reposition(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+
+/// POST /v1/cortical_area/voxel_neurons
+#[utoipa::path(post, path = "/v1/cortical_area/voxel_neurons", tag = "cortical_area")]
+pub async fn post_voxel_neurons(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let mut response = HashMap::new();
+    response.insert("neurons".to_string(), serde_json::json!([]));
+    Ok(Json(response))
+}
+
+// EXACT Python paths:
+/// GET /v1/cortical_area/cortical_area_index_list
+#[utoipa::path(get, path = "/v1/cortical_area/cortical_area_index_list", tag = "cortical_area")]
+pub async fn get_cortical_area_index_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<u32>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    let areas = connectome_service.list_cortical_areas().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    let indices: Vec<u32> = (0..areas.len() as u32).collect();
+    Ok(Json(indices))
+}
+
+/// GET /v1/cortical_area/cortical_idx_mapping
+#[utoipa::path(get, path = "/v1/cortical_area/cortical_idx_mapping", tag = "cortical_area")]
+pub async fn get_cortical_idx_mapping(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, u32>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    let areas = connectome_service.list_cortical_areas().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
+    let mapping: HashMap<String, u32> = areas.iter().enumerate().map(|(idx, a)| (a.cortical_id.clone(), idx as u32)).collect();
+    Ok(Json(mapping))
+}
+
+/// GET /v1/cortical_area/mapping_restrictions
+#[utoipa::path(get, path = "/v1/cortical_area/mapping_restrictions", tag = "cortical_area")]
+pub async fn get_mapping_restrictions_query(State(_state): State<ApiState>, axum::extract::Query(_params): axum::extract::Query<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+    Ok(Json(HashMap::new()))
+}
+
+/// GET /v1/cortical_area/{cortical_id}/memory_usage
+#[utoipa::path(get, path = "/v1/cortical_area/{cortical_id}/memory_usage", tag = "cortical_area")]
+pub async fn get_memory_usage(State(_state): State<ApiState>, axum::extract::Path(_id): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, i64>>> {
+    let mut response = HashMap::new();
+    response.insert("memory_bytes".to_string(), 0);
+    Ok(Json(response))
+}
+
+/// GET /v1/cortical_area/{cortical_id}/neuron_count
+#[utoipa::path(get, path = "/v1/cortical_area/{cortical_id}/neuron_count", tag = "cortical_area")]
+pub async fn get_area_neuron_count(State(_state): State<ApiState>, axum::extract::Path(_id): axum::extract::Path<String>) -> ApiResult<Json<i64>> {
+    Ok(Json(0))
+}
+
+/// POST /v1/cortical_area/cortical_type_options
+#[utoipa::path(post, path = "/v1/cortical_area/cortical_type_options", tag = "cortical_area")]
+pub async fn post_cortical_type_options(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    Ok(Json(vec!["Sensory".to_string(), "Motor".to_string(), "Custom".to_string(), "Memory".to_string()]))
+}
+
+/// POST /v1/cortical_area/mapping_restrictions
+#[utoipa::path(post, path = "/v1/cortical_area/mapping_restrictions", tag = "cortical_area")]
+pub async fn post_mapping_restrictions(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+    Ok(Json(HashMap::new()))
+}
+
+/// POST /v1/cortical_area/mapping_restrictions_between_areas
+#[utoipa::path(post, path = "/v1/cortical_area/mapping_restrictions_between_areas", tag = "cortical_area")]
+pub async fn post_mapping_restrictions_between_areas(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+    Ok(Json(HashMap::new()))
+}
+
+/// PUT /v1/cortical_area/coord_3d
+#[utoipa::path(put, path = "/v1/cortical_area/coord_3d", tag = "cortical_area")]
+pub async fn put_coord_3d(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
+}
+

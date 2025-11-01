@@ -118,3 +118,121 @@ pub async fn delete_region_and_members(State(_state): State<ApiState>, Json(_req
     Err(ApiError::internal("Not yet implemented"))
 }
 
+/// GET /v1/region/regions
+/// Get list of all brain region IDs
+#[utoipa::path(
+    get,
+    path = "/v1/region/regions",
+    tag = "region",
+    responses(
+        (status = 200, description = "List of region IDs", body = Vec<String>)
+    )
+)]
+pub async fn get_regions(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    let regions = connectome_service.list_brain_regions().await
+        .map_err(|e| ApiError::internal(format!("Failed to list regions: {}", e)))?;
+    
+    let region_ids: Vec<String> = regions.iter().map(|r| r.region_id.clone()).collect();
+    Ok(Json(region_ids))
+}
+
+/// GET /v1/region/region_titles
+/// Get mapping of region IDs to titles
+#[utoipa::path(
+    get,
+    path = "/v1/region/region_titles",
+    tag = "region",
+    responses(
+        (status = 200, description = "Region ID to title mapping", body = HashMap<String, String>)
+    )
+)]
+pub async fn get_region_titles(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    let regions = connectome_service.list_brain_regions().await
+        .map_err(|e| ApiError::internal(format!("Failed to list regions: {}", e)))?;
+    
+    let mut titles = HashMap::new();
+    for region in regions {
+        titles.insert(region.region_id.clone(), region.title.clone());
+    }
+    
+    Ok(Json(titles))
+}
+
+/// GET /v1/region/region/{region_id}
+/// Get detailed properties for a specific brain region
+#[utoipa::path(
+    get,
+    path = "/v1/region/region/{region_id}",
+    tag = "region",
+    params(
+        ("region_id" = String, Path, description = "Brain region ID")
+    ),
+    responses(
+        (status = 200, description = "Region properties", body = HashMap<String, serde_json::Value>),
+        (status = 404, description = "Region not found")
+    )
+)]
+pub async fn get_region_detail(
+    State(state): State<ApiState>,
+    axum::extract::Path(region_id): axum::extract::Path<String>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    let region = connectome_service.get_brain_region(&region_id).await
+        .map_err(|e| ApiError::not_found("region", &e.to_string()))?;
+    
+    let mut response = HashMap::new();
+    response.insert("region_id".to_string(), serde_json::json!(region.region_id));
+    response.insert("title".to_string(), serde_json::json!(region.title));
+    response.insert("description".to_string(), serde_json::json!(region.description));
+    response.insert("coordinate_2d".to_string(), serde_json::json!(region.coordinate_2d));
+    response.insert("coordinate_3d".to_string(), serde_json::json!(region.coordinate_3d));
+    response.insert("areas".to_string(), serde_json::json!(region.cortical_area_ids));
+    response.insert("regions".to_string(), serde_json::json!(region.sub_region_ids));
+    response.insert("parent_region_id".to_string(), serde_json::json!(region.parent_region_id));
+    
+    Ok(Json(response))
+}
+
+/// PUT /v1/region/change_region_parent
+/// Change the parent of a brain region
+#[utoipa::path(
+    put,
+    path = "/v1/region/change_region_parent",
+    tag = "region",
+    responses(
+        (status = 200, description = "Parent changed", body = HashMap<String, String>)
+    )
+)]
+pub async fn put_change_region_parent(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Region parent change not yet implemented".to_string())
+    ])))
+}
+
+/// PUT /v1/region/change_cortical_area_region
+/// Change the region association of a cortical area
+#[utoipa::path(
+    put,
+    path = "/v1/region/change_cortical_area_region",
+    tag = "region",
+    responses(
+        (status = 200, description = "Association changed", body = HashMap<String, String>)
+    )
+)]
+pub async fn put_change_cortical_area_region(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Cortical area region association change not yet implemented".to_string())
+    ])))
+}
+

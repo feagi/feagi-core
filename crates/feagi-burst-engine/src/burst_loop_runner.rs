@@ -55,6 +55,9 @@ pub struct BurstLoopRunner {
     /// Visualization publisher for direct Rust-to-Rust publishing (NO PYTHON IN HOT PATH)
     /// Uses trait abstraction to avoid circular dependency with feagi-pns
     pub viz_publisher: Option<Arc<dyn VisualizationPublisher>>,
+    /// FCL/FQ sampler configuration
+    fcl_sampler_frequency: Arc<Mutex<f64>>,  // Sampling frequency in Hz
+    fcl_sampler_consumer: Arc<Mutex<u32>>,   // Consumer type: 1=visualization, 2=motor, 3=both
 }
 
 impl BurstLoopRunner {
@@ -190,6 +193,8 @@ impl BurstLoopRunner {
             viz_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_viz_shm_writer
             motor_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_motor_shm_writer
             viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
+            fcl_sampler_frequency: Arc::new(Mutex::new(30.0)), // Default 30Hz for visualization
+            fcl_sampler_consumer: Arc::new(Mutex::new(1)), // Default: 1 = visualization only
         }
     }
 
@@ -342,6 +347,38 @@ impl BurstLoopRunner {
     /// Configure Fire Ledger window size for a specific cortical area
     pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
         self.npu.lock().unwrap().configure_fire_ledger_window(cortical_idx, window_size);
+    }
+    
+    /// Get FCL/FQ sampler configuration
+    pub fn get_fcl_sampler_config(&self) -> (f64, u32) {
+        let frequency = *self.fcl_sampler_frequency.lock().unwrap();
+        let consumer = *self.fcl_sampler_consumer.lock().unwrap();
+        (frequency, consumer)
+    }
+    
+    /// Update FCL/FQ sampler configuration
+    pub fn set_fcl_sampler_config(&self, frequency: Option<f64>, consumer: Option<u32>) {
+        if let Some(freq) = frequency {
+            *self.fcl_sampler_frequency.lock().unwrap() = freq;
+            tracing::info!(target: "feagi-burst-engine", "FCL sampler frequency updated to {}Hz", freq);
+        }
+        if let Some(cons) = consumer {
+            *self.fcl_sampler_consumer.lock().unwrap() = cons;
+            tracing::info!(target: "feagi-burst-engine", "FCL sampler consumer updated to {}", cons);
+        }
+    }
+    
+    /// Get FCL sample rate for a specific cortical area
+    /// Note: Currently returns global rate as per-area rates not yet implemented
+    pub fn get_area_fcl_sample_rate(&self, _area_id: u32) -> f64 {
+        *self.fcl_sampler_frequency.lock().unwrap()
+    }
+    
+    /// Set FCL sample rate for a specific cortical area
+    /// Note: Currently sets global rate as per-area rates not yet implemented
+    pub fn set_area_fcl_sample_rate(&self, _area_id: u32, sample_rate: f64) {
+        *self.fcl_sampler_frequency.lock().unwrap() = sample_rate;
+        tracing::info!(target: "feagi-burst-engine", "FCL sampler frequency updated to {}Hz (global)", sample_rate);
     }
     
     /// Get reference to NPU for direct access (use sparingly)

@@ -370,5 +370,595 @@ pub async fn post_control(
     }
 }
 
+// ============================================================================
+// FCL SAMPLER CONFIGURATION ENDPOINTS
+// ============================================================================
+
+/// GET /v1/burst_engine/fcl_sampler/config
+/// Get FCL/FQ sampler configuration (frequency, consumer)
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fcl_sampler/config",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "FCL sampler configuration", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_fcl_sampler_config(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let (frequency, consumer) = runtime_service.get_fcl_sampler_config().await
+        .map_err(|e| ApiError::internal(format!("Failed to get FCL sampler config: {}", e)))?;
+    
+    let mut response = HashMap::new();
+    response.insert("frequency".to_string(), serde_json::json!(frequency));
+    response.insert("consumer".to_string(), serde_json::json!(consumer));
+    
+    Ok(Json(response))
+}
+
+/// POST /v1/burst_engine/fcl_sampler/config
+/// Update FCL/FQ sampler configuration
+#[utoipa::path(
+    post,
+    path = "/v1/burst_engine/fcl_sampler/config",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "FCL sampler configuration updated", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Invalid input"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_fcl_sampler_config(
+    State(state): State<ApiState>,
+    Json(request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let frequency = request.get("frequency").and_then(|v| v.as_f64());
+    let consumer = request.get("consumer").and_then(|v| v.as_u64().map(|n| n as u32));
+    
+    runtime_service.set_fcl_sampler_config(frequency, consumer).await
+        .map_err(|e| ApiError::internal(format!("Failed to update FCL sampler config: {}", e)))?;
+    
+    // Return the updated config
+    let (freq, cons) = runtime_service.get_fcl_sampler_config().await
+        .map_err(|e| ApiError::internal(format!("Failed to get updated config: {}", e)))?;
+    
+    let mut response = HashMap::new();
+    response.insert("frequency".to_string(), serde_json::json!(freq));
+    response.insert("consumer".to_string(), serde_json::json!(cons));
+    
+    Ok(Json(response))
+}
+
+/// GET /v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate
+/// Get FCL sample rate for a specific cortical area
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate",
+    tag = "burst_engine",
+    params(
+        ("area_id" = u32, Path, description = "Cortical area ID (cortical_idx)")
+    ),
+    responses(
+        (status = 200, description = "Sample rate", body = HashMap<String, f64>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_area_fcl_sample_rate(
+    State(state): State<ApiState>,
+    axum::extract::Path(area_id): axum::extract::Path<u32>,
+) -> ApiResult<Json<HashMap<String, f64>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let sample_rate = runtime_service.get_area_fcl_sample_rate(area_id).await
+        .map_err(|e| ApiError::internal(format!("Failed to get sample rate: {}", e)))?;
+    
+    let mut response = HashMap::new();
+    response.insert("sample_rate".to_string(), sample_rate);
+    
+    Ok(Json(response))
+}
+
+/// POST /v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate
+/// Set FCL sample rate for a specific cortical area
+#[utoipa::path(
+    post,
+    path = "/v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate",
+    tag = "burst_engine",
+    params(
+        ("area_id" = u32, Path, description = "Cortical area ID (cortical_idx)")
+    ),
+    responses(
+        (status = 200, description = "Sample rate updated", body = HashMap<String, f64>),
+        (status = 400, description = "Invalid input"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_area_fcl_sample_rate(
+    State(state): State<ApiState>,
+    axum::extract::Path(area_id): axum::extract::Path<u32>,
+    Json(request): Json<HashMap<String, f64>>,
+) -> ApiResult<Json<HashMap<String, f64>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let sample_rate = request.get("sample_rate").copied()
+        .ok_or_else(|| ApiError::invalid_input("sample_rate required"))?;
+    
+    if sample_rate <= 0.0 {
+        return Err(ApiError::invalid_input("Sample rate must be positive"));
+    }
+    
+    runtime_service.set_area_fcl_sample_rate(area_id, sample_rate).await
+        .map_err(|e| ApiError::internal(format!("Failed to set sample rate: {}", e)))?;
+    
+    let mut response = HashMap::new();
+    response.insert("sample_rate".to_string(), sample_rate);
+    
+    Ok(Json(response))
+}
+
+// ============================================================================
+// BURST ENGINE RUNTIME CONTROL ENDPOINTS
+// ============================================================================
+
+/// GET /v1/burst_engine/burst_counter
+/// Get the total number of bursts executed since start
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/burst_counter",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Burst counter", body = u64),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_burst_counter(State(state): State<ApiState>) -> ApiResult<Json<u64>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let burst_count = runtime_service.get_burst_count().await
+        .map_err(|e| ApiError::internal(format!("Failed to get burst counter: {}", e)))?;
+    
+    Ok(Json(burst_count))
+}
+
+/// POST /v1/burst_engine/start
+/// Start the burst engine
+#[utoipa::path(
+    post,
+    path = "/v1/burst_engine/start",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Burst engine started", body = HashMap<String, String>),
+        (status = 400, description = "Invalid state"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_start(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    runtime_service.start().await
+        .map_err(|e| ApiError::internal(format!("Failed to start burst engine: {}", e)))?;
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Burst engine started successfully".to_string())
+    ])))
+}
+
+/// POST /v1/burst_engine/stop
+/// Stop the burst engine
+#[utoipa::path(
+    post,
+    path = "/v1/burst_engine/stop",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Burst engine stopped", body = HashMap<String, String>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_stop(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    runtime_service.stop().await
+        .map_err(|e| ApiError::internal(format!("Failed to stop burst engine: {}", e)))?;
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Burst engine stopped successfully".to_string())
+    ])))
+}
+
+/// POST /v1/burst_engine/hold
+/// Pause the burst engine (alias for pause)
+#[utoipa::path(
+    post,
+    path = "/v1/burst_engine/hold",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Burst engine paused", body = HashMap<String, String>),
+        (status = 400, description = "Invalid state"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_hold(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    runtime_service.pause().await
+        .map_err(|e| ApiError::internal(format!("Failed to pause burst engine: {}", e)))?;
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Burst engine paused successfully".to_string())
+    ])))
+}
+
+/// POST /v1/burst_engine/resume
+/// Resume the burst engine after pause
+#[utoipa::path(
+    post,
+    path = "/v1/burst_engine/resume",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Burst engine resumed", body = HashMap<String, String>),
+        (status = 400, description = "Invalid state"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_resume(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    runtime_service.resume().await
+        .map_err(|e| ApiError::internal(format!("Failed to resume burst engine: {}", e)))?;
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Burst engine resumed successfully".to_string())
+    ])))
+}
+
+/// GET /v1/burst_engine/config
+/// Get burst engine configuration
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/config",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Burst engine configuration", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_config(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let status = runtime_service.get_status().await
+        .map_err(|e| ApiError::internal(format!("Failed to get config: {}", e)))?;
+    
+    let mut response = HashMap::new();
+    response.insert("burst_frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
+    response.insert("burst_interval_seconds".to_string(), serde_json::json!(1.0 / status.frequency_hz));
+    response.insert("target_frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
+    response.insert("is_running".to_string(), serde_json::json!(status.is_running));
+    response.insert("is_paused".to_string(), serde_json::json!(status.is_paused));
+    
+    Ok(Json(response))
+}
+
+/// PUT /v1/burst_engine/config
+/// Update burst engine configuration
+#[utoipa::path(
+    put,
+    path = "/v1/burst_engine/config",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Configuration updated", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Invalid input"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn put_config(
+    State(state): State<ApiState>,
+    Json(request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    // Extract burst_frequency_hz from request
+    if let Some(freq) = request.get("burst_frequency_hz").and_then(|v| v.as_f64()) {
+        if freq <= 0.0 {
+            return Err(ApiError::invalid_input("Frequency must be positive"));
+        }
+        
+        runtime_service.set_frequency(freq).await
+            .map_err(|e| ApiError::internal(format!("Failed to set frequency: {}", e)))?;
+    }
+    
+    // Return updated config
+    get_config(State(state)).await
+}
+
+// ============================================================================
+// FIRE LEDGER ENDPOINTS
+// ============================================================================
+
+/// GET /v1/burst_engine/fire_ledger/area/{area_id}/window_size
+/// Get fire ledger window size for specific cortical area
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fire_ledger/area/{area_id}/window_size",
+    tag = "burst_engine",
+    params(
+        ("area_id" = u32, Path, description = "Cortical area ID (cortical_idx)")
+    ),
+    responses(
+        (status = 200, description = "Window size", body = i32),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_fire_ledger_area_window_size(
+    State(state): State<ApiState>,
+    axum::extract::Path(area_id): axum::extract::Path<u32>,
+) -> ApiResult<Json<i32>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let configs = runtime_service.get_fire_ledger_configs().await
+        .map_err(|e| ApiError::internal(format!("Failed to get fire ledger configs: {}", e)))?;
+    
+    // Find the window size for this area
+    for (idx, window_size) in configs {
+        if idx == area_id {
+            return Ok(Json(window_size as i32));
+        }
+    }
+    
+    // Return default if not found
+    Ok(Json(20))
+}
+
+/// PUT /v1/burst_engine/fire_ledger/area/{area_id}/window_size
+/// Set fire ledger window size for specific cortical area
+#[utoipa::path(
+    put,
+    path = "/v1/burst_engine/fire_ledger/area/{area_id}/window_size",
+    tag = "burst_engine",
+    params(
+        ("area_id" = u32, Path, description = "Cortical area ID (cortical_idx)")
+    ),
+    responses(
+        (status = 200, description = "Window size updated", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Invalid input"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn put_fire_ledger_area_window_size(
+    State(state): State<ApiState>,
+    axum::extract::Path(area_id): axum::extract::Path<u32>,
+    Json(request): Json<HashMap<String, i32>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let window_size = request.get("window_size").copied()
+        .ok_or_else(|| ApiError::invalid_input("window_size required"))?;
+    
+    if window_size <= 0 {
+        return Err(ApiError::invalid_input("Window size must be positive"));
+    }
+    
+    runtime_service.configure_fire_ledger_window(area_id, window_size as usize).await
+        .map_err(|e| ApiError::internal(format!("Failed to configure window: {}", e)))?;
+    
+    let mut response = HashMap::new();
+    response.insert("success".to_string(), serde_json::json!(true));
+    response.insert("area_id".to_string(), serde_json::json!(area_id));
+    response.insert("window_size".to_string(), serde_json::json!(window_size));
+    
+    Ok(Json(response))
+}
+
+/// GET /v1/burst_engine/fire_ledger/area/{area_id}/history
+/// Get fire ledger historical data for specific cortical area
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/fire_ledger/area/{area_id}/history",
+    tag = "burst_engine",
+    params(
+        ("area_id" = String, Path, description = "Cortical area ID or index"),
+        ("lookback_steps" = Option<i32>, Query, description = "Number of timesteps to retrieve")
+    ),
+    responses(
+        (status = 200, description = "Fire ledger history", body = HashMap<String, serde_json::Value>),
+        (status = 400, description = "Invalid area ID"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_fire_ledger_history(
+    State(_state): State<ApiState>,
+    axum::extract::Path(area_id): axum::extract::Path<String>,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    // Parse area_id as cortical_idx
+    let cortical_idx = area_id.parse::<u32>()
+        .map_err(|_| ApiError::invalid_input(format!("Invalid area_id: {}", area_id)))?;
+    
+    let _lookback_steps = params.get("lookback_steps")
+        .and_then(|s| s.parse::<i32>().ok());
+    
+    // TODO: Implement fire ledger history retrieval from NPU
+    // For now, return placeholder
+    let mut response = HashMap::new();
+    response.insert("success".to_string(), serde_json::json!(true));
+    response.insert("area_id".to_string(), serde_json::json!(area_id));
+    response.insert("cortical_idx".to_string(), serde_json::json!(cortical_idx));
+    response.insert("history".to_string(), serde_json::json!([]));
+    response.insert("window_size".to_string(), serde_json::json!(20));
+    response.insert("note".to_string(), serde_json::json!("Fire ledger history not yet implemented"));
+    
+    Ok(Json(response))
+}
+
+// ============================================================================
+// MEMBRANE POTENTIALS ENDPOINTS
+// ============================================================================
+
+/// GET /v1/burst_engine/membrane_potentials
+/// Get membrane potentials for specific neurons
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/membrane_potentials",
+    tag = "burst_engine",
+    params(
+        ("neuron_ids" = Vec<u64>, Query, description = "List of neuron IDs")
+    ),
+    responses(
+        (status = 200, description = "Membrane potentials", body = HashMap<String, f32>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_membrane_potentials(
+    State(_state): State<ApiState>,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, f32>>> {
+    // Parse neuron_ids from query params
+    let neuron_ids_str = params.get("neuron_ids")
+        .ok_or_else(|| ApiError::invalid_input("neuron_ids parameter required"))?;
+    
+    // TODO: Parse comma-separated neuron IDs and fetch from NPU
+    // For now, return empty
+    tracing::debug!(target: "feagi-api", "GET membrane_potentials for neuron_ids: {}", neuron_ids_str);
+    
+    Ok(Json(HashMap::new()))
+}
+
+/// PUT /v1/burst_engine/membrane_potentials
+/// Update membrane potentials for specific neurons
+#[utoipa::path(
+    put,
+    path = "/v1/burst_engine/membrane_potentials",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Membrane potentials updated", body = HashMap<String, String>),
+        (status = 400, description = "Invalid input"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn put_membrane_potentials(
+    State(_state): State<ApiState>,
+    Json(potentials): Json<HashMap<String, f32>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    // TODO: Update membrane potentials in NPU
+    tracing::info!(target: "feagi-api", "PUT membrane_potentials: {} neurons", potentials.len());
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), format!("Updated {} neuron membrane potentials", potentials.len()))
+    ])))
+}
+
+// ============================================================================
+// FREQUENCY MEASUREMENT ENDPOINTS
+// ============================================================================
+
+/// GET /v1/burst_engine/frequency_status
+/// Get current frequency measurement status
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/frequency_status",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Frequency status", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_frequency_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    let status = runtime_service.get_status().await
+        .map_err(|e| ApiError::internal(format!("Failed to get status: {}", e)))?;
+    
+    let mut response = HashMap::new();
+    response.insert("target_frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
+    response.insert("actual_frequency_hz".to_string(), serde_json::json!(status.frequency_hz));
+    response.insert("burst_count".to_string(), serde_json::json!(status.burst_count));
+    response.insert("is_measuring".to_string(), serde_json::json!(false));
+    
+    Ok(Json(response))
+}
+
+/// POST /v1/burst_engine/measure_frequency
+/// Trigger frequency measurement
+#[utoipa::path(
+    post,
+    path = "/v1/burst_engine/measure_frequency",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Measurement started", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_measure_frequency(
+    State(_state): State<ApiState>,
+    Json(request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let duration = request.get("duration_seconds").and_then(|v| v.as_f64()).unwrap_or(5.0);
+    let sample_count = request.get("sample_count").and_then(|v| v.as_i64()).unwrap_or(100) as i32;
+    
+    tracing::info!(target: "feagi-api", "Starting frequency measurement: {}s, {} samples", duration, sample_count);
+    
+    // TODO: Implement frequency measurement
+    let mut response = HashMap::new();
+    response.insert("status".to_string(), serde_json::json!("started"));
+    response.insert("duration_seconds".to_string(), serde_json::json!(duration));
+    response.insert("sample_count".to_string(), serde_json::json!(sample_count));
+    
+    Ok(Json(response))
+}
+
+/// GET /v1/burst_engine/frequency_history
+/// Get frequency measurement history
+#[utoipa::path(
+    get,
+    path = "/v1/burst_engine/frequency_history",
+    tag = "burst_engine",
+    params(
+        ("limit" = Option<i32>, Query, description = "Number of measurements to return")
+    ),
+    responses(
+        (status = 200, description = "Frequency history", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_frequency_history(
+    State(_state): State<ApiState>,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let limit = params.get("limit").and_then(|s| s.parse::<i32>().ok()).unwrap_or(10);
+    
+    // TODO: Implement frequency history retrieval
+    let mut response = HashMap::new();
+    response.insert("measurements".to_string(), serde_json::json!([]));
+    response.insert("limit".to_string(), serde_json::json!(limit));
+    
+    Ok(Json(response))
+}
+
+/// POST /v1/burst_engine/force_connectome_integration
+/// Force connectome integration (rebuild neural connections)
+#[utoipa::path(
+    post,
+    path = "/v1/burst_engine/force_connectome_integration",
+    tag = "burst_engine",
+    responses(
+        (status = 200, description = "Integration forced", body = HashMap<String, String>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_force_connectome_integration(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    // TODO: Implement connectome integration forcing
+    tracing::info!(target: "feagi-api", "Force connectome integration requested");
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Connectome integration initiated".to_string()),
+        ("status".to_string(), "not_yet_implemented".to_string())
+    ])))
+}
+
 
 

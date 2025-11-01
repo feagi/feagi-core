@@ -185,5 +185,113 @@ pub async fn post_morphology_usage(
     Ok(Json(usage_pairs))
 }
 
+/// GET /v1/morphology/list
+/// Get list of all morphology names
+#[utoipa::path(
+    get,
+    path = "/v1/morphology/list",
+    tag = "morphology",
+    responses(
+        (status = 200, description = "List of morphology names", body = Vec<String>)
+    )
+)]
+pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    let morphologies = connectome_service.get_morphologies().await
+        .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
+    
+    let names: Vec<String> = morphologies.iter().map(|m| m.name.clone()).collect();
+    Ok(Json(names))
+}
+
+/// GET /v1/morphology/info/{morphology_id}
+/// Get detailed information about a specific morphology
+#[utoipa::path(
+    get,
+    path = "/v1/morphology/info/{morphology_id}",
+    tag = "morphology",
+    params(
+        ("morphology_id" = String, Path, description = "Morphology name")
+    ),
+    responses(
+        (status = 200, description = "Morphology info", body = HashMap<String, serde_json::Value>)
+    )
+)]
+pub async fn get_info(
+    State(state): State<ApiState>,
+    axum::extract::Path(morphology_id): axum::extract::Path<String>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    // Delegate to post_morphology_properties (same logic)
+    post_morphology_properties(State(state), Json(HashMap::from([
+        ("morphology_name".to_string(), morphology_id)
+    ]))).await
+}
+
+/// POST /v1/morphology/create
+/// Create a new morphology
+#[utoipa::path(
+    post,
+    path = "/v1/morphology/create",
+    tag = "morphology",
+    responses(
+        (status = 200, description = "Morphology created", body = HashMap<String, String>)
+    )
+)]
+pub async fn post_create(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    // TODO: Implement morphology creation
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Morphology creation not yet implemented".to_string())
+    ])))
+}
+
+/// PUT /v1/morphology/update
+/// Update an existing morphology
+#[utoipa::path(
+    put,
+    path = "/v1/morphology/update",
+    tag = "morphology",
+    responses(
+        (status = 200, description = "Morphology updated", body = HashMap<String, String>)
+    )
+)]
+pub async fn put_update(
+    State(_state): State<ApiState>,
+    Json(_request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    // TODO: Implement morphology update
+    Ok(Json(HashMap::from([
+        ("message".to_string(), "Morphology update not yet implemented".to_string())
+    ])))
+}
+
+/// DELETE /v1/morphology/delete/{morphology_id}
+/// Delete a morphology
+#[utoipa::path(
+    delete,
+    path = "/v1/morphology/delete/{morphology_id}",
+    tag = "morphology",
+    params(
+        ("morphology_id" = String, Path, description = "Morphology name")
+    ),
+    responses(
+        (status = 200, description = "Morphology deleted", body = HashMap<String, String>)
+    )
+)]
+pub async fn delete_morphology(
+    State(_state): State<ApiState>,
+    axum::extract::Path(morphology_id): axum::extract::Path<String>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    // TODO: Implement morphology deletion
+    tracing::info!(target: "feagi-api", "Delete morphology requested: {}", morphology_id);
+    
+    Ok(Json(HashMap::from([
+        ("message".to_string(), format!("Morphology {} deletion not yet implemented", morphology_id))
+    ])))
+}
+
 
 
