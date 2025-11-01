@@ -7,58 +7,397 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui.css"/>
   
   <style>
-    /* FEAGI Dark Theme */
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --primary-color: #19b6b5;
-        --primary-color-light: #55dada;
-        --background-dark: #121417;
-        --background-medium: #1f2426;
-        --background-light: #2c3133;
-        --text-primary: #f1f1f1;
-        --text-secondary: #a0a5ab;
-        --method-get: #44d9d8;
-        --method-post: #5fe3e3;
-        --method-put: #7feeee;
-        --method-delete: #a2f9f9;
-        --border-color: #3b3f42;
-        --header-bg: #222;
-        --header-text: #fff;
-        --filter-bg: #333;
-        --filter-text: #fff;
-      }
-      body { background-color: var(--background-dark); color: var(--text-primary); }
-      .swagger-ui { background-color: var(--background-dark); color: var(--text-primary); }
-      .swagger-ui .topbar { background-color: var(--background-medium); border-bottom: 1px solid var(--border-color); }
-      .swagger-ui .opblock { background-color: var(--background-medium); border: 1px solid var(--border-color); border-radius: 10px; }
-      .swagger-ui .opblock .opblock-summary { border-bottom: 1px solid var(--border-color); }
-      .swagger-ui .info .title { color: var(--primary-color); }
-      .custom-filter-input { background-color: #444; color: #fff; border-color: #007acc; }
+    /* Default to dark theme colors */
+    :root {
+      --primary-color: #19b6b5;
+      --primary-color-light: #55dada;
+      --background-dark: #121417;
+      --background-medium: #1f2426;
+      --background-light: #2c3133;
+      --accent-gray: #B2BEC3;
+      --text-primary: #f1f1f1;
+      --text-secondary: #a0a5ab;
+      --method-get: #44d9d8;
+      --method-post: #5fe3e3;
+      --method-put: #7feeee;
+      --method-delete: #a2f9f9;
+      --border-color: #3b3f42;
+      --shadow-color: rgba(0, 0, 0, 0.3);
+      --header-bg: #222;
+      --header-text: #fff;
+      --filter-bg: #333;
+      --filter-text: #fff;
     }
     
-    /* FEAGI Light Theme */
-    @media (prefers-color-scheme: light) {
-      :root {
-        --primary-color: #007b8a;
-        --background-light: #f9fafa;
-        --background-medium: #e9eff1;
-        --text-primary: #1e2b33;
-        --text-secondary: #5c6b74;
-        --method-get: #00b894;
-        --method-post: #0984e3;
-        --method-put: #fdcb6e;
-        --method-delete: #d63031;
-        --border-color: #d0d6da;
-        --header-bg: #f9f9f9;
-        --header-text: #000;
-        --filter-bg: #f0f0f0;
-        --filter-text: #333;
-      }
-      body { background-color: #ffffff; color: var(--text-primary); }
-      .swagger-ui .opblock { background-color: var(--background-light); border: 1px solid var(--border-color); border-radius: 10px; }
+    /* Light theme colors - applied when [data-theme="light"] */
+    [data-theme="light"] {
+      --primary-color: #007b8a;
+      --primary-color-light: #00a5b8;
+      --background-dark: #ffffff;
+      --background-medium: #f9fafa;
+      --background-light: #e9eff1;
+      --accent-gray: #c0ccd4;
+      --text-primary: #1e2b33;
+      --text-secondary: #5c6b74;
+      --method-get: #00b894;
+      --method-post: #0984e3;
+      --method-put: #fdcb6e;
+      --method-delete: #d63031;
+      --border-color: #d0d6da;
+      --shadow-color: rgba(0, 0, 0, 0.08);
+      --header-bg: #f9f9f9;
+      --header-text: #000;
+      --filter-bg: #f0f0f0;
+      --filter-text: #333;
     }
     
-    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: var(--background-dark);
+      color: var(--text-primary);
+    }
+    
+    /* Swagger UI Base Styles */
+    .swagger-ui {
+      background-color: var(--background-dark);
+      color: var(--text-primary);
+    }
+    
+    /* Header */
+    .swagger-ui .topbar {
+      background-color: var(--background-medium);
+      border-bottom: 1px solid var(--border-color);
+      box-shadow: 0 2px 6px var(--shadow-color);
+    }
+    
+    .swagger-ui .topbar .topbar-wrapper img {
+      filter: brightness(1.3);
+    }
+    
+    [data-theme="light"] .swagger-ui .topbar .topbar-wrapper img {
+      filter: brightness(0.8);
+    }
+    
+    /* Info Section */
+    .swagger-ui .info {
+      background-color: var(--background-dark);
+      border-bottom: 1px solid var(--border-color);
+      margin: 20px 0;
+    }
+    
+    .swagger-ui .info .title {
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+    
+    .swagger-ui .info .title small.version-stamp {
+      background-color: var(--primary-color);
+      color: var(--text-primary);
+      border-radius: 12px;
+      padding: 4px 10px;
+    }
+    
+    /* Operation Blocks */
+    .swagger-ui .opblock {
+      background-color: var(--background-medium);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      box-shadow: 0 3px 10px var(--shadow-color);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    
+    .swagger-ui .opblock .opblock-summary {
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 16px;
+    }
+    
+    .swagger-ui .opblock .opblock-summary-method {
+      font-weight: bold;
+      border-radius: 6px;
+      min-width: 80px;
+      text-align: center;
+      padding: 4px 8px;
+      color: var(--background-dark);
+    }
+    
+    [data-theme="light"] .swagger-ui .opblock .opblock-summary-method {
+      color: white;
+    }
+    
+    .swagger-ui .opblock .opblock-summary-path {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    
+    .swagger-ui .opblock .opblock-summary-description {
+      color: var(--text-secondary);
+    }
+    
+    /* HTTP Methods */
+    .swagger-ui .opblock.opblock-get {
+      border-left: 4px solid var(--method-get);
+    }
+    
+    .swagger-ui .opblock.opblock-get .opblock-summary-method {
+      background-color: var(--method-get);
+    }
+    
+    .swagger-ui .opblock.opblock-post {
+      border-left: 4px solid var(--method-post);
+    }
+    
+    .swagger-ui .opblock.opblock-post .opblock-summary-method {
+      background-color: var(--method-post);
+    }
+    
+    .swagger-ui .opblock.opblock-put {
+      border-left: 4px solid var(--method-put);
+    }
+    
+    .swagger-ui .opblock.opblock-put .opblock-summary-method {
+      background-color: var(--method-put);
+    }
+    
+    .swagger-ui .opblock.opblock-delete {
+      border-left: 4px solid var(--method-delete);
+    }
+    
+    .swagger-ui .opblock.opblock-delete .opblock-summary-method {
+      background-color: var(--method-delete);
+    }
+    
+    /* Operation Content */
+    .swagger-ui .opblock-body {
+      background-color: var(--background-medium);
+      padding: 16px;
+    }
+    
+    .swagger-ui .opblock-description-wrapper p,
+    .swagger-ui .opblock-external-docs-wrapper p,
+    .swagger-ui .opblock-title_normal p {
+      color: var(--text-primary);
+    }
+    
+    /* Models */
+    .swagger-ui section.models {
+      background-color: var(--background-medium);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      box-shadow: 0 2px 6px var(--shadow-color);
+    }
+    
+    .swagger-ui section.models .model-container {
+      background-color: var(--background-light);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin: 10px;
+    }
+    
+    .swagger-ui section.models h4 {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    /* Schema */
+    .swagger-ui .model-box {
+      background-color: var(--background-light);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+    }
+    
+    .swagger-ui .model {
+      color: var(--text-primary);
+    }
+    
+    .swagger-ui .model-title {
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+    
+    .swagger-ui .property {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+    
+    .swagger-ui .property-type {
+      color: var(--text-secondary);
+    }
+    
+    /* Tables */
+    .swagger-ui table thead tr th {
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-color);
+      background-color: var(--background-light);
+      padding: 12px;
+    }
+    
+    .swagger-ui table tbody tr td {
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 10px;
+    }
+    
+    .swagger-ui table tbody tr:hover td {
+      background-color: var(--background-medium);
+    }
+    
+    /* Forms */
+    .swagger-ui .parameters-col_description input[type=text],
+    .swagger-ui .parameters-col_description select,
+    .swagger-ui textarea {
+      background-color: var(--background-dark);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 8px 12px;
+    }
+    
+    .swagger-ui .parameters-col_description input[type=text]:focus,
+    .swagger-ui .parameters-col_description select:focus,
+    .swagger-ui textarea:focus {
+      border-color: var(--primary-color);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(25, 182, 181, 0.4);
+    }
+    
+    /* Buttons */
+    .swagger-ui .btn {
+      background-color: var(--primary-color);
+      color: var(--text-primary);
+      border: none;
+      border-radius: 6px;
+      padding: 10px 18px;
+      font-weight: 500;
+      box-shadow: 0 2px 6px var(--shadow-color);
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    
+    .swagger-ui .btn:hover {
+      background-color: var(--primary-color-light);
+      transform: translateY(-1px);
+    }
+    
+    .swagger-ui .btn.execute {
+      background-color: var(--method-post);
+      color: #003b3b;
+    }
+    
+    .swagger-ui .btn.execute:hover {
+      background-color: #8ef0f0;
+      color: #002222;
+    }
+    
+    [data-theme="light"] .swagger-ui .btn.execute {
+      color: white;
+    }
+    
+    button.btn.btn-clear.opblock-control__btn {
+      background-color: var(--method-post);
+      color: #333333;
+      border: 1px solid transparent;
+      padding: 6px 12px;
+      font-weight: bold;
+      border-radius: 5px;
+    }
+    
+    button.btn.btn-clear.opblock-control__btn:hover {
+      background-color: #8ef0f0;
+      color: #333;
+    }
+    
+    /* Code Blocks */
+    .swagger-ui .highlight-code {
+      background-color: var(--background-light);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 12px;
+    }
+    
+    .swagger-ui .microlight {
+      color: var(--text-primary);
+      font-family: 'Fira Code', 'Roboto Mono', monospace;
+      font-size: 14px;
+    }
+    
+    /* Response Section */
+    .swagger-ui .responses-inner {
+      background-color: var(--background-medium);
+      padding: 16px;
+      border-radius: 6px;
+    }
+    
+    .swagger-ui .responses-inner h4,
+    .swagger-ui .responses-inner h5 {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    .swagger-ui .response-col_status {
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+    
+    .swagger-ui .response-col_description,
+    .swagger-ui .response-col_links {
+      color: var(--text-primary);
+    }
+    
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    
+    ::-webkit-scrollbar-track {
+      background: var(--background-dark);
+    }
+    
+    ::-webkit-scrollbar-thumb {
+      background: var(--background-light);
+      border-radius: 4px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--primary-color);
+    }
+    
+    /* Tabs */
+    .swagger-ui .tab {
+      color: var(--text-primary);
+      padding: 10px 15px;
+    }
+    
+    .swagger-ui .tab.active {
+      color: var(--primary-color);
+      font-weight: 600;
+    }
+    
+    /* Authorization */
+    .swagger-ui .auth-container {
+      background-color: var(--background-medium);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+    
+    .swagger-ui .auth-container h3 {
+      color: var(--text-primary);
+      font-weight: 600;
+    }
+    
+    /* Tags */
+    .swagger-ui .opblock-tag {
+      background-color: var(--background-medium);
+      color: var(--primary-color);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      box-shadow: 0 2px 4px var(--shadow-color);
+      padding: 12px;
+      font-weight: 600;
+    }
     
     .custom-header {
       padding: 10px 20px;
@@ -142,16 +481,25 @@
       width: 300px;
       padding: 8px 12px;
       border-radius: 4px;
-      border: 2px solid #007acc;
+      border: 2px solid var(--primary-color);
       font-size: 14px;
-      background-color: white;
-      color: #333;
+      background-color: var(--background-light);
+      color: var(--text-primary);
       transition: all 0.2s ease;
     }
     
     .custom-filter-input:focus {
       outline: none;
-      box-shadow: 0 0 0 2px rgba(0, 122, 204, 0.3);
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(25, 182, 181, 0.3);
+    }
+    
+    [data-theme="light"] .custom-filter-input {
+      background-color: white;
+    }
+    
+    [data-theme="light"] .custom-filter-input:focus {
+      box-shadow: 0 0 0 2px rgba(0, 123, 138, 0.3);
     }
     
     .custom-filter-label {
@@ -197,18 +545,31 @@
       const themeSelect = document.getElementById('theme-select');
       themeSelect.value = theme;
 
+      // Determine the actual theme to apply
+      let actualTheme = theme;
       if (theme === 'system') {
+        actualTheme = getSystemTheme();
         localStorage.removeItem('feagi-theme');
       } else {
         localStorage.setItem('feagi-theme', theme);
       }
 
-      // Force apply theme via CSS media query manipulation
-      document.documentElement.setAttribute('data-theme', theme === 'system' ? getSystemTheme() : theme);
+      // Apply theme by setting data-theme attribute on HTML element
+      document.documentElement.setAttribute('data-theme', actualTheme);
+      
+      console.log('FEAGI Swagger UI: Theme changed to', theme, '(applying:', actualTheme + ')');
     }
 
     document.getElementById('theme-select').addEventListener('change', (e) => {
       setTheme(e.target.value);
+    });
+    
+    // Listen for system theme changes when in 'system' mode
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      const currentTheme = localStorage.getItem('feagi-theme');
+      if (!currentTheme || currentTheme === 'system') {
+        setTheme('system');
+      }
     });
 
     window.onload = function() {
