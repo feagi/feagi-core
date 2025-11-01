@@ -46,6 +46,8 @@ const PROPERTY_MAPPINGS: &[(&str, &str)] = &[
     ("snooze-f", "snooze_length"),
     ("_group-t", "group_id"),
     ("subgrp-t", "sub_group_id"),
+    // Also map _group to cortical_group for classification (needed by neuroembryogenesis)
+    ("_group-t", "cortical_group"),
     ("dstmap-d", "cortical_mapping_dst"),
     ("de_gen-f", "degeneration"),
     ("pspuni-b", "psp_uniform_distribution"),

@@ -141,6 +141,11 @@ impl Neuroembryogenesis {
     fn corticogenesis(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         self.update_stage(DevelopmentStage::Corticogenesis, 0);
         info!(target: "feagi-bdu","🧠 Stage 1: Corticogenesis - Creating {} cortical areas", genome.cortical_areas.len());
+        info!(target: "feagi-bdu","🔍 Genome brain_regions check: is_empty={}, count={}", 
+              genome.brain_regions.is_empty(), genome.brain_regions.len());
+        if !genome.brain_regions.is_empty() {
+            info!(target: "feagi-bdu","   Existing regions: {:?}", genome.brain_regions.keys().collect::<Vec<_>>());
+        }
         
         let total_areas = genome.cortical_areas.len();
         
@@ -164,57 +169,231 @@ impl Neuroembryogenesis {
         
         // Ensure brain regions structure exists (auto-generate if missing)
         // This matches Python's normalize_brain_region_membership() behavior
-        let brain_regions_to_add = if genome.brain_regions.is_empty() {
-            info!(target: "feagi-bdu","  No brain_regions in genome - auto-generating default root region");
+        info!(target: "feagi-bdu","🔍 BRAIN REGION AUTO-GEN CHECK: genome.brain_regions.is_empty() = {}", genome.brain_regions.is_empty());
+        let (brain_regions_to_add, region_parent_map) = if genome.brain_regions.is_empty() {
+            info!(target: "feagi-bdu","  ✅ TRIGGERING AUTO-GENERATION: No brain_regions in genome - auto-generating default root region");
+            info!(target: "feagi-bdu","  📊 Genome has {} cortical areas to process", genome.cortical_areas.len());
             
             // Collect all cortical area IDs
             let all_cortical_ids: Vec<String> = genome.cortical_areas.keys().cloned().collect();
+            info!(target: "feagi-bdu","  📊 Collected {} cortical area IDs: {:?}", all_cortical_ids.len(), 
+                  if all_cortical_ids.len() <= 5 { format!("{:?}", all_cortical_ids) } else { format!("{:?}...", &all_cortical_ids[0..5]) });
             
             // Classify areas into inputs/outputs based on their AreaType
             let mut auto_inputs = Vec::new();
             let mut auto_outputs = Vec::new();
             
+            // Classify areas into categories following Python's normalize_brain_region_membership()
+            let mut ipu_areas = Vec::new();  // Sensory inputs
+            let mut opu_areas = Vec::new();  // Motor outputs
+            let mut core_areas = Vec::new(); // Core/maintenance (like _power)
+            let mut custom_memory_areas = Vec::new(); // CUSTOM/MEMORY (go to subregion)
+            
             for (area_id, area) in genome.cortical_areas.iter() {
-                match area.area_type {
-                    feagi_types::AreaType::Sensory => auto_inputs.push(area_id.clone()),
-                    feagi_types::AreaType::Motor => auto_outputs.push(area_id.clone()),
-                    _ => {} // Memory, Custom go to root but not classified as I/O
+                // Get cortical_group from properties (extracted by converter)
+                let cortical_group = area.properties.get("cortical_group")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_uppercase());
+                
+                // Classify following Python's logic:
+                // 1. Areas starting with "_" are always CORE
+                // 2. Check cortical_group property
+                // 3. Fallback to area_type
+                
+                let category = if area_id.starts_with("_") {
+                    "CORE"
+                } else {
+                    match cortical_group.as_deref() {
+                        Some("IPU") => "IPU",
+                        Some("OPU") => "OPU",
+                        Some("CORE") => "CORE",
+                        Some("MEMORY") => "MEMORY",
+                        Some("CUSTOM") => "CUSTOM",
+                        _ => {
+                            // Fallback to area_type
+                            match area.area_type {
+                                feagi_types::AreaType::Sensory => "IPU",
+                                feagi_types::AreaType::Motor => "OPU",
+                                feagi_types::AreaType::Memory => "MEMORY",
+                                _ => "CUSTOM",
+                            }
+                        }
+                    }
+                };
+                
+                // Log first few classifications
+                if ipu_areas.len() + opu_areas.len() + core_areas.len() + custom_memory_areas.len() < 5 {
+                    info!(target: "feagi-bdu","    🔍 Area {}: category={}, group={:?}", 
+                          area_id, category, cortical_group);
+                }
+                
+                // Assign to appropriate list
+                match category {
+                    "IPU" => {
+                        ipu_areas.push(area_id.clone());
+                        auto_inputs.push(area_id.clone());
+                    },
+                    "OPU" => {
+                        opu_areas.push(area_id.clone());
+                        auto_outputs.push(area_id.clone());
+                    },
+                    "CORE" => {
+                        core_areas.push(area_id.clone());
+                    },
+                    "MEMORY" | "CUSTOM" => {
+                        custom_memory_areas.push(area_id.clone());
+                    },
+                    _ => {}
                 }
             }
             
-            // Create default root region
+            info!(target: "feagi-bdu","  📊 Classification complete: IPU={}, OPU={}, CORE={}, CUSTOM/MEMORY={}", 
+                  ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
+            
+            // Build brain region structure following Python's normalize_brain_region_membership()
             use feagi_types::{BrainRegion, RegionType};
-            let root_region = BrainRegion::new(
+            let mut regions_map = std::collections::HashMap::new();
+            
+            // Step 1: Create root region with only IPU/OPU/CORE areas
+            let mut root_area_ids = Vec::new();
+            root_area_ids.extend(ipu_areas.iter().cloned());
+            root_area_ids.extend(opu_areas.iter().cloned());
+            root_area_ids.extend(core_areas.iter().cloned());
+            
+            // Analyze connections to determine actual inputs/outputs for root
+            let (root_inputs, root_outputs) = Self::analyze_region_io(
+                &root_area_ids,
+                &genome.cortical_areas,
+            );
+            
+            let mut root_region = BrainRegion::new(
                 "root".to_string(),
                 "Root Brain Region".to_string(),
-                RegionType::Custom,  // Root is a custom organizational container
+                RegionType::Custom,
             )
             .expect("Failed to create root region")
-            .with_areas(all_cortical_ids.clone());
+            .with_areas(root_area_ids.clone());
             
-            // TODO: Store inputs/outputs in BrainRegion properties when schema is expanded
+            // Store inputs/outputs based on connection analysis
+            if !root_inputs.is_empty() {
+                root_region.add_property("inputs".to_string(), serde_json::json!(root_inputs.clone()));
+            }
+            if !root_outputs.is_empty() {
+                root_region.add_property("outputs".to_string(), serde_json::json!(root_outputs.clone()));
+            }
             
-            let mut regions_map = std::collections::HashMap::new();
+            info!(target: "feagi-bdu","  ✅ Created root region with {} areas (IPU={}, OPU={}, CORE={}) - analyzed: {} inputs, {} outputs",
+                  root_area_ids.len(), ipu_areas.len(), opu_areas.len(), core_areas.len(),
+                  root_inputs.len(), root_outputs.len());
+            
+            // Step 2: Create subregion for CUSTOM/MEMORY areas if any exist
+            let mut subregion_id = None;
+            if !custom_memory_areas.is_empty() {
+                // Generate deterministic subregion ID using hash (matching Python)
+                custom_memory_areas.sort(); // Sort for deterministic hash
+                let combined = custom_memory_areas.join("|");
+                
+                // Use a simple hash (matching Python's sha1[:8])
+                use std::collections::hash_map::DefaultHasher;
+                use std::hash::{Hash, Hasher};
+                let mut hasher = DefaultHasher::new();
+                combined.hash(&mut hasher);
+                let hash = hasher.finish();
+                let hash_hex = format!("{:08x}", hash as u32);
+                
+                let region_id = format!("region_autogen_{}", hash_hex);
+                subregion_id = Some(region_id.clone());
+                
+                // Analyze connections to determine inputs/outputs for subregion
+                let (subregion_inputs, subregion_outputs) = Self::analyze_region_io(
+                    &custom_memory_areas,
+                    &genome.cortical_areas,
+                );
+                
+                // Create subregion
+                let mut subregion = BrainRegion::new(
+                    region_id.clone(),
+                    "Autogen Region".to_string(),
+                    RegionType::Custom,
+                )
+                .expect("Failed to create subregion")
+                .with_areas(custom_memory_areas.clone());
+                
+                // Store inputs/outputs for subregion
+                if !subregion_inputs.is_empty() {
+                    subregion.add_property("inputs".to_string(), serde_json::json!(subregion_inputs.clone()));
+                }
+                if !subregion_outputs.is_empty() {
+                    subregion.add_property("outputs".to_string(), serde_json::json!(subregion_outputs.clone()));
+                }
+                
+                info!(target: "feagi-bdu","  ✅ Created subregion '{}' with {} CUSTOM/MEMORY areas ({} inputs, {} outputs)",
+                      region_id, custom_memory_areas.len(), subregion_inputs.len(), subregion_outputs.len());
+                
+                regions_map.insert(region_id, subregion);
+            }
+            
             regions_map.insert("root".to_string(), root_region);
             
-            info!(target: "feagi-bdu","  ✅ Auto-generated root region with {} cortical areas ({} inputs, {} outputs)",
-                  all_cortical_ids.len(), auto_inputs.len(), auto_outputs.len());
+            // Count total inputs/outputs across all regions
+            let total_inputs = root_inputs.len() + if let Some(ref sid) = subregion_id {
+                regions_map.get(sid)
+                    .and_then(|r| r.properties.get("inputs"))
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0)
+            } else { 0 };
             
-            regions_map
+            let total_outputs = root_outputs.len() + if let Some(ref sid) = subregion_id {
+                regions_map.get(sid)
+                    .and_then(|r| r.properties.get("outputs"))
+                    .and_then(|v| v.as_array())
+                    .map(|a| a.len())
+                    .unwrap_or(0)
+            } else { 0 };
+            
+            info!(target: "feagi-bdu","  ✅ Auto-generated {} brain region(s) with {} total cortical areas ({} total inputs, {} total outputs)",
+                  regions_map.len(), all_cortical_ids.len(), total_inputs, total_outputs);
+            
+            // Return (regions_map, parent_map) so we can properly link hierarchy
+            let mut parent_map = std::collections::HashMap::new();
+            if let Some(ref sub_id) = subregion_id {
+                parent_map.insert(sub_id.clone(), "root".to_string());
+                info!(target: "feagi-bdu","  🔗 Parent relationship: {} -> root", sub_id);
+            }
+            
+            (regions_map, parent_map)
         } else {
-            genome.brain_regions.clone()
+            info!(target: "feagi-bdu","  📋 Genome already has {} brain regions - using existing structure", genome.brain_regions.len());
+            // For existing genomes, we don't have parent info readily available
+            // TODO: Extract parent relationships from genome structure
+            (genome.brain_regions.clone(), std::collections::HashMap::new())
         };
         
-        // Add brain regions - minimize lock scope
+        // Add brain regions with proper parent relationships - minimize lock scope
         {
             let mut manager = self.connectome_manager.write();
             let brain_region_count = brain_regions_to_add.len();
             info!(target: "feagi-bdu","  Adding {} brain regions from genome", brain_region_count);
-            for (region_id, region) in brain_regions_to_add.iter() {
-                // TODO: Track parent relationships from genome
-                manager.add_brain_region(region.clone(), None)?;
-                debug!(target: "feagi-bdu","    ✓ Added brain region: {} ({})", region_id, region.name);
+            
+            // First add root (no parent)
+            if let Some(root_region) = brain_regions_to_add.get("root") {
+                manager.add_brain_region(root_region.clone(), None)?;
+                debug!(target: "feagi-bdu","    ✓ Added brain region: root (Root Brain Region) [parent=None]");
             }
+            
+            // Then add other regions with their parent relationships
+            for (region_id, region) in brain_regions_to_add.iter() {
+                if region_id == "root" {
+                    continue; // Already added
+                }
+                
+                let parent_id = region_parent_map.get(region_id).cloned();
+                manager.add_brain_region(region.clone(), parent_id.clone())?;
+                debug!(target: "feagi-bdu","    ✓ Added brain region: {} ({}) [parent={:?}]", 
+                       region_id, region.name, parent_id);
+            }
+            
             info!(target: "feagi-bdu","  Total brain regions in ConnectomeManager: {}", manager.get_brain_region_ids().len());
         } // Lock released
         
@@ -462,6 +641,59 @@ fn estimate_synapses_for_area(
 }
 
 impl Neuroembryogenesis {
+    /// Analyze region inputs/outputs based on cortical connections
+    /// 
+    /// Following Python's _auto_assign_region_io() logic:
+    /// - OUTPUT: Any area in the region that connects to an area OUTSIDE the region
+    /// - INPUT: Any area in the region that receives connection from OUTSIDE the region
+    fn analyze_region_io(
+        region_area_ids: &[String],
+        all_cortical_areas: &std::collections::HashMap<String, feagi_types::CorticalArea>,
+    ) -> (Vec<String>, Vec<String>) {
+        let area_set: std::collections::HashSet<_> = region_area_ids.iter().cloned().collect();
+        let mut inputs = Vec::new();
+        let mut outputs = Vec::new();
+        
+        // Helper to extract destination area IDs from cortical_mapping_dst
+        let extract_destinations = |area: &feagi_types::CorticalArea| -> Vec<String> {
+            area.properties.get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+                .map(|obj| obj.keys().cloned().collect())
+                .unwrap_or_default()
+        };
+        
+        // Find OUTPUTS: areas in region that connect to areas OUTSIDE region
+        for area_id in region_area_ids {
+            if let Some(area) = all_cortical_areas.get(area_id) {
+                let destinations = extract_destinations(area);
+                let external_destinations: Vec<_> = destinations.iter()
+                    .filter(|dest| !area_set.contains(*dest))
+                    .collect();
+                
+                if !external_destinations.is_empty() {
+                    outputs.push(area_id.clone());
+                }
+            }
+        }
+        
+        // Find INPUTS: areas in region receiving connections from OUTSIDE region
+        for (source_area_id, source_area) in all_cortical_areas.iter() {
+            // Skip areas that are inside the region
+            if area_set.contains(source_area_id) {
+                continue;
+            }
+            
+            let destinations = extract_destinations(source_area);
+            for dest in destinations {
+                if area_set.contains(&dest) && !inputs.contains(&dest) {
+                    inputs.push(dest);
+                }
+            }
+        }
+        
+        (inputs, outputs)
+    }
+    
     /// Update development stage
     fn update_stage(&self, stage: DevelopmentStage, progress: u8) {
         let mut p = self.progress.write();

@@ -46,6 +46,20 @@ pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Jso
             let mut result = HashMap::new();
             for region in regions {
                 debug!(target: "feagi-api", "  - Region: {} ({}) with {} areas", region.region_id, region.name, region.cortical_areas.len());
+                
+                // Extract inputs/outputs from region properties if they exist
+                let inputs = region.properties.get("inputs")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>())
+                    .unwrap_or_default();
+                
+                let outputs = region.properties.get("outputs")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>())
+                    .unwrap_or_default();
+                
+                debug!(target: "feagi-api", "    - Inputs: {} areas, Outputs: {} areas", inputs.len(), outputs.len());
+                
                 result.insert(
                     region.region_id.clone(),
                     serde_json::json!({
@@ -56,8 +70,8 @@ pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Jso
                         "coordinate_3d": [0, 0, 0],  // TODO: Get from region properties
                         "areas": region.cortical_areas,
                         "regions": region.child_regions,
-                        "inputs": [],  // TODO: Calculate input areas
-                        "outputs": []  // TODO: Calculate output areas
+                        "inputs": inputs,
+                        "outputs": outputs
                     })
                 );
             }
