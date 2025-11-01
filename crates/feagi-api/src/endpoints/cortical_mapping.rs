@@ -183,11 +183,30 @@ pub async fn get_mapping(
     let dst_area = params.get("dst_cortical_area")
         .ok_or_else(|| ApiError::invalid_input("dst_cortical_area required"))?;
     
-    // Delegate to post_mapping_properties
-    post_mapping_properties(State(state), Json(HashMap::from([
-        ("src_cortical_area".to_string(), src_area.clone()),
-        ("dst_cortical_area".to_string(), dst_area.clone()),
-    ]))).await
+    // Get mapping properties directly (avoid recursion)
+    let connectome_service = state.connectome_service.as_ref();
+    
+    // Get source cortical area
+    let src_area_info = connectome_service.get_cortical_area(src_area).await
+        .map_err(|e| ApiError::not_found("Cortical area", &format!("Source area {}: {}", src_area, e)))?;
+    
+    // Look for cortical_mapping_dst in properties
+    let mapping_dst = src_area_info.properties.get("cortical_mapping_dst")
+        .and_then(|v| v.as_object());
+    
+    if mapping_dst.is_none() {
+        return Ok(Json(HashMap::new()));
+    }
+    
+    // Get connections for this destination
+    let connections = mapping_dst.unwrap()
+        .get(dst_area)
+        .and_then(|v| v.as_array());
+    
+    let mut response = HashMap::new();
+    response.insert("connections".to_string(), serde_json::json!(connections.unwrap_or(&vec![])));
+    
+    Ok(Json(response))
 }
 
 /// GET /v1/cortical_mapping/mapping_list

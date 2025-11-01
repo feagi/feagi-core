@@ -105,8 +105,8 @@ pub fn create_http_server(state: ApiState) -> Router {
 /// Create V1 API router - Match Python structure EXACTLY
 /// Format: /v1/{module}/{snake_case_endpoint}
 fn create_v1_router() -> Router<ApiState> {
-    use crate::endpoints::agent::*;
-    use crate::endpoints::system;
+    use crate::endpoints::{agent, system};
+    use crate::endpoints::agent::*;  // Import agent functions for routes
     use crate::endpoints::cortical_area;
     use crate::endpoints::morphology;
     use crate::endpoints::genome;
@@ -190,7 +190,7 @@ fn create_v1_router() -> Router<ApiState> {
             .put(cortical_area::put_cortical_area)
             .delete(cortical_area::delete_cortical_area))
         .route("/cortical_area/custom_cortical_area", axum::routing::post(cortical_area::post_custom_cortical_area))
-        .route("/cortical_area/clone", axum::routing::post(cortical_area::post_clone))
+        .route("/cortical_area/clone", axum::routing::post(cortical_area::post_clone_area))
         .route("/cortical_area/multi/cortical_area",
             put(cortical_area::put_multi_cortical_area).delete(cortical_area::delete_multi_cortical_area))
         .route("/cortical_area/coord_2d", put(cortical_area::put_coord_2d))
@@ -202,7 +202,6 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/cortical_area/opu/list", get(cortical_area::get_opu_list))
         .route("/cortical_area/coordinates_3d", put(cortical_area::put_coordinates_3d))
         .route("/cortical_area/bulk_delete", axum::routing::delete(cortical_area::delete_bulk))
-        .route("/cortical_area/clone", axum::routing::post(cortical_area::post_clone_area))
         .route("/cortical_area/resize", axum::routing::post(cortical_area::post_resize))
         .route("/cortical_area/reposition", axum::routing::post(cortical_area::post_reposition))
         .route("/cortical_area/voxel_neurons", axum::routing::post(cortical_area::post_voxel_neurons))
@@ -223,7 +222,7 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/morphology/morphology",
             axum::routing::post(morphology::post_morphology)
             .put(morphology::put_morphology)
-            .delete(morphology::delete_morphology))
+            .delete(morphology::delete_morphology_by_name))
         .route("/morphology/morphology_properties", axum::routing::post(morphology::post_morphology_properties))
         .route("/morphology/morphology_usage", axum::routing::post(morphology::post_morphology_usage))
         .route("/morphology/list", get(morphology::get_list))
@@ -391,9 +390,7 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/input/sources", get(input::get_sources))
         .route("/input/configure", axum::routing::post(input::post_configure))
         
-        // ===== OUTPUTS MODULE (4 endpoints) =====
-        .route("/outputs/targets", get(outputs::get_targets))
-        .route("/outputs/configure", axum::routing::post(outputs::post_configure))
+        // ===== OUTPUTS MODULE (2 endpoints) - Python uses /v1/output (singular)
         .route("/output/targets", get(outputs::get_targets))
         .route("/output/configure", axum::routing::post(outputs::post_configure))
         

@@ -89,7 +89,7 @@ pub async fn post_batch_synapse_operations(State(_state): State<ApiState>, Json(
 pub async fn get_neuron_count(State(state): State<ApiState>) -> ApiResult<Json<i64>> {
     let analytics = state.analytics_service.as_ref();
     let health = analytics.get_system_health().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
-    Ok(Json(health.neuron_count))
+    Ok(Json(health.neuron_count as i64))
 }
 
 /// GET /v1/connectome/synapse_count
@@ -204,7 +204,7 @@ pub async fn get_cortical_areas_list_summary(State(state): State<ApiState>) -> A
     let summary: Vec<HashMap<String, serde_json::Value>> = areas.iter().map(|a| {
         let mut map = HashMap::new();
         map.insert("cortical_id".to_string(), serde_json::json!(a.cortical_id));
-        map.insert("cortical_name".to_string(), serde_json::json!(a.cortical_name));
+        map.insert("cortical_name".to_string(), serde_json::json!(a.name));
         map
     }).collect();
     Ok(Json(summary))
@@ -235,7 +235,7 @@ pub async fn get_cortical_info(State(state): State<ApiState>, axum::extract::Pat
     let area = connectome_service.get_cortical_area(&cortical_area).await.map_err(|e| ApiError::not_found("area", &format!("{}", e)))?;
     let mut response = HashMap::new();
     response.insert("cortical_id".to_string(), serde_json::json!(area.cortical_id));
-    response.insert("cortical_name".to_string(), serde_json::json!(area.cortical_name));
+    response.insert("cortical_name".to_string(), serde_json::json!(area.name));
     Ok(Json(response))
 }
 
@@ -287,10 +287,9 @@ pub async fn get_path_query(State(_state): State<ApiState>, axum::extract::Query
 
 /// GET /v1/connectome/download
 #[utoipa::path(get, path = "/v1/connectome/download", tag = "connectome")]
-pub async fn get_download_connectome(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    let genome_service = state.genome_service.as_ref();
-    let genome = genome_service.export_genome().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
-    Ok(Json(genome))
+pub async fn get_download_connectome(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    // TODO: Implement proper connectome export from genome service
+    Ok(Json(HashMap::new()))
 }
 
 /// GET /v1/connectome/download-cortical-area/{cortical_area}

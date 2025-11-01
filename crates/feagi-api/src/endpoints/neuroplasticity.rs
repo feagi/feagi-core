@@ -5,7 +5,7 @@
 
 use axum::{extract::State, response::Json};
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult};
+use crate::common::ApiResult;
 use crate::transports::http::server::ApiState;
 
 /// GET /v1/neuroplasticity/plasticity_queue_depth

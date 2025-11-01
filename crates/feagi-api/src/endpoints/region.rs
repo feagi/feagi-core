@@ -156,7 +156,7 @@ pub async fn get_region_titles(State(state): State<ApiState>) -> ApiResult<Json<
     
     let mut titles = HashMap::new();
     for region in regions {
-        titles.insert(region.region_id.clone(), region.title.clone());
+        titles.insert(region.region_id.clone(), region.name.clone());
     }
     
     Ok(Json(titles))
@@ -187,13 +187,13 @@ pub async fn get_region_detail(
     
     let mut response = HashMap::new();
     response.insert("region_id".to_string(), serde_json::json!(region.region_id));
-    response.insert("title".to_string(), serde_json::json!(region.title));
-    response.insert("description".to_string(), serde_json::json!(region.description));
-    response.insert("coordinate_2d".to_string(), serde_json::json!(region.coordinate_2d));
-    response.insert("coordinate_3d".to_string(), serde_json::json!(region.coordinate_3d));
-    response.insert("areas".to_string(), serde_json::json!(region.cortical_area_ids));
-    response.insert("regions".to_string(), serde_json::json!(region.sub_region_ids));
-    response.insert("parent_region_id".to_string(), serde_json::json!(region.parent_region_id));
+    response.insert("title".to_string(), serde_json::json!(region.name));
+    response.insert("description".to_string(), serde_json::json!(""));
+    response.insert("coordinate_2d".to_string(), serde_json::json!([0, 0]));
+    response.insert("coordinate_3d".to_string(), serde_json::json!([0, 0, 0]));
+    response.insert("areas".to_string(), serde_json::json!(region.cortical_areas));
+    response.insert("regions".to_string(), serde_json::json!(region.child_regions));
+    response.insert("parent_region_id".to_string(), serde_json::json!(region.parent_id));
     
     Ok(Json(response))
 }

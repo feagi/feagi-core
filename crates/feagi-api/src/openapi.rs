@@ -69,7 +69,7 @@ use crate::{
         crate::endpoints::agent::get_agent_properties_path,
         crate::endpoints::agent::get_shared_memory,
         crate::endpoints::agent::deregister_agent,
-        crate::endpoints::agent::post_manual_stimulation,
+        crate::endpoints::agent::manual_stimulation,
         crate::endpoints::agent::get_fq_sampler_status,
         crate::endpoints::agent::get_capabilities,
         crate::endpoints::agent::get_agent_info,
@@ -154,7 +154,8 @@ use crate::{
         crate::endpoints::morphology::get_morphologies,
         crate::endpoints::morphology::post_morphology,
         crate::endpoints::morphology::put_morphology,
-        crate::endpoints::morphology::delete_morphology,
+        crate::endpoints::morphology::delete_morphology_by_name,
+        crate::endpoints::morphology::delete_morphology,  // This is delete_by_id
         crate::endpoints::morphology::post_morphology_properties,
         crate::endpoints::morphology::post_morphology_usage,
         crate::endpoints::morphology::get_list,

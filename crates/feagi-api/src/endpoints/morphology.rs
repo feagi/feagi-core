@@ -81,9 +81,9 @@ pub async fn put_morphology(State(_state): State<ApiState>, Json(_req): Json<Has
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// DELETE /v1/morphology/morphology
+/// DELETE /v1/morphology/morphology (by request body)
 #[utoipa::path(delete, path = "/v1/morphology/morphology", tag = "morphology")]
-pub async fn delete_morphology(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn delete_morphology_by_name(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
@@ -201,7 +201,7 @@ pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<Strin
     let morphologies = connectome_service.get_morphologies().await
         .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
     
-    let names: Vec<String> = morphologies.iter().map(|m| m.name.clone()).collect();
+    let names: Vec<String> = morphologies.iter().map(|(name, _info)| name.clone()).collect();
     Ok(Json(names))
 }
 

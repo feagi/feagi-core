@@ -348,7 +348,7 @@ pub async fn get_fq_sampler_status(
     viz_sampler.insert("enabled".to_string(), serde_json::json!(!visualization_agents.is_empty()));
     viz_sampler.insert("reason".to_string(), serde_json::json!(
         if visualization_agents.is_empty() {
-            "No visualization agents connected"
+            "No visualization agents connected".to_string()
         } else {
             format!("{} visualization agent(s) connected", visualization_agents.len())
         }
@@ -361,7 +361,7 @@ pub async fn get_fq_sampler_status(
     motor_sampler.insert("enabled".to_string(), serde_json::json!(!motor_agents.is_empty()));
     motor_sampler.insert("reason".to_string(), serde_json::json!(
         if motor_agents.is_empty() {
-            "No motor agents connected"
+            "No motor agents connected".to_string()
         } else {
             format!("{} motor agent(s) connected", motor_agents.len())
         }
