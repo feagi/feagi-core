@@ -44,9 +44,29 @@ pub async fn get_list_types(State(_state): State<ApiState>) -> ApiResult<Json<Ha
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_morphologies(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    // TODO: Get all morphologies
-    Ok(Json(HashMap::new()))
+pub async fn get_morphologies(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    // Get morphologies from connectome
+    let morphologies = connectome_service.get_morphologies().await
+        .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
+    
+    // Convert to Python-compatible format
+    let mut result = HashMap::new();
+    for (name, morphology_info) in morphologies.iter() {
+        result.insert(
+            name.clone(),
+            serde_json::json!({
+                "name": name,
+                "type": morphology_info.morphology_type,
+                "class": morphology_info.class,
+                "parameters": morphology_info.parameters,
+                "source": "genome"
+            })
+        );
+    }
+    
+    Ok(Json(result))
 }
 
 /// POST /v1/morphology/morphology
@@ -68,15 +88,101 @@ pub async fn delete_morphology(State(_state): State<ApiState>, Json(_req): Json<
 }
 
 /// POST /v1/morphology/morphology_properties
-#[utoipa::path(post, path = "/v1/morphology/morphology_properties", tag = "morphology")]
-pub async fn post_morphology_properties(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<serde_json::Value>> {
-    Err(ApiError::internal("Not yet implemented"))
+#[utoipa::path(
+    post, 
+    path = "/v1/morphology/morphology_properties", 
+    tag = "morphology",
+    responses(
+        (status = 200, description = "Morphology properties", body = HashMap<String, serde_json::Value>),
+        (status = 404, description = "Morphology not found"),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_morphology_properties(
+    State(state): State<ApiState>, 
+    Json(req): Json<HashMap<String, String>>
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    use tracing::debug;
+    
+    let morphology_name = req.get("morphology_name")
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_name"))?;
+    
+    debug!(target: "feagi-api", "Getting properties for morphology: {}", morphology_name);
+    
+    let connectome_service = state.connectome_service.as_ref();
+    let morphologies = connectome_service.get_morphologies().await
+        .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
+    
+    let morphology_info = morphologies.get(morphology_name)
+        .ok_or_else(|| ApiError::not_found("Morphology", morphology_name))?;
+    
+    // Return properties in expected format
+    let mut result = HashMap::new();
+    result.insert("morphology_name".to_string(), serde_json::json!(morphology_name));
+    result.insert("type".to_string(), serde_json::json!(morphology_info.morphology_type));
+    result.insert("class".to_string(), serde_json::json!(morphology_info.class));
+    result.insert("parameters".to_string(), morphology_info.parameters.clone());
+    result.insert("source".to_string(), serde_json::json!("genome"));
+    
+    Ok(Json(result))
 }
 
 /// POST /v1/morphology/morphology_usage
-#[utoipa::path(post, path = "/v1/morphology/morphology_usage", tag = "morphology")]
-pub async fn post_morphology_usage(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<serde_json::Value>> {
-    Err(ApiError::internal("Not yet implemented"))
+#[utoipa::path(
+    post, 
+    path = "/v1/morphology/morphology_usage", 
+    tag = "morphology",
+    responses(
+        (status = 200, description = "Morphology usage pairs", body = Vec<Vec<String>>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn post_morphology_usage(
+    State(state): State<ApiState>, 
+    Json(req): Json<HashMap<String, String>>
+) -> ApiResult<Json<Vec<Vec<String>>>> {
+    use tracing::debug;
+    
+    let morphology_name = req.get("morphology_name")
+        .ok_or_else(|| ApiError::invalid_input("Missing morphology_name"))?;
+    
+    debug!(target: "feagi-api", "Getting usage for morphology: {}", morphology_name);
+    
+    let connectome_service = state.connectome_service.as_ref();
+    
+    // Get all cortical areas
+    let areas = connectome_service.list_cortical_areas().await
+        .map_err(|e| ApiError::internal(format!("Failed to list areas: {}", e)))?;
+    
+    // Find all [src, dst] pairs that use this morphology
+    let mut usage_pairs = Vec::new();
+    
+    for area_info in areas {
+        if let Some(mapping_dst) = area_info.properties.get("cortical_mapping_dst") {
+            if let Some(dst_map) = mapping_dst.as_object() {
+                for (dst_id, connections) in dst_map {
+                    if let Some(conn_array) = connections.as_array() {
+                        for conn in conn_array {
+                            let morph_id = if let Some(arr) = conn.as_array() {
+                                arr.get(0).and_then(|v| v.as_str())
+                            } else if let Some(obj) = conn.as_object() {
+                                obj.get("morphology_id").and_then(|v| v.as_str())
+                            } else {
+                                None
+                            };
+                            
+                            if morph_id == Some(morphology_name.as_str()) {
+                                usage_pairs.push(vec![area_info.cortical_id.clone(), dst_id.clone()]);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    debug!(target: "feagi-api", "Found {} usage pairs for morphology: {}", usage_pairs.len(), morphology_name);
+    Ok(Json(usage_pairs))
 }
 
 

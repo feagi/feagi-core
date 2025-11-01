@@ -102,6 +102,9 @@ pub struct ConnectomeManager {
     /// Brain region hierarchy
     brain_regions: BrainRegionHierarchy,
     
+    /// Morphology registry from loaded genome
+    morphology_registry: feagi_evo::MorphologyRegistry,
+    
     /// Configuration
     config: ConnectomeConfig,
     
@@ -124,6 +127,7 @@ impl ConnectomeManager {
             cortical_idx_to_id: HashMap::new(),
             next_cortical_idx: 0,
             brain_regions: BrainRegionHierarchy::new(),
+            morphology_registry: feagi_evo::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: None,
             initialized: false,
@@ -168,6 +172,7 @@ impl ConnectomeManager {
             cortical_idx_to_id: HashMap::new(),
             next_cortical_idx: 0,
             brain_regions: BrainRegionHierarchy::new(),
+            morphology_registry: feagi_evo::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: None,
             initialized: false,
@@ -196,6 +201,7 @@ impl ConnectomeManager {
             cortical_idx_to_id: HashMap::new(),
             next_cortical_idx: 0,
             brain_regions: BrainRegionHierarchy::new(),
+            morphology_registry: feagi_evo::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: Some(npu),
             initialized: false,
@@ -403,6 +409,275 @@ impl ConnectomeManager {
     /// Get the brain region hierarchy
     pub fn get_brain_region_hierarchy(&self) -> &BrainRegionHierarchy {
         &self.brain_regions
+    }
+    
+    // ========================================================================
+    // MORPHOLOGY ACCESS
+    // ========================================================================
+    
+    /// Get all morphologies from the loaded genome
+    pub fn get_morphologies(&self) -> &feagi_evo::MorphologyRegistry {
+        &self.morphology_registry
+    }
+    
+    /// Get morphology count
+    pub fn get_morphology_count(&self) -> usize {
+        self.morphology_registry.count()
+    }
+    
+    // ========================================================================
+    // CORTICAL MAPPING UPDATES
+    // ========================================================================
+    
+    /// Update cortical mapping properties between two cortical areas
+    /// 
+    /// Following Python's update_cortical_mapping_properties() logic:
+    /// 1. Updates the source area's cortical_mapping_dst property
+    /// 2. Triggers synapse regeneration for the affected connection
+    /// 
+    /// # Arguments
+    /// * `src_area_id` - Source cortical area ID
+    /// * `dst_area_id` - Destination cortical area ID
+    /// * `mapping_data` - List of connection specifications
+    /// 
+    /// # Returns
+    /// * `BduResult<()>` - Ok if successful, Err otherwise
+    pub fn update_cortical_mapping(
+        &mut self,
+        src_area_id: &str,
+        dst_area_id: &str,
+        mapping_data: Vec<serde_json::Value>,
+    ) -> BduResult<()> {
+        use tracing::info;
+        
+        info!(target: "feagi-bdu", "Updating cortical mapping: {} -> {}", src_area_id, dst_area_id);
+        
+        // Get source area (must exist)
+        let src_area = self.cortical_areas.get_mut(src_area_id)
+            .ok_or_else(|| crate::types::BduError::InvalidArea(
+                format!("Source area not found: {}", src_area_id)
+            ))?;
+        
+        // Get or create cortical_mapping_dst property
+        let cortical_mapping_dst = if let Some(existing) = src_area.properties.get_mut("cortical_mapping_dst") {
+            existing.as_object_mut()
+                .ok_or_else(|| crate::types::BduError::InvalidMorphology(
+                    "cortical_mapping_dst is not an object".to_string()
+                ))?
+        } else {
+            // Create new cortical_mapping_dst
+            src_area.properties.insert(
+                "cortical_mapping_dst".to_string(),
+                serde_json::json!({})
+            );
+            src_area.properties.get_mut("cortical_mapping_dst")
+                .unwrap()
+                .as_object_mut()
+                .unwrap()
+        };
+        
+        // Update or add the mapping for this destination
+        if mapping_data.is_empty() {
+            // Empty mapping_data = delete the connection
+            cortical_mapping_dst.remove(dst_area_id);
+            info!(target: "feagi-bdu", "Removed mapping from {} to {}", src_area_id, dst_area_id);
+        } else {
+            cortical_mapping_dst.insert(
+                dst_area_id.to_string(),
+                serde_json::Value::Array(mapping_data.clone())
+            );
+            info!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
+                  src_area_id, dst_area_id, mapping_data.len());
+        }
+        
+        Ok(())
+    }
+    
+    /// Regenerate synapses for a specific cortical mapping
+    /// 
+    /// Deletes existing synapses between the areas and creates new ones based on
+    /// the updated mapping rules.
+    /// 
+    /// # Arguments
+    /// * `src_area_id` - Source cortical area ID
+    /// * `dst_area_id` - Destination cortical area ID
+    /// 
+    /// # Returns
+    /// * `BduResult<usize>` - Number of synapses created
+    pub fn regenerate_synapses_for_mapping(
+        &mut self,
+        src_area_id: &str,
+        dst_area_id: &str,
+    ) -> BduResult<usize> {
+        use tracing::info;
+        
+        info!(target: "feagi-bdu", "Regenerating synapses: {} -> {}", src_area_id, dst_area_id);
+        
+        // If NPU is available, regenerate synapses
+        if self.npu.is_some() {
+            // First, delete existing synapses between these areas
+            // TODO: Implement delete_synapses_between_areas in NPU
+            
+            // Then, apply cortical mapping to create new synapses
+            let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
+            
+            info!(target: "feagi-bdu", "Created {} new synapses: {} -> {}", 
+                  synapse_count, src_area_id, dst_area_id);
+            
+            Ok(synapse_count)
+        } else {
+            info!(target: "feagi-bdu", "NPU not available - skipping synapse regeneration");
+            Ok(0)
+        }
+    }
+    
+    /// Apply cortical mapping for a specific area pair
+    fn apply_cortical_mapping_for_pair(
+        &mut self,
+        src_area_id: &str,
+        dst_area_id: &str,
+    ) -> BduResult<usize> {
+        // Clone the rules to avoid borrow checker issues
+        let rules = {
+            let src_area = self.cortical_areas.get(src_area_id)
+                .ok_or_else(|| crate::types::BduError::InvalidArea(
+                    format!("Source area not found: {}", src_area_id)
+                ))?;
+            
+            // Get cortical_mapping_dst
+            let mapping_dst = src_area.properties.get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+                .ok_or_else(|| crate::types::BduError::InvalidMorphology(
+                    format!("No cortical_mapping_dst for {}", src_area_id)
+                ))?;
+            
+            // Get rules for this destination
+            let rules = mapping_dst.get(dst_area_id)
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| crate::types::BduError::InvalidMorphology(
+                    format!("No mapping rules from {} to {}", src_area_id, dst_area_id)
+                ))?;
+            
+            rules.clone()
+        }; // Borrow ends here
+        
+        if rules.is_empty() {
+            return Ok(0);
+        }
+        
+        // Apply each morphology rule
+        let mut total_synapses = 0;
+        for rule in &rules {
+            let synapse_count = self.apply_single_morphology_rule(src_area_id, dst_area_id, rule)?;
+            total_synapses += synapse_count;
+        }
+        
+        Ok(total_synapses)
+    }
+    
+    /// Apply a single morphology rule
+    fn apply_single_morphology_rule(
+        &mut self,
+        src_area_id: &str,
+        dst_area_id: &str,
+        rule: &serde_json::Value,
+    ) -> BduResult<usize> {
+        // Extract morphology_id from rule (array or dict format)
+        let morphology_id = if let Some(arr) = rule.as_array() {
+            arr.get(0).and_then(|v| v.as_str()).unwrap_or("")
+        } else if let Some(obj) = rule.as_object() {
+            obj.get("morphology_id").and_then(|v| v.as_str()).unwrap_or("")
+        } else {
+            return Ok(0);
+        };
+        
+        if morphology_id.is_empty() {
+            return Ok(0);
+        }
+        
+        // Get morphology from registry
+        let morphology = self.morphology_registry.get(morphology_id)
+            .ok_or_else(|| crate::types::BduError::InvalidMorphology(
+                format!("Morphology not found: {}", morphology_id)
+            ))?;
+        
+        // Convert area IDs to cortical indices (required by NPU functions)
+        let src_idx = self.cortical_id_to_idx.get(src_area_id)
+            .ok_or_else(|| crate::types::BduError::InvalidArea(
+                format!("Source area ID not found: {}", src_area_id)
+            ))?;
+        let dst_idx = self.cortical_id_to_idx.get(dst_area_id)
+            .ok_or_else(|| crate::types::BduError::InvalidArea(
+                format!("Destination area ID not found: {}", dst_area_id)
+            ))?;
+        
+        // Apply morphology based on type
+        if let Some(ref npu_arc) = self.npu {
+            let mut npu = npu_arc.lock().unwrap();
+            
+            match morphology.morphology_type {
+                feagi_evo::MorphologyType::Functions => {
+                    // Function-based morphologies (projector, memory, etc.)
+                    match morphology_id {
+                        "projector" => {
+                            use crate::connectivity::synaptogenesis::apply_projector_morphology;
+                            let count = apply_projector_morphology(
+                                &mut npu,
+                                *src_idx,
+                                *dst_idx,
+                                None, // transpose
+                                None, // project_last_layer_of
+                                128,  // weight
+                                255,  // conductance (u8)
+                                100,  // synapse_attractivity
+                            )?;
+                            Ok(count as usize)
+                        },
+                        _ => {
+                            // Other function morphologies not yet implemented
+                            use tracing::debug;
+                            debug!(target: "feagi-bdu", "Function morphology {} not yet implemented", morphology_id);
+                            Ok(0)
+                        }
+                    }
+                },
+                feagi_evo::MorphologyType::Vectors => {
+                    use crate::connectivity::synaptogenesis::apply_vectors_morphology;
+                    if let feagi_evo::MorphologyParameters::Vectors { ref vectors } = morphology.parameters {
+                        // Convert Vec<[i32; 3]> to Vec<(i32, i32, i32)>
+                        let vectors_tuples: Vec<(i32, i32, i32)> = vectors.iter()
+                            .map(|v| (v[0], v[1], v[2]))
+                            .collect();
+                        
+                        let count = apply_vectors_morphology(
+                            &mut npu,
+                            *src_idx,
+                            *dst_idx,
+                            vectors_tuples,
+                            128,  // weight
+                            255,  // conductance (u8)
+                            100,  // synapse_attractivity (added parameter)
+                        )?;
+                        Ok(count as usize)
+                    } else {
+                        Ok(0)
+                    }
+                },
+                feagi_evo::MorphologyType::Patterns => {
+                    use tracing::debug;
+                    // Patterns morphology requires Pattern3D conversion - complex, skip for now
+                    debug!(target: "feagi-bdu", "Pattern morphology {} - conversion not yet implemented", morphology_id);
+                    Ok(0)
+                },
+                _ => {
+                    use tracing::debug;
+                    debug!(target: "feagi-bdu", "Morphology type {:?} not yet fully implemented", morphology.morphology_type);
+                    Ok(0)
+                }
+            }
+        } else {
+            Ok(0) // NPU not available
+        }
     }
     
     // ======================================================================
@@ -1390,6 +1665,10 @@ impl ConnectomeManager {
     /// * `genome` - Genome to analyze for memory requirements
     ///
     pub fn resize_for_genome(&mut self, genome: &feagi_evo::RuntimeGenome) -> BduResult<()> {
+        // Store morphologies from genome
+        self.morphology_registry = genome.morphologies.clone();
+        info!(target: "feagi-bdu", "Stored {} morphologies from genome", self.morphology_registry.count());
+        
         // Calculate required capacity from genome stats
         let required_neurons = genome.stats.innate_neuron_count;
         let required_synapses = genome.stats.innate_synapse_count;

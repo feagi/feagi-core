@@ -12,6 +12,7 @@ use feagi_bdu::ConnectomeManager;
 use feagi_types::{AreaType, BrainRegion, CorticalArea, Dimensions, RegionType};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use std::collections::HashMap;
 use tracing::{info, debug, warn};
 
 /// Default implementation of ConnectomeService
@@ -462,6 +463,49 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool> {
         debug!(target: "feagi-services","Checking if brain region exists: {}", region_id);
         Ok(self.connectome.read().get_brain_region(region_id).is_some())
+    }
+    
+    async fn get_morphologies(&self) -> ServiceResult<HashMap<String, MorphologyInfo>> {
+        let manager = self.connectome.read();
+        let registry = manager.get_morphologies();
+        
+        let mut result = HashMap::new();
+        for (id, morphology) in registry.iter() {
+            result.insert(
+                id.clone(),
+                MorphologyInfo {
+                    morphology_type: format!("{:?}", morphology.morphology_type).to_lowercase(),
+                    class: morphology.class.clone(),
+                    parameters: serde_json::to_value(&morphology.parameters)
+                        .unwrap_or(serde_json::json!({})),
+                }
+            );
+        }
+        
+        debug!(target: "feagi-services", "Retrieved {} morphologies", result.len());
+        Ok(result)
+    }
+    
+    async fn update_cortical_mapping(
+        &self,
+        src_area_id: String,
+        dst_area_id: String,
+        mapping_data: Vec<serde_json::Value>,
+    ) -> ServiceResult<usize> {
+        info!(target: "feagi-services", "Updating cortical mapping: {} -> {} with {} connections",
+              src_area_id, dst_area_id, mapping_data.len());
+        
+        // Update the cortical_mapping_dst property in ConnectomeManager
+        let mut manager = self.connectome.write();
+        manager.update_cortical_mapping(&src_area_id, &dst_area_id, mapping_data.clone())
+            .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
+        
+        // Regenerate synapses for this mapping
+        let synapse_count = manager.regenerate_synapses_for_mapping(&src_area_id, &dst_area_id)
+            .map_err(|e| ServiceError::Backend(format!("Failed to regenerate synapses: {}", e)))?;
+        
+        info!(target: "feagi-services", "Cortical mapping updated: {} synapses created", synapse_count);
+        Ok(synapse_count)
     }
 }
 

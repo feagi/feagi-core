@@ -147,8 +147,7 @@ pub enum MorphologyParameters {
 }
 
 /// Pattern element: exact value, wildcard (*), skip (?), or exclude (!)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(untagged)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PatternElement {
     /// Exact coordinate value
     Value(i32),
@@ -158,6 +157,47 @@ pub enum PatternElement {
     Skip, // "?"
     /// Exclude - exclude this coordinate
     Exclude, // "!"
+}
+
+// Custom serialization to convert PatternElement back to JSON properly
+impl Serialize for PatternElement {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            PatternElement::Value(v) => serializer.serialize_i32(*v),
+            PatternElement::Wildcard => serializer.serialize_str("*"),
+            PatternElement::Skip => serializer.serialize_str("?"),
+            PatternElement::Exclude => serializer.serialize_str("!"),
+        }
+    }
+}
+
+// Custom deserialization to parse JSON into PatternElement
+impl<'de> Deserialize<'de> for PatternElement {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        match value {
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    Ok(PatternElement::Value(i as i32))
+                } else {
+                    Err(serde::de::Error::custom("Pattern element must be an integer"))
+                }
+            }
+            serde_json::Value::String(s) => match s.as_str() {
+                "*" => Ok(PatternElement::Wildcard),
+                "?" => Ok(PatternElement::Skip),
+                "!" => Ok(PatternElement::Exclude),
+                _ => Err(serde::de::Error::custom(format!("Unknown pattern element: {}", s))),
+            },
+            _ => Err(serde::de::Error::custom("Pattern element must be number or string")),
+        }
+    }
 }
 
 /// Physiology configuration (runtime parameters)

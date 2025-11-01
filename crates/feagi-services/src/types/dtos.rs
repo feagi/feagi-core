@@ -143,6 +143,18 @@ pub struct CreateBrainRegionParams {
 }
 
 // ============================================================================
+// MORPHOLOGY DTOs
+// ============================================================================
+
+/// Information about a morphology
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MorphologyInfo {
+    pub morphology_type: String,
+    pub class: String,
+    pub parameters: serde_json::Value,
+}
+
+// ============================================================================
 // GENOME DTOs
 // ============================================================================
 
