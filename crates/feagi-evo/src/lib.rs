@@ -61,6 +61,23 @@ pub use runtime::{
 pub use validator::{validate_genome, ValidationResult};
 pub use converter_flat::convert_flat_to_hierarchical;
 pub use converter_flat_full::convert_flat_to_hierarchical_full;
-pub use templates::{create_minimal_genome, create_genome_with_core_morphologies, add_core_morphologies};
+pub use templates::{
+    create_minimal_genome, 
+    create_genome_with_core_areas,
+    create_genome_with_core_morphologies, 
+    add_core_morphologies,
+    create_death_area,
+    create_power_area,
+    get_default_neural_properties,
+    ensure_core_components,
+    load_essential_genome,
+    load_barebones_genome,
+    load_test_genome,
+    load_vision_genome,
+    ESSENTIAL_GENOME_JSON,
+    BAREBONES_GENOME_JSON,
+    TEST_GENOME_JSON,
+    VISION_GENOME_JSON,
+};
 
 

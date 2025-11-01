@@ -64,11 +64,12 @@ pub async fn post_simulation_timestep(
 )]
 pub async fn get_fcl(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use tracing::debug;
+    use std::collections::BTreeMap;
     
     let runtime_service = state.runtime_service.as_ref();
-    let _connectome_service = state.connectome_service.as_ref();
+    let connectome_service = state.connectome_service.as_ref();
     
-    // Get FCL snapshot from RuntimeService
+    // Get FCL snapshot from RuntimeService (Vec<(neuron_id, potential)>)
     let fcl_data = runtime_service.get_fcl_snapshot().await
         .map_err(|e| ApiError::internal(format!("Failed to get FCL snapshot: {}", e)))?;
     
@@ -76,22 +77,55 @@ pub async fn get_fcl(State(state): State<ApiState>) -> ApiResult<Json<HashMap<St
     let timestep = runtime_service.get_burst_count().await
         .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
     
-    // Organize FCL by cortical area (need to map neuron_id -> cortical_id)
-    let cortical_areas: HashMap<String, Vec<u64>> = HashMap::new();
-    let global_fcl: Vec<u64> = fcl_data.iter().map(|(id, _)| *id).collect();
+    // Get all cortical areas to map neuron IDs to cortical_id
+    let areas = connectome_service.list_cortical_areas().await
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
     
-    // TODO: Map neuron IDs to cortical areas using ConnectomeService
-    // For now, just return global FCL
+    // Build cortical_idx -> cortical_id mapping
+    let mut idx_to_id: HashMap<u32, String> = HashMap::new();
+    for area in &areas {
+        idx_to_id.insert(area.cortical_idx, area.cortical_id.clone());
+    }
     
+    // Group FCL neurons by cortical area
+    // Use BTreeMap for consistent ordering in JSON output
+    let mut cortical_areas: BTreeMap<String, Vec<u64>> = BTreeMap::new();
+    
+    for (neuron_id, _potential) in &fcl_data {
+        // Extract cortical_idx from neuron_id (upper 32 bits)
+        let cortical_idx = (neuron_id >> 32) as u32;
+        
+        // Map to cortical_id
+        if let Some(cortical_id) = idx_to_id.get(&cortical_idx) {
+            cortical_areas.entry(cortical_id.clone())
+                .or_insert_with(Vec::new)
+                .push(*neuron_id);
+        } else {
+            // Fallback: use cortical_idx as string if not found
+            cortical_areas.entry(format!("area_{}", cortical_idx))
+                .or_insert_with(Vec::new)
+                .push(*neuron_id);
+        }
+    }
+    
+    // Limit to first 20 neuron IDs per area (matching Python behavior for network efficiency)
+    for neuron_list in cortical_areas.values_mut() {
+        neuron_list.truncate(20);
+    }
+    
+    let active_cortical_count = cortical_areas.len();
+    let total_neurons: usize = cortical_areas.values().map(|v| v.len()).sum();
+    
+    // Build response (NO global_fcl per user request)
     let mut response = HashMap::new();
     response.insert("timestep".to_string(), serde_json::json!(timestep));
-    response.insert("total_neurons".to_string(), serde_json::json!(fcl_data.len()));
-    response.insert("global_fcl".to_string(), serde_json::json!(global_fcl));
+    response.insert("total_neurons".to_string(), serde_json::json!(total_neurons));
     response.insert("cortical_areas".to_string(), serde_json::json!(cortical_areas));
     response.insert("default_window_size".to_string(), serde_json::json!(20));
-    response.insert("active_cortical_count".to_string(), serde_json::json!(cortical_areas.len()));
+    response.insert("active_cortical_count".to_string(), serde_json::json!(active_cortical_count));
     
-    debug!(target: "feagi-api", "GET /fcl - returned {} neurons from FCL", fcl_data.len());
+    debug!(target: "feagi-api", "GET /fcl - {} neurons across {} cortical areas (limited to 20/area)", 
+           total_neurons, active_cortical_count);
     
     Ok(Json(response))
 }
