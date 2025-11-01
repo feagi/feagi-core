@@ -94,6 +94,12 @@ pub struct RustNPU {
     // Propagation engine (RwLock: burst reads, rare updates)
     pub(crate) propagation_engine: std::sync::RwLock<SynapticPropagationEngine>,
 
+    // Compute backend (Mutex: exclusive access during burst processing)
+    // This is the CPU/GPU backend that processes bursts
+    // TODO: Integrate backend into process_burst() method to replace direct CPU code
+    #[allow(dead_code)]  // Will be used when backend integration is complete
+    pub(crate) backend: std::sync::Mutex<Box<dyn crate::backend::ComputeBackend>>,
+
     // Atomic stats (lock-free reads)
     burst_count: std::sync::atomic::AtomicU64,
     
@@ -114,7 +120,45 @@ pub(crate) struct FireStructures {
 
 impl RustNPU {
     /// Create a new Rust NPU with specified capacities
-    pub fn new(neuron_capacity: usize, synapse_capacity: usize, fire_ledger_window: usize) -> Self {
+    ///
+    /// # Arguments
+    /// * `neuron_capacity` - Maximum number of neurons
+    /// * `synapse_capacity` - Maximum number of synapses
+    /// * `fire_ledger_window` - Fire ledger history window size
+    /// * `gpu_config` - Optional GPU configuration (None = default to CPU)
+    pub fn new(
+        neuron_capacity: usize,
+        synapse_capacity: usize,
+        fire_ledger_window: usize,
+        gpu_config: Option<&crate::backend::GpuConfig>,
+    ) -> Self {
+        use tracing::info;
+        
+        // Determine backend based on GPU config
+        let (backend_type, backend_config) = if let Some(config) = gpu_config {
+            info!("🎮 GPU Configuration:");
+            info!("   GPU enabled: {}", config.use_gpu);
+            info!("   Hybrid mode: {}", config.hybrid_enabled);
+            info!("   GPU threshold: {} synapses", config.gpu_threshold);
+            info!("   GPU memory fraction: {:.1}%", config.gpu_memory_fraction * 100.0);
+            config.to_backend_selection()
+        } else {
+            info!("   No GPU config provided, using CPU backend");
+            (crate::backend::BackendType::CPU, crate::backend::BackendConfig::default())
+        };
+        
+        info!("   Creating backend: {}", backend_type);
+        
+        // Create backend
+        let backend = crate::backend::create_backend(
+            backend_type,
+            neuron_capacity,
+            synapse_capacity,
+            &backend_config,
+        ).expect("Failed to create compute backend");
+        
+        info!("   ✓ Backend selected: {}", backend.backend_name());
+        
         Self {
             neuron_array: std::sync::RwLock::new(NeuronArray::new(neuron_capacity)),
             synapse_array: std::sync::RwLock::new(SynapseArray::new(synapse_capacity)),
@@ -129,6 +173,7 @@ impl RustNPU {
             }),
             area_id_to_name: std::sync::RwLock::new(AHashMap::new()),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
+            backend: std::sync::Mutex::new(backend),
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
         }
@@ -894,7 +939,29 @@ impl RustNPU {
     /// Import connectome snapshot (for loading from file)
     ///
     /// This replaces the entire NPU state with data from a saved connectome.
+    /// Import a connectome from a snapshot
+    ///
+    /// # Arguments
+    /// * `snapshot` - The connectome snapshot to import
+    ///
+    /// # Note
+    /// This method uses CPU backend by default for backward compatibility.
+    /// Use `import_connectome_with_config()` to specify GPU configuration.
     pub fn import_connectome(snapshot: feagi_connectome_serialization::ConnectomeSnapshot) -> Self {
+        Self::import_connectome_with_config(snapshot, None)
+    }
+    
+    /// Import a connectome from a snapshot with optional GPU configuration
+    ///
+    /// # Arguments
+    /// * `snapshot` - The connectome snapshot to import
+    /// * `gpu_config` - Optional GPU configuration (None = default to CPU)
+    pub fn import_connectome_with_config(
+        snapshot: feagi_connectome_serialization::ConnectomeSnapshot,
+        gpu_config: Option<&crate::backend::GpuConfig>,
+    ) -> Self {
+        use tracing::info;
+        
         // Convert neuron array
         let mut neuron_array = NeuronArray::new(snapshot.neurons.capacity);
         neuron_array.count = snapshot.neurons.count;
@@ -920,6 +987,35 @@ impl RustNPU {
         synapse_array.types = snapshot.synapses.types;
         synapse_array.valid_mask = snapshot.synapses.valid_mask;
         synapse_array.source_index = snapshot.synapses.source_index;
+        
+        // Create backend based on GPU config and actual genome size
+        let (backend_type, backend_config) = if let Some(config) = gpu_config {
+            info!("🎮 Imported Connectome GPU Configuration:");
+            info!("   Neurons: {}, Synapses: {}", neuron_array.count, synapse_array.count);
+            info!("   GPU enabled: {}", config.use_gpu);
+            info!("   Hybrid mode: {}", config.hybrid_enabled);
+            if config.hybrid_enabled {
+                info!("   GPU threshold: {} synapses", config.gpu_threshold);
+                if synapse_array.count >= config.gpu_threshold {
+                    info!("   → Genome ABOVE threshold, GPU will be considered");
+                } else {
+                    info!("   → Genome BELOW threshold, CPU will be used");
+                }
+            }
+            config.to_backend_selection()
+        } else {
+            (crate::backend::BackendType::CPU, crate::backend::BackendConfig::default())
+        };
+        
+        // Create backend
+        let backend = crate::backend::create_backend(
+            backend_type,
+            snapshot.neurons.capacity,
+            snapshot.synapses.capacity,
+            &backend_config,
+        ).expect("Failed to create compute backend");
+        
+        info!("   ✓ Backend created: {}", backend.backend_name());
 
         Self {
             neuron_array: std::sync::RwLock::new(neuron_array),
@@ -935,6 +1031,7 @@ impl RustNPU {
             }),
             area_id_to_name: std::sync::RwLock::new(snapshot.cortical_area_names),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
+            backend: std::sync::Mutex::new(backend),
             burst_count: std::sync::atomic::AtomicU64::new(snapshot.burst_count),
             power_amount: std::sync::atomic::AtomicU32::new(snapshot.power_amount.to_bits()),
         }

@@ -54,7 +54,7 @@ pub struct WGPUBackend {
 
     /// Capacity (max neurons/synapses)
     neuron_capacity: usize,
-    synapse_capacity: usize,
+    _synapse_capacity: usize,
 
     /// Current neuron count (for dispatch)
     current_neuron_count: usize,
@@ -88,8 +88,8 @@ struct WGPUBuffers {
     fired_neurons_input: Option<wgpu::Buffer>,
     fired_neurons_output: Option<wgpu::Buffer>,
 
-    // Staging buffers for readback
-    staging_buffer: Option<wgpu::Buffer>,
+    // Staging buffers for readback (reserved for future use)
+    _staging_buffer: Option<wgpu::Buffer>,
 }
 
 impl WGPUBuffers {
@@ -110,7 +110,7 @@ impl WGPUBuffers {
             fcl_potentials_atomic: None,
             fired_neurons_input: None,
             fired_neurons_output: None,
-            staging_buffer: None,
+            _staging_buffer: None,
         }
     }
 }
@@ -160,7 +160,7 @@ impl WGPUBackend {
             fcl_synaptic_propagation_bind_group: None,
             buffers: WGPUBuffers::new(),
             neuron_capacity,
-            synapse_capacity,
+            _synapse_capacity: synapse_capacity,
             current_neuron_count: 0,
             synapse_hash_capacity: 0,
         })
@@ -254,7 +254,7 @@ impl WGPUBackend {
                 buffer
             };
 
-        let create_buffer_u16 =
+        let _create_buffer_u16 =
             |device: &wgpu::Device, queue: &wgpu::Queue, data: &[u16], label: &str| {
                 let buffer = device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some(label),
@@ -616,8 +616,12 @@ impl WGPUBackend {
         Ok(())
     }
 
-    /// Dispatch neural dynamics shader
-    fn dispatch_neural_dynamics(&mut self, burst_count: u64) -> Result<()> {
+    /// Dispatch neural dynamics shader (legacy - full neuron array)
+    /// 
+    /// Note: This method is for the legacy full-array shader.
+    /// Production code uses dispatch_neural_dynamics_fcl() for sparse processing.
+    #[allow(dead_code)]
+    fn dispatch_neural_dynamics(&mut self, _burst_count: u64) -> Result<()> {
         let pipeline = self.neural_dynamics_pipeline.as_ref().ok_or_else(|| {
             Error::ComputationError("Neural dynamics pipeline not initialized".to_string())
         })?;
@@ -653,7 +657,11 @@ impl WGPUBackend {
         Ok(())
     }
 
-    /// Dispatch synaptic propagation shader
+    /// Dispatch synaptic propagation shader (legacy - full array)
+    ///
+    /// Note: This method is for the legacy full-array shader.
+    /// Production code uses dispatch_synaptic_propagation_fcl_gpu() for FCL-aware processing.
+    #[allow(dead_code)]
     fn dispatch_synaptic_propagation(&mut self, fired_count: usize) -> Result<()> {
         let pipeline = self.synaptic_propagation_pipeline.as_ref().ok_or_else(|| {
             Error::ComputationError("Synaptic propagation pipeline not initialized".to_string())
@@ -1116,7 +1124,11 @@ impl WGPUBackend {
         Ok(())
     }
 
-    /// Download fired neuron results from GPU
+    /// Download fired neuron results from GPU (legacy - full array)
+    ///
+    /// Note: This method is for the legacy full-array processing.
+    /// Production code uses download_fired_neurons_fcl() for sparse output.
+    #[allow(dead_code)]
     fn download_fired_neurons(&self) -> Result<Vec<u32>> {
         // Get the fired_mask buffer (bitpacked output from neural dynamics shader)
         let fired_mask_buffer =
@@ -1282,7 +1294,7 @@ impl ComputeBackend for WGPUBackend {
         // Update neuron_array state from GPU (refractory, consecutive counts)
         self.download_neuron_state_updates(neuron_array, &fcl_candidates)?;
 
-        let fired_count = fired_neurons.len();
+        let _fired_count = fired_neurons.len();
 
         // Return results (refractory count placeholder)
         Ok((fired_neurons, fcl_count, 0))

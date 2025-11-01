@@ -246,6 +246,76 @@ impl Default for BackendConfig {
     }
 }
 
+/// GPU configuration from application config (TOML)
+///
+/// This struct provides a simplified interface for GPU configuration
+/// that can be passed from the application layer (feagi/feagi-inference-engine)
+/// to the burst engine without creating tight coupling to feagi-config.
+#[derive(Debug, Clone)]
+pub struct GpuConfig {
+    /// Enable GPU processing globally
+    pub use_gpu: bool,
+    
+    /// Enable hybrid CPU/GPU auto-selection based on genome size
+    pub hybrid_enabled: bool,
+    
+    /// Threshold in synapses to consider GPU in hybrid mode
+    pub gpu_threshold: usize,
+    
+    /// Fraction of GPU memory to use (0.0-1.0)
+    pub gpu_memory_fraction: f64,
+}
+
+impl Default for GpuConfig {
+    fn default() -> Self {
+        Self {
+            use_gpu: true,
+            hybrid_enabled: true,
+            gpu_threshold: 1_000_000,
+            gpu_memory_fraction: 0.8,
+        }
+    }
+}
+
+impl GpuConfig {
+    /// Convert to BackendType and BackendConfig for backend selection
+    ///
+    /// This method translates high-level GPU configuration into the low-level
+    /// backend selection parameters.
+    pub fn to_backend_selection(&self) -> (BackendType, BackendConfig) {
+        let backend_type = if !self.use_gpu {
+            // GPU explicitly disabled
+            BackendType::CPU
+        } else if self.hybrid_enabled {
+            // Hybrid mode: auto-select based on genome size
+            BackendType::Auto
+        } else {
+            // GPU always on (if available)
+            #[cfg(feature = "gpu")]
+            {
+                BackendType::WGPU
+            }
+            #[cfg(not(feature = "gpu"))]
+            {
+                tracing::warn!("GPU requested but 'gpu' feature not enabled at compile time, falling back to CPU");
+                BackendType::CPU
+            }
+        };
+        
+        let backend_config = BackendConfig {
+            // Estimate neuron threshold from synapse threshold
+            // Assume ~100 synapses per neuron (typical for FEAGI genomes)
+            gpu_neuron_threshold: self.gpu_threshold / 100,
+            gpu_synapse_threshold: self.gpu_threshold,
+            force_cpu: !self.use_gpu,
+            force_gpu: self.use_gpu && !self.hybrid_enabled,
+            ..Default::default()
+        };
+        
+        (backend_type, backend_config)
+    }
+}
+
 /// Backend selection decision with rationale
 #[derive(Debug, Clone)]
 pub struct BackendDecision {
