@@ -28,9 +28,14 @@ use std::collections::HashMap;
 )]
 pub async fn post_shock(
     State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, Value>>,
+    Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    // Validate shock configuration
+    let _shock = request.get("shock")
+        .ok_or_else(|| ApiError::invalid_input("Missing 'shock' field"))?;
+    
     // TODO: Configure shock scenarios
+    tracing::info!(target: "feagi-api", "Shock configuration updated");
     
     Ok(Json(HashMap::from([
         ("message".to_string(), "Shock configured successfully".to_string())

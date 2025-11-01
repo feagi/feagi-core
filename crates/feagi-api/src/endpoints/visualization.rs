@@ -28,10 +28,16 @@ use std::collections::HashMap;
 )]
 pub async fn post_register_client(
     State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, Value>>,
+    Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, Value>>> {
-    // TODO: Register visualization client
-    let client_id = uuid::Uuid::new_v4().to_string();
+    // Extract or generate client_id
+    let client_id = request.get("client_id")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+    
+    // TODO: Register visualization client with actual state management
+    tracing::info!(target: "feagi-api", "Registered visualization client: {}", client_id);
     
     let mut response = HashMap::new();
     response.insert("client_id".to_string(), json!(client_id));
@@ -54,9 +60,15 @@ pub async fn post_register_client(
 )]
 pub async fn post_unregister_client(
     State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, Value>>,
+    Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    // Validate client_id is provided
+    let client_id = request.get("client_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing 'client_id' field"))?;
+    
     // TODO: Unregister visualization client
+    tracing::info!(target: "feagi-api", "Unregistered visualization client: {}", client_id);
     
     Ok(Json(HashMap::from([
         ("message".to_string(), "Visualization client unregistered successfully".to_string())

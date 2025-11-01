@@ -241,6 +241,84 @@ use crate::{
             
             // Agent
             crate::v1::AgentRegistrationRequest,
+            
+            // Outputs
+            crate::v1::OutputTargetsResponse,
+            crate::v1::OutputConfigRequest,
+            crate::v1::OutputConfigResponse,
+            
+            // Physiology
+            crate::v1::PhysiologyResponse,
+            crate::v1::PhysiologyParameters,
+            crate::v1::PhysiologyUpdateRequest,
+            crate::v1::PhysiologyUpdateResponse,
+            
+            // Burst Engine
+            crate::v1::FCLResponse,
+            crate::v1::FireQueueResponse,
+            crate::v1::FCLStatusResponse,
+            crate::v1::FireLedgerConfigResponse,
+            crate::v1::BurstEngineStats,
+            crate::v1::BurstEngineStatus,
+            crate::v1::BurstEngineControlRequest,
+            
+            // Monitoring
+            crate::v1::MonitoringStatusResponse,
+            crate::v1::SystemMetricsResponse,
+            crate::v1::MonitoringData,
+            crate::v1::MonitoringDataResponse,
+            
+            // Simulation
+            crate::v1::StimulationUploadRequest,
+            crate::v1::SimulationControlRequest,
+            crate::v1::SimulationStatusResponse,
+            crate::v1::SimulationStatsResponse,
+            crate::v1::SimulationSuccessResponse,
+            
+            // Training
+            crate::v1::ShockConfigRequest,
+            crate::v1::ShockOptionsResponse,
+            crate::v1::ShockStatusResponse,
+            crate::v1::IntensityRequest,
+            crate::v1::BrainFitnessResponse,
+            crate::v1::FitnessCriteriaResponse,
+            crate::v1::FitnessCriteriaUpdateRequest,
+            crate::v1::FitnessStatsResponse,
+            crate::v1::TrainingReportResponse,
+            crate::v1::TrainingStatusResponse,
+            crate::v1::TrainingStatsResponse,
+            crate::v1::TrainingConfigRequest,
+            crate::v1::TrainingSuccessResponse,
+            
+            // Visualization
+            crate::v1::VisualizationClientRequest,
+            crate::v1::VisualizationClientResponse,
+            crate::v1::VisualizationHeartbeatRequest,
+            crate::v1::VisualizationStatusResponse,
+            crate::v1::VisualizationSuccessResponse,
+            
+            // Evolution
+            crate::v1::EvolutionStatusResponse,
+            crate::v1::EvolutionConfigRequest,
+            crate::v1::EvolutionSuccessResponse,
+            
+            // Snapshot
+            crate::v1::SnapshotCreateRequest,
+            crate::v1::SnapshotCreateResponse,
+            crate::v1::SnapshotRestoreRequest,
+            crate::v1::SnapshotListResponse,
+            crate::v1::SnapshotInfo,
+            crate::v1::SnapshotArtifactResponse,
+            crate::v1::SnapshotCompareRequest,
+            crate::v1::SnapshotCompareResponse,
+            crate::v1::SnapshotUploadRequest,
+            crate::v1::SnapshotUploadResponse,
+            crate::v1::SnapshotSuccessResponse,
+            
+            // Network
+            crate::v1::NetworkStatusResponse,
+            crate::v1::NetworkConfigRequest,
+            crate::v1::NetworkSuccessResponse,
             crate::v1::AgentRegistrationResponse,
             crate::v1::HeartbeatRequest,
             crate::v1::HeartbeatResponse,
@@ -314,10 +392,19 @@ use crate::{
         (name = "cortical_mapping", description = "Cortical mapping operations"),
         (name = "region", description = "Brain region management"),
         (name = "connectome", description = "Connectome operations"),
-        (name = "burst_engine", description = "Burst engine configuration"),
+        (name = "burst_engine", description = "Burst engine configuration and FCL/Fire Queue"),
         (name = "insight", description = "Neuron insight operations"),
         (name = "neuroplasticity", description = "Neuroplasticity configuration"),
         (name = "input", description = "Input operations"),
+        (name = "outputs", description = "Output/motor target management"),
+        (name = "physiology", description = "Physiology parameter configuration"),
+        (name = "simulation", description = "Simulation control and stimulation"),
+        (name = "training", description = "Reinforcement learning and training"),
+        (name = "visualization", description = "Visualization client management"),
+        (name = "monitoring", description = "System monitoring and metrics"),
+        (name = "evolution", description = "Evolutionary algorithms"),
+        (name = "snapshot", description = "Brain snapshot management"),
+        (name = "network", description = "Network configuration"),
     ),
     modifiers(&SecurityAddon)
 )]

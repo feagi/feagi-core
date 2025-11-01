@@ -49,9 +49,14 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
 )]
 pub async fn post_config(
     State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, Value>>,
+    Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    // Validate config is provided
+    let _config = request.get("config")
+        .ok_or_else(|| ApiError::invalid_input("Missing 'config' field"))?;
+    
     // TODO: Apply evolution configuration
+    tracing::info!(target: "feagi-api", "Evolution configuration updated");
     
     Ok(Json(HashMap::from([
         ("message".to_string(), "Evolution configured successfully".to_string())

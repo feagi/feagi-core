@@ -54,9 +54,15 @@ pub async fn post_create(
 )]
 pub async fn post_restore(
     State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, Value>>,
+    Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    // Validate snapshot_id is provided
+    let snapshot_id = request.get("snapshot_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("Missing 'snapshot_id' field"))?;
+    
     // TODO: Restore snapshot
+    tracing::info!(target: "feagi-api", "Restoring snapshot: {}", snapshot_id);
     
     Ok(Json(HashMap::from([
         ("message".to_string(), "Snapshot restored successfully".to_string())

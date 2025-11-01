@@ -28,9 +28,14 @@ use std::collections::HashMap;
 )]
 pub async fn post_stimulation_upload(
     State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, Value>>,
+    Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    // Validate stimulation script is provided
+    let _script = request.get("stimulation_script")
+        .ok_or_else(|| ApiError::invalid_input("Missing 'stimulation_script' field"))?;
+    
     // TODO: Upload and apply stimulation script
+    tracing::info!(target: "feagi-api", "Stimulation script upload requested");
     
     Ok(Json(HashMap::from([
         ("message".to_string(), "Stimulation script uploaded successfully".to_string())

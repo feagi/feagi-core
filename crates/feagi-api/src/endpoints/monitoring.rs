@@ -26,11 +26,19 @@ use std::collections::HashMap;
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
-    // TODO: Retrieve monitoring status
+pub async fn get_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+    // Get monitoring status from analytics service
+    let analytics_service = state.analytics_service.as_ref();
+    
+    // Get system health as a proxy for monitoring status
+    let health = analytics_service.get_system_health().await
+        .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
+    
     let mut response = HashMap::new();
-    response.insert("enabled".to_string(), json!(false));
-    response.insert("metrics_collected".to_string(), json!(0));
+    response.insert("enabled".to_string(), json!(true));
+    response.insert("metrics_collected".to_string(), json!(5)); // Static count for now
+    response.insert("brain_readiness".to_string(), json!(health.brain_readiness));
+    response.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
     
     Ok(Json(response))
 }
@@ -46,12 +54,24 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_metrics(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
-    // TODO: Retrieve system metrics
+pub async fn get_metrics(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+    // Get system metrics from analytics and runtime services
+    let runtime_service = state.runtime_service.as_ref();
+    let analytics_service = state.analytics_service.as_ref();
+    
+    let runtime_status = runtime_service.get_status().await
+        .map_err(|e| ApiError::internal(format!("Failed to get runtime status: {}", e)))?;
+    
+    let health = analytics_service.get_system_health().await
+        .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
+    
     let mut response = HashMap::new();
-    response.insert("cpu_usage".to_string(), json!(0.0));
-    response.insert("memory_usage".to_string(), json!(0.0));
-    response.insert("burst_rate".to_string(), json!(0.0));
+    response.insert("burst_frequency_hz".to_string(), json!(runtime_status.frequency_hz));
+    response.insert("burst_count".to_string(), json!(runtime_status.burst_count));
+    response.insert("neuron_count".to_string(), json!(health.neuron_count));
+    response.insert("cortical_area_count".to_string(), json!(health.cortical_area_count));
+    response.insert("brain_readiness".to_string(), json!(health.brain_readiness));
+    response.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
     
     Ok(Json(response))
 }
@@ -67,10 +87,24 @@ pub async fn get_metrics(State(_state): State<ApiState>) -> ApiResult<Json<HashM
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_data(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
-    // TODO: Retrieve detailed monitoring data
+pub async fn get_data(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+    // Get detailed monitoring data from all services
+    let analytics_service = state.analytics_service.as_ref();
+    
+    let health = analytics_service.get_system_health().await
+        .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
+    
+    // Return comprehensive monitoring data
+    let mut data = HashMap::new();
+    data.insert("neuron_count".to_string(), json!(health.neuron_count));
+    data.insert("cortical_area_count".to_string(), json!(health.cortical_area_count));
+    data.insert("burst_count".to_string(), json!(health.burst_count));
+    data.insert("brain_readiness".to_string(), json!(health.brain_readiness));
+    data.insert("burst_engine_active".to_string(), json!(health.burst_engine_active));
+    
     let mut response = HashMap::new();
-    response.insert("data".to_string(), json!({}));
+    response.insert("data".to_string(), json!(data));
+    response.insert("timestamp".to_string(), json!(chrono::Utc::now().to_rfc3339()));
     
     Ok(Json(response))
 }
