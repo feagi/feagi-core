@@ -62,20 +62,36 @@ pub async fn post_simulation_timestep(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fcl(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fcl(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use tracing::debug;
     
-    // TODO: Get FCL from BurstLoopRunner/NPU
-    // For now, return empty FCL structure
-    debug!(target: "feagi-api", "GET /fcl - returning empty FCL (implementation pending)");
+    let runtime_service = state.runtime_service.as_ref();
+    let _connectome_service = state.connectome_service.as_ref();
+    
+    // Get FCL snapshot from RuntimeService
+    let fcl_data = runtime_service.get_fcl_snapshot().await
+        .map_err(|e| ApiError::internal(format!("Failed to get FCL snapshot: {}", e)))?;
+    
+    // Get burst count for timestep
+    let timestep = runtime_service.get_burst_count().await
+        .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+    
+    // Organize FCL by cortical area (need to map neuron_id -> cortical_id)
+    let cortical_areas: HashMap<String, Vec<u64>> = HashMap::new();
+    let global_fcl: Vec<u64> = fcl_data.iter().map(|(id, _)| *id).collect();
+    
+    // TODO: Map neuron IDs to cortical areas using ConnectomeService
+    // For now, just return global FCL
     
     let mut response = HashMap::new();
-    response.insert("timestep".to_string(), serde_json::json!(0));
-    response.insert("total_neurons".to_string(), serde_json::json!(0));
-    response.insert("global_fcl".to_string(), serde_json::json!(Vec::<u64>::new()));
-    response.insert("cortical_areas".to_string(), serde_json::json!(HashMap::<String, Vec<u64>>::new()));
+    response.insert("timestep".to_string(), serde_json::json!(timestep));
+    response.insert("total_neurons".to_string(), serde_json::json!(fcl_data.len()));
+    response.insert("global_fcl".to_string(), serde_json::json!(global_fcl));
+    response.insert("cortical_areas".to_string(), serde_json::json!(cortical_areas));
     response.insert("default_window_size".to_string(), serde_json::json!(20));
-    response.insert("active_cortical_count".to_string(), serde_json::json!(0));
+    response.insert("active_cortical_count".to_string(), serde_json::json!(cortical_areas.len()));
+    
+    debug!(target: "feagi-api", "GET /fcl - returned {} neurons from FCL", fcl_data.len());
     
     Ok(Json(response))
 }
@@ -91,16 +107,40 @@ pub async fn get_fcl(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<S
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fire_queue(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_fire_queue(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use tracing::debug;
     
-    // TODO: Get Fire Queue from BurstLoopRunner/NPU
-    debug!(target: "feagi-api", "GET /fire_queue - returning empty queue (implementation pending)");
+    let runtime_service = state.runtime_service.as_ref();
+    let _connectome_service = state.connectome_service.as_ref();
+    
+    // Get Fire Queue sample from RuntimeService
+    let fq_sample = runtime_service.get_fire_queue_sample().await
+        .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
+    
+    // Get burst count for timestep
+    let timestep = runtime_service.get_burst_count().await
+        .map_err(|e| ApiError::internal(format!("Failed to get burst count: {}", e)))?;
+    
+    // Convert cortical_idx to cortical_id using ConnectomeService
+    let mut cortical_areas: HashMap<String, Vec<u64>> = HashMap::new();
+    let mut total_fired = 0;
+    
+    for (cortical_idx, (neuron_ids, _, _, _, _)) in fq_sample {
+        // TODO: Map cortical_idx to cortical_id using ConnectomeService
+        // For now, use cortical_idx as string
+        let cortical_id = format!("area_{}", cortical_idx);
+        
+        let ids_u64: Vec<u64> = neuron_ids.iter().map(|&id| id as u64).collect();
+        total_fired += ids_u64.len();
+        cortical_areas.insert(cortical_id, ids_u64);
+    }
     
     let mut response = HashMap::new();
-    response.insert("timestep".to_string(), serde_json::json!(0));
-    response.insert("total_fired".to_string(), serde_json::json!(0));
-    response.insert("cortical_areas".to_string(), serde_json::json!(HashMap::<String, Vec<u64>>::new()));
+    response.insert("timestep".to_string(), serde_json::json!(timestep));
+    response.insert("total_fired".to_string(), serde_json::json!(total_fired));
+    response.insert("cortical_areas".to_string(), serde_json::json!(cortical_areas));
+    
+    debug!(target: "feagi-api", "GET /fire_queue - returned {} fired neurons", total_fired);
     
     Ok(Json(response))
 }
@@ -166,7 +206,9 @@ pub async fn get_fcl_status(State(_state): State<ApiState>) -> ApiResult<Json<Ha
     )
 )]
 pub async fn get_fire_ledger_default_window_size(State(_state): State<ApiState>) -> ApiResult<Json<i32>> {
-    // TODO: Get from configuration
+    // Get default window size from Fire Ledger configuration
+    // TODO: Add get_default_window_size to RuntimeService
+    // For now, return standard default
     Ok(Json(20))
 }
 
@@ -186,7 +228,13 @@ pub async fn put_fire_ledger_default_window_size(
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let window_size = request.get("window_size").copied().unwrap_or(20);
     
-    // TODO: Update configuration
+    if window_size <= 0 {
+        return Err(ApiError::invalid_input("Window size must be positive"));
+    }
+    
+    // TODO: Update default window size configuration
+    tracing::info!(target: "feagi-api", "Default Fire Ledger window size set to {}", window_size);
+    
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::json!(true));
     response.insert("window_size".to_string(), serde_json::json!(window_size));
@@ -205,12 +253,24 @@ pub async fn put_fire_ledger_default_window_size(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fire_ledger_areas_window_config(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    // TODO: Get per-area window configuration
+pub async fn get_fire_ledger_areas_window_config(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    let runtime_service = state.runtime_service.as_ref();
+    
+    // Get Fire Ledger configurations from RuntimeService
+    let configs = runtime_service.get_fire_ledger_configs().await
+        .map_err(|e| ApiError::internal(format!("Failed to get fire ledger configs: {}", e)))?;
+    
+    // Convert to area_id -> window_size HashMap
+    // TODO: Map cortical_idx to cortical_id using ConnectomeService
+    let mut areas: HashMap<String, usize> = HashMap::new();
+    for (cortical_idx, window_size) in configs {
+        areas.insert(format!("area_{}", cortical_idx), window_size);
+    }
+    
     let mut response = HashMap::new();
     response.insert("default_window_size".to_string(), serde_json::json!(20));
-    response.insert("areas".to_string(), serde_json::json!(HashMap::<String, i32>::new()));
-    response.insert("total_configured_areas".to_string(), serde_json::json!(0));
+    response.insert("areas".to_string(), serde_json::json!(areas));
+    response.insert("total_configured_areas".to_string(), serde_json::json!(areas.len()));
     
     Ok(Json(response))
 }

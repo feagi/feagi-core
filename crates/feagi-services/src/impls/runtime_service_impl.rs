@@ -171,5 +171,45 @@ impl RuntimeService for RuntimeServiceImpl {
             "Burst count reset not yet implemented".to_string(),
         ))
     }
+    
+    async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>> {
+        let runner = self.burst_runner.read();
+        let fcl_data = runner.get_fcl_snapshot();
+        
+        // Convert NeuronId (u32) to u64
+        let result = fcl_data.iter()
+            .map(|(neuron_id, potential)| (neuron_id.0 as u64, *potential))
+            .collect();
+        
+        Ok(result)
+    }
+    
+    async fn get_fire_queue_sample(&self) -> ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+        let mut runner = self.burst_runner.write();
+        
+        match runner.get_fire_queue_sample() {
+            Some(sample) => {
+                // Convert AHashMap to std::HashMap for service layer compatibility
+                let result: std::collections::HashMap<_, _> = sample.into_iter().collect();
+                Ok(result)
+            },
+            None => Ok(std::collections::HashMap::new()),
+        }
+    }
+    
+    async fn get_fire_ledger_configs(&self) -> ServiceResult<Vec<(u32, usize)>> {
+        let runner = self.burst_runner.read();
+        Ok(runner.get_fire_ledger_configs())
+    }
+    
+    async fn configure_fire_ledger_window(&self, cortical_idx: u32, window_size: usize) -> ServiceResult<()> {
+        let mut runner = self.burst_runner.write();
+        runner.configure_fire_ledger_window(cortical_idx, window_size);
+        
+        info!(target: "feagi-services", "Configured Fire Ledger window for area {}: {} bursts", 
+            cortical_idx, window_size);
+        
+        Ok(())
+    }
 }
 

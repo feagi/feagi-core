@@ -27,16 +27,34 @@ use std::collections::HashMap;
     )
 )]
 pub async fn post_create(
-    State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, Value>>,
+    State(state): State<ApiState>,
+    Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, Value>>> {
-    // TODO: Create snapshot
-    let snapshot_id = uuid::Uuid::new_v4().to_string();
+    let snapshot_service = state.snapshot_service.as_ref()
+        .ok_or_else(|| ApiError::internal("Snapshot service not available"))?;
+    
+    // Parse options from request
+    let stateful = request.get("stateful").and_then(|v| v.as_bool()).unwrap_or(false);
+    let compression = request.get("compression").and_then(|v| v.as_bool()).unwrap_or(true);
+    let name = request.get("name").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let description = request.get("description").and_then(|v| v.as_str()).map(|s| s.to_string());
+    
+    let options = feagi_services::SnapshotCreateOptions {
+        name,
+        description,
+        stateful,
+        compression,
+    };
+    
+    // Create snapshot via service layer
+    let metadata = snapshot_service.create_snapshot(options).await
+        .map_err(|e| ApiError::internal(format!("Failed to create snapshot: {}", e)))?;
     
     let mut response = HashMap::new();
-    response.insert("snapshot_id".to_string(), json!(snapshot_id));
+    response.insert("snapshot_id".to_string(), json!(metadata.snapshot_id));
     response.insert("success".to_string(), json!(true));
     response.insert("message".to_string(), json!("Snapshot created successfully"));
+    response.insert("path".to_string(), json!(format!("./snapshots/{}", metadata.snapshot_id)));
     
     Ok(Json(response))
 }
@@ -53,16 +71,22 @@ pub async fn post_create(
     )
 )]
 pub async fn post_restore(
-    State(_state): State<ApiState>,
+    State(state): State<ApiState>,
     Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    let snapshot_service = state.snapshot_service.as_ref()
+        .ok_or_else(|| ApiError::internal("Snapshot service not available"))?;
+    
     // Validate snapshot_id is provided
     let snapshot_id = request.get("snapshot_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("Missing 'snapshot_id' field"))?;
     
-    // TODO: Restore snapshot
-    tracing::info!(target: "feagi-api", "Restoring snapshot: {}", snapshot_id);
+    // Restore snapshot via service layer
+    snapshot_service.restore_snapshot(snapshot_id).await
+        .map_err(|e| ApiError::internal(format!("Failed to restore snapshot: {}", e)))?;
+    
+    tracing::info!(target: "feagi-api", "Restored snapshot: {}", snapshot_id);
     
     Ok(Json(HashMap::from([
         ("message".to_string(), "Snapshot restored successfully".to_string())
@@ -80,10 +104,16 @@ pub async fn post_restore(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_list(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
-    // TODO: Retrieve snapshot list
+pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+    let snapshot_service = state.snapshot_service.as_ref()
+        .ok_or_else(|| ApiError::internal("Snapshot service not available"))?;
+    
+    // Get snapshot list from service layer
+    let snapshots = snapshot_service.list_snapshots().await
+        .map_err(|e| ApiError::internal(format!("Failed to list snapshots: {}", e)))?;
+    
     let mut response = HashMap::new();
-    response.insert("snapshots".to_string(), json!(Vec::<String>::new()));
+    response.insert("snapshots".to_string(), json!(snapshots));
     
     Ok(Json(response))
 }
@@ -100,10 +130,17 @@ pub async fn get_list(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<
     )
 )]
 pub async fn delete_snapshot(
-    State(_state): State<ApiState>,
-    Path(_snapshot_id): Path<String>,
+    State(state): State<ApiState>,
+    Path(snapshot_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Delete snapshot
+    let snapshot_service = state.snapshot_service.as_ref()
+        .ok_or_else(|| ApiError::internal("Snapshot service not available"))?;
+    
+    // Delete snapshot via service layer
+    snapshot_service.delete_snapshot(&snapshot_id).await
+        .map_err(|e| ApiError::internal(format!("Failed to delete snapshot: {}", e)))?;
+    
+    tracing::info!(target: "feagi-api", "Deleted snapshot: {}", snapshot_id);
     
     Ok(Json(HashMap::from([
         ("message".to_string(), "Snapshot deleted successfully".to_string())

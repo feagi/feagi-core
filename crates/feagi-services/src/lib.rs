@@ -91,6 +91,7 @@ pub mod types;
 // Re-export main API
 pub use traits::{
     AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
+    SnapshotService, SnapshotMetadata, SnapshotCreateOptions,
 };
 
 pub use types::{
@@ -106,6 +107,6 @@ pub use types::{
 // Re-export implementations (optional - adapters can use their own)
 pub use impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
-    RuntimeServiceImpl,
+    RuntimeServiceImpl, SnapshotServiceImpl,
 };
 

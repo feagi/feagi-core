@@ -33,6 +33,7 @@ pub struct ApiState {
     pub genome_service: Arc<dyn GenomeService + Send + Sync>,
     pub neuron_service: Arc<dyn NeuronService + Send + Sync>,
     pub runtime_service: Arc<dyn RuntimeService + Send + Sync>,
+    pub snapshot_service: Option<Arc<dyn feagi_services::SnapshotService + Send + Sync>>,
 }
 
 /// Create the main HTTP server application

@@ -321,6 +321,33 @@ impl BurstLoopRunner {
     pub fn get_frequency(&self) -> f64 {
         self.frequency_hz
     }
+    
+    /// Get current FCL snapshot for monitoring/debugging
+    /// Returns Vec of (NeuronId, potential) pairs
+    pub fn get_fcl_snapshot(&self) -> Vec<(NeuronId, f32)> {
+        self.npu.lock().unwrap().get_last_fcl_snapshot()
+    }
+    
+    /// Get current fire queue for monitoring
+    /// Returns the last sampled fire queue data
+    pub fn get_fire_queue_sample(&mut self) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+        self.npu.lock().unwrap().sample_fire_queue()
+    }
+    
+    /// Get Fire Ledger window configurations for all cortical areas
+    pub fn get_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
+        self.npu.lock().unwrap().get_all_fire_ledger_configs()
+    }
+    
+    /// Configure Fire Ledger window size for a specific cortical area
+    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
+        self.npu.lock().unwrap().configure_fire_ledger_window(cortical_idx, window_size);
+    }
+    
+    /// Get reference to NPU for direct access (use sparingly)
+    pub fn get_npu(&self) -> Arc<Mutex<RustNPU>> {
+        self.npu.clone()
+    }
 }
 
 impl Drop for BurstLoopRunner {

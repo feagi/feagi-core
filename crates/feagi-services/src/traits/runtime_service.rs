@@ -98,6 +98,39 @@ pub trait RuntimeService: Send + Sync {
     /// Resets the burst counter to zero.
     ///
     async fn reset_burst_count(&self) -> ServiceResult<()>;
+    
+    /// Get FCL (Fire Candidate List) snapshot for monitoring
+    ///
+    /// Returns vector of (neuron_id, potential) pairs from last burst
+    ///
+    /// # Returns
+    /// * `Vec<(u64, f32)>` - Neuron IDs and their membrane potentials
+    ///
+    async fn get_fcl_snapshot(&self) -> ServiceResult<Vec<(u64, f32)>>;
+    
+    /// Get Fire Queue sample for monitoring
+    ///
+    /// Returns neurons that actually fired in the last burst, organized by cortical area
+    ///
+    /// # Returns
+    /// * `HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>` - Area data
+    ///
+    async fn get_fire_queue_sample(&self) -> ServiceResult<std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>>;
+    
+    /// Get Fire Ledger window configurations for all cortical areas
+    ///
+    /// # Returns
+    /// * `Vec<(u32, usize)>` - (cortical_idx, window_size) pairs
+    ///
+    async fn get_fire_ledger_configs(&self) -> ServiceResult<Vec<(u32, usize)>>;
+    
+    /// Configure Fire Ledger window size for a cortical area
+    ///
+    /// # Arguments
+    /// * `cortical_idx` - Cortical area index
+    /// * `window_size` - Number of bursts to retain in history
+    ///
+    async fn configure_fire_ledger_window(&self, cortical_idx: u32, window_size: usize) -> ServiceResult<()>;
 }
 
 
