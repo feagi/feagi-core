@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 
 use crate::traits::agent_service::*;
 use feagi_bdu::ConnectomeManager;
@@ -138,10 +138,17 @@ impl AgentService for AgentServiceImpl {
         agent_info.metadata.insert("controller_version".to_string(), serde_json::json!(registration.controller_version));
         
         // Register in agent registry
+        info!("📝 [AGENT-SERVICE] Registering in AgentRegistry: {}", registration.agent_id);
         self.agent_registry.write().register(agent_info)
-            .map_err(|e| AgentError::RegistrationFailed(e))?;
+            .map_err(|e| {
+                error!("❌ [AGENT-SERVICE] Registration failed: {}", e);
+                AgentError::RegistrationFailed(e)
+            })?;
         
-        info!("✅ [AGENT-SERVICE] Agent '{}' registered successfully", registration.agent_id);
+        // Verify registration worked
+        let count = self.agent_registry.read().get_all().len();
+        info!("✅ [AGENT-SERVICE] Agent '{}' registered successfully (total agents: {})", 
+            registration.agent_id, count);
         
         Ok(AgentRegistrationResponse {
             status: "success".to_string(),
@@ -161,7 +168,12 @@ impl AgentService for AgentServiceImpl {
     async fn list_agents(&self) -> AgentResult<Vec<String>> {
         let registry = self.agent_registry.read();
         let agents = registry.get_all();
-        Ok(agents.iter().map(|a| a.agent_id.clone()).collect())
+        let agent_ids: Vec<String> = agents.iter().map(|a| a.agent_id.clone()).collect();
+        
+        tracing::info!(target: "feagi-services", 
+            "📋 list_agents called - found {} agents: {:?}", agent_ids.len(), agent_ids);
+        
+        Ok(agent_ids)
     }
     
     async fn get_agent_properties(&self, agent_id: &str) -> AgentResult<AgentProperties> {
