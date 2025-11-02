@@ -82,7 +82,7 @@ pub fn validate_genome(genome: &RuntimeGenome) -> ValidationResult {
     result
 }
 
-/// Auto-fix common genome issues (zero dimensions, zero per_voxel_neuron_cnt)
+/// Auto-fix common genome issues (zero dimensions, zero per_voxel_neuron_cnt, missing physiology)
 ///
 /// This function modifies the genome in-place to fix issues that can be automatically corrected.
 /// Should be called before validation to prevent common user errors.
@@ -96,6 +96,22 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
     use tracing::info;
     
     let mut fixes_applied = 0;
+    
+    // Fix missing or invalid physiology values
+    if genome.physiology.simulation_timestep <= 0.0 {
+        let default_timestep = crate::runtime::PhysiologyConfig::default().simulation_timestep;
+        info!("🔧 AUTO-FIX: Invalid simulation_timestep {} → {} (default)", 
+              genome.physiology.simulation_timestep, default_timestep);
+        genome.physiology.simulation_timestep = default_timestep;
+        fixes_applied += 1;
+    }
+    
+    if genome.physiology.max_age == 0 {
+        let default_age = crate::runtime::PhysiologyConfig::default().max_age;
+        info!("🔧 AUTO-FIX: max_age 0 → {} (default)", default_age);
+        genome.physiology.max_age = default_age;
+        fixes_applied += 1;
+    }
     
     for (cortical_id, area) in &mut genome.cortical_areas {
         // Fix zero dimensions

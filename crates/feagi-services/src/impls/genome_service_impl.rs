@@ -34,6 +34,10 @@ impl GenomeService for GenomeServiceImpl {
         let genome = feagi_evo::load_genome_from_json(&params.json_str)
             .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
         
+        // Extract simulation_timestep from genome physiology (will be returned in GenomeInfo)
+        let simulation_timestep = genome.physiology.simulation_timestep;
+        info!(target: "feagi-services", "Genome simulation_timestep: {} seconds", simulation_timestep);
+        
         // Load into connectome via ConnectomeManager
         // This involves synaptogenesis which can be CPU-intensive, so run it on a blocking thread
         // CRITICAL: Add timeout to prevent hanging during shutdown
@@ -88,8 +92,23 @@ impl GenomeService for GenomeServiceImpl {
             progress.synapses_created
         );
         
-        // Return genome info
-        self.get_genome_info().await
+        // Return genome info with simulation_timestep
+        let (cortical_area_count, brain_region_count) = {
+            let manager = self.connectome.read();
+            let cortical_area_count = manager.get_cortical_area_count();
+            let brain_region_ids = manager.get_brain_region_ids();
+            let brain_region_count = brain_region_ids.len();
+            (cortical_area_count, brain_region_count)
+        };
+        
+        Ok(GenomeInfo {
+            genome_id: "current".to_string(),
+            genome_title: "Current Genome".to_string(),
+            version: "2.1".to_string(),
+            cortical_area_count,
+            brain_region_count,
+            simulation_timestep,  // From genome physiology
+        })
     }
 
     async fn save_genome(&self, params: SaveGenomeParams) -> ServiceResult<String> {
@@ -127,6 +146,7 @@ impl GenomeService for GenomeServiceImpl {
             version: "2.1".to_string(),
             cortical_area_count,
             brain_region_count,
+            simulation_timestep: 0.025,  // Default value (TODO: Store in ConnectomeManager)
         })
     }
 

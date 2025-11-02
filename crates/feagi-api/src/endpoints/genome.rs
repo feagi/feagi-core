@@ -114,6 +114,19 @@ async fn load_default_genome(
     tracing::info!(target: "feagi-api","Successfully loaded {} genome: {} cortical areas, {} brain regions", 
                genome_name, genome_info.cortical_area_count, genome_info.brain_region_count);
     
+    // CRITICAL: Update burst frequency from genome's simulation_timestep
+    // Genome specifies timestep in seconds, convert to Hz: frequency = 1 / timestep
+    let burst_frequency_hz = 1.0 / genome_info.simulation_timestep;
+    tracing::info!(target: "feagi-api","Updating burst frequency from genome: {} seconds timestep → {:.0} Hz", 
+                   genome_info.simulation_timestep, burst_frequency_hz);
+    
+    // Update runtime service with new frequency
+    let runtime_service = state.runtime_service.as_ref();
+    runtime_service.set_frequency(burst_frequency_hz).await
+        .map_err(|e| ApiError::internal(format!("Failed to update burst frequency: {}", e)))?;
+    
+    tracing::info!(target: "feagi-api","✅ Burst frequency updated to {:.0} Hz from genome physiology", burst_frequency_hz);
+    
     // Return response matching Python format
     let mut response = HashMap::new();
     response.insert("success".to_string(), serde_json::Value::Bool(true));

@@ -166,6 +166,7 @@ pub struct GenomeInfo {
     pub version: String,
     pub cortical_area_count: usize,
     pub brain_region_count: usize,
+    pub simulation_timestep: f64,  // Simulation timestep in seconds from physiology
 }
 
 /// Parameters for loading a genome
