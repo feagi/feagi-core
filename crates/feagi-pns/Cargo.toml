@@ -26,6 +26,7 @@ serde_json = "1.0"
 anyhow = "1.0"
 crossbeam = "0.8"
 parking_lot = "0.12"
+ahash.workspace = true
 thiserror = "1.0"
 lz4 = "1.28"  # LZ4 compression (used by multiple transports)
 tracing = { workspace = true }  # Structured logging

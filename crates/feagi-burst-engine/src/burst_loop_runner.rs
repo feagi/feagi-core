@@ -19,6 +19,7 @@
 use crate::sensory::AgentManager;
 use crate::RustNPU;
 use feagi_types::NeuronId;
+use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -31,6 +32,11 @@ use std::thread;
 pub trait VisualizationPublisher: Send + Sync {
     /// Publish visualization data (LZ4-compressed Type 11 format)
     fn publish_visualization(&self, data: &[u8]) -> Result<(), String>;
+}
+
+pub trait MotorPublisher: Send + Sync {
+    /// Publish motor data to a specific agent (XYZP format)
+    fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<(), String>;
 }
 
 /// Burst loop runner - manages the main neural processing loop
@@ -55,6 +61,11 @@ pub struct BurstLoopRunner {
     /// Visualization publisher for direct Rust-to-Rust publishing (NO PYTHON IN HOT PATH)
     /// Uses trait abstraction to avoid circular dependency with feagi-pns
     pub viz_publisher: Option<Arc<dyn VisualizationPublisher>>,
+    /// Motor publisher for agent-specific motor command publishing
+    pub motor_publisher: Option<Arc<dyn MotorPublisher>>,
+    /// Motor area subscriptions: agent_id → Set<cortical_id>
+    /// Stores cortical_id strings (e.g., "omot00"), matching sensory stream pattern
+    motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     /// FCL/FQ sampler configuration
     fcl_sampler_frequency: Arc<Mutex<f64>>,  // Sampling frequency in Hz
     fcl_sampler_consumer: Arc<Mutex<u32>>,   // Consumer type: 1=visualization, 2=motor, 3=both
@@ -69,9 +80,10 @@ impl BurstLoopRunner {
     /// * `npu` - The NPU to run bursts on
     /// * `viz_publisher` - Optional visualization publisher (None = no ZMQ visualization)
     /// * `frequency_hz` - Burst frequency in Hz
-    pub fn new<P: VisualizationPublisher + 'static>(
+    pub fn new<V: VisualizationPublisher + 'static, M: MotorPublisher + 'static>(
         npu: Arc<Mutex<RustNPU>>,
-        viz_publisher: Option<Arc<Mutex<P>>>,
+        viz_publisher: Option<Arc<Mutex<V>>>,
+        motor_publisher: Option<Arc<Mutex<M>>>,
         frequency_hz: f64,
     ) -> Self {
         // Create FCL injection callback for sensory data
@@ -195,16 +207,27 @@ impl BurstLoopRunner {
 
         let sensory_manager = AgentManager::new(injection_callback);
 
-        // Convert generic publisher to trait object (if provided)
+        // Convert generic publishers to trait objects (if provided)
         let viz_publisher_trait: Option<Arc<dyn VisualizationPublisher>> = viz_publisher.map(|p| {
-            // Wrap Arc<Mutex<P>> to implement VisualizationPublisher
-            struct VisualizerWrapper<P: VisualizationPublisher>(Arc<Mutex<P>>);
-            impl<P: VisualizationPublisher> VisualizationPublisher for VisualizerWrapper<P> {
+            // Wrap Arc<Mutex<V>> to implement VisualizationPublisher
+            struct VisualizerWrapper<V: VisualizationPublisher>(Arc<Mutex<V>>);
+            impl<V: VisualizationPublisher> VisualizationPublisher for VisualizerWrapper<V> {
                 fn publish_visualization(&self, data: &[u8]) -> Result<(), String> {
                     self.0.lock().unwrap().publish_visualization(data)
                 }
             }
             Arc::new(VisualizerWrapper(p)) as Arc<dyn VisualizationPublisher>
+        });
+
+        let motor_publisher_trait: Option<Arc<dyn MotorPublisher>> = motor_publisher.map(|p| {
+            // Wrap Arc<Mutex<M>> to implement MotorPublisher
+            struct MotorWrapper<M: MotorPublisher>(Arc<Mutex<M>>);
+            impl<M: MotorPublisher> MotorPublisher for MotorWrapper<M> {
+                fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<(), String> {
+                    self.0.lock().unwrap().publish_motor(agent_id, data)
+                }
+            }
+            Arc::new(MotorWrapper(p)) as Arc<dyn MotorPublisher>
         });
 
         Self {
@@ -216,6 +239,8 @@ impl BurstLoopRunner {
             viz_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_viz_shm_writer
             motor_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_motor_shm_writer
             viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
+            motor_publisher: motor_publisher_trait, // Trait object for motor (NO PYTHON CALLBACKS!)
+            motor_subscriptions: Arc::new(ParkingLotRwLock::new(ahash::AHashMap::new())),
             fcl_sampler_frequency: Arc::new(Mutex::new(30.0)), // Default 30Hz for visualization
             fcl_sampler_consumer: Arc::new(Mutex::new(1)), // Default: 1 = visualization only
             cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
@@ -242,6 +267,26 @@ impl BurstLoopRunner {
         let mut guard = self.motor_shm_writer.lock().unwrap();
         *guard = Some(writer);
         Ok(())
+    }
+    
+    /// Register an agent's motor subscriptions
+    /// Called when an agent registers with motor capability
+    /// Stores cortical_id strings (e.g., "omot00"), matching sensory stream pattern
+    pub fn register_motor_subscriptions(&self, agent_id: String, cortical_ids: ahash::AHashSet<String>) {
+        self.motor_subscriptions.write().insert(agent_id.clone(), cortical_ids.clone());
+        
+        info!(
+            "[BURST-RUNNER] 🎮 Registered motor subscriptions for agent '{}': {:?}",
+            agent_id, cortical_ids
+        );
+    }
+    
+    /// Unregister an agent's motor subscriptions
+    /// Called when an agent disconnects
+    pub fn unregister_motor_subscriptions(&self, agent_id: &str) {
+        if self.motor_subscriptions.write().remove(agent_id).is_some() {
+            info!("[BURST-RUNNER] Removed motor subscriptions for agent '{}'", agent_id);
+        }
     }
 
     // REMOVED: set_viz_zmq_publisher - NO PYTHON CALLBACKS IN HOT PATH!
@@ -271,14 +316,17 @@ impl BurstLoopRunner {
         let frequency = self.frequency_hz.clone();  // Clone Arc for thread
         let running = self.running.clone();
         let viz_writer = self.viz_shm_writer.clone();
+        let motor_writer = self.motor_shm_writer.clone();
         let viz_publisher = self.viz_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
+        let motor_publisher = self.motor_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
+        let motor_subs = self.motor_subscriptions.clone();
         let cached_burst_count = self.cached_burst_count.clone(); // For lock-free burst count reads
 
         self.thread_handle = Some(
             thread::Builder::new()
                 .name("feagi-burst-loop".to_string())
                 .spawn(move || {
-                    burst_loop(npu, frequency, running, viz_writer, viz_publisher, cached_burst_count);
+                    burst_loop(npu, frequency, running, viz_writer, motor_writer, viz_publisher, motor_publisher, motor_subs, cached_burst_count);
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
         );
@@ -423,6 +471,135 @@ impl Drop for BurstLoopRunner {
     }
 }
 
+/// Helper function to encode fire queue data to XYZP format
+/// Used by both visualization and motor output streams
+/// 
+/// 🚀 ZERO-COPY OPTIMIZATION: Takes ownership of fire_data to move (not clone) vectors
+/// This eliminates ~1 MB allocation per burst @ 10 Hz = ~10 MB/sec saved
+/// 
+/// Filter by cortical_id strings (e.g., "omot00"), matching sensory stream pattern
+fn encode_fire_data_to_xyzp(
+    fire_data: ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
+    cortical_id_filter: Option<&ahash::AHashSet<String>>,
+    npu: &Arc<Mutex<RustNPU>>,
+) -> Result<Vec<u8>, String> {
+    use feagi_data_serialization::FeagiSerializable;
+    use feagi_data_structures::genomic::CorticalID;
+    use feagi_data_structures::neuron_voxels::xyzp::{
+        CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+    };
+
+    let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
+
+    for (area_id, (_id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data {
+        // Skip empty areas or areas with mismatched vector lengths
+        if x_vec.is_empty() || y_vec.is_empty() || z_vec.is_empty() || p_vec.is_empty() {
+            continue;
+        }
+        
+        // Sanity check: all vectors should have the same length
+        if x_vec.len() != y_vec.len() || x_vec.len() != z_vec.len() || x_vec.len() != p_vec.len() {
+            error!(
+                "[ENCODE-XYZP] ❌ Vector length mismatch in area {}: x={}, y={}, z={}, p={}",
+                area_id, x_vec.len(), y_vec.len(), z_vec.len(), p_vec.len()
+            );
+            continue;
+        }
+        
+        // Get cortical_id FIRST (needed for filtering)
+        let cortical_id_opt = npu
+            .lock()
+            .unwrap()
+            .get_cortical_area_name(area_id)
+            .map(|s| s.to_string());
+        
+        // Apply cortical_id filter if specified (for motor subscriptions)
+        if let Some(filter) = cortical_id_filter {
+            if let Some(ref cortical_id) = cortical_id_opt {
+                static FIRST_FILTER_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if !FIRST_FILTER_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                    info!("[ENCODE-XYZP] 🔍 Motor filter check: area_idx={}, cortical_id='{}', filter={:?}", 
+                          area_id, cortical_id, filter);
+                    FIRST_FILTER_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+                
+                if !filter.contains(cortical_id) {
+                    continue; // Skip - not in agent's motor subscriptions
+                }
+            } else {
+                continue; // Skip if no cortical_id
+            }
+        }
+        
+        let cortical_id = match cortical_id_opt {
+            Some(name) => {
+                let mut bytes = [b' '; 6];
+                let name_bytes = name.as_bytes();
+                let copy_len = name_bytes.len().min(6);
+                bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+
+                match CorticalID::from_bytes(&bytes) {
+                    Ok(id) => id,
+                    Err(e) => {
+                        error!("[ENCODE-XYZP] ❌ Failed to create CorticalID for '{}': {:?}", name, e);
+                        continue;
+                    }
+                }
+            }
+            None => {
+                error!("[ENCODE-XYZP] ❌ No cortical area name for area_id {}", area_id);
+                continue;
+            }
+        };
+
+        // CRITICAL: Final safety check - ensure we have actual data
+        let vec_len = x_vec.len();
+        if vec_len == 0 {
+            error!("[ENCODE-XYZP] ❌ CRITICAL: Vectors have zero length after all checks! area_id={}", area_id);
+            continue;
+        }
+        
+        // Create neuron voxel arrays (MOVE vectors for zero-copy)
+        match NeuronVoxelXYZPArrays::new_from_vectors(
+            x_vec,  // ✅ MOVE (no clone)
+            y_vec,  // ✅ MOVE (no clone)
+            z_vec,  // ✅ MOVE (no clone)
+            p_vec,  // ✅ MOVE (no clone)
+        ) {
+            Ok(arrays) => {
+                info!("[ENCODE-XYZP] ✅ Created arrays for area {} with {} neurons", area_id, vec_len);
+                cortical_mapped.mappings.insert(cortical_id, arrays);
+            }
+            Err(e) => {
+                error!("[ENCODE-XYZP] ❌ Failed to create arrays for area {}: {:?}", area_id, e);
+                continue;
+            }
+        }
+    }
+
+    // Check if we have any data to send
+    if cortical_mapped.mappings.is_empty() {
+        // No neurons fired in any subscribed area - return empty buffer
+        return Ok(Vec::new());
+    }
+
+    // DEBUG: Log what we're about to serialize
+    info!("[ENCODE-XYZP] 🔍 About to serialize {} cortical areas", cortical_mapped.mappings.len());
+    info!("[ENCODE-XYZP] 🔍 Calling get_number_of_bytes_needed()...");
+    let bytes_needed = cortical_mapped.get_number_of_bytes_needed();
+    info!("[ENCODE-XYZP] 🔍 Bytes needed: {}", bytes_needed);
+    
+    // Serialize to bytes
+    let mut buffer = vec![0u8; bytes_needed];
+    info!("[ENCODE-XYZP] 🔍 Calling try_serialize_struct_to_byte_slice()...");
+    cortical_mapped
+        .try_serialize_struct_to_byte_slice(&mut buffer)
+        .map_err(|e| format!("Failed to serialize: {:?}", e))?;
+    info!("[ENCODE-XYZP] 🔍 Serialization successful!");
+
+    Ok(buffer)
+}
+
 /// Helper to get timestamp string with millisecond precision
 fn get_timestamp() -> String {
     let now = std::time::SystemTime::now();
@@ -444,7 +621,10 @@ fn burst_loop(
     frequency_hz: Arc<Mutex<f64>>,  // Shared frequency - can be updated while running
     running: Arc<AtomicBool>,
     viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
+    motor_shm_writer: Arc<Mutex<Option<crate::motor_shm_writer::MotorSHMWriter>>>,
     viz_publisher: Option<Arc<dyn VisualizationPublisher>>, // Trait object for visualization (NO PYTHON CALLBACKS!)
+    motor_publisher: Option<Arc<dyn MotorPublisher>>, // Trait object for motor (NO PYTHON CALLBACKS!)
+    motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
 ) {
     let timestamp = get_timestamp();
@@ -569,125 +749,43 @@ fn burst_loop(
             }
 
             if let Some(fire_data) = fire_data_opt {
-                // Debug: Log first successful viz write (for migration debugging)
-                // Warning about unused static is expected - kept for development debugging
-                #[allow(dead_code)]  // In development - used for debugging first viz write
-                static FIRST_VIZ_WRITE_LOGGED: std::sync::atomic::AtomicBool =
-                    std::sync::atomic::AtomicBool::new(false);
-
-                // Encode as raw Type 11 structure (no container wrapper, like rust-py-libs pattern)
-                use feagi_data_serialization::FeagiSerializable;
-                use feagi_data_structures::genomic::CorticalID;
-                use feagi_data_structures::neuron_voxels::xyzp::{
-                    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
-                };
-
-                // Convert FQ data to CorticalMappedXYZPNeuronVoxels
-                let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
-                let mut _total_neurons = 0;
-
-                // 🚀 ZERO-COPY OPTIMIZATION: Consume fire_data to avoid cloning vectors
-                // This eliminates ~1 MB allocation per burst @ 10 Hz = ~10 MB/sec saved
-                for (area_id, (_id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data {
-                    _total_neurons += _id_vec.len();
-
-                    // Debug: Log what areas we're encoding
-                    static FIRST_AREAS_LOGGED: std::sync::atomic::AtomicBool =
-                        std::sync::atomic::AtomicBool::new(false);
-                    if !FIRST_AREAS_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                        let area_name = npu
-                            .lock()
-                            .unwrap()
-                            .get_cortical_area_name(area_id)
-                            .map(|s| s.to_string());
-                        debug!(
-                            "[BURST-LOOP] 🔍 Area {} ({}): {} neurons",
-                            area_id,
-                            area_name.as_deref().unwrap_or("unknown"),
-                            _id_vec.len()
+                // DEBUG: Log fire_data structure before encoding
+                static FIRST_FIRE_DATA_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if !FIRST_FIRE_DATA_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                    info!("[BURST-LOOP] 🔍 Viz fire_data has {} cortical areas", fire_data.len());
+                    for (area_id, (id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data.iter() {
+                        info!(
+                            "[BURST-LOOP] 🔍   Area {}: id_len={}, x_len={}, y_len={}, z_len={}, p_len={}",
+                            area_id, id_vec.len(), x_vec.len(), y_vec.len(), z_vec.len(), p_vec.len()
                         );
-                        FIRST_AREAS_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
-
-                    // Get cortical area name from NPU mapping
-                    let cortical_name_opt = npu
-                        .lock()
-                        .unwrap()
-                        .get_cortical_area_name(area_id)
-                        .map(|s| s.to_string());
-                    let cortical_id = match cortical_name_opt {
-                        Some(name) => {
-                            let mut bytes = [b' '; 6];
-                            let name_bytes = name.as_bytes();
-                            let copy_len = name_bytes.len().min(6);
-                            bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-
-                            match CorticalID::from_bytes(&bytes) {
-                                Ok(id) => id,
-                                Err(e) => {
-                                    error!("[BURST-LOOP] ❌ Failed to create CorticalID for '{}': {:?}", name, e);
-                                    continue;
-                                }
-                            }
-                        }
-                        None => {
-                            error!(
-                                "[BURST-LOOP] ❌ No cortical area name registered for area_id {}",
-                                area_id
-                            );
-                            continue;
-                        }
-                    };
-
-                    // MOVED: Transfer ownership instead of cloning (zero-copy)
-                    match NeuronVoxelXYZPArrays::new_from_vectors(
-                        x_vec,  // ✅ MOVE (no clone)
-                        y_vec,  // ✅ MOVE (no clone)
-                        z_vec,  // ✅ MOVE (no clone)
-                        p_vec,  // ✅ MOVE (no clone)
-                    ) {
-                        Ok(neuron_arrays) => {
-                            cortical_mapped.insert(cortical_id, neuron_arrays);
-                        }
-                        Err(e) => {
-                            error!("[BURST-LOOP] ❌ Failed to create neuron arrays: {:?}", e);
-                            continue;
-                        }
-                    }
+                    FIRST_FIRE_DATA_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
+                
+                // Use shared encoding function (zero-copy, with all safety checks)
+                match encode_fire_data_to_xyzp(fire_data, None, &npu) {
+                    Ok(buffer) => {
+                        // Skip if no data (empty buffer means no neurons fired or all areas were filtered out)
+                        if buffer.is_empty() {
+                            static SKIP_LOGGED: std::sync::atomic::AtomicBool =
+                                std::sync::atomic::AtomicBool::new(false);
+                            if !SKIP_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+                                debug!("[BURST-LOOP] Skipping visualization - no neurons fired");
+                                SKIP_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                            }
+                        } else {
+                            static FIRST_VIZ_LOG: std::sync::atomic::AtomicBool =
+                                std::sync::atomic::AtomicBool::new(false);
+                            if !FIRST_VIZ_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                                debug!("[BURST-LOOP] First visualization data: {} bytes", buffer.len());
+                                FIRST_VIZ_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                            }
 
-                if cortical_mapped.len() > 0 {
-                    // Use raw FeagiSerializable API (like rust-py-libs pattern)
-                    let bytes_needed = cortical_mapped.get_number_of_bytes_needed();
-                    let mut buffer = vec![0u8; bytes_needed];
-
-                    static FIRST_SIZE_LOG: std::sync::atomic::AtomicBool =
-                        std::sync::atomic::AtomicBool::new(false);
-                    if !FIRST_SIZE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                        debug!(
-                            "[BURST-LOOP] 🔍 SERIALIZE: bytes_needed={}, buffer.len()={}",
-                            bytes_needed,
-                            buffer.len()
-                        );
-                        FIRST_SIZE_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-
-                    if let Ok(_) = cortical_mapped.try_serialize_struct_to_byte_slice(&mut buffer) {
-                        static FIRST_ACTUAL_SIZE_LOG: std::sync::atomic::AtomicBool =
-                            std::sync::atomic::AtomicBool::new(false);
-                        if !FIRST_ACTUAL_SIZE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                            debug!("[BURST-LOOP] 🔍 SERIALIZE: Actual serialized buffer.len()={}, first 8 bytes: {:02x?}", buffer.len(), &buffer[..8.min(buffer.len())]);
-                            FIRST_ACTUAL_SIZE_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
-                        }
-                        // Write to SHM if writer is attached (uncompressed - local IPC)
-                        if has_shm_writer {
-                            let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
-                            if let Some(writer) = viz_writer_lock.as_mut() {
-                                match writer.write_payload(&buffer) {
-                                    Ok(_) => {
-                                        // Visualization data written successfully to SHM
-                                    }
-                                    Err(e) => {
+                            // Write to SHM if writer is attached (uncompressed - local IPC)
+                            if has_shm_writer {
+                                let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
+                                if let Some(writer) = viz_writer_lock.as_mut() {
+                                    if let Err(e) = writer.write_payload(&buffer) {
                                         let timestamp = get_timestamp();
                                         error!(
                                             "[{}] [BURST-LOOP] ❌ Failed to write viz SHM: {}",
@@ -696,73 +794,132 @@ fn burst_loop(
                                     }
                                 }
                             }
-                        }
 
-                        // Publish to ZMQ via trait object (direct Rust-to-Rust call, NO PYTHON!)
-                        // Publisher (PNS) handles LZ4 compression and ZMQ publishing
-                        if let Some(ref publisher) = viz_publisher {
-                            static FIRST_PUBLISH_LOGGED: std::sync::atomic::AtomicBool =
-                                std::sync::atomic::AtomicBool::new(false);
-                            if !FIRST_PUBLISH_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                debug!("[BURST-LOOP] First visualization publish: {} bytes", buffer.len());
-                                FIRST_PUBLISH_LOGGED
-                                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                            }
-                            
-                            // DIAGNOSTIC: Track publish rate and data volume
-                            static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                            
-                            let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                            if count % 30 == 0 {  // Log every 30 publishes (~1 second at 30Hz)
-                                debug!("[BURST-LOOP] Viz publish #{}: {} bytes/frame", count, buffer.len());
-                            }
-
-                            match publisher.publish_visualization(&buffer) {
-                                Ok(_) => {
-                                    static SUCCESS_LOGGED: std::sync::atomic::AtomicBool =
-                                        std::sync::atomic::AtomicBool::new(false);
-                                    if !SUCCESS_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                        debug!("[BURST-LOOP] Visualization publisher connected and working");
-                                        SUCCESS_LOGGED
-                                            .store(true, std::sync::atomic::Ordering::Relaxed);
-                                    }
+                            // Publish to ZMQ via trait object (direct Rust-to-Rust call, NO PYTHON!)
+                            if let Some(ref publisher) = viz_publisher {
+                                // DIAGNOSTIC: Track publish rate and data volume
+                                static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                                
+                                let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                if count % 30 == 0 {  // Log every 30 publishes (~1 second at 30Hz)
+                                    debug!("[BURST-LOOP] Viz publish #{}: {} bytes/frame", count, buffer.len());
                                 }
-                                Err(e) => {
+
+                                if let Err(e) = publisher.publish_visualization(&buffer) {
                                     error!("[BURST-LOOP] ❌ VIZ PUBLISH ERROR: {}", e);
                                 }
                             }
-                        } else {
-                            static NO_PUBLISHER_LOGGED: std::sync::atomic::AtomicBool =
-                                std::sync::atomic::AtomicBool::new(false);
-                            if !NO_PUBLISHER_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                error!("[BURST-LOOP] ⚠️ CRITICAL: viz_publisher is None!");
-                                NO_PUBLISHER_LOGGED
-                                    .store(true, std::sync::atomic::Ordering::Relaxed);
-                            }
-                        }
-                    } else {
-                        static SERIALIZE_ERROR_LOGGED: std::sync::atomic::AtomicBool =
-                            std::sync::atomic::AtomicBool::new(false);
-                        if !SERIALIZE_ERROR_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                            let timestamp = get_timestamp();
-                            error!(
-                                "[{}] [BURST-LOOP] ❌ Failed to serialize - skipping viz writes",
-                                timestamp
-                            );
-                            SERIALIZE_ERROR_LOGGED
-                                .store(true, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
-                } else {
-                    static SKIP_LOGGED: std::sync::atomic::AtomicBool =
-                        std::sync::atomic::AtomicBool::new(false);
-                    if !SKIP_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                        debug!("[BURST-LOOP] Skipping visualization - no cortical areas yet (genome not loaded)");
-                        SKIP_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                    Err(e) => {
+                        static ERROR_LOGGED: std::sync::atomic::AtomicBool =
+                            std::sync::atomic::AtomicBool::new(false);
+                        if !ERROR_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
+                            error!("[BURST-LOOP] ❌ Failed to encode visualization data: {}", e);
+                            ERROR_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        }
                     }
                 }
             } // Close if let Some(fire_data)
         } // Close visualization block
+
+        // Motor output generation and publishing (per-agent, filtered by subscriptions)
+        if motor_publisher.is_some() || motor_shm_writer.lock().unwrap().is_some() {
+            // Reuse fire_data from visualization sampling (avoid double sampling!)
+            let motor_lock_start = Instant::now();
+            info!("🔍 [MOTOR-TIMING] Attempting to acquire NPU lock for motor sampling...");
+            let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
+            let motor_lock_done = Instant::now();
+            info!("🔍 [MOTOR-TIMING] Motor sampling completed in {:?}", motor_lock_done.duration_since(motor_lock_start));
+
+            if fire_data_opt.is_none() {
+                static FIRST_EMPTY_FIRE_LOG: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
+                if !FIRST_EMPTY_FIRE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                    debug!("[BURST-LOOP] 🎮 Fire queue is empty (no neurons firing) - no motor data to send");
+                    FIRST_EMPTY_FIRE_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            }
+            
+            if let Some(fire_data) = fire_data_opt {
+                // Get motor subscriptions
+                let subscriptions = motor_subscriptions.read();
+                
+                if subscriptions.is_empty() {
+                    static FIRST_EMPTY_LOG: std::sync::atomic::AtomicBool =
+                        std::sync::atomic::AtomicBool::new(false);
+                    if !FIRST_EMPTY_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                        debug!("[BURST-LOOP] 🎮 No motor subscriptions (no agents registered with motor capability)");
+                        FIRST_EMPTY_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                } else {
+                    static FIRST_MOTOR_LOG: std::sync::atomic::AtomicBool =
+                        std::sync::atomic::AtomicBool::new(false);
+                    if !FIRST_MOTOR_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                        info!("[BURST-LOOP] 🎮 Motor output active: {} agents subscribed", subscriptions.len());
+                        FIRST_MOTOR_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+
+                    // Generate motor output for each subscribed agent
+                    // Note: We clone fire_data for each agent (acceptable overhead for typical 1-2 agents)
+                    for (agent_id, subscribed_cortical_ids) in subscriptions.iter() {
+                        // Filter by cortical_id strings (e.g., {"omot00"})
+                        let cortical_id_filter = Some(subscribed_cortical_ids);
+                        
+                        let encode_start = Instant::now();
+                        // Clone for each agent (minimal overhead, and allows zero-copy within encode function)
+                        match encode_fire_data_to_xyzp(fire_data.clone(), cortical_id_filter, &npu) {
+                            Ok(motor_bytes) => {
+                                // Skip if no data (no neurons fired in subscribed areas)
+                                if motor_bytes.is_empty() {
+                                    continue;
+                                }
+                                
+                                let encode_duration = encode_start.elapsed();
+                                
+                                static FIRST_ENCODE_LOG: std::sync::atomic::AtomicBool =
+                                    std::sync::atomic::AtomicBool::new(false);
+                                if !FIRST_ENCODE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+                                    info!(
+                                        "[BURST-LOOP] 🎮 Encoded motor output for '{}': {} bytes in {:?}",
+                                        agent_id, motor_bytes.len(), encode_duration
+                                    );
+                                    FIRST_ENCODE_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                                }
+
+                                // Publish via ZMQ to agent
+                                if let Some(ref publisher) = motor_publisher {
+                                    match publisher.publish_motor(agent_id, &motor_bytes) {
+                                        Ok(_) => {
+                                            // Log every motor send (not just first) for debugging
+                                            info!(
+                                                "[BURST-LOOP] 🎮 SENDING motor data to agent '{}': {} bytes",
+                                                agent_id, motor_bytes.len()
+                                            );
+                                        }
+                                        Err(e) => {
+                                            error!("[BURST-LOOP] ❌ MOTOR PUBLISH ERROR for '{}': {}", agent_id, e);
+                                        }
+                                    }
+                                } else {
+                                    debug!("[BURST-LOOP] 🎮 Motor publisher not available (None)");
+                                }
+
+                                // Write to motor SHM if available (for local agents)
+                                if let Some(writer) = motor_shm_writer.lock().unwrap().as_mut() {
+                                    if let Err(e) = writer.write_payload(&motor_bytes) {
+                                        error!("[BURST-LOOP] ❌ Failed to write motor SHM: {}", e);
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                error!("[BURST-LOOP] ❌ Failed to encode motor output for '{}': {}", agent_id, e);
+                            }
+                        }
+                    }
+                }
+            }
+        } // Close motor block
 
         // Performance logging every 5 seconds
         let now = Instant::now();
@@ -873,7 +1030,7 @@ mod tests {
 
     #[test]
     fn test_burst_loop_lifecycle() {
-        // Use a unit type for the generic parameter since we're not testing visualization
+        // Use a unit type for the generic parameter since we're not testing visualization/motor
         struct NoViz;
         impl VisualizationPublisher for NoViz {
             fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> {
@@ -881,8 +1038,15 @@ mod tests {
             }
         }
         
+        struct NoMotor;
+        impl MotorPublisher for NoMotor {
+            fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        
         let npu = Arc::new(Mutex::new(RustNPU::new_cpu_only(1000, 10000, 20)));
-        let mut runner = BurstLoopRunner::new::<NoViz>(npu, None, 10.0);
+        let mut runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu, None, None, 10.0);
 
         assert!(!runner.is_running());
 

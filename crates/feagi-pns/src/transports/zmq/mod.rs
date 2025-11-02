@@ -147,4 +147,19 @@ impl ZmqStreams {
             .publish(data)
             .map_err(|e| PNSError::Zmq(format!("Viz publish: {}", e)))
     }
+    
+    /// Publish motor data to a specific agent via ZMQ
+    pub fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<(), PNSError> {
+        // Log every motor publish for debugging
+        debug!(
+            "[ZMQ-STREAMS] 🎮 Publishing motor data to '{}': {} bytes via ZMQ",
+            agent_id, data.len()
+        );
+
+        // TODO: Add topic prefix for agent-specific delivery
+        // For now, publish to all (agents filter by agent_id in the data)
+        self.motor_stream
+            .publish(data)
+            .map_err(|e| PNSError::Zmq(format!("Motor publish: {}", e)))
+    }
 }

@@ -20,6 +20,7 @@ ndarray.workspace = true
 ahash.workspace = true
 memmap2 = "0.9"  # Memory-mapped file I/O for SHM
 chrono = "0.4"   # Timestamp formatting
+parking_lot = "0.12"  # For motor subscriptions RwLock
 
 # Observability
 feagi-observability = { workspace = true }

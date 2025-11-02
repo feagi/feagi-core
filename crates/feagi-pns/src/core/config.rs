@@ -61,7 +61,7 @@ impl Default for PNSConfig {
             #[cfg(feature = "zmq-transport")]
             zmq_api_control_address: "tcp://0.0.0.0:5565".to_string(), // API control port
             #[cfg(feature = "zmq-transport")]
-            zmq_motor_address: "tcp://0.0.0.0:30005".to_string(), // Motor output port
+            zmq_motor_address: "tcp://0.0.0.0:5564".to_string(), // Motor output port (standard FEAGI port)
             #[cfg(feature = "zmq-transport")]
             zmq_viz_address: "tcp://0.0.0.0:5562".to_string(), // Visualization output port
             #[cfg(feature = "zmq-transport")]

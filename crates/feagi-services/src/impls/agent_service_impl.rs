@@ -166,12 +166,15 @@ impl AgentService for AgentServiceImpl {
     }
     
     async fn list_agents(&self) -> AgentResult<Vec<String>> {
+        tracing::info!(target: "feagi-services", "📋 list_agents() called - acquiring registry read lock...");
         let registry = self.agent_registry.read();
         let agents = registry.get_all();
         let agent_ids: Vec<String> = agents.iter().map(|a| a.agent_id.clone()).collect();
         
         tracing::info!(target: "feagi-services", 
-            "📋 list_agents called - found {} agents: {:?}", agent_ids.len(), agent_ids);
+            "📋 list_agents() found {} agents: {:?}", agent_ids.len(), agent_ids);
+        tracing::info!(target: "feagi-services",
+            "📋 Registry pointer: {:p}", &*self.agent_registry as *const _);
         
         Ok(agent_ids)
     }
@@ -203,6 +206,46 @@ impl AgentService for AgentServiceImpl {
         
         let agent_router_address = format!("tcp://{}:{}", agent_ip, agent_data_port);
         
+        // Build full capabilities map (including vision, motor, viz, not just custom)
+        let mut capabilities = HashMap::new();
+        
+        // Add vision capability if present
+        if let Some(ref vision) = agent.capabilities.vision {
+            capabilities.insert(
+                "vision".to_string(),
+                serde_json::to_value(vision).unwrap_or(serde_json::Value::Null)
+            );
+        }
+        
+        // Add motor capability if present
+        if let Some(ref motor) = agent.capabilities.motor {
+            capabilities.insert(
+                "motor".to_string(),
+                serde_json::to_value(motor).unwrap_or(serde_json::Value::Null)
+            );
+        }
+        
+        // Add visualization capability if present
+        if let Some(ref viz) = agent.capabilities.visualization {
+            capabilities.insert(
+                "visualization".to_string(),
+                serde_json::to_value(viz).unwrap_or(serde_json::Value::Null)
+            );
+        }
+        
+        // Add sensory capability if present
+        if let Some(ref sensory) = agent.capabilities.sensory {
+            capabilities.insert(
+                "sensory".to_string(),
+                serde_json::to_value(sensory).unwrap_or(serde_json::Value::Null)
+            );
+        }
+        
+        // Add custom capabilities
+        for (k, v) in agent.capabilities.custom.iter() {
+            capabilities.insert(k.clone(), v.clone());
+        }
+        
         Ok(AgentProperties {
             agent_type: agent.agent_type.to_string(),
             agent_ip,
@@ -210,9 +253,7 @@ impl AgentService for AgentServiceImpl {
             agent_router_address,
             agent_version,
             controller_version,
-            capabilities: agent.capabilities.custom.iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
+            capabilities,
         })
     }
     

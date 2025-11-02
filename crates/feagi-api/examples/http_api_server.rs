@@ -61,8 +61,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create RuntimeService with a simple BurstLoopRunner
     // (For full functionality, configure with actual NPU and visualization publisher)
+    
+    // Dummy publishers for testing
+    struct DummyViz;
+    impl feagi_burst_engine::VisualizationPublisher for DummyViz {
+        fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> { Ok(()) }
+    }
+    struct DummyMotor;
+    impl feagi_burst_engine::MotorPublisher for DummyMotor {
+        fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> { Ok(()) }
+    }
+    
     let npu_for_runtime = Arc::new(StdMutex::new(RustNPU::new(10, 10, 10))); // Minimal NPU
-    let burst_loop = BurstLoopRunner::new::<()>(npu_for_runtime, None, 30.0); // No viz publisher
+    let burst_loop = BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
     let burst_runner_for_runtime = Arc::new(ParkingLotMutex::new(burst_loop));
 
     let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime))

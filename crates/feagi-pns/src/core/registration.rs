@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn, error};
+use ahash::AHashSet;
 
 /// Registration request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,20 +41,38 @@ pub struct RegistrationHandler {
     /// Optional reference to burst engine's sensory agent manager for SHM I/O
     sensory_agent_manager:
         Arc<parking_lot::Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>>>>,
+    /// Optional reference to burst loop runner for motor subscription tracking
+    burst_runner:
+        Arc<parking_lot::Mutex<Option<Arc<parking_lot::RwLock<feagi_burst_engine::BurstLoopRunner>>>>>,
+    /// Actual ZMQ port numbers (from config, NOT hardcoded)
+    motor_port: u16,
+    viz_port: u16,
     /// Callbacks for Python integration
     on_agent_registered: RegistrationCallback,
     on_agent_deregistered: DeregistrationCallback,
 }
 
 impl RegistrationHandler {
-    pub fn new(agent_registry: Arc<RwLock<AgentRegistry>>) -> Self {
+    pub fn new(agent_registry: Arc<RwLock<AgentRegistry>>, motor_port: u16, viz_port: u16) -> Self {
         Self {
             agent_registry,
             shm_base_path: "/tmp".to_string(),
             sensory_agent_manager: Arc::new(parking_lot::Mutex::new(None)),
+            burst_runner: Arc::new(parking_lot::Mutex::new(None)),
+            motor_port,
+            viz_port,
             on_agent_registered: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_deregistered: Arc::new(parking_lot::Mutex::new(None)),
         }
+    }
+    
+    /// Set burst runner reference (for motor subscription tracking)
+    pub fn set_burst_runner(
+        &self,
+        runner: Arc<parking_lot::RwLock<feagi_burst_engine::BurstLoopRunner>>,
+    ) {
+        *self.burst_runner.lock() = Some(runner);
+        info!("🦀 [REGISTRATION] Burst runner connected for motor subscriptions");
     }
 
     /// Set the sensory agent manager (for SHM I/O coordination)
@@ -152,10 +171,18 @@ impl RegistrationHandler {
         );
 
         // Register in registry
+        info!("🦀 [REGISTRATION] 🔍 Registering agent '{}' in AgentRegistry...", request.agent_id);
         self.agent_registry
             .write()
             .register(agent_info.clone())
             .map_err(|e| format!("Failed to register agent: {}", e))?;
+        
+        // Verify registration
+        let registry_count = self.agent_registry.read().get_all().len();
+        let all_agents: Vec<String> = self.agent_registry.read().get_all().iter().map(|a| a.agent_id.clone()).collect();
+        info!("🦀 [REGISTRATION] ✅ Agent '{}' registered in AgentRegistry (total agents: {})", request.agent_id, registry_count);
+        info!("🦀 [REGISTRATION] Registry contents: {:?}", all_agents);
+        info!("🦀 [REGISTRATION] Registry pointer: {:p}", &*self.agent_registry as *const _);
 
         // Register with burst engine's sensory agent manager (if sensory capability exists)
         if let Some(ref sensory) = agent_info.capabilities.sensory {
@@ -196,6 +223,30 @@ impl RegistrationHandler {
                 }
             } else {
                 warn!("🦀 [REGISTRATION] ⚠️  Sensory agent manager not connected - skipping burst engine registration");
+            }
+        }
+
+        // Register motor subscriptions with burst engine (if motor capability exists)
+        if let Some(ref motor) = agent_info.capabilities.motor {
+            if let Some(burst_runner_lock) = self.burst_runner.lock().as_ref() {
+                info!(
+                    "🦀 [REGISTRATION] 🎮 Agent {} has motor capability with {} cortical areas: {:?}",
+                    request.agent_id, motor.source_cortical_areas.len(), motor.source_cortical_areas
+                );
+                
+                // Store cortical_id strings (matching sensory stream pattern)
+                // Resolution to area_idx happens during encoding, just like sensory
+                let cortical_ids: AHashSet<String> = motor.source_cortical_areas.iter().cloned().collect();
+                
+                burst_runner_lock.read().register_motor_subscriptions(
+                    request.agent_id.clone(),
+                    cortical_ids.clone(),
+                );
+                
+                info!("🦀 [REGISTRATION] ✅ Motor subscriptions registered for '{}' with cortical_ids: {:?}", 
+                      request.agent_id, cortical_ids);
+            } else {
+                info!("🦀 [REGISTRATION] 🎮 Agent {} has motor capability but burst runner not connected yet", request.agent_id);
             }
         }
 
@@ -241,8 +292,8 @@ impl RegistrationHandler {
                 Some(shm_paths)
             },
             zmq_ports: Some(HashMap::from([
-                ("motor".to_string(), 30005),
-                ("visualization".to_string(), 30000),
+                ("motor".to_string(), self.motor_port),
+                ("visualization".to_string(), self.viz_port),
             ])),
         })
     }

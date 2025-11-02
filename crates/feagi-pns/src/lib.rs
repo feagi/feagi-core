@@ -150,9 +150,26 @@ impl PNS {
     pub fn with_config(config: PNSConfig) -> Result<Self> {
         let agent_registry = Arc::new(RwLock::new(AgentRegistry::with_defaults()));
         let heartbeat_tracker = Arc::new(Mutex::new(HeartbeatTracker::new()));
-        let registration_handler = Arc::new(Mutex::new(RegistrationHandler::new(Arc::clone(
-            &agent_registry,
-        ))));
+        
+        // Extract ports from config addresses (e.g., "tcp://0.0.0.0:5564" -> 5564)
+        let motor_port = config.zmq_motor_address
+            .split(':')
+            .last()
+            .and_then(|s| s.parse::<u16>().ok())
+            .unwrap_or(5564);  // @architecture:acceptable - emergency fallback
+        let viz_port = config.zmq_viz_address
+            .split(':')
+            .last()
+            .and_then(|s| s.parse::<u16>().ok())
+            .unwrap_or(5562);  // @architecture:acceptable - emergency fallback
+        
+        info!("🦀 [PNS] Port configuration: motor={}, viz={}", motor_port, viz_port);
+        
+        let registration_handler = Arc::new(Mutex::new(RegistrationHandler::new(
+            Arc::clone(&agent_registry),
+            motor_port,
+            viz_port,
+        )));
 
         Ok(Self {
             config,
@@ -191,6 +208,19 @@ impl PNS {
             .lock()
             .set_sensory_agent_manager(manager);
         info!("🦀 [PNS] Sensory agent manager connected for SHM I/O");
+    }
+    
+    /// Set the burst runner (for motor subscription tracking)
+    /// Should be called after creating BurstLoopRunner
+    pub fn set_burst_runner(
+        &self,
+        runner: Arc<parking_lot::RwLock<feagi_burst_engine::BurstLoopRunner>>,
+    ) {
+        // Propagate to registration handler for motor subscription management
+        self.registration_handler
+            .lock()
+            .set_burst_runner(runner);
+        info!("🦀 [PNS] Burst runner connected for motor subscriptions");
     }
 
     /// Connect the Rust NPU to the sensory stream for direct injection
@@ -537,12 +567,50 @@ impl PNS {
             }
         }
     }
+    
+    /// Publish motor data to a specific agent
+    /// Called by burst engine to send motor commands
+    pub fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<()> {
+        static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+        if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
+            info!(
+                "[PNS] 🎮 publish_motor() called for agent '{}': {} bytes",
+                agent_id, data.len()
+            );
+            FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+
+        // Motor uses ZMQ for agent-specific delivery
+        #[cfg(feature = "zmq-transport")]
+        {
+            if let Some(streams) = self.zmq_streams.lock().as_ref() {
+                streams.publish_motor(agent_id, data)?;
+                Ok(())
+            } else {
+                error!("[PNS] ❌ ZMQ streams not started!");
+                Err(PNSError::NotRunning("ZMQ streams not started".to_string()))
+            }
+        }
+        
+        #[cfg(not(feature = "zmq-transport"))]
+        {
+            let _ = (agent_id, data); // Suppress unused warnings
+            error!("[PNS] ❌ ZMQ transport not enabled!");
+            Err(PNSError::NotRunning("ZMQ transport not available".to_string()))
+        }
+    }
 }
 
 /// Implement VisualizationPublisher trait for burst engine integration (NO PYTHON IN HOT PATH!)
 impl feagi_burst_engine::VisualizationPublisher for PNS {
     fn publish_visualization(&self, data: &[u8]) -> std::result::Result<(), String> {
         self.publish_visualization(data).map_err(|e| e.to_string())
+    }
+}
+
+impl feagi_burst_engine::MotorPublisher for PNS {
+    fn publish_motor(&self, agent_id: &str, data: &[u8]) -> std::result::Result<(), String> {
+        self.publish_motor(agent_id, data).map_err(|e| e.to_string())
     }
 }
 
