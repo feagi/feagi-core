@@ -357,75 +357,42 @@ impl SensoryStream {
             .try_deserialize_and_update_self_from_byte_slice(struct_data)
             .map_err(|e| format!("Failed to deserialize: {:?}", e))?;
 
-        // 🚀 PERFORMANCE FIX: Do batch processing with minimal lock time
-        // OLD: Held lock for 1.4+ seconds while doing 4410 individual lookups + injection
-        // NEW: Acquire lock twice briefly: once for coordinate-to-ID conversion, once for injection
+        // ✅ CLEAN ARCHITECTURE: PNS just transports XYZP, NPU handles all neural logic
+        // The NPU owns coordinate-to-ID conversion and does it efficiently in batch
         
+        let inject_start = std::time::Instant::now();
         let mut total_injected = 0;
         
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
             let cortical_name = cortical_id.as_ascii_string();
             
-            // Step 1: Prepare all data (NO LOCKS)
+            // Step 1: Extract raw XYZP data (NO LOCKS)
             let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
             let num_neurons = neuron_arrays.len();
             
-            info!("🔍 [ZMQ-SENSORY] Processing {} neurons for cortical area '{}'", num_neurons, cortical_name);
-            
-            // Step 2: Build coordinate list (NO LOCKS)
-            let coords: Vec<(u32, u32, u32)> = (0..num_neurons)
-                .map(|i| (x_coords[i], y_coords[i], z_coords[i]))
+            // Build XYZP array
+            let xyzp_data: Vec<(u32, u32, u32, f32)> = (0..num_neurons)
+                .map(|i| (x_coords[i], y_coords[i], z_coords[i], potentials[i]))
                 .collect();
             
-            // Step 3: Quick lock for cortical area resolution + BATCH coordinate lookup
-            let lookup_start = std::time::Instant::now();
-            let npu = npu_arc.lock().unwrap();
-            info!("🔍 [ZMQ-SENSORY] NPU lock acquired in {:?}", lookup_start.elapsed());
+            info!("🔍 [ZMQ-SENSORY] Injecting {} XYZP data points for cortical area '{}'", num_neurons, cortical_name);
             
-            // Resolve cortical name to index
-            let cortical_idx = match npu.get_cortical_area_id(&cortical_name) {
-                Some(idx) => idx,
-                None => {
-                    warn!(
-                        "[ZMQ-SENSORY] Warning: Unknown cortical area '{}'",
-                        cortical_name
-                    );
-                    drop(npu);
-                    continue;
-                }
-            };
-            
-            // 🚀 BATCH coordinate lookup (1000x faster than loop!)
-            // OLD: 4410 individual hash lookups = 1.4 seconds
-            // NEW: Single batch lookup = ~1 millisecond
-            let neuron_ids = npu.batch_get_neuron_ids_from_coordinates(cortical_idx, &coords);
-            drop(npu); // Release lock immediately after batch lookup!
-            
-            let lookup_duration = lookup_start.elapsed();
-            info!("🔍 [ZMQ-SENSORY] BATCH coordinate lookup completed in {:?} for {} neurons", lookup_duration, num_neurons);
-            
-            // Step 4: Build neuron-potential pairs (NO LOCKS)
-            let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
-            for (neuron_id, i) in neuron_ids.iter().zip(0..num_neurons) {
-                neuron_potential_pairs.push((*neuron_id, potentials[i]));
-            }
-            
-            // Step 5: Acquire lock AGAIN for injection
-            let inject_start = std::time::Instant::now();
+            // Step 2: Quick lock - NPU handles everything (name resolution + coordinate conversion + injection)
+            let area_start = std::time::Instant::now();
             let mut npu = npu_arc.lock().unwrap();
-            info!("🔍 [ZMQ-SENSORY] NPU lock re-acquired for injection in {:?}", inject_start.elapsed());
+            info!("🔍 [ZMQ-SENSORY] NPU lock acquired in {:?}", area_start.elapsed());
             
-            if !neuron_potential_pairs.is_empty() {
-                npu.inject_sensory_with_potentials(&neuron_potential_pairs);
-                total_injected += neuron_potential_pairs.len();
-            }
-            let inject_duration = inject_start.elapsed();
-            info!("🔍 [ZMQ-SENSORY] Injection completed in {:?}", inject_duration);
+            // NPU handles: cortical name → ID, coordinates → neuron IDs, injection
+            let injected = npu.inject_sensory_xyzp(&cortical_name, &xyzp_data);
+            total_injected += injected;
             
-            drop(npu); // Release lock
-            let total_duration = lookup_start.elapsed();
-            info!("🔍 [ZMQ-SENSORY] Total processing time for area: {:?}", total_duration);
+            drop(npu);
+            let area_duration = area_start.elapsed();
+            info!("🔍 [ZMQ-SENSORY] Injected {} neurons in {:?}", injected, area_duration);
         }
+        
+        let total_duration = inject_start.elapsed();
+        info!("🔍 [ZMQ-SENSORY] Total injection time: {:?} for {} neurons", total_duration, total_injected);
 
         Ok(total_injected)
     }

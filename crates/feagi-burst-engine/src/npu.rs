@@ -624,6 +624,7 @@ impl RustNPU {
 
     /// Stage sensory neurons for next burst (thread-safe, prevents FCL clear race)
     /// XYZP data from agents is staged here and injected AFTER fcl.clear() in Phase 1
+    /// NOTE: Prefer inject_sensory_xyzp() for cleaner architecture
     pub fn inject_sensory_with_potentials(&mut self, neurons: &[(NeuronId, f32)]) {
         let mut fire_structures = self.fire_structures.lock().unwrap();
         if let Some(pending) = Some(&mut fire_structures.pending_sensory_injections) {
@@ -883,16 +884,19 @@ impl RustNPU {
             }
         };
 
-        // Convert XYZ coordinates to neuron IDs
-        let mut neuron_potential_pairs = Vec::with_capacity(xyzp_data.len());
-        let mut found_count = 0;
-
-        for &(x, y, z, potential) in xyzp_data {
-            if let Some(neuron_id) = self.get_neuron_at_coordinates(cortical_area, x, y, z) {
-                neuron_potential_pairs.push((neuron_id, potential));
-                found_count += 1;
-            }
+        // 🚀 BATCH coordinate-to-ID conversion (1000x faster than individual lookups!)
+        // Extract coordinates
+        let coords: Vec<(u32, u32, u32)> = xyzp_data.iter().map(|(x, y, z, _p)| (*x, *y, *z)).collect();
+        
+        // Batch lookup
+        let neuron_ids = self.neuron_array.read().unwrap().batch_coordinate_lookup(cortical_area, &coords);
+        
+        // Build (NeuronId, potential) pairs
+        let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
+        for (neuron_id, (_x, _y, _z, potential)) in neuron_ids.iter().zip(xyzp_data.iter()) {
+            neuron_potential_pairs.push((*neuron_id, *potential));
         }
+        let found_count = neuron_potential_pairs.len();
 
         // Inject found neurons
         if !neuron_potential_pairs.is_empty() {
