@@ -40,8 +40,8 @@ pub trait VisualizationPublisher: Send + Sync {
 pub struct BurstLoopRunner {
     /// Shared NPU instance (holds power neurons internally + burst count)
     npu: Arc<Mutex<RustNPU>>,
-    /// Target frequency in Hz
-    frequency_hz: f64,
+    /// Target frequency in Hz (shared with burst thread for dynamic updates)
+    frequency_hz: Arc<Mutex<f64>>,
     /// Running flag (atomic for thread-safe stop)
     running: Arc<AtomicBool>,
     /// Thread handle (for graceful shutdown)
@@ -186,7 +186,7 @@ impl BurstLoopRunner {
 
         Self {
             npu,
-            frequency_hz,
+            frequency_hz: Arc::new(Mutex::new(frequency_hz)),  // Shared with burst thread for dynamic updates
             running: Arc::new(AtomicBool::new(false)),
             thread_handle: None,
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
@@ -223,9 +223,9 @@ impl BurstLoopRunner {
     // REMOVED: set_viz_zmq_publisher - NO PYTHON CALLBACKS IN HOT PATH!
     // PNS is now passed directly in constructor for pure Rust-to-Rust communication
 
-    /// Set burst frequency (can be called while running)
+    /// Set burst frequency (can be called while running - thread-safe)
     pub fn set_frequency(&mut self, frequency_hz: f64) {
-        self.frequency_hz = frequency_hz;
+        *self.frequency_hz.lock().unwrap() = frequency_hz;
         info!("[BURST-RUNNER] Frequency set to {:.2} Hz", frequency_hz);
     }
 
@@ -237,13 +237,14 @@ impl BurstLoopRunner {
             return Err("Burst loop already running".to_string());
         }
 
+        let current_freq = *self.frequency_hz.lock().unwrap();
         info!("[BURST-RUNNER] Starting burst loop at {:.2} Hz (power neurons auto-discovered from cortical_idx=1)", 
-                 self.frequency_hz);
+                 current_freq);
 
         self.running.store(true, Ordering::Release);
 
         let npu = self.npu.clone();
-        let frequency = self.frequency_hz;
+        let frequency = self.frequency_hz.clone();  // Clone Arc for thread
         let running = self.running.clone();
         let viz_writer = self.viz_shm_writer.clone();
         let viz_publisher = self.viz_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
@@ -324,7 +325,7 @@ impl BurstLoopRunner {
 
     /// Get configured burst frequency in Hz
     pub fn get_frequency(&self) -> f64 {
-        self.frequency_hz
+        *self.frequency_hz.lock().unwrap()
     }
     
     /// Get current FCL snapshot for monitoring/debugging
@@ -411,15 +412,16 @@ fn get_timestamp() -> String {
 /// Burst count is tracked by NPU - single source of truth!
 fn burst_loop(
     npu: Arc<Mutex<RustNPU>>,
-    frequency_hz: f64,
+    frequency_hz: Arc<Mutex<f64>>,  // Shared frequency - can be updated while running
     running: Arc<AtomicBool>,
     viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     viz_publisher: Option<Arc<dyn VisualizationPublisher>>, // Trait object for visualization (NO PYTHON CALLBACKS!)
 ) {
     let timestamp = get_timestamp();
+    let initial_freq = *frequency_hz.lock().unwrap();
     info!(
         "[{}] [BURST-LOOP] 🚀 Starting main loop at {:.2} Hz",
-        timestamp, frequency_hz
+        timestamp, initial_freq
     );
 
     let mut burst_num = 0u64;
@@ -722,11 +724,12 @@ fn burst_loop(
                 let actual_hz = 1.0 / avg_interval.as_secs_f64();
                 let avg_neurons = total_neurons_fired / burst_times.len();
 
+                let desired_hz = *frequency_hz.lock().unwrap();
                 debug!(
                     burst_num,
-                    desired_hz = frequency_hz,
+                    desired_hz,
                     actual_hz,
-                    accuracy_percent = (actual_hz / frequency_hz * 100.0),
+                    accuracy_percent = (actual_hz / desired_hz * 100.0),
                     avg_neurons,
                     "📊 Burst loop stats"
                 );
@@ -746,14 +749,16 @@ fn burst_loop(
         // Strategy: <5Hz = chunked sleep, 5-100Hz = hybrid, >100Hz = busy-wait
         // CRITICAL: Break sleep into chunks to allow responsive shutdown
         // Maximum sleep chunk: 50ms to ensure shutdown responds within ~50ms
-        let interval_sec = 1.0 / frequency_hz;
+        // CRITICAL: Read frequency dynamically to allow runtime updates
+        let current_frequency_hz = *frequency_hz.lock().unwrap();
+        let interval_sec = 1.0 / current_frequency_hz;
         let target_time = burst_start + Duration::from_secs_f64(interval_sec);
         let now = Instant::now();
 
         if now < target_time {
             let remaining = target_time - now;
 
-            if frequency_hz < 5.0 {
+            if current_frequency_hz < 5.0 {
                 // Low frequency: sleep in small chunks to allow shutdown
                 // Check shutdown flag every 50ms for responsive shutdown (<100ms response time)
                 let chunk_size = Duration::from_millis(50);
@@ -772,7 +777,7 @@ fn burst_loop(
                         Duration::ZERO
                     };
                 }
-            } else if frequency_hz > 100.0 {
+            } else if current_frequency_hz > 100.0 {
                 // High frequency: pure busy-wait (always responsive)
                 while Instant::now() < target_time && running.load(Ordering::Relaxed) {}
             } else {
