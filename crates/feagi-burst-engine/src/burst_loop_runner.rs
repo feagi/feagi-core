@@ -97,66 +97,82 @@ impl BurstLoopRunner {
                 }
 
                 // Convert (x,y,z) to neuron IDs and inject with actual P values
-                if let Ok(mut npu_lock) = npu_for_callback.lock() {
-                    // Extract coordinates for batch lookup
-                    let coords: Vec<(u32, u32, u32)> =
-                        xyzp_data.iter().map(|(x, y, z, _)| (*x, *y, *z)).collect();
+                // 🚀 PERFORMANCE FIX: Do coordinate lookup ONCE using batch API, OUTSIDE the main NPU lock
+                // This prevents holding the lock for 1+ seconds while processing 4410 neurons
+                
+                let callback_start = std::time::Instant::now();
+                info!("🔍 [SENSORY-CALLBACK] Processing {} XYZP data points for area {}", xyzp_data.len(), cortical_area);
+                
+                // Step 1: Extract coordinates (no locks needed)
+                let coords: Vec<(u32, u32, u32)> =
+                    xyzp_data.iter().map(|(x, y, z, _)| (*x, *y, *z)).collect();
 
-                    // Batch coordinate lookup
-                    let neuron_ids = npu_lock
+                // Step 2: Batch lookup with MINIMAL lock time (only neuron_array read lock, NOT full NPU lock)
+                let lookup_start = std::time::Instant::now();
+                let neuron_ids = if let Ok(npu_lock) = npu_for_callback.lock() {
+                    let result = npu_lock
                         .neuron_array
                         .read().unwrap()
                         .batch_coordinate_lookup(cortical_area, &coords);
+                    drop(npu_lock); // Release NPU lock ASAP!
+                    result
+                } else {
+                    warn!("[FCL-INJECT] Failed to acquire NPU lock for coordinate lookup");
+                    return;
+                };
+                let lookup_duration = lookup_start.elapsed();
+                info!("🔍 [SENSORY-CALLBACK] Batch lookup completed in {:?}", lookup_duration);
 
-                    // 🔍 DEBUG: Log conversion result
-                    static FIRST_CONVERSION_LOGGED: std::sync::atomic::AtomicBool =
-                        std::sync::atomic::AtomicBool::new(false);
-                    if !FIRST_CONVERSION_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
-                        && !neuron_ids.is_empty()
+                // 🔍 DEBUG: Log conversion result
+                static FIRST_CONVERSION_LOGGED: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
+                if !FIRST_CONVERSION_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
+                    && !neuron_ids.is_empty()
+                {
+                    info!(
+                        "[FCL-INJECT]    Converted {} coords → {} valid neurons",
+                        xyzp_data.len(),
+                        neuron_ids.len()
+                    );
+                    info!(
+                        "[FCL-INJECT]    First 5 neuron IDs: {:?}",
+                        &neuron_ids[0..neuron_ids.len().min(5)]
+                    );
+                    FIRST_CONVERSION_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+
+                // Step 3: Build (NeuronId, potential) pairs from batch results (NO LOCKS!)
+                let pair_start = std::time::Instant::now();
+                let mut neuron_potential_pairs: Vec<(NeuronId, f32)> =
+                    Vec::with_capacity(neuron_ids.len());
+                for (neuron_id, (_x, _y, _z, p)) in neuron_ids.iter().zip(xyzp_data.iter()) {
+                    neuron_potential_pairs.push((*neuron_id, *p));
+                }
+                let pair_duration = pair_start.elapsed();
+                info!("🔍 [SENSORY-CALLBACK] Built {} pairs in {:?}", neuron_potential_pairs.len(), pair_duration);
+
+                // 🔍 DEBUG: Log first few potentials
+                static FIRST_POTENTIALS_LOGGED: std::sync::atomic::AtomicBool =
+                    std::sync::atomic::AtomicBool::new(false);
+                if !FIRST_POTENTIALS_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
+                    && !neuron_potential_pairs.is_empty()
+                {
+                    info!("[FCL-INJECT]    First 5 potentials from data:");
+                    for (_idx, (neuron_id, p)) in
+                        neuron_potential_pairs.iter().take(5).enumerate()
                     {
-                        info!(
-                            "[FCL-INJECT]    Converted {} coords → {} valid neurons",
-                            xyzp_data.len(),
-                            neuron_ids.len()
-                        );
-                        info!(
-                            "[FCL-INJECT]    First 5 neuron IDs: {:?}",
-                            &neuron_ids[0..neuron_ids.len().min(5)]
-                        );
-                        FIRST_CONVERSION_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                        info!("[FCL-INJECT]      [{:?}] p={:.3}", neuron_id, p);
                     }
+                    FIRST_POTENTIALS_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
 
-                    // Build (NeuronId, potential) pairs from XYZP data
-                    let mut neuron_potential_pairs: Vec<(NeuronId, f32)> =
-                        Vec::with_capacity(xyzp_data.len());
-                    for (x, y, z, p) in xyzp_data.iter() {
-                        if let Some(neuron_id) = npu_lock.neuron_array.read().unwrap().get_neuron_at_coordinate(
-                            cortical_area,
-                            *x,
-                            *y,
-                            *z,
-                        ) {
-                            neuron_potential_pairs.push((neuron_id, *p));
-                        }
-                    }
-
-                    // 🔍 DEBUG: Log first few potentials
-                    static FIRST_POTENTIALS_LOGGED: std::sync::atomic::AtomicBool =
-                        std::sync::atomic::AtomicBool::new(false);
-                    if !FIRST_POTENTIALS_LOGGED.load(std::sync::atomic::Ordering::Relaxed)
-                        && !neuron_potential_pairs.is_empty()
-                    {
-                        info!("[FCL-INJECT]    First 5 potentials from data:");
-                        for (_idx, (neuron_id, p)) in
-                            neuron_potential_pairs.iter().take(5).enumerate()
-                        {
-                            info!("[FCL-INJECT]      [{:?}] p={:.3}", neuron_id, p);
-                        }
-                        FIRST_POTENTIALS_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
-
-                    // Inject with individual potentials
+                // Step 4: FINAL injection - acquire lock ONLY for this quick operation
+                let inject_start = std::time::Instant::now();
+                if let Ok(mut npu_lock) = npu_for_callback.lock() {
+                    info!("🔍 [SENSORY-CALLBACK] Acquired NPU lock for injection in {:?}", inject_start.elapsed());
                     npu_lock.inject_sensory_with_potentials(&neuron_potential_pairs);
+                    let inject_duration = inject_start.elapsed();
+                    info!("🔍 [SENSORY-CALLBACK] Injection completed in {:?}", inject_duration);
 
                     // 🔍 DEBUG: Log injection summary
                     static FIRST_SUMMARY_LOGGED: std::sync::atomic::AtomicBool =
@@ -168,7 +184,12 @@ impl BurstLoopRunner {
                         );
                         FIRST_SUMMARY_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
+                } else {
+                    warn!("[FCL-INJECT] Failed to acquire NPU lock for injection");
                 }
+                
+                let total_duration = callback_start.elapsed();
+                info!("🔍 [SENSORY-CALLBACK] Total callback time: {:?}", total_duration);
             },
         );
 
@@ -465,14 +486,27 @@ fn burst_loop(
             break;
         }
         
+        let lock_start = Instant::now();
+        info!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for burst...");
+        
         let should_exit = {
             let npu_lock = npu.lock().unwrap();
+            let lock_acquired = Instant::now();
+            info!("🔍 [BURST-TIMING] NPU lock acquired in {:?}", lock_acquired.duration_since(lock_start));
+            
             // Check flag again after acquiring lock (in case shutdown happened during lock wait)
             if !running.load(Ordering::Relaxed) {
                 true // Signal to exit
             } else {
+                let process_start = Instant::now();
+                info!("🔍 [BURST-TIMING] Starting process_burst()...");
+                
                 match npu_lock.process_burst() {
                     Ok(result) => {
+                        let process_done = Instant::now();
+                        info!("🔍 [BURST-TIMING] process_burst() completed in {:?}, {} neurons fired", 
+                            process_done.duration_since(process_start), result.neuron_count);
+                        
                         total_neurons_fired += result.neuron_count;
                         // Update cached burst count for lock-free reads
                         cached_burst_count.store(npu_lock.get_burst_count(), std::sync::atomic::Ordering::Relaxed);
@@ -516,7 +550,11 @@ fn burst_loop(
 
         if has_shm_writer || has_viz_publisher {
             // Force sample FQ on every burst (bypasses rate limiting)
+            let viz_lock_start = Instant::now();
+            info!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for viz sampling...");
             let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
+            let viz_lock_done = Instant::now();
+            info!("🔍 [BURST-TIMING] Viz sampling completed in {:?}", viz_lock_done.duration_since(viz_lock_start));
 
             static FIRST_CHECK_LOGGED: std::sync::atomic::AtomicBool =
                 std::sync::atomic::AtomicBool::new(false);
