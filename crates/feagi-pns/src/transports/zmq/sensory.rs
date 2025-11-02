@@ -22,9 +22,12 @@ pub struct SensoryReceiveConfig {
 impl Default for SensoryReceiveConfig {
     fn default() -> Self {
         Self {
-            receive_high_water_mark: 1000,
+            // REAL-TIME: HWM=1 ensures only latest sensory data is kept
+            // Old data is automatically dropped by ZMQ if not consumed fast enough
+            receive_high_water_mark: 1,
             linger_ms: 0,
-            immediate: false,
+            // REAL-TIME: immediate=true disables Nagle's algorithm for lowest latency
+            immediate: true,
             poll_timeout_ms: 1000,
             startup_drain_timeout_ms: 500, // 500ms drain on startup
         }

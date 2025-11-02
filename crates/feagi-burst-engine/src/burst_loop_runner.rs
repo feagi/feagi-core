@@ -58,6 +58,8 @@ pub struct BurstLoopRunner {
     /// FCL/FQ sampler configuration
     fcl_sampler_frequency: Arc<Mutex<f64>>,  // Sampling frequency in Hz
     fcl_sampler_consumer: Arc<Mutex<u32>>,   // Consumer type: 1=visualization, 2=motor, 3=both
+    /// Cached burst count (shared reference to NPU's atomic) for lock-free reads
+    cached_burst_count: Arc<std::sync::atomic::AtomicU64>,
 }
 
 impl BurstLoopRunner {
@@ -195,6 +197,7 @@ impl BurstLoopRunner {
             viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
             fcl_sampler_frequency: Arc::new(Mutex::new(30.0)), // Default 30Hz for visualization
             fcl_sampler_consumer: Arc::new(Mutex::new(1)), // Default: 1 = visualization only
+            cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
         }
     }
 
@@ -248,12 +251,13 @@ impl BurstLoopRunner {
         let running = self.running.clone();
         let viz_writer = self.viz_shm_writer.clone();
         let viz_publisher = self.viz_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
+        let cached_burst_count = self.cached_burst_count.clone(); // For lock-free burst count reads
 
         self.thread_handle = Some(
             thread::Builder::new()
                 .name("feagi-burst-loop".to_string())
                 .spawn(move || {
-                    burst_loop(npu, frequency, running, viz_writer, viz_publisher);
+                    burst_loop(npu, frequency, running, viz_writer, viz_publisher, cached_burst_count);
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
         );
@@ -318,9 +322,13 @@ impl BurstLoopRunner {
         self.running.load(Ordering::Acquire)
     }
 
-    /// Get current burst count (from NPU - single source of truth)
+    /// Get current burst count (lock-free atomic read)
+    ///
+    /// Reads from cached value that's updated by the burst loop.
+    /// Never blocks, even during burst processing.
+    ///
     pub fn get_burst_count(&self) -> u64 {
-        self.npu.lock().unwrap().get_burst_count()
+        self.cached_burst_count.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Get configured burst frequency in Hz
@@ -416,6 +424,7 @@ fn burst_loop(
     running: Arc<AtomicBool>,
     viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
     viz_publisher: Option<Arc<dyn VisualizationPublisher>>, // Trait object for visualization (NO PYTHON CALLBACKS!)
+    cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -465,6 +474,8 @@ fn burst_loop(
                 match npu_lock.process_burst() {
                     Ok(result) => {
                         total_neurons_fired += result.neuron_count;
+                        // Update cached burst count for lock-free reads
+                        cached_burst_count.store(npu_lock.get_burst_count(), std::sync::atomic::Ordering::Relaxed);
                         false // Continue processing
                     }
                     Err(e) => {

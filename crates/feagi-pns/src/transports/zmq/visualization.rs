@@ -37,9 +37,12 @@ pub struct VisualizationSendConfig {
 impl Default for VisualizationSendConfig {
     fn default() -> Self {
         Self {
-            queue_capacity: 512,
+            // REAL-TIME: Keep only 1 frame in queue for absolute minimum latency
+            // Brain Visualizer should see real-time activity, not buffered history
+            queue_capacity: 1,
             send_timeout_ms: -1, // Block until send succeeds
             idle_sleep_ms: 1,
+            // REAL-TIME: Drop oldest frames when queue is full
             overflow_strategy: VisualizationOverflowStrategy::DropOldest,
             backpressure_sleep_ms: 1,
         }
@@ -154,8 +157,12 @@ impl VisualizationStream {
         let socket = self.context.socket(zmq::PUB).map_err(|e| e.to_string())?;
 
         socket.set_linger(0).map_err(|e| e.to_string())?;
-        socket.set_sndhwm(10000).map_err(|e| e.to_string())?;
-        socket.set_conflate(false).map_err(|e| e.to_string())?;
+        // REAL-TIME: HWM=1 ensures only latest visualization is kept
+        // Brain Visualizer should show current activity, not buffered history
+        socket.set_sndhwm(1).map_err(|e| e.to_string())?;
+        // REAL-TIME: conflate=true enables "last value caching" - keeps only newest message
+        // This is critical for PUB/SUB pattern to drop intermediate frames
+        socket.set_conflate(true).map_err(|e| e.to_string())?;
         socket
             .set_sndtimeo(self.send_config.send_timeout_ms)
             .map_err(|e| e.to_string())?;

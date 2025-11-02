@@ -30,6 +30,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{info, warn, debug};
 
 use feagi_types::{BrainRegion, BrainRegionHierarchy, CorticalArea};
@@ -114,6 +115,14 @@ pub struct ConnectomeManager {
     /// All neuron/synapse data queries delegate to the NPU.
     npu: Option<Arc<Mutex<RustNPU>>>,
     
+    /// Cached neuron count (lock-free read) - updated by burst engine
+    /// This prevents health checks from blocking on NPU lock
+    cached_neuron_count: Arc<AtomicUsize>,
+    
+    /// Cached synapse count (lock-free read) - updated by burst engine
+    /// This prevents health checks from blocking on NPU lock
+    cached_synapse_count: Arc<AtomicUsize>,
+    
     /// Is the connectome initialized (has cortical areas)?
     initialized: bool,
 }
@@ -131,6 +140,8 @@ impl ConnectomeManager {
             morphology_registry: feagi_evo::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: None,
+            cached_neuron_count: Arc::new(AtomicUsize::new(0)),
+            cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
         }
     }
@@ -176,6 +187,8 @@ impl ConnectomeManager {
             morphology_registry: feagi_evo::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: None,
+            cached_neuron_count: Arc::new(AtomicUsize::new(0)),
+            cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
         }
     }
@@ -205,6 +218,8 @@ impl ConnectomeManager {
             morphology_registry: feagi_evo::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: Some(npu),
+            cached_neuron_count: Arc::new(AtomicUsize::new(0)),
+            cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
         }
     }
@@ -695,6 +710,11 @@ impl ConnectomeManager {
     pub fn set_npu(&mut self, npu: Arc<Mutex<RustNPU>>) {
         self.npu = Some(npu);
         info!(target: "feagi-bdu","🔗 ConnectomeManager: NPU reference set");
+        
+        // Initialize cached stats immediately
+        self.update_all_cached_stats();
+        info!(target: "feagi-bdu","📊 Initialized cached stats: {} neurons, {} synapses", 
+            self.get_neuron_count(), self.get_synapse_count());
     }
     
     /// Check if NPU is connected
@@ -1063,40 +1083,92 @@ impl ConnectomeManager {
         }
     }
     
-    /// Get total number of active neurons
+    /// Get total number of active neurons (lock-free cached read with opportunistic update)
     ///
     /// # Returns
     ///
-    /// The total number of neurons in the NPU, or 0 if NPU is not connected
+    /// The total number of neurons (from cache)
+    ///
+    /// # Performance
+    ///
+    /// This is a lock-free atomic read that never blocks, even during burst processing.
+    /// Opportunistically updates cache if NPU is available (non-blocking try_lock).
     ///
     pub fn get_neuron_count(&self) -> usize {
+        // Opportunistically update cache if NPU is available (non-blocking)
         if let Some(ref npu) = self.npu {
-            if let Ok(npu_lock) = npu.lock() {
-                npu_lock.get_neuron_count()
-            } else {
-                0
+            if let Ok(npu_lock) = npu.try_lock() {
+                let fresh_count = npu_lock.get_neuron_count();
+                self.cached_neuron_count.store(fresh_count, Ordering::Relaxed);
             }
-        } else {
-            0
+            // If NPU is busy, just use cached value
+        }
+        
+        // Always return cached value (never blocks)
+        self.cached_neuron_count.load(Ordering::Relaxed)
+    }
+    
+    /// Update the cached neuron count (explicit update)
+    ///
+    /// Use this if you want to force a cache update. Most callers should just
+    /// use get_neuron_count() which updates opportunistically.
+    ///
+    pub fn update_cached_neuron_count(&self) {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.try_lock() {
+                let count = npu_lock.get_neuron_count();
+                self.cached_neuron_count.store(count, Ordering::Relaxed);
+            }
         }
     }
     
-    /// Get total number of synapses
+    /// Get total number of synapses (lock-free cached read with opportunistic update)
     ///
     /// # Returns
     ///
-    /// The total number of synapses in the NPU, or 0 if NPU is not connected
+    /// The total number of synapses (from cache)
+    ///
+    /// # Performance
+    ///
+    /// This is a lock-free atomic read that never blocks, even during burst processing.
+    /// Opportunistically updates cache if NPU is available (non-blocking try_lock).
     ///
     pub fn get_synapse_count(&self) -> usize {
+        // Opportunistically update cache if NPU is available (non-blocking)
         if let Some(ref npu) = self.npu {
-            if let Ok(npu_lock) = npu.lock() {
-                npu_lock.get_synapse_count()
-            } else {
-                0
+            if let Ok(npu_lock) = npu.try_lock() {
+                let fresh_count = npu_lock.get_synapse_count();
+                self.cached_synapse_count.store(fresh_count, Ordering::Relaxed);
             }
-        } else {
-            0
+            // If NPU is busy, just use cached value
         }
+        
+        // Always return cached value (never blocks)
+        self.cached_synapse_count.load(Ordering::Relaxed)
+    }
+    
+    /// Update the cached synapse count (explicit update)
+    ///
+    /// Use this if you want to force a cache update. Most callers should just
+    /// use get_synapse_count() which updates opportunistically.
+    ///
+    pub fn update_cached_synapse_count(&self) {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.try_lock() {
+                let count = npu_lock.get_synapse_count();
+                self.cached_synapse_count.store(count, Ordering::Relaxed);
+            }
+        }
+    }
+    
+    /// Update all cached stats (neuron and synapse counts)
+    ///
+    /// This is called automatically when NPU is connected and can be called
+    /// explicitly if you want to force a cache refresh.
+    ///
+    pub fn update_all_cached_stats(&self) {
+        self.update_cached_neuron_count();
+        self.update_cached_synapse_count();
     }
     
     /// Get neuron coordinates (x, y, z)

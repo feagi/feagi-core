@@ -80,9 +80,12 @@ impl AgentConfig {
             connection_timeout_ms: 5000,
             registration_retries: 3,
             retry_backoff_ms: 1000,
-            sensory_send_hwm: 1000,
+            // REAL-TIME: HWM=1 ensures agent doesn't buffer old sensory data
+            // If FEAGI is slow, old frames are dropped (desired behavior for real-time)
+            sensory_send_hwm: 1,
             sensory_linger_ms: 0,
-            sensory_immediate: false,
+            // REAL-TIME: immediate=true disables Nagle's algorithm for lowest latency
+            sensory_immediate: true,
         }
     }
 

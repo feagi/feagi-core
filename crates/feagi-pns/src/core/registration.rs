@@ -88,8 +88,9 @@ impl RegistrationHandler {
         &self,
         request: RegistrationRequest,
     ) -> Result<RegistrationResponse, String> {
+        let total_start = std::time::Instant::now();
         info!(
-            "🦀 [REGISTRATION] Processing registration for agent: {} (type: {})",
+            "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Processing registration for agent: {} (type: {})",
             request.agent_id, request.agent_type
         );
 
@@ -161,24 +162,34 @@ impl RegistrationHandler {
             if let Some(sensory_mgr_lock) = self.sensory_agent_manager.lock().as_ref() {
                 if let Some(shm_path) = &sensory.shm_path {
                     info!(
-                        "🦀 [REGISTRATION] Registering {} with burst engine: {} @ {}Hz",
+                        "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Registering {} with burst engine: {} @ {}Hz",
                         request.agent_id, shm_path, sensory.rate_hz
                     );
 
+                    let burst_start = std::time::Instant::now();
                     let sensory_mgr = sensory_mgr_lock.lock().unwrap();
+                    let burst_lock_duration = burst_start.elapsed();
+                    info!(
+                        "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Burst engine lock acquired in {:?}",
+                        burst_lock_duration
+                    );
+                    
                     let config = feagi_burst_engine::AgentConfig {
                         agent_id: request.agent_id.clone(),
                         shm_path: std::path::PathBuf::from(shm_path),
                         rate_hz: sensory.rate_hz,
                         area_mapping: sensory.cortical_mappings.clone(),
                     };
+                    
+                    let register_start = std::time::Instant::now();
                     sensory_mgr
                         .register_agent(config)
                         .map_err(|e| format!("Failed to register with burst engine: {}", e))?;
+                    let register_duration = register_start.elapsed();
 
                     info!(
-                        "🦀 [REGISTRATION] ✅ Agent {} registered with burst engine",
-                        request.agent_id
+                        "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] ✅ Agent {} registered with burst engine in {:?}",
+                        request.agent_id, register_duration
                     );
                 } else {
                     warn!("🦀 [REGISTRATION] ⚠️  Sensory capability exists but no SHM path");
@@ -195,17 +206,29 @@ impl RegistrationHandler {
                 serde_json::to_string(&request.capabilities).unwrap_or_else(|_| "{}".to_string());
 
             info!(
-                "🦀 [REGISTRATION] Invoking Python callback for agent: {}",
+                "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Invoking Python callback for agent: {}",
                 request.agent_id
             );
+            let callback_start = std::time::Instant::now();
             callback(
                 request.agent_id.clone(),
                 request.agent_type.clone(),
                 caps_json,
             );
+            let callback_duration = callback_start.elapsed();
+            info!(
+                "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Python callback completed in {:?}",
+                callback_duration
+            );
         }
 
         // Return success response
+        let total_duration = total_start.elapsed();
+        info!(
+            "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] ✅ Total registration completed in {:?} for agent: {}",
+            total_duration, request.agent_id
+        );
+        
         Ok(RegistrationResponse {
             status: "success".to_string(),
             message: Some(format!(
