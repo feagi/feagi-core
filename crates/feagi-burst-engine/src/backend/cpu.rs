@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn test_cpu_backend_creation() {
         let backend = CPUBackend::new();
-        assert_eq!(backend.backend_name(), "CPU (SIMD)");
+        assert_eq!(backend.backend_name(), "CPU (SIMD) - LIF");
     }
 
     #[test]

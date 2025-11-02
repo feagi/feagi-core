@@ -206,22 +206,19 @@ impl NeuronService for NeuronServiceImpl {
         let neurons: Vec<NeuronInfo> = neuron_ids
             .iter()
             .take(limit.unwrap_or(usize::MAX))
-            .filter_map(|&id| {
+            .map(|&id| {
                 // Get coordinates and cortical idx
                 let coordinates = manager.get_neuron_coordinates(id);
                 let cortical_idx = manager.get_neuron_cortical_idx(id);
                 
-                // Return None if neuron doesn't exist (coordinates are (0,0,0) or cortical_idx is 0)
-                if coordinates == (0, 0, 0) || cortical_idx == 0 {
-                    None
-                } else {
-                    Some(NeuronInfo {
-                        id,
-                        cortical_id: cortical_id.to_string(),
-                        cortical_idx,
-                        coordinates,
-                        properties: std::collections::HashMap::new(),  // TODO: Get properties
-                    })
+                // CRITICAL: (0,0,0) is a VALID coordinate for 1x1x1 areas like _power!
+                // Do NOT filter out neurons at (0,0,0) - it's a legitimate position
+                NeuronInfo {
+                    id,
+                    cortical_id: cortical_id.to_string(),
+                    cortical_idx,
+                    coordinates,
+                    properties: std::collections::HashMap::new(),  // TODO: Get properties
                 }
             })
             .collect();

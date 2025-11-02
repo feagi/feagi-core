@@ -42,7 +42,16 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
     let parsed = GenomeParser::parse(&hierarchical_json_str)?;
     
     // Convert to RuntimeGenome
-    to_runtime_genome(parsed, &hierarchical_json_str)
+    let mut runtime_genome = to_runtime_genome(parsed, &hierarchical_json_str)?;
+    
+    // CRITICAL: Auto-fix common issues before validation
+    // This prevents genomes with 0 dimensions or 0 per_voxel_neuron_cnt from failing
+    let fixes_applied = crate::validator::auto_fix_genome(&mut runtime_genome);
+    if fixes_applied > 0 {
+        tracing::info!("🔧 [GENOME-LOAD] Applied {} auto-fixes to genome", fixes_applied);
+    }
+    
+    Ok(runtime_genome)
 }
 
 /// Check if genome is in flat format

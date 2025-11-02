@@ -179,6 +179,18 @@ impl RustNPU {
         }
     }
 
+    /// Create a new NPU with CPU-only backend (for tests)
+    /// 
+    /// This is a convenience wrapper for tests that don't need GPU configuration.
+    /// Production code should use `new()` with explicit GPU config.
+    pub fn new_cpu_only(
+        neuron_capacity: usize,
+        synapse_capacity: usize,
+        fire_ledger_window: usize,
+    ) -> Self {
+        Self::new(neuron_capacity, synapse_capacity, fire_ledger_window, None)
+    }
+
     /// Set power injection amount (lock-free atomic operation)
     pub fn set_power_amount(&self, amount: f32) {
         self.power_amount.store(amount.to_bits(), std::sync::atomic::Ordering::Relaxed);
@@ -1606,6 +1618,18 @@ impl RustNPU {
         synapses
     }
 
+    /// Rebuild the synapse index in the propagation engine
+    /// 
+    /// CRITICAL: This MUST be called after adding/removing synapses to update the
+    /// internal index used by get_outgoing_synapses() and synaptic propagation.
+    /// 
+    /// Without calling this, newly created synapses will be invisible to queries!
+    pub fn rebuild_synapse_index(&mut self) {
+        let synapse_array = self.synapse_array.read().unwrap();
+        let mut prop_engine = self.propagation_engine.write().unwrap();
+        prop_engine.build_synapse_index(&synapse_array);
+    }
+
     /// Get neuron state for diagnostics (CFC, extended refractory, potential, etc.)
     /// Returns (cfc, cfc_limit, extended_refrac_period, potential, threshold, refrac_countdown)
     pub fn get_neuron_state(&self, neuron_id: NeuronId) -> Option<(u16, u16, u16, f32, f32, u16)> {
@@ -1995,7 +2019,7 @@ mod tests {
 
     #[test]
     fn test_npu_creation() {
-        let npu = RustNPU::new(1000, 10000, 20);
+        let npu = RustNPU::new_cpu_only(1000, 10000, 20);
         assert_eq!(npu.get_neuron_count(), 0);
         assert_eq!(npu.get_synapse_count(), 0);
         assert_eq!(npu.get_burst_count(), 0);
@@ -2003,14 +2027,14 @@ mod tests {
 
     #[test]
     fn test_npu_creation_with_zero_capacity() {
-        let npu = RustNPU::new(0, 0, 0);
+        let npu = RustNPU::new_cpu_only(0, 0, 0);
         assert_eq!(npu.get_neuron_count(), 0);
         assert_eq!(npu.get_synapse_count(), 0);
     }
 
     #[test]
     fn test_npu_creation_with_large_capacity() {
-        let npu = RustNPU::new(1_000_000, 10_000_000, 100);
+        let npu = RustNPU::new_cpu_only(1_000_000, 10_000_000, 100);
         assert_eq!(npu.get_neuron_count(), 0);
     }
 
@@ -2020,7 +2044,7 @@ mod tests {
 
     #[test]
     fn test_add_neurons() {
-        let mut npu = RustNPU::new(1000, 10000, 20);
+        let mut npu = RustNPU::new_cpu_only(1000, 10000, 20);
 
         let id1 = npu
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2036,7 +2060,7 @@ mod tests {
 
     #[test]
     fn test_add_neuron_sequential_ids() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         for i in 0..10 {
             let id = npu
@@ -2050,7 +2074,7 @@ mod tests {
 
     #[test]
     fn test_add_neuron_different_parameters() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         // High threshold
         let _n1 = npu
@@ -2077,7 +2101,7 @@ mod tests {
 
     #[test]
     fn test_add_neuron_different_cortical_areas() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let _power = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2094,7 +2118,7 @@ mod tests {
 
     #[test]
     fn test_add_neuron_3d_coordinates() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let _n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 5, 10, 15)
@@ -2109,7 +2133,7 @@ mod tests {
 
     #[test]
     fn test_add_synapses() {
-        let mut npu = RustNPU::new(1000, 10000, 20);
+        let mut npu = RustNPU::new_cpu_only(1000, 10000, 20);
 
         let n1 = npu
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2132,7 +2156,7 @@ mod tests {
 
     #[test]
     fn test_add_multiple_synapses() {
-        let mut npu = RustNPU::new(1000, 10000, 20);
+        let mut npu = RustNPU::new_cpu_only(1000, 10000, 20);
 
         let n1 = npu
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2174,7 +2198,7 @@ mod tests {
 
     #[test]
     fn test_add_inhibitory_synapse() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2197,7 +2221,7 @@ mod tests {
 
     #[test]
     fn test_synapse_removal() {
-        let mut npu = RustNPU::new(1000, 10000, 20);
+        let mut npu = RustNPU::new_cpu_only(1000, 10000, 20);
 
         let n1 = npu
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2222,7 +2246,7 @@ mod tests {
 
     #[test]
     fn test_remove_nonexistent_synapse() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2240,7 +2264,7 @@ mod tests {
 
     #[test]
     fn test_burst_processing() {
-        let mut npu = RustNPU::new(1000, 10000, 20);
+        let mut npu = RustNPU::new_cpu_only(1000, 10000, 20);
 
         // Add a power neuron
         let _power_neuron = npu
@@ -2257,7 +2281,7 @@ mod tests {
 
     #[test]
     fn test_burst_counter_increments() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         for i in 1..=10 {
             let result = npu.process_burst().unwrap();
@@ -2268,7 +2292,7 @@ mod tests {
 
     #[test]
     fn test_power_injection_auto_discovery() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         // Add 5 power neurons (cortical_area=1)
         for i in 0..5 {
@@ -2290,7 +2314,7 @@ mod tests {
 
     #[test]
     fn test_set_power_amount() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         // Add power neuron with high threshold
         npu.add_neuron(5.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2306,7 +2330,7 @@ mod tests {
 
     #[test]
     fn test_empty_burst_no_power() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         // Add only regular neurons (no power area)
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2321,7 +2345,7 @@ mod tests {
     fn test_power_injection_zero_to_n_transition() {
         // Test the startup race condition: burst loop starts before genome load
         // This simulates what happens in production when burst engine starts before embryogenesis
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
         npu.set_power_amount(0.5);
 
         // Burst 1: No power neurons yet (pre-embryogenesis)
@@ -2349,7 +2373,7 @@ mod tests {
 
     #[test]
     fn test_inject_sensory_input() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2363,7 +2387,7 @@ mod tests {
 
     #[test]
     fn test_inject_multiple_sensory_inputs() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2382,7 +2406,7 @@ mod tests {
 
     #[test]
     fn test_sensory_accumulation_on_same_neuron() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2402,7 +2426,7 @@ mod tests {
 
     #[test]
     fn test_fire_ledger_recording() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let _neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2418,7 +2442,7 @@ mod tests {
 
     #[test]
     fn test_fire_ledger_window_configuration() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         npu.configure_fire_ledger_window(1, 50);
 
@@ -2432,7 +2456,7 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_rate_limiting() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
@@ -2448,7 +2472,7 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_motor_subscribers() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         assert!(!npu.has_motor_subscribers());
 
@@ -2461,7 +2485,7 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_viz_subscribers() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         assert!(!npu.has_visualization_subscribers());
 
@@ -2474,7 +2498,7 @@ mod tests {
 
     #[test]
     fn test_get_latest_fire_queue_sample() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
@@ -2494,7 +2518,7 @@ mod tests {
 
     #[test]
     fn test_register_cortical_area_name() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         npu.register_cortical_area(1, "visual_cortex".to_string());
         npu.register_cortical_area(2, "motor_cortex".to_string());
@@ -2508,7 +2532,7 @@ mod tests {
 
     #[test]
     fn test_add_synapse_to_nonexistent_neuron() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2531,7 +2555,7 @@ mod tests {
 
     #[test]
     fn test_burst_with_empty_npu() {
-        let mut npu = RustNPU::new(100, 1000, 10);
+        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
 
         let result = npu.process_burst().unwrap();
 
@@ -2542,7 +2566,7 @@ mod tests {
 
     #[test]
     fn test_large_sensory_batch() {
-        let mut npu = RustNPU::new(1000, 10000, 10);
+        let mut npu = RustNPU::new_cpu_only(1000, 10000, 10);
 
         // Add 100 neurons
         let mut neurons = Vec::new();

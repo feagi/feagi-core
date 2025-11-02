@@ -519,6 +519,11 @@ impl ConnectomeManager {
             info!(target: "feagi-bdu", "Created {} new synapses: {} -> {}", 
                   synapse_count, src_area_id, dst_area_id);
             
+            // CRITICAL: Rebuild synapse index so new synapses are visible to queries and propagation!
+            let mut npu = self.npu.as_ref().unwrap().lock().unwrap();
+            npu.rebuild_synapse_index();
+            info!(target: "feagi-bdu", "Rebuilt synapse index after adding {} synapses", synapse_count);
+            
             Ok(synapse_count)
         } else {
             info!(target: "feagi-bdu", "NPU not available - skipping synapse regeneration");
@@ -695,6 +700,16 @@ impl ConnectomeManager {
     /// Check if NPU is connected
     pub fn has_npu(&self) -> bool {
         self.npu.is_some()
+    }
+    
+    /// Get NPU reference (read-only access for queries)
+    /// 
+    /// # Returns
+    /// 
+    /// * `Option<&Arc<Mutex<RustNPU>>>` - Reference to NPU if connected
+    /// 
+    pub fn get_npu(&self) -> Option<&Arc<Mutex<RustNPU>>> {
+        self.npu.as_ref()
     }
     
     // ======================================================================

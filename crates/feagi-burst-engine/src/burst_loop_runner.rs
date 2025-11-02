@@ -819,8 +819,16 @@ mod tests {
 
     #[test]
     fn test_burst_loop_lifecycle() {
-        let npu = Arc::new(Mutex::new(RustNPU::new(1000, 10000, 20)));
-        let mut runner = BurstLoopRunner::new(npu, 10.0);
+        // Use a unit type for the generic parameter since we're not testing visualization
+        struct NoViz;
+        impl VisualizationPublisher for NoViz {
+            fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> {
+                Ok(())
+            }
+        }
+        
+        let npu = Arc::new(Mutex::new(RustNPU::new_cpu_only(1000, 10000, 20)));
+        let mut runner = BurstLoopRunner::new::<NoViz>(npu, None, 10.0);
 
         assert!(!runner.is_running());
 

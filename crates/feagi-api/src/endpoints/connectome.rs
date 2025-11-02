@@ -218,14 +218,68 @@ pub async fn get_cortical_areas_list_transforming(State(_state): State<ApiState>
 
 /// GET /v1/connectome/cortical_area/{cortical_id}/neurons
 #[utoipa::path(get, path = "/v1/connectome/cortical_area/{cortical_id}/neurons", tag = "connectome")]
-pub async fn get_cortical_area_neurons(State(_state): State<ApiState>, axum::extract::Path(_cortical_id): axum::extract::Path<String>) -> ApiResult<Json<Vec<u64>>> {
-    Ok(Json(Vec::new()))
+pub async fn get_cortical_area_neurons(State(state): State<ApiState>, axum::extract::Path(cortical_id): axum::extract::Path<String>) -> ApiResult<Json<Vec<u64>>> {
+    use tracing::debug;
+    
+    let neuron_service = state.neuron_service.as_ref();
+    
+    // CRITICAL FIX: Query actual neurons from NPU instead of returning empty stub
+    let neurons = neuron_service.list_neurons_in_area(&cortical_id, None).await
+        .map_err(|e| ApiError::internal(format!("Failed to get neurons in area {}: {}", cortical_id, e)))?;
+    
+    let neuron_ids: Vec<u64> = neurons.iter().map(|n| n.id).collect();
+    
+    debug!(target: "feagi-api", "GET /connectome/cortical_area/{}/neurons - found {} neurons", cortical_id, neuron_ids.len());
+    Ok(Json(neuron_ids))
 }
 
 /// GET /v1/connectome/{cortical_area_id}/synapses
 #[utoipa::path(get, path = "/v1/connectome/{cortical_area_id}/synapses", tag = "connectome")]
-pub async fn get_area_synapses(State(_state): State<ApiState>, axum::extract::Path(_area_id): axum::extract::Path<String>) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
-    Ok(Json(Vec::new()))
+pub async fn get_area_synapses(State(state): State<ApiState>, axum::extract::Path(area_id): axum::extract::Path<String>) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
+    use tracing::debug;
+    
+    let connectome_service = state.connectome_service.as_ref();
+    let neuron_service = state.neuron_service.as_ref();
+    
+    // CRITICAL FIX: Query actual synapses from NPU instead of returning empty stub
+    // Get cortical_idx for the area
+    let area_info = connectome_service.get_cortical_area(&area_id).await
+        .map_err(|_| ApiError::not_found("CorticalArea", &area_id))?;
+    
+    let cortical_idx = area_info.cortical_idx;
+    
+    // Get all neurons in this cortical area
+    let neurons = neuron_service.list_neurons_in_area(&area_id, None).await
+        .map_err(|e| ApiError::internal(format!("Failed to get neurons: {}", e)))?;
+    
+    debug!(target: "feagi-api", "Getting synapses for area {} (idx={}): {} neurons", area_id, cortical_idx, neurons.len());
+    
+    // Collect all outgoing synapses from neurons in this area
+    // Access NPU through ConnectomeManager singleton
+    let manager = feagi_bdu::ConnectomeManager::instance();
+    let manager_lock = manager.read();
+    let npu_arc = manager_lock.get_npu()
+        .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
+    let npu_lock = npu_arc.lock().unwrap();
+    
+    let mut all_synapses = Vec::new();
+    for neuron_info in &neurons {
+        let neuron_id = neuron_info.id as u32;
+        let outgoing = npu_lock.get_outgoing_synapses(neuron_id);
+        
+        for (target_id, weight, psp, synapse_type) in outgoing {
+            let mut synapse_obj = HashMap::new();
+            synapse_obj.insert("source_neuron_id".to_string(), serde_json::json!(neuron_id));
+            synapse_obj.insert("target_neuron_id".to_string(), serde_json::json!(target_id));
+            synapse_obj.insert("weight".to_string(), serde_json::json!(weight));
+            synapse_obj.insert("postsynaptic_potential".to_string(), serde_json::json!(psp));
+            synapse_obj.insert("synapse_type".to_string(), serde_json::json!(synapse_type));
+            all_synapses.push(synapse_obj);
+        }
+    }
+    
+    debug!(target: "feagi-api", "Found {} synapses from area {}", all_synapses.len(), area_id);
+    Ok(Json(all_synapses))
 }
 
 /// GET /v1/connectome/cortical_info/{cortical_area}

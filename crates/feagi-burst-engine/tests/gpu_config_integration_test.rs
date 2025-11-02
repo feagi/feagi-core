@@ -23,7 +23,7 @@ fn test_gpu_config_disabled() {
         gpu_memory_fraction: 0.8,
     };
 
-    let (backend_type, backend_config) = config.to_backend_config();
+    let (backend_type, backend_config) = config.to_backend_selection();
 
     assert_eq!(backend_type, BackendType::CPU);
     assert!(backend_config.force_cpu);
@@ -39,7 +39,7 @@ fn test_gpu_config_hybrid_mode() {
         gpu_memory_fraction: 0.8,
     };
 
-    let (backend_type, backend_config) = config.to_backend_config();
+    let (backend_type, backend_config) = config.to_backend_selection();
 
     assert_eq!(backend_type, BackendType::Auto);
     assert_eq!(backend_config.gpu_synapse_threshold, 500_000);
@@ -57,7 +57,7 @@ fn test_gpu_config_always_on() {
         gpu_memory_fraction: 0.8,
     };
 
-    let (backend_type, backend_config) = config.to_backend_config();
+    let (backend_type, backend_config) = config.to_backend_selection();
 
     assert_eq!(backend_type, BackendType::WGPU);
     assert!(!backend_config.force_cpu);
@@ -83,7 +83,7 @@ fn test_gpu_config_custom_threshold() {
         gpu_memory_fraction: 0.5,
     };
 
-    let (_, backend_config) = config.to_backend_config();
+    let (_, backend_config) = config.to_backend_selection();
 
     assert_eq!(backend_config.gpu_synapse_threshold, 5_000_000);
     assert_eq!(backend_config.gpu_neuron_threshold, 50_000); // 5M / 100
@@ -115,7 +115,7 @@ fn test_backend_selection_small_genome() {
         gpu_memory_fraction: 0.8,
     };
 
-    let (_, backend_config) = config.to_backend_config();
+    let (_, backend_config) = config.to_backend_selection();
 
     // Small genome: 10K neurons, 100K synapses
     let decision = select_backend(10_000, 100_000, &backend_config);
@@ -136,7 +136,7 @@ fn test_backend_selection_large_genome() {
         gpu_memory_fraction: 0.8,
     };
 
-    let (_, backend_config) = config.to_backend_config();
+    let (_, backend_config) = config.to_backend_selection();
 
     // Large genome: 2M neurons, 200M synapses
     let decision = select_backend(2_000_000, 200_000_000, &backend_config);

@@ -82,6 +82,56 @@ pub fn validate_genome(genome: &RuntimeGenome) -> ValidationResult {
     result
 }
 
+/// Auto-fix common genome issues (zero dimensions, zero per_voxel_neuron_cnt)
+///
+/// This function modifies the genome in-place to fix issues that can be automatically corrected.
+/// Should be called before validation to prevent common user errors.
+///
+/// # Arguments
+/// * `genome` - Mutable reference to genome to fix
+///
+/// # Returns
+/// * Number of fixes applied
+pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
+    use tracing::info;
+    
+    let mut fixes_applied = 0;
+    
+    for (cortical_id, area) in &mut genome.cortical_areas {
+        // Fix zero dimensions
+        if area.dimensions.width == 0 {
+            info!("🔧 AUTO-FIX: Cortical area '{}' width 0 → 1", cortical_id);
+            area.dimensions.width = 1;
+            fixes_applied += 1;
+        }
+        if area.dimensions.height == 0 {
+            info!("🔧 AUTO-FIX: Cortical area '{}' height 0 → 1", cortical_id);
+            area.dimensions.height = 1;
+            fixes_applied += 1;
+        }
+        if area.dimensions.depth == 0 {
+            info!("🔧 AUTO-FIX: Cortical area '{}' depth 0 → 1", cortical_id);
+            area.dimensions.depth = 1;
+            fixes_applied += 1;
+        }
+        
+        // Fix zero per_voxel_neuron_cnt
+        if let Some(per_voxel_value) = area.properties.get_mut("per_voxel_neuron_cnt") {
+            if let Some(0) = per_voxel_value.as_i64() {
+                info!("🔧 AUTO-FIX: Cortical area '{}' per_voxel_neuron_cnt 0 → 1", cortical_id);
+                *per_voxel_value = serde_json::Value::from(1);
+                fixes_applied += 1;
+            }
+        }
+    }
+    
+    if fixes_applied > 0 {
+        info!("🔧 AUTO-FIX: Applied {} automatic corrections to genome", fixes_applied);
+    }
+    
+    fixes_applied
+}
+
 /// Validate genome metadata
 fn validate_metadata(genome: &RuntimeGenome, result: &mut ValidationResult) {
     if genome.metadata.genome_id.is_empty() {
@@ -116,12 +166,23 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
             ));
         }
         
-        // Validate dimensions
+        // Validate dimensions - AUTO-FIX zeros to 1
         if area.dimensions.width == 0 || area.dimensions.height == 0 || area.dimensions.depth == 0 {
-            result.add_error(format!(
-                "Cortical area '{}' has zero dimension(s): {}x{}x{}",
+            result.add_warning(format!(
+                "AUTO-FIX: Cortical area '{}' has zero dimension(s): {}x{}x{} - will be corrected to minimum (1,1,1)",
                 cortical_id, area.dimensions.width, area.dimensions.height, area.dimensions.depth
             ));
+            // Note: Auto-fix happens in auto_fix_genome() - this just detects the issue
+        }
+        
+        // Validate per_voxel_neuron_cnt
+        if let Some(per_voxel) = area.properties.get("per_voxel_neuron_cnt").and_then(|v| v.as_i64()) {
+            if per_voxel == 0 {
+                result.add_warning(format!(
+                    "AUTO-FIX: Cortical area '{}' has per_voxel_neuron_cnt=0 - will be corrected to 1",
+                    cortical_id
+                ));
+            }
         }
         
         // Warn about very large dimensions

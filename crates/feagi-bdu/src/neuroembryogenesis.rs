@@ -441,8 +441,14 @@ impl Neuroembryogenesis {
                 .and_then(|v| v.as_i64())
                 .unwrap_or(1);
             
+            // 🔍 DIAGNOSTIC: Log core area properties
+            if cortical_id == "_power" || cortical_id == "_death" {
+                info!(target: "feagi-bdu","  🔍 [CORE-AREA] {} - dimensions: {:?}, per_voxel: {}", 
+                    cortical_id, area.dimensions, per_voxel_count);
+            }
+            
             if per_voxel_count == 0 {
-                debug!(target: "feagi-bdu","  Skipping area {} - per_voxel_neuron_cnt is 0", cortical_id);
+                warn!(target: "feagi-bdu","  ⚠️ Skipping area {} - per_voxel_neuron_cnt is 0 (will have NO neurons!)", cortical_id);
                 continue;
             }
             
