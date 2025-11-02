@@ -5,7 +5,7 @@
 
 use axum::{extract::State, response::Json};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use crate::common::{ApiError, ApiResult};
 use crate::transports::http::server::ApiState;
 
@@ -16,9 +16,17 @@ pub struct MorphologyListResponse {
 
 /// GET /v1/morphology/morphology_list
 #[utoipa::path(get, path = "/v1/morphology/morphology_list", tag = "morphology")]
-pub async fn get_morphology_list(State(_state): State<ApiState>) -> ApiResult<Json<MorphologyListResponse>> {
-    // TODO: Get from morphology service
-    Ok(Json(MorphologyListResponse { morphology_list: vec![] }))
+pub async fn get_morphology_list(State(state): State<ApiState>) -> ApiResult<Json<MorphologyListResponse>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    let morphologies = connectome_service.get_morphologies().await
+        .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
+    
+    // Sort morphology names alphabetically for consistent UI display
+    let mut names: Vec<String> = morphologies.iter().map(|(name, _)| name.clone()).collect();
+    names.sort();
+    
+    Ok(Json(MorphologyListResponse { morphology_list: names }))
 }
 
 /// GET /v1/morphology/morphology_types
@@ -29,9 +37,10 @@ pub async fn get_morphology_types(State(_state): State<ApiState>) -> ApiResult<J
 
 /// GET /v1/morphology/list/types
 #[utoipa::path(get, path = "/v1/morphology/list/types", tag = "morphology")]
-pub async fn get_list_types(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+pub async fn get_list_types(State(_state): State<ApiState>) -> ApiResult<Json<BTreeMap<String, Vec<String>>>> {
     // TODO: Get actual morphology categorization
-    Ok(Json(HashMap::new()))
+    // Use BTreeMap for alphabetical ordering in UI
+    Ok(Json(BTreeMap::new()))
 }
 
 /// GET /v1/morphology/morphologies
@@ -44,7 +53,7 @@ pub async fn get_list_types(State(_state): State<ApiState>) -> ApiResult<Json<Ha
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_morphologies(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_morphologies(State(state): State<ApiState>) -> ApiResult<Json<BTreeMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
     
     // Get morphologies from connectome
@@ -52,7 +61,8 @@ pub async fn get_morphologies(State(state): State<ApiState>) -> ApiResult<Json<H
         .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
     
     // Convert to Python-compatible format
-    let mut result = HashMap::new();
+    // Use BTreeMap for alphabetical ordering in UI
+    let mut result = BTreeMap::new();
     for (name, morphology_info) in morphologies.iter() {
         result.insert(
             name.clone(),
@@ -101,7 +111,7 @@ pub async fn delete_morphology_by_name(State(_state): State<ApiState>, Json(_req
 pub async fn post_morphology_properties(
     State(state): State<ApiState>, 
     Json(req): Json<HashMap<String, String>>
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+) -> ApiResult<Json<BTreeMap<String, serde_json::Value>>> {
     use tracing::debug;
     
     let morphology_name = req.get("morphology_name")
@@ -117,7 +127,8 @@ pub async fn post_morphology_properties(
         .ok_or_else(|| ApiError::not_found("Morphology", morphology_name))?;
     
     // Return properties in expected format
-    let mut result = HashMap::new();
+    // Use BTreeMap for alphabetical ordering in UI
+    let mut result = BTreeMap::new();
     result.insert("morphology_name".to_string(), serde_json::json!(morphology_name));
     result.insert("type".to_string(), serde_json::json!(morphology_info.morphology_type));
     result.insert("class".to_string(), serde_json::json!(morphology_info.class));
@@ -201,7 +212,9 @@ pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<Strin
     let morphologies = connectome_service.get_morphologies().await
         .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
     
-    let names: Vec<String> = morphologies.iter().map(|(name, _info)| name.clone()).collect();
+    // Sort morphology names alphabetically for consistent UI display
+    let mut names: Vec<String> = morphologies.iter().map(|(name, _info)| name.clone()).collect();
+    names.sort();
     Ok(Json(names))
 }
 
@@ -215,13 +228,13 @@ pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<Strin
         ("morphology_id" = String, Path, description = "Morphology name")
     ),
     responses(
-        (status = 200, description = "Morphology info", body = HashMap<String, serde_json::Value>)
+        (status = 200, description = "Morphology info", body = BTreeMap<String, serde_json::Value>)
     )
 )]
 pub async fn get_info(
     State(state): State<ApiState>,
     axum::extract::Path(morphology_id): axum::extract::Path<String>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+) -> ApiResult<Json<BTreeMap<String, serde_json::Value>>> {
     // Delegate to post_morphology_properties (same logic)
     post_morphology_properties(State(state), Json(HashMap::from([
         ("morphology_name".to_string(), morphology_id)

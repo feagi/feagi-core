@@ -498,11 +498,14 @@ pub async fn get_cortical_area_index_list(State(state): State<ApiState>) -> ApiR
 
 /// GET /v1/cortical_area/cortical_idx_mapping
 #[utoipa::path(get, path = "/v1/cortical_area/cortical_idx_mapping", tag = "cortical_area")]
-pub async fn get_cortical_idx_mapping(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, u32>>> {
+pub async fn get_cortical_idx_mapping(State(state): State<ApiState>) -> ApiResult<Json<std::collections::BTreeMap<String, u32>>> {
+    use std::collections::BTreeMap;
+    
     let connectome_service = state.connectome_service.as_ref();
     let areas = connectome_service.list_cortical_areas().await.map_err(|e| ApiError::internal(format!("{}", e)))?;
     // CRITICAL FIX: Use the actual cortical_idx from CorticalArea, NOT enumerate() which ignores reserved indices!
-    let mapping: HashMap<String, u32> = areas.iter().map(|a| (a.cortical_id.clone(), a.cortical_idx)).collect();
+    // Use BTreeMap for consistent alphabetical ordering
+    let mapping: BTreeMap<String, u32> = areas.iter().map(|a| (a.cortical_id.clone(), a.cortical_idx)).collect();
     Ok(Json(mapping))
 }
 
