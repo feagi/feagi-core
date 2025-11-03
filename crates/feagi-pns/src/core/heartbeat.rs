@@ -46,13 +46,55 @@ impl HeartbeatTracker {
                     break;
                 }
 
-                // Check for stale agents
-                let stale_agents = agent_registry.read().get_stale_agents();
+                // Check for stale agents with detailed diagnostics
+                let registry = agent_registry.read();
+                let stale_agents = registry.get_stale_agents();
 
                 if !stale_agents.is_empty() {
                     info!("🦀 [HEARTBEAT] Found {} stale agent(s)", stale_agents.len());
 
-                    // Deregister stale agents
+                    // Log detailed staleness information for each agent
+                    for agent_id in &stale_agents {
+                        if let Some(agent_info) = registry.get(agent_id) {
+                            let now = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap()
+                                .as_millis() as u64;
+                            let time_since_last_seen_ms = now.saturating_sub(agent_info.last_seen);
+                            let timeout_threshold_ms = registry.get_timeout_ms();
+                            
+                            info!(
+                                "🦀 [HEARTBEAT] 🚨 DEREGISTRATION CAUSE for '{}': \
+                                Last heartbeat was {}ms ago (threshold: {}ms, exceeded by: {}ms)",
+                                agent_id,
+                                time_since_last_seen_ms,
+                                timeout_threshold_ms,
+                                time_since_last_seen_ms.saturating_sub(timeout_threshold_ms)
+                            );
+                            info!(
+                                "🦀 [HEARTBEAT]   ├─ Agent last_seen: {} (Unix epoch ms)",
+                                agent_info.last_seen
+                            );
+                            info!(
+                                "🦀 [HEARTBEAT]   ├─ Current time: {} (Unix epoch ms)",
+                                now
+                            );
+                            info!(
+                                "🦀 [HEARTBEAT]   ├─ Time inactive: {:.2}s / {:.2}s timeout",
+                                time_since_last_seen_ms as f64 / 1000.0,
+                                timeout_threshold_ms as f64 / 1000.0
+                            );
+                            info!(
+                                "🦀 [HEARTBEAT]   └─ Agent type: {}",
+                                agent_info.agent_type
+                            );
+                        }
+                    }
+                }
+                drop(registry);
+
+                // Deregister stale agents
+                if !stale_agents.is_empty() {
                     for agent_id in stale_agents {
                         info!("🦀 [HEARTBEAT] Deregistering stale agent: {}", agent_id);
                         if let Err(e) = agent_registry.write().deregister(&agent_id) {

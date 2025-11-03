@@ -643,6 +643,8 @@ fn burst_loop(
         "[{}] [BURST-LOOP] 🚀 Starting main loop at {:.2} Hz",
         timestamp, initial_freq
     );
+    
+    info!("[BURST-LOOP] 🔍 DIAGNOSTIC: Entering while loop with running={}", running.load(Ordering::Acquire));
 
     let mut burst_num = 0u64;
     let mut last_stats_time = Instant::now();
@@ -652,6 +654,11 @@ fn burst_loop(
 
     while running.load(Ordering::Acquire) {
         let burst_start = Instant::now();
+        
+        // DIAGNOSTIC: Log that we're alive
+        if burst_num % 100 == 0 {
+            info!("[BURST-LOOP] ✅ Burst {} starting (loop is alive)", burst_num);
+        }
 
         // Track actual burst interval
         if let Some(last) = last_burst_time {
@@ -677,12 +684,16 @@ fn burst_loop(
         }
         
         let lock_start = Instant::now();
-        debug!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for burst...");
+        if burst_num < 5 || burst_num % 100 == 0 {
+            info!("🔍 [BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...", burst_num);
+        }
         
         let should_exit = {
             let mut npu_lock = npu.lock().unwrap();
             let lock_acquired = Instant::now();
-            debug!("🔍 [BURST-TIMING] NPU lock acquired in {:?}", lock_acquired.duration_since(lock_start));
+            if burst_num < 5 || burst_num % 100 == 0 {
+                info!("🔍 [BURST-TIMING] Burst {}: NPU lock acquired in {:?}", burst_num, lock_acquired.duration_since(lock_start));
+            }
             
             // Check flag again after acquiring lock (in case shutdown happened during lock wait)
             if !running.load(Ordering::Relaxed) {
@@ -760,8 +771,12 @@ fn burst_loop(
                 match npu_lock.process_burst() {
                     Ok(result) => {
                         let process_done = Instant::now();
-                        debug!("🔍 [BURST-TIMING] process_burst() completed in {:?}, {} neurons fired", 
-                            process_done.duration_since(process_start), result.neuron_count);
+                        let duration = process_done.duration_since(process_start);
+                        
+                        if burst_num < 5 || burst_num % 100 == 0 {
+                            info!("🔍 [BURST-TIMING] Burst {}: process_burst() completed in {:?}, {} neurons fired", 
+                                burst_num, duration, result.neuron_count);
+                        }
                         
                         total_neurons_fired += result.neuron_count;
                         // Update cached burst count for lock-free reads
@@ -779,6 +794,10 @@ fn burst_loop(
                 }
             }
         };
+        
+        if burst_num < 5 || burst_num % 100 == 0 {
+            info!("🔍 [BURST-TIMING] Burst {}: NPU lock RELEASED", burst_num);
+        }
         
         // Exit if shutdown was requested
         if should_exit || !running.load(Ordering::Relaxed) {

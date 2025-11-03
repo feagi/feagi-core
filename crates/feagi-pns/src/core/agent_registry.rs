@@ -282,8 +282,21 @@ impl AgentRegistry {
 
     /// Update heartbeat for an agent
     pub fn heartbeat(&mut self, agent_id: &str) -> Result<(), String> {
+        use tracing::debug;
+        
         if let Some(agent) = self.agents.get_mut(agent_id) {
+            let old_last_seen = agent.last_seen;
             agent.update_activity();
+            let new_last_seen = agent.last_seen;
+            
+            debug!(
+                "💓 [REGISTRY] Heartbeat updated for '{}': last_seen {} -> {} (+{}ms)",
+                agent_id,
+                old_last_seen,
+                new_last_seen,
+                new_last_seen.saturating_sub(old_last_seen)
+            );
+            
             Ok(())
         } else {
             Err(format!("Agent {} not found", agent_id))
@@ -383,6 +396,11 @@ impl AgentRegistry {
         self.agents.values().filter(|agent| {
             agent.capabilities.visualization.is_some()
         }).count()
+    }
+
+    /// Get the configured timeout threshold in milliseconds
+    pub fn get_timeout_ms(&self) -> u64 {
+        self.timeout_ms
     }
 
     /// Validate agent configuration

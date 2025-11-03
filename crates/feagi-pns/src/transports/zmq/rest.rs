@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
-use tracing::{info, error};
+use tracing::{info, error, debug};
 
 /// REST request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -254,22 +254,35 @@ impl RestStream {
             .and_then(|b| b.get("agent_id").and_then(|v| v.as_str()).map(String::from))
             .unwrap_or_default();
 
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+
         match handler.lock().process_heartbeat(&agent_id) {
             Ok(_) => {
                 let count = HEARTBEAT_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+                
+                // Log every heartbeat at DEBUG level, and periodic summary at INFO level
+                debug!(
+                    "💓 [ZMQ-REST] Heartbeat received from '{}' at {} (count: {})",
+                    agent_id, now, count
+                );
+                
                 if count == 1 || count % 30 == 0 {
                     info!(
-                        "🦀 [PNS] 💓 Heartbeat #{} received from {}",
-                        count, agent_id
+                        "🦀 [PNS] 💓 Heartbeat #{} received from {} (timestamp: {})",
+                        count, agent_id, now
                     );
                 }
+                
                 serde_json::json!({
                     "status": 200,
                     "body": {"message": "ok"}
                 })
             }
             Err(e) => {
-                error!("🦀 [PNS] Heartbeat failed for {}: {}", agent_id, e);
+                error!("🦀 [PNS] 💓 Heartbeat FAILED for '{}' at {}: {}", agent_id, now, e);
                 serde_json::json!({
                     "status": 404,
                     "body": {"error": e}

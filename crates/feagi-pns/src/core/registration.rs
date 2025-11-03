@@ -470,10 +470,22 @@ impl RegistrationHandler {
 
     /// Process heartbeat
     pub fn process_heartbeat(&self, agent_id: &str) -> Result<String, String> {
+        use tracing::debug;
+        
+        debug!("💓 [REGISTRATION] Processing heartbeat for '{}'", agent_id);
+        
         self.agent_registry
             .write()
             .heartbeat(agent_id)
-            .map(|_| format!("Heartbeat recorded for {}", agent_id))
+            .map(|_| {
+                debug!("💓 [REGISTRATION] Heartbeat successfully recorded for '{}'", agent_id);
+                format!("Heartbeat recorded for {}", agent_id)
+            })
+            .map_err(|e| {
+                use tracing::warn;
+                warn!("⚠️ [REGISTRATION] Heartbeat failed for '{}': {}", agent_id, e);
+                e
+            })
     }
 }
 

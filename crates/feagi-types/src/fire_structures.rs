@@ -26,14 +26,17 @@ use std::collections::{HashMap, VecDeque};
 #[derive(Debug, Clone)]
 pub struct FireCandidateList {
     /// Candidate neurons: neuron_id -> accumulated potential
-    candidates: HashMap<u32, f32>,
+    /// Using AHashMap for ~2x faster hashing
+    /// Pre-allocated to 100K capacity to avoid rehashing
+    candidates: ahash::AHashMap<u32, f32>,
 }
 
 impl FireCandidateList {
-    /// Create a new FCL
+    /// Create a new FCL with pre-allocated capacity
+    /// Pre-allocation prevents expensive rehashing during burst processing
     pub fn new() -> Self {
         Self {
-            candidates: HashMap::new(),
+            candidates: ahash::AHashMap::with_capacity(100_000),
         }
     }
 
@@ -68,8 +71,13 @@ impl FireCandidateList {
     }
 
     /// Clear all candidates
+    /// Clear the FCL (retains capacity to avoid reallocation)
     pub fn clear(&mut self) {
         self.candidates.clear();
+        // Shrink if it grew beyond 150K (prevent unbounded growth)
+        if self.candidates.capacity() > 150_000 {
+            self.candidates.shrink_to(100_000);
+        }
     }
 }
 
