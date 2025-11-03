@@ -65,6 +65,12 @@ impl MotorStream {
 
     /// Publish motor data to all subscribers
     pub fn publish(&self, data: &[u8]) -> Result<(), String> {
+        // Fast path: If stream not running, don't try to send
+        // This prevents errors when no motor agents are connected
+        if !*self.running.lock() {
+            return Ok(()); // Silently discard - this is expected when no motor agents connected
+        }
+        
         let sock_guard = self.socket.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,

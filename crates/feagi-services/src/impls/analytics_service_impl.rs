@@ -179,17 +179,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
     async fn get_total_neuron_count(&self) -> ServiceResult<usize> {
         debug!(target: "feagi-services","Getting total neuron count");
         
-        info!("🔍 [LOCK-TRACE] Attempting to acquire connectome READ lock for neuron count...");
-        let start = std::time::Instant::now();
-        let manager = self.connectome.read();
-        let lock_duration = start.elapsed();
-        info!("🔍 [LOCK-TRACE] Connectome READ lock acquired in {:?}", lock_duration);
-        
-        let count = manager.get_neuron_count();
-        info!("🔍 [LOCK-TRACE] Neuron count retrieved: {}, releasing READ lock", count);
-        drop(manager);
-        info!("🔍 [LOCK-TRACE] Connectome READ lock released");
-        
+        let count = self.connectome.read().get_neuron_count();
         Ok(count)
     }
 

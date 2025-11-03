@@ -198,6 +198,12 @@ impl VisualizationStream {
 
     /// Enqueue visualization data for asynchronous delivery (with LZ4 compression).
     pub fn publish(&self, data: &[u8]) -> Result<(), String> {
+        // Fast path: If stream not running, don't even try to compress/enqueue
+        // This prevents backpressure when no consumer is connected
+        if !*self.running.lock() {
+            return Ok(()); // Silently discard - this is expected when no viz agents connected
+        }
+        
         static FIRST_LOG: AtomicBool = AtomicBool::new(false);
         if !FIRST_LOG.load(Ordering::Relaxed) {
             debug!(
@@ -239,7 +245,7 @@ impl VisualizationStream {
             match self.queue.push(current) {
                 Ok(()) => {
                     self.stats.record_enqueue(self.queue.len());
-                    warn!(
+                    debug!(
                         "[ZMQ-VIZ] enqueue success: queue_len={} hwm={} waits={} drops={}",
                         self.queue.len(),
                         self.stats.queue_high_watermark.load(Ordering::Relaxed),
@@ -339,7 +345,7 @@ impl VisualizationStream {
                     static SEND_COUNTER: AtomicU64 = AtomicU64::new(0);
                     let count = SEND_COUNTER.fetch_add(1, Ordering::Relaxed);
                     if count % 30 == 0 {  // Log every 30 sends
-                        info!("[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)", count, item.payload.len());
+                        debug!("[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)", count, item.payload.len());
                     }
                     break;
                 }

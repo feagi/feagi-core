@@ -837,6 +837,13 @@ impl RustNPU {
             .map(|(&idx, name)| (idx, name.clone()))
             .collect()
     }
+    
+    /// Check if a genome is loaded (has neurons)
+    /// Returns true if NPU has any valid neurons, false otherwise
+    pub fn is_genome_loaded(&self) -> bool {
+        let neuron_array = self.neuron_array.read().unwrap();
+        neuron_array.count > 0 && neuron_array.valid_mask.iter().any(|&valid| valid)
+    }
 
     /// Find neuron ID at specific X,Y,Z coordinates within a cortical area
     /// Returns None if no neuron exists at that position

@@ -342,6 +342,48 @@ impl AgentRegistry {
     pub fn count(&self) -> usize {
         self.agents.len()
     }
+    
+    /// Check if any agent has sensory capability (for stream gating)
+    pub fn has_sensory_agents(&self) -> bool {
+        self.agents.values().any(|agent| {
+            agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some()
+        })
+    }
+    
+    /// Check if any agent has motor capability (for stream gating)
+    pub fn has_motor_agents(&self) -> bool {
+        self.agents.values().any(|agent| {
+            agent.capabilities.motor.is_some()
+        })
+    }
+    
+    /// Check if any agent has visualization capability (for stream gating)
+    pub fn has_visualization_agents(&self) -> bool {
+        self.agents.values().any(|agent| {
+            agent.capabilities.visualization.is_some()
+        })
+    }
+    
+    /// Get count of agents with sensory capability
+    pub fn count_sensory_agents(&self) -> usize {
+        self.agents.values().filter(|agent| {
+            agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some()
+        }).count()
+    }
+    
+    /// Get count of agents with motor capability
+    pub fn count_motor_agents(&self) -> usize {
+        self.agents.values().filter(|agent| {
+            agent.capabilities.motor.is_some()
+        }).count()
+    }
+    
+    /// Get count of agents with visualization capability
+    pub fn count_visualization_agents(&self) -> usize {
+        self.agents.values().filter(|agent| {
+            agent.capabilities.visualization.is_some()
+        }).count()
+    }
 
     /// Validate agent configuration
     fn validate_agent_config(

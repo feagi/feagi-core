@@ -1,10 +1,10 @@
 // Sensory stream for receiving sensory data from agents
 // Uses PULL socket pattern for receiving data from multiple agents (agents use PUSH)
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use std::thread;
-use tracing::{info, warn, error};
+use tracing::{debug, info, warn, error};
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]
@@ -58,9 +58,14 @@ pub struct SensoryStream {
     config: SensoryReceiveConfig,
     /// Reference to Rust NPU for direct injection (no FFI overhead!)
     npu: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>>>>,
+    /// Reference to AgentRegistry for security gating
+    agent_registry: Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
     /// Statistics
     total_messages: Arc<Mutex<u64>>,
     total_neurons: Arc<Mutex<u64>>,
+    /// Security stats (rejected messages)
+    rejected_no_genome: Arc<Mutex<u64>>,
+    rejected_no_agents: Arc<Mutex<u64>>,
 }
 
 impl SensoryStream {
@@ -78,8 +83,11 @@ impl SensoryStream {
             running: Arc::new(Mutex::new(false)),
             config,
             npu: Arc::new(Mutex::new(None)),
+            agent_registry: Arc::new(Mutex::new(None)),
             total_messages: Arc::new(Mutex::new(0)),
             total_neurons: Arc::new(Mutex::new(0)),
+            rejected_no_genome: Arc::new(Mutex::new(0)),
+            rejected_no_agents: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -87,6 +95,12 @@ impl SensoryStream {
     pub fn set_npu(&self, npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>) {
         *self.npu.lock() = Some(npu);
         info!("🦀 [SENSORY-STREAM] NPU connected for direct injection");
+    }
+    
+    /// Set the AgentRegistry reference for security gating
+    pub fn set_agent_registry(&self, registry: Arc<RwLock<crate::core::AgentRegistry>>) {
+        *self.agent_registry.lock() = Some(registry);
+        info!("🦀 [SENSORY-STREAM] AgentRegistry connected for security gating");
     }
 
     /// Start the sensory stream
@@ -211,8 +225,11 @@ impl SensoryStream {
         let socket = Arc::clone(&self.socket);
         let running = Arc::clone(&self.running);
         let npu = Arc::clone(&self.npu);
+        let agent_registry = Arc::clone(&self.agent_registry);
         let total_messages = Arc::clone(&self.total_messages);
         let total_neurons = Arc::clone(&self.total_neurons);
+        let rejected_no_genome = Arc::clone(&self.rejected_no_genome);
+        let rejected_no_agents = Arc::clone(&self.rejected_no_agents);
         let config = self.config.clone();
 
         thread::spawn(move || {
@@ -256,7 +273,7 @@ impl SensoryStream {
                         let message_bytes = msg.as_ref();
 
                         // Try to deserialize as binary XYZP data (using feagi-data-processing)
-                        match Self::deserialize_and_inject_xyzp(message_bytes, &npu) {
+                        match Self::deserialize_and_inject_xyzp(message_bytes, &npu, &agent_registry, &rejected_no_genome, &rejected_no_agents) {
                             Ok(neuron_count) => {
                                 *total_neurons.lock() += neuron_count as u64;
 
@@ -300,10 +317,20 @@ impl SensoryStream {
     /// (version 2 container format), and directly injects it into the Rust NPU.
     /// Pure Rust path with no Python FFI overhead.
     ///
+    /// ## Security Gating
+    /// This method rejects data if:
+    /// 1. No genome is loaded (NPU has no neurons)
+    /// 2. No agents with sensory capability are registered
+    ///
+    /// This prevents malicious agents from sending data when FEAGI is not ready.
+    ///
     /// Returns the number of neurons injected.
     fn deserialize_and_inject_xyzp(
         message_bytes: &[u8],
         npu_mutex: &Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>>>>,
+        agent_registry_mutex: &Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
+        rejected_no_genome: &Arc<Mutex<u64>>,
+        rejected_no_agents: &Arc<Mutex<u64>>,
     ) -> Result<usize, String> {
         use feagi_data_serialization::FeagiByteContainer;
         use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
@@ -315,6 +342,38 @@ impl SensoryStream {
             None => return Err("NPU not connected".to_string()),
         };
         drop(npu_lock); // Release early
+        
+        // SECURITY GATE 1: Check if genome is loaded
+        {
+            let npu = npu_arc.lock().unwrap();
+            if !npu.is_genome_loaded() {
+                *rejected_no_genome.lock() += 1;
+                let count = *rejected_no_genome.lock();
+                if count == 1 || count % 100 == 0 {
+                    warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No genome loaded (rejected {} total)", count);
+                }
+                return Err("Security: No genome loaded".to_string());
+            }
+        }
+        
+        // SECURITY GATE 2: Check if any sensory agents are registered
+        {
+            let registry_lock = agent_registry_mutex.lock();
+            if let Some(registry_arc) = registry_lock.as_ref() {
+                let registry = registry_arc.read();
+                if !registry.has_sensory_agents() {
+                    *rejected_no_agents.lock() += 1;
+                    let count = *rejected_no_agents.lock();
+                    if count == 1 || count % 100 == 0 {
+                        warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No registered sensory agents (rejected {} total)", count);
+                    }
+                    return Err("Security: No registered sensory agents".to_string());
+                }
+            } else {
+                // AgentRegistry not connected yet - reject for safety
+                return Err("Security: AgentRegistry not connected".to_string());
+            }
+        }
 
         // Deserialize using FeagiByteContainer (proper container format)
         let mut byte_container = FeagiByteContainer::new_empty();
@@ -366,12 +425,12 @@ impl SensoryStream {
                 .map(|i| (x_coords[i], y_coords[i], z_coords[i], potentials[i]))
                 .collect();
             
-            info!("🔍 [ZMQ-SENSORY] Injecting {} XYZP data points for cortical area '{}'", num_neurons, cortical_name);
+            debug!("🔍 [ZMQ-SENSORY] Injecting {} XYZP data points for cortical area '{}'", num_neurons, cortical_name);
             
             // Step 2: Quick lock - NPU handles everything (name resolution + coordinate conversion + injection)
             let area_start = std::time::Instant::now();
             let mut npu = npu_arc.lock().unwrap();
-            info!("🔍 [ZMQ-SENSORY] NPU lock acquired in {:?}", area_start.elapsed());
+            debug!("🔍 [ZMQ-SENSORY] NPU lock acquired in {:?}", area_start.elapsed());
             
             // NPU handles: cortical name → ID, coordinates → neuron IDs, injection
             let injected = npu.inject_sensory_xyzp(&cortical_name, &xyzp_data);
@@ -379,11 +438,11 @@ impl SensoryStream {
             
             drop(npu);
             let area_duration = area_start.elapsed();
-            info!("🔍 [ZMQ-SENSORY] Injected {} neurons in {:?}", injected, area_duration);
+            debug!("🔍 [ZMQ-SENSORY] Injected {} neurons in {:?}", injected, area_duration);
         }
         
         let total_duration = inject_start.elapsed();
-        info!("🔍 [ZMQ-SENSORY] Total injection time: {:?} for {} neurons", total_duration, total_injected);
+        debug!("🔍 [ZMQ-SENSORY] Total injection time: {:?} for {} neurons", total_duration, total_injected);
 
         Ok(total_injected)
     }

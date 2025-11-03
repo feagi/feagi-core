@@ -517,7 +517,7 @@ fn encode_fire_data_to_xyzp(
             if let Some(ref cortical_id) = cortical_id_opt {
                 static FIRST_FILTER_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
                 if !FIRST_FILTER_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                    info!("[ENCODE-XYZP] 🔍 Motor filter check: area_idx={}, cortical_id='{}', filter={:?}", 
+                    debug!("[ENCODE-XYZP] 🔍 Motor filter check: area_idx={}, cortical_id='{}', filter={:?}", 
                           area_id, cortical_id, filter);
                     FIRST_FILTER_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
                 }
@@ -566,7 +566,7 @@ fn encode_fire_data_to_xyzp(
             p_vec,  // ✅ MOVE (no clone)
         ) {
             Ok(arrays) => {
-                info!("[ENCODE-XYZP] ✅ Created arrays for area {} with {} neurons", area_id, vec_len);
+                debug!("[ENCODE-XYZP] ✅ Created arrays for area {} with {} neurons", area_id, vec_len);
                 cortical_mapped.mappings.insert(cortical_id, arrays);
             }
             Err(e) => {
@@ -594,7 +594,7 @@ fn encode_fire_data_to_xyzp(
     // Extract bytes from container
     let buffer = byte_container.get_byte_ref().to_vec();
     
-    info!(
+    debug!(
         "[ENCODE-XYZP] ✅ Encoded {} cortical areas into FeagiByteContainer: {} bytes",
         cortical_mapped.mappings.len(),
         buffer.len()
@@ -670,24 +670,24 @@ fn burst_loop(
         }
         
         let lock_start = Instant::now();
-        info!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for burst...");
+        debug!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for burst...");
         
         let should_exit = {
             let npu_lock = npu.lock().unwrap();
             let lock_acquired = Instant::now();
-            info!("🔍 [BURST-TIMING] NPU lock acquired in {:?}", lock_acquired.duration_since(lock_start));
+            debug!("🔍 [BURST-TIMING] NPU lock acquired in {:?}", lock_acquired.duration_since(lock_start));
             
             // Check flag again after acquiring lock (in case shutdown happened during lock wait)
             if !running.load(Ordering::Relaxed) {
                 true // Signal to exit
             } else {
                 let process_start = Instant::now();
-                info!("🔍 [BURST-TIMING] Starting process_burst()...");
+                debug!("🔍 [BURST-TIMING] Starting process_burst()...");
                 
                 match npu_lock.process_burst() {
                     Ok(result) => {
                         let process_done = Instant::now();
-                        info!("🔍 [BURST-TIMING] process_burst() completed in {:?}, {} neurons fired", 
+                        debug!("🔍 [BURST-TIMING] process_burst() completed in {:?}, {} neurons fired", 
                             process_done.duration_since(process_start), result.neuron_count);
                         
                         total_neurons_fired += result.neuron_count;
@@ -734,10 +734,10 @@ fn burst_loop(
         if has_shm_writer || has_viz_publisher {
             // Force sample FQ on every burst (bypasses rate limiting)
             let viz_lock_start = Instant::now();
-            info!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for viz sampling...");
+            debug!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for viz sampling...");
             let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
             let viz_lock_done = Instant::now();
-            info!("🔍 [BURST-TIMING] Viz sampling completed in {:?}", viz_lock_done.duration_since(viz_lock_start));
+            debug!("🔍 [BURST-TIMING] Viz sampling completed in {:?}", viz_lock_done.duration_since(viz_lock_start));
 
             static FIRST_CHECK_LOGGED: std::sync::atomic::AtomicBool =
                 std::sync::atomic::AtomicBool::new(false);
@@ -755,9 +755,9 @@ fn burst_loop(
                 // DEBUG: Log fire_data structure before encoding
                 static FIRST_FIRE_DATA_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
                 if !FIRST_FIRE_DATA_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                    info!("[BURST-LOOP] 🔍 Viz fire_data has {} cortical areas", fire_data.len());
+                    debug!("[BURST-LOOP] 🔍 Viz fire_data has {} cortical areas", fire_data.len());
                     for (area_id, (id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data.iter() {
-                        info!(
+                        debug!(
                             "[BURST-LOOP] 🔍   Area {}: id_len={}, x_len={}, y_len={}, z_len={}, p_len={}",
                             area_id, id_vec.len(), x_vec.len(), y_vec.len(), z_vec.len(), p_vec.len()
                         );
@@ -799,17 +799,30 @@ fn burst_loop(
                             }
 
                             // Publish to ZMQ via trait object (direct Rust-to-Rust call, NO PYTHON!)
+                            // THROTTLE: Only publish at 30Hz to avoid overwhelming consumers
+                            // Burst rate is 10kHz, but viz updates don't need to be that frequent
                             if let Some(ref publisher) = viz_publisher {
-                                // DIAGNOSTIC: Track publish rate and data volume
+                                static LAST_PUBLISH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
                                 static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
                                 
-                                let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                if count % 30 == 0 {  // Log every 30 publishes (~1 second at 30Hz)
-                                    debug!("[BURST-LOOP] Viz publish #{}: {} bytes/frame", count, buffer.len());
-                                }
+                                let now = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_millis() as u64;
+                                let last = LAST_PUBLISH.load(std::sync::atomic::Ordering::Relaxed);
+                                
+                                // Throttle to ~30Hz (publish every 33ms)
+                                if now - last >= 33 {
+                                    LAST_PUBLISH.store(now, std::sync::atomic::Ordering::Relaxed);
+                                    
+                                    let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    if count % 30 == 0 {  // Log every 30 publishes (~1 second at 30Hz)
+                                        debug!("[BURST-LOOP] Viz publish #{}: {} bytes/frame (throttled to 30Hz)", count, buffer.len());
+                                    }
 
-                                if let Err(e) = publisher.publish_visualization(&buffer) {
-                                    error!("[BURST-LOOP] ❌ VIZ PUBLISH ERROR: {}", e);
+                                    if let Err(e) = publisher.publish_visualization(&buffer) {
+                                        error!("[BURST-LOOP] ❌ VIZ PUBLISH ERROR: {}", e);
+                                    }
                                 }
                             }
                         }
@@ -830,10 +843,10 @@ fn burst_loop(
         if motor_publisher.is_some() || motor_shm_writer.lock().unwrap().is_some() {
             // Reuse fire_data from visualization sampling (avoid double sampling!)
             let motor_lock_start = Instant::now();
-            info!("🔍 [MOTOR-TIMING] Attempting to acquire NPU lock for motor sampling...");
+            debug!("🔍 [MOTOR-TIMING] Attempting to acquire NPU lock for motor sampling...");
             let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
             let motor_lock_done = Instant::now();
-            info!("🔍 [MOTOR-TIMING] Motor sampling completed in {:?}", motor_lock_done.duration_since(motor_lock_start));
+            debug!("🔍 [MOTOR-TIMING] Motor sampling completed in {:?}", motor_lock_done.duration_since(motor_lock_start));
 
             if fire_data_opt.is_none() {
                 static FIRST_EMPTY_FIRE_LOG: std::sync::atomic::AtomicBool =
@@ -859,7 +872,7 @@ fn burst_loop(
                     static FIRST_MOTOR_LOG: std::sync::atomic::AtomicBool =
                         std::sync::atomic::AtomicBool::new(false);
                     if !FIRST_MOTOR_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                        info!("[BURST-LOOP] 🎮 Motor output active: {} agents subscribed", subscriptions.len());
+                        debug!("[BURST-LOOP] 🎮 Motor output active: {} agents subscribed", subscriptions.len());
                         FIRST_MOTOR_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
                     }
 
@@ -883,7 +896,7 @@ fn burst_loop(
                                 static FIRST_ENCODE_LOG: std::sync::atomic::AtomicBool =
                                     std::sync::atomic::AtomicBool::new(false);
                                 if !FIRST_ENCODE_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                                    info!(
+                                    debug!(
                                         "[BURST-LOOP] 🎮 Encoded motor output for '{}': {} bytes in {:?}",
                                         agent_id, motor_bytes.len(), encode_duration
                                     );
@@ -895,7 +908,7 @@ fn burst_loop(
                                     match publisher.publish_motor(agent_id, &motor_bytes) {
                                         Ok(_) => {
                                             // Log every motor send (not just first) for debugging
-                                            info!(
+                                            debug!(
                                                 "[BURST-LOOP] 🎮 SENDING motor data to agent '{}': {} bytes",
                                                 agent_id, motor_bytes.len()
                                             );

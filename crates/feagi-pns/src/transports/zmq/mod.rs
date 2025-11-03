@@ -14,8 +14,8 @@ pub use visualization::{
     VisualizationOverflowStrategy, VisualizationSendConfig, VisualizationStream,
 };
 
-use crate::core::{PNSError, RegistrationHandler};
-use parking_lot::Mutex;
+use crate::core::{PNSError, RegistrationHandler, AgentRegistry};
+use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use tracing::{debug, info};
 
@@ -36,6 +36,7 @@ impl ZmqStreams {
         viz_address: &str,
         sensory_address: &str,
         registration_handler: Arc<Mutex<RegistrationHandler>>,
+        agent_registry: Arc<RwLock<AgentRegistry>>,
         viz_config: VisualizationSendConfig,
         sensory_config: SensoryReceiveConfig,
     ) -> Result<Self, PNSError> {
@@ -59,6 +60,9 @@ impl ZmqStreams {
         let sensory_stream =
             SensoryStream::new(Arc::clone(&context), sensory_address, sensory_config)
                 .map_err(|e| PNSError::Zmq(format!("Sensory stream: {}", e)))?;
+        
+        // Wire up agent registry for security gating
+        sensory_stream.set_agent_registry(Arc::clone(&agent_registry));
 
         Ok(Self {
             rest_stream,
@@ -94,6 +98,50 @@ impl ZmqStreams {
             .map_err(|e| PNSError::Zmq(format!("Sensory start: {}", e)))?;
         info!("🦀 [ZMQ-STREAMS] ✅ Data streams started (sensory/motor/viz)");
         Ok(())
+    }
+    
+    // === Individual Stream Control (for dynamic gating) ===
+    
+    /// Start sensory stream only
+    pub fn start_sensory_stream(&self) -> Result<(), PNSError> {
+        self.sensory_stream
+            .start()
+            .map_err(|e| PNSError::Zmq(format!("Sensory start: {}", e)))
+    }
+    
+    /// Stop sensory stream only
+    pub fn stop_sensory_stream(&self) -> Result<(), PNSError> {
+        self.sensory_stream
+            .stop()
+            .map_err(|e| PNSError::Zmq(format!("Sensory stop: {}", e)))
+    }
+    
+    /// Start motor stream only
+    pub fn start_motor_stream(&self) -> Result<(), PNSError> {
+        self.motor_stream
+            .start()
+            .map_err(|e| PNSError::Zmq(format!("Motor start: {}", e)))
+    }
+    
+    /// Stop motor stream only
+    pub fn stop_motor_stream(&self) -> Result<(), PNSError> {
+        self.motor_stream
+            .stop()
+            .map_err(|e| PNSError::Zmq(format!("Motor stop: {}", e)))
+    }
+    
+    /// Start visualization stream only
+    pub fn start_viz_stream(&self) -> Result<(), PNSError> {
+        self.viz_stream
+            .start()
+            .map_err(|e| PNSError::Zmq(format!("Viz start: {}", e)))
+    }
+    
+    /// Stop visualization stream only
+    pub fn stop_viz_stream(&self) -> Result<(), PNSError> {
+        self.viz_stream
+            .stop()
+            .map_err(|e| PNSError::Zmq(format!("Viz stop: {}", e)))
     }
 
     /// Start all streams at once (legacy method for backward compatibility)

@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tracing::{info, warn, error};
+use tracing::{info, warn, error, debug};
 use ahash::AHashSet;
 
 /// Registration request from agent
@@ -33,6 +33,9 @@ pub type RegistrationCallback =
     Arc<parking_lot::Mutex<Option<Box<dyn Fn(String, String, String) + Send + Sync>>>>;
 pub type DeregistrationCallback =
     Arc<parking_lot::Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>;
+/// Type alias for dynamic gating callbacks
+pub type DynamicGatingCallback =
+    Arc<parking_lot::Mutex<Option<Box<dyn Fn(String) + Send + Sync>>>>;
 
 /// Registration Handler
 pub struct RegistrationHandler {
@@ -51,6 +54,9 @@ pub struct RegistrationHandler {
     /// Callbacks for Python integration
     on_agent_registered: RegistrationCallback,
     on_agent_deregistered: DeregistrationCallback,
+    /// Callbacks for dynamic stream gating
+    on_agent_registered_dynamic: DynamicGatingCallback,
+    on_agent_deregistered_dynamic: DynamicGatingCallback,
 }
 
 impl RegistrationHandler {
@@ -65,6 +71,8 @@ impl RegistrationHandler {
             viz_port,
             on_agent_registered: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_deregistered: Arc::new(parking_lot::Mutex::new(None)),
+            on_agent_registered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
+            on_agent_deregistered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
         }
     }
     
@@ -102,6 +110,24 @@ impl RegistrationHandler {
     {
         *self.on_agent_deregistered.lock() = Some(Box::new(callback));
         info!("🦀 [REGISTRATION] Agent deregistration callback set");
+    }
+    
+    /// Set callback for dynamic stream gating on agent registration
+    pub fn set_on_agent_registered_dynamic<F>(&self, callback: F)
+    where
+        F: Fn(String) + Send + Sync + 'static,
+    {
+        *self.on_agent_registered_dynamic.lock() = Some(Box::new(callback));
+        info!("🦀 [REGISTRATION] Dynamic gating registration callback set");
+    }
+    
+    /// Set callback for dynamic stream gating on agent deregistration
+    pub fn set_on_agent_deregistered_dynamic<F>(&self, callback: F)
+    where
+        F: Fn(String) + Send + Sync + 'static,
+    {
+        *self.on_agent_deregistered_dynamic.lock() = Some(Box::new(callback));
+        info!("🦀 [REGISTRATION] Dynamic gating deregistration callback set");
     }
 
     /// Process a registration request
@@ -274,6 +300,15 @@ impl RegistrationHandler {
                 callback_duration
             );
         }
+        
+        // Invoke dynamic gating callback if set
+        info!("🦀 [REGISTRATION] Checking for dynamic gating callback...");
+        if let Some(ref callback) = *self.on_agent_registered_dynamic.lock() {
+            info!("🦀 [REGISTRATION] ✅ Dynamic gating callback found, invoking for agent: {}", request.agent_id);
+            callback(request.agent_id.clone());
+        } else {
+            warn!("⚠️  [REGISTRATION] No dynamic gating callback set - streams won't auto-start!");
+        }
 
         // Return success response
         let total_duration = total_start.elapsed();
@@ -406,6 +441,14 @@ impl RegistrationHandler {
                     agent_id
                 );
                 callback(agent_id.to_string());
+            }
+            
+            // Invoke dynamic gating callback
+            if let Some(ref callback) = *self.on_agent_deregistered_dynamic.lock() {
+                info!("🦀 [REGISTRATION] ✅ Invoking dynamic gating callback for deregistration: {}", agent_id);
+                callback(agent_id.to_string());
+            } else {
+                debug!("[REGISTRATION] No dynamic gating deregistration callback set");
             }
         }
 

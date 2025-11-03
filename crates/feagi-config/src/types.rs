@@ -362,6 +362,8 @@ impl Default for AgentsConfig {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct NeuralConfig {
+    /// Burst engine timestep in seconds (default: 0.1s = 10Hz)
+    /// This value is overridden by genome's simulation_timestep when a genome is loaded
     pub burst_engine_timestep: f64,
     pub batch_size: usize,
     pub use_sparse_computation: bool,
