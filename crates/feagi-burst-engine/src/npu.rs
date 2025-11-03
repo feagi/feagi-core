@@ -1154,12 +1154,13 @@ impl RustNPU {
         let clamped_excitability = excitability.clamp(0.0, 1.0);
         let mut updated_count = 0;
 
+        // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
+        let mut neuron_array_write = self.neuron_array.write().unwrap();
+        
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.read().unwrap().count {
-            if self.neuron_array.read().unwrap().valid_mask[idx]
-                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
-            {
-                self.neuron_array.write().unwrap().excitabilities[idx] = clamped_excitability;
+        for idx in 0..neuron_array_write.count {
+            if neuron_array_write.valid_mask[idx] && neuron_array_write.cortical_areas[idx] == cortical_area {
+                neuron_array_write.excitabilities[idx] = clamped_excitability;
                 updated_count += 1;
             }
         }
@@ -1178,39 +1179,30 @@ impl RustNPU {
 
         let mut updated_count = 0;
 
+        // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
+        let mut neuron_array_write = self.neuron_array.write().unwrap();
+
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.read().unwrap().count {
-            if self.neuron_array.read().unwrap().valid_mask[idx]
-                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
-            {
+        for idx in 0..neuron_array_write.count {
+            if neuron_array_write.valid_mask[idx] && neuron_array_write.cortical_areas[idx] == cortical_area {
                 // Get the actual neuron_id for this array index
-                let neuron_id = self.neuron_array.read().unwrap().index_to_neuron_id[idx];
+                let neuron_id = neuron_array_write.index_to_neuron_id[idx];
 
                 // Update base refractory period (used when neuron fires)
-                self.neuron_array.write().unwrap().refractory_periods[idx] = refractory_period;
+                neuron_array_write.refractory_periods[idx] = refractory_period;
 
                 // CRITICAL FIX: Do NOT set countdown here!
                 // The countdown should only be set AFTER a neuron fires.
                 // Setting it now would block the neuron immediately, which is backward.
-                //
-                // Correct behavior:
-                // 1. Neuron fires → countdown = refractory_period
-                // 2. Next burst: countdown > 0 → BLOCKED
-                // 3. Decrement countdown each burst
-                // 4. When countdown = 0 → neuron can fire again
-                //
-                // If we set countdown=refractory_period NOW (before firing),
-                // the neuron would be blocked for N bursts FIRST, then fire.
-                // That's backward!
 
                 // Only clear countdown if setting refractory to 0 (allow immediate firing)
                 if refractory_period == 0 {
-                    self.neuron_array.write().unwrap().refractory_countdowns[idx] = 0;
+                    neuron_array_write.refractory_countdowns[idx] = 0;
                 }
 
                 // Reset consecutive fire count when applying a new period to avoid
                 // stale state causing unexpected immediate extended refractory.
-                self.neuron_array.write().unwrap().consecutive_fire_counts[idx] = 0;
+                neuron_array_write.consecutive_fire_counts[idx] = 0;
 
                 updated_count += 1;
 
@@ -1218,7 +1210,7 @@ impl RustNPU {
                 if updated_count <= 3 {
                     info!(
                         "[RUST-BATCH-UPDATE]   Neuron {}: refractory_period={}, countdown={}",
-                        neuron_id, refractory_period, self.neuron_array.read().unwrap().refractory_countdowns[idx]
+                        neuron_id, refractory_period, neuron_array_write.refractory_countdowns[idx]
                     );
                 }
             }
@@ -1231,12 +1223,13 @@ impl RustNPU {
     pub fn update_cortical_area_threshold(&mut self, cortical_area: u32, threshold: f32) -> usize {
         let mut updated_count = 0;
 
+        // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
+        let mut neuron_array_write = self.neuron_array.write().unwrap();
+        
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.read().unwrap().count {
-            if self.neuron_array.read().unwrap().valid_mask[idx]
-                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
-            {
-                self.neuron_array.write().unwrap().thresholds[idx] = threshold;
+        for idx in 0..neuron_array_write.count {
+            if neuron_array_write.valid_mask[idx] && neuron_array_write.cortical_areas[idx] == cortical_area {
+                neuron_array_write.thresholds[idx] = threshold;
                 updated_count += 1;
             }
         }
@@ -1248,12 +1241,13 @@ impl RustNPU {
     pub fn update_cortical_area_leak(&mut self, cortical_area: u32, leak: f32) -> usize {
         let mut updated_count = 0;
 
+        // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
+        let mut neuron_array_write = self.neuron_array.write().unwrap();
+        
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.read().unwrap().count {
-            if self.neuron_array.read().unwrap().valid_mask[idx]
-                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
-            {
-                self.neuron_array.write().unwrap().leak_coefficients[idx] = leak;
+        for idx in 0..neuron_array_write.count {
+            if neuron_array_write.valid_mask[idx] && neuron_array_write.cortical_areas[idx] == cortical_area {
+                neuron_array_write.leak_coefficients[idx] = leak;
                 updated_count += 1;
             }
         }
@@ -1269,12 +1263,13 @@ impl RustNPU {
     ) -> usize {
         let mut updated_count = 0;
 
+        // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
+        let mut neuron_array_write = self.neuron_array.write().unwrap();
+        
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.read().unwrap().count {
-            if self.neuron_array.read().unwrap().valid_mask[idx]
-                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
-            {
-                self.neuron_array.write().unwrap().consecutive_fire_limits[idx] = limit;
+        for idx in 0..neuron_array_write.count {
+            if neuron_array_write.valid_mask[idx] && neuron_array_write.cortical_areas[idx] == cortical_area {
+                neuron_array_write.consecutive_fire_limits[idx] = limit;
                 updated_count += 1;
             }
         }
@@ -1290,12 +1285,13 @@ impl RustNPU {
     ) -> usize {
         let mut updated_count = 0;
 
+        // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
+        let mut neuron_array_write = self.neuron_array.write().unwrap();
+        
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.read().unwrap().count {
-            if self.neuron_array.read().unwrap().valid_mask[idx]
-                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
-            {
-                self.neuron_array.write().unwrap().snooze_periods[idx] = snooze_period;
+        for idx in 0..neuron_array_write.count {
+            if neuron_array_write.valid_mask[idx] && neuron_array_write.cortical_areas[idx] == cortical_area {
+                neuron_array_write.snooze_periods[idx] = snooze_period;
                 updated_count += 1;
             }
         }
@@ -1532,12 +1528,13 @@ impl RustNPU {
     ) -> usize {
         let mut updated_count = 0;
 
+        // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
+        let mut neuron_array_write = self.neuron_array.write().unwrap();
+        
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..self.neuron_array.read().unwrap().count {
-            if self.neuron_array.read().unwrap().valid_mask[idx]
-                && self.neuron_array.read().unwrap().cortical_areas[idx] == cortical_area
-            {
-                self.neuron_array.write().unwrap().mp_charge_accumulation[idx] = mp_charge_accumulation;
+        for idx in 0..neuron_array_write.count {
+            if neuron_array_write.valid_mask[idx] && neuron_array_write.cortical_areas[idx] == cortical_area {
+                neuron_array_write.mp_charge_accumulation[idx] = mp_charge_accumulation;
                 updated_count += 1;
             }
         }

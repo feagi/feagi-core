@@ -17,6 +17,7 @@
 //! - Sensory neurons injected by separate threads directly into FCL
 
 use crate::sensory::AgentManager;
+use crate::parameter_update_queue::ParameterUpdateQueue;
 use crate::RustNPU;
 use feagi_types::NeuronId;
 use parking_lot::RwLock as ParkingLotRwLock;
@@ -71,6 +72,9 @@ pub struct BurstLoopRunner {
     fcl_sampler_consumer: Arc<Mutex<u32>>,   // Consumer type: 1=visualization, 2=motor, 3=both
     /// Cached burst count (shared reference to NPU's atomic) for lock-free reads
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>,
+    /// Parameter update queue (asynchronous, non-blocking)
+    /// API pushes updates here, burst loop consumes between bursts
+    pub parameter_queue: ParameterUpdateQueue,
 }
 
 impl BurstLoopRunner {
@@ -244,6 +248,7 @@ impl BurstLoopRunner {
             fcl_sampler_frequency: Arc::new(Mutex::new(30.0)), // Default 30Hz for visualization
             fcl_sampler_consumer: Arc::new(Mutex::new(1)), // Default: 1 = visualization only
             cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            parameter_queue: ParameterUpdateQueue::new(),
         }
     }
 
@@ -321,12 +326,13 @@ impl BurstLoopRunner {
         let motor_publisher = self.motor_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
         let motor_subs = self.motor_subscriptions.clone();
         let cached_burst_count = self.cached_burst_count.clone(); // For lock-free burst count reads
+        let param_queue = self.parameter_queue.clone(); // Parameter update queue
 
         self.thread_handle = Some(
             thread::Builder::new()
                 .name("feagi-burst-loop".to_string())
                 .spawn(move || {
-                    burst_loop(npu, frequency, running, viz_writer, motor_writer, viz_publisher, motor_publisher, motor_subs, cached_burst_count);
+                    burst_loop(npu, frequency, running, viz_writer, motor_writer, viz_publisher, motor_publisher, motor_subs, cached_burst_count, param_queue);
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
         );
@@ -629,6 +635,7 @@ fn burst_loop(
     motor_publisher: Option<Arc<dyn MotorPublisher>>, // Trait object for motor (NO PYTHON CALLBACKS!)
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
+    parameter_queue: ParameterUpdateQueue, // Asynchronous parameter update queue
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -673,7 +680,7 @@ fn burst_loop(
         debug!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for burst...");
         
         let should_exit = {
-            let npu_lock = npu.lock().unwrap();
+            let mut npu_lock = npu.lock().unwrap();
             let lock_acquired = Instant::now();
             debug!("🔍 [BURST-TIMING] NPU lock acquired in {:?}", lock_acquired.duration_since(lock_start));
             
@@ -681,6 +688,72 @@ fn burst_loop(
             if !running.load(Ordering::Relaxed) {
                 true // Signal to exit
             } else {
+                // APPLY QUEUED PARAMETER UPDATES (before burst processing)
+                // This ensures updates take effect immediately in this burst
+                let pending_updates = parameter_queue.drain_all();
+                if !pending_updates.is_empty() {
+                    let update_start = Instant::now();
+                    let mut applied_count = 0;
+                    
+                    info!("[PARAM-QUEUE] Processing {} queued updates", pending_updates.len());
+                    
+                    for update in pending_updates {
+                        let count = match update.parameter_name.as_str() {
+                            "neuron_fire_threshold" | "firing_threshold" | "firing_threshold_limit" => {
+                                if let Some(threshold) = update.value.as_f64() {
+                                    npu_lock.update_cortical_area_threshold(update.cortical_idx, threshold as f32)
+                                } else { 0 }
+                            }
+                            "neuron_refractory_period" | "refractory_period" | "refrac" => {
+                                if let Some(period) = update.value.as_u64() {
+                                    npu_lock.update_cortical_area_refractory_period(update.cortical_idx, period as u16)
+                                } else { 0 }
+                            }
+                            "leak" | "leak_coefficient" | "neuron_leak_coefficient" => {
+                                if let Some(leak) = update.value.as_f64() {
+                                    if (0.0..=1.0).contains(&leak) {
+                                        npu_lock.update_cortical_area_leak(update.cortical_idx, leak as f32)
+                                    } else { 0 }
+                                } else { 0 }
+                            }
+                            "consecutive_fire_cnt_max" | "neuron_consecutive_fire_count" | "consecutive_fire_count" => {
+                                if let Some(limit) = update.value.as_u64() {
+                                    npu_lock.update_cortical_area_consecutive_fire_limit(update.cortical_idx, limit as u16)
+                                } else { 0 }
+                            }
+                            "snooze_length" | "neuron_snooze_period" | "snooze_period" => {
+                                if let Some(snooze) = update.value.as_u64() {
+                                    npu_lock.update_cortical_area_snooze_period(update.cortical_idx, snooze as u16)
+                                } else { 0 }
+                            }
+                            "neuron_excitability" => {
+                                if let Some(excitability) = update.value.as_f64() {
+                                    if (0.0..=1.0).contains(&excitability) {
+                                        npu_lock.update_cortical_area_excitability(update.cortical_idx, excitability as f32)
+                                    } else { 0 }
+                                } else { 0 }
+                            }
+                            "neuron_mp_charge_accumulation" | "mp_charge_accumulation" => {
+                                if let Some(accumulation) = update.value.as_bool() {
+                                    npu_lock.update_cortical_area_mp_charge_accumulation(update.cortical_idx, accumulation)
+                                } else { 0 }
+                            }
+                            _ => 0,
+                        };
+                        
+                        if count > 0 {
+                            applied_count += 1;
+                            debug!("[PARAM-QUEUE] Applied {}={} to {} neurons in area {}", 
+                                update.parameter_name, update.value, count, update.cortical_id);
+                        }
+                    }
+                    
+                    if applied_count > 0 {
+                        let update_duration = update_start.elapsed();
+                        info!("[PARAM-QUEUE] ✓ Applied {} parameter updates in {:?}", applied_count, update_duration);
+                    }
+                }
+                
                 let process_start = Instant::now();
                 debug!("🔍 [BURST-TIMING] Starting process_burst()...");
                 

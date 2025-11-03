@@ -173,76 +173,17 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn update_cortical_area(
         &self,
         cortical_id: &str,
-        params: UpdateCorticalAreaParams,
+        _params: UpdateCorticalAreaParams,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services","Updating cortical area: {}", cortical_id);
         
-        // Get mutable access to the cortical area
-        {
-            let mut manager = self.connectome.write();
-            let area = manager
-                .get_cortical_area_mut(cortical_id)
-                .ok_or_else(|| ServiceError::NotFound {
-                    resource: "CorticalArea".to_string(),
-                    id: cortical_id.to_string(),
-                })?;
-            
-            // Update only the fields that are provided
-            if let Some(name) = params.name {
-                area.name = name;
-            }
-            if let Some(position) = params.position {
-                area.position = position;
-            }
-            if let Some(dimensions) = params.dimensions {
-                area.dimensions = Dimensions::new(dimensions.0, dimensions.1, dimensions.2);
-            }
-            if let Some(area_type_str) = params.area_type {
-                area.area_type = Self::string_to_area_type(&area_type_str)?;
-            }
-            if let Some(visible) = params.visible {
-                area.visible = visible;
-            }
-            if let Some(postsynaptic_current) = params.postsynaptic_current {
-                area.postsynaptic_current = postsynaptic_current;
-            }
-            if let Some(plasticity_constant) = params.plasticity_constant {
-                area.plasticity_constant = plasticity_constant;
-            }
-            if let Some(degeneration) = params.degeneration {
-                area.degeneration = degeneration;
-            }
-            if let Some(psp_uniform_distribution) = params.psp_uniform_distribution {
-                area.psp_uniform_distribution = psp_uniform_distribution;
-            }
-            if let Some(firing_threshold_increment) = params.firing_threshold_increment {
-                area.firing_threshold_increment = firing_threshold_increment;
-            }
-            if let Some(firing_threshold_limit) = params.firing_threshold_limit {
-                area.firing_threshold_limit = firing_threshold_limit;
-            }
-            if let Some(consecutive_fire_count) = params.consecutive_fire_count {
-                area.consecutive_fire_count = consecutive_fire_count;
-            }
-            if let Some(snooze_period) = params.snooze_period {
-                area.snooze_period = snooze_period;
-            }
-            if let Some(refractory_period) = params.refractory_period {
-                area.refractory_period = refractory_period;
-            }
-            if let Some(leak_coefficient) = params.leak_coefficient {
-                area.leak_coefficient = leak_coefficient;
-            }
-            if let Some(leak_variability) = params.leak_variability {
-                area.leak_variability = leak_variability;
-            }
-            if let Some(burst_engine_active) = params.burst_engine_active {
-                area.burst_engine_active = burst_engine_active;
-            }
-        } // Release write lock
+        // TODO: This should be routed through GenomeService for proper genome update
+        // and change classification (PARAMETER vs STRUCTURAL vs METADATA)
+        // Currently this is a stub - needs architecture alignment with Python implementation
         
-        // Return updated area info
-        self.get_cortical_area(cortical_id).await
+        Err(ServiceError::NotImplemented(
+            "Cortical area updates must go through GenomeService for proper genome synchronization".to_string()
+        ))
     }
 
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
@@ -352,6 +293,30 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {
         debug!(target: "feagi-services","Checking if cortical area exists: {}", cortical_id);
         Ok(self.connectome.read().has_cortical_area(cortical_id))
+    }
+
+    async fn get_cortical_area_properties(
+        &self,
+        cortical_id: &str,
+    ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>> {
+        debug!(target: "feagi-services","Getting cortical area properties: {}", cortical_id);
+        
+        let manager = self.connectome.read();
+        manager
+            .get_cortical_area_properties(cortical_id)
+            .ok_or_else(|| ServiceError::NotFound {
+                resource: "CorticalArea".to_string(),
+                id: cortical_id.to_string(),
+            })
+    }
+
+    async fn get_all_cortical_area_properties(
+        &self,
+    ) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>> {
+        debug!(target: "feagi-services","Getting all cortical area properties");
+        
+        let manager = self.connectome.read();
+        Ok(manager.get_all_cortical_area_properties())
     }
 
     // ========================================================================

@@ -12,7 +12,7 @@ use feagi_bdu::ConnectomeManager;
 use feagi_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use tracing::{debug, info};
+use tracing::debug;
 
 /// Default implementation of AnalyticsService
 pub struct AnalyticsServiceImpl {

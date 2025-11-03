@@ -362,11 +362,24 @@ impl RegistrationHandler {
 
         // Parse motor capability (support both legacy and new format)
         if let Some(motor) = caps_json.get("motor") {
-            if motor
+            // Check if motor is enabled (legacy format) or if it exists (new format)
+            let is_enabled = motor
                 .get("enabled")
                 .and_then(|v| v.as_bool())
-                .unwrap_or(false)
-            {
+                .unwrap_or(true); // Default to true if 'enabled' key doesn't exist (new format)
+            
+            if is_enabled {
+                // Extract source_cortical_areas from JSON
+                let source_cortical_areas: Vec<String> = motor
+                    .get("source_cortical_areas")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                            .collect()
+                    })
+                    .unwrap_or_else(|| vec!["omot00".to_string()]); // Default to omot00 for backward compatibility
+                
                 capabilities.motor = Some(MotorCapability {
                     modality: motor
                         .get("modality")
@@ -376,8 +389,8 @@ impl RegistrationHandler {
                     output_count: motor
                         .get("output_count")
                         .and_then(|v| v.as_u64())
-                        .unwrap_or(1) as usize,
-                    source_cortical_areas: vec![],
+                        .unwrap_or(source_cortical_areas.len() as u64) as usize,
+                    source_cortical_areas,
                 });
             }
         }

@@ -18,6 +18,7 @@ thiserror.workspace = true
 rayon.workspace = true
 ndarray.workspace = true
 ahash.workspace = true
+serde_json = "1.0"  # For parameter update queue values
 memmap2 = "0.9"  # Memory-mapped file I/O for SHM
 chrono = "0.4"   # Timestamp formatting
 parking_lot = "0.12"  # For motor subscriptions RwLock

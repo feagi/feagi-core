@@ -87,6 +87,7 @@ Licensed under the Apache License, Version 2.0
 pub mod impls;
 pub mod traits;
 pub mod types;
+pub mod genome;
 
 // Re-export main API
 pub use traits::{

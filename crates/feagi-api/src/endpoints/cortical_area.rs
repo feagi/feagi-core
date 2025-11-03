@@ -276,8 +276,8 @@ pub async fn post_cortical_area_properties(
     let connectome_service = state.connectome_service.as_ref();
     let cortical_id = request.get("cortical_id").ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
     
-    match connectome_service.get_cortical_area(cortical_id).await {
-        Ok(area) => Ok(Json(serde_json::to_value(area).unwrap_or_default())),
+    match connectome_service.get_cortical_area_properties(cortical_id).await {
+        Ok(properties) => Ok(Json(serde_json::to_value(properties).unwrap_or_default())),
         Err(e) => Err(ApiError::internal(format!("Failed to get properties: {}", e))),
     }
 }
@@ -293,8 +293,8 @@ pub async fn post_multi_cortical_area_properties(
     let mut result = HashMap::new();
     
     for cortical_id in request {
-        if let Ok(area) = connectome_service.get_cortical_area(&cortical_id).await {
-            result.insert(cortical_id, serde_json::to_value(area).unwrap_or_default());
+        if let Ok(properties) = connectome_service.get_cortical_area_properties(&cortical_id).await {
+            result.insert(cortical_id, serde_json::to_value(properties).unwrap_or_default());
         }
     }
     Ok(Json(result))
@@ -314,14 +314,29 @@ pub async fn post_cortical_area(
 
 /// PUT /v1/cortical_area/cortical_area
 #[utoipa::path(put, path = "/v1/cortical_area/cortical_area", tag = "cortical_area")]
-#[allow(unused_variables)]  // In development - parameters will be used when implemented
 pub async fn put_cortical_area(
     State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, serde_json::Value>>,
+    Json(mut request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    let connectome_service = state.connectome_service.as_ref();
-    // TODO: Parse request and update cortical area
-    Err(ApiError::internal("Not yet implemented"))
+    let genome_service = state.genome_service.as_ref();
+    
+    // Extract cortical_id
+    let cortical_id = request.get("cortical_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?
+        .to_string();
+    
+    // Remove cortical_id from changes (it's not a property to update)
+    request.remove("cortical_id");
+    
+    // Call GenomeService with raw changes (it handles classification and routing)
+    match genome_service.update_cortical_area(&cortical_id, request).await {
+        Ok(_) => Ok(Json(HashMap::from([
+            ("message".to_string(), "Cortical area updated".to_string()),
+            ("cortical_id".to_string(), cortical_id),
+        ]))),
+        Err(e) => Err(ApiError::internal(format!("Failed to update: {}", e))),
+    }
 }
 
 /// DELETE /v1/cortical_area/cortical_area

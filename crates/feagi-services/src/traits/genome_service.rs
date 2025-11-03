@@ -70,6 +70,34 @@ pub trait GenomeService: Send + Sync {
     /// * `ServiceError::Backend` - Failed to reset connectome
     ///
     async fn reset_connectome(&self) -> ServiceResult<()>;
+    
+    /// Update a cortical area with intelligent routing for optimal performance
+    ///
+    /// ARCHITECTURE: This is the proper entry point for cortical area updates.
+    /// It updates the genome FIRST (source of truth), then syncs to NPU/ConnectomeManager.
+    ///
+    /// PERFORMANCE OPTIMIZATION: Intelligently routes updates based on change type:
+    /// - Parameter changes: Direct neuron updates (~2-5ms, NO synapse rebuild)
+    /// - Metadata changes: Simple property updates (~1ms)
+    /// - Structural changes: Localized synapse rebuild (~100-200ms)
+    ///
+    /// # Arguments
+    /// * `cortical_id` - Cortical area identifier
+    /// * `changes` - Map of property_name -> new_value
+    ///
+    /// # Returns
+    /// * `CorticalAreaInfo` - Updated area information
+    ///
+    /// # Errors
+    /// * `ServiceError::NotFound` - Cortical area not found
+    /// * `ServiceError::InvalidInput` - Invalid parameters
+    /// * `ServiceError::Backend` - Update failed
+    ///
+    async fn update_cortical_area(
+        &self,
+        cortical_id: &str,
+        changes: std::collections::HashMap<String, serde_json::Value>,
+    ) -> ServiceResult<CorticalAreaInfo>;
 }
 
 

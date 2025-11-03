@@ -39,6 +39,7 @@ pub mod motor_shm_writer;
 pub mod neural_dynamics;
 pub mod neuron_models; // Neuron model trait system (LIF, Izhikevich, etc.)
 pub mod npu;
+pub mod parameter_update_queue;
 pub mod sensory; // Rust sensory injection system
 pub mod synaptic_propagation;
 pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
@@ -51,6 +52,7 @@ pub use fq_sampler::*;
 pub use neural_dynamics::*;
 pub use neuron_models::*;
 pub use npu::*;
+pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
 pub use sensory::*;
 pub use synaptic_propagation::*;
 pub use viz_shm_writer::*;

@@ -97,6 +97,31 @@ pub trait ConnectomeService: Send + Sync {
     ///
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool>;
 
+    /// Get cortical area properties as a flat HashMap
+    ///
+    /// # Arguments
+    /// * `cortical_id` - Cortical area identifier
+    ///
+    /// # Returns
+    /// * `HashMap<String, serde_json::Value>` - Flattened properties of the cortical area
+    ///
+    /// # Errors
+    /// * `ServiceError::NotFound` - Cortical area not found
+    ///
+    async fn get_cortical_area_properties(
+        &self,
+        cortical_id: &str,
+    ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>>;
+
+    /// Get properties of all cortical areas
+    ///
+    /// # Returns
+    /// * `Vec<HashMap<String, serde_json::Value>>` - List of property maps for all areas
+    ///
+    async fn get_all_cortical_area_properties(
+        &self,
+    ) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>>;
+
     // ========================================================================
     // BRAIN REGION OPERATIONS
     // ========================================================================
