@@ -1,7 +1,6 @@
 // Sensory stream for receiving sensory data from agents
 // Uses PULL socket pattern for receiving data from multiple agents (agents use PUSH)
 
-use feagi_data_serialization::FeagiSerializable;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::thread;
@@ -297,14 +296,16 @@ impl SensoryStream {
 
     /// Deserialize XYZP binary data and inject into NPU
     ///
-    /// Receives binary XYZP data from agents, deserializes it using feagi_data_serialization,
-    /// and directly injects it into the Rust NPU. Pure Rust path with no Python FFI overhead.
+    /// Receives binary XYZP data from agents, deserializes it using FeagiByteContainer
+    /// (version 2 container format), and directly injects it into the Rust NPU.
+    /// Pure Rust path with no Python FFI overhead.
     ///
     /// Returns the number of neurons injected.
     fn deserialize_and_inject_xyzp(
         message_bytes: &[u8],
         npu_mutex: &Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU>>>>>,
     ) -> Result<usize, String> {
+        use feagi_data_serialization::FeagiByteContainer;
         use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
         // Get NPU reference
@@ -315,47 +316,37 @@ impl SensoryStream {
         };
         drop(npu_lock); // Release early
 
-        // Validate container header
-        if message_bytes.len() < 8 {
-            return Err(format!("Message too short: {} bytes", message_bytes.len()));
+        // Deserialize using FeagiByteContainer (proper container format)
+        let mut byte_container = FeagiByteContainer::new_empty();
+        let mut data_vec = message_bytes.to_vec();
+        
+        // Load bytes into container
+        byte_container
+            .try_write_data_to_container_and_verify(&mut |bytes| {
+                std::mem::swap(bytes, &mut data_vec);
+                Ok(())
+            })
+            .map_err(|e| format!("Failed to load FeagiByteContainer: {:?}", e))?;
+
+        // Verify container structure count
+        let num_structures = byte_container
+            .try_get_number_contained_structures()
+            .map_err(|e| format!("Failed to get structure count: {:?}", e))?;
+
+        if num_structures == 0 {
+            return Err("FeagiByteContainer has no structures".to_string());
         }
 
-        let version = message_bytes[0];
-        let struct_count = message_bytes[3];
-        let data_size = u32::from_le_bytes([
-            message_bytes[4],
-            message_bytes[5],
-            message_bytes[6],
-            message_bytes[7],
-        ]) as usize;
+        // Extract first structure (should be CorticalMappedXYZPNeuronVoxels)
+        let boxed_struct = byte_container
+            .try_create_new_struct_from_index(0)
+            .map_err(|e| format!("Failed to deserialize structure from container: {:?}", e))?;
 
-        if version != 2 {
-            return Err(format!("Expected version 2, got {}", version));
-        }
-
-        if struct_count != 1 {
-            return Err(format!("Expected 1 struct, got {}", struct_count));
-        }
-
-        // Struct data starts at byte 8 (after global header + data_size)
-        let struct_data_start = 8;
-        let struct_data_end = 8 + data_size;
-
-        if message_bytes.len() < struct_data_end {
-            return Err(format!(
-                "Message too short: {} < {}",
-                message_bytes.len(),
-                struct_data_end
-            ));
-        }
-
-        let struct_data = &message_bytes[struct_data_start..struct_data_end];
-
-        // Deserialize CorticalMappedXYZPNeuronVoxels
-        let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
-        cortical_mapped
-            .try_deserialize_and_update_self_from_byte_slice(struct_data)
-            .map_err(|e| format!("Failed to deserialize: {:?}", e))?;
+        // Downcast to CorticalMappedXYZPNeuronVoxels using as_any().downcast_ref()
+        let cortical_mapped = boxed_struct
+            .as_any()
+            .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()
+            .ok_or_else(|| "Structure is not CorticalMappedXYZPNeuronVoxels".to_string())?;
 
         // ✅ CLEAN ARCHITECTURE: PNS just transports XYZP, NPU handles all neural logic
         // The NPU owns coordinate-to-ID conversion and does it efficiently in batch

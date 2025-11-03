@@ -163,10 +163,18 @@ impl PNS {
             .and_then(|s| s.parse::<u16>().ok())
             .unwrap_or(5562);  // @architecture:acceptable - emergency fallback
         
-        info!("🦀 [PNS] Port configuration: motor={}, viz={}", motor_port, viz_port);
+        // Extract sensory port from config
+        let sensory_port = config.zmq_sensory_address
+            .split(':')
+            .last()
+            .and_then(|s| s.parse::<u16>().ok())
+            .unwrap_or(5558);  // @architecture:acceptable - emergency fallback
+        
+        info!("🦀 [PNS] Port configuration: sensory={}, motor={}, viz={}", sensory_port, motor_port, viz_port);
         
         let registration_handler = Arc::new(Mutex::new(RegistrationHandler::new(
             Arc::clone(&agent_registry),
+            sensory_port,
             motor_port,
             viz_port,
         )));

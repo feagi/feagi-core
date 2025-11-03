@@ -45,6 +45,7 @@ pub struct RegistrationHandler {
     burst_runner:
         Arc<parking_lot::Mutex<Option<Arc<parking_lot::RwLock<feagi_burst_engine::BurstLoopRunner>>>>>,
     /// Actual ZMQ port numbers (from config, NOT hardcoded)
+    sensory_port: u16,
     motor_port: u16,
     viz_port: u16,
     /// Callbacks for Python integration
@@ -53,12 +54,13 @@ pub struct RegistrationHandler {
 }
 
 impl RegistrationHandler {
-    pub fn new(agent_registry: Arc<RwLock<AgentRegistry>>, motor_port: u16, viz_port: u16) -> Self {
+    pub fn new(agent_registry: Arc<RwLock<AgentRegistry>>, sensory_port: u16, motor_port: u16, viz_port: u16) -> Self {
         Self {
             agent_registry,
             shm_base_path: "/tmp".to_string(),
             sensory_agent_manager: Arc::new(parking_lot::Mutex::new(None)),
             burst_runner: Arc::new(parking_lot::Mutex::new(None)),
+            sensory_port,
             motor_port,
             viz_port,
             on_agent_registered: Arc::new(parking_lot::Mutex::new(None)),
@@ -292,6 +294,7 @@ impl RegistrationHandler {
                 Some(shm_paths)
             },
             zmq_ports: Some(HashMap::from([
+                ("sensory".to_string(), self.sensory_port),
                 ("motor".to_string(), self.motor_port),
                 ("visualization".to_string(), self.viz_port),
             ])),

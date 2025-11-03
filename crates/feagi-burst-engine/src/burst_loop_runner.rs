@@ -483,7 +483,6 @@ fn encode_fire_data_to_xyzp(
     cortical_id_filter: Option<&ahash::AHashSet<String>>,
     npu: &Arc<Mutex<RustNPU>>,
 ) -> Result<Vec<u8>, String> {
-    use feagi_data_serialization::FeagiSerializable;
     use feagi_data_structures::genomic::CorticalID;
     use feagi_data_structures::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
@@ -583,19 +582,23 @@ fn encode_fire_data_to_xyzp(
         return Ok(Vec::new());
     }
 
-    // DEBUG: Log what we're about to serialize
-    info!("[ENCODE-XYZP] 🔍 About to serialize {} cortical areas", cortical_mapped.mappings.len());
-    info!("[ENCODE-XYZP] 🔍 Calling get_number_of_bytes_needed()...");
-    let bytes_needed = cortical_mapped.get_number_of_bytes_needed();
-    info!("[ENCODE-XYZP] 🔍 Bytes needed: {}", bytes_needed);
+    // Serialize to FeagiByteContainer (version 2 container format)
+    // This ensures proper container wrapping with global header, structure lookup, etc.
+    use feagi_data_serialization::FeagiByteContainer;
     
-    // Serialize to bytes
-    let mut buffer = vec![0u8; bytes_needed];
-    info!("[ENCODE-XYZP] 🔍 Calling try_serialize_struct_to_byte_slice()...");
-    cortical_mapped
-        .try_serialize_struct_to_byte_slice(&mut buffer)
-        .map_err(|e| format!("Failed to serialize: {:?}", e))?;
-    info!("[ENCODE-XYZP] 🔍 Serialization successful!");
+    let mut byte_container = FeagiByteContainer::new_empty();
+    byte_container
+        .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)
+        .map_err(|e| format!("Failed to encode into FeagiByteContainer: {:?}", e))?;
+
+    // Extract bytes from container
+    let buffer = byte_container.get_byte_ref().to_vec();
+    
+    info!(
+        "[ENCODE-XYZP] ✅ Encoded {} cortical areas into FeagiByteContainer: {} bytes",
+        cortical_mapped.mappings.len(),
+        buffer.len()
+    );
 
     Ok(buffer)
 }

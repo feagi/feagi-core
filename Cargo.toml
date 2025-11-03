@@ -116,7 +116,7 @@ wgpu = "0.19"
 pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
-# Published FEAGI data crates (v0.0.50-beta.49 with callback feature)
+# Published FEAGI data crates (using crates.io for consistency with BV)
 feagi_data_structures = "0.0.50-beta.50"
 feagi_data_serialization = "0.0.50-beta.50"
 
