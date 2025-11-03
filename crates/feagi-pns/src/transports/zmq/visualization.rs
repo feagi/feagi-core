@@ -62,9 +62,13 @@ impl VisualizationSendConfig {
 }
 
 #[derive(Debug)]
+/// Queue item for visualization stream
+/// Contains raw fire queue data that will be serialized on the worker thread
 struct VisualizationQueueItem {
     topic: Vec<u8>,
-    payload: Vec<u8>,
+    raw_fire_data: feagi_burst_engine::RawFireQueueSnapshot,
+    /// Optional: For backwards compatibility with pre-serialized data (SHM path)
+    pre_serialized_payload: Option<Vec<u8>>,
 }
 
 #[derive(Default, Debug)]
@@ -196,35 +200,28 @@ impl VisualizationStream {
         Ok(())
     }
 
-    /// Enqueue visualization data for asynchronous delivery (with LZ4 compression).
-    pub fn publish(&self, data: &[u8]) -> Result<(), String> {
-        // Fast path: If stream not running, don't even try to compress/enqueue
-        // This prevents backpressure when no consumer is connected
+    /// Publish raw fire queue data (NEW ARCHITECTURE - serialization in worker thread)
+    /// This keeps serialization out of the burst engine hot path
+    pub fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> Result<(), String> {
+        // Fast path: If stream not running, don't even try to enqueue
         if !*self.running.lock() {
-            return Ok(()); // Silently discard - this is expected when no viz agents connected
+            return Ok(()); // Silently discard - expected when no viz agents connected
         }
         
         static FIRST_LOG: AtomicBool = AtomicBool::new(false);
         if !FIRST_LOG.load(Ordering::Relaxed) {
-            debug!(
-                "[VIZ-STREAM] 🔍 TRACE: publish() called with {} bytes (BEFORE compression)",
-                data.len()
+            let total_neurons: usize = fire_data.values().map(|d| d.neuron_ids.len()).sum();
+            info!(
+                "[VIZ-STREAM] 🏗️ ARCHITECTURE: publish_raw_fire_queue() - {} neurons, {} areas (serialization will happen on worker thread)",
+                total_neurons, fire_data.len()
             );
             FIRST_LOG.store(true, Ordering::Relaxed);
         }
 
-        let compressed =
-            match lz4::block::compress(data, Some(lz4::block::CompressionMode::FAST(1)), true) {
-                Ok(c) => c,
-                Err(e) => {
-                    error!("[VIZ-STREAM] ❌ LZ4 FAILED: {:?}", e);
-                    return Err(format!("LZ4 compression failed: {}", e));
-                }
-            };
-
         let item = VisualizationQueueItem {
             topic: b"activity".to_vec(),
-            payload: compressed,
+            raw_fire_data: fire_data,
+            pre_serialized_payload: None, // Will be serialized on worker thread
         };
 
         self.enqueue(item);
@@ -315,6 +312,51 @@ impl VisualizationStream {
 
         *self.worker_thread.lock() = Some(handle);
     }
+    
+    /// Serialize raw fire queue data to FeagiByteContainer format
+    /// This runs on the PNS worker thread, NOT the burst engine thread
+    fn serialize_fire_queue(fire_data: &feagi_burst_engine::RawFireQueueSnapshot) -> Result<Vec<u8>, String> {
+        use feagi_data_structures::genomic::CorticalID;
+        use feagi_data_structures::neuron_voxels::xyzp::{
+            CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+        };
+        use feagi_data_serialization::FeagiByteContainer;
+        
+        let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
+        
+        for (_area_id, area_data) in fire_data {
+            if area_data.neuron_ids.is_empty() {
+                continue;
+            }
+            
+            // Create CorticalID from area name
+            let mut bytes = [b' '; 6];
+            let name_bytes = area_data.cortical_area_name.as_bytes();
+            let copy_len = name_bytes.len().min(6);
+            bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+            
+            let cortical_id = CorticalID::from_bytes(&bytes)
+                .map_err(|e| format!("Failed to create CorticalID for '{}': {:?}", area_data.cortical_area_name, e))?;
+            
+            // Create neuron voxel arrays (cloning vectors since we're on a different thread)
+            let neuron_arrays = NeuronVoxelXYZPArrays::new_from_vectors(
+                area_data.coords_x.clone(),
+                area_data.coords_y.clone(),
+                area_data.coords_z.clone(),
+                area_data.potentials.clone(),
+            ).map_err(|e| format!("Failed to create neuron arrays: {:?}", e))?;
+            
+            cortical_mapped.insert(cortical_id, neuron_arrays);
+        }
+        
+        // Serialize to FeagiByteContainer
+        let mut byte_container = FeagiByteContainer::new_empty();
+        byte_container
+            .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)
+            .map_err(|e| format!("Failed to encode into FeagiByteContainer: {:?}", e))?;
+        
+        Ok(byte_container.get_byte_ref().to_vec())
+    }
 
     fn send_item(
         socket: &Arc<Mutex<Option<zmq::Socket>>>,
@@ -323,6 +365,53 @@ impl VisualizationStream {
         shutdown: &Arc<AtomicBool>,
         retry_sleep: Duration,
     ) {
+        // Step 1: Serialize raw fire queue data on this worker thread (OFF BURST THREAD!)
+        let payload = if let Some(pre_serialized) = item.pre_serialized_payload {
+            // Backwards compatibility: use pre-serialized data
+            pre_serialized
+        } else {
+            // NEW PATH: Serialize raw fire queue data here (not in burst engine!)
+            let total_neurons: usize = item.raw_fire_data.values().map(|d| d.neuron_ids.len()).sum();
+            
+            static FIRST_SERIALIZE_LOG: AtomicBool = AtomicBool::new(false);
+            if !FIRST_SERIALIZE_LOG.load(Ordering::Relaxed) || total_neurons > 1000 {
+                info!("[ZMQ-VIZ] 🏗️ SERIALIZING: {} neurons from {} areas (on PNS worker thread, NOT burst thread)", 
+                    total_neurons, item.raw_fire_data.len());
+                FIRST_SERIALIZE_LOG.store(true, Ordering::Relaxed);
+            }
+            
+            let serialize_start = std::time::Instant::now();
+            
+            // Serialize using FeagiByteContainer
+            let serialized = match Self::serialize_fire_queue(&item.raw_fire_data) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    error!("[ZMQ-VIZ] ❌ Serialization failed: {}", e);
+                    stats.record_drop();
+                    return;
+                }
+            };
+            
+            let serialize_duration = serialize_start.elapsed();
+            if total_neurons > 1000 {
+                info!("[ZMQ-VIZ] ⏱️ SERIALIZE TIME: {} neurons → {} bytes in {:?}", 
+                    total_neurons, serialized.len(), serialize_duration);
+            }
+            
+            serialized
+        };
+        
+        // Step 2: Compress (on PNS worker thread)
+        let compressed = match lz4::block::compress(&payload, Some(lz4::block::CompressionMode::FAST(1)), true) {
+            Ok(c) => c,
+            Err(e) => {
+                error!("[ZMQ-VIZ] ❌ LZ4 compression failed: {:?}", e);
+                stats.record_drop();
+                return;
+            }
+        };
+        
+        // Step 3: Send via ZMQ
         let mut guard = socket.lock();
         let sock = match guard.as_mut() {
             Some(sock) => sock,
@@ -339,13 +428,13 @@ impl VisualizationStream {
                 return;
             }
 
-            match sock.send(&item.payload, 0) {
+            match sock.send(&compressed, 0) {
                 Ok(()) => {
                     // DIAGNOSTIC: Track actual ZMQ send rate
                     static SEND_COUNTER: AtomicU64 = AtomicU64::new(0);
                     let count = SEND_COUNTER.fetch_add(1, Ordering::Relaxed);
                     if count % 30 == 0 {  // Log every 30 sends
-                        debug!("[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)", count, item.payload.len());
+                        debug!("[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)", count, compressed.len());
                     }
                     break;
                 }

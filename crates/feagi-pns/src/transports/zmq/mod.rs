@@ -180,19 +180,19 @@ impl ZmqStreams {
         &mut self.api_control_stream
     }
 
-    /// Publish visualization data to ZMQ subscribers
-    pub fn publish_visualization(&self, data: &[u8]) -> Result<(), PNSError> {
+    /// Publish raw fire queue data (NEW ARCHITECTURE - serialization in PNS thread)
+    pub fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> Result<(), PNSError> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-            debug!(
-                "[ZMQ-STREAMS] 🔍 TRACE: Forwarding {} bytes to viz_stream.publish()",
-                data.len()
+            info!(
+                "[ZMQ-STREAMS] 🏗️ ARCHITECTURE: Forwarding raw fire queue ({} areas) to viz_stream (serialization will happen on worker thread)",
+                fire_data.len()
             );
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
         self.viz_stream
-            .publish(data)
+            .publish_raw_fire_queue(fire_data)
             .map_err(|e| PNSError::Zmq(format!("Viz publish: {}", e)))
     }
     

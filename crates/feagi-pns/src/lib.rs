@@ -1158,15 +1158,15 @@ impl PNS {
         Arc::clone(&self.agent_registry)
     }
 
-    /// Publish visualization data to configured transport (UDP or ZMQ)
-    /// Called by burst engine after writing FQ data to SHM
-    pub fn publish_visualization(&self, data: &[u8]) -> Result<()> {
+    /// Publish raw fire queue data (NEW ARCHITECTURE - serialization off burst thread)
+    /// Called by burst engine with raw fire queue data
+    /// PNS will serialize on its own thread to avoid blocking burst engine
+    pub fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> Result<()> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-            debug!(
-                "[PNS] 🔍 TRACE: publish_visualization() called with {} bytes via {:?}",
-                data.len(),
-                self.config.visualization_transport
+            info!(
+                "[PNS] 🔍 ARCHITECTURE: publish_raw_fire_queue() called with {} areas (serialization will happen on PNS thread)",
+                fire_data.len()
             );
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
@@ -1175,7 +1175,7 @@ impl PNS {
             #[cfg(feature = "zmq-transport")]
             TransportMode::Zmq => {
                 if let Some(streams) = self.zmq_streams.lock().as_ref() {
-                    streams.publish_visualization(data)?;
+                    streams.publish_raw_fire_queue(fire_data)?;
                     Ok(())
                 } else {
                     error!("[PNS] ❌ CRITICAL: ZMQ streams not started!");
@@ -1184,36 +1184,10 @@ impl PNS {
             }
             #[cfg(feature = "udp-transport")]
             TransportMode::Udp => {
-                // UDP requires async context, bridge via runtime.block_on()
-                if let Some(runtime) = self.async_runtime.lock().as_ref() {
-                    if let Some(udp_viz) = self.udp_viz_transport.lock().as_ref() {
-                        // Create FBC from data for zero-copy
-                        use feagi_data_serialization::FeagiByteContainer;
-                        let mut fbc = FeagiByteContainer::new_empty();
-                        fbc.try_write_data_by_copy_and_verify(data).map_err(|e| {
-                            PNSError::Transport(format!("FBC write failed: {:?}", e))
-                        })?;
-                        let shared_fbc = Arc::new(fbc);
-
-                        // Bridge sync→async via runtime
-                        runtime
-                            .block_on(udp_viz.publish_visualization(shared_fbc))
-                            .map_err(|e| {
-                                PNSError::Transport(format!("UDP viz publish failed: {}", e))
-                            })?;
-                        Ok(())
-                    } else {
-                        error!("[PNS] ❌ CRITICAL: UDP visualization transport not started!");
-                        Err(PNSError::NotRunning(
-                            "UDP viz transport not started".to_string(),
-                        ))
-                    }
-                } else {
-                    error!("[PNS] ❌ CRITICAL: Async runtime not available for UDP!");
-                    Err(PNSError::NotRunning(
-                        "Async runtime not available".to_string(),
-                    ))
-                }
+                // UDP path: Serialize raw fire queue data first (on this thread, not burst thread)
+                // TODO: Move this serialization to UDP transport's own worker thread for consistency
+                warn!("[PNS] ⚠️ UDP transport for visualization not yet updated for raw fire queue architecture");
+                Err(PNSError::Transport("UDP visualization with raw fire queue not yet implemented".to_string()))
             }
             #[cfg(not(any(feature = "zmq-transport", feature = "udp-transport")))]
             _ => {
@@ -1259,8 +1233,8 @@ impl PNS {
 
 /// Implement VisualizationPublisher trait for burst engine integration (NO PYTHON IN HOT PATH!)
 impl feagi_burst_engine::VisualizationPublisher for PNS {
-    fn publish_visualization(&self, data: &[u8]) -> std::result::Result<(), String> {
-        self.publish_visualization(data).map_err(|e| e.to_string())
+    fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> std::result::Result<(), String> {
+        self.publish_raw_fire_queue(fire_data).map_err(|e| e.to_string())
     }
 }
 

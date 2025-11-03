@@ -30,9 +30,26 @@ use std::thread;
 
 /// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-pns)
 /// Any component that can publish visualization data implements this trait.
+/// Raw fire queue data for a single cortical area
+/// This is the unencoded data that will be serialized by PNS
+#[derive(Debug, Clone)]
+pub struct RawFireQueueData {
+    pub cortical_area_idx: u32,
+    pub cortical_area_name: String,  // Needed for serialization (avoids NPU dependency in PNS)
+    pub neuron_ids: Vec<u32>,
+    pub coords_x: Vec<u32>,
+    pub coords_y: Vec<u32>,
+    pub coords_z: Vec<u32>,
+    pub potentials: Vec<f32>,
+}
+
+/// Complete fire queue snapshot for visualization
+pub type RawFireQueueSnapshot = ahash::AHashMap<u32, RawFireQueueData>;
+
 pub trait VisualizationPublisher: Send + Sync {
-    /// Publish visualization data (LZ4-compressed Type 11 format)
-    fn publish_visualization(&self, data: &[u8]) -> Result<(), String>;
+    /// Publish raw fire queue data (PNS will serialize and compress)
+    /// This keeps serialization out of the burst engine hot path
+    fn publish_raw_fire_queue(&self, fire_data: RawFireQueueSnapshot) -> Result<(), String>;
 }
 
 pub trait MotorPublisher: Send + Sync {
@@ -216,8 +233,8 @@ impl BurstLoopRunner {
             // Wrap Arc<Mutex<V>> to implement VisualizationPublisher
             struct VisualizerWrapper<V: VisualizationPublisher>(Arc<Mutex<V>>);
             impl<V: VisualizationPublisher> VisualizationPublisher for VisualizerWrapper<V> {
-                fn publish_visualization(&self, data: &[u8]) -> Result<(), String> {
-                    self.0.lock().unwrap().publish_visualization(data)
+                fn publish_raw_fire_queue(&self, fire_data: RawFireQueueSnapshot) -> Result<(), String> {
+                    self.0.lock().unwrap().publish_raw_fire_queue(fire_data)
                 }
             }
             Arc::new(VisualizerWrapper(p)) as Arc<dyn VisualizationPublisher>
@@ -485,9 +502,8 @@ impl Drop for BurstLoopRunner {
 /// 
 /// Filter by cortical_id strings (e.g., "omot00"), matching sensory stream pattern
 fn encode_fire_data_to_xyzp(
-    fire_data: ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
+    fire_data: RawFireQueueSnapshot,
     cortical_id_filter: Option<&ahash::AHashSet<String>>,
-    npu: &Arc<Mutex<RustNPU>>,
 ) -> Result<Vec<u8>, String> {
     use feagi_data_structures::genomic::CorticalID;
     use feagi_data_structures::neuron_voxels::xyzp::{
@@ -496,7 +512,12 @@ fn encode_fire_data_to_xyzp(
 
     let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-    for (area_id, (_id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data {
+    for (area_id, area_data) in fire_data {
+        let x_vec = area_data.coords_x;
+        let y_vec = area_data.coords_y;
+        let z_vec = area_data.coords_z;
+        let p_vec = area_data.potentials;
+        
         // Skip empty areas or areas with mismatched vector lengths
         if x_vec.is_empty() || y_vec.is_empty() || z_vec.is_empty() || p_vec.is_empty() {
             continue;
@@ -511,49 +532,26 @@ fn encode_fire_data_to_xyzp(
             continue;
         }
         
-        // Get cortical_id FIRST (needed for filtering)
-        let cortical_id_opt = npu
-            .lock()
-            .unwrap()
-            .get_cortical_area_name(area_id)
-            .map(|s| s.to_string());
-        
         // Apply cortical_id filter if specified (for motor subscriptions)
         if let Some(filter) = cortical_id_filter {
-            if let Some(ref cortical_id) = cortical_id_opt {
-                static FIRST_FILTER_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-                if !FIRST_FILTER_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                    debug!("[ENCODE-XYZP] 🔍 Motor filter check: area_idx={}, cortical_id='{}', filter={:?}", 
-                          area_id, cortical_id, filter);
-                    FIRST_FILTER_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
-                }
-                
-                if !filter.contains(cortical_id) {
-                    continue; // Skip - not in agent's motor subscriptions
-                }
-            } else {
-                continue; // Skip if no cortical_id
+            if !filter.contains(&area_data.cortical_area_name) {
+                continue; // Skip - not in agent's motor subscriptions
             }
         }
         
-        let cortical_id = match cortical_id_opt {
-            Some(name) => {
-                let mut bytes = [b' '; 6];
-                let name_bytes = name.as_bytes();
-                let copy_len = name_bytes.len().min(6);
-                bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+        // Create CorticalID from area name (already in RawFireQueueData)
+        let cortical_id = {
+            let mut bytes = [b' '; 6];
+            let name_bytes = area_data.cortical_area_name.as_bytes();
+            let copy_len = name_bytes.len().min(6);
+            bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
 
-                match CorticalID::from_bytes(&bytes) {
-                    Ok(id) => id,
-                    Err(e) => {
-                        error!("[ENCODE-XYZP] ❌ Failed to create CorticalID for '{}': {:?}", name, e);
-                        continue;
-                    }
+            match CorticalID::from_bytes(&bytes) {
+                Ok(id) => id,
+                Err(e) => {
+                    error!("[ENCODE-XYZP] ❌ Failed to create CorticalID for '{}': {:?}", area_data.cortical_area_name, e);
+                    continue;
                 }
-            }
-            None => {
-                error!("[ENCODE-XYZP] ❌ No cortical area name for area_id {}", area_id);
-                continue;
             }
         };
 
@@ -823,8 +821,18 @@ fn burst_loop(
             DEBUG_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
-        if has_shm_writer || has_viz_publisher {
-            // Force sample FQ on every burst (bypasses rate limiting)
+        // CRITICAL FIX: Check throttle BEFORE sampling/encoding (avoid wasted work!)
+        // Only sample and encode when we're actually going to publish
+        static LAST_VIZ_PUBLISH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as u64;
+        let last_viz = LAST_VIZ_PUBLISH.load(std::sync::atomic::Ordering::Relaxed);
+        let should_publish_viz = (now_ms - last_viz >= 33) && has_viz_publisher;
+        
+        if has_shm_writer || should_publish_viz {
+            // Force sample FQ only when we're going to use it (avoid wasted work!)
             let viz_lock_start = Instant::now();
             debug!("🔍 [BURST-TIMING] Attempting to acquire NPU lock for viz sampling...");
             let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
@@ -844,91 +852,79 @@ fn burst_loop(
             }
 
             if let Some(fire_data) = fire_data_opt {
-                // DEBUG: Log fire_data structure before encoding
-                static FIRST_FIRE_DATA_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-                if !FIRST_FIRE_DATA_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                    debug!("[BURST-LOOP] 🔍 Viz fire_data has {} cortical areas", fire_data.len());
-                    for (area_id, (id_vec, x_vec, y_vec, z_vec, p_vec)) in fire_data.iter() {
-                        debug!(
-                            "[BURST-LOOP] 🔍   Area {}: id_len={}, x_len={}, y_len={}, z_len={}, p_len={}",
-                            area_id, id_vec.len(), x_vec.len(), y_vec.len(), z_vec.len(), p_vec.len()
-                        );
+                // Convert to RawFireQueueSnapshot for PNS (zero-copy - moves vectors)
+                let mut raw_snapshot = RawFireQueueSnapshot::new();
+                let mut total_neurons = 0;
+                
+                for (area_id, (neuron_ids, coords_x, coords_y, coords_z, potentials)) in fire_data {
+                    if neuron_ids.is_empty() {
+                        continue;
                     }
-                    FIRST_FIRE_DATA_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
+                    
+                    // Get cortical area name for serialization (PNS needs this)
+                    let area_name = npu.lock().unwrap()
+                        .get_cortical_area_name(area_id)
+                        .unwrap_or_else(|| format!("area_{}", area_id));
+                    
+                    total_neurons += neuron_ids.len();
+                    
+                    raw_snapshot.insert(area_id, RawFireQueueData {
+                        cortical_area_idx: area_id,
+                        cortical_area_name: area_name,
+                        neuron_ids,
+                        coords_x,
+                        coords_y,
+                        coords_z,
+                        potentials,
+                    });
                 }
                 
-                // Use shared encoding function (zero-copy, with all safety checks)
-                match encode_fire_data_to_xyzp(fire_data, None, &npu) {
-                    Ok(buffer) => {
-                        // Skip if no data (empty buffer means no neurons fired or all areas were filtered out)
-                        if buffer.is_empty() {
-                            static SKIP_LOGGED: std::sync::atomic::AtomicBool =
-                                std::sync::atomic::AtomicBool::new(false);
-                            if !SKIP_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                                debug!("[BURST-LOOP] Skipping visualization - no neurons fired");
-                                SKIP_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
-                            }
-                        } else {
-                            static FIRST_VIZ_LOG: std::sync::atomic::AtomicBool =
-                                std::sync::atomic::AtomicBool::new(false);
-                            if !FIRST_VIZ_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-                                debug!("[BURST-LOOP] First visualization data: {} bytes", buffer.len());
-                                FIRST_VIZ_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
-                            }
+                if total_neurons > 0 {
+                    if burst_num % 100 == 0 || total_neurons > 1000 {
+                        debug!("[BURST-LOOP] 🔍 Sampled {} neurons from {} areas for viz", total_neurons, raw_snapshot.len());
+                    }
+                    
+                    // Send raw data to PNS (non-blocking handoff, PNS will serialize on its own thread)
+                    if let Some(ref publisher) = viz_publisher {
+                        static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+                        
+                        // Update shared timestamp (used for throttle check above)
+                        LAST_VIZ_PUBLISH.store(now_ms, std::sync::atomic::Ordering::Relaxed);
+                        
+                        let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if count % 30 == 0 {
+                            info!("[BURST-LOOP] 📊 Viz handoff #{}: {} neurons → PNS (serialization off-thread)", count, total_neurons);
+                        }
 
-                            // Write to SHM if writer is attached (uncompressed - local IPC)
-                            if has_shm_writer {
+                        if let Err(e) = publisher.publish_raw_fire_queue(raw_snapshot.clone()) {
+                            error!("[BURST-LOOP] ❌ VIZ HANDOFF ERROR: {}", e);
+                        }
+                    }
+                    
+                    // SHM writer still needs serialized data (for local visualization)
+                    // This is acceptable since SHM is local IPC, not network-bound
+                    if has_shm_writer {
+                        match encode_fire_data_to_xyzp(raw_snapshot, None) {
+                            Ok(buffer) => {
                                 let mut viz_writer_lock = viz_shm_writer.lock().unwrap();
                                 if let Some(writer) = viz_writer_lock.as_mut() {
                                     if let Err(e) = writer.write_payload(&buffer) {
-                                        let timestamp = get_timestamp();
-                                        error!(
-                                            "[{}] [BURST-LOOP] ❌ Failed to write viz SHM: {}",
-                                            timestamp, e
-                                        );
+                                        error!("[BURST-LOOP] ❌ Failed to write viz SHM: {}", e);
                                     }
                                 }
                             }
-
-                            // Publish to ZMQ via trait object (direct Rust-to-Rust call, NO PYTHON!)
-                            // THROTTLE: Only publish at 30Hz to avoid overwhelming consumers
-                            // Burst rate is 10kHz, but viz updates don't need to be that frequent
-                            if let Some(ref publisher) = viz_publisher {
-                                static LAST_PUBLISH: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                                static PUBLISH_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-                                
-                                let now = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_millis() as u64;
-                                let last = LAST_PUBLISH.load(std::sync::atomic::Ordering::Relaxed);
-                                
-                                // Throttle to ~30Hz (publish every 33ms)
-                                if now - last >= 33 {
-                                    LAST_PUBLISH.store(now, std::sync::atomic::Ordering::Relaxed);
-                                    
-                                    let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                    if count % 30 == 0 {  // Log every 30 publishes (~1 second at 30Hz)
-                                        debug!("[BURST-LOOP] Viz publish #{}: {} bytes/frame (throttled to 30Hz)", count, buffer.len());
-                                    }
-
-                                    if let Err(e) = publisher.publish_visualization(&buffer) {
-                                        error!("[BURST-LOOP] ❌ VIZ PUBLISH ERROR: {}", e);
-                                    }
-                                }
+                            Err(e) => {
+                                error!("[BURST-LOOP] ❌ Failed to encode for SHM: {}", e);
                             }
-                        }
-                    }
-                    Err(e) => {
-                        static ERROR_LOGGED: std::sync::atomic::AtomicBool =
-                            std::sync::atomic::AtomicBool::new(false);
-                        if !ERROR_LOGGED.load(std::sync::atomic::Ordering::Relaxed) {
-                            error!("[BURST-LOOP] ❌ Failed to encode visualization data: {}", e);
-                            ERROR_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
                         }
                     }
                 }
             } // Close if let Some(fire_data)
+        } else {
+            // Skipped encoding this burst (throttled)
+            if burst_num % 100 == 0 {
+                debug!("[BURST-LOOP] 🔍 VIZ SKIPPED: Throttle (will sample/encode in {}ms)", 33_u64.saturating_sub(now_ms - last_viz));
+            }
         } // Close visualization block
 
         // Motor output generation and publishing (per-agent, filtered by subscriptions)
@@ -950,6 +946,28 @@ fn burst_loop(
             }
             
             if let Some(fire_data) = fire_data_opt {
+                // Convert to RawFireQueueSnapshot (same as viz path)
+                let mut motor_snapshot = RawFireQueueSnapshot::new();
+                for (area_id, (neuron_ids, coords_x, coords_y, coords_z, potentials)) in fire_data {
+                    if neuron_ids.is_empty() {
+                        continue;
+                    }
+                    
+                    let area_name = npu.lock().unwrap()
+                        .get_cortical_area_name(area_id)
+                        .unwrap_or_else(|| format!("area_{}", area_id));
+                    
+                    motor_snapshot.insert(area_id, RawFireQueueData {
+                        cortical_area_idx: area_id,
+                        cortical_area_name: area_name,
+                        neuron_ids,
+                        coords_x,
+                        coords_y,
+                        coords_z,
+                        potentials,
+                    });
+                }
+                
                 // Get motor subscriptions
                 let subscriptions = motor_subscriptions.read();
                 
@@ -969,14 +987,14 @@ fn burst_loop(
                     }
 
                     // Generate motor output for each subscribed agent
-                    // Note: We clone fire_data for each agent (acceptable overhead for typical 1-2 agents)
+                    // Note: We clone motor_snapshot for each agent (acceptable overhead for typical 1-2 agents)
                     for (agent_id, subscribed_cortical_ids) in subscriptions.iter() {
                         // Filter by cortical_id strings (e.g., {"omot00"})
                         let cortical_id_filter = Some(subscribed_cortical_ids);
                         
                         let encode_start = Instant::now();
                         // Clone for each agent (minimal overhead, and allows zero-copy within encode function)
-                        match encode_fire_data_to_xyzp(fire_data.clone(), cortical_id_filter, &npu) {
+                        match encode_fire_data_to_xyzp(motor_snapshot.clone(), cortical_id_filter) {
                             Ok(motor_bytes) => {
                                 // Skip if no data (no neurons fired in subscribed areas)
                                 if motor_bytes.is_empty() {
