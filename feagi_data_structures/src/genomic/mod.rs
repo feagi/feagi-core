@@ -12,5 +12,5 @@ mod neural_model_descriptors;
 mod genomic_object_properties;
 mod brain_regions;
 
-pub use cortical_id::CorticalID;
+pub use cortical_id2::CorticalID;
 pub use cortical_type::{CorticalType, CoreCorticalType, SensorCorticalType, MotorCorticalType};

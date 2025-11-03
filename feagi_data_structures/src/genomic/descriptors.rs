@@ -112,3 +112,29 @@ define_index!(AgentDeviceIndex, u32,
 
 //endregion
 
+//region Cortical Variant Enums
+
+pub enum IOCorticalAreaDataType {
+    Percentage(PercentageNeuronPositioning, FrameChangeHandling),
+    Percentage2D(PercentageNeuronPositioning, FrameChangeHandling),
+    Percentage3D(PercentageNeuronPositioning, FrameChangeHandling),
+    Percentage4D(PercentageNeuronPositioning, FrameChangeHandling),
+    SignedPercentage(PercentageNeuronPositioning, FrameChangeHandling),
+    SignedPercentage2D(PercentageNeuronPositioning, FrameChangeHandling),
+    SignedPercentage3D(PercentageNeuronPositioning, FrameChangeHandling),
+    SignedPercentage4D(PercentageNeuronPositioning, FrameChangeHandling),
+    ImageFrame(FrameChangeHandling),
+    MiscData(FrameChangeHandling)
+}
+
+pub enum PercentageNeuronPositioning {
+    Linear,
+    Fractional,
+}
+
+pub enum FrameChangeHandling {
+    Absolute,
+    Incremental,
+}
+
+//endregion
