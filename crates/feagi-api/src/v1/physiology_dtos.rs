@@ -49,6 +49,11 @@ pub struct PhysiologyParameters {
     /// Sleep trigger neural activity max
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sleep_trigger_neural_activity_max: Option<f64>,
+    
+    /// Quantization precision for numeric values
+    /// Options: "fp32" (default), "fp16", "int8"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quantization_precision: Option<String>,
 }
 
 /// Request to update physiology parameters

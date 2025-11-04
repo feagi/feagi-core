@@ -1,0 +1,94 @@
+{
+  "genome_id": "example_fp32",
+  "genome_title": "Example FP32 Standard Genome",
+  "genome_description": "Standard genome with FP32 precision for maximum accuracy",
+  "version": "2.0",
+  "physiology": {
+    "simulation_timestep": 0.01,
+    "max_age": 10000000,
+    "evolution_burst_count": 50,
+    "ipu_idle_threshold": 1000,
+    "plasticity_queue_depth": 3,
+    "lifespan_mgmt_interval": 10,
+    "quantization_precision": "fp32"
+  },
+  "blueprint": {
+    "cortical_areas": {
+      "sensory": {
+        "cortical_id": "sens_1",
+        "cortical_name": "Sensory Input",
+        "cortical_neuron_count": 100,
+        "location": {
+          "x": 0,
+          "y": 0,
+          "z": 0
+        },
+        "dimensions": {
+          "x": 10,
+          "y": 10,
+          "z": 1
+        },
+        "cortical_neuron_per_voxel_count": 1,
+        "cortical_synapses_per_neuron": 10,
+        "cortical_mapping_dstn": {},
+        "morphology_id": "lif_standard"
+      },
+      "motor": {
+        "cortical_id": "motor_1",
+        "cortical_name": "Motor Output",
+        "cortical_neuron_count": 50,
+        "location": {
+          "x": 15,
+          "y": 0,
+          "z": 0
+        },
+        "dimensions": {
+          "x": 10,
+          "y": 5,
+          "z": 1
+        },
+        "cortical_neuron_per_voxel_count": 1,
+        "cortical_synapses_per_neuron": 20,
+        "cortical_mapping_dstn": {
+          "sens_1": {
+            "cortical_mapping_type": "fully_connected",
+            "postsynaptic_current": 50
+          }
+        },
+        "morphology_id": "lif_standard"
+      }
+    }
+  },
+  "morphologies": {
+    "lif_standard": {
+      "morphology_id": "lif_standard",
+      "morphology_name": "Standard LIF Neuron",
+      "type": "vectors",
+      "parameters": {
+        "firing_threshold_increment_rate": 0.0,
+        "firing_threshold_limit": 100.0,
+        "firing_threshold_starting_value": 50.0,
+        "leak_coefficient": 0.97,
+        "leak_variability": 0.0,
+        "refractory_period": 2,
+        "snooze_length": 0,
+        "consecutive_fire_cnt_max": 1000000,
+        "firing_threshold_increment_x_fired_count": 0.0,
+        "mp_charge_accumulation": true,
+        "mp_driven_psp": false,
+        "longterm_mem_threshold": 0.0,
+        "degeneracy": 1,
+        "psp_uniform_distribution": false,
+        "postsynaptic_current": 255,
+        "plasticity_constant": 0.0,
+        "degeneration": 0.0
+      }
+    }
+  },
+  "stats": {
+    "innate_cortical_area_count": 2,
+    "innate_neuron_count": 150,
+    "innate_synapse_count": 1500
+  }
+}
+

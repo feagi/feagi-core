@@ -29,6 +29,7 @@ use std::fmt;
 pub mod fire_structures;
 pub mod npu;
 pub mod models;
+pub mod numeric;
 
 // Multi-model neuron architecture (Phase 0: ID management only)
 // See: feagi-core/docs/MULTI_MODEL_NEURON_ARCHITECTURE.md
@@ -43,6 +44,9 @@ pub use id_manager::NeuronArrayType;
 
 // Export brain architecture models
 pub use models::{CorticalArea, BrainRegion, BrainRegionHierarchy, AreaType, RegionType};
+
+// Export numeric quantization types
+pub use numeric::{NeuralValue, INT8Value, INT8LeakCoefficient, Precision, QuantizationSpec};
 
 /// Neuron ID (globally unique across the entire brain)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -220,6 +220,15 @@ pub struct PhysiologyConfig {
     
     /// Lifespan management interval
     pub lifespan_mgmt_interval: u64,
+    
+    /// Quantization precision for numeric values
+    /// Options: "fp32" (default), "fp16", "int8"
+    #[serde(default = "default_quantization_precision")]
+    pub quantization_precision: String,
+}
+
+pub fn default_quantization_precision() -> String {
+    "fp32".to_string()
 }
 
 impl Default for PhysiologyConfig {
@@ -231,6 +240,7 @@ impl Default for PhysiologyConfig {
             ipu_idle_threshold: 1000,
             plasticity_queue_depth: 3,
             lifespan_mgmt_interval: 10,
+            quantization_precision: default_quantization_precision(),
         }
     }
 }

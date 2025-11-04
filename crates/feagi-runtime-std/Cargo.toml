@@ -1,0 +1,26 @@
+[package]
+name = "feagi-runtime-std"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Standard runtime adapter for FEAGI (Desktop/Server)"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+# Platform-agnostic core
+feagi-types = { path = "../feagi-types" }
+feagi-neural = { path = "../feagi-neural" }
+feagi-synapse = { path = "../feagi-synapse" }
+
+# Standard library dependencies
+rayon = { workspace = true }  # Parallel processing
+ahash = { workspace = true }  # Fast hashing
+thiserror = { workspace = true }  # Error handling
+
+[dev-dependencies]
+

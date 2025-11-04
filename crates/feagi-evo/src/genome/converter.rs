@@ -274,6 +274,12 @@ fn parse_physiology(physiology_value: &Option<Value>) -> EvoResult<PhysiologyCon
                 .or_else(|| value["burst_delay"].as_f64())
                 .unwrap_or(0.025);
             
+            // Parse quantization precision (new field)
+            let quantization_precision = value["quantization_precision"]
+                .as_str()
+                .unwrap_or("fp32")
+                .to_string();
+            
             Ok(PhysiologyConfig {
                 simulation_timestep,
                 max_age: value["max_age"].as_u64().unwrap_or(10_000_000),
@@ -281,6 +287,7 @@ fn parse_physiology(physiology_value: &Option<Value>) -> EvoResult<PhysiologyCon
                 ipu_idle_threshold: value["ipu_idle_threshold"].as_u64().unwrap_or(1000),
                 plasticity_queue_depth: value["plasticity_queue_depth"].as_u64().unwrap_or(3) as usize,
                 lifespan_mgmt_interval: value["lifespan_mgmt_interval"].as_u64().unwrap_or(10),
+                quantization_precision,
             })
         }
         None => Ok(PhysiologyConfig::default()),
