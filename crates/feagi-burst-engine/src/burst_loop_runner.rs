@@ -63,7 +63,7 @@ pub trait MotorPublisher: Send + Sync {
 /// 🦀 Burst count is stored in NPU - single source of truth!
 pub struct BurstLoopRunner {
     /// Shared NPU instance (holds power neurons internally + burst count)
-    npu: Arc<Mutex<RustNPU>>,
+    npu: Arc<Mutex<RustNPU<f32>>>,
     /// Target frequency in Hz (shared with burst thread for dynamic updates)
     frequency_hz: Arc<Mutex<f64>>,
     /// Running flag (atomic for thread-safe stop)
@@ -102,7 +102,7 @@ impl BurstLoopRunner {
     /// * `viz_publisher` - Optional visualization publisher (None = no ZMQ visualization)
     /// * `frequency_hz` - Burst frequency in Hz
     pub fn new<V: VisualizationPublisher + 'static, M: MotorPublisher + 'static>(
-        npu: Arc<Mutex<RustNPU>>,
+        npu: Arc<Mutex<RustNPU<f32>>>,
         viz_publisher: Option<Arc<Mutex<V>>>,
         motor_publisher: Option<Arc<Mutex<M>>>,
         frequency_hz: f64,
@@ -628,7 +628,7 @@ fn get_timestamp() -> String {
 /// Power neurons are read directly from RustNPU's internal state.
 /// Burst count is tracked by NPU - single source of truth!
 fn burst_loop(
-    npu: Arc<Mutex<RustNPU>>,
+    npu: Arc<Mutex<RustNPU<f32>>>,
     frequency_hz: Arc<Mutex<f64>>,  // Shared frequency - can be updated while running
     running: Arc<AtomicBool>,
     viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,

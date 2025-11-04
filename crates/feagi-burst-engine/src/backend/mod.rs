@@ -91,10 +91,10 @@ pub trait ComputeBackend: Send + Sync {
     ///
     /// # Returns
     /// List of neurons that fired + statistics
-    fn process_neural_dynamics(
+    fn process_neural_dynamics<T: NeuralValue>(
         &mut self,
         fcl: &FireCandidateList,
-        neuron_array: &mut NeuronArray,
+        neuron_array: &mut NeuronArray<T>,
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)>;
 
@@ -106,12 +106,12 @@ pub trait ComputeBackend: Send + Sync {
     /// optimizations (e.g., keep data on GPU between stages).
     ///
     /// Default implementation calls the two methods separately.
-    fn process_burst(
+    fn process_burst<T: NeuralValue>(
         &mut self,
         fired_neurons: &[u32],
         synapse_array: &SynapseArray,
         fcl: &mut FireCandidateList,
-        neuron_array: &mut NeuronArray,
+        neuron_array: &mut NeuronArray<T>,
         burst_count: u64,
     ) -> Result<BackendBurstResult> {
         let start = std::time::Instant::now();
@@ -150,9 +150,9 @@ pub trait ComputeBackend: Send + Sync {
     /// between bursts (thresholds, leak coefficients, etc.)
     ///
     /// For CPU backends, this is a no-op.
-    fn initialize_persistent_data(
+    fn initialize_persistent_data<T: NeuralValue>(
         &mut self,
-        _neuron_array: &NeuronArray,
+        _neuron_array: &NeuronArray<T>,
         _synapse_array: &SynapseArray,
     ) -> Result<()> {
         Ok(())

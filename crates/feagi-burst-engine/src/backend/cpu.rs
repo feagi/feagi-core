@@ -93,10 +93,10 @@ impl ComputeBackend for CPUBackend {
         Ok(synapse_count)
     }
 
-    fn process_neural_dynamics(
+    fn process_neural_dynamics<T: NeuralValue>(
         &mut self,
         fcl: &FireCandidateList,
-        neuron_array: &mut NeuronArray,
+        neuron_array: &mut NeuronArray<T>,
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // FCL-aware: Process only FCL neurons (existing neural_dynamics already supports this!)

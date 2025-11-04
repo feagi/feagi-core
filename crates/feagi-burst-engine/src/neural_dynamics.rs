@@ -48,9 +48,9 @@ pub struct DynamicsResult {
 /// 3. Check firing thresholds (with refractory period)
 /// 4. Apply probabilistic excitability
 /// 5. Create Fire Queue from firing neurons
-pub fn process_neural_dynamics(
+pub fn process_neural_dynamics<T: NeuralValue>(
     fcl: &FireCandidateList,
-    neuron_array: &mut NeuronArray,
+    neuron_array: &mut NeuronArray<T>,
     burst_count: u64,
 ) -> Result<DynamicsResult> {
     let candidates = fcl.get_all_candidates();
@@ -110,10 +110,10 @@ pub fn process_neural_dynamics(
 ///
 /// Returns Some(FiringNeuron) if the neuron fires, None otherwise
 #[inline(always)]
-fn process_single_neuron(
+fn process_single_neuron<T: NeuralValue>(
     neuron_id: NeuronId,
-    candidate_potential: f32,
-    neuron_array: &mut NeuronArray,
+    candidate_potential: T,
+    neuron_array: &mut NeuronArray<T>,
     burst_count: u64,
 ) -> Option<FiringNeuron> {
     // neuron_id == array index (direct access, no HashMap needed!)

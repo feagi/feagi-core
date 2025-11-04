@@ -57,11 +57,18 @@ pub struct BurstResult {
 
 /// Complete Rust Neural Processing Unit with Fine-Grained Locking
 /// 
+/// ## Generic Type Parameter
+/// 
+/// - **T: NeuralValue**: The numeric type for membrane potentials, thresholds, and resting potentials
+///   - `f32`: 32-bit floating point (default, highest precision)
+///   - `INT8Value`: 8-bit integer (memory efficient, 42% memory reduction)
+///   - `f16`: 16-bit floating point (future, GPU-optimized)
+/// 
 /// ## Locking Strategy (Performance-Critical)
 /// 
 /// This structure uses fine-grained locking to enable concurrent operations:
 /// 
-/// - **RwLock<NeuronArray>**: Multiple readers (burst processing reads many neurons),
+/// - **RwLock<NeuronArray<T>>**: Multiple readers (burst processing reads many neurons),
 ///   exclusive writer (neurogenesis, parameter updates)
 /// - **RwLock<SynapseArray>**: Multiple readers (burst processing reads synapses),
 ///   exclusive writer (synaptogenesis, plasticity)
@@ -80,9 +87,9 @@ pub struct BurstResult {
 /// With 30 Hz burst rate + 30 FPS video injection:
 /// - **Before**: All operations serialized on one mutex (API unresponsive)
 /// - **After**: Concurrent sensory injection + burst processing + API queries
-pub struct RustNPU {
+pub struct RustNPU<T: NeuralValue> {
     // Core data structures (RwLock: many readers, one writer)
-    pub(crate) neuron_array: std::sync::RwLock<NeuronArray>,
+    pub(crate) neuron_array: std::sync::RwLock<NeuronArray<T>>,
     pub(crate) synapse_array: std::sync::RwLock<SynapseArray>,
 
     // Fire structures (Mutex: exclusive access for FCL/FQ operations)
@@ -118,8 +125,11 @@ pub(crate) struct FireStructures {
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
 }
 
-impl RustNPU {
+impl<T: NeuralValue> RustNPU<T> {
     /// Create a new Rust NPU with specified capacities
+    ///
+    /// # Type Parameters
+    /// - `T: NeuralValue`: Numeric type for membrane potentials (f32, INT8Value, etc.)
     ///
     /// # Arguments
     /// * `neuron_capacity` - Maximum number of neurons
@@ -160,7 +170,7 @@ impl RustNPU {
         info!("   ✓ Backend selected: {}", backend.backend_name());
         
         Self {
-            neuron_array: std::sync::RwLock::new(NeuronArray::new(neuron_capacity)),
+            neuron_array: std::sync::RwLock::new(NeuronArray::<T>::new(neuron_capacity)),
             synapse_array: std::sync::RwLock::new(SynapseArray::new(synapse_capacity)),
             fire_structures: std::sync::Mutex::new(FireStructures {
                 fire_candidate_list: FireCandidateList::new(),
@@ -183,6 +193,10 @@ impl RustNPU {
     /// 
     /// This is a convenience wrapper for tests that don't need GPU configuration.
     /// Production code should use `new()` with explicit GPU config.
+    /// Create a new Rust NPU with CPU-only backend (convenience method)
+    ///
+    /// # Type Parameters
+    /// - `T: NeuralValue`: Numeric type for membrane potentials (f32, INT8Value, etc.)
     pub fn new_cpu_only(
         neuron_capacity: usize,
         synapse_capacity: usize,
@@ -214,9 +228,9 @@ impl RustNPU {
     /// Add a neuron to the NPU (LIF model with genome leak only)
     pub fn add_neuron(
         &mut self,
-        threshold: f32,
-        leak_coefficient: f32,
-        resting_potential: f32,
+        threshold: T,  // Quantized threshold
+        leak_coefficient: f32,  // Kept as f32 for precision
+        resting_potential: T,  // Quantized resting potential
         neuron_type: i32,
         refractory_period: u16,
         excitability: f32,
@@ -267,9 +281,9 @@ impl RustNPU {
     /// Returns: (neuron_ids, failed_indices)
     pub fn add_neurons_batch(
         &mut self,
-        thresholds: Vec<f32>,
-        leak_coefficients: Vec<f32>,
-        resting_potentials: Vec<f32>,
+        thresholds: Vec<T>,  // Quantized thresholds
+        leak_coefficients: Vec<f32>,  // Kept as f32 for precision
+        resting_potentials: Vec<T>,  // Quantized resting potentials
         neuron_types: Vec<i32>,
         refractory_periods: Vec<u16>,
         excitabilities: Vec<f32>,
@@ -1685,9 +1699,9 @@ struct InjectionResult {
 ///
 /// 🔋 Power neurons are identified by cortical_idx = 1 (_power area)
 /// No separate list - scans neuron array directly!
-fn phase1_injection_with_synapses(
+fn phase1_injection_with_synapses<T: NeuralValue>(
     fcl: &mut FireCandidateList,
-    neuron_array: &mut NeuronArray,
+    neuron_array: &mut NeuronArray<T>,
     propagation_engine: &mut SynapticPropagationEngine,
     previous_fire_queue: &FireQueue,
     power_amount: f32,
@@ -1848,7 +1862,7 @@ fn phase1_injection_with_synapses(
 // ═══════════════════════════════════════════════════════════
 // Fire Ledger API (Extension of RustNPU impl)
 // ═══════════════════════════════════════════════════════════
-impl RustNPU {
+impl<T: NeuralValue> RustNPU<T> {
     /// Get firing history for a cortical area from Fire Ledger
     /// Returns Vec of (timestep, Vec<neuron_id>) tuples, newest first
     pub fn get_fire_ledger_history(
@@ -1879,7 +1893,7 @@ impl RustNPU {
 // ═══════════════════════════════════════════════════════════
 // FQ Sampler API (Entry Point #2: Motor/Visualization Output)
 // ═══════════════════════════════════════════════════════════
-impl RustNPU {
+impl<T: NeuralValue> RustNPU<T> {
     /// Sample the current Fire Queue for visualization/motor output
     ///
     /// Returns None if:
