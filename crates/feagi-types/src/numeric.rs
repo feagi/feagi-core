@@ -174,11 +174,16 @@ pub trait NeuralValue: Copy + Clone + Send + Sync + fmt::Debug + 'static {
     /// ```
     fn saturating_add(self, other: Self) -> Self;
     
-    /// Multiply by leak coefficient (for membrane potential decay)
+    /// Apply leak decay (for membrane potential decay)
     ///
-    /// This is optimized for the common case of: `potential *= leak`
-    /// where leak is typically 0.9-0.99
-    fn mul_leak(self, leak: Self) -> Self;
+    /// Implements: `potential *= (1.0 - leak_coefficient)`
+    /// where leak_coefficient is the fraction lost per timestep (0.0-1.0)
+    ///
+    /// Example: leak=0.1 means lose 10%, so multiply by 0.9
+    ///
+    /// Note: leak_coefficient is always f32 (not quantized) because it's a small
+    /// value (0.0-1.0) that doesn't map well to membrane potential quantization ranges.
+    fn mul_leak(self, leak_coefficient: f32) -> Self;
     
     /// Compare (greater than or equal) for threshold checks
     ///
@@ -229,8 +234,10 @@ impl NeuralValue for f32 {
     }
     
     #[inline(always)]
-    fn mul_leak(self, leak: Self) -> Self {
-        self * leak  // Direct FP multiply
+    fn mul_leak(self, leak_coefficient: f32) -> Self {
+        // leak_coefficient is amount lost (0.0-1.0)
+        // Multiply by (1.0 - leak_coefficient) to get retention
+        self * (1.0 - leak_coefficient)
     }
     
     #[inline(always)]
@@ -360,17 +367,12 @@ impl NeuralValue for INT8Value {
     }
     
     #[inline]
-    fn mul_leak(self, leak: Self) -> Self {
-        // For leak multiplication, we need to treat leak specially
-        // Leak is typically 0.90-0.99, represented in INT8 as positive values
-        // 
-        // The leak value from_f32(0.97) maps to range [-100, 50] not [0, 1]
-        // This is a design issue - leak should use a different scale
-        //
-        // For now, convert to float, multiply, convert back
-        let self_f32 = self.to_f32();
-        let leak_f32 = leak.to_f32();
-        Self::from_f32(self_f32 * leak_f32)
+    fn mul_leak(self, leak_coefficient: f32) -> Self {
+        // leak_coefficient is the amount lost (0.0-1.0)
+        // Compute: potential * (1.0 - leak_coefficient)
+        let potential_f32 = self.to_f32();
+        let retention = 1.0 - leak_coefficient;
+        Self::from_f32(potential_f32 * retention)
     }
     
     #[inline]

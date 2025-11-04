@@ -10,31 +10,33 @@
 //! Uses stack-allocated arrays for predictable memory usage.
 
 use feagi_neural::{update_neuron_lif, is_refractory};
+use feagi_types::NeuralValue;
 
 /// Fixed-size neuron array for embedded systems
 ///
 /// All data is stack-allocated with compile-time size limits.
 /// No heap allocations, perfect for `no_std` environments.
+/// Generic over `T: NeuralValue` to support multiple quantization levels.
 ///
 /// # Example
 /// ```
 /// use feagi_runtime_embedded::NeuronArray;
 ///
-/// // 100-neuron array on the stack (~5 KB)
-/// let mut neurons = NeuronArray::<100>::new();
+/// // 100-neuron array on the stack (~5 KB for f32)
+/// let mut neurons = NeuronArray::<f32, 100>::new();
 /// neurons.add_neuron(1.0, 0.1, 5, 1.0);
 /// ```
-pub struct NeuronArray<const N: usize> {
+pub struct NeuronArray<T: NeuralValue, const N: usize> {
     /// Current number of neurons
     pub count: usize,
     
-    /// Membrane potentials
-    pub membrane_potentials: [f32; N],
+    /// Membrane potentials (quantized to T)
+    pub membrane_potentials: [T; N],
     
-    /// Firing thresholds
-    pub thresholds: [f32; N],
+    /// Firing thresholds (quantized to T)
+    pub thresholds: [T; N],
     
-    /// Leak coefficients
+    /// Leak coefficients (kept as f32 for precision - see QUANTIZATION_ISSUES_LOG.md #1)
     pub leak_coefficients: [f32; N],
     
     /// Refractory periods
@@ -50,15 +52,16 @@ pub struct NeuronArray<const N: usize> {
     pub valid_mask: [bool; N],
 }
 
-impl<const N: usize> NeuronArray<N> {
+impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
     /// Create a new fixed-size neuron array
     ///
     /// All arrays are zero-initialized on the stack.
-    pub const fn new() -> Self {
+    /// Note: Not const due to T::zero() trait method
+    pub fn new() -> Self {
         Self {
             count: 0,
-            membrane_potentials: [0.0; N],
-            thresholds: [1.0; N],
+            membrane_potentials: [T::zero(); N],
+            thresholds: [T::from_f32(1.0); N],
             leak_coefficients: [0.1; N],
             refractory_periods: [0; N],
             refractory_countdowns: [0; N],
@@ -72,7 +75,7 @@ impl<const N: usize> NeuronArray<N> {
     /// Returns the neuron index, or None if array is full.
     pub fn add_neuron(
         &mut self,
-        threshold: f32,
+        threshold: T,
         leak: f32,
         refractory_period: u16,
         excitability: f32,
@@ -103,14 +106,14 @@ impl<const N: usize> NeuronArray<N> {
     ///
     /// # Example
     /// ```
-    /// let mut neurons = NeuronArray::<100>::new();
+    /// let mut neurons = NeuronArray::<f32, 100>::new();
     /// let inputs = [1.5; 100];
     /// let mut fired = [false; 100];
     /// let count = neurons.process_burst(&inputs, &mut fired);
     /// ```
     pub fn process_burst(
         &mut self,
-        candidate_potentials: &[f32; N],
+        candidate_potentials: &[T; N],
         fired_mask: &mut [bool; N],
     ) -> usize {
         let mut fired_count = 0;
@@ -133,7 +136,7 @@ impl<const N: usize> NeuronArray<N> {
                 &mut self.membrane_potentials[idx],
                 self.thresholds[idx],
                 self.leak_coefficients[idx],
-                0.0, // resting_potential
+                T::zero(), // resting_potential
                 input,
             );
             
@@ -159,30 +162,30 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_new() {
-        let array = NeuronArray::<10>::new();
+    fn test_new_f32() {
+        let array = NeuronArray::<f32, 10>::new();
         assert_eq!(array.count, 0);
     }
     
     #[test]
-    fn test_add_neuron() {
-        let mut array = NeuronArray::<10>::new();
+    fn test_add_neuron_f32() {
+        let mut array = NeuronArray::<f32, 10>::new();
         let idx = array.add_neuron(1.0, 0.1, 5, 1.0);
         assert_eq!(idx, Some(0));
         assert_eq!(array.count, 1);
     }
     
     #[test]
-    fn test_array_full() {
-        let mut array = NeuronArray::<2>::new();
+    fn test_array_full_f32() {
+        let mut array = NeuronArray::<f32, 2>::new();
         assert!(array.add_neuron(1.0, 0.1, 5, 1.0).is_some());
         assert!(array.add_neuron(1.0, 0.1, 5, 1.0).is_some());
         assert!(array.add_neuron(1.0, 0.1, 5, 1.0).is_none()); // Full
     }
     
     #[test]
-    fn test_process_burst() {
-        let mut array = NeuronArray::<10>::new();
+    fn test_process_burst_f32() {
+        let mut array = NeuronArray::<f32, 10>::new();
         array.add_neuron(1.0, 0.1, 5, 1.0);
         array.add_neuron(1.0, 0.1, 5, 1.0);
         
@@ -199,8 +202,8 @@ mod tests {
     }
     
     #[test]
-    fn test_memory_footprint() {
-        let size = NeuronArray::<100>::memory_footprint();
+    fn test_memory_footprint_f32() {
+        let size = NeuronArray::<f32, 100>::memory_footprint();
         // ~100 neurons × 48 bytes = ~4.8 KB
         assert!(size < 10_000); // Should be under 10 KB
     }

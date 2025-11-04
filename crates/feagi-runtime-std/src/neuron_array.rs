@@ -10,20 +10,23 @@
 //! Uses `Vec` for dynamic growth and Rayon for parallel processing.
 
 use feagi_neural::{update_neuron_lif, is_refractory};
+use feagi_types::NeuralValue;
 use rayon::prelude::*;
 
 /// Dynamic neuron array for desktop/server environments
-pub struct NeuronArray {
+/// 
+/// Generic over `T: NeuralValue` to support multiple quantization levels
+pub struct NeuronArray<T: NeuralValue> {
     /// Current number of neurons
     pub count: usize,
     
-    /// Membrane potentials
-    pub membrane_potentials: Vec<f32>,
+    /// Membrane potentials (quantized to T)
+    pub membrane_potentials: Vec<T>,
     
-    /// Firing thresholds
-    pub thresholds: Vec<f32>,
+    /// Firing thresholds (quantized to T)
+    pub thresholds: Vec<T>,
     
-    /// Leak coefficients
+    /// Leak coefficients (kept as f32 for precision - see QUANTIZATION_ISSUES_LOG.md #1)
     pub leak_coefficients: Vec<f32>,
     
     /// Refractory periods
@@ -39,13 +42,13 @@ pub struct NeuronArray {
     pub valid_mask: Vec<bool>,
 }
 
-impl NeuronArray {
+impl<T: NeuralValue> NeuronArray<T> {
     /// Create a new neuron array with initial capacity
     pub fn new(capacity: usize) -> Self {
         Self {
             count: 0,
-            membrane_potentials: vec![0.0; capacity],
-            thresholds: vec![1.0; capacity],
+            membrane_potentials: vec![T::zero(); capacity],
+            thresholds: vec![T::from_f32(1.0); capacity],
             leak_coefficients: vec![0.1; capacity],
             refractory_periods: vec![0; capacity],
             refractory_countdowns: vec![0; capacity],
@@ -57,7 +60,7 @@ impl NeuronArray {
     /// Add a neuron
     pub fn add_neuron(
         &mut self,
-        threshold: f32,
+        threshold: T,
         leak: f32,
         refractory_period: u16,
         excitability: f32,
@@ -66,7 +69,7 @@ impl NeuronArray {
         
         // Grow if needed
         if idx >= self.membrane_potentials.len() {
-            self.membrane_potentials.push(0.0);
+            self.membrane_potentials.push(T::zero());
             self.thresholds.push(threshold);
             self.leak_coefficients.push(leak);
             self.refractory_periods.push(refractory_period);
@@ -94,7 +97,7 @@ impl NeuronArray {
     /// networks (<100 neurons), sequential may be faster.
     pub fn process_burst_parallel(
         &mut self,
-        candidate_potentials: &[f32],
+        candidate_potentials: &[T],
         _burst_count: u64,
     ) -> Vec<usize> {
         // Phase 1: Compute in parallel (read-only)
@@ -102,22 +105,22 @@ impl NeuronArray {
             .into_par_iter()
             .map(|idx| {
                 if !self.valid_mask[idx] {
-                    return (idx, false, 0.0);
+                    return (idx, false, T::zero());
                 }
                 
                 let in_refractory = self.refractory_countdowns[idx] > 0;
                 if in_refractory {
-                    return (idx, false, 0.0);
+                    return (idx, false, T::zero());
                 }
                 
                 // Simulate neuron update (read-only)
                 let mut potential = self.membrane_potentials[idx];
-                let input = candidate_potentials.get(idx).copied().unwrap_or(0.0);
+                let input = candidate_potentials.get(idx).copied().unwrap_or(T::zero());
                 let fired = update_neuron_lif(
                     &mut potential,
                     self.thresholds[idx],
                     self.leak_coefficients[idx],
-                    0.0,
+                    T::zero(),
                     input,
                 );
                 
@@ -149,7 +152,7 @@ impl NeuronArray {
     /// Process burst sequentially (single-threaded)
     pub fn process_burst_sequential(
         &mut self,
-        candidate_potentials: &[f32],
+        candidate_potentials: &[T],
         _burst_count: u64,
     ) -> Vec<usize> {
         let mut fired_indices = Vec::new();
@@ -163,12 +166,12 @@ impl NeuronArray {
                 continue;
             }
             
-            let input = candidate_potentials.get(idx).copied().unwrap_or(0.0);
+            let input = candidate_potentials.get(idx).copied().unwrap_or(T::zero());
             let fired = update_neuron_lif(
                 &mut self.membrane_potentials[idx],
                 self.thresholds[idx],
                 self.leak_coefficients[idx],
-                0.0,
+                T::zero(),
                 input,
             );
             
@@ -187,16 +190,16 @@ mod tests {
     use super::*;
     
     #[test]
-    fn test_add_neuron() {
-        let mut array = NeuronArray::new(10);
+    fn test_add_neuron_f32() {
+        let mut array = NeuronArray::<f32>::new(10);
         let idx = array.add_neuron(1.0, 0.1, 5, 1.0);
         assert_eq!(idx, 0);
         assert_eq!(array.count, 1);
     }
     
     #[test]
-    fn test_process_burst_sequential() {
-        let mut array = NeuronArray::new(10);
+    fn test_process_burst_sequential_f32() {
+        let mut array = NeuronArray::<f32>::new(10);
         array.add_neuron(1.0, 0.1, 5, 1.0);
         array.add_neuron(1.0, 0.1, 5, 1.0);
         
@@ -209,8 +212,8 @@ mod tests {
     }
     
     #[test]
-    fn test_process_burst_parallel() {
-        let mut array = NeuronArray::new(100);
+    fn test_process_burst_parallel_f32() {
+        let mut array = NeuronArray::<f32>::new(100);
         for _ in 0..100 {
             array.add_neuron(1.0, 0.1, 5, 1.0);
         }
