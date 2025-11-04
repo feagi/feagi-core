@@ -11,7 +11,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_burst_engine::RustNPU;
+// use feagi_burst_engine::RustNPU; // Now using DynamicNPU
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use serde_json::Value;

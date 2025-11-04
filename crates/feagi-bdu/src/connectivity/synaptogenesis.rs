@@ -34,7 +34,7 @@ use crate::connectivity::rules::{
 };
 use crate::types::BduResult;
 use feagi_types::{NeuronId, SynapseType, SynapticConductance, SynapticWeight};
-use feagi_burst_engine::npu::RustNPU;
+// use feagi_burst_engine::npu::RustNPU; // Now using DynamicNPU
 
 /// Apply projector morphology directly on NPU
 ///

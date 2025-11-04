@@ -82,6 +82,7 @@ members = [
     # === Runtime Adapters (NEW - Phase 2) ===
     "crates/feagi-runtime-std",        # Desktop/Server (Vec, Rayon)
     "crates/feagi-runtime-embedded",   # ESP32/RTOS (fixed arrays, no_std)
+    "crates/feagi-embedded",           # Platform abstraction + implementations (ESP32, Arduino, etc.)
     
     # === Infrastructure Layer ===
     "crates/feagi-state-manager",      # Runtime state management (NEW)

@@ -45,7 +45,7 @@
 //! use feagi::prelude::*;
 //!
 //! // Create NPU
-//! let mut npu = RustNPU::new(100_000, 1_000_000, 20);
+//! let mut npu = RustNPU::new_cpu_only(100_000, 1_000_000, 20);
 //!
 //! // Add neurons
 //! let neuron_id = npu.add_neuron(
@@ -80,7 +80,7 @@
 //!
 //! // Load pre-trained brain
 //! let snapshot = load_connectome("brain.connectome")?;
-//! let mut npu = RustNPU::import_connectome(snapshot);
+//! let mut npu = RustNPU::<f32>::import_connectome(snapshot);
 //!
 //! // Run inference
 //! loop {
