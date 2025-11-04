@@ -320,7 +320,7 @@ impl VisualizationStream {
         use feagi_data_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
-        use feagi_data_serialization::FeagiByteContainer;
+        use feagi_data_serialization::{FeagiByteContainer, FeagiSerializable};
         
         let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
         
@@ -350,6 +350,10 @@ impl VisualizationStream {
         }
         
         // Serialize to FeagiByteContainer
+        // Note: overwrite_byte_data_with_single_struct_data() already handles efficient allocation internally:
+        // - It pre-calculates size via get_number_of_bytes_needed()
+        // - Only resizes if current capacity is insufficient
+        // - Reuses existing allocation when possible
         let mut byte_container = FeagiByteContainer::new_empty();
         byte_container
             .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)

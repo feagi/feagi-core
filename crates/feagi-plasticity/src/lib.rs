@@ -24,6 +24,7 @@ pub mod neuron_id_manager;
 pub mod pattern_detector;
 pub mod service;
 pub mod stdp;
+pub mod stdp_core; // Platform-agnostic STDP (no_std compatible)
 
 // Re-export key types
 pub use memory_neuron_array::{MemoryNeuronArray, MemoryNeuronLifecycleConfig, MemoryNeuronStats};

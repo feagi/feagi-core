@@ -75,6 +75,10 @@ members = [
     "crates/feagi-types",              # Core data structures (Neuron, Synapse, etc.)
     "crates/feagi-config",             # Configuration loader (TOML + overrides)
     
+    # === Platform-Agnostic Core (NEW - Phase 1) ===
+    "crates/feagi-neural",             # Pure neural dynamics (no_std)
+    "crates/feagi-synapse",            # Pure synaptic algorithms (no_std)
+    
     # === Infrastructure Layer ===
     "crates/feagi-state-manager",      # Runtime state management (NEW)
     "crates/feagi-evo",                # Genome I/O and evolution (genotype)
@@ -85,7 +89,7 @@ members = [
     # === Algorithm Layer (Core Neural Computation) ===
     "crates/feagi-burst-engine",       # NPU execution & inference
     "crates/feagi-bdu",                # Neurogenesis (brain development)
-    "crates/feagi-plasticity",         # Synaptic learning (STDP, memory)
+    "crates/feagi-plasticity",         # Synaptic learning (STDP, memory) + stdp_core (no_std)
     "crates/feagi-connectome-serialization",  # Connectome persistence
     
     # === I/O Layer (TODO: Move to feagi-io repo) ===

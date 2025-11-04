@@ -588,6 +588,10 @@ fn encode_fire_data_to_xyzp(
 
     // Serialize to FeagiByteContainer (version 2 container format)
     // This ensures proper container wrapping with global header, structure lookup, etc.
+    // Note: overwrite_byte_data_with_single_struct_data() already handles efficient allocation internally:
+    // - It pre-calculates size via get_number_of_bytes_needed()
+    // - Only resizes if current capacity is insufficient
+    // - Reuses existing allocation when possible
     use feagi_data_serialization::FeagiByteContainer;
     
     let mut byte_container = FeagiByteContainer::new_empty();

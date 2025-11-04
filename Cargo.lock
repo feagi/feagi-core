@@ -1268,6 +1268,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-neural"
+version = "2.0.0"
+dependencies = [
+ "feagi-types",
+]
+
+[[package]]
 name = "feagi-observability"
 version = "2.0.0"
 dependencies = [
@@ -1361,6 +1368,13 @@ dependencies = [
  "wasm-bindgen",
  "wasm_sync",
  "web-sys",
+]
+
+[[package]]
+name = "feagi-synapse"
+version = "2.0.0"
+dependencies = [
+ "feagi-types",
 ]
 
 [[package]]
