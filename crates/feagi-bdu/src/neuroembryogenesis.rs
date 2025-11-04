@@ -108,20 +108,51 @@ impl Neuroembryogenesis {
     pub fn develop_from_genome(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         info!(target: "feagi-bdu","🧬 Starting neuroembryogenesis for genome: {}", genome.metadata.genome_id);
         
-        // Log quantization precision (Phase 2 complete, dispatch in Phase 3)
+        // Phase 5: Parse quantization precision and dispatch to type-specific builder
         let quantization_precision = &genome.physiology.quantization_precision;
+        let quant_spec = match QuantizationSpec::from_genome_string(quantization_precision) {
+            Ok(spec) => spec,
+            Err(e) => {
+                warn!(target: "feagi-bdu",
+                    "   Failed to parse quantization_precision '{}': {}. Defaulting to FP32",
+                    quantization_precision, e
+                );
+                QuantizationSpec::default() // FP32
+            }
+        };
+        
         info!(target: "feagi-bdu",
-            "   Quantization precision: {} (numeric type selection in Phase 3)",
-            quantization_precision
+            "   Quantization precision: {:?} (range: [{}, {}] for membrane potential)",
+            quant_spec.precision,
+            quant_spec.membrane_potential_min,
+            quant_spec.membrane_potential_max
         );
         
-        // TODO (Phase 3): Parse quantization spec and dispatch to type-specific builder
-        // let quant_spec = feagi_types::QuantizationSpec::from_genome_string(quantization_precision)?;
-        // match quant_spec.precision {
-        //     Precision::FP32 => develop_with_type::<f32>(genome)?,
-        //     Precision::INT8 => develop_with_type::<INT8Value>(genome)?,
-        //     ...
-        // }
+        // Phase 5: Type dispatch (currently only FP32 is fully implemented)
+        match quant_spec.precision {
+            Precision::FP32 => {
+                info!(target: "feagi-bdu", "   Using FP32 (32-bit floating-point) computation");
+                // Continue with current FP32 implementation below
+            }
+            Precision::INT8 => {
+                warn!(target: "feagi-bdu",
+                    "   INT8 quantization requested but not yet fully integrated."
+                );
+                warn!(target: "feagi-bdu",
+                    "   Falling back to FP32 for now. Full INT8 support in Phase 6.");
+                warn!(target: "feagi-bdu",
+                    "   (Core algorithms support INT8, but connectome dispatch not yet wired)");
+                // TODO (Phase 6): Call develop_with_type::<INT8Value>(self, genome, &quant_spec)
+            }
+            Precision::FP16 => {
+                warn!(target: "feagi-bdu",
+                    "   FP16 quantization requested but not yet implemented."
+                );
+                warn!(target: "feagi-bdu",
+                    "   Falling back to FP32. FP16 support planned for future release.");
+                // TODO (Future): Call develop_with_type::<f16>(self, genome, &quant_spec)
+            }
+        }
         
         // Update stage: Initialization
         self.update_stage(DevelopmentStage::Initialization, 0);
