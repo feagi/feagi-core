@@ -20,37 +20,11 @@
 use crate::fire_structures::{FireQueue, FiringNeuron};
 use feagi_types::*;
 
-/// Fast PCG hash for deterministic pseudo-random number generation
-/// Based on PCG family of PRNGs: https://www.pcg-random.org/
-///
-/// This provides fast, high-quality pseudo-random numbers suitable for
-/// excitability checks without requiring a mutable RNG state.
-#[inline(always)]
-fn pcg_hash(input: u32) -> u32 {
-    let state = input.wrapping_mul(747796405).wrapping_add(2891336453);
-    let word = ((state >> ((state >> 28) + 4)) ^ state).wrapping_mul(277803737);
-    (word >> 22) ^ word
-}
-
-/// Convert PCG hash to floating point in range [0, 1)
-#[inline(always)]
-fn pcg_hash_to_float(input: u32) -> f32 {
-    (pcg_hash(input) as f32) / 4294967296.0
-}
-
-/// Generate pseudo-random value for excitability check
-///
-/// CRITICAL: Combines neuron_id AND burst_count to ensure different random values each burst.
-/// This ensures probabilistic firing works correctly (e.g., 20% excitability = 20% chance per burst).
-#[inline(always)]
-fn excitability_random(neuron_id: u32, burst_count: u64) -> f32 {
-    // Combine neuron_id and burst_count to get different random values each burst
-    // Use wrapping operations to prevent overflow
-    let seed = neuron_id
-        .wrapping_mul(2654435761)
-        .wrapping_add((burst_count as u32).wrapping_mul(1597334677));
-    pcg_hash_to_float(seed)
-}
+// Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
+use feagi_neural::{
+    excitability_random,
+    apply_leak,
+};
 
 /// Result of neural dynamics processing
 #[derive(Debug, Clone)]
@@ -310,38 +284,15 @@ fn process_single_neuron(
         neuron_array.consecutive_fire_counts[idx] = 0;
     }
 
-    // Apply LIF leak toward resting potential (only for non-firing neurons)
-    // SEMANTICS: leak_coefficient (0.0 to 1.0) = percentage of potential LOST per burst
-    //   leak=0.0 → no decay (potential persists)
-    //   leak=0.5 → lose 50% of potential per burst
-    //   leak=1.0 → lose 100% of potential (instant reset to 0)
-    // Formula: V_new = V_current * (1.0 - leak_coefficient)
+    // Apply LIF leak (using platform-agnostic function from feagi-neural)
     let leak_coefficient = neuron_array.leak_coefficients[idx];
-    if leak_coefficient > 0.0 {
-        let leaked_potential = current_potential * (1.0 - leak_coefficient);
-        neuron_array.membrane_potentials[idx] = leaked_potential;
-    }
-    // If leak_coefficient == 0, potential remains unchanged (bypassed for performance)
+    apply_leak(&mut neuron_array.membrane_potentials[idx], leak_coefficient);
 
     None
 }
 
-/// SIMD-optimized batch processing (future optimization)
-///
-/// Process 8 neurons at once using AVX2 SIMD instructions.
-/// This will be enabled once we have sufficient test coverage.
-///
-/// Migration status: Scaffolded for future performance optimization after Python parity achieved.
-/// Warning about unused code is expected - will be integrated in phase 2 optimization.
-pub fn process_neural_dynamics_simd(
-    fcl: &FireCandidateList,
-    neuron_array: &mut NeuronArray,
-    burst_count: u64,
-) -> Result<DynamicsResult> {
-    // TODO: Implement SIMD version using std::simd or explicit SIMD intrinsics
-    // For now, fall back to scalar implementation
-    process_neural_dynamics(fcl, neuron_array, burst_count)
-}
+// REMOVED: process_neural_dynamics_simd - dead code with fallback
+// SIMD optimization should be done in platform-agnostic core (feagi-neural) if needed
 
 #[cfg(test)]
 mod tests {

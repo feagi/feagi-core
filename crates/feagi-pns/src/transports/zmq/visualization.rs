@@ -320,7 +320,7 @@ impl VisualizationStream {
         use feagi_data_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
-        use feagi_data_serialization::{FeagiByteContainer, FeagiSerializable};
+        use feagi_data_serialization::FeagiByteContainer;
         
         let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
         

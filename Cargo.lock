@@ -1185,7 +1185,9 @@ dependencies = [
  "chrono",
  "criterion",
  "feagi-connectome-serialization",
+ "feagi-neural",
  "feagi-observability",
+ "feagi-synapse",
  "feagi-types",
  "feagi_data_serialization",
  "feagi_data_structures",
@@ -1327,6 +1329,28 @@ dependencies = [
  "tokio-test",
  "tracing",
  "zmq",
+]
+
+[[package]]
+name = "feagi-runtime-embedded"
+version = "2.0.0"
+dependencies = [
+ "feagi-neural",
+ "feagi-synapse",
+ "feagi-types",
+ "spin",
+]
+
+[[package]]
+name = "feagi-runtime-std"
+version = "2.0.0"
+dependencies = [
+ "ahash",
+ "feagi-neural",
+ "feagi-synapse",
+ "feagi-types",
+ "rayon",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -3815,6 +3839,9 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+dependencies = [
+ "lock_api",
+]
 
 [[package]]
 name = "spirv"

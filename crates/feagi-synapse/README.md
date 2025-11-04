@@ -21,11 +21,13 @@ use feagi_synapse::{compute_synaptic_contribution, SynapseType};
 
 // Calculate excitatory contribution
 let contribution = compute_synaptic_contribution(255, 255, SynapseType::Excitatory);
-assert_eq!(contribution, 1.0); // Maximum excitatory
+assert_eq!(contribution, 65025.0); // Maximum excitatory (255 × 255, NO normalization)
 
 // Calculate inhibitory contribution
 let contribution = compute_synaptic_contribution(255, 255, SynapseType::Inhibitory);
-assert_eq!(contribution, -1.0); // Maximum inhibitory
+assert_eq!(contribution, -65025.0); // Maximum inhibitory
+
+// IMPORTANT: Direct cast (NO division by 255), matches Python behavior
 ```
 
 ## Platform Support

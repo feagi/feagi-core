@@ -1163,7 +1163,7 @@ mod tests {
         // Use a unit type for the generic parameter since we're not testing visualization/motor
         struct NoViz;
         impl VisualizationPublisher for NoViz {
-            fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> {
+            fn publish_raw_fire_queue(&self, _fire_data: RawFireQueueSnapshot) -> Result<(), String> {
                 Ok(())
             }
         }

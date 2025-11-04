@@ -22,9 +22,12 @@ pub enum SynapseType {
 /// `contribution = weight × conductance × sign`
 ///
 /// Where:
-/// - `weight`: Synaptic strength (0-255, normalized to 0.0-1.0)
-/// - `conductance`: Post-synaptic potential (0-255, normalized to 0.0-1.0)
+/// - `weight`: Synaptic strength (0-255, direct cast to float, NO normalization)
+/// - `conductance`: Post-synaptic potential (0-255, direct cast to float, NO normalization)
 /// - `sign`: +1.0 for excitatory, -1.0 for inhibitory
+///
+/// CRITICAL: This matches FEAGI's Python behavior - direct cast with NO division by 255.
+/// Values range from 0.0 to 65,025.0 (255 × 255), NOT 0.0 to 1.0.
 ///
 /// # Arguments
 /// * `weight` - Synaptic weight (0-255)
@@ -39,10 +42,10 @@ pub enum SynapseType {
 /// use feagi_synapse::{compute_synaptic_contribution, SynapseType};
 ///
 /// let contribution = compute_synaptic_contribution(255, 255, SynapseType::Excitatory);
-/// assert_eq!(contribution, 1.0); // Maximum excitatory
+/// assert_eq!(contribution, 65025.0); // Maximum excitatory (255 × 255)
 ///
 /// let contribution = compute_synaptic_contribution(255, 255, SynapseType::Inhibitory);
-/// assert_eq!(contribution, -1.0); // Maximum inhibitory
+/// assert_eq!(contribution, -65025.0); // Maximum inhibitory
 /// ```
 #[inline]
 pub fn compute_synaptic_contribution(
@@ -50,8 +53,9 @@ pub fn compute_synaptic_contribution(
     conductance: u8,
     synapse_type: SynapseType,
 ) -> f32 {
-    let w = weight as f32 / 255.0;
-    let c = conductance as f32 / 255.0;
+    // CRITICAL: Direct cast, NO normalization (matches Python .astype(np.float32))
+    let w = weight as f32;
+    let c = conductance as f32;
     let sign = match synapse_type {
         SynapseType::Excitatory => 1.0,
         SynapseType::Inhibitory => -1.0,
@@ -116,25 +120,25 @@ mod tests {
     #[test]
     fn test_excitatory_contribution() {
         let contribution = compute_synaptic_contribution(255, 255, SynapseType::Excitatory);
-        assert_eq!(contribution, 1.0);
+        assert_eq!(contribution, 65025.0); // 255 × 255 (NO normalization)
     }
 
     #[test]
     fn test_inhibitory_contribution() {
         let contribution = compute_synaptic_contribution(255, 255, SynapseType::Inhibitory);
-        assert_eq!(contribution, -1.0);
+        assert_eq!(contribution, -65025.0); // -(255 × 255)
     }
 
     #[test]
     fn test_partial_weight() {
         let contribution = compute_synaptic_contribution(128, 255, SynapseType::Excitatory);
-        assert!((contribution - 0.5).abs() < 0.01); // ~0.5
+        assert_eq!(contribution, 128.0 * 255.0); // Direct multiplication
     }
 
     #[test]
     fn test_partial_conductance() {
         let contribution = compute_synaptic_contribution(255, 128, SynapseType::Excitatory);
-        assert!((contribution - 0.5).abs() < 0.01); // ~0.5
+        assert_eq!(contribution, 255.0 * 128.0); // Direct multiplication
     }
 
     #[test]

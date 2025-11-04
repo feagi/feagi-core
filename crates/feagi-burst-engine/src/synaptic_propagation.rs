@@ -37,7 +37,10 @@
 
 use ahash::AHashMap;
 use feagi_types::*;
-use rayon::prelude::*; // Faster non-cryptographic hash
+use rayon::prelude::*;
+
+// Use platform-agnostic synaptic algorithms (Phase 1 - NO DUPLICATION)
+use feagi_synapse::{compute_synaptic_contribution, SynapseType as FeagiSynapseType};
 
 /// Synapse lookup index: maps source neuron → list of synapse indices
 pub type SynapseIndex = AHashMap<NeuronId, Vec<usize>>;
@@ -142,22 +145,17 @@ impl SynapticPropagationEngine {
                 // Get target cortical area
                 let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
 
-                // Calculate contribution directly from SoA fields (SIMD-friendly)
-                let weight = SynapticWeight(synapse_array.weights[syn_idx]);
-                let psp = SynapticConductance(synapse_array.postsynaptic_potentials[syn_idx]);  // TODO: Rename type
+                // Calculate contribution using platform-agnostic function from feagi-synapse
+                let weight = synapse_array.weights[syn_idx];
+                let psp = synapse_array.postsynaptic_potentials[syn_idx];
                 let synapse_type = match synapse_array.types[syn_idx] {
-                    0 => SynapseType::Excitatory,
-                    _ => SynapseType::Inhibitory,
+                    0 => FeagiSynapseType::Excitatory,
+                    _ => FeagiSynapseType::Inhibitory,
                 };
 
-                // Calculate: weight × psp × sign (standardized LIF formula)
-                let sign = if synapse_type == SynapseType::Excitatory {
-                    1.0
-                } else {
-                    -1.0
-                };
-                let contribution =
-                    SynapticContribution(weight.to_float() * psp.to_float() * sign);
+                let contribution = SynapticContribution(
+                    compute_synaptic_contribution(weight, psp, synapse_type)
+                );
 
                 Some((target_neuron, cortical_area, contribution))
             })
@@ -197,7 +195,6 @@ impl Default for SynapticPropagationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     fn create_test_synapses() -> SynapseArray {
         let mut synapse_array = SynapseArray {

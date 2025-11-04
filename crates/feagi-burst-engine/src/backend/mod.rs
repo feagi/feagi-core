@@ -497,8 +497,8 @@ pub fn create_backend(
             )?))
         }
         BackendType::Auto => {
-            // Should not reach here, but fallback to CPU
-            Ok(Box::new(CPUBackend::new()))
+            // Should never reach here - Auto should be resolved in from_config()
+            unreachable!("BackendType::Auto should be resolved before create_backend() is called")
         }
     }
 }
