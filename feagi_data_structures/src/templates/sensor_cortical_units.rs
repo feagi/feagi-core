@@ -1,34 +1,29 @@
-//! Sensor cortical type definitions for FEAGI.
-//!
-//! Defines all supported sensor types including infrared, ultrasonic,
-//! accelerometer, gyroscope, camera, and various other sensory inputs.
-
-/// Macro defining all sensor (input processing unit) cortical types.
-///
-/// This macro generates enum variants and associated metadata for each
-/// sensor type, including encoding methods, dimension ranges, and identifiers.
-///
-/// # Usage
-/// ```ignore
-/// sensor_definition!(define_io_cortical_types);
-/// ```
 #[macro_export]
-macro_rules! sensor_definition {
+macro_rules! sensor_cortical_units {
     ($callback:ident) => {
         $callback! {
             SensorCorticalUnit {
+
+                // Cortical ID formatting
+                // (1 char: base cortical type, 3 char: cortical unit type, 1 char data type configuration enum, 1 char subunit index, 2 chars subunit group index)
+
+
 
                 #[doc = "Infrared distance sensor for object detection."]
                 Infrared => {
                     friendly_name: "Infrared Sensor",
                     snake_case_identifier: "infrared",
-                    
-                    
+                    accepted_data_type: Percentage,
+                    subunit_identifiers: {
+                        // Base Cortical ID (descriptor enu)
+                        (b"i" b"inf" [0] [0] [0, 0] , Percentage_Absolute_Linear),
+                    }
+
                 }
-                
-                
-                
-                
+
+
+
+
 
 
                 #[doc = "Infrared distance sensor for object detection."]
