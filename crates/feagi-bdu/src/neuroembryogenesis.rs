@@ -18,6 +18,7 @@ Licensed under the Apache License, Version 2.0
 use std::sync::Arc;
 use parking_lot::RwLock;
 use feagi_evo::RuntimeGenome;
+use feagi_types::{Precision, QuantizationSpec};
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
 use tracing::{info, warn, debug};
@@ -106,6 +107,21 @@ impl Neuroembryogenesis {
     /// This is the main entry point that orchestrates all development stages.
     pub fn develop_from_genome(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
         info!(target: "feagi-bdu","🧬 Starting neuroembryogenesis for genome: {}", genome.metadata.genome_id);
+        
+        // Log quantization precision (Phase 2 complete, dispatch in Phase 3)
+        let quantization_precision = &genome.physiology.quantization_precision;
+        info!(target: "feagi-bdu",
+            "   Quantization precision: {} (numeric type selection in Phase 3)",
+            quantization_precision
+        );
+        
+        // TODO (Phase 3): Parse quantization spec and dispatch to type-specific builder
+        // let quant_spec = feagi_types::QuantizationSpec::from_genome_string(quantization_precision)?;
+        // match quant_spec.precision {
+        //     Precision::FP32 => develop_with_type::<f32>(genome)?,
+        //     Precision::INT8 => develop_with_type::<INT8Value>(genome)?,
+        //     ...
+        // }
         
         // Update stage: Initialization
         self.update_stage(DevelopmentStage::Initialization, 0);

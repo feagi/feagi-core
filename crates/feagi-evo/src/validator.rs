@@ -113,6 +113,36 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
         fixes_applied += 1;
     }
     
+    // Fix missing or invalid quantization_precision
+    if genome.physiology.quantization_precision.is_empty() {
+        let default_precision = crate::runtime::default_quantization_precision();
+        info!("🔧 AUTO-FIX: Missing quantization_precision → '{}' (default)", default_precision);
+        genome.physiology.quantization_precision = default_precision;
+        fixes_applied += 1;
+    } else {
+        // Normalize to canonical format
+        use feagi_types::Precision;
+        match Precision::from_str(&genome.physiology.quantization_precision) {
+            Ok(precision) => {
+                let canonical = precision.as_str().to_string();
+                if genome.physiology.quantization_precision != canonical {
+                    info!("🔧 AUTO-FIX: Quantization precision '{}' → '{}' (normalized)", 
+                          genome.physiology.quantization_precision, canonical);
+                    genome.physiology.quantization_precision = canonical;
+                    fixes_applied += 1;
+                }
+            }
+            Err(_) => {
+                // Invalid precision - will be caught by validator
+                let default_precision = crate::runtime::default_quantization_precision();
+                info!("🔧 AUTO-FIX: Invalid quantization_precision '{}' → '{}' (default)", 
+                      genome.physiology.quantization_precision, default_precision);
+                genome.physiology.quantization_precision = default_precision;
+                fixes_applied += 1;
+            }
+        }
+    }
+    
     for (cortical_id, area) in &mut genome.cortical_areas {
         // Fix zero dimensions
         if area.dimensions.width == 0 {
@@ -344,6 +374,33 @@ fn validate_physiology(genome: &RuntimeGenome, result: &mut ValidationResult) {
     if phys.plasticity_queue_depth == 0 {
         result.add_warning("plasticity_queue_depth is 0 (no plasticity history)".to_string());
     }
+    
+    // Validate quantization_precision
+    validate_quantization_precision(&phys.quantization_precision, result);
+}
+
+/// Validate quantization precision value
+fn validate_quantization_precision(precision: &str, result: &mut ValidationResult) {
+    use feagi_types::Precision;
+    
+    // Try to parse the precision string
+    match Precision::from_str(precision) {
+        Ok(parsed_precision) => {
+            // Valid - log what was selected
+            if precision != parsed_precision.as_str() {
+                result.add_warning(format!(
+                    "Quantization precision '{}' normalized to '{}'",
+                    precision, parsed_precision.as_str()
+                ));
+            }
+        }
+        Err(_) => {
+            result.add_error(format!(
+                "Invalid quantization_precision: '{}' (must be 'fp32', 'fp16', or 'int8')",
+                precision
+            ));
+        }
+    }
 }
 
 /// Cross-validate references between genome sections
@@ -487,6 +544,82 @@ mod tests {
         // Genome is valid but has warnings
         assert!(result.errors.is_empty());
         assert!(!result.warnings.is_empty()); // Warning about no morphologies
+    }
+    
+    #[test]
+    fn test_validate_quantization_precision() {
+        let mut genome = create_minimal_genome();
+        
+        // Test 1: Valid precision (fp32)
+        genome.physiology.quantization_precision = "fp32".to_string();
+        let result = validate_genome(&genome);
+        assert!(result.errors.is_empty(), "fp32 should be valid");
+        
+        // Test 2: Valid precision (int8)
+        genome.physiology.quantization_precision = "int8".to_string();
+        let result = validate_genome(&genome);
+        assert!(result.errors.is_empty(), "int8 should be valid");
+        
+        // Test 3: Valid but non-canonical (i8 → int8)
+        genome.physiology.quantization_precision = "i8".to_string();
+        let result = validate_genome(&genome);
+        assert!(result.errors.is_empty(), "i8 should be valid");
+        assert!(result.warnings.iter().any(|w| w.contains("normalized")), 
+                "Should warn about normalization");
+        
+        // Test 4: Invalid precision
+        genome.physiology.quantization_precision = "invalid".to_string();
+        let result = validate_genome(&genome);
+        assert!(!result.errors.is_empty(), "invalid should produce error");
+        assert!(result.errors.iter().any(|e| e.contains("Invalid quantization_precision")),
+                "Should have quantization error");
+    }
+    
+    #[test]
+    fn test_auto_fix_quantization_precision() {
+        // Test 1: Missing precision (empty string)
+        let mut genome = create_minimal_genome();
+        genome.physiology.quantization_precision = "".to_string();
+        
+        let fixes = auto_fix_genome(&mut genome);
+        assert!(fixes > 0, "Should apply at least one fix");
+        assert_eq!(genome.physiology.quantization_precision, "fp32", 
+                   "Should default to fp32");
+        
+        // Test 2: Non-canonical (i8 → int8)
+        genome.physiology.quantization_precision = "i8".to_string();
+        let _fixes = auto_fix_genome(&mut genome);
+        assert_eq!(genome.physiology.quantization_precision, "int8",
+                   "Should normalize i8 to int8");
+        
+        // Test 3: Invalid → default
+        genome.physiology.quantization_precision = "invalid".to_string();
+        let _fixes = auto_fix_genome(&mut genome);
+        assert_eq!(genome.physiology.quantization_precision, "fp32",
+                   "Invalid should default to fp32");
+    }
+    
+    fn create_minimal_genome() -> RuntimeGenome {
+        RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test".to_string(),
+                genome_title: "Test".to_string(),
+                genome_description: "".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 0.0,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies: MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0".to_string(),
+                blueprint: "0".to_string(),
+                physiology: "0".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        }
     }
 }
 
