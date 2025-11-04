@@ -50,8 +50,8 @@ use feagi_burst_engine::npu::RustNPU;
 ///
 /// # Returns
 /// Number of synapses created
-pub fn apply_projector_morphology<T: feagi_types::NeuralValue>(
-    npu: &mut feagi_burst_engine::RustNPU<T>,
+pub fn apply_projector_morphology(
+    npu: &mut feagi_burst_engine::DynamicNPU,
     src_area_id: u32,
     dst_area_id: u32,
     transpose: Option<(usize, usize, usize)>,
@@ -125,8 +125,8 @@ pub fn apply_projector_morphology<T: feagi_types::NeuralValue>(
 }
 
 /// Apply expander morphology directly on NPU
-pub fn apply_expander_morphology<T: feagi_types::NeuralValue>(
-    npu: &mut feagi_burst_engine::RustNPU<T>,
+pub fn apply_expander_morphology(
+    npu: &mut feagi_burst_engine::DynamicNPU,
     src_area_id: u32,
     dst_area_id: u32,
     weight: u8,
@@ -179,8 +179,8 @@ pub fn apply_expander_morphology<T: feagi_types::NeuralValue>(
 }
 
 /// Apply block connection morphology directly on NPU
-pub fn apply_block_connection_morphology<T: feagi_types::NeuralValue>(
-    npu: &mut feagi_burst_engine::RustNPU<T>,
+pub fn apply_block_connection_morphology(
+    npu: &mut feagi_burst_engine::DynamicNPU,
     src_area_id: u32,
     dst_area_id: u32,
     scaling_factor: u32,
@@ -241,8 +241,8 @@ pub fn apply_block_connection_morphology<T: feagi_types::NeuralValue>(
 }
 
 /// Apply pattern matching morphology directly on NPU
-pub fn apply_patterns_morphology<T: feagi_types::NeuralValue>(
-    npu: &mut feagi_burst_engine::RustNPU<T>,
+pub fn apply_patterns_morphology(
+    npu: &mut feagi_burst_engine::DynamicNPU,
     src_area_id: u32,
     dst_area_id: u32,
     patterns: Vec<(Pattern3D, Pattern3D)>,
@@ -304,8 +304,8 @@ pub fn apply_patterns_morphology<T: feagi_types::NeuralValue>(
 }
 
 /// Apply vector offset morphology directly on NPU
-pub fn apply_vectors_morphology<T: feagi_types::NeuralValue>(
-    npu: &mut feagi_burst_engine::RustNPU<T>,
+pub fn apply_vectors_morphology(
+    npu: &mut feagi_burst_engine::DynamicNPU,
     src_area_id: u32,
     dst_area_id: u32,
     vectors: Vec<(i32, i32, i32)>,
@@ -365,8 +365,8 @@ pub fn apply_vectors_morphology<T: feagi_types::NeuralValue>(
 }
 
 /// Calculate area dimensions by finding max coordinates
-fn calculate_area_dimensions<T: feagi_types::NeuralValue>(
-    npu: &RustNPU<T>,
+fn calculate_area_dimensions(
+    npu: &feagi_burst_engine::DynamicNPU,
     area_id: u32,
 ) -> (usize, usize, usize) {
     let mut max_x = 0;

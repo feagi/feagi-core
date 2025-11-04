@@ -21,13 +21,13 @@ use feagi_pns::{
 
 /// Implementation of the Agent service
 pub struct AgentServiceImpl {
-    connectome_manager: Arc<RwLock<ConnectomeManager<f32>>>,
+    connectome_manager: Arc<RwLock<ConnectomeManager>>,
     agent_registry: Arc<RwLock<AgentRegistry>>,
 }
 
 impl AgentServiceImpl {
     pub fn new(
-        connectome_manager: Arc<RwLock<ConnectomeManager<f32>>>,
+        connectome_manager: Arc<RwLock<ConnectomeManager>>,
         agent_registry: Arc<RwLock<AgentRegistry>>,
     ) -> Self {
         Self {

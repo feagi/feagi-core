@@ -57,7 +57,7 @@ pub struct SensoryStream {
     running: Arc<Mutex<bool>>,
     config: SensoryReceiveConfig,
     /// Reference to Rust NPU for direct injection (no FFI overhead!)
-    npu: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>>>>,
+    npu: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>>>>,
     /// Reference to AgentRegistry for security gating
     agent_registry: Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
     /// Statistics
@@ -92,7 +92,7 @@ impl SensoryStream {
     }
 
     /// Set the Rust NPU reference for direct injection
-    pub fn set_npu(&self, npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>) {
+    pub fn set_npu(&self, npu: Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) {
         *self.npu.lock() = Some(npu);
         info!("🦀 [SENSORY-STREAM] NPU connected for direct injection");
     }
@@ -327,7 +327,7 @@ impl SensoryStream {
     /// Returns the number of neurons injected.
     fn deserialize_and_inject_xyzp(
         message_bytes: &[u8],
-        npu_mutex: &Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>>>>,
+        npu_mutex: &Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>>>>,
         agent_registry_mutex: &Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
         rejected_no_genome: &Arc<Mutex<u64>>,
         rejected_no_agents: &Arc<Mutex<u64>>,

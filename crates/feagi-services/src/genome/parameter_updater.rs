@@ -26,11 +26,11 @@ use crate::ServiceResult;
 /// 
 /// Performance: ~2-5ms vs ~100-200ms for synapse rebuild (20-40x faster)
 pub struct CorticalParameterUpdater {
-    npu: Arc<Mutex<RustNPU<f32>>>,
+    npu: Arc<Mutex<feagi_burst_engine::DynamicNPU>>,
 }
 
 impl CorticalParameterUpdater {
-    pub fn new(npu: Arc<Mutex<RustNPU<f32>>>) -> Self {
+    pub fn new(npu: Arc<Mutex<feagi_burst_engine::DynamicNPU>>) -> Self {
         Self { npu }
     }
     

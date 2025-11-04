@@ -16,13 +16,13 @@ use tracing::debug;
 
 /// Default implementation of AnalyticsService
 pub struct AnalyticsServiceImpl {
-    connectome: Arc<RwLock<ConnectomeManager<f32>>>,
+    connectome: Arc<RwLock<ConnectomeManager>>,
     burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
 }
 
 impl AnalyticsServiceImpl {
     pub fn new(
-        connectome: Arc<RwLock<ConnectomeManager<f32>>>,
+        connectome: Arc<RwLock<ConnectomeManager>>,
         burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
     ) -> Self {
         Self {

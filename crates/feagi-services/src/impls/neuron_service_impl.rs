@@ -15,11 +15,11 @@ use tracing::debug;
 
 /// Default implementation of NeuronService
 pub struct NeuronServiceImpl {
-    connectome: Arc<RwLock<ConnectomeManager<f32>>>,
+    connectome: Arc<RwLock<ConnectomeManager>>,
 }
 
 impl NeuronServiceImpl {
-    pub fn new(connectome: Arc<RwLock<ConnectomeManager<f32>>>) -> Self {
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
         Self { connectome }
     }
 }

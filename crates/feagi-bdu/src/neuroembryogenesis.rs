@@ -79,9 +79,9 @@ impl Default for DevelopmentProgress {
 ///
 /// # Type Parameters
 /// - `T: NeuralValue`: The numeric precision for the connectome (f32, INT8Value, f16)
-pub struct Neuroembryogenesis<T: feagi_types::NeuralValue> {
+pub struct Neuroembryogenesis {
     /// Reference to ConnectomeManager for building structures
-    connectome_manager: Arc<RwLock<ConnectomeManager<T>>>,
+    connectome_manager: Arc<RwLock<ConnectomeManager>>,
     
     /// Current development progress
     progress: Arc<RwLock<DevelopmentProgress>>,
@@ -90,9 +90,9 @@ pub struct Neuroembryogenesis<T: feagi_types::NeuralValue> {
     start_time: std::time::Instant,
 }
 
-impl<T: feagi_types::NeuralValue> Neuroembryogenesis<T> {
+impl Neuroembryogenesis {
     /// Create a new neuroembryogenesis instance
-    pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager<T>>>) -> Self {
+    pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager>>) -> Self {
         Self {
             connectome_manager,
             progress: Arc::new(RwLock::new(DevelopmentProgress::default())),
@@ -131,7 +131,7 @@ impl<T: feagi_types::NeuralValue> Neuroembryogenesis<T> {
             quant_spec.membrane_potential_max
         );
         
-        // Phase 6: Type dispatch - Neuroembryogenesis<T> is now fully generic!
+        // Phase 6: Type dispatch - Neuroembryogenesis is now fully generic!
         // The precision is determined by the type T of this Neuroembryogenesis instance.
         // All stages (corticogenesis, neurogenesis, synaptogenesis) automatically use the correct type.
         match quant_spec.precision {
@@ -155,27 +155,9 @@ impl<T: feagi_types::NeuralValue> Neuroembryogenesis<T> {
             }
         }
         
-        // Verify type consistency (genome precision should match Neuroembryogenesis<T>)
-        // This is a runtime check since T is erased after compilation
-        let type_name = std::any::type_name::<T>();
-        let expected_type = match quant_spec.precision {
-            Precision::FP32 => "f32",
-            Precision::INT8 => "INT8Value",
-            Precision::FP16 => "f16",
-        };
-        
-        if !type_name.contains(expected_type) {
-            warn!(target: "feagi-bdu",
-                "   ⚠️  Type mismatch: Genome specifies {:?} but Neuroembryogenesis is using {}",
-                quant_spec.precision, type_name
-            );
-            warn!(target: "feagi-bdu",
-                "   Proceeding with {} (caller must create Neuroembryogenesis::<{}> for correct precision)",
-                type_name, expected_type
-            );
-        } else {
-            info!(target: "feagi-bdu", "   ✓ Type consistency verified: Using {}", type_name);
-        }
+        // Type consistency is now handled by DynamicNPU at creation time
+        // The caller (main.rs) peeks at genome precision and creates the correct DynamicNPU variant
+        info!(target: "feagi-bdu", "   ✓ Quantization handled by DynamicNPU (dispatches at runtime)");
         
         // Update stage: Initialization
         self.update_stage(DevelopmentStage::Initialization, 0);
@@ -716,7 +698,7 @@ fn estimate_synapses_for_area(
     total
 }
 
-impl<T: feagi_types::NeuralValue> Neuroembryogenesis<T> {
+impl Neuroembryogenesis {
     /// Analyze region inputs/outputs based on cortical connections
     /// 
     /// Following Python's _auto_assign_region_io() logic:
@@ -844,16 +826,4 @@ mod tests {
 }
 
 
-
-// ═══════════════════════════════════════════════════════════
-// Type Aliases for Convenience
-// ═══════════════════════════════════════════════════════════
-
-/// Neuroembryogenesis with 32-bit floating point precision (default)
-pub type NeuroembryogenesisF32 = Neuroembryogenesis<f32>;
-
-/// Neuroembryogenesis with 8-bit integer precision (memory efficient)
-pub type NeuroembryogenesisINT8 = Neuroembryogenesis<feagi_types::INT8Value>;
-
-// Future: pub type NeuroembryogenesisF16 = Neuroembryogenesis<f16>;
 

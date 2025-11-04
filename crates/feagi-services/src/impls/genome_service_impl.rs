@@ -21,7 +21,7 @@ use crate::genome::{ChangeType, CorticalChangeClassifier};
 
 /// Default implementation of GenomeService
 pub struct GenomeServiceImpl {
-    connectome: Arc<RwLock<ConnectomeManager<f32>>>,
+    connectome: Arc<RwLock<ConnectomeManager>>,
     parameter_queue: Option<ParameterUpdateQueue>,
     /// Currently loaded genome (source of truth for structural changes)
     /// This is updated when genome is loaded or when cortical areas are modified
@@ -29,7 +29,7 @@ pub struct GenomeServiceImpl {
 }
 
 impl GenomeServiceImpl {
-    pub fn new(connectome: Arc<RwLock<ConnectomeManager<f32>>>) -> Self {
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
         Self { 
             connectome,
             parameter_queue: None,
@@ -38,7 +38,7 @@ impl GenomeServiceImpl {
     }
     
     pub fn new_with_parameter_queue(
-        connectome: Arc<RwLock<ConnectomeManager<f32>>>,
+        connectome: Arc<RwLock<ConnectomeManager>>,
         parameter_queue: ParameterUpdateQueue,
     ) -> Self {
         Self { 
@@ -89,7 +89,7 @@ impl GenomeService for GenomeServiceImpl {
             
             // Now call develop_from_genome without holding the lock
             // It will acquire its own locks internally
-            let manager_arc = feagi_bdu::ConnectomeManager::<f32>::instance();
+            let manager_arc = feagi_bdu::ConnectomeManager::instance();
             let mut neuro = Neuroembryogenesis::new(manager_arc);
             neuro.develop_from_genome(&genome_clone)
                 .map_err(|e| ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e)))?;
@@ -478,7 +478,7 @@ impl GenomeServiceImpl {
     fn do_localized_rebuild(
         cortical_id: &str,
         changes: HashMap<String, Value>,
-        connectome: Arc<RwLock<ConnectomeManager<f32>>>,
+        connectome: Arc<RwLock<ConnectomeManager>>,
         genome_store: Arc<RwLock<Option<feagi_evo::RuntimeGenome>>>,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!("[STRUCTURAL-REBUILD] Starting localized rebuild for {}", cortical_id);
@@ -616,7 +616,7 @@ impl GenomeServiceImpl {
     /// Helper to get cortical area info (blocking version for spawn_blocking contexts)
     fn get_cortical_area_info_blocking(
         cortical_id: &str,
-        connectome: &Arc<RwLock<ConnectomeManager<f32>>>,
+        connectome: &Arc<RwLock<ConnectomeManager>>,
     ) -> ServiceResult<CorticalAreaInfo> {
         let manager = connectome.read();
         

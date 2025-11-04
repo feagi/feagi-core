@@ -53,7 +53,7 @@ enum StreamState {
 /// Minimal PNS clone for callbacks (only the Arc fields needed for dynamic gating)
 #[derive(Clone)]
 struct PNSForCallbacks {
-    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>>>>,
+    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>>>>,
     agent_registry: Arc<RwLock<AgentRegistry>>,
     #[cfg(feature = "zmq-transport")]
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
@@ -439,7 +439,7 @@ pub struct PNS {
     
     // === Dynamic Stream Gating ===
     /// NPU reference for genome state checking (dynamic gating)
-    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>>>>,
+    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>>>>,
     /// Sensory stream state
     sensory_stream_state: Arc<Mutex<StreamState>>,
     /// Motor stream state
@@ -560,7 +560,7 @@ impl PNS {
 
     /// Set NPU reference for dynamic stream gating
     /// Should be called during initialization, before starting streams
-    pub fn set_npu_for_gating(&self, npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>) {
+    pub fn set_npu_for_gating(&self, npu: Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) {
         *self.npu_ref.lock() = Some(Arc::clone(&npu));
         info!("🦀 [PNS] NPU connected for dynamic stream gating");
     }
@@ -570,7 +570,7 @@ impl PNS {
     #[cfg(feature = "zmq-transport")]
     pub fn connect_npu_to_sensory_stream(
         &self,
-        npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>,
+        npu: Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>,
     ) {
         if let Some(streams) = self.zmq_streams.lock().as_ref() {
             streams.get_sensory_stream().set_npu(npu);
@@ -585,7 +585,7 @@ impl PNS {
     #[cfg(feature = "zmq-transport")]
     pub fn connect_npu_to_api_control_stream(
         &self,
-        npu: Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>,
+        npu: Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>,
     ) {
         if let Some(streams) = self.zmq_streams.lock().as_mut() {
             streams.get_api_control_stream_mut().set_npu(npu);
