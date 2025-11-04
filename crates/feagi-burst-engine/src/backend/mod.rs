@@ -57,7 +57,10 @@ pub struct BurstTiming {
 ///
 /// **FCL-Aware Design**: Backends process only Fire Candidate List neurons,
 /// not the entire neuron array. This enables efficient sparse processing on GPU.
-pub trait ComputeBackend: Send + Sync {
+/// Compute backend trait (CPU, GPU, NPU, Hailo)
+///
+/// Generic over `T: NeuralValue` to support different quantization levels
+pub trait ComputeBackend<T: NeuralValue>: Send + Sync {
     /// Get backend type name for logging/debugging
     fn backend_name(&self) -> &str;
 
@@ -91,7 +94,7 @@ pub trait ComputeBackend: Send + Sync {
     ///
     /// # Returns
     /// List of neurons that fired + statistics
-    fn process_neural_dynamics<T: NeuralValue>(
+    fn process_neural_dynamics(
         &mut self,
         fcl: &FireCandidateList,
         neuron_array: &mut NeuronArray<T>,
@@ -106,7 +109,7 @@ pub trait ComputeBackend: Send + Sync {
     /// optimizations (e.g., keep data on GPU between stages).
     ///
     /// Default implementation calls the two methods separately.
-    fn process_burst<T: NeuralValue>(
+    fn process_burst(
         &mut self,
         fired_neurons: &[u32],
         synapse_array: &SynapseArray,
@@ -150,7 +153,7 @@ pub trait ComputeBackend: Send + Sync {
     /// between bursts (thresholds, leak coefficients, etc.)
     ///
     /// For CPU backends, this is a no-op.
-    fn initialize_persistent_data<T: NeuralValue>(
+    fn initialize_persistent_data(
         &mut self,
         _neuron_array: &NeuronArray<T>,
         _synapse_array: &SynapseArray,
@@ -462,12 +465,12 @@ fn estimate_gpu_speedup(neuron_count: usize, synapse_count: usize) -> f32 {
 }
 
 /// Create backend based on type
-pub fn create_backend(
+pub fn create_backend<T: NeuralValue>(
     backend_type: BackendType,
     neuron_capacity: usize,
     synapse_capacity: usize,
     config: &BackendConfig,
-) -> Result<Box<dyn ComputeBackend>> {
+) -> Result<Box<dyn ComputeBackend<T>>> {
     let actual_type = if backend_type == BackendType::Auto {
         // Count will be updated later, use capacity as estimate
         let decision = select_backend(neuron_capacity, synapse_capacity, config);

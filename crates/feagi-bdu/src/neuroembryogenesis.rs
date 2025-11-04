@@ -78,7 +78,7 @@ impl Default for DevelopmentProgress {
 /// Uses ConnectomeManager to build the actual neural structures.
 pub struct Neuroembryogenesis {
     /// Reference to ConnectomeManager for building structures
-    connectome_manager: Arc<RwLock<ConnectomeManager>>,
+    connectome_manager: Arc<RwLock<ConnectomeManager<f32>>>,
     
     /// Current development progress
     progress: Arc<RwLock<DevelopmentProgress>>,
@@ -89,7 +89,7 @@ pub struct Neuroembryogenesis {
 
 impl Neuroembryogenesis {
     /// Create a new neuroembryogenesis instance
-    pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager>>) -> Self {
+    pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager<f32>>>) -> Self {
         Self {
             connectome_manager,
             progress: Arc::new(RwLock::new(DevelopmentProgress::default())),

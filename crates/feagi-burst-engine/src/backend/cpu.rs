@@ -45,7 +45,7 @@ impl Default for CPUBackend {
     }
 }
 
-impl ComputeBackend for CPUBackend {
+impl<T: NeuralValue> ComputeBackend<T> for CPUBackend {
     fn backend_name(&self) -> &str {
         &self.name
     }
@@ -93,7 +93,7 @@ impl ComputeBackend for CPUBackend {
         Ok(synapse_count)
     }
 
-    fn process_neural_dynamics<T: NeuralValue>(
+    fn process_neural_dynamics(
         &mut self,
         fcl: &FireCandidateList,
         neuron_array: &mut NeuronArray<T>,
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn test_cpu_backend_creation() {
         let backend = CPUBackend::new();
-        assert_eq!(backend.backend_name(), "CPU (SIMD) - LIF");
+        assert_eq!(<CPUBackend as ComputeBackend<f32>>::backend_name(&backend), "CPU (SIMD) - LIF");
     }
 
     #[test]
@@ -138,7 +138,9 @@ mod tests {
         let mut fcl = FireCandidateList::new();
 
         // Should not panic
-        let result = backend.process_synaptic_propagation(&fired_neurons, &synapse_array, &mut fcl);
+        let result = <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
+            &mut backend, &fired_neurons, &synapse_array, &mut fcl
+        );
 
         assert!(result.is_ok());
     }

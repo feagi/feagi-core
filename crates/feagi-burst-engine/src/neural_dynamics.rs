@@ -75,8 +75,10 @@ pub fn process_neural_dynamics<T: NeuralValue>(
         let mut refractory = 0;
 
         for &(neuron_id, candidate_potential) in &candidates {
+            // Convert f32 from FCL to T
+            let candidate_potential_t = T::from_f32(candidate_potential);
             if let Some(neuron) =
-                process_single_neuron(neuron_id, candidate_potential, neuron_array, burst_count)
+                process_single_neuron(neuron_id, candidate_potential_t, neuron_array, burst_count)
             {
                 results.push(neuron);
             }
@@ -171,12 +173,12 @@ fn process_single_neuron<T: NeuralValue>(
 
     // 2. Add candidate potential (matches Python: add BEFORE checking threshold)
     let old_potential = neuron_array.membrane_potentials[idx];
-    let current_potential = old_potential + candidate_potential;
+    let current_potential = old_potential.saturating_add(candidate_potential);
     neuron_array.membrane_potentials[idx] = current_potential;
 
     // 3. Check threshold (matches Python: "Check firing conditions BEFORE decay")
     let threshold = neuron_array.thresholds[idx];
-    if current_potential >= threshold {
+    if current_potential.ge(threshold) {
         // 5. Check consecutive fire limit (matches Python SIMD implementation)
         // Skip constraint if consecutive_fire_limit is 0 (unlimited firing)
         let consecutive_fire_limit = neuron_array.consecutive_fire_limits[idx];
@@ -220,7 +222,7 @@ fn process_single_neuron<T: NeuralValue>(
 
         if should_fire {
             // Reset membrane potential
-            neuron_array.membrane_potentials[idx] = 0.0;
+            neuron_array.membrane_potentials[idx] = T::zero();
 
             // Increment consecutive fire count
             neuron_array.consecutive_fire_counts[idx] += 1;
@@ -266,7 +268,7 @@ fn process_single_neuron<T: NeuralValue>(
 
             return Some(FiringNeuron {
                 neuron_id,
-                membrane_potential: current_potential,
+                membrane_potential: current_potential.to_f32(),
                 cortical_area: CorticalAreaId(neuron_array.cortical_areas[idx]),
                 x,
                 y,

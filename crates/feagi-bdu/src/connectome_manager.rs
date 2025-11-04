@@ -40,8 +40,8 @@ use crate::types::{BduError, BduResult, NeuronId};
 use feagi_burst_engine::RustNPU;
 
 /// Global singleton instance of ConnectomeManager
-static INSTANCE: Lazy<Arc<RwLock<ConnectomeManager>>> =
-    Lazy::new(|| Arc::new(RwLock::new(ConnectomeManager::new())));
+static INSTANCE: Lazy<Arc<RwLock<ConnectomeManager<f32>>>> =
+    Lazy::new(|| Arc::new(RwLock::new(ConnectomeManager::<f32>::new())));
 
 /// Configuration for ConnectomeManager
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,7 +87,7 @@ impl Default for ConnectomeConfig {
 /// Uses `RwLock` for concurrent reads with exclusive writes.
 /// Multiple threads can read simultaneously, but writes block.
 ///
-pub struct ConnectomeManager {
+pub struct ConnectomeManager<T: feagi_types::NeuralValue> {
     /// Map of cortical_id -> CorticalArea metadata
     cortical_areas: HashMap<String, CorticalArea>,
     
@@ -113,7 +113,7 @@ pub struct ConnectomeManager {
     /// 
     /// This is set by the Python process manager after NPU initialization.
     /// All neuron/synapse data queries delegate to the NPU.
-    npu: Option<Arc<Mutex<RustNPU>>>,
+    npu: Option<Arc<Mutex<RustNPU<T>>>>,
     
     /// Cached neuron count (lock-free read) - updated by burst engine
     /// This prevents health checks from blocking on NPU lock
@@ -127,7 +127,7 @@ pub struct ConnectomeManager {
     initialized: bool,
 }
 
-impl ConnectomeManager {
+impl<T: feagi_types::NeuralValue> ConnectomeManager<T> {
     /// Create a new ConnectomeManager (private - use `instance()`)
     fn new() -> Self {
         Self {
@@ -162,8 +162,10 @@ impl ConnectomeManager {
     /// let area_count = read_lock.get_cortical_area_count();
     /// ```
     ///
-    pub fn instance() -> Arc<RwLock<Self>> {
-        Arc::clone(&INSTANCE)
+    pub fn instance() -> Arc<RwLock<ConnectomeManager<f32>>> {
+        // Note: Singleton is always f32 for backward compatibility
+        // New code should use ConnectomeManager::<T>::new_for_testing_with_npu() for custom types
+        Arc::clone(&*INSTANCE)
     }
     
     /// Create a new isolated instance for testing
@@ -208,7 +210,7 @@ impl ConnectomeManager {
     /// let npu = Arc::new(Mutex::new(RustNPU::new(1_000_000, 10_000_000, 10)));
     /// let manager = ConnectomeManager::new_for_testing_with_npu(npu);
     /// ```
-    pub fn new_for_testing_with_npu(npu: Arc<Mutex<feagi_burst_engine::RustNPU>>) -> Self {
+    pub fn new_for_testing_with_npu(npu: Arc<Mutex<feagi_burst_engine::RustNPU<T>>>) -> Self {
         Self {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
@@ -707,7 +709,7 @@ impl ConnectomeManager {
     ///
     /// * `npu` - Arc to the Rust NPU
     ///
-    pub fn set_npu(&mut self, npu: Arc<Mutex<RustNPU>>) {
+    pub fn set_npu(&mut self, npu: Arc<Mutex<RustNPU<T>>>) {
         self.npu = Some(npu);
         info!(target: "feagi-bdu","🔗 ConnectomeManager: NPU reference set");
         
@@ -728,7 +730,7 @@ impl ConnectomeManager {
     /// 
     /// * `Option<&Arc<Mutex<RustNPU>>>` - Reference to NPU if connected
     /// 
-    pub fn get_npu(&self) -> Option<&Arc<Mutex<RustNPU>>> {
+    pub fn get_npu(&self) -> Option<&Arc<Mutex<RustNPU<T>>>> {
         self.npu.as_ref()
     }
     
@@ -888,9 +890,9 @@ impl ConnectomeManager {
         
         // Add neuron via NPU
         let neuron_id = npu_lock.add_neuron(
-            firing_threshold,
+            T::from_f32(firing_threshold),
             leak_coefficient,
-            resting_potential,
+            T::from_f32(resting_potential),
             neuron_type as i32,
             refractory_period,
             excitability,
@@ -1673,7 +1675,7 @@ impl ConnectomeManager {
         // from the caller, so we need to ensure neuroembryogenesis uses the SAME Arc reference.
         
         // Get the singleton instance (same Arc as self.connectome in GenomeServiceImpl)
-        let manager_arc = ConnectomeManager::instance();
+        let manager_arc = ConnectomeManager::<f32>::instance();
         
         // CRITICAL: We're already holding a write lock from spawn_blocking.
         // Neuroembryogenesis will try to acquire its own write locks.
@@ -2035,10 +2037,13 @@ impl ConnectomeManager {
         
         // Call NPU batch creation (SIMD-optimized)
         // Signature: (thresholds, leak_coeffs, resting_pots, neuron_types, refract, excit, consec_limits, snooze, mp_accums, cortical_areas, x, y, z)
+        // Convert f32 vectors to T
+        let firing_thresholds_t: Vec<T> = firing_thresholds.into_iter().map(T::from_f32).collect();
+        let resting_potentials_t: Vec<T> = resting_potentials.into_iter().map(T::from_f32).collect();
         let (neurons_created, _indices) = npu_lock.add_neurons_batch(
-            firing_thresholds,
+            firing_thresholds_t,
             leak_coeffs,
-            resting_potentials,
+            resting_potentials_t,
             neuron_types,
             refractory_periods,
             excitabilities,
@@ -2138,7 +2143,7 @@ impl ConnectomeManager {
         
         // Update properties if provided
         if let Some(threshold) = firing_threshold {
-            if npu_lock.update_neuron_threshold(neuron_id_u32, threshold) {
+            if npu_lock.update_neuron_threshold(neuron_id_u32, T::from_f32(threshold)) {
                 updated = true;
                 debug!(target: "feagi-bdu","Updated neuron {} firing_threshold = {}", neuron_id, threshold);
             } else if !updated {
@@ -2156,7 +2161,7 @@ impl ConnectomeManager {
         }
         
         if let Some(resting) = resting_potential {
-            if npu_lock.update_neuron_resting_potential(neuron_id_u32, resting) {
+            if npu_lock.update_neuron_resting_potential(neuron_id_u32, T::from_f32(resting)) {
                 updated = true;
                 debug!(target: "feagi-bdu","Updated neuron {} resting_potential = {}", neuron_id, resting);
             } else if !updated {
@@ -2206,7 +2211,7 @@ impl ConnectomeManager {
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
         
         // Update threshold via NPU
-        if npu_lock.update_neuron_threshold(neuron_id as u32, new_threshold) {
+        if npu_lock.update_neuron_threshold(neuron_id as u32, T::from_f32(new_threshold)) {
             debug!(target: "feagi-bdu","Set neuron {} firing threshold = {}", neuron_id, new_threshold);
             Ok(())
         } else {
@@ -2760,7 +2765,7 @@ impl ConnectomeManager {
 }
 
 // Manual Debug implementation (RustNPU doesn't implement Debug)
-impl std::fmt::Debug for ConnectomeManager {
+impl<T: feagi_types::NeuralValue> std::fmt::Debug for ConnectomeManager<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ConnectomeManager")
             .field("cortical_areas", &self.cortical_areas.len())
@@ -2992,7 +2997,7 @@ mod tests {
         use feagi_burst_engine::npu::RustNPU;
         
         // Get ConnectomeManager singleton
-        let manager_arc = ConnectomeManager::instance();
+        let manager_arc = ConnectomeManager::<f32>::instance();
         
         // Create and attach NPU
         let npu = Arc::new(Mutex::new(RustNPU::new(100, 1000, 10)));

@@ -115,7 +115,7 @@ impl WGPUBuffers {
     }
 }
 
-impl WGPUBackend {
+impl<T: NeuralValue> WGPUBackend {
     /// Create a new WGPU backend
     pub fn new(neuron_capacity: usize, synapse_capacity: usize) -> Result<Self> {
         // Initialize WGPU
@@ -235,7 +235,7 @@ impl WGPUBackend {
     }
 
     /// Upload neuron array data to GPU
-    fn upload_neuron_arrays(&mut self, neuron_array: &NeuronArray) -> Result<()> {
+    fn upload_neuron_arrays(&mut self, neuron_array: &NeuronArray<T>) -> Result<()> {
         let neuron_count = neuron_array.count;
         self.current_neuron_count = neuron_count;
 
@@ -1111,7 +1111,7 @@ impl WGPUBackend {
     /// Updates refractory countdowns and consecutive fire counts for FCL neurons
     fn download_neuron_state_updates(
         &mut self,
-        neuron_array: &mut NeuronArray,
+        neuron_array: &mut NeuronArray<T>,
         fcl_candidates: &[(u32, f32)],
     ) -> Result<()> {
         // TODO: Download u16_dynamic_state buffer for FCL neurons
@@ -1199,7 +1199,7 @@ impl WGPUBackend {
     }
 }
 
-impl ComputeBackend for WGPUBackend {
+impl<T: NeuralValue> ComputeBackend<T> for WGPUBackend {
     fn backend_name(&self) -> &str {
         &self.name
     }
@@ -1257,7 +1257,7 @@ impl ComputeBackend for WGPUBackend {
     fn process_neural_dynamics(
         &mut self,
         fcl: &FireCandidateList,
-        neuron_array: &mut NeuronArray,
+        neuron_array: &mut NeuronArray<T>,
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // **FCL-AWARE**: Upload only FCL candidates to GPU (sparse array)
@@ -1302,7 +1302,7 @@ impl ComputeBackend for WGPUBackend {
 
     fn initialize_persistent_data(
         &mut self,
-        neuron_array: &NeuronArray,
+        neuron_array: &NeuronArray<T>,
         synapse_array: &SynapseArray,
     ) -> Result<()> {
         // Upload all data to GPU

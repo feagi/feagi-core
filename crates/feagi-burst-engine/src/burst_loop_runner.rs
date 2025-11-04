@@ -483,7 +483,7 @@ impl BurstLoopRunner {
     }
     
     /// Get reference to NPU for direct access (use sparingly)
-    pub fn get_npu(&self) -> Arc<Mutex<RustNPU>> {
+    pub fn get_npu(&self) -> Arc<Mutex<RustNPU<f32>>> {
         self.npu.clone()
     }
 }

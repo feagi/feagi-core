@@ -105,7 +105,7 @@ pub struct RustNPU<T: NeuralValue> {
     // This is the CPU/GPU backend that processes bursts
     // TODO: Integrate backend into process_burst() method to replace direct CPU code
     #[allow(dead_code)]  // Will be used when backend integration is complete
-    pub(crate) backend: std::sync::Mutex<Box<dyn crate::backend::ComputeBackend>>,
+    pub(crate) backend: std::sync::Mutex<Box<dyn crate::backend::ComputeBackend<T>>>,
 
     // Atomic stats (lock-free reads)
     burst_count: std::sync::atomic::AtomicU64,
@@ -408,9 +408,10 @@ impl<T: NeuralValue> RustNPU<T> {
 
         let alloc_start = Instant::now();
         // ✅ SIMD-OPTIMIZED: Fill uniform values with bulk operations (LLVM auto-vectorizes!)
-        let thresholds = vec![default_threshold; total_neurons];
+        // Convert f32 defaults to T
+        let thresholds = vec![T::from_f32(default_threshold); total_neurons];
         let leak_coefficients = vec![default_leak_coefficient; total_neurons];
-        let resting_potentials = vec![default_resting_potential; total_neurons];
+        let resting_potentials = vec![T::from_f32(default_resting_potential); total_neurons];
         let neuron_types = vec![default_neuron_type; total_neurons];
         let refractory_periods = vec![default_refractory_period; total_neurons];
         let excitabilities = vec![default_excitability; total_neurons];
@@ -806,10 +807,10 @@ impl<T: NeuralValue> RustNPU<T> {
             return None;
         }
         match property {
-            "threshold" => neuron_array.thresholds.get(idx).copied(),
+            "threshold" => neuron_array.thresholds.get(idx).map(|&v| v.to_f32()),
             "leak_coefficient" => neuron_array.leak_coefficients.get(idx).copied(),
-            "membrane_potential" => neuron_array.membrane_potentials.get(idx).copied(),
-            "resting_potential" => neuron_array.resting_potentials.get(idx).copied(),
+            "membrane_potential" => neuron_array.membrane_potentials.get(idx).map(|&v| v.to_f32()),
+            "resting_potential" => neuron_array.resting_potentials.get(idx).map(|&v| v.to_f32()),
             "excitability" => neuron_array.excitabilities.get(idx).copied(),
             _ => None,
         }
@@ -942,10 +943,11 @@ impl<T: NeuralValue> RustNPU<T> {
         let neurons = SerializableNeuronArray {
             count: neuron_array.count,
             capacity: neuron_array.capacity,
-            membrane_potentials: neuron_array.membrane_potentials.clone(),
-            thresholds: neuron_array.thresholds.clone(),
+            // Convert T to f32 for serialization
+            membrane_potentials: neuron_array.membrane_potentials.iter().map(|&v| v.to_f32()).collect(),
+            thresholds: neuron_array.thresholds.iter().map(|&v| v.to_f32()).collect(),
             leak_coefficients: neuron_array.leak_coefficients.clone(),
-            resting_potentials: neuron_array.resting_potentials.clone(),
+            resting_potentials: neuron_array.resting_potentials.iter().map(|&v| v.to_f32()).collect(),
             neuron_types: neuron_array.neuron_types.clone(),
             refractory_periods: neuron_array.refractory_periods.clone(),
             refractory_countdowns: neuron_array.refractory_countdowns.clone(),
@@ -1010,12 +1012,13 @@ impl<T: NeuralValue> RustNPU<T> {
         use tracing::info;
         
         // Convert neuron array
-        let mut neuron_array = NeuronArray::new(snapshot.neurons.capacity);
+        let mut neuron_array = NeuronArray::<T>::new(snapshot.neurons.capacity);
         neuron_array.count = snapshot.neurons.count;
-        neuron_array.membrane_potentials = snapshot.neurons.membrane_potentials;
-        neuron_array.thresholds = snapshot.neurons.thresholds;
+        // Convert f32 from serialized data to T
+        neuron_array.membrane_potentials = snapshot.neurons.membrane_potentials.iter().map(|&v| T::from_f32(v)).collect();
+        neuron_array.thresholds = snapshot.neurons.thresholds.iter().map(|&v| T::from_f32(v)).collect();
         neuron_array.leak_coefficients = snapshot.neurons.leak_coefficients;
-        neuron_array.resting_potentials = snapshot.neurons.resting_potentials;
+        neuron_array.resting_potentials = snapshot.neurons.resting_potentials.iter().map(|&v| T::from_f32(v)).collect();
         neuron_array.neuron_types = snapshot.neurons.neuron_types;
         neuron_array.refractory_periods = snapshot.neurons.refractory_periods;
         neuron_array.refractory_countdowns = snapshot.neurons.refractory_countdowns;
@@ -1124,7 +1127,7 @@ impl<T: NeuralValue> RustNPU<T> {
     
     /// Update firing threshold for a specific neuron
     /// Returns true if successful, false if neuron doesn't exist
-    pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: f32) -> bool {
+    pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: T) -> bool {
         let idx = neuron_id as usize;
         if idx >= self.neuron_array.read().unwrap().count || !self.neuron_array.read().unwrap().valid_mask[idx] {
             return false;
@@ -1148,7 +1151,7 @@ impl<T: NeuralValue> RustNPU<T> {
     
     /// Update resting potential for a specific neuron
     /// Returns true if successful, false if neuron doesn't exist
-    pub fn update_neuron_resting_potential(&mut self, neuron_id: u32, resting_potential: f32) -> bool {
+    pub fn update_neuron_resting_potential(&mut self, neuron_id: u32, resting_potential: T) -> bool {
         let idx = neuron_id as usize;
         if idx >= self.neuron_array.read().unwrap().count || !self.neuron_array.read().unwrap().valid_mask[idx] {
             return false;
@@ -1243,7 +1246,7 @@ impl<T: NeuralValue> RustNPU<T> {
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
         for idx in 0..neuron_array_write.count {
             if neuron_array_write.valid_mask[idx] && neuron_array_write.cortical_areas[idx] == cortical_area {
-                neuron_array_write.thresholds[idx] = threshold;
+                neuron_array_write.thresholds[idx] = T::from_f32(threshold);
                 updated_count += 1;
             }
         }
@@ -1365,7 +1368,7 @@ impl<T: NeuralValue> RustNPU<T> {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.write().unwrap().thresholds[idx] = *value;
+                self.neuron_array.write().unwrap().thresholds[idx] = T::from_f32(*value);
                 updated_count += 1;
             }
         }
@@ -1445,7 +1448,7 @@ impl<T: NeuralValue> RustNPU<T> {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.write().unwrap().membrane_potentials[idx] = *value;
+                self.neuron_array.write().unwrap().membrane_potentials[idx] = T::from_f32(*value);
                 updated_count += 1;
             }
         }
@@ -1464,7 +1467,7 @@ impl<T: NeuralValue> RustNPU<T> {
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
             if idx < self.neuron_array.read().unwrap().count && self.neuron_array.read().unwrap().valid_mask[idx] {
-                self.neuron_array.write().unwrap().resting_potentials[idx] = *value;
+                self.neuron_array.write().unwrap().resting_potentials[idx] = T::from_f32(*value);
                 updated_count += 1;
             }
         }
@@ -1675,8 +1678,8 @@ impl<T: NeuralValue> RustNPU<T> {
             self.neuron_array.read().unwrap().consecutive_fire_counts[idx],
             self.neuron_array.read().unwrap().consecutive_fire_limits[idx],
             self.neuron_array.read().unwrap().snooze_periods[idx], // Extended refractory period (additive)
-            self.neuron_array.read().unwrap().membrane_potentials[idx],
-            self.neuron_array.read().unwrap().thresholds[idx],
+            self.neuron_array.read().unwrap().membrane_potentials[idx].to_f32(),
+            self.neuron_array.read().unwrap().thresholds[idx].to_f32(),
             self.neuron_array.read().unwrap().refractory_countdowns[idx],
         ))
     }
@@ -1722,7 +1725,7 @@ fn phase1_injection_with_synapses<T: NeuralValue>(
     for idx in 0..neuron_array.count {
         if neuron_array.valid_mask[idx] && !neuron_array.mp_charge_accumulation[idx] {
             // Reset membrane potential for non-accumulating neurons
-            neuron_array.membrane_potentials[idx] = 0.0;
+            neuron_array.membrane_potentials[idx] = T::zero();
         }
     }
 
@@ -2051,7 +2054,7 @@ mod tests {
 
     #[test]
     fn test_npu_creation() {
-        let npu = RustNPU::new_cpu_only(1000, 10000, 20);
+        let npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 20);
         assert_eq!(npu.get_neuron_count(), 0);
         assert_eq!(npu.get_synapse_count(), 0);
         assert_eq!(npu.get_burst_count(), 0);
@@ -2059,14 +2062,14 @@ mod tests {
 
     #[test]
     fn test_npu_creation_with_zero_capacity() {
-        let npu = RustNPU::new_cpu_only(0, 0, 0);
+        let npu = RustNPU::<f32>::new_cpu_only(0, 0, 0);
         assert_eq!(npu.get_neuron_count(), 0);
         assert_eq!(npu.get_synapse_count(), 0);
     }
 
     #[test]
     fn test_npu_creation_with_large_capacity() {
-        let npu = RustNPU::new_cpu_only(1_000_000, 10_000_000, 100);
+        let npu = RustNPU::<f32>::new_cpu_only(1_000_000, 10_000_000, 100);
         assert_eq!(npu.get_neuron_count(), 0);
     }
 
@@ -2092,7 +2095,7 @@ mod tests {
 
     #[test]
     fn test_add_neuron_sequential_ids() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         for i in 0..10 {
             let id = npu
@@ -2106,7 +2109,7 @@ mod tests {
 
     #[test]
     fn test_add_neuron_different_parameters() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         // High threshold
         let _n1 = npu
@@ -2133,7 +2136,7 @@ mod tests {
 
     #[test]
     fn test_add_neuron_different_cortical_areas() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let _power = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2150,7 +2153,7 @@ mod tests {
 
     #[test]
     fn test_add_neuron_3d_coordinates() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let _n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 5, 10, 15)
@@ -2230,7 +2233,7 @@ mod tests {
 
     #[test]
     fn test_add_inhibitory_synapse() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2278,7 +2281,7 @@ mod tests {
 
     #[test]
     fn test_remove_nonexistent_synapse() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2313,7 +2316,7 @@ mod tests {
 
     #[test]
     fn test_burst_counter_increments() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         for i in 1..=10 {
             let result = npu.process_burst().unwrap();
@@ -2324,7 +2327,7 @@ mod tests {
 
     #[test]
     fn test_power_injection_auto_discovery() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         // Add 5 power neurons (cortical_area=1)
         for i in 0..5 {
@@ -2346,7 +2349,7 @@ mod tests {
 
     #[test]
     fn test_set_power_amount() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         // Add power neuron with high threshold
         npu.add_neuron(5.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2362,7 +2365,7 @@ mod tests {
 
     #[test]
     fn test_empty_burst_no_power() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         // Add only regular neurons (no power area)
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2377,7 +2380,7 @@ mod tests {
     fn test_power_injection_zero_to_n_transition() {
         // Test the startup race condition: burst loop starts before genome load
         // This simulates what happens in production when burst engine starts before embryogenesis
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
         npu.set_power_amount(0.5);
 
         // Burst 1: No power neurons yet (pre-embryogenesis)
@@ -2405,7 +2408,7 @@ mod tests {
 
     #[test]
     fn test_inject_sensory_input() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2419,7 +2422,7 @@ mod tests {
 
     #[test]
     fn test_inject_multiple_sensory_inputs() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2438,7 +2441,7 @@ mod tests {
 
     #[test]
     fn test_sensory_accumulation_on_same_neuron() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2458,7 +2461,7 @@ mod tests {
 
     #[test]
     fn test_fire_ledger_recording() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let _neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2474,7 +2477,7 @@ mod tests {
 
     #[test]
     fn test_fire_ledger_window_configuration() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         npu.configure_fire_ledger_window(1, 50);
 
@@ -2488,7 +2491,7 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_rate_limiting() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
@@ -2504,7 +2507,7 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_motor_subscribers() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         assert!(!npu.has_motor_subscribers());
 
@@ -2517,7 +2520,7 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_viz_subscribers() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         assert!(!npu.has_visualization_subscribers());
 
@@ -2530,7 +2533,7 @@ mod tests {
 
     #[test]
     fn test_get_latest_fire_queue_sample() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
@@ -2550,7 +2553,7 @@ mod tests {
 
     #[test]
     fn test_register_cortical_area_name() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         npu.register_cortical_area(1, "visual_cortex".to_string());
         npu.register_cortical_area(2, "motor_cortex".to_string());
@@ -2564,7 +2567,7 @@ mod tests {
 
     #[test]
     fn test_add_synapse_to_nonexistent_neuron() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2587,7 +2590,7 @@ mod tests {
 
     #[test]
     fn test_burst_with_empty_npu() {
-        let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
         let result = npu.process_burst().unwrap();
 
@@ -2614,3 +2617,16 @@ mod tests {
         let _result = npu.process_burst().unwrap();
     }
 }
+
+// ═══════════════════════════════════════════════════════════
+// Type Aliases for Convenience
+// ═══════════════════════════════════════════════════════════
+
+/// RustNPU with 32-bit floating point precision (default, highest accuracy)
+pub type RustNPUF32 = RustNPU<f32>;
+
+/// RustNPU with 8-bit integer precision (memory efficient, 42% reduction)
+#[cfg(feature = "int8")]
+pub type RustNPUINT8 = RustNPU<INT8Value>;
+
+// Future: pub type RustNPUF16 = RustNPU<f16>;
