@@ -63,6 +63,18 @@ pub use hal::{
 #[cfg(feature = "esp32")]
 pub use platforms::Esp32Platform;
 
+#[cfg(feature = "arduino-due")]
+pub use platforms::ArduinoDuePlatform;
+
+#[cfg(feature = "stm32f4")]
+pub use platforms::Stm32F4Platform;
+
+#[cfg(feature = "rpi-pico")]
+pub use platforms::RpiPicoPlatform;
+
+#[cfg(feature = "hailo")]
+pub use platforms::{Hailo8Accelerator, HailoError, HybridCpuHailo};
+
 // Re-export core FEAGI types for convenience
 pub use feagi_types::{INT8Value, NeuralValue};
 pub use feagi_runtime_embedded::{NeuronArray, SynapseArray};
@@ -80,6 +92,18 @@ pub mod prelude {
     
     #[cfg(feature = "esp32")]
     pub use crate::platforms::Esp32Platform;
+    
+    #[cfg(feature = "arduino-due")]
+    pub use crate::platforms::ArduinoDuePlatform;
+    
+    #[cfg(feature = "stm32f4")]
+    pub use crate::platforms::Stm32F4Platform;
+    
+    #[cfg(feature = "rpi-pico")]
+    pub use crate::platforms::RpiPicoPlatform;
+    
+    #[cfg(feature = "hailo")]
+    pub use crate::platforms::{Hailo8Accelerator, HailoError, HybridCpuHailo};
 }
 
 /// Version information

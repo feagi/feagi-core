@@ -5,10 +5,11 @@ Transport abstraction layer for FEAGI, providing a unified interface for multipl
 ## Features
 
 - **ZMQ Support**: Complete implementation of ZMQ socket patterns (ROUTER, DEALER, PUB, SUB, PUSH, PULL)
+- **WebSocket Support**: Full async WebSocket implementation for all patterns (NEW!)
 - **Client & Server**: Both sides of the communication in a single crate
 - **Feature Flags**: Granular control over which transports and roles are compiled
 - **Type-Safe**: Strong typing and trait-based abstractions
-- **Cross-Platform**: Works on Linux, macOS, Windows, Docker, and embedded systems
+- **Cross-Platform**: Works on Linux, macOS, Windows, Docker, embedded systems, and web browsers
 - **Well-Tested**: Comprehensive integration tests and examples
 
 ## Installation
@@ -33,11 +34,14 @@ feagi-transports = { version = "2.0", features = ["all"] }
 |---------|-------------|
 | `zmq-server` | ZMQ server patterns (ROUTER, PUB, PULL) |
 | `zmq-client` | ZMQ client patterns (DEALER, SUB, PUSH) |
+| `websocket-server` | WebSocket server patterns (ROUTER, PUB, PULL) |
+| `websocket-client` | WebSocket client patterns (DEALER, SUB, PUSH) |
 | `udp-server` | UDP server (planned) |
 | `udp-client` | UDP client (planned) |
 | `shm-server` | Shared memory server (planned) |
 | `shm-client` | Shared memory client (planned) |
 | `zmq` | Both ZMQ server and client |
+| `websocket` | Both WebSocket server and client |
 | `udp` | Both UDP server and client |
 | `shm` | Both SHM server and client |
 | `server` | All server implementations |
@@ -203,11 +207,103 @@ ZMQ transports are highly optimized:
 - **Throughput**: >1M messages/second
 - **Scalability**: Supports thousands of concurrent clients
 
+## WebSocket Transport (NEW!)
+
+### Quick Start: WebSocket Pub/Sub
+
+#### Server (Publisher)
+
+```rust
+use feagi_transports::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut publisher = WsPub::with_address("127.0.0.1:9050").await?;
+    publisher.start_async().await?;
+    
+    loop {
+        publisher.publish(b"topic", b"data")?;
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+}
+```
+
+#### Client (Subscriber)
+
+```rust
+use feagi_transports::prelude::*;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let mut subscriber = WsSub::with_address("ws://127.0.0.1:9050").await?;
+    subscriber.start_async().await?;
+    subscriber.subscribe(b"topic")?;
+    
+    loop {
+        let (topic, data) = subscriber.receive_timeout(1000)?;
+        println!("Received: {:?} - {:?}", topic, data);
+    }
+}
+```
+
+### WebSocket Examples
+
+Run the WebSocket examples to see all patterns in action:
+
+```bash
+# Terminal 1: Start WebSocket publisher
+cargo run --example ws_publisher --features=websocket-server
+
+# Terminal 2: Start WebSocket subscriber
+cargo run --example ws_subscriber --features=websocket-client
+```
+
+```bash
+# Terminal 1: Start WebSocket pull server
+cargo run --example ws_pull_server --features=websocket-server
+
+# Terminal 2: Start WebSocket push client
+cargo run --example ws_push_client --features=websocket-client
+```
+
+```bash
+# Terminal 1: Start WebSocket router server
+cargo run --example ws_router_server --features=websocket-server
+
+# Terminal 2: Start WebSocket dealer client
+cargo run --example ws_dealer_client --features=websocket-client
+```
+
+### WebSocket Features
+
+- **Async-first**: Built on tokio and tokio-tungstenite
+- **Browser-compatible**: Standard WebSocket protocol
+- **Topic filtering**: PUB/SUB pattern with topic-based routing
+- **Multiple clients**: Supports many concurrent connections
+- **Binary & Text**: Handles both message types
+- **Automatic reconnection**: Robust connection handling
+
+### When to Use WebSocket vs ZMQ
+
+**Use WebSocket when:**
+- Need browser/web client support
+- Cross-platform compatibility is critical
+- Simple deployment (no external dependencies)
+- HTTP/HTTPS infrastructure already in place
+- Working with firewalls (WebSocket uses standard ports)
+
+**Use ZMQ when:**
+- Maximum performance is required
+- Complex routing patterns needed
+- Working in pure backend environments
+- Need advanced ZMQ features (multipart, etc.)
+
 ## Future Work
 
+- [x] WebSocket transport implementation (COMPLETED!)
 - [ ] UDP transport implementation
 - [ ] Shared memory transport for embedded systems
-- [ ] TLS/encryption support
+- [ ] TLS/WSS encryption support for WebSocket
 - [ ] gRPC transport adapter
 - [ ] WebRTC for browser-based agents
 - [ ] MQTT for IoT devices

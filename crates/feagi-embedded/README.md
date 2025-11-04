@@ -46,15 +46,22 @@ Part of [FEAGI 2.0](https://github.com/feagi/feagi) - Framework for Evolutionary
 
 ### Supported Platforms
 
-| Platform | Status | Feature Flag | Target |
-|----------|--------|--------------|--------|
-| ESP32 | ✅ Ready | `esp32` | `xtensa-esp32-none-elf` |
-| ESP32-S3 | ✅ Ready | `esp32-s3` | `xtensa-esp32s3-none-elf` |
-| ESP32-C3 | ✅ Ready | `esp32-c3` | `riscv32imc-esp-espidf` |
-| Arduino Due | 🔧 Planned | `arduino-due` | `thumbv7m-none-eabi` |
-| STM32F4 | 🔧 Planned | `stm32f4` | `thumbv7em-none-eabihf` |
-| Raspberry Pi Pico | 🔧 Planned | `rpi-pico` | `thumbv6m-none-eabi` |
-| Hailo-8 | 🚀 Planned | `hailo` | `aarch64-unknown-linux-gnu` |
+| Platform | Status | Feature Flag | Target | Max Neurons (INT8) |
+|----------|--------|--------------|--------|--------------------|
+| ESP32 | ✅ Production | `esp32` | `xtensa-esp32-none-elf` | 2,000 |
+| ESP32-S3 | ✅ Production | `esp32-s3` | `xtensa-esp32s3-none-elf` | 40,000 |
+| ESP32-C3 | ✅ Production | `esp32-c3` | `riscv32imc-esp-espidf` | 1,500 |
+| Arduino Due | ✅ Foundation | `arduino-due` | `thumbv7m-none-eabi` | 1,000 |
+| STM32F4 | ✅ Foundation | `stm32f4` | `thumbv7em-none-eabihf` | 2,500 |
+| Raspberry Pi Pico | ✅ Foundation | `rpi-pico` | `thumbv6m-none-eabi` | 3,500 |
+| **Hailo-8** | ✅ **Foundation** | `hailo` | `aarch64-unknown-linux-gnu` | **1,000,000+** 🚀 |
+
+**Legend**:
+- ✅ **Production**: Fully tested on hardware, production-ready (ESP32 family)
+- ✅ **Foundation**: Traits implemented, compiles successfully, needs hardware/FFI testing
+- 🔧 **Planned**: Architecture designed, implementation pending
+
+**Note**: Hailo-8 requires HailoRT C/C++ library and FFI bindings for hardware deployment. Architecture is complete!
 
 ---
 

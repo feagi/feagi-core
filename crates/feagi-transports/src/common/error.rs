@@ -26,6 +26,12 @@ pub enum TransportError {
     /// Timeout occurred
     Timeout,
     
+    /// No data available (non-blocking receive)
+    NoData,
+    
+    /// Connection closed
+    ConnectionClosed,
+    
     /// Transport is not running
     NotRunning,
     
@@ -64,6 +70,8 @@ impl fmt::Display for TransportError {
             Self::SendFailed(msg) => write!(f, "Send failed: {}", msg),
             Self::ReceiveFailed(msg) => write!(f, "Receive failed: {}", msg),
             Self::Timeout => write!(f, "Operation timed out"),
+            Self::NoData => write!(f, "No data available"),
+            Self::ConnectionClosed => write!(f, "Connection closed"),
             Self::NotRunning => write!(f, "Transport is not running"),
             Self::AlreadyRunning => write!(f, "Transport is already running"),
             Self::InvalidConfig(msg) => write!(f, "Invalid configuration: {}", msg),

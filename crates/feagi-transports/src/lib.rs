@@ -138,6 +138,9 @@ pub mod udp;
 #[cfg(any(feature = "shm-server", feature = "shm-client"))]
 pub mod shm;
 
+#[cfg(any(feature = "websocket-server", feature = "websocket-client"))]
+pub mod websocket;
+
 // Re-export commonly used types
 pub use common::{
     ClientConfig, Message, MessageMetadata, MultipartMessage, ReplyHandle, ServerConfig,
@@ -158,4 +161,10 @@ pub mod prelude {
 
     #[cfg(feature = "zmq-client")]
     pub use crate::zmq::client::*;
+    
+    #[cfg(feature = "websocket-server")]
+    pub use crate::websocket::server::*;
+    
+    #[cfg(feature = "websocket-client")]
+    pub use crate::websocket::client::*;
 }
