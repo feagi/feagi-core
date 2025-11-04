@@ -21,27 +21,40 @@ use tracing::{debug, warn};
 
 /// Complete neuron array with all properties
 ///
-/// Uses Structure-of-Arrays for SIMD optimization
+/// Uses Structure-of-Arrays for SIMD optimization.
+/// Generic over `T: NeuralValue` to support multiple quantization levels (FP32, INT8, FP16).
+///
+/// # Type Parameters
+/// - `T: NeuralValue`: The numeric type for membrane potentials, thresholds, and resting potentials.
+///   - `f32`: 32-bit floating point (default, highest precision)
+///   - `INT8Value`: 8-bit integer (memory efficient, 42% reduction)
+///   - `f16`: 16-bit floating point (future, GPU-optimized)
+///
+/// # Memory Layout
+/// - Membrane potentials, thresholds, resting potentials: `T` (quantized)
+/// - Leak coefficients: `f32` (kept as f32 for precision - see QUANTIZATION_ISSUES_LOG.md #1)
+/// - Excitabilities: `f32` (0.0-1.0 range, kept as f32)
 #[derive(Debug, Clone)]
-pub struct NeuronArray {
+pub struct NeuronArray<T: NeuralValue> {
     /// Number of neurons allocated
     pub capacity: usize,
 
     /// Number of neurons actually used
     pub count: usize,
 
-    /// Membrane potentials (mV or arbitrary units)
-    pub membrane_potentials: Vec<f32>,
+    /// Membrane potentials (mV or arbitrary units) - quantized to T
+    pub membrane_potentials: Vec<T>,
 
-    /// Firing thresholds
-    pub thresholds: Vec<f32>,
+    /// Firing thresholds - quantized to T
+    pub thresholds: Vec<T>,
 
     /// Leak coefficients (0.0 to 1.0) - LIF leak toward resting potential
     /// Genome parameter: leak_c (with leak_v variability applied at neuron creation)
+    /// Kept as f32 for precision (small values don't quantize well - see QUANTIZATION_ISSUES_LOG.md #1)
     pub leak_coefficients: Vec<f32>,
 
-    /// Resting potentials - target potential for leak behavior
-    pub resting_potentials: Vec<f32>,
+    /// Resting potentials - target potential for leak behavior - quantized to T
+    pub resting_potentials: Vec<T>,
 
     /// Neuron types (0 = excitatory, 1 = inhibitory, etc.)
     pub neuron_types: Vec<i32>,
@@ -101,16 +114,16 @@ pub struct NeuronArray {
     pub spatial_hash: AHashMap<(u32, u32, u32, u32), u32>,
 }
 
-impl NeuronArray {
+impl<T: NeuralValue> NeuronArray<T> {
     /// Create a new neuron array with specified capacity
     pub fn new(capacity: usize) -> Self {
         Self {
             capacity,
             count: 0,
-            membrane_potentials: vec![0.0; capacity],
-            thresholds: vec![1.0; capacity],
+            membrane_potentials: vec![T::zero(); capacity],
+            thresholds: vec![T::from_f32(1.0); capacity],
             leak_coefficients: vec![0.0; capacity], // 0 = no leak (common for power neurons)
-            resting_potentials: vec![0.0; capacity],
+            resting_potentials: vec![T::zero(); capacity],
             neuron_types: vec![0; capacity], // 0 = excitatory
             refractory_periods: vec![0; capacity],
             refractory_countdowns: vec![0; capacity],
@@ -132,9 +145,9 @@ impl NeuronArray {
     /// Uses Leaky Integrate-and-Fire (LIF) model with genome parameters only.
     pub fn add_neuron(
         &mut self,
-        threshold: f32,
-        leak_coefficient: f32, // Genome: leak_c (with leak_v variability already applied)
-        resting_potential: f32, // Target potential for leak
+        threshold: T,  // Quantized threshold
+        leak_coefficient: f32, // Genome: leak_c (with leak_v variability already applied) - kept as f32
+        resting_potential: T,  // Target potential for leak - quantized
         neuron_type: i32,
         refractory_period: u16,
         excitability: f32,
@@ -192,9 +205,9 @@ impl NeuronArray {
     /// Uses SIMD vectorization for array operations where possible.
     pub fn add_neurons_batch(
         &mut self,
-        thresholds: &[f32],
-        leak_coefficients: &[f32],
-        resting_potentials: &[f32],
+        thresholds: &[T],  // Quantized thresholds
+        leak_coefficients: &[f32],  // Kept as f32 for precision
+        resting_potentials: &[T],  // Quantized resting potentials
         neuron_types: &[i32],
         refractory_periods: &[u16],
         excitabilities: &[f32],
@@ -326,28 +339,53 @@ impl NeuronArray {
         Ok(neuron_ids)
     }
 
-    /// Get neuron threshold
+    /// Get neuron threshold (returns f32 for backward compatibility)
     #[inline(always)]
     pub fn get_threshold(&self, neuron_id: NeuronId) -> f32 {
+        self.thresholds[neuron_id.0 as usize].to_f32()
+    }
+
+    /// Get neuron threshold as T (returns quantized value)
+    #[inline(always)]
+    pub fn get_threshold_quantized(&self, neuron_id: NeuronId) -> T {
         self.thresholds[neuron_id.0 as usize]
     }
 
-    /// Get neuron membrane potential
+    /// Get neuron membrane potential (returns f32 for backward compatibility)
     #[inline(always)]
     pub fn get_potential(&self, neuron_id: NeuronId) -> f32 {
+        self.membrane_potentials[neuron_id.0 as usize].to_f32()
+    }
+
+    /// Get neuron membrane potential as T (returns quantized value)
+    #[inline(always)]
+    pub fn get_potential_quantized(&self, neuron_id: NeuronId) -> T {
         self.membrane_potentials[neuron_id.0 as usize]
     }
 
-    /// Set neuron membrane potential
+    /// Set neuron membrane potential (accepts T for type safety)
     #[inline(always)]
-    pub fn set_potential(&mut self, neuron_id: NeuronId, potential: f32) {
+    pub fn set_potential(&mut self, neuron_id: NeuronId, potential: T) {
         self.membrane_potentials[neuron_id.0 as usize] = potential;
     }
 
-    /// Accumulate to neuron membrane potential
+    /// Set neuron membrane potential from f32 (convenience method)
     #[inline(always)]
-    pub fn accumulate_potential(&mut self, neuron_id: NeuronId, delta: f32) {
-        self.membrane_potentials[neuron_id.0 as usize] += delta;
+    pub fn set_potential_f32(&mut self, neuron_id: NeuronId, potential: f32) {
+        self.membrane_potentials[neuron_id.0 as usize] = T::from_f32(potential);
+    }
+
+    /// Accumulate to neuron membrane potential (accepts T for type safety)
+    #[inline(always)]
+    pub fn accumulate_potential(&mut self, neuron_id: NeuronId, delta: T) {
+        let idx = neuron_id.0 as usize;
+        self.membrane_potentials[idx] = self.membrane_potentials[idx].saturating_add(delta);
+    }
+
+    /// Accumulate to neuron membrane potential from f32 (convenience method)
+    #[inline(always)]
+    pub fn accumulate_potential_f32(&mut self, neuron_id: NeuronId, delta: f32) {
+        self.accumulate_potential(neuron_id, T::from_f32(delta));
     }
 
     /// Get neuron cortical area
@@ -446,6 +484,15 @@ impl NeuronArray {
         self.count
     }
 }
+
+/// Type aliases for backward compatibility and convenience
+///
+/// These aliases provide explicit type annotations for common use cases.
+/// Use them when you need to be explicit about quantization level.
+pub type NeuronArrayF32 = NeuronArray<f32>;
+#[cfg(feature = "int8")]
+pub type NeuronArrayINT8 = NeuronArray<crate::INT8Value>;
+// Future: pub type NeuronArrayF16 = NeuronArray<f16>;
 
 /// Complete synapse array with dynamic operations
 ///
@@ -757,19 +804,19 @@ mod tests {
 
     #[test]
     fn test_neuron_array_creation() {
-        let neurons = NeuronArray::new(100);
+        let neurons = NeuronArray::<f32>::new(100);
         assert_eq!(neurons.capacity, 100);
         assert_eq!(neurons.count, 0);
     }
 
     #[test]
     fn test_add_neuron() {
-        let mut neurons = NeuronArray::new(100);
+        let mut neurons = NeuronArray::<f32>::new(100);
         let id = neurons
             .add_neuron(
-                1.0,    // threshold
+                1.0,    // threshold (f32 literal)
                 0.1,    // leak_coefficient
-                0.0,    // resting_potential
+                0.0,    // resting_potential (f32 literal)
                 0,      // neuron_type
                 5,      // refractory_period
                 1.0,    // excitability

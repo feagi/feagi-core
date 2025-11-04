@@ -110,7 +110,7 @@ pub struct QuantizationSpec {
 impl Default for QuantizationSpec {
     fn default() -> Self {
         Self {
-            precision: Precision::FP32,
+            precision: Precision::INT8,  // Default to INT8 for memory efficiency
             membrane_potential_min: -100.0,
             membrane_potential_max: 50.0,
             threshold_min: 0.0,
@@ -516,8 +516,9 @@ mod tests {
     #[test]
     fn test_int8_leak_multiply() {
         // Test: 50.0 * 0.97 ≈ 48.5
+        // Note: leak_coefficient is f32 (kept as f32 for precision - see QUANTIZATION_ISSUES_LOG.md #1)
         let potential = INT8Value::from_f32(50.0);
-        let leak = INT8Value::from_f32(0.97);
+        let leak = 0.97f32;  // Leak is f32, not quantized
         let result = potential.mul_leak(leak);
         let result_f32 = result.to_f32();
         

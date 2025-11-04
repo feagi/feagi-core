@@ -114,10 +114,10 @@ impl Neuroembryogenesis {
             Ok(spec) => spec,
             Err(e) => {
                 warn!(target: "feagi-bdu",
-                    "   Failed to parse quantization_precision '{}': {}. Defaulting to FP32",
+                    "   Failed to parse quantization_precision '{}': {}. Defaulting to INT8",
                     quantization_precision, e
                 );
-                QuantizationSpec::default() // FP32
+                QuantizationSpec::default() // INT8 (new default)
             }
         };
         

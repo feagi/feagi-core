@@ -228,7 +228,7 @@ pub struct PhysiologyConfig {
 }
 
 pub fn default_quantization_precision() -> String {
-    "fp32".to_string()
+    "int8".to_string()  // Default to INT8 for memory efficiency
 }
 
 impl Default for PhysiologyConfig {
