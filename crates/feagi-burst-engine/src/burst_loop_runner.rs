@@ -18,7 +18,7 @@
 
 use crate::sensory::AgentManager;
 use crate::parameter_update_queue::ParameterUpdateQueue;
-use crate::RustNPU;
+use crate::{RustNPU, DynamicNPU};
 use feagi_types::NeuronId;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -63,7 +63,8 @@ pub trait MotorPublisher: Send + Sync {
 /// 🦀 Burst count is stored in NPU - single source of truth!
 pub struct BurstLoopRunner {
     /// Shared NPU instance (holds power neurons internally + burst count)
-    npu: Arc<Mutex<RustNPU<f32>>>,
+    /// DynamicNPU dispatches to either F32 or INT8 variant based on genome
+    npu: Arc<Mutex<DynamicNPU>>,
     /// Target frequency in Hz (shared with burst thread for dynamic updates)
     frequency_hz: Arc<Mutex<f64>>,
     /// Running flag (atomic for thread-safe stop)
@@ -102,7 +103,7 @@ impl BurstLoopRunner {
     /// * `viz_publisher` - Optional visualization publisher (None = no ZMQ visualization)
     /// * `frequency_hz` - Burst frequency in Hz
     pub fn new<V: VisualizationPublisher + 'static, M: MotorPublisher + 'static>(
-        npu: Arc<Mutex<RustNPU<f32>>>,
+        npu: Arc<Mutex<DynamicNPU>>,
         viz_publisher: Option<Arc<Mutex<V>>>,
         motor_publisher: Option<Arc<Mutex<M>>>,
         frequency_hz: f64,
@@ -143,10 +144,8 @@ impl BurstLoopRunner {
                 // Step 2: Batch lookup with MINIMAL lock time (only neuron_array read lock, NOT full NPU lock)
                 let lookup_start = std::time::Instant::now();
                 let neuron_ids = if let Ok(npu_lock) = npu_for_callback.lock() {
-                    let result = npu_lock
-                        .neuron_array
-                        .read().unwrap()
-                        .batch_coordinate_lookup(cortical_area, &coords);
+                    // Use dispatch method instead of direct neuron_array access
+                    let result = npu_lock.batch_get_neuron_ids_from_coordinates(cortical_area, &coords);
                     drop(npu_lock); // Release NPU lock ASAP!
                     result
                 } else {
@@ -483,7 +482,7 @@ impl BurstLoopRunner {
     }
     
     /// Get reference to NPU for direct access (use sparingly)
-    pub fn get_npu(&self) -> Arc<Mutex<RustNPU<f32>>> {
+    pub fn get_npu(&self) -> Arc<Mutex<DynamicNPU>> {
         self.npu.clone()
     }
 }
@@ -628,7 +627,7 @@ fn get_timestamp() -> String {
 /// Power neurons are read directly from RustNPU's internal state.
 /// Burst count is tracked by NPU - single source of truth!
 fn burst_loop(
-    npu: Arc<Mutex<RustNPU<f32>>>,
+    npu: Arc<Mutex<DynamicNPU>>,
     frequency_hz: Arc<Mutex<f64>>,  // Shared frequency - can be updated while running
     running: Arc<AtomicBool>,
     viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,

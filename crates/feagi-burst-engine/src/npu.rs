@@ -2626,7 +2626,216 @@ mod tests {
 pub type RustNPUF32 = RustNPU<f32>;
 
 /// RustNPU with 8-bit integer precision (memory efficient, 42% reduction)
-#[cfg(feature = "int8")]
 pub type RustNPUINT8 = RustNPU<INT8Value>;
 
 // Future: pub type RustNPUF16 = RustNPU<f16>;
+
+// ═══════════════════════════════════════════════════════════
+// Runtime Type Dispatch
+// ═══════════════════════════════════════════════════════════
+
+/// Dynamic NPU that can hold either F32 or INT8 precision at runtime
+///
+/// This enum enables runtime dispatch based on genome's quantization_precision.
+/// The system parses the genome, determines the precision, and creates the
+/// appropriate variant. All operations are then dispatched via pattern matching.
+///
+/// # Architecture
+/// - **Compile-time generics**: Both RustNPU<f32> and RustNPU<INT8Value> are
+///   monomorphized at compile time for maximum performance
+/// - **Zero-cost abstraction**: No vtables or dynamic dispatch overhead
+/// - **Type safety**: Impossible to mix precisions accidentally
+///
+/// # Example
+/// ```rust,ignore
+/// let precision = parse_genome_precision(&genome)?;
+/// let npu = match precision {
+///     Precision::FP32 => DynamicNPU::F32(RustNPU::<f32>::new(...)?),
+///     Precision::INT8 => DynamicNPU::INT8(RustNPU::<INT8Value>::new(...)?),
+///     _ => return Err("Unsupported precision"),
+/// };
+/// ```
+pub enum DynamicNPU {
+    /// 32-bit floating point (highest precision, baseline memory)
+    F32(RustNPU<f32>),
+    
+    /// 8-bit integer (memory efficient, 42% reduction)
+    INT8(RustNPU<INT8Value>),
+}
+
+/// Macro to generate dispatch methods that forward to the underlying NPU
+macro_rules! dispatch {
+    // Immutable method
+    ($self:expr, $method:ident($($arg:expr),*)) => {
+        match $self {
+            DynamicNPU::F32(npu) => npu.$method($($arg),*),
+            DynamicNPU::INT8(npu) => npu.$method($($arg),*),
+        }
+    };
+}
+
+/// Macro for mutable dispatch methods
+macro_rules! dispatch_mut {
+    ($self:expr, $method:ident($($arg:expr),*)) => {
+        match $self {
+            DynamicNPU::F32(npu) => npu.$method($($arg),*),
+            DynamicNPU::INT8(npu) => npu.$method($($arg),*),
+        }
+    };
+}
+
+impl DynamicNPU {
+    /// Get the precision type as a string (for logging/debugging)
+    pub fn precision_name(&self) -> &'static str {
+        match self {
+            DynamicNPU::F32(_) => "FP32",
+            DynamicNPU::INT8(_) => "INT8",
+        }
+    }
+    
+    /// Get direct access to F32 NPU (panics if not F32)
+    pub fn as_f32(&self) -> &RustNPU<f32> {
+        match self {
+            DynamicNPU::F32(npu) => npu,
+            _ => panic!("NPU is not F32 variant"),
+        }
+    }
+    
+    /// Get direct mutable access to F32 NPU (panics if not F32)
+    pub fn as_f32_mut(&mut self) -> &mut RustNPU<f32> {
+        match self {
+            DynamicNPU::F32(npu) => npu,
+            _ => panic!("NPU is not F32 variant"),
+        }
+    }
+    
+    /// Get direct access to INT8 NPU (panics if not INT8)
+    pub fn as_int8(&self) -> &RustNPU<INT8Value> {
+        match self {
+            DynamicNPU::INT8(npu) => npu,
+            _ => panic!("NPU is not INT8 variant"),
+        }
+    }
+    
+    /// Get direct mutable access to INT8 NPU (panics if not INT8)
+    pub fn as_int8_mut(&mut self) -> &mut RustNPU<INT8Value> {
+        match self {
+            DynamicNPU::INT8(npu) => npu,
+            _ => panic!("NPU is not INT8 variant"),
+        }
+    }
+    
+    // ========================================
+    // Core NPU Operations (Dispatched)
+    // ========================================
+    
+    /// Get current neuron count
+    pub fn neuron_count(&self) -> usize {
+        match self {
+            DynamicNPU::F32(npu) => npu.neuron_array.read().unwrap().count,
+            DynamicNPU::INT8(npu) => npu.neuron_array.read().unwrap().count,
+        }
+    }
+    
+    /// Get current synapse count
+    pub fn synapse_count(&self) -> usize {
+        match self {
+            DynamicNPU::F32(npu) => npu.synapse_array.read().unwrap().count,
+            DynamicNPU::INT8(npu) => npu.synapse_array.read().unwrap().count,
+        }
+    }
+    
+    /// Get burst count
+    pub fn get_burst_count(&self) -> u64 {
+        dispatch!(self, get_burst_count())
+    }
+    
+    /// Set power amount
+    pub fn set_power_amount(&self, amount: f32) {
+        dispatch!(self, set_power_amount(amount))
+    }
+    
+    /// Get power amount
+    pub fn get_power_amount(&self) -> f32 {
+        dispatch!(self, get_power_amount())
+    }
+    
+    /// Process burst
+    pub fn process_burst(&self) -> Result<BurstResult> {
+        dispatch!(self, process_burst())
+    }
+    
+    /// Inject sensory batch
+    pub fn inject_sensory_batch(&mut self, neuron_ids: &[NeuronId], potential: f32) {
+        dispatch!(self, inject_sensory_batch(neuron_ids, potential))
+    }
+    
+    /// Inject sensory with individual potentials
+    pub fn inject_sensory_with_potentials(&mut self, neurons: &[(NeuronId, f32)]) {
+        dispatch!(self, inject_sensory_with_potentials(neurons))
+    }
+    
+    /// Register cortical area
+    pub fn register_cortical_area(&mut self, area_id: u32, cortical_name: String) {
+        dispatch!(self, register_cortical_area(area_id, cortical_name))
+    }
+    
+    /// Get cortical area name
+    pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
+        dispatch!(self, get_cortical_area_name(area_id))
+    }
+    
+    /// Check if genome is loaded
+    pub fn is_genome_loaded(&self) -> bool {
+        dispatch!(self, is_genome_loaded())
+    }
+    
+    /// Get all cortical areas
+    pub fn get_all_cortical_areas(&self) -> Vec<(u32, String)> {
+        dispatch!(self, get_all_cortical_areas())
+    }
+    
+    /// Get registered cortical area count
+    pub fn get_registered_cortical_area_count(&self) -> usize {
+        dispatch!(self, get_registered_cortical_area_count())
+    }
+    
+    /// Rebuild indexes (synapses, etc.)
+    pub fn rebuild_indexes(&mut self) {
+        dispatch!(self, rebuild_indexes())
+    }
+    
+    /// Get FCL clone
+    pub fn get_fcl_clone(&self) -> FireCandidateList {
+        dispatch!(self, get_fcl_clone())
+    }
+    
+    /// Get last FCL snapshot
+    pub fn get_last_fcl_snapshot(&self) -> Vec<(NeuronId, f32)> {
+        dispatch!(self, get_last_fcl_snapshot())
+    }
+    
+    /// Sample fire queue (for visualization)
+    pub fn sample_fire_queue(&self) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+        dispatch!(self, sample_fire_queue())
+    }
+    
+    /// Get batch neuron IDs from coordinates (for sensory injection)
+    pub fn batch_get_neuron_ids_from_coordinates(
+        &self,
+        area: u32,
+        coords: &[(u32, u32, u32)],
+    ) -> Vec<Option<NeuronId>> {
+        dispatch!(self, batch_get_neuron_ids_from_coordinates(area, coords))
+    }
+    
+    /// Get all fire ledger configs
+    pub fn get_all_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
+        dispatch!(self, get_all_fire_ledger_configs())
+    }
+    
+    /// Configure fire ledger window
+    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
+        dispatch!(self, configure_fire_ledger_window(cortical_idx, window_size))
+    }
+}

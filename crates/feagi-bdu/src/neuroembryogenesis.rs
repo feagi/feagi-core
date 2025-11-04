@@ -853,7 +853,6 @@ mod tests {
 pub type NeuroembryogenesisF32 = Neuroembryogenesis<f32>;
 
 /// Neuroembryogenesis with 8-bit integer precision (memory efficient)
-#[cfg(feature = "int8")]
 pub type NeuroembryogenesisINT8 = Neuroembryogenesis<feagi_types::INT8Value>;
 
 // Future: pub type NeuroembryogenesisF16 = Neuroembryogenesis<f16>;

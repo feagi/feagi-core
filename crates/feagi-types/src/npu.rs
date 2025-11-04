@@ -490,7 +490,6 @@ impl<T: NeuralValue> NeuronArray<T> {
 /// These aliases provide explicit type annotations for common use cases.
 /// Use them when you need to be explicit about quantization level.
 pub type NeuronArrayF32 = NeuronArray<f32>;
-#[cfg(feature = "int8")]
 pub type NeuronArrayINT8 = NeuronArray<crate::INT8Value>;
 // Future: pub type NeuronArrayF16 = NeuronArray<f16>;
 

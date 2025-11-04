@@ -20,6 +20,44 @@ pub fn load_genome_from_file<P: AsRef<Path>>(path: P) -> EvoResult<RuntimeGenome
     load_genome_from_json(&json_str)
 }
 
+/// Peek at genome's quantization precision without full parsing
+///
+/// This is a lightweight function that extracts ONLY the quantization_precision
+/// field from a genome file, allowing the system to create the appropriately-typed
+/// NPU before loading the full genome.
+///
+/// # Returns
+/// - `"fp32"` or `"f32"` → f32 precision
+/// - `"int8"` → INT8 quantization  
+/// - `"fp16"` or `"f16"` → f16 precision (future)
+/// - If field is missing or unparseable, returns `"int8"` (default)
+///
+/// # Example
+/// ```rust,ignore
+/// let precision = peek_quantization_precision("genome.json")?;
+/// let npu = match precision.as_str() {
+///     "fp32" | "f32" => DynamicNPU::F32(RustNPU::<f32>::new(...)?),
+///     "int8" => DynamicNPU::INT8(RustNPU::<INT8Value>::new(...)?),
+///     _ => DynamicNPU::INT8(RustNPU::<INT8Value>::new(...)?), // default
+/// };
+/// ```
+pub fn peek_quantization_precision<P: AsRef<Path>>(path: P) -> EvoResult<String> {
+    let json_str = fs::read_to_string(path)?;
+    
+    // Parse to generic JSON Value
+    let json_value: Value = serde_json::from_str(&json_str)
+        .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
+    
+    // Try to extract quantization_precision from genome_physiology
+    let precision = json_value
+        .get("genome_physiology")
+        .and_then(|p| p.get("quantization_precision"))
+        .and_then(|q| q.as_str())
+        .unwrap_or("int8"); // Default to INT8 if not found
+    
+    Ok(precision.to_lowercase())
+}
+
 /// Load a genome from a JSON string
 pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
     // Parse JSON to Value first to check format
