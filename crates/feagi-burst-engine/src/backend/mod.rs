@@ -493,11 +493,23 @@ pub fn create_backend<T: NeuralValue>(
         }
         #[cfg(feature = "gpu")]
         BackendType::WGPU => {
+            // GPU backend currently only supports f32
+            // This is because shaders are compiled for f32 arithmetic
+            if std::any::TypeId::of::<T>() != std::any::TypeId::of::<f32>() {
+                let type_name = std::any::type_name::<T>();
+                info!("⚠️  GPU backend requested but {} quantization is not supported on GPU", type_name);
+                info!("   GPU shaders are currently f32-only. Falling back to CPU backend.");
+                info!("   Future: f16 GPU support planned for mixed-precision training");
+                return Ok(Box::new(CPUBackend::new()));
+            }
+            
             info!("🎮 Using WGPU backend (GPU accelerated)");
-            Ok(Box::new(WGPUBackend::new(
-                neuron_capacity,
-                synapse_capacity,
-            )?))
+            // SAFETY: We've verified T == f32 above, so this is safe
+            // We use unsafe transmute because we can't directly cast Box<WGPUBackend> to Box<dyn ComputeBackend<T>>
+            // when T is a generic parameter, even though we know T == f32 at runtime
+            let backend = WGPUBackend::new(neuron_capacity, synapse_capacity)?;
+            let boxed: Box<dyn ComputeBackend<f32>> = Box::new(backend);
+            Ok(unsafe { std::mem::transmute(boxed) })
         }
         BackendType::Auto => {
             // Should never reach here - Auto should be resolved in from_config()

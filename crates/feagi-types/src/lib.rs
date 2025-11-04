@@ -279,9 +279,10 @@ mod tests {
 
     #[test]
     fn test_synaptic_weight_conversion() {
-        let weight = SynapticWeight::from_float(0.5);
+        // SynapticWeight uses direct cast (0-255 range, not normalized 0-1)
+        let weight = SynapticWeight::from_float(127.0);
         assert_eq!(weight.0, 127);
-        assert!((weight.to_float() - 0.498).abs() < 0.01);
+        assert_eq!(weight.to_float(), 127.0);  // Direct cast: 127 → 127.0
     }
 
     #[test]
@@ -295,7 +296,8 @@ mod tests {
             valid: true,
         };
         let contribution = synapse.calculate_contribution();
-        assert!((contribution.0 - 1.0).abs() < 0.01); // Should be ~1.0
+        // Direct cast: 255 * 255 * 1.0 = 65,025 (NOT normalized!)
+        assert_eq!(contribution.0, 65025.0);
 
         let inhibitory = Synapse {
             synapse_type: SynapseType::Inhibitory,

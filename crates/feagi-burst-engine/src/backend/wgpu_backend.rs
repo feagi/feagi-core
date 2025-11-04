@@ -115,7 +115,7 @@ impl WGPUBuffers {
     }
 }
 
-impl<T: NeuralValue> WGPUBackend {
+impl WGPUBackend {
     /// Create a new WGPU backend
     pub fn new(neuron_capacity: usize, synapse_capacity: usize) -> Result<Self> {
         // Initialize WGPU
@@ -235,7 +235,7 @@ impl<T: NeuralValue> WGPUBackend {
     }
 
     /// Upload neuron array data to GPU
-    fn upload_neuron_arrays(&mut self, neuron_array: &NeuronArray<T>) -> Result<()> {
+    fn upload_neuron_arrays(&mut self, neuron_array: &NeuronArray<f32>) -> Result<()> {
         let neuron_count = neuron_array.count;
         self.current_neuron_count = neuron_count;
 
@@ -1111,7 +1111,7 @@ impl<T: NeuralValue> WGPUBackend {
     /// Updates refractory countdowns and consecutive fire counts for FCL neurons
     fn download_neuron_state_updates(
         &mut self,
-        neuron_array: &mut NeuronArray<T>,
+        neuron_array: &mut NeuronArray<f32>,
         fcl_candidates: &[(u32, f32)],
     ) -> Result<()> {
         // TODO: Download u16_dynamic_state buffer for FCL neurons
@@ -1199,7 +1199,9 @@ impl<T: NeuralValue> WGPUBackend {
     }
 }
 
-impl<T: NeuralValue> ComputeBackend<T> for WGPUBackend {
+// GPU backend currently only supports f32 (shaders are f32-based)
+// Future: Add f16 support for GPU optimization
+impl ComputeBackend<f32> for WGPUBackend {
     fn backend_name(&self) -> &str {
         &self.name
     }
@@ -1257,7 +1259,7 @@ impl<T: NeuralValue> ComputeBackend<T> for WGPUBackend {
     fn process_neural_dynamics(
         &mut self,
         fcl: &FireCandidateList,
-        neuron_array: &mut NeuronArray<T>,
+        neuron_array: &mut NeuronArray<f32>,
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // **FCL-AWARE**: Upload only FCL candidates to GPU (sparse array)
@@ -1302,7 +1304,7 @@ impl<T: NeuralValue> ComputeBackend<T> for WGPUBackend {
 
     fn initialize_persistent_data(
         &mut self,
-        neuron_array: &NeuronArray<T>,
+        neuron_array: &NeuronArray<f32>,
         synapse_array: &SynapseArray,
     ) -> Result<()> {
         // Upload all data to GPU

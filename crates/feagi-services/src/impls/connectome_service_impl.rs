@@ -17,11 +17,11 @@ use tracing::{info, debug, warn};
 
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
-    connectome: Arc<RwLock<ConnectomeManager>>,
+    connectome: Arc<RwLock<ConnectomeManager<f32>>>,
 }
 
 impl ConnectomeServiceImpl {
-    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
+    pub fn new(connectome: Arc<RwLock<ConnectomeManager<f32>>>) -> Self {
         Self { connectome }
     }
     

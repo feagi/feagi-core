@@ -53,7 +53,7 @@ enum StreamState {
 /// Minimal PNS clone for callbacks (only the Arc fields needed for dynamic gating)
 #[derive(Clone)]
 struct PNSForCallbacks {
-    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32><f32>>>>>>,
+    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>>>>,
     agent_registry: Arc<RwLock<AgentRegistry>>,
     #[cfg(feature = "zmq-transport")]
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
@@ -439,7 +439,7 @@ pub struct PNS {
     
     // === Dynamic Stream Gating ===
     /// NPU reference for genome state checking (dynamic gating)
-    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32><f32>>>>>>,
+    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::RustNPU<f32>>>>>>,
     /// Sensory stream state
     sensory_stream_state: Arc<Mutex<StreamState>>,
     /// Motor stream state
@@ -957,13 +957,13 @@ impl PNS {
         // Wire up dynamic gating callbacks
         info!("🦀 [PNS] Wiring dynamic stream gating callbacks...");
         let pns_self = self.clone_for_callbacks();
-        self.registration_handler.lock().set_on_agent_registered_dynamic(move |agent_id| {
+        self.registration_handler.lock().set_on_agent_registered_dynamic(move |agent_id: String| {
             info!("🔔 [PNS-DYNAMIC-CALLBACK] Registration callback fired for agent: {}", agent_id);
             pns_self.on_agent_registered_dynamic(&agent_id);
         });
         
         let pns_self = self.clone_for_callbacks();
-        self.registration_handler.lock().set_on_agent_deregistered_dynamic(move |agent_id| {
+        self.registration_handler.lock().set_on_agent_deregistered_dynamic(move |agent_id: String| {
             info!("🔔 [PNS-DYNAMIC-CALLBACK] Deregistration callback fired for agent: {}", agent_id);
             pns_self.on_agent_deregistered_dynamic(&agent_id);
         });
@@ -1024,8 +1024,12 @@ impl PNS {
         // Start ZMQ data streams
         #[cfg(feature = "zmq-transport")]
         {
-            if let Some(ref zmq_streams) = *self.zmq_streams.lock() {
-                zmq_streams.start_data_streams()?;
+            let streams_lock = self.zmq_streams.lock();
+            if let Some(ref zmq_streams) = *streams_lock {
+                match zmq_streams.start_data_streams() {
+                    Ok(()) => {},
+                    Err(e) => return Err(e),
+                }
             } else {
                 return Err(PNSError::Agent(
                     "ZMQ streams not initialized - call start_control_streams() first".to_string(),
@@ -1038,7 +1042,7 @@ impl PNS {
         {
             if self.config.visualization_transport == TransportMode::Udp {
                 if let Some(runtime) = self.async_runtime.lock().as_ref() {
-                    let runtime_clone = Arc::clone(runtime);
+                    let runtime_clone: Arc<tokio::runtime::Runtime> = Arc::clone(runtime);
                     let mut udp_viz = UdpTransport::new(
                         self.config.udp_viz_config.clone(),
                         runtime_clone.clone(),
@@ -1056,7 +1060,7 @@ impl PNS {
             // Start UDP sensory transport if configured
             if self.config.sensory_transport == TransportMode::Udp {
                 if let Some(runtime) = self.async_runtime.lock().as_ref() {
-                    let runtime_clone = Arc::clone(runtime);
+                    let runtime_clone: Arc<tokio::runtime::Runtime> = Arc::clone(runtime);
                     let mut udp_sensory = UdpTransport::new(
                         self.config.udp_sensory_config.clone(),
                         runtime_clone.clone(),

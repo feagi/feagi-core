@@ -17,14 +17,14 @@ use tracing::debug;
 
 /// Default implementation of SystemService
 pub struct SystemServiceImpl {
-    connectome: Arc<RwLock<ConnectomeManager>>,
+    connectome: Arc<RwLock<ConnectomeManager<f32>>>,
     burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
     start_time: SystemTime,
 }
 
 impl SystemServiceImpl {
     pub fn new(
-        connectome: Arc<RwLock<ConnectomeManager>>,
+        connectome: Arc<RwLock<ConnectomeManager<f32>>>,
         burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
     ) -> Self {
         Self {

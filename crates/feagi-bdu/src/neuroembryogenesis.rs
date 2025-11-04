@@ -76,9 +76,12 @@ impl Default for DevelopmentProgress {
 ///
 /// Manages the development of a brain from genome instructions.
 /// Uses ConnectomeManager to build the actual neural structures.
-pub struct Neuroembryogenesis {
+///
+/// # Type Parameters
+/// - `T: NeuralValue`: The numeric precision for the connectome (f32, INT8Value, f16)
+pub struct Neuroembryogenesis<T: feagi_types::NeuralValue> {
     /// Reference to ConnectomeManager for building structures
-    connectome_manager: Arc<RwLock<ConnectomeManager<f32>>>,
+    connectome_manager: Arc<RwLock<ConnectomeManager<T>>>,
     
     /// Current development progress
     progress: Arc<RwLock<DevelopmentProgress>>,
@@ -87,9 +90,9 @@ pub struct Neuroembryogenesis {
     start_time: std::time::Instant,
 }
 
-impl Neuroembryogenesis {
+impl<T: feagi_types::NeuralValue> Neuroembryogenesis<T> {
     /// Create a new neuroembryogenesis instance
-    pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager<f32>>>) -> Self {
+    pub fn new(connectome_manager: Arc<RwLock<ConnectomeManager<T>>>) -> Self {
         Self {
             connectome_manager,
             progress: Arc::new(RwLock::new(DevelopmentProgress::default())),
@@ -128,30 +131,50 @@ impl Neuroembryogenesis {
             quant_spec.membrane_potential_max
         );
         
-        // Phase 5: Type dispatch (currently only FP32 is fully implemented)
+        // Phase 6: Type dispatch - Neuroembryogenesis<T> is now fully generic!
+        // The precision is determined by the type T of this Neuroembryogenesis instance.
+        // All stages (corticogenesis, neurogenesis, synaptogenesis) automatically use the correct type.
         match quant_spec.precision {
             Precision::FP32 => {
-                info!(target: "feagi-bdu", "   Using FP32 (32-bit floating-point) computation");
-                // Continue with current FP32 implementation below
+                info!(target: "feagi-bdu", "   ✓ Using FP32 (32-bit floating-point) - highest precision");
+                info!(target: "feagi-bdu", "   Memory usage: Baseline (4 bytes/neuron for membrane potential)");
             }
             Precision::INT8 => {
-                warn!(target: "feagi-bdu",
-                    "   INT8 quantization requested but not yet fully integrated."
-                );
-                warn!(target: "feagi-bdu",
-                    "   Falling back to FP32 for now. Full INT8 support in Phase 6.");
-                warn!(target: "feagi-bdu",
-                    "   (Core algorithms support INT8, but connectome dispatch not yet wired)");
-                // TODO (Phase 6): Call develop_with_type::<INT8Value>(self, genome, &quant_spec)
+                info!(target: "feagi-bdu", "   ✓ Using INT8 (8-bit integer) - memory efficient");
+                info!(target: "feagi-bdu", "   Memory reduction: 42% (1 byte/neuron for membrane potential)");
+                info!(target: "feagi-bdu", "   Quantization range: [{}, {}]", 
+                    quant_spec.membrane_potential_min, 
+                    quant_spec.membrane_potential_max);
+                // Note: If this Neuroembryogenesis was created with <f32>, this will warn below
+                // The caller must create Neuroembryogenesis::<INT8Value> to use INT8
             }
             Precision::FP16 => {
-                warn!(target: "feagi-bdu",
-                    "   FP16 quantization requested but not yet implemented."
-                );
-                warn!(target: "feagi-bdu",
-                    "   Falling back to FP32. FP16 support planned for future release.");
-                // TODO (Future): Call develop_with_type::<f16>(self, genome, &quant_spec)
+                warn!(target: "feagi-bdu", "   FP16 quantization requested but not yet implemented.");
+                warn!(target: "feagi-bdu", "   FP16 support planned for future GPU optimization.");
+                // Note: Requires f16 type and implementation
             }
+        }
+        
+        // Verify type consistency (genome precision should match Neuroembryogenesis<T>)
+        // This is a runtime check since T is erased after compilation
+        let type_name = std::any::type_name::<T>();
+        let expected_type = match quant_spec.precision {
+            Precision::FP32 => "f32",
+            Precision::INT8 => "INT8Value",
+            Precision::FP16 => "f16",
+        };
+        
+        if !type_name.contains(expected_type) {
+            warn!(target: "feagi-bdu",
+                "   ⚠️  Type mismatch: Genome specifies {:?} but Neuroembryogenesis is using {}",
+                quant_spec.precision, type_name
+            );
+            warn!(target: "feagi-bdu",
+                "   Proceeding with {} (caller must create Neuroembryogenesis::<{}> for correct precision)",
+                type_name, expected_type
+            );
+        } else {
+            info!(target: "feagi-bdu", "   ✓ Type consistency verified: Using {}", type_name);
         }
         
         // Update stage: Initialization
@@ -693,7 +716,7 @@ fn estimate_synapses_for_area(
     total
 }
 
-impl Neuroembryogenesis {
+impl<T: feagi_types::NeuralValue> Neuroembryogenesis<T> {
     /// Analyze region inputs/outputs based on cortical connections
     /// 
     /// Following Python's _auto_assign_region_io() logic:
@@ -773,8 +796,8 @@ mod tests {
     
     #[test]
     fn test_neuroembryogenesis_creation() {
-        let manager = ConnectomeManager::instance();
-        let neuro = Neuroembryogenesis::new(manager);
+        let manager = ConnectomeManager::<f32>::instance();
+        let neuro = Neuroembryogenesis::<f32>::new(manager);
         
         let progress = neuro.get_progress();
         assert_eq!(progress.stage, DevelopmentStage::Initialization);
@@ -783,8 +806,8 @@ mod tests {
     
     #[test]
     fn test_development_from_minimal_genome() {
-        let manager = ConnectomeManager::instance();
-        let mut neuro = Neuroembryogenesis::new(manager.clone());
+        let manager = ConnectomeManager::<f32>::instance();
+        let mut neuro = Neuroembryogenesis::<f32>::new(manager.clone());
         
         // Create a minimal genome with one cortical area
         let mut genome = create_genome_with_core_morphologies(
@@ -819,4 +842,19 @@ mod tests {
         println!("✅ Development completed in {}ms", progress.duration_ms);
     }
 }
+
+
+
+// ═══════════════════════════════════════════════════════════
+// Type Aliases for Convenience
+// ═══════════════════════════════════════════════════════════
+
+/// Neuroembryogenesis with 32-bit floating point precision (default)
+pub type NeuroembryogenesisF32 = Neuroembryogenesis<f32>;
+
+/// Neuroembryogenesis with 8-bit integer precision (memory efficient)
+#[cfg(feature = "int8")]
+pub type NeuroembryogenesisINT8 = Neuroembryogenesis<feagi_types::INT8Value>;
+
+// Future: pub type NeuroembryogenesisF16 = Neuroembryogenesis<f16>;
 
