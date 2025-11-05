@@ -16,10 +16,11 @@ pub mod zmq;
 #[cfg(feature = "udp-transport")]
 pub mod udp;
 
+#[cfg(feature = "websocket-transport")]
+pub mod websocket;
+
 // Future transports (placeholder modules will be added as needed):
 // #[cfg(feature = "shm-transport")]
 // pub mod shm;
-// #[cfg(feature = "websocket-transport")]
-// pub mod websocket;
 // #[cfg(feature = "rtos-transport")]
 // pub mod rtos;

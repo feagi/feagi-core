@@ -44,6 +44,17 @@ pub struct AgentRegistration {
     pub agent_ip: Option<String>,
     pub capabilities: HashMap<String, serde_json::Value>,
     pub metadata: Option<HashMap<String, serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chosen_transport: Option<String>, // Agent reports which transport it chose
+}
+
+/// Transport configuration (FEAGI 2.0)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransportConfig {
+    pub transport_type: String,
+    pub enabled: bool,
+    pub ports: HashMap<String, u16>,
+    pub host: String,
 }
 
 /// Agent registration response
@@ -56,6 +67,15 @@ pub struct AgentRegistrationResponse {
     pub transport: Option<HashMap<String, serde_json::Value>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rates: Option<HashMap<String, HashMap<String, f64>>>,
+    // FEAGI 2.0: Multi-transport support
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub transports: Option<Vec<TransportConfig>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recommended_transport: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zmq_ports: Option<HashMap<String, u16>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shm_paths: Option<HashMap<String, String>>,
 }
 
 /// Agent properties
@@ -68,6 +88,8 @@ pub struct AgentProperties {
     pub agent_version: String,
     pub controller_version: String,
     pub capabilities: HashMap<String, serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chosen_transport: Option<String>, // Transport the agent chose: "zmq", "websocket", "shm", etc.
 }
 
 /// Heartbeat request

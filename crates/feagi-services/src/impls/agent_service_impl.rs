@@ -17,12 +17,15 @@ use feagi_bdu::ConnectomeManager;
 use feagi_pns::{
     AgentRegistry, AgentInfo, AgentType, AgentCapabilities, AgentTransport,
     SensoryCapability, VisualizationCapability, MotorCapability,
+    RegistrationHandler, RegistrationRequest,
 };
+use parking_lot::Mutex;
 
 /// Implementation of the Agent service
 pub struct AgentServiceImpl {
     connectome_manager: Arc<RwLock<ConnectomeManager>>,
     agent_registry: Arc<RwLock<AgentRegistry>>,
+    registration_handler: Option<Arc<Mutex<RegistrationHandler>>>,
 }
 
 impl AgentServiceImpl {
@@ -33,7 +36,14 @@ impl AgentServiceImpl {
         Self {
             connectome_manager,
             agent_registry,
+            registration_handler: None,
         }
+    }
+    
+    /// Set the PNS registration handler for full transport negotiation
+    pub fn set_registration_handler(&mut self, handler: Arc<Mutex<RegistrationHandler>>) {
+        self.registration_handler = Some(handler);
+        info!("🦀 [AGENT-SERVICE] Registration handler connected");
     }
 }
 
@@ -137,7 +147,50 @@ impl AgentService for AgentServiceImpl {
         agent_info.metadata.insert("agent_version".to_string(), serde_json::json!(registration.agent_version));
         agent_info.metadata.insert("controller_version".to_string(), serde_json::json!(registration.controller_version));
         
-        // Register in agent registry
+        // If we have a registration handler, use it (gets full transport info)
+        if let Some(handler) = &self.registration_handler {
+            info!("📝 [AGENT-SERVICE] Using PNS registration handler for full transport negotiation");
+            
+            // Build PNS registration request
+            let pns_request = RegistrationRequest {
+                agent_id: registration.agent_id.clone(),
+                agent_type: registration.agent_type.clone(),
+                capabilities: serde_json::to_value(&registration.capabilities)
+                    .unwrap_or(serde_json::Value::Object(serde_json::Map::new())),
+                chosen_transport: registration.chosen_transport.clone(), // Pass through the agent's transport choice
+            };
+            
+            // Call PNS registration handler
+            let pns_response = handler.lock().process_registration(pns_request)
+                .map_err(|e| AgentError::RegistrationFailed(e))?;
+            
+            // Convert PNS transport configs to service transport configs
+            let transports = pns_response.transports.map(|ts| {
+                ts.into_iter().map(|t| {
+                    TransportConfig {
+                        transport_type: t.transport_type,
+                        enabled: t.enabled,
+                        ports: t.ports,
+                        host: t.host,
+                    }
+                }).collect()
+            });
+            
+            return Ok(AgentRegistrationResponse {
+                status: pns_response.status,
+                message: pns_response.message.unwrap_or_else(|| "Success".to_string()),
+                success: true,
+                transport: None,  // Legacy
+                rates: None,      // TODO: Calculate rates
+                transports,       // NEW: Full transport info!
+                recommended_transport: pns_response.recommended_transport,
+                zmq_ports: pns_response.zmq_ports,
+                shm_paths: pns_response.shm_paths,
+            });
+        }
+        
+        // Fallback: Register directly in registry (legacy path without transport info)
+        warn!("⚠️ [AGENT-SERVICE] No registration handler - using fallback path (no transport info)");
         info!("📝 [AGENT-SERVICE] Registering in AgentRegistry: {}", registration.agent_id);
         self.agent_registry.write().register(agent_info)
             .map_err(|e| {
@@ -154,8 +207,12 @@ impl AgentService for AgentServiceImpl {
             status: "success".to_string(),
             message: format!("Agent {} registered successfully", registration.agent_id),
             success: true,
-            transport: None, // TODO: Add transport negotiation
-            rates: None,     // TODO: Add rate negotiation
+            transport: None,
+            rates: None,
+            transports: None,      // No transport info in fallback path
+            recommended_transport: None,
+            zmq_ports: None,
+            shm_paths: None,
         })
     }
     
@@ -254,6 +311,7 @@ impl AgentService for AgentServiceImpl {
             agent_version,
             controller_version,
             capabilities,
+            chosen_transport: agent.chosen_transport.clone(),
         })
     }
     

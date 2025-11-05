@@ -67,11 +67,13 @@ pub mod config;
 pub mod error;
 pub mod heartbeat;
 pub mod reconnect;
+pub mod transport;
 
 // Re-export main types for convenience
 pub use client::AgentClient;
 pub use config::AgentConfig;
 pub use error::{Result, SdkError};
+pub use transport::{RegistrationResponse, TransportConfig as TransportInfo};
 
 // Re-export types from feagi-pns
 pub use feagi_pns::{AgentCapabilities, AgentType, MotorCapability, VisionCapability};

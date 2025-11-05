@@ -157,14 +157,14 @@ pub mod prelude {
     pub use crate::traits::*;
 
     #[cfg(feature = "zmq-server")]
-    pub use crate::zmq::server::*;
+    pub use crate::zmq::server::{ZmqPub, ZmqPull, ZmqRouter};
 
     #[cfg(feature = "zmq-client")]
-    pub use crate::zmq::client::*;
+    pub use crate::zmq::client::{ZmqDealer, ZmqPush, ZmqSub};
     
     #[cfg(feature = "websocket-server")]
-    pub use crate::websocket::server::*;
+    pub use crate::websocket::server::{WsPub, WsPull, WsRouter};
     
     #[cfg(feature = "websocket-client")]
-    pub use crate::websocket::client::*;
+    pub use crate::websocket::client::{WsDealer, WsPush, WsSub};
 }

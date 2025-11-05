@@ -134,8 +134,9 @@ impl Publisher for WsPub {
         message.push(b'|');
         message.extend_from_slice(data);
         
-        tx.send(message)
-            .map_err(|e| TransportError::SendFailed(e.to_string()))?;
+        // Ignore SendError if no receivers (no clients connected yet)
+        // This is normal - messages are dropped if no one is listening
+        let _ = tx.send(message);
         
         Ok(())
     }
@@ -146,8 +147,8 @@ impl Publisher for WsPub {
             .as_ref()
             .ok_or(TransportError::NotRunning)?;
         
-        tx.send(data.to_vec())
-            .map_err(|e| TransportError::SendFailed(e.to_string()))?;
+        // Ignore SendError if no receivers (no clients connected yet)
+        let _ = tx.send(data.to_vec());
         
         Ok(())
     }

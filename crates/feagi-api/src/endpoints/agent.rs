@@ -50,17 +50,44 @@ pub async fn register_agent(
         agent_ip: request.agent_ip,
         capabilities: request.capabilities,
         metadata: request.metadata,
+        chosen_transport: request.chosen_transport,
     };
 
     match agent_service.register_agent(registration).await {
-        Ok(response) => Ok(Json(AgentRegistrationResponse {
-            status: response.status,
-            message: response.message,
-            success: response.success,
-            transport: response.transport,
-            rates: response.rates,
-        })),
-        Err(e) => Err(ApiError::internal(format!("Registration failed: {}", e))),
+        Ok(response) => {
+            // Convert service TransportConfig to API TransportConfig
+            let transports = response.transports.map(|ts| {
+                ts.into_iter().map(|t| {
+                    crate::v1::agent_dtos::TransportConfig {
+                        transport_type: t.transport_type,
+                        enabled: t.enabled,
+                        ports: t.ports,
+                        host: t.host,
+                    }
+                }).collect()
+            });
+            
+            Ok(Json(AgentRegistrationResponse {
+                status: response.status,
+                message: response.message,
+                success: response.success,
+                transport: response.transport,
+                rates: response.rates,
+                transports,
+                recommended_transport: response.recommended_transport,
+                zmq_ports: response.zmq_ports,
+                shm_paths: response.shm_paths,
+            }))
+        },
+        Err(e) => {
+            // Check if error is about unsupported transport (validation error)
+            let error_msg = e.to_string();
+            if error_msg.contains("not supported") || error_msg.contains("disabled") {
+                Err(ApiError::invalid_input(error_msg))
+            } else {
+                Err(ApiError::internal(format!("Registration failed: {}", e)))
+            }
+        }
     }
 }
 
@@ -167,6 +194,7 @@ pub async fn get_agent_properties(
             agent_version: properties.agent_version,
             controller_version: properties.controller_version,
             capabilities: properties.capabilities,
+            chosen_transport: properties.chosen_transport,
         })),
         Err(e) => Err(ApiError::not_found("agent", &format!("{}", e))),
     }
@@ -452,6 +480,9 @@ pub async fn get_agent_info(
     response.insert("agent_version".to_string(), serde_json::json!(properties.agent_version));
     response.insert("controller_version".to_string(), serde_json::json!(properties.controller_version));
     response.insert("status".to_string(), serde_json::json!("active"));
+    if let Some(ref transport) = properties.chosen_transport {
+        response.insert("chosen_transport".to_string(), serde_json::json!(transport));
+    }
     
     Ok(Json(response))
 }
@@ -490,6 +521,7 @@ pub async fn get_agent_properties_path(
             agent_version: properties.agent_version,
             controller_version: properties.controller_version,
             capabilities: properties.capabilities,
+            chosen_transport: properties.chosen_transport,
         })),
         Err(e) => Err(ApiError::not_found("agent", &format!("{}", e))),
     }

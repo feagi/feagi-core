@@ -57,6 +57,10 @@ struct PNSForCallbacks {
     agent_registry: Arc<RwLock<AgentRegistry>>,
     #[cfg(feature = "zmq-transport")]
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
+    #[cfg(feature = "websocket-transport")]
+    websocket_streams: Arc<Mutex<Option<WebSocketStreams>>>,
+    websocket_enabled: bool,
+    websocket_viz_port: u16,
     sensory_stream_state: Arc<Mutex<StreamState>>,
     motor_stream_state: Arc<Mutex<StreamState>>,
     viz_stream_state: Arc<Mutex<StreamState>>,
@@ -81,6 +85,24 @@ impl PNSForCallbacks {
     
     fn should_viz_stream_run(&self) -> bool {
         self.is_genome_loaded() && self.agent_registry.read().has_visualization_agents()
+    }
+    
+    fn get_active_viz_transports(&self) -> Vec<String> {
+        let registry = self.agent_registry.read();
+        let mut transports = std::collections::HashSet::new();
+        
+        for agent in registry.get_all() {
+            if matches!(agent.agent_type, AgentType::Visualization | AgentType::Infrastructure) {
+                if let Some(ref chosen) = agent.chosen_transport {
+                    transports.insert(chosen.clone());
+                } else {
+                    // Legacy: if no chosen_transport, assume ZMQ
+                    transports.insert("zmq".to_string());
+                }
+            }
+        }
+        
+        transports.into_iter().collect()
     }
     
     fn try_start_sensory_stream(&self) {
@@ -233,9 +255,15 @@ impl PNSForCallbacks {
     fn try_start_viz_stream(&self) {
         let mut state = self.viz_stream_state.lock();
         
-        if *state != StreamState::Stopped {
-            debug!("[PNS-DYNAMIC] Viz stream already {:?}, not starting", *state);
+        // Allow restart if stuck in Starting (recovery from failed startup)
+        if *state == StreamState::Running {
+            debug!("[PNS-DYNAMIC] Viz stream already Running, not restarting");
             return;
+        }
+        
+        if *state == StreamState::Starting {
+            warn!("⚠️ [PNS-DYNAMIC] Viz stream stuck in Starting state - forcing restart");
+            *state = StreamState::Stopped; // Reset to allow restart
         }
         
         let genome_loaded = self.is_genome_loaded();
@@ -258,22 +286,68 @@ impl PNSForCallbacks {
             return;
         }
         
+        // Determine which transports need to be started based on agent preferences
+        let active_transports = self.get_active_viz_transports();
+        let needs_zmq = active_transports.contains(&"zmq".to_string()) || 
+                        active_transports.contains(&"shm".to_string()) ||
+                        active_transports.is_empty(); // Default to ZMQ if no preference
+        let needs_websocket = active_transports.contains(&"websocket".to_string());
+        
+        info!("🔍 [PNS-DYNAMIC] Starting viz streams for transports: {:?} (ZMQ: {}, WebSocket: {})", 
+              active_transports, needs_zmq, needs_websocket);
+        
+        // Start ZMQ viz stream only if agents are using it
         #[cfg(feature = "zmq-transport")]
         {
-            if let Some(streams) = self.zmq_streams.lock().as_ref() {
-                match streams.start_viz_stream() {
-                    Ok(()) => {
-                        *self.viz_stream_state.lock() = StreamState::Running;
-                        let count = self.agent_registry.read().count_visualization_agents();
-                        info!("🟢 [PNS-DYNAMIC] Viz stream started: {} agents", count);
-                    }
-                    Err(e) => {
-                        error!("❌ [PNS-DYNAMIC] Failed to start viz: {}", e);
-                        *self.viz_stream_state.lock() = StreamState::Stopped;
+            if needs_zmq {
+                info!("🔍 [PNS-DYNAMIC] Starting ZMQ viz stream (agents using ZMQ/SHM)...");
+                if let Some(streams) = self.zmq_streams.lock().as_ref() {
+                    match streams.start_viz_stream() {
+                        Ok(()) => {
+                            info!("🟢 [PNS-DYNAMIC] ZMQ viz stream started");
+                        }
+                        Err(e) => {
+                            error!("❌ [PNS-DYNAMIC] Failed to start ZMQ viz: {}", e);
+                        }
                     }
                 }
+            } else {
+                info!("⏭️ [PNS-DYNAMIC] Skipping ZMQ viz stream (no agents using ZMQ/SHM)");
             }
         }
+        
+        // Start WebSocket viz stream only if agents are using it
+        #[cfg(feature = "websocket-transport")]
+        {
+            if needs_websocket && self.websocket_enabled {
+                info!("🔍 [PNS-DYNAMIC] Starting WebSocket viz stream (agents using WebSocket)...");
+                let ws_lock = self.websocket_streams.lock();
+                if let Some(ref streams) = *ws_lock {
+                    match streams.start_data_streams() {
+                        Ok(()) => {
+                            info!("🟢 [PNS-DYNAMIC] WebSocket viz stream started on port {}", 
+                                  self.websocket_viz_port);
+                        }
+                        Err(e) => {
+                            error!("❌ [PNS-DYNAMIC] Failed to start WebSocket viz: {}", e);
+                        }
+                    }
+                    drop(ws_lock);
+                } else {
+                    warn!("⚠️ [PNS-DYNAMIC] WebSocket enabled but streams not initialized!");
+                }
+            } else if needs_websocket && !self.websocket_enabled {
+                error!("❌ [PNS-DYNAMIC] Agent requested WebSocket but it's disabled in config!");
+            } else {
+                info!("⏭️ [PNS-DYNAMIC] Skipping WebSocket viz stream (no agents using WebSocket)");
+            }
+        }
+        
+        // Mark as running after starting all enabled transports
+        info!("🔍 [PNS-DYNAMIC] Setting viz stream state to Running...");
+        *self.viz_stream_state.lock() = StreamState::Running;
+        let count = self.agent_registry.read().count_visualization_agents();
+        info!("🟢 [PNS-DYNAMIC] Viz streams started for {} agents", count);
     }
     
     fn try_stop_viz_stream(&self) {
@@ -362,9 +436,9 @@ pub mod transports;
 pub use core::{
     AgentCapabilities, AgentDisconnectedEvent, AgentInfo, AgentRegisteredEvent, AgentRegistry,
     AgentTransport, AgentType, HeartbeatTracker, MotorCapability, MotorCommandEvent, PNSConfig,
-    PNSError, RegistrationHandler, RegistrationRequest, Result, SensoryCapability, SensoryDataEvent,
-    SharedFBC, StreamType, TransportMode, VisionCapability, VisualizationCapability,
-    VisualizationReadyEvent,
+    PNSError, RegistrationHandler, RegistrationRequest, RegistrationResponse, Result, SensoryCapability, SensoryDataEvent,
+    SharedFBC, StreamType, TransportConfig, TransportMode, VisionCapability, VisualizationCapability,
+    VisualizationReadyEvent, WebSocketConfig,
 };
 
 // Re-export transport-specific types
@@ -376,6 +450,9 @@ pub use transports::zmq::{
 
 #[cfg(feature = "udp-transport")]
 pub use transports::udp::{UdpConfig, UdpTransport};
+
+#[cfg(feature = "websocket-transport")]
+pub use transports::websocket::WebSocketStreams;
 
 // Keep shm module at root for now (will be moved to transports/ in future)
 pub mod shm;
@@ -421,6 +498,10 @@ pub struct PNS {
     /// ZMQ streams (blocking, TCP-based)
     #[cfg(feature = "zmq-transport")]
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
+
+    /// WebSocket streams (async, web-compatible)
+    #[cfg(feature = "websocket-transport")]
+    websocket_streams: Arc<Mutex<Option<WebSocketStreams>>>,
 
     /// UDP visualization transport (async, best-effort)
     #[cfg(feature = "udp-transport")]
@@ -494,12 +575,24 @@ impl PNS {
         
         info!("🦀 [PNS] Port configuration: sensory={}, motor={}, viz={}", sensory_port, motor_port, viz_port);
         
-        let registration_handler = Arc::new(Mutex::new(RegistrationHandler::new(
+        let mut registration_handler_instance = RegistrationHandler::new(
             Arc::clone(&agent_registry),
             sensory_port,
             motor_port,
             viz_port,
-        )));
+        );
+        
+        // Configure WebSocket transport
+        registration_handler_instance.set_websocket_config(
+            config.websocket.enabled,
+            config.websocket.host.clone(),
+            config.websocket.sensory_port,
+            config.websocket.motor_port,
+            config.websocket.visualization_port,
+            config.websocket.registration_port,
+        );
+        
+        let registration_handler = Arc::new(Mutex::new(registration_handler_instance));
 
         Ok(Self {
             config,
@@ -509,6 +602,8 @@ impl PNS {
             // Transport layer
             #[cfg(feature = "zmq-transport")]
             zmq_streams: Arc::new(Mutex::new(None)),
+            #[cfg(feature = "websocket-transport")]
+            websocket_streams: Arc::new(Mutex::new(None)),
             #[cfg(feature = "udp-transport")]
             udp_viz_transport: Arc::new(Mutex::new(None)),
             #[cfg(feature = "udp-transport")]
@@ -529,6 +624,34 @@ impl PNS {
             agent_registered: Arc::new(Mutex::new(FeagiSignal::new())),
             agent_disconnected: Arc::new(Mutex::new(FeagiSignal::new())),
         })
+    }
+    
+    /// Wire dynamic gating callbacks to registration handler
+    /// Must be called after PNS is wrapped in Arc (in main.rs)
+    pub fn wire_dynamic_gating_callbacks(pns: &Arc<Self>) {
+        let pns_weak = Arc::downgrade(pns);
+        
+        let on_registered = {
+            let pns_weak = pns_weak.clone();
+            move |agent_id: String| {
+                if let Some(pns_ref) = pns_weak.upgrade() {
+                    pns_ref.on_agent_registered_dynamic(&agent_id);
+                }
+            }
+        };
+        let on_deregistered = {
+            let pns_weak = pns_weak.clone();
+            move |agent_id: String| {
+                if let Some(pns_ref) = pns_weak.upgrade() {
+                    pns_ref.on_agent_deregistered_dynamic(&agent_id);
+                }
+            }
+        };
+        
+        // Register callbacks using the setter methods
+        pns.registration_handler.lock().set_on_agent_registered_dynamic(on_registered);
+        pns.registration_handler.lock().set_on_agent_deregistered_dynamic(on_deregistered);
+        info!("🦀 [PNS] Dynamic gating callbacks registered with RegistrationHandler");
     }
 
     /// Set the sensory agent manager (for SHM I/O coordination)
@@ -947,6 +1070,20 @@ impl PNS {
             *self.zmq_streams.lock() = Some(zmq_streams);
         }
 
+        // Initialize WebSocket streams if enabled
+        #[cfg(feature = "websocket-transport")]
+        {
+            if self.config.websocket.enabled {
+                info!("🦀 [PNS] Initializing WebSocket streams...");
+                let ws_streams = WebSocketStreams::new(self.config.clone())?;
+                ws_streams.start_control_streams()?;
+                *self.websocket_streams.lock() = Some(ws_streams);
+                info!("🦀 [PNS] ✅ WebSocket control streams initialized");
+            } else {
+                info!("🦀 [PNS] WebSocket transport disabled in configuration");
+            }
+        }
+
         // Start heartbeat monitoring
         self.heartbeat_tracker
             .lock()
@@ -982,6 +1119,10 @@ impl PNS {
             agent_registry: Arc::clone(&self.agent_registry),
             #[cfg(feature = "zmq-transport")]
             zmq_streams: Arc::clone(&self.zmq_streams),
+            #[cfg(feature = "websocket-transport")]
+            websocket_streams: Arc::clone(&self.websocket_streams),
+            websocket_enabled: self.config.websocket.enabled,
+            websocket_viz_port: self.config.websocket.visualization_port,
             sensory_stream_state: Arc::clone(&self.sensory_stream_state),
             motor_stream_state: Arc::clone(&self.motor_stream_state),
             viz_stream_state: Arc::clone(&self.viz_stream_state),
@@ -1034,6 +1175,28 @@ impl PNS {
                 return Err(PNSError::Agent(
                     "ZMQ streams not initialized - call start_control_streams() first".to_string(),
                 ));
+            }
+        }
+
+        // Start WebSocket data streams if enabled
+        #[cfg(feature = "websocket-transport")]
+        {
+            if self.config.websocket.enabled {
+                let streams_lock = self.websocket_streams.lock();
+                if let Some(ref ws_streams) = *streams_lock {
+                    match ws_streams.start_data_streams() {
+                        Ok(()) => {
+                            info!("🦀 [PNS] ✅ WebSocket data streams started");
+                            info!("🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}/visualization", 
+                                  self.config.websocket.host, self.config.websocket.visualization_port);
+                        },
+                        Err(e) => {
+                            warn!("⚠️ [PNS] WebSocket streams start failed: {} (continuing with ZMQ)", e);
+                        }
+                    }
+                } else {
+                    info!("🦀 [PNS] WebSocket streams not initialized (disabled in config)");
+                }
             }
         }
 
@@ -1161,10 +1324,36 @@ impl PNS {
     pub fn get_agent_registry(&self) -> Arc<RwLock<AgentRegistry>> {
         Arc::clone(&self.agent_registry)
     }
+    
+    /// Get registration handler (for full transport negotiation)
+    pub fn get_registration_handler(&self) -> Arc<parking_lot::Mutex<RegistrationHandler>> {
+        Arc::clone(&self.registration_handler)
+    }
+    
+    /// Check which transports have active visualization agents
+    fn get_active_viz_transports(&self) -> Vec<String> {
+        let registry = self.agent_registry.read();
+        let mut transports = std::collections::HashSet::new();
+        
+        for agent in registry.get_all() {
+            if matches!(agent.agent_type, AgentType::Visualization | AgentType::Infrastructure) {
+                if let Some(ref chosen) = agent.chosen_transport {
+                    transports.insert(chosen.clone());
+                } else {
+                    // Legacy: if no chosen_transport, assume ZMQ
+                    transports.insert("zmq".to_string());
+                }
+            }
+        }
+        
+        transports.into_iter().collect()
+    }
 
     /// Publish raw fire queue data (NEW ARCHITECTURE - serialization off burst thread)
     /// Called by burst engine with raw fire queue data
     /// PNS will serialize on its own thread to avoid blocking burst engine
+    /// 
+    /// **PER-AGENT TRANSPORT:** Only publishes to transports that have active agents
     pub fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> Result<()> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
@@ -1175,35 +1364,78 @@ impl PNS {
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
-        match self.config.visualization_transport {
-            #[cfg(feature = "zmq-transport")]
-            TransportMode::Zmq => {
+        let active_transports = self.get_active_viz_transports();
+        
+        static TRANSPORT_LOG_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let log_count = TRANSPORT_LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if log_count % 100 == 0 {
+            info!("[PNS] 🔍 Active viz transports: {:?}", active_transports);
+        }
+        
+        let mut published_to = Vec::new();
+        let mut errors = Vec::new();
+
+        // Publish to ZMQ if any agent is using it
+        #[cfg(feature = "zmq-transport")]
+        {
+            if active_transports.contains(&"zmq".to_string()) || active_transports.contains(&"shm".to_string()) || active_transports.is_empty() {
                 if let Some(streams) = self.zmq_streams.lock().as_ref() {
-                    streams.publish_raw_fire_queue(fire_data)?;
-                    Ok(())
-                } else {
-                    error!("[PNS] ❌ CRITICAL: ZMQ streams not started!");
-                    Err(PNSError::NotRunning("ZMQ streams not started".to_string()))
+                    match streams.publish_raw_fire_queue(fire_data.clone()) {
+                        Ok(()) => published_to.push("ZMQ"),
+                        Err(e) => errors.push(format!("ZMQ: {}", e)),
+                    }
                 }
             }
-            #[cfg(feature = "udp-transport")]
-            TransportMode::Udp => {
-                // UDP path: Serialize raw fire queue data first (on this thread, not burst thread)
-                // TODO: Move this serialization to UDP transport's own worker thread for consistency
-                warn!("[PNS] ⚠️ UDP transport for visualization not yet updated for raw fire queue architecture");
-                Err(PNSError::Transport("UDP visualization with raw fire queue not yet implemented".to_string()))
+        }
+
+        // Publish to WebSocket if any agent chose it OR if WebSocket servers are running
+        // (allowing clients that don't send chosen_transport to still receive data)
+        #[cfg(feature = "websocket-transport")]
+        {
+            let should_publish_ws = active_transports.contains(&"websocket".to_string()) || 
+                (self.config.websocket.enabled && self.agent_registry.read().has_visualization_agents());
+            
+            if should_publish_ws {
+                if let Some(streams) = self.websocket_streams.lock().as_ref() {
+                    if streams.is_running() {
+                        match streams.publish_raw_fire_queue(fire_data.clone()) {
+                            Ok(()) => published_to.push("WebSocket"),
+                            Err(e) => errors.push(format!("WebSocket: {}", e)),
+                        }
+                    } else {
+                        if log_count % 100 == 0 {
+                            warn!("[PNS] ⚠️ WebSocket enabled but not running (servers not started)");
+                        }
+                    }
+                } else {
+                    if log_count % 100 == 0 {
+                        warn!("[PNS] ⚠️ WebSocket enabled but streams not initialized!");
+                    }
+                }
             }
-            #[cfg(not(any(feature = "zmq-transport", feature = "udp-transport")))]
-            _ => {
-                Err(PNSError::Transport(
-                    "No visualization transport enabled (enable zmq-transport or udp-transport feature)".to_string(),
-                ))
+        }
+
+        // Log results
+        if !published_to.is_empty() {
+            static LOG_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let count = LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if count % 100 == 0 {  // Log every 100th frame to avoid spam
+                info!("[PNS] 📡 Published visualization to: {:?}", published_to);
             }
+            Ok(())
+        } else if !errors.is_empty() {
+            warn!("[PNS] ⚠️ Visualization publish failed: {:?}", errors);
+            Err(PNSError::Transport(format!("All transports failed: {:?}", errors)))
+        } else {
+            // No transports running - this is OK during startup
+            Ok(())
         }
     }
     
     /// Publish motor data to a specific agent
     /// Called by burst engine to send motor commands
+    /// 
+    /// **MULTI-TRANSPORT:** Publishes to ALL enabled transports (ZMQ, WebSocket)
     pub fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<()> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
@@ -1214,23 +1446,42 @@ impl PNS {
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
-        // Motor uses ZMQ for agent-specific delivery
+        let mut published_to = Vec::new();
+        let mut errors = Vec::new();
+
+        // Publish to ZMQ if enabled
         #[cfg(feature = "zmq-transport")]
         {
             if let Some(streams) = self.zmq_streams.lock().as_ref() {
-                streams.publish_motor(agent_id, data)?;
-                Ok(())
-            } else {
-                error!("[PNS] ❌ ZMQ streams not started!");
-                Err(PNSError::NotRunning("ZMQ streams not started".to_string()))
+                match streams.publish_motor(agent_id, data) {
+                    Ok(()) => published_to.push("ZMQ"),
+                    Err(e) => errors.push(format!("ZMQ: {}", e)),
+                }
             }
         }
-        
-        #[cfg(not(feature = "zmq-transport"))]
+
+        // Publish to WebSocket if enabled
+        #[cfg(feature = "websocket-transport")]
         {
-            let _ = (agent_id, data); // Suppress unused warnings
-            error!("[PNS] ❌ ZMQ transport not enabled!");
-            Err(PNSError::NotRunning("ZMQ transport not available".to_string()))
+            if let Some(streams) = self.websocket_streams.lock().as_ref() {
+                if streams.is_running() {
+                    match streams.publish_motor(agent_id, data) {
+                        Ok(()) => published_to.push("WebSocket"),
+                        Err(e) => errors.push(format!("WebSocket: {}", e)),
+                    }
+                }
+            }
+        }
+
+        // Return success if published to at least one transport
+        if !published_to.is_empty() {
+            Ok(())
+        } else if !errors.is_empty() {
+            warn!("[PNS] ⚠️ Motor publish failed for '{}': {:?}", agent_id, errors);
+            Err(PNSError::Transport(format!("All transports failed: {:?}", errors)))
+        } else {
+            // No transports running
+            Err(PNSError::NotRunning("No motor transports available".to_string()))
         }
     }
 }

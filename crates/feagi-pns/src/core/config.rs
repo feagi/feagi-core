@@ -17,6 +17,44 @@ pub enum TransportMode {
     Udp,
 }
 
+/// WebSocket transport configuration
+#[derive(Debug, Clone)]
+pub struct WebSocketConfig {
+    pub enabled: bool,
+    pub host: String,
+    pub sensory_port: u16,
+    pub motor_port: u16,
+    pub visualization_port: u16,
+    pub registration_port: u16,
+    pub rest_api_port: u16,
+    pub connection_timeout_ms: u64,
+    pub ping_interval_ms: u64,
+    pub ping_timeout_ms: u64,
+    pub close_timeout_ms: u64,
+    pub max_message_size: usize,
+    pub max_connections: usize,
+}
+
+impl Default for WebSocketConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,  // Disabled by default, enabled via config
+            host: "0.0.0.0".to_string(),
+            sensory_port: 9051,
+            motor_port: 9052,
+            visualization_port: 9050,
+            registration_port: 9053,
+            rest_api_port: 9054,
+            connection_timeout_ms: 5000,
+            ping_interval_ms: 60000,
+            ping_timeout_ms: 60000,
+            close_timeout_ms: 10000,
+            max_message_size: 10485760,  // 10MB
+            max_connections: 100,
+        }
+    }
+}
+
 /// Configuration for PNS
 #[derive(Debug, Clone)]
 pub struct PNSConfig {
@@ -41,6 +79,9 @@ pub struct PNSConfig {
     pub udp_viz_config: UdpConfig,
     #[cfg(feature = "udp-transport")]
     pub udp_sensory_config: UdpConfig,
+
+    // === WebSocket Configuration (NEW) ===
+    pub websocket: WebSocketConfig,
 
     // === Transport Mode Selection ===
     /// Transport for visualization data (Zmq or Udp)
@@ -97,6 +138,9 @@ impl Default for PNSConfig {
             sensory_transport: TransportMode::Zmq,
             #[cfg(all(feature = "udp-transport", not(feature = "zmq-transport")))]
             sensory_transport: TransportMode::Udp,
+
+            // WebSocket defaults
+            websocket: WebSocketConfig::default(),
 
             // Shared
             shm_base_path: "/tmp".to_string(),

@@ -17,6 +17,17 @@ pub struct RegistrationRequest {
     pub agent_id: String,
     pub agent_type: String,
     pub capabilities: serde_json::Value, // Flexible JSON for different formats
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub chosen_transport: Option<String>, // Agent reports which transport it chose: "zmq", "websocket", "shm", etc.
+}
+
+/// Transport configuration for an agent
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TransportConfig {
+    pub transport_type: String, // "zmq" or "websocket"
+    pub enabled: bool,
+    pub ports: HashMap<String, u16>,
+    pub host: String,
 }
 
 /// Registration response to agent
@@ -25,7 +36,9 @@ pub struct RegistrationResponse {
     pub status: String,
     pub message: Option<String>,
     pub shm_paths: Option<HashMap<String, String>>, // capability_type -> shm_path
-    pub zmq_ports: Option<HashMap<String, u16>>,
+    pub zmq_ports: Option<HashMap<String, u16>>,    // Legacy field for backward compatibility
+    pub transports: Option<Vec<TransportConfig>>,    // NEW: Available transports with their configs
+    pub recommended_transport: Option<String>,        // NEW: "zmq" or "websocket"
 }
 
 /// Type alias for registration callbacks
@@ -51,6 +64,13 @@ pub struct RegistrationHandler {
     sensory_port: u16,
     motor_port: u16,
     viz_port: u16,
+    /// WebSocket port numbers (from config, NOT hardcoded)
+    ws_enabled: bool,
+    ws_host: String,
+    ws_sensory_port: u16,
+    ws_motor_port: u16,
+    ws_viz_port: u16,
+    ws_registration_port: u16,
     /// Callbacks for Python integration
     on_agent_registered: RegistrationCallback,
     on_agent_deregistered: DeregistrationCallback,
@@ -69,11 +89,37 @@ impl RegistrationHandler {
             sensory_port,
             motor_port,
             viz_port,
+            ws_enabled: false,
+            ws_host: "0.0.0.0".to_string(),
+            ws_sensory_port: 9051,
+            ws_motor_port: 9052,
+            ws_viz_port: 9050,
+            ws_registration_port: 9053,
             on_agent_registered: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_deregistered: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_registered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_deregistered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
         }
+    }
+    
+    /// Set WebSocket transport configuration
+    pub fn set_websocket_config(
+        &mut self,
+        enabled: bool,
+        host: String,
+        sensory_port: u16,
+        motor_port: u16,
+        viz_port: u16,
+        registration_port: u16,
+    ) {
+        self.ws_enabled = enabled;
+        self.ws_host = host;
+        self.ws_sensory_port = sensory_port;
+        self.ws_motor_port = motor_port;
+        self.ws_viz_port = viz_port;
+        self.ws_registration_port = registration_port;
+        info!("🦀 [REGISTRATION] WebSocket transport configured: enabled={}, ports={}:{}:{}:{}", 
+              enabled, sensory_port, motor_port, viz_port, registration_port);
     }
     
     /// Set burst runner reference (for motor subscription tracking)
@@ -140,37 +186,73 @@ impl RegistrationHandler {
             "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Processing registration for agent: {} (type: {})",
             request.agent_id, request.agent_type
         );
+        
+        // Validate requested transport if provided
+        if let Some(ref requested_transport) = request.chosen_transport {
+            info!("🦀 [REGISTRATION] Agent requests transport: {}", requested_transport);
+            
+            match requested_transport.as_str() {
+                "websocket" => {
+                    if !self.ws_enabled {
+                        return Err(format!(
+                            "Transport '{}' not supported: WebSocket is disabled in FEAGI configuration",
+                            requested_transport
+                        ));
+                    }
+                }
+                "zmq" | "shm" | "hybrid" => {
+                    // ZMQ/SHM always available (for now)
+                }
+                other => {
+                    return Err(format!(
+                        "Transport '{}' not supported: Available transports are: zmq, websocket (if enabled), shm",
+                        other
+                    ));
+                }
+            }
+            info!("🦀 [REGISTRATION] ✅ Transport '{}' is supported", requested_transport);
+        }
 
         // Parse capabilities
         let capabilities = self.parse_capabilities(&request.capabilities)?;
 
-        // Allocate SHM paths if needed
+        // Allocate SHM paths ONLY if agent didn't explicitly choose a non-SHM transport
         let mut shm_paths = HashMap::new();
         let mut allocated_capabilities = capabilities.clone();
+        
+        let should_provide_shm = match request.chosen_transport.as_ref().map(|s| s.as_str()) {
+            Some("websocket") | Some("zmq") => false, // Agent explicitly chose non-SHM transport
+            Some("shm") | Some("hybrid") | None => true, // Agent wants SHM or didn't specify
+            Some(_) => false, // Unknown transport, don't offer SHM
+        };
 
-        if let Some(ref mut sensory) = allocated_capabilities.sensory {
-            let shm_path = format!(
-                "{}/feagi-shm-{}-sensory.bin",
-                self.shm_base_path, request.agent_id
-            );
-            sensory.shm_path = Some(shm_path.clone());
-            shm_paths.insert("sensory".to_string(), shm_path);
-        }
+        if should_provide_shm {
+            if let Some(ref mut sensory) = allocated_capabilities.sensory {
+                let shm_path = format!(
+                    "{}/feagi-shm-{}-sensory.bin",
+                    self.shm_base_path, request.agent_id
+                );
+                sensory.shm_path = Some(shm_path.clone());
+                shm_paths.insert("sensory".to_string(), shm_path);
+            }
 
-        if allocated_capabilities.motor.is_some() {
-            let shm_path = format!(
-                "{}/feagi-shm-{}-motor.bin",
-                self.shm_base_path, request.agent_id
-            );
-            shm_paths.insert("motor".to_string(), shm_path);
-        }
+            if allocated_capabilities.motor.is_some() {
+                let shm_path = format!(
+                    "{}/feagi-shm-{}-motor.bin",
+                    self.shm_base_path, request.agent_id
+                );
+                shm_paths.insert("motor".to_string(), shm_path);
+            }
 
-        if allocated_capabilities.visualization.is_some() {
-            let shm_path = format!(
-                "{}/feagi-shared-mem-visualization_stream.bin",
-                self.shm_base_path
-            );
-            shm_paths.insert("visualization".to_string(), shm_path);
+            if allocated_capabilities.visualization.is_some() {
+                let shm_path = format!(
+                    "{}/feagi-shared-mem-visualization_stream.bin",
+                    self.shm_base_path
+                );
+                shm_paths.insert("visualization".to_string(), shm_path);
+            }
+        } else {
+            info!("🦀 [REGISTRATION] Skipping SHM paths - agent chose transport: {:?}", request.chosen_transport);
         }
 
         // Determine transport
@@ -191,12 +273,18 @@ impl RegistrationHandler {
         };
 
         // Create agent info using the new constructor
-        let agent_info = AgentInfo::new(
+        let mut agent_info = AgentInfo::new(
             request.agent_id.clone(),
             agent_type_enum,
             allocated_capabilities,
             transport,
         );
+        
+        // Store the transport the agent chose (if provided)
+        if let Some(ref chosen) = request.chosen_transport {
+            agent_info.chosen_transport = Some(chosen.clone());
+            info!("🦀 [REGISTRATION] Agent '{}' chose transport: {}", request.agent_id, chosen);
+        }
 
         // Register in registry
         info!("🦀 [REGISTRATION] 🔍 Registering agent '{}' in AgentRegistry...", request.agent_id);
@@ -310,12 +398,45 @@ impl RegistrationHandler {
             warn!("⚠️  [REGISTRATION] No dynamic gating callback set - streams won't auto-start!");
         }
 
+        // Build transport configurations
+        let mut transports = Vec::new();
+        
+        // Add ZMQ transport (always available)
+        transports.push(TransportConfig {
+            transport_type: "zmq".to_string(),
+            enabled: true,
+            ports: HashMap::from([
+                ("sensory".to_string(), self.sensory_port),
+                ("motor".to_string(), self.motor_port),
+                ("visualization".to_string(), self.viz_port),
+            ]),
+            host: "0.0.0.0".to_string(), // Will be overridden by actual config
+        });
+        
+        // Add WebSocket transport if enabled
+        if self.ws_enabled {
+            transports.push(TransportConfig {
+                transport_type: "websocket".to_string(),
+                enabled: true,
+                ports: HashMap::from([
+                    ("sensory".to_string(), self.ws_sensory_port),
+                    ("motor".to_string(), self.ws_motor_port),
+                    ("visualization".to_string(), self.ws_viz_port),
+                    ("registration".to_string(), self.ws_registration_port),
+                ]),
+                host: self.ws_host.clone(),
+            });
+        }
+        
         // Return success response
         let total_duration = total_start.elapsed();
         info!(
             "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] ✅ Total registration completed in {:?} for agent: {}",
             total_duration, request.agent_id
         );
+        info!("🦀 [REGISTRATION] Available transports: {} (ZMQ + {})", 
+              transports.len(), 
+              if self.ws_enabled { "WebSocket" } else { "no WebSocket" });
         
         Ok(RegistrationResponse {
             status: "success".to_string(),
@@ -333,6 +454,8 @@ impl RegistrationHandler {
                 ("motor".to_string(), self.motor_port),
                 ("visualization".to_string(), self.viz_port),
             ])),
+            transports: Some(transports),
+            recommended_transport: Some("zmq".to_string()), // ZMQ is default for now
         })
     }
 

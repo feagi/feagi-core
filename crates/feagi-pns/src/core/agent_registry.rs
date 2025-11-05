@@ -143,6 +143,9 @@ pub struct AgentInfo {
 
     /// Agent capabilities
     pub capabilities: AgentCapabilities,
+    
+    /// Transport method the agent chose to use
+    pub chosen_transport: Option<String>, // "zmq", "websocket", "shm", or "hybrid"
 
     /// Registration timestamp (Unix epoch milliseconds)
     pub registered_at: u64,
@@ -175,6 +178,7 @@ impl AgentInfo {
             agent_id,
             agent_type,
             capabilities,
+            chosen_transport: None, // Set later when agent reports back
             registered_at: now,
             last_seen: now,
             transport,

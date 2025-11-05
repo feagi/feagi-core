@@ -25,6 +25,8 @@ pub struct FeagiConfig {
     pub agent: AgentConfig,
     pub ports: PortsConfig,
     pub zmq: ZmqConfig,
+    pub websocket: WebSocketConfig,  // FEAGI 2.0: WebSocket transport
+    pub transports: TransportsConfig, // FEAGI 2.0: Multi-transport coordination
     pub timeouts: TimeoutsConfig,
     pub agents: AgentsConfig,
     pub neural: NeuralConfig,
@@ -48,6 +50,8 @@ impl Default for FeagiConfig {
             agent: AgentConfig::default(),
             ports: PortsConfig::default(),
             zmq: ZmqConfig::default(),
+            websocket: WebSocketConfig::default(),
+            transports: TransportsConfig::default(),
             timeouts: TimeoutsConfig::default(),
             agents: AgentsConfig::default(),
             neural: NeuralConfig::default(),
@@ -311,6 +315,64 @@ pub struct RestStreamConfig {
 impl Default for RestStreamConfig {
     fn default() -> Self {
         Self { enabled: true }
+    }
+}
+
+/// WebSocket-specific settings (FEAGI 2.0)
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct WebSocketConfig {
+    pub enabled: bool,
+    pub host: String,
+    pub sensory_port: u16,
+    pub motor_port: u16,
+    pub visualization_port: u16,
+    pub registration_port: u16,
+    pub rest_api_port: u16,
+    pub connection_timeout_ms: u64,
+    pub ping_interval_ms: u64,
+    pub ping_timeout_ms: u64,
+    pub close_timeout_ms: u64,
+    pub max_message_size: usize,
+    pub max_connections: usize,
+}
+
+impl Default for WebSocketConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false, // Disabled by default
+            host: "0.0.0.0".to_string(),
+            sensory_port: 9051,
+            motor_port: 9052,
+            visualization_port: 9050,
+            registration_port: 9053,
+            rest_api_port: 9054,
+            connection_timeout_ms: 5000,
+            ping_interval_ms: 60000,
+            ping_timeout_ms: 60000,
+            close_timeout_ms: 10000,
+            max_message_size: 10485760, // 10MB
+            max_connections: 100,
+        }
+    }
+}
+
+/// Multi-transport coordination settings (FEAGI 2.0)
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct TransportsConfig {
+    pub available: Vec<String>,
+    pub default: String,
+    pub allow_mixed: bool,
+}
+
+impl Default for TransportsConfig {
+    fn default() -> Self {
+        Self {
+            available: vec!["zmq".to_string()],
+            default: "zmq".to_string(),
+            allow_mixed: false,
+        }
     }
 }
 

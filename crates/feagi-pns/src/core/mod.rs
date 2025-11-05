@@ -20,11 +20,11 @@ pub use agent_registry::{
     AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
     SensoryCapability, VisionCapability, VisualizationCapability,
 };
-pub use config::{PNSConfig, TransportMode};
+pub use config::{PNSConfig, TransportMode, WebSocketConfig};
 pub use events::{
     AgentDisconnectedEvent, AgentRegisteredEvent, MotorCommandEvent, SensoryDataEvent,
     VisualizationReadyEvent,
 };
 pub use heartbeat::HeartbeatTracker;
-pub use registration::{RegistrationHandler, RegistrationRequest};
+pub use registration::{RegistrationHandler, RegistrationRequest, RegistrationResponse, TransportConfig};
 pub use types::{PNSError, Result, SharedFBC, StreamType};
