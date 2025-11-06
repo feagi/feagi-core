@@ -56,7 +56,13 @@ pub async fn post_genome_append(State(_state): State<ApiState>, Json(_req): Json
 pub async fn post_upload_barebones_genome(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    load_default_genome(state, "barebones").await
+    tracing::debug!(target: "feagi-api", "📥 POST /v1/genome/upload/barebones - Request received");
+    let result = load_default_genome(state, "barebones").await;
+    match &result {
+        Ok(_) => tracing::debug!(target: "feagi-api", "✅ POST /v1/genome/upload/barebones - Success"),
+        Err(e) => tracing::error!(target: "feagi-api", "❌ POST /v1/genome/upload/barebones - Error: {:?}", e),
+    }
+    result
 }
 
 /// POST /v1/genome/upload/essential
@@ -82,7 +88,8 @@ async fn load_default_genome(
     state: ApiState,
     genome_name: &str,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    tracing::info!(target: "feagi-api", "Loading {} genome from embedded Rust genomes", genome_name);
+    tracing::info!(target: "feagi-api", "🔄 Loading {} genome from embedded Rust genomes", genome_name);
+    tracing::debug!(target: "feagi-api", "   State components available: genome_service=true, runtime_service=true");
     
     // Load genome from embedded Rust templates (no file I/O!)
     let genome_json = match genome_name {

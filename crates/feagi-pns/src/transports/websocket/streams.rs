@@ -25,7 +25,8 @@ pub struct WebSocketStreams {
     motor_pub: Arc<Mutex<Option<WsPub>>>,
     sensory_pull: Arc<Mutex<Option<WsPull>>>,
     
-    // Async runtime for WebSocket servers
+    // Async runtime for WebSocket servers (reserved for future use)
+    #[allow(dead_code)]
     runtime: Arc<Mutex<Option<Arc<Runtime>>>>,
 }
 
