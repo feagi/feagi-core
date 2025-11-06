@@ -6,8 +6,6 @@
 
 pub mod descriptors;
 mod cortical_area;
-mod neural_model_descriptors;
-mod genomic_object_properties;
 mod brain_regions;
 mod cortical_unit_type;
 

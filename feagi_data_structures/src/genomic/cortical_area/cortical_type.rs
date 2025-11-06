@@ -1,4 +1,5 @@
 use std::fmt;
+use crate::genomic::cortical_area::cortical_id::CorticalID;
 use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataType;
 
 // Describes the method data is encoded within a cortical area
@@ -22,6 +23,20 @@ pub enum CoreCorticalType {
     /// Power management processing
     Power
 }
+
+impl CoreCorticalType {
+
+
+
+
+    pub fn to_cortical_id(&self) -> CorticalID {
+        match self {
+            Self::Death => CorticalID{bytes: *b"___death"},
+            Self::Power => CorticalID{bytes: *b"___power"},
+        }
+    }
+}
+
 
 impl fmt::Display for CoreCorticalType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
