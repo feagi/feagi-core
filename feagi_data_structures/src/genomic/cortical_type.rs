@@ -368,28 +368,6 @@ impl TryFrom<CorticalType> for MotorCorticalType {
 //region CoreCorticalType
 // This won't be expanded, this doesn't need a template
 
-/// Core cortical area types for fundamental brain functions.
-///
-/// Represents essential processing regions that manage the agent's power
-/// and termination states.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum CoreCorticalType {
-    /// Termination/death signal processing
-    Death,
-    /// Power management processing
-    Power
-}
-
-impl fmt::Display for CoreCorticalType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let ch = match self {
-            CoreCorticalType::Death => "Death",
-            CoreCorticalType::Power => "Power"
-        };
-        write!(f, "CoreCorticalType({})", ch)
-    }
-}
-
 impl From<CoreCorticalType> for CorticalType {
     fn from(core: CoreCorticalType) -> Self {
         CorticalType::Core(core)

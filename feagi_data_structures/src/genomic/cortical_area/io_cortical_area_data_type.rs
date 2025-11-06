@@ -1,5 +1,4 @@
 use crate::FeagiDataError;
-use crate::genomic::cortical_area::io_cortical_area_data_type_descriptors::{FrameChangeHandling, PercentageNeuronPositioning};
 
 pub type DataTypeConfigurationFlag = u8;
 
@@ -127,3 +126,19 @@ impl TryFrom<DataTypeConfigurationFlag> for IOCorticalAreaDataType {
         IOCorticalAreaDataType::try_from_data_type_configuration_flag(value)
     }
 }
+
+//region SubEnums
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum PercentageNeuronPositioning {
+    Linear,
+    #[default]
+    Fractional,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+pub enum FrameChangeHandling {
+    #[default]
+    Absolute,
+    Incremental,
+}
+//endregion

@@ -1,6 +1,7 @@
-mod cortical_area;
-mod input_output;
-mod io_cortical_area_data_type;
-mod io_cortical_area_data_type_descriptors;
-mod cortical_unit_type;
+//mod cortical_area;
 mod cortical_type;
+mod cortical_id;
+pub mod io_cortical_area_data_type;
+pub mod descriptors;
+
+pub use io_cortical_area_data_type::{IOCorticalAreaDataType};

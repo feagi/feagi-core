@@ -1,15 +1,56 @@
+use std::fmt;
 use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataType;
 
+// Describes the method data is encoded within a cortical area
 pub enum CorticalType {
-    Custom,
-    Memory,
     Core(CoreCorticalType),
+    Custom(CustomCorticalType),
+    Memory(MemoryCorticalType),
     BrainInput(IOCorticalAreaDataType),
     BrainOutput(IOCorticalAreaDataType)
 }
 
-
+//region Core
+/// Core cortical area types for fundamental brain functions.
+///
+/// Represents essential processing regions that manage the agent's power
+/// and termination states.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum CoreCorticalType {
-    Power,
-    Death
+    /// Termination/death signal processing
+    Death,
+    /// Power management processing
+    Power
 }
+
+impl fmt::Display for CoreCorticalType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let ch = match self {
+            CoreCorticalType::Death => "Death",
+            CoreCorticalType::Power => "Power"
+        };
+        write!(f, "CoreCorticalType({})", ch)
+    }
+}
+
+//endregion
+
+//region Custom
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum CustomCorticalType {
+    #[default]
+    LeakyIntegrateFire
+}
+
+
+//endregion
+
+//region Memory
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum MemoryCorticalType {
+    #[default]
+    Memory
+}
+
+//endregion
