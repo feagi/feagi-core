@@ -13,14 +13,34 @@ macro_rules! sensor_cortical_units {
                 Infrared => {
                     friendly_name: "Infrared Sensor",
                     snake_case_identifier: "infrared",
-                    accepted_data_type: Percentage,
-                    subunit_identifiers: {
-                        // Base Cortical ID (descriptor enu)
+                    accepted_wrapped_io_data_type: WrappedIOType::Percentage,
+                    use_default_registration_function: true,
+                    cortical_id_unit_reference: b"inf"
+
+                    subunit_cortical_areas: {
+                        (Percentage, 0u8)
+                        
+                        // (Base Cortical ID byte arr, encoder enum key)
                         (b"i" b"inf" [0] [0] [0, 0] , Percentage_Absolute_Linear),
                     }
 
                 }
 
+
+
+
+                #[doc = "Segmented vision processing, with a higher resolution center and lower resolution peripherals"]
+                Infrared => {
+                    friendly_name: "Segmented Vision",
+                    snake_case_identifier: "segmented_vision",
+                    accepted_wrapped_io_data_type: WrappedIOType::SegmentedImageFrame(None),
+                    use_default_registration_function: false,
+                    subunit_identifiers: {
+                        // Base Cortical ID (descriptor enu)
+                        (b"i" b"seg" [0] [0] [0, 0] , ImageFrame_),
+                    }
+
+                }
 
 
 
