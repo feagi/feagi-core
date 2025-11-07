@@ -89,11 +89,7 @@ impl PlatformType {
     pub fn detect() -> Option<Self> {
         #[cfg(feature = "esp32")]
         {
-            #[cfg(esp32s3)]
-            return Some(PlatformType::Esp32S3);
-            #[cfg(esp32c3)]
-            return Some(PlatformType::Esp32C3);
-            #[cfg(esp32)]
+            // Generic ESP32 platform (covers ESP32, ESP32-S3, ESP32-C3)
             return Some(PlatformType::Esp32);
         }
         

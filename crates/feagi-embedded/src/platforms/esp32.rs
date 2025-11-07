@@ -5,12 +5,7 @@
 use crate::hal::*;
 
 #[cfg(feature = "esp32")]
-use esp_idf_svc::hal::{
-    peripherals::Peripherals,
-    uart::{config::Config as UartConfig, UartDriver},
-};
-#[cfg(feature = "esp32")]
-use esp_idf_svc::sys as esp_idf_sys;
+use esp_idf_svc::{hal::uart::UartDriver, sys as esp_idf_sys};
 
 /// ESP32 platform structure
 #[cfg(feature = "esp32")]
@@ -29,10 +24,9 @@ impl Esp32Platform {
     /// ```no_run
     /// let platform = Esp32Platform::init().expect("Failed to initialize ESP32");
     /// ```
-    pub fn init() -> Result<Self, Box<dyn core::error::Error>> {
-        // Initialize ESP-IDF
+    pub fn init() -> anyhow::Result<Self> {
+        // Initialize ESP-IDF system
         esp_idf_sys::link_patches();
-        esp_idf_svc::log::EspLogger::initialize_default();
         
         log::info!("ESP32 platform initialized");
         
@@ -54,10 +48,9 @@ impl Esp32Platform {
         tx_pin: u32,
         rx_pin: u32,
         baudrate: u32,
-    ) -> Result<Self, Box<dyn core::error::Error>> {
+    ) -> anyhow::Result<Self> {
         // Initialize ESP-IDF
         esp_idf_sys::link_patches();
-        esp_idf_svc::log::EspLogger::initialize_default();
         
         log::info!("ESP32 platform initializing with UART...");
         log::info!("  TX: GPIO{}, RX: GPIO{}", tx_pin, rx_pin);
@@ -73,16 +66,15 @@ impl Esp32Platform {
     
     /// Get ESP32 chip model
     pub fn chip_model(&self) -> &'static str {
-        #[cfg(esp32)]
-        return "ESP32";
-        #[cfg(esp32s2)]
-        return "ESP32-S2";
-        #[cfg(esp32s3)]
-        return "ESP32-S3";
-        #[cfg(esp32c3)]
-        return "ESP32-C3";
-        #[cfg(not(any(esp32, esp32s2, esp32s3, esp32c3)))]
-        return "ESP32-Unknown";
+        #[cfg(feature = "esp32-s3")]
+        {
+            return "ESP32-S3";
+        }
+        #[cfg(feature = "esp32-c3")]
+        {
+            return "ESP32-C3";
+        }
+        "ESP32"
     }
 }
 
@@ -103,11 +95,11 @@ impl SerialIO for Esp32Platform {
     
     fn write(&mut self, data: &[u8]) -> Result<usize, Self::Error> {
         if let Some(uart) = &mut self.uart {
-            uart.write(data).map_err(|e| esp_idf_sys::EspError::from(e).code())
+            uart.write(data)
         } else {
-            // Fallback: print to console
-            for &byte in data {
-                print!("{}", byte as char);
+            // Fallback: log to console (no UART configured)
+            if let Ok(s) = core::str::from_utf8(data) {
+                log::info!("{}", s);
             }
             Ok(data.len())
         }
@@ -115,7 +107,7 @@ impl SerialIO for Esp32Platform {
     
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
         if let Some(uart) = &mut self.uart {
-            uart.read(buffer, 0).map_err(|e| esp_idf_sys::EspError::from(e).code())
+            uart.read(buffer, 0)
         } else {
             Ok(0) // No UART configured
         }
@@ -123,7 +115,8 @@ impl SerialIO for Esp32Platform {
     
     fn flush(&mut self) -> Result<(), Self::Error> {
         if let Some(uart) = &mut self.uart {
-            uart.flush().map_err(|e| esp_idf_sys::EspError::from(e).code())
+            // Use wait_tx_done instead of flush for ESP-IDF
+            uart.wait_tx_done(1000)
         } else {
             Ok(())
         }
@@ -150,7 +143,9 @@ impl Platform for Esp32Platform {
     }
     
     fn cpu_frequency_hz(&self) -> u32 {
-        unsafe { esp_idf_sys::esp_clk_cpu_freq() }
+        unsafe {
+            (esp_idf_sys::esp_rom_get_cpu_ticks_per_us() as u64 * 1_000_000) as u32
+        }
     }
     
     fn available_memory_bytes(&self) -> usize {
