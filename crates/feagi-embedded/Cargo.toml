@@ -28,6 +28,7 @@ esp-idf-hal = { version = ">=0.44", optional = true }
 esp-idf-sys = { version = ">=0.35", optional = true, default-features = false, features = ["binstart"] }
 embedded-hal = { version = "1.0", optional = true }
 log = { version = "0.4", optional = true }
+heapless = "0.8"
 
 # Arduino Due HAL (SAM3X8E - ARM Cortex-M3)
 # Note: Arduino Due uses Atmel SAM3X8E chip

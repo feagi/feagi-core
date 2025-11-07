@@ -7,6 +7,18 @@ use crate::hal::*;
 #[cfg(feature = "esp32")]
 use esp_idf_svc::{hal::uart::UartDriver, sys as esp_idf_sys};
 
+#[cfg(feature = "esp32")]
+use core::ffi::c_char;
+#[cfg(feature = "esp32")]
+use core::fmt::Write;
+#[cfg(feature = "esp32")]
+use heapless::String;
+
+#[cfg(feature = "esp32")]
+const LOG_TAG: &[u8] = b"FEAGI\0";
+#[cfg(feature = "esp32")]
+const LOG_ALL_TAG: &[u8] = b"*\0";
+
 /// ESP32 platform structure
 #[cfg(feature = "esp32")]
 pub struct Esp32Platform {
@@ -27,9 +39,20 @@ impl Esp32Platform {
     pub fn init() -> anyhow::Result<Self> {
         // Initialize ESP-IDF system
         esp_idf_sys::link_patches();
-        
-        log::info!("ESP32 platform initialized");
-        
+
+        unsafe {
+            esp_idf_sys::esp_log_level_set(
+                LOG_ALL_TAG.as_ptr() as *const c_char,
+                esp_idf_sys::esp_log_level_t_ESP_LOG_INFO,
+            );
+            esp_idf_sys::esp_log_level_set(
+                LOG_TAG.as_ptr() as *const c_char,
+                esp_idf_sys::esp_log_level_t_ESP_LOG_INFO,
+            );
+        }
+
+        esp32_log(LogLevel::Info, "ESP32 platform initialized");
+
         Ok(Self {
             uart: None,
         })
@@ -51,10 +74,16 @@ impl Esp32Platform {
     ) -> anyhow::Result<Self> {
         // Initialize ESP-IDF
         esp_idf_sys::link_patches();
-        
-        log::info!("ESP32 platform initializing with UART...");
-        log::info!("  TX: GPIO{}, RX: GPIO{}", tx_pin, rx_pin);
-        log::info!("  Baudrate: {}", baudrate);
+
+        esp32_log(LogLevel::Info, "ESP32 platform initializing with UART...");
+
+        let mut buf: String<48> = String::new();
+        let _ = write!(buf, "  TX: GPIO{}, RX: GPIO{}", tx_pin, rx_pin);
+        esp32_log(LogLevel::Info, buf.as_str());
+
+        let mut baud_buf: String<32> = String::new();
+        let _ = write!(baud_buf, "  Baudrate: {}", baudrate);
+        esp32_log(LogLevel::Info, baud_buf.as_str());
         
         // TODO: Implement UART initialization
         // This requires accessing Peripherals which needs refactoring
@@ -99,7 +128,7 @@ impl SerialIO for Esp32Platform {
         } else {
             // Fallback: log to console (no UART configured)
             if let Ok(s) = core::str::from_utf8(data) {
-                log::info!("{}", s);
+                esp32_log(LogLevel::Info, s);
             }
             Ok(data.len())
         }
@@ -126,13 +155,7 @@ impl SerialIO for Esp32Platform {
 #[cfg(feature = "esp32")]
 impl Logger for Esp32Platform {
     fn log(&self, level: LogLevel, message: &str) {
-        match level {
-            LogLevel::Error => log::error!("{}", message),
-            LogLevel::Warn => log::warn!("{}", message),
-            LogLevel::Info => log::info!("{}", message),
-            LogLevel::Debug => log::debug!("{}", message),
-            LogLevel::Trace => log::trace!("{}", message),
-        }
+        esp32_log(level, message);
     }
 }
 
@@ -161,6 +184,25 @@ pub struct Esp32Platform;
 impl Esp32Platform {
     pub fn init() -> Result<Self, &'static str> {
         Err("ESP32 feature not enabled. Rebuild with --features esp32")
+    }
+}
+
+#[cfg(feature = "esp32")]
+fn esp32_log(level: LogLevel, message: &str) {
+    let mut line: String<256> = String::new();
+    if write!(line, "[{}] {}", level.as_str(), message).is_err() {
+        return;
+    }
+    let _ = line.push('\r');
+    let _ = line.push('\n');
+    let _ = line.push('\0');
+
+    unsafe {
+        // esp_rom_printf is printf-style, needs format string
+        esp_idf_sys::esp_rom_printf(
+            b"%s\0".as_ptr() as *const c_char,
+            line.as_ptr() as *const c_char,
+        );
     }
 }
 

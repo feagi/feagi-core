@@ -40,21 +40,28 @@ pub use rpi_pico::RpiPicoPlatform;
 #[cfg(feature = "hailo")]
 pub use hailo::{Hailo8Accelerator, HailoError, HybridCpuHailo};
 
-// Platform registry for runtime selection
+/// Platform registry for runtime selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlatformType {
+    /// Espressif ESP32 family (Xtensa dual-core).
     #[cfg(feature = "esp32")]
     Esp32,
+    /// Espressif ESP32-S3 family with vector extensions.
     #[cfg(feature = "esp32-s3")]
     Esp32S3,
+    /// Espressif ESP32-C3 family based on RISC-V.
     #[cfg(feature = "esp32-c3")]
     Esp32C3,
+    /// Arduino Due board (Atmel SAM3X8E).
     #[cfg(feature = "arduino-due")]
     ArduinoDue,
+    /// STM32F4 series microcontrollers.
     #[cfg(feature = "stm32f4")]
     Stm32F4,
+    /// Raspberry Pi Pico (RP2040) board.
     #[cfg(feature = "rpi-pico")]
     RaspberryPiPico,
+    /// Hailo-8 neural accelerator module.
     #[cfg(feature = "hailo")]
     Hailo8,
     // Future platforms

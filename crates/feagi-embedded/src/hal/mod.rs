@@ -8,10 +8,15 @@
 /// - Logging (Logger)
 /// - Neural acceleration (NeuralAccelerator)
 
+/// Timekeeping abstractions (monotonic timers, delays).
 pub mod time;
+/// Serial input/output traits for UART-style communication.
 pub mod serial;
+/// General-purpose I/O abstractions for pins.
 pub mod gpio;
+/// Logging interfaces for embedded targets.
 pub mod logger;
+/// Neural accelerator control traits.
 pub mod accelerator;
 
 // Re-export trait types

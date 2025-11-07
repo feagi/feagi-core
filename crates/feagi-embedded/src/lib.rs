@@ -41,10 +41,10 @@
 //! - `stm32f4` - STM32F4 series support (future)
 //! - `hailo` - Hailo-8 neural accelerator support (future)
 
-// HAL trait definitions
+/// Hardware abstraction traits shared by all platforms.
 pub mod hal;
 
-// Platform implementations
+/// Concrete platform implementations (ESP32, STM32, etc.).
 pub mod platforms;
 
 // Re-export commonly used types
