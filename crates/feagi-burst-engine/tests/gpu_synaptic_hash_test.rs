@@ -179,7 +179,8 @@ fn test_gpu_empty_synapse_array() {
     
     // Create genome with no synapses
     let neuron_count = 1000;
-    let neuron_array = NeuronArray::new(neuron_count);
+    let mut neuron_array = NeuronArray::new(neuron_count);
+    neuron_array.count = neuron_count; // Set count so buffers are created
     let synapse_array = SynapseArray::new(0);
     
     let mut backend = create_backend::<f32>(

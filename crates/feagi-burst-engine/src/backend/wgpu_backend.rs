@@ -399,6 +399,11 @@ impl WGPUBackend {
             synapse_data.push(packed_params);
         }
 
+        // Ensure minimum buffer size (WGPU requires at least 4 bytes)
+        if synapse_data.is_empty() {
+            synapse_data.push(0); // Dummy data for empty case
+        }
+
         let synapse_data_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Synapse Data (Consolidated)"),
             size: (synapse_data.len() * 4) as u64,
@@ -476,6 +481,11 @@ impl WGPUBackend {
             bytemuck::cast_slice(&hash_metadata),
         );
         self.buffers.synapse_hash_metadata = Some(hash_metadata_buffer);
+
+        // Ensure minimum buffer size for synapse list
+        if synapse_list.is_empty() {
+            synapse_list.push(0); // Dummy data for empty case
+        }
 
         let synapse_list_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Synapse List"),
