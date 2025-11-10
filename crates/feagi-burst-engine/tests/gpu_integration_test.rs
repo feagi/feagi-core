@@ -110,8 +110,9 @@ mod gpu_integration {
     }
 
     /// Helper: Create test neuron array
-    fn create_test_neurons(count: usize) -> NeuronArray {
+    fn create_test_neurons(count: usize) -> NeuronArray<f32> {
         use feagi_types::*;
+        use ahash::AHashMap;
 
         NeuronArray {
             capacity: count,
@@ -130,13 +131,16 @@ mod gpu_integration {
             cortical_areas: vec![0; count],
             coordinates: (0..count).flat_map(|i| vec![i as u32, 0, 0]).collect(),
             valid_mask: vec![true; count],
+            index_to_neuron_id: (0..count).map(|i| i as u32).collect(),
+            mp_charge_accumulation: vec![false; count],
+            spatial_hash: AHashMap::new(),
         }
     }
 
     /// Helper: Create test synapse array
     fn create_test_synapses(neuron_count: usize, synapse_count: usize) -> SynapseArray {
         use feagi_types::*;
-        use std::collections::HashMap;
+        use ahash::AHashMap;
 
         let source_neurons: Vec<u32> = (0..synapse_count)
             .map(|i| (i % neuron_count) as u32)
@@ -145,12 +149,12 @@ mod gpu_integration {
             .map(|i| ((i + 1) % neuron_count) as u32)
             .collect();
         let weights = vec![128u8; synapse_count];
-        let conductances = vec![100u8; synapse_count];
+        let postsynaptic_potentials = vec![200u8; synapse_count];
         let types = vec![0u8; synapse_count];
         let valid_mask = vec![true; synapse_count];
 
         // Build source index
-        let mut source_index: HashMap<u32, Vec<usize>> = HashMap::new();
+        let mut source_index: AHashMap<u32, Vec<usize>> = AHashMap::new();
         for (idx, &source) in source_neurons.iter().enumerate() {
             source_index
                 .entry(source)
@@ -164,7 +168,7 @@ mod gpu_integration {
             source_neurons,
             target_neurons,
             weights,
-            conductances,
+            postsynaptic_potentials,
             types,
             valid_mask,
             source_index,

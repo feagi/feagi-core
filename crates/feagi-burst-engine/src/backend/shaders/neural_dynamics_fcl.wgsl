@@ -45,7 +45,7 @@
 // OUTPUT (Sparse - only FCL neurons)
 // ═══════════════════════════════════════════════════════════
 
-@group(0) @binding(6) var<storage, read_write> fcl_fired_mask: array<u32>;  // Bitpacked sparse output
+@group(0) @binding(6) var<storage, read_write> fcl_fired_mask: array<atomic<u32>>;  // Bitpacked sparse output (atomic for race-free writes)
 
 // Constants
 @group(0) @binding(7) var<storage, read> params: NeuralParams;
@@ -141,19 +141,22 @@ fn neural_dynamics_fcl_main(@builtin(global_invocation_id) global_id: vec3<u32>)
         return;
     }
     
-    // Step 3: Check firing threshold
+    // Step 3: Check firing threshold (>= to match CPU .ge() logic)
     if (membrane < threshold) {
-        // Not firing - just update membrane
+        // Below threshold - not firing
         membrane_potentials[neuron_id] = membrane;
         return;
     }
     
     // Step 4: Apply probabilistic excitability
-    let rand_val = excitability_random(neuron_id, params.burst_count);
-    if (rand_val > excitability) {
-        // Failed excitability check
-        membrane_potentials[neuron_id] = membrane;
-        return;
+    // Fast path: excitability >= 0.999 means always fire (matches CPU, avoids floating-point edge cases)
+    if (excitability < 0.999) {
+        let rand_val = excitability_random(neuron_id, params.burst_count);
+        if (rand_val > excitability) {
+            // Failed excitability check
+            membrane_potentials[neuron_id] = membrane;
+            return;
+        }
     }
     
     // ═══════════════════════════════════════════════════════════
@@ -186,7 +189,7 @@ fn neural_dynamics_fcl_main(@builtin(global_invocation_id) global_id: vec3<u32>)
     let fired_word_idx = fcl_idx / 32u;
     let fired_bit_idx = fcl_idx % 32u;
     
-    // Set bit in sparse fired mask
-    fcl_fired_mask[fired_word_idx] = fcl_fired_mask[fired_word_idx] | (1u << fired_bit_idx);
+    // Set bit in sparse fired mask (ATOMIC to prevent race conditions!)
+    atomicOr(&fcl_fired_mask[fired_word_idx], 1u << fired_bit_idx);
 }
 

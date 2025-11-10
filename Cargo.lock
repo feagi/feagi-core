@@ -1751,6 +1751,7 @@ dependencies = [
 name = "feagi-embedded"
 version = "2.0.0"
 dependencies = [
+ "anyhow",
  "cortex-m",
  "cortex-m-rt",
  "embedded-hal 1.0.0",
@@ -1761,6 +1762,7 @@ dependencies = [
  "feagi-runtime-embedded",
  "feagi-synapse",
  "feagi-types",
+ "heapless",
  "log",
  "panic-halt",
  "rp2040-boot2",

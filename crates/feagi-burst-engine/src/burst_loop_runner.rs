@@ -1174,7 +1174,8 @@ mod tests {
             }
         }
         
-        let npu = Arc::new(Mutex::new(RustNPU::new_cpu_only(1000, 10000, 20)));
+        let rust_npu = crate::RustNPU::new_cpu_only(1000, 10000, 20);
+        let npu = Arc::new(Mutex::new(DynamicNPU::F32(rust_npu)));
         let mut runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu, None, None, 10.0);
 
         assert!(!runner.is_running());

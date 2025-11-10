@@ -983,6 +983,70 @@ impl WGPUBackend {
         Ok(())
     }
 
+    /// Download FCL potentials from GPU atomic buffer and populate CPU-side FCL
+    fn download_fcl_from_gpu(&self, fcl: &mut FireCandidateList) -> Result<()> {
+        use feagi_types::NeuronId;
+
+        // Get the FCL atomic potentials buffer
+        let fcl_atomic_buffer = self.buffers.fcl_potentials_atomic.as_ref()
+            .ok_or_else(|| Error::ComputationError("FCL atomic buffer not created".to_string()))?;
+
+        let buffer_size = fcl_atomic_buffer.size();
+
+        // Create staging buffer for GPU→CPU transfer
+        let staging_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("FCL Atomic Staging"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        // Copy from GPU buffer to staging buffer
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Download FCL Potentials"),
+            });
+        encoder.copy_buffer_to_buffer(fcl_atomic_buffer, 0, &staging_buffer, 0, buffer_size);
+        self.queue.submit(Some(encoder.finish()));
+
+        // Map staging buffer to CPU memory (blocking)
+        let buffer_slice = staging_buffer.slice(..);
+        let (sender, receiver) = std::sync::mpsc::channel();
+        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
+            sender.send(result).unwrap();
+        });
+
+        // Wait for mapping to complete
+        self.device.poll(wgpu::Maintain::Wait);
+        receiver
+            .recv()
+            .map_err(|_| Error::ComputationError("Failed to receive FCL buffer map result".to_string()))?
+            .map_err(|e| Error::ComputationError(format!("Failed to map FCL buffer: {:?}", e)))?;
+
+        // Read data and convert from i32 fixed-point to f32
+        let data = buffer_slice.get_mapped_range();
+        let atomic_values: &[i32] = bytemuck::cast_slice(&data);
+
+        // Clear existing FCL and repopulate from GPU results
+        fcl.clear();
+        for (neuron_id, &atomic_val) in atomic_values.iter().enumerate() {
+            if atomic_val != 0 {
+                // Convert from fixed-point i32 (scaled by 1000) back to f32
+                let potential = (atomic_val as f32) / 1000.0;
+                fcl.add_candidate(NeuronId(neuron_id as u32), potential);
+            }
+        }
+
+        // Unmap buffer
+        drop(data);
+        staging_buffer.unmap();
+
+        info!("📥 Downloaded {} FCL candidates from GPU", fcl.len());
+
+        Ok(())
+    }
+
     /// Download fired neurons from GPU (sparse: only FCL indices)
     ///
     /// **Key optimization**: Downloads only FCL fired mask (< 1 KB), not full mask (122 KB)
@@ -1210,7 +1274,7 @@ impl ComputeBackend<f32> for WGPUBackend {
         &mut self,
         fired_neurons: &[u32],
         synapse_array: &SynapseArray,
-        _fcl: &mut FireCandidateList,
+        fcl: &mut FireCandidateList,
     ) -> Result<usize> {
         if fired_neurons.is_empty() {
             return Ok(0);
@@ -1251,8 +1315,10 @@ impl ComputeBackend<f32> for WGPUBackend {
 
         info!("✅ GPU synaptic propagation complete");
 
+        // Read back FCL results from GPU atomic buffer to CPU-side FCL
+        self.download_fcl_from_gpu(fcl)?;
+
         // Return estimated synapse count
-        // Note: FCL results stay on GPU for neural dynamics (full GPU→GPU pipeline)
         Ok(fired_neurons.len() * (synapse_array.count / synapse_array.source_index.len().max(1)))
     }
 

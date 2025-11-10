@@ -164,7 +164,7 @@ fn test_speedup_estimation_scales() {
 fn test_backend_creation_cpu() {
     let config = BackendConfig::default();
 
-    let backend = create_backend(BackendType::CPU, 10_000, 1_000_000, &config);
+    let backend = create_backend::<f32>(BackendType::CPU, 10_000, 1_000_000, &config);
     assert!(backend.is_ok());
 
     let backend = backend.unwrap();
@@ -177,7 +177,7 @@ fn test_backend_creation_gpu() {
     let config = BackendConfig::default();
 
     if is_gpu_available() {
-        let backend = create_backend(BackendType::WGPU, 10_000, 1_000_000, &config);
+        let backend = create_backend::<f32>(BackendType::WGPU, 10_000, 1_000_000, &config);
         assert!(backend.is_ok());
 
         let backend = backend.unwrap();
@@ -190,11 +190,11 @@ fn test_backend_creation_auto() {
     let config = BackendConfig::default();
 
     // Small genome - should get CPU
-    let backend_small = create_backend(BackendType::Auto, 10_000, 1_000_000, &config);
+    let backend_small = create_backend::<f32>(BackendType::Auto, 10_000, 1_000_000, &config);
     assert!(backend_small.is_ok());
 
     // Large genome - should get GPU if available
-    let backend_large = create_backend(BackendType::Auto, 1_000_000, 100_000_000, &config);
+    let backend_large = create_backend::<f32>(BackendType::Auto, 1_000_000, 100_000_000, &config);
     assert!(backend_large.is_ok());
 }
 

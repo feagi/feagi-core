@@ -22,7 +22,7 @@ use feagi_types::{NeuronId, SynapseType, SynapticConductance, SynapticWeight};
 // ═══════════════════════════════════════════════════════════
 
 /// Create a simple 3-layer network: Input → Hidden → Output
-fn create_simple_network() -> RustNPU {
+fn create_simple_network() -> RustNPU<f32> {
     let mut npu = RustNPU::new_cpu_only(1000, 10000, 20);
 
     // Power area (cortical_area=1) - 3 neurons
