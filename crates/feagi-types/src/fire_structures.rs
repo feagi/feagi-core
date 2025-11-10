@@ -79,6 +79,11 @@ impl FireCandidateList {
             self.candidates.shrink_to(100_000);
         }
     }
+
+    /// Iterate over all candidates (neuron_id, potential)
+    pub fn iter(&self) -> impl Iterator<Item = (NeuronId, f32)> + '_ {
+        self.candidates.iter().map(|(&id, &pot)| (NeuronId(id), pot))
+    }
 }
 
 impl Default for FireCandidateList {

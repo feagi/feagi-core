@@ -87,13 +87,20 @@ __global__ void synaptic_propagation_fcl(
                 unsigned int psp = (packed_params >> 8) & 0xFF;
                 unsigned int syn_type = (packed_params >> 16) & 0xFF;
                 
+                // CRITICAL: Normalize weight and PSP to [0,1] range (matches CPU backend)
+                // Both are stored as u8 (0-255) but represent normalized values
+                float weight_norm = (float)weight / 255.0f;
+                float psp_norm = (float)psp / 255.0f;
+                
                 // Calculate synaptic contribution
                 // Type 0 = excitatory (+), Type 1 = inhibitory (-)
+                // Result is in normalized range, then scaled by 1,000,000 for fixed-point
+                // Scale factor of 1M provides 6 decimal places of precision
                 int contribution = (syn_type == 0) ? 
-                    (int)(weight * psp) : 
-                    -(int)(weight * psp);
+                    (int)(weight_norm * psp_norm * 1000000.0f) : 
+                    -(int)(weight_norm * psp_norm * 1000000.0f);
                 
-                // Atomic accumulation into FCL
+                // Atomic accumulation into FCL (fixed-point representation)
                 // This handles race conditions when multiple synapses target same neuron
                 atomicAdd(&fcl_potentials[target_neuron], contribution);
             }

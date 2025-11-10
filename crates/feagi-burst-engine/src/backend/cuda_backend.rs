@@ -388,6 +388,34 @@ impl CUDABackend {
         Ok(())
     }
     
+    /// Upload FCL from host to GPU (for sensory injection)
+    /// 
+    /// CRITICAL: This is needed when FCL is populated from CPU side (sensory input)
+    /// rather than from synaptic propagation on GPU
+    fn upload_fcl(&mut self, fcl: &FireCandidateList) -> Result<()> {
+        let fcl_buffer = self.buffers.fcl_potentials_atomic.as_mut()
+            .ok_or_else(|| Error::ComputationError("FCL buffer not allocated".to_string()))?;
+        
+        debug!("📤 Uploading FCL to GPU ({} candidates)...", fcl.len());
+        
+        // Convert FCL to atomic i32 array (fixed-point)
+        let mut fcl_host = vec![0i32; self.current_neuron_count];
+        for (neuron_id, potential) in fcl.iter() {
+            let idx = neuron_id.0 as usize;
+            if idx < self.current_neuron_count {
+                // Convert to fixed-point (multiply by 1M for 6 decimal precision)
+                fcl_host[idx] = (potential * 1000000.0) as i32;
+            }
+        }
+        
+        // Upload to GPU
+        self.device.htod_copy_into(fcl_host, fcl_buffer)
+            .map_err(|e| Error::ComputationError(format!("Failed to upload FCL: {}", e)))?;
+        
+        debug!("📤 Uploaded {} FCL candidates to GPU", fcl.len());
+        Ok(())
+    }
+    
     /// Download FCL from GPU and populate host FCL
     fn download_fcl(&self, fcl: &mut FireCandidateList) -> Result<()> {
         let fcl_buffer = self.buffers.fcl_potentials_atomic.as_ref()
@@ -403,7 +431,7 @@ impl CUDABackend {
         fcl.clear();
         for (neuron_id, &atomic_val) in fcl_host.iter().enumerate() {
             if atomic_val != 0 {
-                let potential = (atomic_val as f32) / 1000.0;  // Scale back from fixed-point
+                let potential = (atomic_val as f32) / 1000000.0;  // Scale back from fixed-point (1M scale)
                 fcl.add_candidate(NeuronId(neuron_id as u32), potential);
             }
         }
@@ -565,6 +593,10 @@ impl ComputeBackend<f32> for CUDABackend {
         }
         
         debug!("🚀 Launching neural dynamics kernel ({} candidates)...", fcl.len());
+        
+        // CRITICAL: Upload FCL from host to GPU (for sensory injection)
+        // This is required when FCL is populated from CPU side (e.g., power area, IPU data)
+        self.upload_fcl(fcl)?;
         
         // Clear fired mask for this burst
         if let Some(fired_mask) = self.buffers.fcl_fired_mask.as_mut() {
