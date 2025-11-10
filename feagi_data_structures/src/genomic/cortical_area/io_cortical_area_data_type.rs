@@ -64,30 +64,27 @@ impl IOCorticalAreaDataType {
     }
 
     pub(crate) const fn as_io_cortical_id(&self, is_input: bool, cortical_unit_identifier: [u8; 3], cortical_unit_index: CorticalUnitIndex, cortical_group_index: CorticalGroupIndex) -> CorticalID {
-
-        // TODO there has to be a better method than multiple copies?
-        let mut cortical_id_bytes: [u8; CorticalID::NUMBER_OF_BYTES] = {
-            if is_input {
-                *b"i0000000"
-            }
-            else {
-                *b"00000000"
-            }
-        };
-
-        cortical_id_bytes[1..4].copy_from_slice(&cortical_unit_identifier);
         let data_type_configuration: DataTypeConfigurationFlag = self.to_data_type_configuration_flag();
         let data_type_configuration_bytes: [u8; 2] = data_type_configuration.to_le_bytes();
-        cortical_id_bytes[4..5].copy_from_slice(&data_type_configuration_bytes);
-        cortical_id_bytes[6] = *cortical_unit_index;
-        cortical_id_bytes[7] = *cortical_group_index;
+        
+
+        let cortical_id_bytes: [u8; CorticalID::NUMBER_OF_BYTES] = [
+            if is_input { b'i' } else { b'0' },
+            cortical_unit_identifier[0],
+            cortical_unit_identifier[1],
+            cortical_unit_identifier[2],
+            data_type_configuration_bytes[0],
+            data_type_configuration_bytes[1],
+            cortical_unit_index.get(),
+            cortical_group_index.get(),
+        ];
 
         CorticalID {
             bytes: cortical_id_bytes,
         }
-
-
     }
+
+    
 
 
 

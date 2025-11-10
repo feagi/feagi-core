@@ -23,6 +23,13 @@ macro_rules! define_index {
         )]
         pub struct $name($inner);
 
+        impl $name {
+            // const return method
+            pub const fn get(&self) -> $inner {
+                self.0
+            }
+        }
+
         impl std::ops::Deref for $name {
             type Target = $inner;
 
