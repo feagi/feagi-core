@@ -14,10 +14,14 @@
 mod cpu;
 #[cfg(feature = "gpu")]
 mod wgpu_backend;
+#[cfg(feature = "cuda")]
+mod cuda_backend;
 
 pub use cpu::CPUBackend;
 #[cfg(feature = "gpu")]
 pub use wgpu_backend::WGPUBackend;
+#[cfg(feature = "cuda")]
+pub use cuda_backend::{CUDABackend, is_cuda_available, enumerate_cuda_devices};
 
 use feagi_types::*;
 use tracing::info;

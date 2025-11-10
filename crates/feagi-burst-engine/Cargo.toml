@@ -30,15 +30,23 @@ parking_lot = "0.12"  # For motor subscriptions RwLock
 feagi-observability = { workspace = true }
 tracing = { workspace = true }
 
-# GPU acceleration (optional feature)
+# GPU acceleration (optional features)
 wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }
 bytemuck = { workspace = true, optional = true }
 
+# CUDA acceleration (optional features)
+cudarc = { version = "0.11", features = ["cuda-11080", "f16"], optional = true }
+half = { version = "2.4", optional = true }
+
 [features]
 default = []
-# Enable GPU acceleration via WGPU
+# Enable GPU acceleration via WGPU (cross-platform)
 gpu = ["wgpu", "pollster", "bytemuck"]
+# Enable CUDA acceleration (NVIDIA only, highest performance)
+cuda = ["cudarc", "half"]
+# Enable all GPU backends
+all-gpu = ["gpu", "cuda"]
 # Enable plasticity integration (trait-based, no direct dependency)
 with-plasticity = []
 
