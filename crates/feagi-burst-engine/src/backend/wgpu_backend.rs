@@ -404,9 +404,43 @@ impl WGPUBackend {
             synapse_data.push(0); // Dummy data for empty case
         }
 
+        // Check buffer size limits
+        // Metal on macOS: max_buffer_size=256MB, max_storage_buffer_binding_size=128MB
+        // Most GPUs have similar or larger limits, but Metal is more restrictive
+        const MAX_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB total buffer limit
+        const MAX_BINDING_SIZE: u64 = 128 * 1024 * 1024; // 128MB binding size limit (Metal)
+        let required_size = (synapse_data.len() * 4) as u64;
+        
+        if required_size > MAX_BINDING_SIZE {
+            return Err(Error::ComputationError(format!(
+                "Synapse buffer size ({} MB) exceeds GPU binding limit ({} MB). \
+                 Genome has {} synapses requiring {} bytes. \
+                 Metal (macOS) limits buffers in bind groups to 128MB. \
+                 Consider: (1) Reducing synapse density (<100/neuron for >100K neurons), \
+                 (2) Using CPU backend, (3) Implementing buffer chunking (TODO)",
+                required_size / (1024 * 1024),
+                MAX_BINDING_SIZE / (1024 * 1024),
+                synapse_count,
+                required_size
+            )));
+        }
+        
+        if required_size > MAX_BUFFER_SIZE {
+            return Err(Error::ComputationError(format!(
+                "Synapse buffer size ({} MB) exceeds GPU total buffer limit ({} MB). \
+                 Genome has {} synapses requiring {} bytes. \
+                 Consider: (1) Reducing synapse count, (2) Using CPU backend, \
+                 (3) Implementing buffer chunking (TODO)",
+                required_size / (1024 * 1024),
+                MAX_BUFFER_SIZE / (1024 * 1024),
+                synapse_count,
+                required_size
+            )));
+        }
+
         let synapse_data_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Synapse Data (Consolidated)"),
-            size: (synapse_data.len() * 4) as u64,
+            size: required_size,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
