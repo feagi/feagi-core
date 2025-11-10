@@ -1,6 +1,6 @@
 use std::fmt::{Display};
 use crate::FeagiDataError;
-use crate::genomic::cortical_area::cortical_type::CorticalType;
+use crate::genomic::cortical_area::cortical_type::{CoreCorticalType, CorticalType, CustomCorticalType, MemoryCorticalType};
 
 macro_rules! match_bytes_by_cortical_type {
     ($cortical_id_bytes: expr,
@@ -54,13 +54,21 @@ impl CorticalID {
 
     pub fn as_cortical_type(&self) -> Result<CorticalType, FeagiDataError> {
         match_bytes_by_cortical_type!(self.bytes,
-            custom => {},
-            memory => {},
+            custom => {
+                // NOTE: Only 1 custom type currently
+                Ok(CorticalType::Custom(CustomCorticalType::LeakyIntegrateFire))
+            },
+            memory => {
+                // NOTE: Only 1 memory type currently
+                Ok(CorticalType::Memory(MemoryCorticalType::Memory))
+            },
             core => {
-                
+                Ok(CorticalType::Core(CoreCorticalType::try_from_cortical_id_bytes_type_unchecked(&self.bytes)?))
             },
             brain_input => {},
-            brain_output => {},
+            brain_output => {
+                todo!()
+            },
             invalid => {
                 Err(FeagiDataError::InternalError("Attempted to convert an invalid cortical ID instantiated object to cortical type!".into()))
             },

@@ -1,8 +1,10 @@
 use crate::FeagiDataError;
+use crate::genomic::cortical_area::CorticalID;
+use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
 
-pub type DataTypeConfigurationFlag = u8;
+pub type DataTypeConfigurationFlag = u16;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum IOCorticalAreaDataType {
     Percentage(FrameChangeHandling, PercentageNeuronPositioning),
     Percentage2D(FrameChangeHandling, PercentageNeuronPositioning),
@@ -17,52 +19,7 @@ pub enum IOCorticalAreaDataType {
 }
 
 impl IOCorticalAreaDataType {
-
-    /// Converts the enum to a u8 representation.
-    ///
-    /// Bit layout:
-    /// - Bits 0-3: Variant type (0-9)
-    /// - Bit 4: FrameChangeHandling (0=Absolute, 1=Incremental)
-    /// - Bit 5: PercentageNeuronPositioning (0=Linear, 1=Fractional, only valid for variants 0-7)
-    /// - Bits 6-7: Reserved
-    ///
-    /// This function is `const`, allowing it to be used in compile-time constant expressions.
-    pub const fn to_data_type_configuration_flag(&self) -> DataTypeConfigurationFlag {
-        let (variant, frame_handling, positioning) = match self {
-            IOCorticalAreaDataType::Percentage(f, p) => (0u8, *f, Some(*p)),
-            IOCorticalAreaDataType::Percentage2D(f, p) => (1u8, *f, Some(*p)),
-            IOCorticalAreaDataType::Percentage3D(f, p) => (2u8, *f, Some(*p)),
-            IOCorticalAreaDataType::Percentage4D(f, p) => (3u8, *f, Some(*p)),
-            IOCorticalAreaDataType::SignedPercentage(f, p) => (4u8, *f, Some(*p)),
-            IOCorticalAreaDataType::SignedPercentage2D(f, p) => (5u8, *f, Some(*p)),
-            IOCorticalAreaDataType::SignedPercentage3D(f, p) => (6u8, *f, Some(*p)),
-            IOCorticalAreaDataType::SignedPercentage4D(f, p) => (7u8, *f, Some(*p)),
-            IOCorticalAreaDataType::CartesianPlane(f) => (8u8, *f, None),
-            IOCorticalAreaDataType::Misc(f) => (9u8, *f, None),
-        };
-
-        let frame_bits = match frame_handling {
-            FrameChangeHandling::Absolute => 0u8,
-            FrameChangeHandling::Incremental => 1u8,
-        };
-
-        let positioning_bits = match positioning {
-            Some(PercentageNeuronPositioning::Linear) => 0u8,
-            Some(PercentageNeuronPositioning::Fractional) => 1u8,
-            None => 0u8, // Not applicable for CartesianPlane/Misc
-        };
-
-        // Pack: variant (4 bits) | frame_handling (1 bit) << 4 | positioning (1 bit) << 5
-        variant | (frame_bits << 4) | (positioning_bits << 5)
-
-        // NOTE: bits 6 and 7 are currently unused!
-    }
-
-    /// Attempts to convert an u8 to the enum.
-    ///
-    /// Returns an error if the variant type is invalid (>9) or if the positioning
-    /// bit is set for variants that don't support it (CartesianPlane, Misc).
-    pub fn try_from_data_type_configuration_flag(value: DataTypeConfigurationFlag) -> Result<Self, FeagiDataError> {
+    pub(crate) fn try_from_data_type_configuration_flag(value: DataTypeConfigurationFlag) -> Result<Self, FeagiDataError> {
         let variant = value & 0x0F; // Bits 0-3
         let frame_handling = (value >> 4) & 0x01; // Bit 4
         let positioning = (value >> 5) & 0x01; // Bit 5
@@ -104,6 +61,65 @@ impl IOCorticalAreaDataType {
             }
             _ => Err(FeagiDataError::BadParameters(format!("Invalid variant type: {}", variant))),
         }
+    }
+
+    pub(crate) const fn as_io_cortical_id(&self, is_input: bool, cortical_unit_identifier: [u8; 3], cortical_unit_index: CorticalUnitIndex, cortical_group_index: CorticalGroupIndex) -> CorticalID {
+
+        // TODO there has to be a better method than multiple copies?
+        let mut cortical_id_bytes: [u8; CorticalID::NUMBER_OF_BYTES] = {
+            if is_input {
+                *b"i0000000"
+            }
+            else {
+                *b"00000000"
+            }
+        };
+
+        cortical_id_bytes[1..4].copy_from_slice(&cortical_unit_identifier);
+        let data_type_configuration: DataTypeConfigurationFlag = self.to_data_type_configuration_flag();
+        let data_type_configuration_bytes: [u8; 2] = data_type_configuration.to_le_bytes();
+        cortical_id_bytes[4..5].copy_from_slice(&data_type_configuration_bytes);
+        cortical_id_bytes[6] = *cortical_unit_index;
+        cortical_id_bytes[7] = *cortical_group_index;
+
+        CorticalID {
+            bytes: cortical_id_bytes,
+        }
+
+
+    }
+
+
+
+    pub(crate) const fn to_data_type_configuration_flag(&self) -> DataTypeConfigurationFlag {
+        let (variant, frame_handling, positioning) = match self {
+            IOCorticalAreaDataType::Percentage(f, p) => (0u16, *f, Some(*p)),
+            IOCorticalAreaDataType::Percentage2D(f, p) => (1u16, *f, Some(*p)),
+            IOCorticalAreaDataType::Percentage3D(f, p) => (2u16, *f, Some(*p)),
+            IOCorticalAreaDataType::Percentage4D(f, p) => (3u16, *f, Some(*p)),
+            IOCorticalAreaDataType::SignedPercentage(f, p) => (4u16, *f, Some(*p)),
+            IOCorticalAreaDataType::SignedPercentage2D(f, p) => (5u16, *f, Some(*p)),
+            IOCorticalAreaDataType::SignedPercentage3D(f, p) => (6u16, *f, Some(*p)),
+            IOCorticalAreaDataType::SignedPercentage4D(f, p) => (7u16, *f, Some(*p)),
+            IOCorticalAreaDataType::CartesianPlane(f) => (8u16, *f, None),
+            IOCorticalAreaDataType::Misc(f) => (9u16, *f, None),
+        };
+
+        let frame_bits = match frame_handling {
+            FrameChangeHandling::Absolute => 0u16,
+            FrameChangeHandling::Incremental => 1u16,
+        };
+
+        let positioning_bits = match positioning {
+            Some(PercentageNeuronPositioning::Linear) => 0u16,
+            Some(PercentageNeuronPositioning::Fractional) => 1u16,
+            None => 0u16, // Not applicable for CartesianPlane/Misc
+        };
+
+        // Pack: variant (4 bits) | frame_handling (1 bit) << 4 | positioning (1 bit) << 5
+        variant | (frame_bits << 4) | (positioning_bits << 5)
+
+        // NOTE: bits 6 and 7 are currently unused, as well as the second byte!
     }
 }
 

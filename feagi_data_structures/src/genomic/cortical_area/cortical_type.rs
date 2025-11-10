@@ -1,8 +1,11 @@
 use std::fmt;
+use crate::FeagiDataError;
 use crate::genomic::cortical_area::cortical_id::CorticalID;
 use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataType;
 
 // Describes the method data is encoded within a cortical area
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum CorticalType {
     Core(CoreCorticalType),
     Custom(CustomCorticalType),
@@ -25,9 +28,14 @@ pub enum CoreCorticalType {
 }
 
 impl CoreCorticalType {
+    pub(crate) fn try_from_cortical_id_bytes_type_unchecked(cortical_id_bytes: &[u8; CorticalID::NUMBER_OF_BYTES]) -> Result<CoreCorticalType, FeagiDataError> {
+        match cortical_id_bytes {
+            b"___death" => Ok(CoreCorticalType::Death),
+            b"___power" => Ok(CoreCorticalType::Power),
+            _ => Err(FeagiDataError::BadParameters(format!("Unable to cast cortical ID bytes '{}' to a core cortical type!", String::from_utf8_lossy(cortical_id_bytes))))
+        }
 
-
-
+    }
 
     pub fn to_cortical_id(&self) -> CorticalID {
         match self {
