@@ -32,6 +32,8 @@ pub enum FeagiDataError {
     NeuronError(String),
     /// Internal error indicating a bug (please report)
     InternalError(String),
+    /// failed to process something in a const function
+    ConstError(&'static str),
     /// Feature not yet implemented
     NotImplemented,
 }
@@ -44,6 +46,7 @@ impl Display for FeagiDataError {
             FeagiDataError::BadParameters(msg) => write!(f, "Bad Parameters: {}", msg),
             FeagiDataError::NeuronError(msg) => write!(f, "NeuronError: {}", msg),
             FeagiDataError::InternalError(msg) => write!(f, "Internal Error, please raise an issue on Github: {}", msg),
+            FeagiDataError::ConstError(msg) => write!(f, "ConstError: {}", msg),
             FeagiDataError::NotImplemented => write!(f, "This function is not yet implemented! Please raise an issue on Github!")
         }
     }

@@ -2,6 +2,7 @@ use crate::FeagiDataError;
 use crate::genomic::cortical_area::CorticalID;
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
 
+
 pub type DataTypeConfigurationFlag = u16;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -19,7 +20,7 @@ pub enum IOCorticalAreaDataType {
 }
 
 impl IOCorticalAreaDataType {
-    pub(crate) fn try_from_data_type_configuration_flag(value: DataTypeConfigurationFlag) -> Result<Self, FeagiDataError> {
+    pub const fn try_from_data_type_configuration_flag(value: DataTypeConfigurationFlag) -> Result<Self, FeagiDataError> {
         let variant = value & 0x0F; // Bits 0-3
         let frame_handling = (value >> 4) & 0x01; // Bit 4
         let positioning = (value >> 5) & 0x01; // Bit 5
@@ -27,13 +28,13 @@ impl IOCorticalAreaDataType {
         let frame_handling_enum = match frame_handling {
             0 => FrameChangeHandling::Absolute,
             1 => FrameChangeHandling::Incremental,
-            _ => return Err(FeagiDataError::BadParameters("Invalid frame handling value".to_string())),
+            _ => return Err(FeagiDataError::ConstError("Invalid frame handling value")),
         };
 
         let positioning_enum = match positioning {
             0 => PercentageNeuronPositioning::Linear,
             1 => PercentageNeuronPositioning::Fractional,
-            _ => return Err(FeagiDataError::BadParameters("Invalid positioning value".to_string())),
+            _ => return Err(FeagiDataError::ConstError("Invalid positioning value")),
         };
 
         match variant {
@@ -48,22 +49,23 @@ impl IOCorticalAreaDataType {
             8 => {
                 // CartesianPlane doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
-                    return Err(FeagiDataError::BadParameters("CartesianPlane variant does not support positioning parameter".to_string()));
+                    return Err(FeagiDataError::ConstError("CartesianPlane variant does not support positioning parameter"));
                 }
                 Ok(IOCorticalAreaDataType::CartesianPlane(frame_handling_enum))
             }
             9 => {
                 // Misc doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
-                    return Err(FeagiDataError::BadParameters("Misc variant does not support positioning parameter".to_string()));
+                    return Err(FeagiDataError::ConstError("Misc variant does not support positioning parameter"));
                 }
                 Ok(IOCorticalAreaDataType::Misc(frame_handling_enum))
             }
-            _ => Err(FeagiDataError::BadParameters(format!("Invalid variant type: {}", variant))),
+            _ => Err(FeagiDataError::ConstError("Invalid variant type!")),
         }
     }
 
-    pub(crate) const fn as_io_cortical_id(&self, is_input: bool, cortical_unit_identifier: [u8; 3], cortical_unit_index: CorticalUnitIndex, cortical_group_index: CorticalGroupIndex) -> CorticalID {
+
+    pub const fn as_io_cortical_id(&self, is_input: bool, cortical_unit_identifier: [u8; 3], cortical_unit_index: CorticalUnitIndex, cortical_group_index: CorticalGroupIndex) -> CorticalID {
         let data_type_configuration: DataTypeConfigurationFlag = self.to_data_type_configuration_flag();
         let data_type_configuration_bytes: [u8; 2] = data_type_configuration.to_le_bytes();
         
@@ -84,11 +86,7 @@ impl IOCorticalAreaDataType {
         }
     }
 
-    
-
-
-
-    pub(crate) const fn to_data_type_configuration_flag(&self) -> DataTypeConfigurationFlag {
+    pub const fn to_data_type_configuration_flag(&self) -> DataTypeConfigurationFlag {
         let (variant, frame_handling, positioning) = match self {
             IOCorticalAreaDataType::Percentage(f, p) => (0u16, *f, Some(*p)),
             IOCorticalAreaDataType::Percentage2D(f, p) => (1u16, *f, Some(*p)),

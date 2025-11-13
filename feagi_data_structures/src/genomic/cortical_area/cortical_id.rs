@@ -1,6 +1,6 @@
 use std::fmt::{Display};
 use crate::FeagiDataError;
-use crate::genomic::cortical_area::cortical_type::{CoreCorticalType, CorticalType, CustomCorticalType, MemoryCorticalType};
+use crate::genomic::cortical_area::cortical_type::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
 
 macro_rules! match_bytes_by_cortical_type {
     ($cortical_id_bytes: expr,
@@ -47,7 +47,6 @@ impl CorticalID {
     pub fn try_from_base_64(str: &str) -> Result<Self, FeagiDataError> {
         todo!()
     }
-
     //endregion
 
     //region export
@@ -56,18 +55,18 @@ impl CorticalID {
         bytes.copy_from_slice(&self.bytes)
     }
 
-    pub fn as_cortical_type(&self) -> Result<CorticalType, FeagiDataError> {
+    pub fn as_cortical_type(&self) -> Result<CorticalAreaType, FeagiDataError> {
         match_bytes_by_cortical_type!(self.bytes,
             custom => {
                 // NOTE: Only 1 custom type currently
-                Ok(CorticalType::Custom(CustomCorticalType::LeakyIntegrateFire))
+                Ok(CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire))
             },
             memory => {
                 // NOTE: Only 1 memory type currently
-                Ok(CorticalType::Memory(MemoryCorticalType::Memory))
+                Ok(CorticalAreaType::Memory(MemoryCorticalType::Memory))
             },
             core => {
-                Ok(CorticalType::Core(CoreCorticalType::try_from_cortical_id_bytes_type_unchecked(&self.bytes)?))
+                Ok(CorticalAreaType::Core(CoreCorticalType::try_from_cortical_id_bytes_type_unchecked(&self.bytes)?))
             },
             brain_input => {
                 todo!()

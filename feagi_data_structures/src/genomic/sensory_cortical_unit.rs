@@ -1,88 +1,71 @@
-use crate::genomic::cortical_area::{CorticalID, CorticalType, IOCorticalAreaDataType};
+use std::fmt::Display;
+use crate::FeagiDataError;
+use crate::genomic::cortical_area::{CorticalID, CorticalAreaType, IOCorticalAreaDataType};
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
-use crate::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
+use crate::genomic::cortical_area::io_cortical_area_data_type::{DataTypeConfigurationFlag, FrameChangeHandling, PercentageNeuronPositioning};
 
 // TODO this should be macro generated from template!
-// TODO Dighital needs a boolean
+// TODO Digital needs a boolean
+#[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
 pub enum SensoryCorticalUnit {
-    Infrared(FrameChangeHandling, PercentageNeuronPositioning),
-    AnalogGPIO(FrameChangeHandling, PercentageNeuronPositioning),
-    Vision(FrameChangeHandling),
-    SegmentedVision(FrameChangeHandling), // 9 cartesian cortical areas
-    IMU(FrameChangeHandling, PercentageNeuronPositioning), // 1 3d percentage area, 1 4d percentage area // TODO placeholder!
+    Infrared,
+    AnalogGPIO,
+    Vision,
+    SegmentedVision,
+    IMU,
 }
 
-// TODO talk about experience of user of switching from one type to the other
-
-// TODO I hate allocating on the heap. There are some other crates that can do "vectors" on the stack that may be worth looking into
-
 impl SensoryCorticalUnit {
-    pub fn get_as_cortical_types(&self) -> Vec<CorticalType> {
-        match self {
-            SensoryCorticalUnit::Infrared(handling, percentage_neuron_positioning) => {
-                vec![CorticalType::BrainInput(IOCorticalAreaDataType::Percentage(handling.clone(), percentage_neuron_positioning.clone()))]
-            }
-            SensoryCorticalUnit::AnalogGPIO(handling, percentage_neuron_positioning) => {
-                vec![CorticalType::BrainInput(IOCorticalAreaDataType::Percentage(handling.clone(), percentage_neuron_positioning.clone()))]
-            }
-            SensoryCorticalUnit::Vision(handling) => {
-                vec![CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling))]
-            }
-            SensoryCorticalUnit::SegmentedVision(handling) => {
-                vec![
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::CartesianPlane(*handling)),
-                ]
-            }
-            SensoryCorticalUnit::IMU(handling, percentage_neuron_positioning) => {
-                vec![
-                    CorticalType::BrainInput(IOCorticalAreaDataType::SignedPercentage3D(*handling, *percentage_neuron_positioning)),
-                    CorticalType::BrainInput(IOCorticalAreaDataType::SignedPercentage4D(*handling, *percentage_neuron_positioning)),
-                ]
-            }
-        }
+
+    // TODO macro
+    pub const fn get_segmented_vision_cortical_area_types(frame_change_handling: FrameChangeHandling) -> [CorticalAreaType; 9] {
+        let io_cortical_area_data_type: IOCorticalAreaDataType = IOCorticalAreaDataType::CartesianPlane(frame_change_handling);
+        [
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+            CorticalAreaType::BrainInput(io_cortical_area_data_type),
+        ]
     }
 
-    pub fn get_as_cortical_ids(&self, group: CorticalGroupIndex) -> Vec<CorticalID> {
-        match self {
-            SensoryCorticalUnit::Infrared(handling, percentage_neuron_positioning) => {
-                vec![IOCorticalAreaDataType::Percentage(handling.clone(), percentage_neuron_positioning.clone()).as_io_cortical_id(true, *b"inf", CorticalUnitIndex::from(0), group)]
-            }
-            SensoryCorticalUnit::AnalogGPIO(handling, percentage_neuron_positioning) => {
-                vec![IOCorticalAreaDataType::Percentage(handling.clone(), percentage_neuron_positioning.clone()).as_io_cortical_id(true, *b"inf", CorticalUnitIndex::from(0), group)]
-            }
-            SensoryCorticalUnit::Vision(handling) => {
-                vec![IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"vis", CorticalUnitIndex::from(0), group)]
-            }
-            SensoryCorticalUnit::SegmentedVision(handling) => {
-                vec![
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(0), group),
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(1), group),
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(2), group),
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(3), group),
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(4), group),
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(5), group),
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(6), group),
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(7), group),
-                    IOCorticalAreaDataType::CartesianPlane(*handling).as_io_cortical_id(true, *b"svi", CorticalUnitIndex::from(8), group),
-                ]
-            }
-            SensoryCorticalUnit::IMU(handling, percentage_neuron_positioning) => {
+    // TODO macro
+    pub const fn get_segmented_vision_cortical_ids(frame_change_handling: FrameChangeHandling, cortical_group_index: CorticalGroupIndex) -> [CorticalID; 9] {
+        let io_cortical_area_data_type: IOCorticalAreaDataType = IOCorticalAreaDataType::CartesianPlane(frame_change_handling);
+        let cortical_unit_identifier: [u8; 3] = *b"svi";
 
-                vec![
-                    IOCorticalAreaDataType::SignedPercentage3D(*handling, *percentage_neuron_positioning).as_io_cortical_id(true, *b"imu", CorticalUnitIndex::from(0), group),
-                    IOCorticalAreaDataType::SignedPercentage4D(*handling, *percentage_neuron_positioning).as_io_cortical_id(true, *b"imu", CorticalUnitIndex::from(1), group),
-                ]
-            }
-        }
+        [
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(0), cortical_group_index),
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(1), cortical_group_index),
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(2), cortical_group_index),
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(3), cortical_group_index),
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(4), cortical_group_index),
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(5), cortical_group_index),
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(6), cortical_group_index),
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(7), cortical_group_index),
+            io_cortical_area_data_type.as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from(8), cortical_group_index),
+        ]
+
     }
 
 
+
+
+
+}
+
+impl Display for SensoryCorticalUnit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SensoryCorticalUnit::Infrared => write!(f, "Infrared"),
+            SensoryCorticalUnit::AnalogGPIO => write!(f, "Analog GPIO"),
+            SensoryCorticalUnit::Vision => write!(f, "Vision"),
+            SensoryCorticalUnit::SegmentedVision => write!(f, "Segmented Vision"),
+            SensoryCorticalUnit::IMU => write!(f, "IMU"),
+        }
+    }
 }
