@@ -11,18 +11,18 @@ macro_rules! match_bytes_by_cortical_type {
         brain_output => $brain_output:block,
         invalid => $invalid:block,
     ) => {
-        match *$cortical_id_bytes[0] {
-            b"c" => $custom,
-            b"m" => $memory,
-            b"_" => $core
-            b"i" => $brain_input,
-            b"o" => $brain_output,
+        match $cortical_id_bytes[0] {
+            b'c' => $custom,
+            b'm' => $memory,
+            b'_' => $core
+            b'i' => $brain_input,
+            b'o' => $brain_output,
             _ => $invalid,
         }
     };
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CorticalID {
     pub(crate) bytes: [u8; CorticalID::CORTICAL_ID_LENGTH],
 }
@@ -36,7 +36,7 @@ impl CorticalID {
 
     //region Constructors
 
-    pub fn try_from_bytes(bytes: [u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<Self, FeagiDataError> {
+    pub fn try_from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<Self, FeagiDataError> {
         todo!()
     }
 
@@ -52,6 +52,10 @@ impl CorticalID {
 
     //region export
 
+    pub fn write_id_to_bytes(&self, bytes: &mut[u8; Self::NUMBER_OF_BYTES]) {
+        bytes.copy_from_slice(&self.bytes)
+    }
+
     pub fn as_cortical_type(&self) -> Result<CorticalType, FeagiDataError> {
         match_bytes_by_cortical_type!(self.bytes,
             custom => {
@@ -65,7 +69,9 @@ impl CorticalID {
             core => {
                 Ok(CorticalType::Core(CoreCorticalType::try_from_cortical_id_bytes_type_unchecked(&self.bytes)?))
             },
-            brain_input => {},
+            brain_input => {
+                todo!()
+            },
             brain_output => {
                 todo!()
             },

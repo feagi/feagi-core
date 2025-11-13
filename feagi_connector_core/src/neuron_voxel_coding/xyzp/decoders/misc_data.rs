@@ -1,7 +1,7 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::CorticalChannelCount;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
@@ -38,19 +38,19 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
         let max_possible_z_index = self.misc_dimensions.depth;
 
         for neuron in neuron_array.iter() {
-            if neuron.cortical_coordinate.x >= max_possible_x_index || neuron.cortical_coordinate.y >= max_possible_y_index || neuron.cortical_coordinate.z >= max_possible_z_index {
+            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index || neuron.neuron_voxel_coordinate.y >= max_possible_y_index || neuron.neuron_voxel_coordinate.z >= max_possible_z_index {
                 continue;
             }
 
-            let channel_index: u32  = neuron.cortical_coordinate.x / self.misc_dimensions.width;
-            let in_channel_x_index: u32  = neuron.cortical_coordinate.x % self.misc_dimensions.width;
+            let channel_index: u32  = neuron.neuron_voxel_coordinate.x / self.misc_dimensions.width;
+            let in_channel_x_index: u32  = neuron.neuron_voxel_coordinate.x % self.misc_dimensions.width;
             let misc_data: &mut MiscData = pipelines_with_data_to_update.get_mut(channel_index as usize).unwrap().get_cached_input_mut().try_into()?;
             if !channel_changed[channel_index as usize] {
                 misc_data.blank_data();
                 channel_changed[channel_index as usize] = true;
             }
             let internal_data = misc_data.get_internal_data_mut(); // TODO should we possibly allocate these references outside this loop?
-            internal_data[(in_channel_x_index as usize, neuron.cortical_coordinate.y as usize, neuron.cortical_coordinate.z as usize)] = neuron.potential.clamp(-1.0, 1.0);
+            internal_data[(in_channel_x_index as usize, neuron.neuron_voxel_coordinate.y as usize, neuron.neuron_voxel_coordinate.z as usize)] = neuron.potential.clamp(-1.0, 1.0);
         };
 
         Ok(())

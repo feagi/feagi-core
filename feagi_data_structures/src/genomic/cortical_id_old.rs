@@ -40,7 +40,7 @@ impl CorticalID {
     /// 
     /// # Example
     /// ```
-    /// use feagi_data_structures::genomic::CorticalID;
+    /// use feagi_data_structures::genomic::cortical_area::CorticalID;
     /// 
     /// let id = CorticalID::new_custom_cortical_area_id("c_lmao".to_string()).unwrap();
     /// assert_eq!(id.as_ascii_string(), "c_lmao");
@@ -62,7 +62,7 @@ impl CorticalID {
     /// 
     /// # Example
     /// ```
-    /// use feagi_data_structures::genomic::CorticalID;
+    /// use feagi_data_structures::genomic::cortical_area::CorticalID;
     /// 
     /// let id = CorticalID::new_memory_cortical_area_id("m_cats".to_string()).unwrap();
     /// assert_eq!(id.as_ascii_string(), "m_cats");
@@ -128,7 +128,7 @@ impl CorticalID {
     /// 
     /// # Example
     /// ```
-    /// use feagi_data_structures::genomic::CorticalID;
+    /// use feagi_data_structures::genomic::cortical_area::CorticalID;
     /// 
     /// let bytes = b"c_lmao";
     /// let id = CorticalID::from_bytes(bytes).unwrap();
@@ -154,7 +154,7 @@ impl CorticalID {
     /// 
     /// # Example
     /// ```
-    /// use feagi_data_structures::genomic::CorticalID;
+    /// use feagi_data_structures::genomic::cortical_area::CorticalID;
     /// 
     /// let id = CorticalID::from_string("c_lmao".to_string()).unwrap();
     /// assert_eq!(id.as_ascii_string(), "c_lmao");
@@ -205,7 +205,7 @@ impl CorticalID {
     /// 
     /// # Example
     /// ```
-    /// use feagi_data_structures::genomic::CorticalID;
+    /// use feagi_data_structures::genomic::cortical_area::CorticalID;
     /// 
     /// let id = CorticalID::new_custom_cortical_area_id("c_lmao".to_string()).unwrap();
     /// assert_eq!(id.as_ascii_string(), "c_lmao");
@@ -235,7 +235,7 @@ impl CorticalID {
     /// 
     /// # Example
     /// ```
-    /// use feagi_data_structures::genomic::CorticalID;
+    /// use feagi_data_structures::genomic::cortical_area::CorticalID;
     /// 
     /// let id = CorticalID::new_custom_cortical_area_id("c_lmao".to_string()).unwrap();
     /// let mut bytes = [0u8; 6];

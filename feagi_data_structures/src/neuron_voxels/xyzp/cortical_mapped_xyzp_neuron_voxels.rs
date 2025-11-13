@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::mem::size_of;
-use crate::genomic::CorticalID;
+use crate::genomic::cortical_area::CorticalID;
 use crate::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays};
 
 /// Neuron voxel data organized by cortical area.
@@ -214,20 +214,6 @@ impl CorticalMappedXYZPNeuronVoxels {
     ///
     /// `Some(NeuronVoxelXYZPArrays)` of the removed data if the cortical area existed,
     /// `None` if the cortical area was not found.
-    ///
-    /// # Examples
-    ///
-    /// ```rust
-    /// use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
-    /// use feagi_data_structures::genomic::CorticalID;
-    ///
-    /// let mut neuron_data = CorticalMappedXYZPNeuronVoxels::new();
-    /// let cortical_id = CorticalID::from_string("iic400".into()).unwrap();
-    /// neuron_data.insert(cortical_id, NeuronVoxelXYZPArrays::new());
-    ///
-    /// let removed = neuron_data.remove(cortical_id);
-    /// assert!(removed.is_some());
-    /// ```
     pub fn remove(&mut self, cortical_id: CorticalID) -> Option<NeuronVoxelXYZPArrays> {
         self.mappings.remove(&cortical_id)
     }
@@ -341,17 +327,6 @@ impl CorticalMappedXYZPNeuronVoxels {
     ///
     /// # Returns
     /// A mutable reference to the (cleared) neuron voxel array for this cortical area.
-    ///
-    /// # Examples
-    /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP};
-    /// use feagi_data_structures::genomic::CorticalID;
-    ///
-    /// let mut data = CorticalMappedXYZPNeuronVoxels::new();
-    /// let cortical_id = CorticalID::from_string("iic400".into()).unwrap();
-    /// let neurons = data.ensure_clear_and_borrow_mut(&cortical_id);
-    /// neurons.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
-    /// ```
     pub fn ensure_clear_and_borrow_mut(&mut self, cortical_id: &CorticalID) -> &mut NeuronVoxelXYZPArrays {
         if self.mappings.contains_key(cortical_id) { // If already contains neuron array, clear it and return it
             let neurons = self.mappings.get_mut(cortical_id).unwrap();

@@ -9,8 +9,8 @@
 use ndarray::Array3;
 use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::{CorticalID, CorticalType, SensorCorticalType};
-use feagi_data_structures::genomic::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use super::ImageFrame;
 use super::descriptors::{ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions};

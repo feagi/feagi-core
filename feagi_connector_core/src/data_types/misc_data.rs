@@ -1,6 +1,6 @@
 use ndarray::{s, Array3, Zip};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::descriptors::CorticalChannelIndex;
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
 use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
 use super::descriptors::MiscDataDimensions;
 use super::ImageFrame;

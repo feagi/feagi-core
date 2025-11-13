@@ -3,7 +3,7 @@
 use feagi_data_structures::neuron_voxels::xyzp::{
     NeuronVoxelXYZP, NeuronVoxelXYZPArrays, CorticalMappedXYZPNeuronVoxels
 };
-use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use std::ops::RangeInclusive;
 
 #[cfg(test)]
@@ -16,9 +16,9 @@ mod xyzp_tests {
     fn test_neuron_voxel_creation() {
         let voxel = NeuronVoxelXYZP::new(10, 20, 30, 0.75);
 
-        assert_eq!(voxel.cortical_coordinate.x, 10);
-        assert_eq!(voxel.cortical_coordinate.y, 20);
-        assert_eq!(voxel.cortical_coordinate.z, 30);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 10);
+        assert_eq!(voxel.neuron_voxel_coordinate.y, 20);
+        assert_eq!(voxel.neuron_voxel_coordinate.z, 30);
         assert_eq!(voxel.potential, 0.75);
     }
 
@@ -82,9 +82,9 @@ mod xyzp_tests {
         assert_eq!(arrays.len(), 3);
 
         let voxel = arrays.get(1).unwrap();
-        assert_eq!(voxel.cortical_coordinate.x, 4);
-        assert_eq!(voxel.cortical_coordinate.y, 5);
-        assert_eq!(voxel.cortical_coordinate.z, 6);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 4);
+        assert_eq!(voxel.neuron_voxel_coordinate.y, 5);
+        assert_eq!(voxel.neuron_voxel_coordinate.z, 6);
         assert_eq!(voxel.potential, 0.2);
     }
 
@@ -96,7 +96,7 @@ mod xyzp_tests {
 
         assert_eq!(arrays.len(), 1);
         let voxel = arrays.get(0).unwrap();
-        assert_eq!(voxel.cortical_coordinate.x, 10);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 10);
         assert_eq!(voxel.potential, 0.7);
     }
 
@@ -119,11 +119,11 @@ mod xyzp_tests {
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
 
         let popped = arrays.pop().unwrap();
-        assert_eq!(popped.cortical_coordinate.x, 4);
+        assert_eq!(popped.neuron_voxel_coordinate.x, 4);
         assert_eq!(arrays.len(), 1);
 
         let popped = arrays.pop().unwrap();
-        assert_eq!(popped.cortical_coordinate.x, 1);
+        assert_eq!(popped.neuron_voxel_coordinate.x, 1);
         assert_eq!(arrays.len(), 0);
 
         assert!(arrays.pop().is_none());
@@ -187,7 +187,7 @@ mod xyzp_tests {
 
         let collected: Vec<_> = arrays.iter().collect();
         assert_eq!(collected.len(), 3);
-        assert_eq!(collected[1].cortical_coordinate.x, 4);
+        assert_eq!(collected[1].neuron_voxel_coordinate.x, 4);
     }
 
     #[test]
@@ -201,9 +201,9 @@ mod xyzp_tests {
 
         assert_eq!(indexed.len(), 2);
         assert_eq!(indexed[0].0, 0);
-        assert_eq!(indexed[0].1.cortical_coordinate.x, 10);
+        assert_eq!(indexed[0].1.neuron_voxel_coordinate.x, 10);
         assert_eq!(indexed[1].0, 1);
-        assert_eq!(indexed[1].1.cortical_coordinate.x, 40);
+        assert_eq!(indexed[1].1.neuron_voxel_coordinate.x, 40);
     }
 
     #[test]
@@ -216,7 +216,7 @@ mod xyzp_tests {
         let collected: Vec<_> = arrays.into_iter().collect();
 
         assert_eq!(collected.len(), 2);
-        assert_eq!(collected[0].cortical_coordinate.x, 1);
+        assert_eq!(collected[0].neuron_voxel_coordinate.x, 1);
         assert_eq!(collected[1].potential, 0.7);
     }
 
@@ -231,7 +231,7 @@ mod xyzp_tests {
 
         assert_eq!(arrays.len(), 3);
         let voxel = arrays.get(1).unwrap();
-        assert_eq!(voxel.cortical_coordinate.x, 2);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 2);
         assert_eq!(voxel.potential, 0.2);
     }
 
@@ -271,7 +271,7 @@ mod xyzp_tests {
         let vec = arrays.copy_as_neuron_xyzp_vec();
 
         assert_eq!(vec.len(), 2);
-        assert_eq!(vec[0].cortical_coordinate.x, 1);
+        assert_eq!(vec[0].neuron_voxel_coordinate.x, 1);
         assert_eq!(vec[1].potential, 0.7);
     }
 
@@ -335,10 +335,10 @@ mod xyzp_tests {
         assert_eq!(filtered.len(), 2); // Only voxels at (5,6,7) and (10,11,12) match
 
         let first = filtered.get(0).unwrap();
-        assert_eq!(first.cortical_coordinate.x, 5);
+        assert_eq!(first.neuron_voxel_coordinate.x, 5);
 
         let second = filtered.get(1).unwrap();
-        assert_eq!(second.cortical_coordinate.x, 10);
+        assert_eq!(second.neuron_voxel_coordinate.x, 10);
     }
 
     #[test]
@@ -357,9 +357,9 @@ mod xyzp_tests {
         assert!(result.is_ok());
 
         let voxel = arrays.get(0).unwrap();
-        assert_eq!(voxel.cortical_coordinate.x, 10);
-        assert_eq!(voxel.cortical_coordinate.y, 20);
-        assert_eq!(voxel.cortical_coordinate.z, 30);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 10);
+        assert_eq!(voxel.neuron_voxel_coordinate.y, 20);
+        assert_eq!(voxel.neuron_voxel_coordinate.z, 30);
         assert_eq!(voxel.potential, 0.9);
     }
 

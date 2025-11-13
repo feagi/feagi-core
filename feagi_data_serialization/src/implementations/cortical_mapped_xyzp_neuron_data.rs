@@ -3,7 +3,7 @@
 use std::any::Any;
 use byteorder::{ByteOrder, LittleEndian};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays};
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 
@@ -78,8 +78,8 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
         let mut reading_header_byte_index: usize = FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT + NUMBER_BYTES_CORTICAL_COUNT_HEADER;
 
         for _cortical_index in 0..number_cortical_areas {
-            let cortical_id = CorticalID::from_bytes(
-                <&[u8; 6]>::try_from(&byte_reading[reading_header_byte_index..reading_header_byte_index + 6]).unwrap()
+            let cortical_id = CorticalID::try_from_bytes(
+                <&[u8; CorticalID::NUMBER_OF_BYTES]>::try_from(&byte_reading[reading_header_byte_index..reading_header_byte_index + CorticalID::NUMBER_OF_BYTES]).unwrap()
             )?;
             let data_start_reading: usize = LittleEndian::read_u32(&byte_reading[reading_header_byte_index + 6..reading_header_byte_index + 10]) as usize;
             let number_bytes_to_read: usize = LittleEndian::read_u32(&byte_reading[reading_header_byte_index + 10..reading_header_byte_index + 14]) as usize;

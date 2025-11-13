@@ -1,4 +1,4 @@
-use crate::genomic::descriptors::CorticalCoordinate;
+use crate::genomic::cortical_area::descriptors::NeuronVoxelCoordinate;
 
 /// A single neuron voxel storing spatial coordinates and activation potential in XYZP format.
 /// 
@@ -7,7 +7,7 @@ use crate::genomic::descriptors::CorticalCoordinate;
 #[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelXYZP {
     /// coordinate within the cortical area.
-    pub cortical_coordinate: CorticalCoordinate,
+    pub neuron_voxel_coordinate: NeuronVoxelCoordinate,
     /// potential (voltage) of the voxel
     pub potential: f32
 }
@@ -39,7 +39,7 @@ impl NeuronVoxelXYZP {
     /// ```
     pub fn new(x: u32, y: u32, z: u32, potential: f32) -> Self {
         NeuronVoxelXYZP {
-            cortical_coordinate: CorticalCoordinate::new(x, y, z),
+            neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z),
             potential
         }
     }
@@ -74,13 +74,13 @@ impl NeuronVoxelXYZP {
     /// }
     /// ```
     pub fn as_tuple(&self) -> (u32, u32, u32, f32) {
-        (self.cortical_coordinate.x, self.cortical_coordinate.y, self.cortical_coordinate.z, self.potential)
+        (self.neuron_voxel_coordinate.x, self.neuron_voxel_coordinate.y, self.neuron_voxel_coordinate.z, self.potential)
     }
 }
 
 impl std::fmt::Display for NeuronVoxelXYZP {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let s = format!("NeuronVoxelXYZP({}, {}, {}, {})", self.cortical_coordinate.x, self.cortical_coordinate.y, self.cortical_coordinate.z, self.potential);
+        let s = format!("NeuronVoxelXYZP({}, {}, {}, {})", self.neuron_voxel_coordinate.x, self.neuron_voxel_coordinate.y, self.neuron_voxel_coordinate.z, self.potential);
         write!(f, "{}", s)
     }
 }

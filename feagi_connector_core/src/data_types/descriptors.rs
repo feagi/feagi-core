@@ -6,7 +6,7 @@ use std::cmp;
 use std::fmt::Display;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping};
-use feagi_data_structures::genomic::descriptors::CorticalChannelDimensions;
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelDimensions;
 use super::{ImageFrame, Percentage, Percentage2D, Percentage4D, SegmentedImageFrame};
 
 

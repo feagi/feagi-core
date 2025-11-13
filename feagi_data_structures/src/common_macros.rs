@@ -24,6 +24,12 @@ macro_rules! define_index {
         pub struct $name($inner);
 
         impl $name {
+
+            // const constructor
+            pub const fn from(var: $inner) -> Self {
+                Self(var)
+            }
+
             // const return method
             pub const fn get(&self) -> $inner {
                 self.0

@@ -1,7 +1,7 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::{Percentage3D};
@@ -56,16 +56,16 @@ impl NeuronVoxelXYZPDecoder for Percentage3DExponentialNeuronVoxelXYZPDecoder {
         for neuron in neuron_array.iter() {
 
             // Ignoring any neuron_voxels that have no potential (if sent for some reason).
-            if neuron.cortical_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+            if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            if neuron.cortical_coordinate.x >= max_possible_x_index || neuron.cortical_coordinate.z >= z_depth {
+            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index || neuron.neuron_voxel_coordinate.z >= z_depth {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            let z_row_vector = self.z_depth_scratch_space.get_mut(neuron.cortical_coordinate.x as usize).unwrap();
-            z_row_vector.push(neuron.cortical_coordinate.z)
+            let z_row_vector = self.z_depth_scratch_space.get_mut(neuron.neuron_voxel_coordinate.x as usize).unwrap();
+            z_row_vector.push(neuron.neuron_voxel_coordinate.z)
         };
 
         // At this point, we have numbers in scratch space to average out

@@ -1,7 +1,7 @@
 // TODO we need some example byte arrays to write some more tests!
 
 use feagi_data_serialization::{FeagiByteContainer, FeagiByteStructureType};
-use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::descriptors::CorticalDimensions;
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 
