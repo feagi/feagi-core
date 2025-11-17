@@ -7,7 +7,7 @@ use paste;
 
 macro_rules! define_sensory_cortical_units_enum {
     (
-        SensorCorticalUnit {
+        SensoryCorticalUnit {
             $(
                 $(#[doc = $doc:expr])?
                 $variant_name:ident => {
@@ -50,17 +50,35 @@ macro_rules! define_sensory_cortical_units_enum {
                         $($param_name: $param_type,)* cortical_group_index: CorticalGroupIndex) -> [CorticalID; $number_cortical_areas] {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
-                            $($cortical_area_type_expr .as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from($area_index), cortical_group_index)),*
+                            $(
+                                $cortical_area_type_expr .as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from($area_index), cortical_group_index)
+                            ),*
                         ]
-
                     }
                 }
             )*
 
+            pub const fn get_type_from_cortical_id_bytes(bytes: &[u8; CorticalID::NUMBER_OF_BYTES]) -> Result<SensoryCorticalUnit, FeagiDataError> {
+                if bytes[0] != b'i' {
+                    return Err(FeagiDataError::ConstError("Given Cortical ID cannot be decoded into a sensory cortical unit as it does not start with 'i'"));
+                }
+                todo!();
+            }
+
+            pub const fn get_snake_case_name(&self) -> &'static str {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => $snake_case_name,
+                    )*
+                }
+            }
+
+
+
         }
     };
-
 
 }
 // Generate the SensoryCorticalUnit enum and all helper methods from the template
 sensor_cortical_units!(define_sensory_cortical_units_enum);
+

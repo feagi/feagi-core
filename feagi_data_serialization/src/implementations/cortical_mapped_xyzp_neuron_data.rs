@@ -10,7 +10,7 @@ use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 /// Current version of the neuron XYZP serialization format.
 const BYTE_STRUCT_VERSION: u8 = 1;
 
-/// Bytes per cortical ID header: 6 (ID) + 4 (start index) + 4 (byte count).
+/// Bytes per cortical ID header: 8 (ID) + 4 (start index) + 4 (byte count).
 const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize = CorticalID::NUMBER_OF_BYTES + size_of::<u32>() + size_of::<u32>();
 
 /// Bytes for cortical area count header.
@@ -81,8 +81,12 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
             let cortical_id = CorticalID::try_from_bytes(
                 <&[u8; CorticalID::NUMBER_OF_BYTES]>::try_from(&byte_reading[reading_header_byte_index..reading_header_byte_index + CorticalID::NUMBER_OF_BYTES]).unwrap()
             )?;
-            let data_start_reading: usize = LittleEndian::read_u32(&byte_reading[reading_header_byte_index + 6..reading_header_byte_index + 10]) as usize;
-            let number_bytes_to_read: usize = LittleEndian::read_u32(&byte_reading[reading_header_byte_index + 10..reading_header_byte_index + 14]) as usize;
+
+            const CORTICAL_ID_AND_U32_OFFSET: usize = size_of::<u32>() + CorticalID::NUMBER_OF_BYTES;
+            const CORTICAL_ID_AND_U32_AND_U32_OFFSET: usize = size_of::<u32>() + size_of::<u32>() + CorticalID::NUMBER_OF_BYTES;
+
+            let data_start_reading: usize = LittleEndian::read_u32(&byte_reading[reading_header_byte_index + CorticalID::NUMBER_OF_BYTES..reading_header_byte_index + CORTICAL_ID_AND_U32_OFFSET]) as usize;
+            let number_bytes_to_read: usize = LittleEndian::read_u32(&byte_reading[reading_header_byte_index + CORTICAL_ID_AND_U32_OFFSET..reading_header_byte_index + CORTICAL_ID_AND_U32_AND_U32_OFFSET]) as usize;
 
             if byte_reading.len() < data_start_reading + number_bytes_to_read {
                 return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZP is too short to fit the data the header says it contains!".into()).into());

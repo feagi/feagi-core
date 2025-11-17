@@ -2,7 +2,7 @@
 macro_rules! sensor_cortical_units {
     ($callback:ident) => {
         $callback! {
-            SensorCorticalUnit {
+            SensoryCorticalUnit {
 
                 #[doc = "Infrared distance sensor for object detection."]
                 Infrared => {
