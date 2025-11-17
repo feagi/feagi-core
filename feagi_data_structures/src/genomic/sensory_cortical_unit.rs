@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use crate::{sensor_cortical_units, FeagiDataError};
 use crate::genomic::cortical_area::{CorticalID, CorticalAreaType, IOCorticalAreaDataType};
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
@@ -75,6 +75,16 @@ macro_rules! define_sensory_cortical_units_enum {
 
 
 
+        }
+
+        impl Display for SensoryCorticalUnit {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => write!(f, $friendly_name),
+                    )*
+                }
+    }
         }
     };
 
