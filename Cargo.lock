@@ -395,6 +395,7 @@ name = "feagi_data_structures"
 version = "0.0.50-beta.50"
 dependencies = [
  "ndarray",
+ "paste",
  "rayon",
  "serde_json",
 ]
