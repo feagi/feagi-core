@@ -65,10 +65,37 @@ macro_rules! sensor_unit_functions {
 
         // Arm for WrappedIOType::Percentage
         (@generate_function
-            WrappedIOType::Percentage
+            $sensory_unit:ident,
+            $snake_case_name:expr,
+            WrappedIOType::Percentage,
+        ) => {
+            ::paste::paste! {
+                pub fn [<$snake_case_name _register>](
+                    &mut self,
+                    group: CorticalGroupIndex,
+                    number_channels: CorticalChannelCount,
+                    z_neuron_resolution: NeuronDepth,
+                    frame_change_handling: FrameChangeHandling,
+                    percentage_neuron_positioning: PercentageNeuronPositioning
+                    ) -> Result<(), FeagiDataError>
+                {
+                    let cortical_id: CorticalID = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
+                    let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = {
+                        match percentage_neuron_positioning {
+                            PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)
+                            PercentageNeuronPositioning::Fractional => PercentageFractionalNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)
+                        }
+                    }
+
+                    let initial_val: WrappedIOData = WrappedIOType::Percentage1D(0.0)?;
+                    self.register($sensory_unit, group, encoder, Vec::new(), initial_val)?;
+                    Ok(())
+                }
 
 
-        )
+
+            }
+        }
 
 
 
