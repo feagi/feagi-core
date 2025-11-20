@@ -29,6 +29,10 @@ impl Percentage {
 
 //region Constructors
 
+    pub const fn new_zero() -> Self {
+        Percentage { value: 0.0 }
+    }
+
     /// Creates a percentage from a value in [0.0, 1.0] without validation.
     ///
     /// # Safety

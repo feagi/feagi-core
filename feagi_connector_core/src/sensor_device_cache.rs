@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
-use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-use feagi_data_structures::genomic::cortical_area::IOCorticalAreaDataType;
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
+use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
+use feagi_data_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaDataType};
 use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex};
 use feagi_data_structures::genomic::SensoryCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
@@ -178,7 +178,7 @@ macro_rules! sensor_unit_functions {
     (@generate_functions
         $sensory_unit:ident,
         $snake_case_name:expr,
-        Percentage,
+        Percentage
     ) => {
         ::paste::paste! {
             pub fn [<$snake_case_name _register>](
@@ -192,18 +192,18 @@ macro_rules! sensor_unit_functions {
             {
                 let cortical_id: CorticalID = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = {
-                    match percentage_neuron_positioning {
-                        PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)
-                        PercentageNeuronPositioning::Fractional => PercentageFractionalNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)
+                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
+                        PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
+                        PercentageNeuronPositioning::Fractional => PercentageExponentialNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
                     }
-                }
+                };
 
-                let initial_val: WrappedIOData = WrappedIOType::Percentage1D(0.0)?;
-                self.register($sensory_unit, group, encoder, Vec::new(), initial_val)?;
+                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, Vec::new(), initial_val)?;
                 Ok(())
             }
         }
-    }
+    };
 }
 
 pub(crate) struct SensorDeviceCache {
