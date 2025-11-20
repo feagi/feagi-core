@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
-use feagi_data_structures::{sensor_definition, FeagiDataError, FeagiSignal};
+use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_data_structures::genomic::cortical_area::IOCorticalAreaDataType;
@@ -27,7 +27,7 @@ macro_rules! sensor_unit_functions {
                 $variant_name:ident => {
                     friendly_name: $friendly_name:expr,
                     snake_case_name: $snake_case_name:expr,
-                    accepted_wrapped_io_data_type: $accepted_wrapped_io_data_type:expr,
+                    accepted_wrapped_io_data_type: $accepted_wrapped_io_data_type:ident,
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
                     cortical_type_parameters: {
@@ -39,166 +39,171 @@ macro_rules! sensor_unit_functions {
                 }
             ),* $(,)?
         }
+    ) =>
+    {
+        $(
+            sensor_unit_functions!(@generate_functions
+            $variant_name,
+            $snake_case_name,
+            $accepted_wrapped_io_data_type
+            );
+        )*
+    };
+
+    //region Similar Functions
+    // Helper macro to generate stage and other similar functions
+    (@generate_similar_functions
+        $variant_name:ident,
+        $snake_case_identifier:expr,
+        $wrapped_data_type:ident,
     ) => {
+        ::paste::paste! {
 
-        //region Similar Functions
-        // Helper macro to generate stage and other similar functions
-        (@generate_similar_functions
-            $variant_name:ident,
-            $snake_case_identifier:expr
-            $wrapped_data_type:expr,
-        ) => {
-            ::paste::paste! {
+            pub fn [<$snake_case_name _write>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+                data: $wrapped_data_type,
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
+                let wrapped_data: WrappedIOData = data.into();
+                let instant = Instant::now();
 
-                pub fn [<$snake_case_name _write>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel: CorticalChannelIndex,
-                    data: $wrapped_data_type,
-                ) -> Result<(), FeagiDataError>
-                {
-                    const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                    let wrapped_data: WrappedIOData = data.into();
-                    let instant = Instant::now();
-
-                    self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
-                    Ok(())
-                }
-
-                pub fn [<$snake_case_identifier _read_postprocessed_cache_value>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel: CorticalChannelIndex,
-                ) -> Result< $data_type, FeagiDataError> {
-
-                    const SENSOR_TYPE: SensorCorticalType = SensorCorticalType::$cortical_type_key_name;
-                    let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
-                    let val: $data_type = wrapped.try_into()?;
-                    Ok(val)
-                }
-
-                pub fn [<$snake_case_identifier _get_single_stage_properties>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel_index: CorticalChannelIndex,
-                    stage_index: PipelineStagePropertyIndex
-                ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
-                {
-                    const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
-                    let stage = self.try_get_single_stage_properties(SENSOR_UNIT_TYPE, group, channel_index, stage_index)?;
-                    Ok(stage)
-                }
-
-                pub fn [<$snake_case_identifier _get_all_stage_properties>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel_index: CorticalChannelIndex
-                ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
-                {
-                    const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
-                    let stages = self.try_get_all_stage_properties(SENSOR_UNIT_TYPE, group, channel_index)?;
-                    Ok(stages)
-                }
-
-                pub fn [<$snake_case_identifier _update_single_stage_properties>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel_index: CorticalChannelIndex,
-                    pipeline_stage_property_index: PipelineStagePropertyIndex,
-                    updating_property: Box<dyn PipelineStageProperties + Sync + Send>
-                ) -> Result<(), FeagiDataError>
-                {
-                    const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
-                    self.try_update_single_stage_properties(SENSOR_UNIT_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
-                    Ok(())
-                }
-
-                pub fn [<$snake_case_identifier _update_all_stage_properties>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel_index: CorticalChannelIndex,
-                    updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
-                ) -> Result<(), FeagiDataError>
-                {
-                    const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
-                    self.try_update_all_stage_properties(SENSOR_UNIT_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
-                    Ok(())
-                }
-
-                pub fn [<$snake_case_identifier _replace_single_stage>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel_index: CorticalChannelIndex,
-                    pipeline_stage_property_index: PipelineStagePropertyIndex,
-                    replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
-                ) -> Result<(), FeagiDataError>
-                {
-                    const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
-                    self.try_replace_single_stage(SENSOR_UNIT_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
-                    Ok(())
-                }
-
-                pub fn [<$snake_case_identifier _replace_all_stages>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel_index: CorticalChannelIndex,
-                    new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
-                ) -> Result<(), FeagiDataError>
-                {
-                    const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
-                    self.try_replace_all_stages(SENSOR_UNIT_TYPE, group, channel_index, new_pipeline_stage_properties)?;
-                    Ok(())
-                }
-
-                pub fn [<$snake_case_identifier _removing_all_stages>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    channel_index: CorticalChannelIndex
-                ) -> Result<(), FeagiDataError>
-                {
-                    const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
-                    self.try_removing_all_stages(SENSOR_UNIT_TYPE, group, channel_index)?;
-                    Ok(())
-                }
+                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                Ok(())
             }
-        };
-        //endregion
 
+            pub fn [<$snake_case_identifier _read_postprocessed_cache_value>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel: CorticalChannelIndex,
+            ) -> Result< $data_type, FeagiDataError> {
 
-        // Arm for WrappedIOType::Percentage
-        (@generate_function
-            $sensory_unit:ident,
-            $snake_case_name:expr,
-            WrappedIOType::Percentage,
-        ) => {
-            ::paste::paste! {
-                pub fn [<$snake_case_name _register>](
-                    &mut self,
-                    group: CorticalGroupIndex,
-                    number_channels: CorticalChannelCount,
-                    z_neuron_resolution: NeuronDepth,
-                    frame_change_handling: FrameChangeHandling,
-                    percentage_neuron_positioning: PercentageNeuronPositioning
-                    ) -> Result<(), FeagiDataError>
-                {
-                    let cortical_id: CorticalID = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
-                    let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = {
-                        match percentage_neuron_positioning {
-                            PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)
-                            PercentageNeuronPositioning::Fractional => PercentageFractionalNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)
-                        }
-                    }
+                const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
+                let wrapped = self.try_read_postprocessed_cached_value(SENSOR_TYPE, group, channel)?;
+                let val: $data_type = wrapped.try_into()?;
+                Ok(val)
+            }
 
-                    let initial_val: WrappedIOData = WrappedIOType::Percentage1D(0.0)?;
-                    self.register($sensory_unit, group, encoder, Vec::new(), initial_val)?;
-                    Ok(())
-                }
+            pub fn [<$snake_case_identifier _get_single_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                stage_index: PipelineStagePropertyIndex
+            ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
+            {
+                const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
+                let stage = self.try_get_single_stage_properties(SENSOR_UNIT_TYPE, group, channel_index, stage_index)?;
+                Ok(stage)
+            }
+
+            pub fn [<$snake_case_identifier _get_all_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
+            {
+                const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
+                let stages = self.try_get_all_stage_properties(SENSOR_UNIT_TYPE, group, channel_index)?;
+                Ok(stages)
+            }
+
+            pub fn [<$snake_case_identifier _update_single_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                updating_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
+                self.try_update_single_stage_properties(SENSOR_UNIT_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+                Ok(())
+            }
+
+            pub fn [<$snake_case_identifier _update_all_stage_properties>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
+                self.try_update_all_stage_properties(SENSOR_UNIT_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+                Ok(())
+            }
+
+            pub fn [<$snake_case_identifier _replace_single_stage>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                pipeline_stage_property_index: PipelineStagePropertyIndex,
+                replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
+                self.try_replace_single_stage(SENSOR_UNIT_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
+                Ok(())
+            }
+
+            pub fn [<$snake_case_identifier _replace_all_stages>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex,
+                new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
+                self.try_replace_all_stages(SENSOR_UNIT_TYPE, group, channel_index, new_pipeline_stage_properties)?;
+                Ok(())
+            }
+
+            pub fn [<$snake_case_identifier _removing_all_stages>](
+                &mut self,
+                group: CorticalGroupIndex,
+                channel_index: CorticalChannelIndex
+            ) -> Result<(), FeagiDataError>
+            {
+                const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$variant_name;
+                self.try_removing_all_stages(SENSOR_UNIT_TYPE, group, channel_index)?;
+                Ok(())
             }
         }
-
-
-
     };
+    //endregion
+
+
+    // Arm for WrappedIOType::Percentage
+    (@generate_functions
+        $sensory_unit:ident,
+        $snake_case_name:expr,
+        Percentage,
+    ) => {
+        ::paste::paste! {
+            pub fn [<$snake_case_name _register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                z_neuron_resolution: NeuronDepth,
+                frame_change_handling: FrameChangeHandling,
+                percentage_neuron_positioning: PercentageNeuronPositioning
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = {
+                    match percentage_neuron_positioning {
+                        PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)
+                        PercentageNeuronPositioning::Fractional => PercentageFractionalNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)
+                    }
+                }
+
+                let initial_val: WrappedIOData = WrappedIOType::Percentage1D(0.0)?;
+                self.register($sensory_unit, group, encoder, Vec::new(), initial_val)?;
+                Ok(())
+            }
+        }
+    }
 }
 
 pub(crate) struct SensorDeviceCache {
@@ -225,7 +230,7 @@ impl SensorDeviceCache {
         }
     }
 
-    sensor_definition!(sensor_unit_functions);
+    sensor_cortical_units!(sensor_unit_functions);
 
 
     //region Internal
