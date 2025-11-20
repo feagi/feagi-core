@@ -281,23 +281,14 @@ macro_rules! sensor_unit_functions {
                 group: CorticalGroupIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
-                input_image_properties: ImageFrameProperties,
-                segmented_image_properties: SegmentedImageFrameProperties,
-                 initial_gaze: GazeProperties
+                image_properties: ImageFrameProperties,
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: [CorticalID; 9] = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, group);
-                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, group)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = ImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_id, &image_properties, number_channels)?;
 
-                let initial_val: WrappedIOData = WrappedIOType::SegmentedImageFrame(Some(segmented_image_properties)).create_blank_data_of_type()?;
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( vec![ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?]) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
+                let initial_val: WrappedIOData = WrappedIOType::ImageFrame(Some(image_properties)).create_blank_data_of_type()?;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, Vec::new(), initial_val)?;
                 Ok(())
             }
         }

@@ -24,10 +24,12 @@ use crate::wrapped_io_data::WrappedIOData;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
 pub enum WrappedIOType {
+    /*
     F32, // NOTE: No Feagi Neurons encode floats directly!
     F32_2D,
     F32_3D,
     F32_4D,
+     */
     Percentage,
     Percentage_2D,
     Percentage_3D,
@@ -71,10 +73,12 @@ impl WrappedIOType {
     /// must be provided or this will return an error.
     pub fn create_blank_data_of_type(&self) -> Result<WrappedIOData, FeagiDataError> {
         match self {
+            /*
             WrappedIOType::F32 => Ok(WrappedIOData::F32(0.0)),
             WrappedIOType::F32_2D => Ok(WrappedIOData::F32_2D((0.0, 0.0))),
             WrappedIOType::F32_3D => Ok(WrappedIOData::F32_3D((0.0, 0.0, 0.0))),
             WrappedIOType::F32_4D => Ok(WrappedIOData::F32_4D((0.0, 0.0, 0.0, 0.0))),
+             */
 
             WrappedIOType::Percentage => Ok(WrappedIOData::Percentage(Percentage::new_from_0_1_unchecked(0.0))),
             WrappedIOType::Percentage_2D => Ok(WrappedIOData::Percentage_2D(Percentage2D::new_identical_percentages(Percentage::new_from_0_1_unchecked(0.0)))),
@@ -111,10 +115,12 @@ impl WrappedIOType {
 impl std::fmt::Display for WrappedIOType {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
+            /*
             WrappedIOType::F32 => write!(f, "IOTypeVariant(F32)"),
             WrappedIOType::F32_2D => write!(f, "IOTypeVariant(F32_2D)"),
             WrappedIOType::F32_3D => write!(f, "IOTypeVariant(F32_3D)"),
             WrappedIOType::F32_4D => write!(f, "IOTypeVariant(F32_4D)"),
+             */
             WrappedIOType::Percentage => write!(f, "IOTypeVariant(Percentage)"),
             WrappedIOType::Percentage_2D => write!(f, "IOTypeVariant(Percentage_2D)"),
             WrappedIOType::Percentage_3D => write!(f, "IOTypeVariant(Percentage_3D)"),
@@ -153,10 +159,12 @@ impl std::fmt::Display for WrappedIOType {
 impl From<WrappedIOData> for WrappedIOType {
     fn from(io_type: WrappedIOData) -> Self {
         match io_type {
+            /*
             WrappedIOData::F32(_) => WrappedIOType::F32,
             WrappedIOData::F32_2D(_) => WrappedIOType::F32_2D,
             WrappedIOData::F32_3D(_) => WrappedIOType::F32_3D,
             WrappedIOData::F32_4D(_) => WrappedIOType::F32_4D,
+             */
             WrappedIOData::Percentage(_) => WrappedIOType::Percentage,
             WrappedIOData::Percentage_2D(_) => WrappedIOType::Percentage_2D,
             WrappedIOData::Percentage_3D(_) => WrappedIOType::Percentage_3D,
@@ -175,10 +183,12 @@ impl From<WrappedIOData> for WrappedIOType {
 impl From<&WrappedIOData> for WrappedIOType {
     fn from(io_type: &WrappedIOData) -> Self {
         match io_type {
+            /*
             WrappedIOData::F32(_) => WrappedIOType::F32,
             WrappedIOData::F32_2D(_) => WrappedIOType::F32_2D,
             WrappedIOData::F32_3D(_) => WrappedIOType::F32_3D,
             WrappedIOData::F32_4D(_) => WrappedIOType::F32_4D,
+             */
             WrappedIOData::Percentage(_) => WrappedIOType::Percentage,
             WrappedIOData::Percentage_2D(_) => WrappedIOType::Percentage_2D,
             WrappedIOData::Percentage_3D(_) => WrappedIOType::Percentage_3D,

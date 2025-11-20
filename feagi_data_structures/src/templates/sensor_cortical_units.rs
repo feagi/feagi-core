@@ -85,7 +85,7 @@ macro_rules! sensor_cortical_units {
                 },
 
                 #[doc = "Analog GPIO input, such as an input from the GPIO pins on a Raspberry pi"]
-                Servo => {
+                AnalogGPIO => {
                     friendly_name: "Analog GPIO Sensor",
                     snake_case_name: "analog_gpio",
                     accepted_wrapped_io_data_type: Percentage,
@@ -101,10 +101,10 @@ macro_rules! sensor_cortical_units {
                 },
 
                 #[doc = "Miscellaneous sensor that does not fit existing templates."]
-                Misc => {
+                MiscData => {
                     friendly_name: "Miscellaneous Sensor",
                     snake_case_name: "miscellaneous",
-                    accepted_wrapped_io_data_type: Miscellaneous,
+                    accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"mis",
                     number_cortical_areas: 1,
                     cortical_type_parameters: {
@@ -116,7 +116,7 @@ macro_rules! sensor_cortical_units {
                 },
 
                 #[doc = "Camera vision input"]
-                Servo => {
+                Vision => {
                     friendly_name: "Vision Sensor",
                     snake_case_name: "vision",
                     accepted_wrapped_io_data_type: ImageFrame,
@@ -126,7 +126,7 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_types: {
-                        (IOCorticalAreaDataType::ImageFrame(frame_change_handling), 0)
+                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 0)
                     }
                 },
 
