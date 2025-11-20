@@ -20,6 +20,118 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
+                #[doc = "Proximity (distance) sensor for object detection."]
+                Proximity => {
+                    friendly_name: "Proximity Sensor",
+                    snake_case_name: "proximity",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"pro",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    }
+                },
+
+                #[doc = "Shocking sensor for sensing 'pain'. Useful for training."]
+                Shock => {
+                    friendly_name: "Shock sensor",
+                    snake_case_name: "shock",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"shk",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    }
+                },
+
+                #[doc = "Battery level sensor."]
+                Battery => {
+                    friendly_name: "Battery Sensor",
+                    snake_case_name: "battery",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"bat",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    }
+                },
+
+                #[doc = "Servo position sensor for monitoring actuator position."]
+                Servo => {
+                    friendly_name: "Servo Sensor",
+                    snake_case_name: "servo",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"svm",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    }
+                },
+
+                #[doc = "Analog GPIO input, such as an input from the GPIO pins on a Raspberry pi"]
+                Servo => {
+                    friendly_name: "Analog GPIO Sensor",
+                    snake_case_name: "analog_gpio",
+                    accepted_wrapped_io_data_type: Percentage,
+                    cortical_id_unit_reference: *b"agp",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    }
+                },
+
+                #[doc = "Miscellaneous sensor that does not fit existing templates."]
+                Misc => {
+                    friendly_name: "Miscellaneous Sensor",
+                    snake_case_name: "miscellaneous",
+                    accepted_wrapped_io_data_type: Miscellaneous,
+                    cortical_id_unit_reference: *b"mis",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::Misc(frame_change_handling), 0)
+                    }
+                },
+
+                #[doc = "Camera vision input"]
+                Servo => {
+                    friendly_name: "Vision Sensor",
+                    snake_case_name: "vision",
+                    accepted_wrapped_io_data_type: ImageFrame,
+                    cortical_id_unit_reference: *b"img",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::ImageFrame(frame_change_handling), 0)
+                    }
+                },
+
+
+
                 #[doc = "Segmented vision processing, with a higher resolution center and lower resolution peripherals"]
                 SegmentedVision => {
                     friendly_name: "Segmented Vision",

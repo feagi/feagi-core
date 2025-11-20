@@ -240,6 +240,68 @@ macro_rules! sensor_unit_functions {
             }
         }
     };
+
+    // Arm for WrappedIOType::MiscData
+    (@generate_functions
+        $sensory_unit:ident,
+        $snake_case_name:expr,
+        MiscData
+    ) => {
+        ::paste::paste! {
+            pub fn [<$snake_case_name _register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                misc_data_dimensions: MiscDataDimensions
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, group)[0];
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
+
+                let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, Vec::new(), initial_val)?;
+                Ok(())
+            }
+        }
+
+        sensor_unit_functions!(@generate_similar_functions $sensory_unit, $snake_case_name, MiscData);
+    };
+
+
+    // Arm for WrappedIOType::ImageFrame
+    (@generate_functions
+        $sensory_unit:ident,
+        $snake_case_name:expr,
+        ImageFrame
+    ) => {
+        ::paste::paste! {
+            pub fn [<$snake_case_name _register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                input_image_properties: ImageFrameProperties,
+                segmented_image_properties: SegmentedImageFrameProperties,
+                 initial_gaze: GazeProperties
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: [CorticalID; 9] = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, group);
+                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
+
+                let initial_val: WrappedIOData = WrappedIOType::SegmentedImageFrame(Some(segmented_image_properties)).create_blank_data_of_type()?;
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for _i in 0..*number_channels {
+                        output.push( vec![ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?]) // TODO properly implement clone so we dont need to do this
+                    };
+                    output
+                };
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
+                Ok(())
+            }
+        }
+    };
 }
 
 pub(crate) struct SensorDeviceCache {
