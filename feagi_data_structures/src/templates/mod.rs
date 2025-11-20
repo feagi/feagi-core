@@ -4,3 +4,4 @@
 //! and motor output types in FEAGI's I/O system.
 
 mod sensor_cortical_units;
+mod motor_cortical_units;
