@@ -37,7 +37,28 @@ impl CorticalID {
     //region Constructors
 
     pub fn try_from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<Self, FeagiDataError> {
-        todo!()
+        match_bytes_by_cortical_type!(bytes,
+            custom => {
+                Ok(CorticalID {bytes: *bytes})
+            },
+            memory => {
+                Ok(CorticalID {bytes: *bytes})
+            },
+            core => {
+                Ok(CorticalID {bytes: *bytes})
+            },
+            brain_input => {
+                // TODO more checks
+                Ok(CorticalID {bytes: *bytes})
+            },
+            brain_output => {
+                // TODO more checks
+                Ok(CorticalID {bytes: *bytes})
+            },
+            invalid => {
+                Err(FeagiDataError::DeserializationError("Unable to deserialize cortical ID bytes as any possible type!".into()))
+            },
+        )
     }
 
     pub fn try_from_u64(u: u64) -> Result<Self, FeagiDataError> {
