@@ -4,7 +4,7 @@ use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
-use feagi_data_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaDataType};
+use feagi_data_structures::genomic::cortical_area::{CorticalID};
 use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex};
 use feagi_data_structures::genomic::SensoryCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;

@@ -7,5 +7,6 @@ pub mod wrapped_io_data;
 pub mod data_types;
 mod connector_agent;
 mod sensor_device_cache;
-mod motor_device_cache;
+mod motor_device_cache_old;
 mod feagi_interfaces;
+mod motor_device_cache;
