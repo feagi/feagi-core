@@ -1,14 +1,16 @@
 //! Tests for the genomic module
-//! 
+//!
 //! This module contains comprehensive tests for genomic data structures
-//! including cortical types, cortical IDs, descriptors, and their relationships.
+//! including cortical types, cortical IDs, descriptors, and sensory cortical units.
 
 use feagi_data_structures::genomic::*;
-use feagi_data_structures::genomic::descriptors::*;
+use feagi_data_structures::genomic::cortical_area::*;
+use feagi_data_structures::genomic::cortical_area::descriptors::*;
+use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::*;
 use feagi_data_structures::FeagiDataError;
 
 #[cfg(test)]
-mod test_descriptors {
+mod test_cortical_area_descriptors {
     use super::*;
 
     mod test_indices {
@@ -70,15 +72,15 @@ mod test_descriptors {
         }
 
         #[test]
-        fn test_agent_device_index_creation() {
-            let index = AgentDeviceIndex::from(500u32);
-            assert_eq!(*index, 500u32);
+        fn test_cortical_unit_index_creation() {
+            let index = CorticalUnitIndex::from(5u8);
+            assert_eq!(*index, 5u8);
         }
 
         #[test]
-        fn test_agent_device_index_zero() {
-            let index = AgentDeviceIndex::from(0u32);
-            assert_eq!(*index, 0u32);
+        fn test_cortical_unit_index_max_value() {
+            let index = CorticalUnitIndex::from(u8::MAX);
+            assert_eq!(*index, u8::MAX);
         }
     }
 
@@ -108,23 +110,10 @@ mod test_descriptors {
             let result = CorticalChannelCount::new(0);
             assert!(result.is_err());
             if let Err(FeagiDataError::BadParameters(msg)) = result {
-                assert_eq!(msg, "Count cannot be zero!");
+                assert!(msg.contains("cannot be zero"));
             } else {
                 panic!("Expected BadParameters error");
             }
-        }
-
-        #[test]
-        fn test_cortical_channel_count_display() {
-            let count = CorticalChannelCount::new(42).unwrap();
-            let display_string = format!("{}", count);
-            assert_eq!(display_string, "42");
-        }
-
-        #[test]
-        fn test_cortical_channel_count_from_conversion() {
-            let count = CorticalChannelCount::try_from(10u32).unwrap();
-            assert_eq!(*count, 10u32);
         }
 
         #[test]
@@ -138,7 +127,7 @@ mod test_descriptors {
             let result = NeuronDepth::new(0);
             assert!(result.is_err());
             if let Err(FeagiDataError::BadParameters(msg)) = result {
-                assert_eq!(msg, "Count cannot be zero!");
+                assert!(msg.contains("cannot be zero"));
             } else {
                 panic!("Expected BadParameters error");
             }
@@ -152,27 +141,28 @@ mod test_descriptors {
     }
 
     mod test_coordinates {
+        use feagi_data_structures::genomic::descriptors::GenomeCoordinate;
         use super::*;
 
         #[test]
-        fn test_cortical_coordinate_creation() {
-            let coord = CorticalCoordinate::new(10, 20, 30);
+        fn test_neuron_voxel_coordinate_creation() {
+            let coord = NeuronVoxelCoordinate::new(10, 20, 30);
             assert_eq!(coord.x, 10);
             assert_eq!(coord.y, 20);
             assert_eq!(coord.z, 30);
         }
 
         #[test]
-        fn test_cortical_coordinate_zero_values() {
-            let coord = CorticalCoordinate::new(0, 0, 0);
+        fn test_neuron_voxel_coordinate_zero_values() {
+            let coord = NeuronVoxelCoordinate::new(0, 0, 0);
             assert_eq!(coord.x, 0);
             assert_eq!(coord.y, 0);
             assert_eq!(coord.z, 0);
         }
 
         #[test]
-        fn test_cortical_coordinate_max_values() {
-            let coord = CorticalCoordinate::new(u32::MAX, u32::MAX, u32::MAX);
+        fn test_neuron_voxel_coordinate_max_values() {
+            let coord = NeuronVoxelCoordinate::new(u32::MAX, u32::MAX, u32::MAX);
             assert_eq!(coord.x, u32::MAX);
             assert_eq!(coord.y, u32::MAX);
             assert_eq!(coord.z, u32::MAX);
@@ -201,7 +191,6 @@ mod test_descriptors {
             assert_eq!(coord.y, i32::MIN);
             assert_eq!(coord.z, 0);
         }
-
     }
 
     mod test_dimensions {
@@ -230,24 +219,36 @@ mod test_descriptors {
         }
 
         #[test]
-        fn test_cortical_dimensions_valid() {
-            let dims = CorticalDimensions::new(100, 200, 300).unwrap();
+        fn test_cortical_area_dimensions_valid() {
+            let dims = CorticalAreaDimensions::new(100, 200, 300).unwrap();
             assert_eq!(dims.width, 100);
             assert_eq!(dims.height, 200);
             assert_eq!(dims.depth, 300);
         }
     }
+}
 
-    mod test_dimension_ranges {
-        use super::*;
+#[cfg(test)]
+mod test_genomic_descriptors {
+    use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
+    use super::*;
 
-        #[test]
-        fn test_cortical_channel_dimension_range_valid() {
-            let range = CorticalChannelDimensionRange::new(0..10, 5..15, 10..20).unwrap();
-            assert_eq!(range.width, 0..10);
-            assert_eq!(range.height, 5..15);
-            assert_eq!(range.depth, 10..20);
-        }
+    #[test]
+    fn test_agent_device_index_creation() {
+        let index = AgentDeviceIndex::from(500u32);
+        assert_eq!(*index, 500u32);
+    }
+
+    #[test]
+    fn test_agent_device_index_zero() {
+        let index = AgentDeviceIndex::from(0u32);
+        assert_eq!(*index, 0u32);
+    }
+
+    #[test]
+    fn test_agent_device_index_max_value() {
+        let index = AgentDeviceIndex::from(u32::MAX);
+        assert_eq!(*index, u32::MAX);
     }
 }
 
@@ -262,14 +263,14 @@ mod test_cortical_types {
         fn test_core_cortical_type_death() {
             let core_type = CoreCorticalType::Death;
             let cortical_id = core_type.to_cortical_id();
-            assert_eq!(cortical_id.as_ascii_string(), "_death");
+            assert_eq!(format!("{}", cortical_id), "___death");
         }
 
         #[test]
         fn test_core_cortical_type_power() {
             let core_type = CoreCorticalType::Power;
             let cortical_id = core_type.to_cortical_id();
-            assert_eq!(cortical_id.as_ascii_string(), "_power");
+            assert_eq!(format!("{}", cortical_id), "___power");
         }
 
         #[test]
@@ -280,123 +281,67 @@ mod test_cortical_types {
             assert_eq!(format!("{}", death_type), "CoreCorticalType(Death)");
             assert_eq!(format!("{}", power_type), "CoreCorticalType(Power)");
         }
-
-        #[test]
-        fn test_core_cortical_type_conversion_to_cortical_type() {
-            let core_type = CoreCorticalType::Death;
-            let cortical_type: CorticalType = core_type.into();
-            
-            match cortical_type {
-                CorticalType::Core(CoreCorticalType::Death) => (),
-                _ => panic!("Expected Core(Death) cortical type"),
-            }
-        }
     }
 
-    mod test_cortical_type {
+    mod test_cortical_area_type {
         use super::*;
 
         #[test]
-        fn test_cortical_type_is_type_checks() {
-            let custom = CorticalType::Custom;
-            let memory = CorticalType::Memory;
-            let core = CorticalType::Core(CoreCorticalType::Death);
+        fn test_cortical_area_type_core_variant() {
+            let area_type = CorticalAreaType::Core(CoreCorticalType::Death);
             
-            assert!(custom.is_type_custom());
-            assert!(!custom.is_type_memory());
-            assert!(!custom.is_type_core());
-            assert!(!custom.is_type_sensor());
-            assert!(!custom.is_type_motor());
-            
-            assert!(memory.is_type_memory());
-            assert!(!memory.is_type_custom());
-            
-            assert!(core.is_type_core());
-            assert!(!core.is_type_custom());
+            match area_type {
+                CorticalAreaType::Core(CoreCorticalType::Death) => (),
+                _ => panic!("Expected Core(Death) variant"),
+            }
         }
 
         #[test]
-        fn test_cortical_type_verify_type_success() {
-            let custom = CorticalType::Custom;
-            let memory = CorticalType::Memory;
-            let core = CorticalType::Core(CoreCorticalType::Power);
+        fn test_cortical_area_type_custom_variant() {
+            let area_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
             
-            assert!(custom.verify_is_custom().is_ok());
-            assert!(memory.verify_is_memory().is_ok());
-            assert!(core.verify_is_core().is_ok());
+            match area_type {
+                CorticalAreaType::Custom(_) => (),
+                _ => panic!("Expected Custom variant"),
+            }
         }
 
         #[test]
-        fn test_cortical_type_verify_type_failure() {
-            let custom = CorticalType::Custom;
+        fn test_cortical_area_type_memory_variant() {
+            let area_type = CorticalAreaType::Memory(MemoryCorticalType::Memory);
             
-            assert!(custom.verify_is_memory().is_err());
-            assert!(custom.verify_is_core().is_err());
-            assert!(custom.verify_is_sensor().is_err());
-            assert!(custom.verify_is_motor().is_err());
+            match area_type {
+                CorticalAreaType::Memory(_) => (),
+                _ => panic!("Expected Memory variant"),
+            }
         }
 
         #[test]
-        fn test_cortical_type_display() {
-            let custom = CorticalType::Custom;
-            let memory = CorticalType::Memory;
-            let core = CorticalType::Core(CoreCorticalType::Death);
+        fn test_cortical_area_type_brain_input_variant() {
+            let io_type = IOCorticalAreaDataType::Percentage(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear
+            );
+            let area_type = CorticalAreaType::BrainInput(io_type);
             
-            assert_eq!(format!("{}", custom), "'Custom'");
-            assert_eq!(format!("{}", memory), "'Memory'");
-            assert!(format!("{}", core).contains("'Core("));
+            match area_type {
+                CorticalAreaType::BrainInput(_) => (),
+                _ => panic!("Expected BrainInput variant"),
+            }
         }
 
         #[test]
-        fn test_cortical_type_to_cortical_id_errors() {
-            let custom = CorticalType::Custom;
-            let memory = CorticalType::Memory;
-            let index = CorticalGroupIndex::from(0u8);
+        fn test_cortical_area_type_brain_output_variant() {
+            let io_type = IOCorticalAreaDataType::Percentage(
+                FrameChangeHandling::Incremental,
+                PercentageNeuronPositioning::Fractional
+            );
+            let area_type = CorticalAreaType::BrainOutput(io_type);
             
-            assert!(custom.to_cortical_id(index).is_err());
-            assert!(memory.to_cortical_id(index).is_err());
-        }
-
-        #[test]
-        fn test_cortical_type_to_cortical_id_success() {
-            let core = CorticalType::Core(CoreCorticalType::Death);
-            let index = CorticalGroupIndex::from(0u8);
-            
-            let result = core.to_cortical_id(index);
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap().as_ascii_string(), "_death");
-        }
-
-        #[test]
-        fn test_cortical_type_channel_size_boundaries_errors() {
-            let custom = CorticalType::Custom;
-            let memory = CorticalType::Memory;
-            let core = CorticalType::Core(CoreCorticalType::Death);
-            
-            assert!(custom.try_get_channel_size_boundaries().is_err());
-            assert!(memory.try_get_channel_size_boundaries().is_err());
-            assert!(core.try_get_channel_size_boundaries().is_err());
-        }
-
-        #[test]
-        fn test_cortical_type_from_bytes_custom() {
-            let bytes = b"custom";
-            let result = CorticalType::try_get_type_from_bytes(bytes).unwrap();
-            assert_eq!(result, CorticalType::Custom);
-        }
-
-        #[test]
-        fn test_cortical_type_from_bytes_memory() {
-            let bytes = b"memory";
-            let result = CorticalType::try_get_type_from_bytes(bytes).unwrap();
-            assert_eq!(result, CorticalType::Memory);
-        }
-
-        #[test]
-        fn test_cortical_type_from_bytes_invalid_start() {
-            let bytes = b"xinval";
-            let result = CorticalType::try_get_type_from_bytes(bytes);
-            assert!(result.is_err());
+            match area_type {
+                CorticalAreaType::BrainOutput(_) => (),
+                _ => panic!("Expected BrainOutput variant"),
+            }
         }
     }
 }
@@ -410,175 +355,21 @@ mod test_cortical_id {
 
         #[test]
         fn test_cortical_id_constants() {
-            assert_eq!(CorticalID::CORTICAL_ID_LENGTH, 6);
-            assert_eq!(CorticalID::NUMBER_OF_BYTES, 6);
+            assert_eq!(CorticalID::CORTICAL_ID_LENGTH, 8);
+            assert_eq!(CorticalID::NUMBER_OF_BYTES, 8);
             assert_eq!(CorticalID::CORTICAL_ID_LENGTH, CorticalID::NUMBER_OF_BYTES);
         }
 
         #[test]
-        fn test_cortical_id_new_custom_valid() {
-            let result = CorticalID::new_custom_cortical_area_id("cust01".to_string());
-            assert!(result.is_ok());
-            
-            let cortical_id = result.unwrap();
-            assert_eq!(cortical_id.as_ascii_string(), "cust01");
+        fn test_cortical_id_from_core_death() {
+            let cortical_id = CoreCorticalType::Death.to_cortical_id();
+            assert_eq!(format!("{}", cortical_id), "___death");
         }
 
         #[test]
-        fn test_cortical_id_new_custom_wrong_prefix() {
-            let result = CorticalID::new_custom_cortical_area_id("xust01".to_string());
-            assert!(result.is_err());
-            
-            if let Err(FeagiDataError::BadParameters(msg)) = result {
-                assert!(msg.contains("A custom cortical area ID must start with 'c'"));
-            } else {
-                panic!("Expected BadParameters error");
-            }
-        }
-
-        #[test]
-        fn test_cortical_id_new_custom_wrong_length() {
-            let result = CorticalID::new_custom_cortical_area_id("cust".to_string());
-            assert!(result.is_err());
-        }
-
-        #[test]
-        fn test_cortical_id_new_custom_non_ascii() {
-            let result = CorticalID::new_custom_cortical_area_id("cust🎯1".to_string());
-            assert!(result.is_err());
-        }
-
-        #[test]
-        fn test_cortical_id_new_custom_invalid_characters() {
-            let result = CorticalID::new_custom_cortical_area_id("cust@1".to_string());
-            assert!(result.is_err());
-        }
-
-        #[test]
-        fn test_cortical_id_new_memory_valid() {
-            let result = CorticalID::new_memory_cortical_area_id("mem001".to_string());
-            assert!(result.is_ok());
-            
-            let cortical_id = result.unwrap();
-            assert_eq!(cortical_id.as_ascii_string(), "mem001");
-        }
-
-        #[test]
-        fn test_cortical_id_new_memory_wrong_prefix() {
-            let result = CorticalID::new_memory_cortical_area_id("xem001".to_string());
-            assert!(result.is_err());
-            
-            if let Err(FeagiDataError::BadParameters(msg)) = result {
-                assert!(msg.contains("A memory cortical area ID must start with 'm'"));
-            } else {
-                panic!("Expected BadParameters error");
-            }
-        }
-
-        #[test]
-        fn test_cortical_id_new_core_death() {
-            let result = CorticalID::new_core_cortical_area_id(CoreCorticalType::Death);
-            assert!(result.is_ok());
-            
-            let cortical_id = result.unwrap();
-            assert_eq!(cortical_id.as_ascii_string(), "_death");
-        }
-
-        #[test]
-        fn test_cortical_id_new_core_power() {
-            let result = CorticalID::new_core_cortical_area_id(CoreCorticalType::Power);
-            assert!(result.is_ok());
-            
-            let cortical_id = result.unwrap();
-            assert_eq!(cortical_id.as_ascii_string(), "_power");
-        }
-
-        #[test]
-        fn test_cortical_id_from_string_valid() {
-            let result = CorticalID::from_string("custom".to_string());
-            assert!(result.is_ok());
-            
-            let cortical_id = result.unwrap();
-            assert_eq!(cortical_id.as_ascii_string(), "custom");
-        }
-
-        #[test]
-        fn test_cortical_id_from_string_wrong_length() {
-            let result = CorticalID::from_string("short".to_string());
-            assert!(result.is_err());
-            
-            if let Err(FeagiDataError::BadParameters(msg)) = result {
-                assert!(msg.contains("A cortical ID must have a length of 6"));
-            } else {
-                panic!("Expected BadParameters error");
-            }
-        }
-
-        #[test]
-        fn test_cortical_id_from_string_non_ascii() {
-            let result = CorticalID::from_string("cust🎯1".to_string());
-            assert!(result.is_err());
-            
-            if let Err(FeagiDataError::BadParameters(_msg)) = result {
-            } else {
-                panic!("Expected BadParameters error");
-            }
-        }
-
-        #[test]
-        fn test_cortical_id_from_string_invalid_characters() {
-            let result = CorticalID::from_string("cust@1".to_string());
-            assert!(result.is_err());
-            
-            if let Err(FeagiDataError::BadParameters(msg)) = result {
-                assert!(msg.contains("A cortical ID must be made only of alphanumeric characters and underscores"));
-            } else {
-                panic!("Expected BadParameters error");
-            }
-        }
-
-        #[test]
-        fn test_cortical_id_from_bytes_valid() {
-            let bytes = b"custom";
-            let result = CorticalID::from_bytes(bytes);
-            assert!(result.is_ok());
-            
-            let cortical_id = result.unwrap();
-            assert_eq!(cortical_id.as_ascii_string(), "custom");
-        }
-
-        #[test]
-        fn test_cortical_id_from_bytes_non_ascii() {
-            let bytes = [0xFF, 0xFE, 0xFD, 0xFC, 0xFB, 0xFA]; // Invalid UTF-8
-            let result = CorticalID::from_bytes(&bytes);
-            assert!(result.is_err());
-            
-            if let Err(FeagiDataError::DeserializationError(msg)) = result {
-                assert!(msg.contains("Unable to parse cortical ID as ASCII"));
-            } else {
-                panic!("Expected DeserializationError");
-            }
-        }
-
-        #[test]
-        fn test_cortical_id_try_from_cortical_type_core() {
-            let cortical_type = CorticalType::Core(CoreCorticalType::Death);
-            let index = CorticalGroupIndex::from(0u8);
-            
-            let result = CorticalID::try_from_cortical_type(&cortical_type, index);
-            assert!(result.is_ok());
-            
-            let cortical_id = result.unwrap();
-            assert_eq!(cortical_id.as_ascii_string(), "_death");
-        }
-
-        #[test]
-        fn test_cortical_id_try_from_cortical_type_custom_error() {
-            let cortical_type = CorticalType::Custom;
-            let index = CorticalGroupIndex::from(0u8);
-            
-            let result = CorticalID::try_from_cortical_type(&cortical_type, index);
-            assert!(result.is_err());
+        fn test_cortical_id_from_core_power() {
+            let cortical_id = CoreCorticalType::Power.to_cortical_id();
+            assert_eq!(format!("{}", cortical_id), "___power");
         }
     }
 
@@ -587,222 +378,438 @@ mod test_cortical_id {
 
         #[test]
         fn test_cortical_id_as_bytes() {
-            let cortical_id = CorticalID::from_string("custom".to_string()).unwrap();
+            let cortical_id = CoreCorticalType::Death.to_cortical_id();
             let bytes = cortical_id.as_bytes();
-            assert_eq!(bytes, b"custom");
+            assert_eq!(bytes, b"___death");
         }
 
         #[test]
-        fn test_cortical_id_as_ascii_string() {
-            let cortical_id = CorticalID::from_string("memory".to_string()).unwrap();
-            let string = cortical_id.as_ascii_string();
-            assert_eq!(string, "memory");
+        fn test_cortical_id_display() {
+            let cortical_id = CoreCorticalType::Power.to_cortical_id();
+            let display_string = format!("{}", cortical_id);
+            assert_eq!(display_string, "___power");
         }
 
         #[test]
-        fn test_cortical_id_get_cortical_type_custom() {
-            let cortical_id = CorticalID::from_string("custom".to_string()).unwrap();
-            let cortical_type = cortical_id.get_cortical_type();
-            assert_eq!(cortical_type, CorticalType::Custom);
-        }
-
-        #[test]
-        fn test_cortical_id_get_cortical_type_memory() {
-            let cortical_id = CorticalID::from_string("memory".to_string()).unwrap();
-            let cortical_type = cortical_id.get_cortical_type();
-            assert_eq!(cortical_type, CorticalType::Memory);
-        }
-
-        #[test]
-        fn test_cortical_id_get_cortical_type_core() {
-            let cortical_id = CorticalID::new_core_cortical_area_id(CoreCorticalType::Death).unwrap();
-            let cortical_type = cortical_id.get_cortical_type();
+        fn test_cortical_id_as_cortical_type_core_death() {
+            let cortical_id = CoreCorticalType::Death.to_cortical_id();
+            let cortical_type = cortical_id.as_cortical_type().unwrap();
             
             match cortical_type {
-                CorticalType::Core(CoreCorticalType::Death) => (),
+                CorticalAreaType::Core(CoreCorticalType::Death) => (),
                 _ => panic!("Expected Core(Death) cortical type"),
             }
         }
 
         #[test]
+        fn test_cortical_id_as_cortical_type_core_power() {
+            let cortical_id = CoreCorticalType::Power.to_cortical_id();
+            let cortical_type = cortical_id.as_cortical_type().unwrap();
+            
+            match cortical_type {
+                CorticalAreaType::Core(CoreCorticalType::Power) => (),
+                _ => panic!("Expected Core(Power) cortical type"),
+            }
+        }
+
+        #[test]
+        fn test_cortical_id_write_to_bytes() {
+            let cortical_id = CoreCorticalType::Death.to_cortical_id();
+            let mut buffer = [0u8; 8];
+            cortical_id.write_id_to_bytes(&mut buffer);
+            assert_eq!(&buffer, b"___death");
+        }
+
+        #[test]
         fn test_cortical_id_clone() {
-            let cortical_id1 = CorticalID::from_string("clone1".to_string()).unwrap();
+            let cortical_id1 = CoreCorticalType::Power.to_cortical_id();
             let cortical_id2 = cortical_id1.clone();
             
             assert_eq!(cortical_id1, cortical_id2);
-            assert_eq!(cortical_id1.as_ascii_string(), cortical_id2.as_ascii_string());
+            assert_eq!(format!("{}", cortical_id1), format!("{}", cortical_id2));
+        }
+
+        #[test]
+        fn test_cortical_id_copy() {
+            let cortical_id1 = CoreCorticalType::Death.to_cortical_id();
+            let cortical_id2 = cortical_id1; // Copy, not move
+            
+            assert_eq!(cortical_id1, cortical_id2);
         }
     }
 }
 
 #[cfg(test)]
-mod test_type_conversions {
+mod test_io_cortical_area_data_type {
+    use super::*;
+
+    mod test_frame_change_handling {
+        use super::*;
+
+        #[test]
+        fn test_frame_change_handling_variants() {
+            let absolute = FrameChangeHandling::Absolute;
+            let incremental = FrameChangeHandling::Incremental;
+            
+            assert_ne!(absolute, incremental);
+        }
+
+        #[test]
+        fn test_frame_change_handling_default() {
+            let default = FrameChangeHandling::default();
+            assert_eq!(default, FrameChangeHandling::Absolute);
+        }
+    }
+
+    mod test_percentage_neuron_positioning {
+        use super::*;
+
+        #[test]
+        fn test_percentage_neuron_positioning_variants() {
+            let linear = PercentageNeuronPositioning::Linear;
+            let fractional = PercentageNeuronPositioning::Fractional;
+            
+            assert_ne!(linear, fractional);
+        }
+
+        #[test]
+        fn test_percentage_neuron_positioning_default() {
+            let default = PercentageNeuronPositioning::default();
+            assert_eq!(default, PercentageNeuronPositioning::Fractional);
+        }
+    }
+
+    mod test_io_cortical_area_data_type_variants {
+        use super::*;
+
+        #[test]
+        fn test_percentage_variant() {
+            let io_type = IOCorticalAreaDataType::Percentage(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear
+            );
+            
+            match io_type {
+                IOCorticalAreaDataType::Percentage(_, _) => (),
+                _ => panic!("Expected Percentage variant"),
+            }
+        }
+
+        #[test]
+        fn test_signed_percentage_variant() {
+            let io_type = IOCorticalAreaDataType::SignedPercentage(
+                FrameChangeHandling::Incremental,
+                PercentageNeuronPositioning::Fractional
+            );
+            
+            match io_type {
+                IOCorticalAreaDataType::SignedPercentage(_, _) => (),
+                _ => panic!("Expected SignedPercentage variant"),
+            }
+        }
+
+        #[test]
+        fn test_cartesian_plane_variant() {
+            let io_type = IOCorticalAreaDataType::CartesianPlane(FrameChangeHandling::Absolute);
+            
+            match io_type {
+                IOCorticalAreaDataType::CartesianPlane(_) => (),
+                _ => panic!("Expected CartesianPlane variant"),
+            }
+        }
+
+        #[test]
+        fn test_percentage_3d_variant() {
+            let io_type = IOCorticalAreaDataType::SignedPercentage3D(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear
+            );
+            
+            match io_type {
+                IOCorticalAreaDataType::SignedPercentage3D(_, _) => (),
+                _ => panic!("Expected SignedPercentage3D variant"),
+            }
+        }
+
+        #[test]
+        fn test_percentage_4d_variant() {
+            let io_type = IOCorticalAreaDataType::SignedPercentage4D(
+                FrameChangeHandling::Incremental,
+                PercentageNeuronPositioning::Fractional
+            );
+            
+            match io_type {
+                IOCorticalAreaDataType::SignedPercentage4D(_, _) => (),
+                _ => panic!("Expected SignedPercentage4D variant"),
+            }
+        }
+    }
+
+    mod test_data_type_configuration_flag {
+        use super::*;
+
+        #[test]
+        fn test_to_configuration_flag_percentage() {
+            let io_type = IOCorticalAreaDataType::Percentage(
+                FrameChangeHandling::Incremental,
+                PercentageNeuronPositioning::Linear
+            );
+            
+            let flag = io_type.to_data_type_configuration_flag();
+            
+            // Verify the flag is non-zero
+            assert_ne!(flag, 0);
+        }
+
+        #[test]
+        fn test_configuration_flag_roundtrip_percentage() {
+            let original = IOCorticalAreaDataType::Percentage(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear
+            );
+            
+            let flag = original.to_data_type_configuration_flag();
+            let recovered = IOCorticalAreaDataType::try_from_data_type_configuration_flag(flag).unwrap();
+            
+            assert_eq!(original, recovered);
+        }
+
+        #[test]
+        fn test_configuration_flag_roundtrip_cartesian_plane() {
+            let original = IOCorticalAreaDataType::CartesianPlane(FrameChangeHandling::Incremental);
+            
+            let flag = original.to_data_type_configuration_flag();
+            let recovered = IOCorticalAreaDataType::try_from_data_type_configuration_flag(flag).unwrap();
+            
+            assert_eq!(original, recovered);
+        }
+
+        #[test]
+        fn test_different_types_produce_different_flags() {
+            let type1 = IOCorticalAreaDataType::Percentage(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear
+            );
+            
+            let type2 = IOCorticalAreaDataType::SignedPercentage(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear
+            );
+            
+            let flag1 = type1.to_data_type_configuration_flag();
+            let flag2 = type2.to_data_type_configuration_flag();
+            
+            assert_ne!(flag1, flag2);
+        }
+    }
+
+    mod test_as_io_cortical_id {
+        use super::*;
+
+        #[test]
+        fn test_as_io_cortical_id_creates_valid_id() {
+            let io_type = IOCorticalAreaDataType::Percentage(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear
+            );
+            
+            let unit_id = *b"tst";
+            let unit_index = CorticalUnitIndex::from(0u8);
+            let group_index = CorticalGroupIndex::from(5u8);
+            
+            let cortical_id = io_type.as_io_cortical_id(true, unit_id, unit_index, group_index);
+            
+            // Verify the ID starts with 'i' for input
+            let bytes = cortical_id.as_bytes();
+            assert_eq!(bytes[0], b'i');
+        }
+
+        #[test]
+        fn test_as_io_cortical_id_input_vs_output() {
+            let io_type = IOCorticalAreaDataType::Percentage(
+                FrameChangeHandling::Absolute,
+                PercentageNeuronPositioning::Linear
+            );
+            
+            let unit_id = *b"tst";
+            let unit_index = CorticalUnitIndex::from(0u8);
+            let group_index = CorticalGroupIndex::from(0u8);
+            
+            let input_id = io_type.as_io_cortical_id(true, unit_id, unit_index, group_index);
+            let output_id = io_type.as_io_cortical_id(false, unit_id, unit_index, group_index);
+            
+            assert_ne!(input_id, output_id);
+            
+            let input_bytes = input_id.as_bytes();
+            let output_bytes = output_id.as_bytes();
+            
+            assert_eq!(input_bytes[0], b'i');
+            assert_eq!(output_bytes[0], b'0');
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_sensory_cortical_unit {
     use super::*;
 
     #[test]
-    fn test_core_cortical_type_to_cortical_type() {
-        let core_type = CoreCorticalType::Death;
-        let cortical_type: CorticalType = core_type.into();
+    fn test_sensory_cortical_unit_display() {
+        // Test the Display implementation for sensor types
+        assert_eq!(format!("{}", SensoryCorticalUnit::Infrared), "Infrared Sensor");
+        assert_eq!(format!("{}", SensoryCorticalUnit::SegmentedVision), "Segmented Vision");
+    }
+
+    #[test]
+    fn test_sensory_cortical_unit_snake_case_name() {
+        // Test the snake_case_name method
+        assert_eq!(SensoryCorticalUnit::Infrared.get_snake_case_name(), "infrared");
+        assert_eq!(SensoryCorticalUnit::SegmentedVision.get_snake_case_name(), "segmented_vision");
+    }
+
+    #[test]
+    fn test_infrared_cortical_area_types_array() {
+        // Test that infrared generates 1 cortical area type
+        let frame_handling = FrameChangeHandling::Absolute;
+        let positioning = PercentageNeuronPositioning::Linear;
         
-        assert!(cortical_type.is_type_core());
-        match cortical_type {
-            CorticalType::Core(CoreCorticalType::Death) => (),
-            _ => panic!("Expected Core(Death)"),
+        let types = SensoryCorticalUnit::get_infrared_cortical_area_types_array(frame_handling, positioning);
+        
+        assert_eq!(types.len(), 1);
+        match types[0] {
+            CorticalAreaType::BrainInput(_) => (),
+            _ => panic!("Expected BrainInput type"),
         }
     }
 
     #[test]
-    fn test_core_cortical_type_reference_to_cortical_type() {
-        let core_type = CoreCorticalType::Power;
-        let cortical_type: CorticalType = (&core_type).into();
+    fn test_infrared_cortical_ids_array() {
+        // Test that infrared generates correct cortical IDs
+        let frame_handling = FrameChangeHandling::Absolute;
+        let positioning = PercentageNeuronPositioning::Linear;
+        let group = CorticalGroupIndex::from(5u8);
         
-        assert!(cortical_type.is_type_core());
-        match cortical_type {
-            CorticalType::Core(CoreCorticalType::Power) => (),
-            _ => panic!("Expected Core(Power)"),
+        let ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(frame_handling, positioning, group);
+        
+        assert_eq!(ids.len(), 1);
+        
+        // Verify the cortical ID has the correct structure
+        let bytes = ids[0].as_bytes();
+        assert_eq!(bytes[0], b'i', "Sensor ID should start with 'i'");
+        assert_eq!(&bytes[1..4], b"inf", "Infrared ID should contain 'inf'");
+    }
+
+    #[test]
+    fn test_segmented_vision_cortical_area_types_array() {
+        // Test that segmented vision generates 9 cortical area types
+        let frame_handling = FrameChangeHandling::Incremental;
+        
+        let types = SensoryCorticalUnit::get_segmented_vision_cortical_area_types_array(frame_handling);
+        
+        assert_eq!(types.len(), 9);
+        
+        // All should be BrainInput types
+        for area_type in types.iter() {
+            match area_type {
+                CorticalAreaType::BrainInput(_) => (),
+                _ => panic!("Expected BrainInput type"),
+            }
         }
     }
 
     #[test]
-    fn test_index_conversions() {
-        let base_value = 42u8;
-        let group_index = CorticalGroupIndex::from(base_value);
-        let back_to_base: u8 = group_index.into();
+    fn test_segmented_vision_cortical_ids_array() {
+        // Test that segmented vision generates 9 distinct cortical IDs
+        let frame_handling = FrameChangeHandling::Incremental;
+        let group = CorticalGroupIndex::from(3u8);
         
-        assert_eq!(base_value, back_to_base);
+        let ids = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group);
+        
+        assert_eq!(ids.len(), 9);
+        
+        // Verify all IDs are unique and properly formatted
+        for (i, id) in ids.iter().enumerate() {
+            let bytes = id.as_bytes();
+            assert_eq!(bytes[0], b'i', "Sensor ID should start with 'i'");
+            assert_eq!(&bytes[1..4], b"svi", "Segmented vision ID should contain 'svi'");
+            
+            // Check that IDs are unique
+            for (j, other_id) in ids.iter().enumerate() {
+                if i != j {
+                    assert_ne!(id, other_id, "IDs at index {} and {} should be different", i, j);
+                }
+            }
+        }
     }
 
     #[test]
-    fn test_count_conversions() {
-        let base_value = 100u32;
-        let channel_count = CorticalChannelCount::try_from(base_value).unwrap();
-        let back_to_base: u32 = channel_count.into();
+    fn test_different_frame_handling_produces_different_ids() {
+        // Test that different frame handling produces different IDs
+        let positioning = PercentageNeuronPositioning::Linear;
+        let group = CorticalGroupIndex::from(0u8);
         
-        assert_eq!(base_value, back_to_base);
+        let absolute_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            positioning,
+            group
+        );
+        
+        let incremental_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            positioning,
+            group
+        );
+        
+        assert_ne!(absolute_ids[0], incremental_ids[0], "Different frame handling should produce different IDs");
+    }
+
+    #[test]
+    fn test_different_positioning_produces_different_ids() {
+        // Test that different positioning produces different IDs
+        let frame_handling = FrameChangeHandling::Absolute;
+        let group = CorticalGroupIndex::from(0u8);
+        
+        let linear_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            frame_handling,
+            PercentageNeuronPositioning::Linear,
+            group
+        );
+        
+        let fractional_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            frame_handling,
+            PercentageNeuronPositioning::Fractional,
+            group
+        );
+        
+        assert_ne!(linear_ids[0], fractional_ids[0], "Different positioning should produce different IDs");
+    }
+
+    #[test]
+    fn test_different_groups_produce_different_ids() {
+        // Test that different groups produce different IDs
+        let frame_handling = FrameChangeHandling::Absolute;
+        let positioning = PercentageNeuronPositioning::Linear;
+        
+        let group0_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            frame_handling,
+            positioning,
+            CorticalGroupIndex::from(0u8)
+        );
+        
+        let group1_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            frame_handling,
+            positioning,
+            CorticalGroupIndex::from(1u8)
+        );
+        
+        assert_ne!(group0_ids[0], group1_ids[0], "Different groups should produce different IDs");
     }
 }
 
 #[cfg(test)]
 mod test_comprehensive_scenarios {
+    use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, GenomeCoordinate};
     use super::*;
-
-    #[test]
-    fn test_cortical_id_type_roundtrip() {
-        // Test that we can create a cortical ID and get back the correct type
-        let original_type = CorticalType::Core(CoreCorticalType::Death);
-        let index = CorticalGroupIndex::from(0u8);
-        
-        let cortical_id = CorticalID::try_from_cortical_type(&original_type, index).unwrap();
-        let recovered_type = cortical_id.get_cortical_type();
-        
-        assert_eq!(original_type, recovered_type);
-    }
-
-    #[test]
-    fn test_maximum_group_index() {
-        // Test that we can handle the maximum group index value
-        let max_index = CorticalGroupIndex::from(u8::MAX);
-        let core_type = CoreCorticalType::Power;
-        
-        // Core types should work with any index (though they don't use it)
-        let cortical_type = CorticalType::Core(core_type);
-        let cortical_id = CorticalID::try_from_cortical_type(&cortical_type, max_index);
-        
-        assert!(cortical_id.is_ok());
-    }
-
-    #[test]
-    fn test_neuron_depth_with_coordinates() {
-        // Test neuron depth in realistic scenarios
-        let depth = NeuronDepth::new(100).unwrap();
-        let coord = CorticalCoordinate::new(10, 20, *depth - 1);
-        
-        assert_eq!(*depth, 100);
-        assert_eq!(coord.z, 99); // Within depth bounds
-    }
-
-    #[test]
-    fn test_agent_device_channel_mapping() {
-        // Test a realistic scenario of mapping agent devices to channels
-        let agent_device = AgentDeviceIndex::from(1001u32);
-        let cortical_group = CorticalGroupIndex::from(5u8);
-        let cortical_channel = CorticalChannelIndex::from(0u32);
-        
-        assert_eq!(*agent_device, 1001);
-        assert_eq!(*cortical_group, 5);
-        assert_eq!(*cortical_channel, 0);
-        
-        // These would typically be used together in mapping tables
-        assert_ne!(*agent_device, *cortical_channel); // Different index types
-    }
-}
-
-#[cfg(test)]
-mod test_error_handling_edge_cases {
-    use super::*;
-
-    #[test]
-    fn test_zero_values_in_counts() {
-        // All count types should reject zero
-        assert!(CorticalChannelCount::new(0).is_err());
-        assert!(NeuronDepth::new(0).is_err());
-    }
-
-    #[test]
-    fn test_zero_values_in_dimensions() {
-        // All dimension types should reject zero in any axis
-        assert!(CorticalChannelDimensions::new(0, 10, 10).is_err());
-        assert!(CorticalChannelDimensions::new(10, 0, 10).is_err());
-        assert!(CorticalChannelDimensions::new(10, 10, 0).is_err());
-        
-        assert!(CorticalDimensions::new(0, 10, 10).is_err());
-        assert!(CorticalDimensions::new(10, 0, 10).is_err());
-        assert!(CorticalDimensions::new(10, 10, 0).is_err());
-    }
-
-    #[test]
-    fn test_cortical_id_length_boundaries() {
-        // Test exactly at the boundaries of the length requirement
-        assert!(CorticalID::from_string("".to_string()).is_err());
-        assert!(CorticalID::from_string("short".to_string()).is_err());
-        assert!(CorticalID::from_string("exactl".to_string()).is_err()); // 6 chars but invalid type
-        assert!(CorticalID::from_string("toolong".to_string()).is_err());
-    }
-
-    #[test]
-    fn test_cortical_id_character_restrictions() {
-        // Test various invalid character combinations
-        let invalid_chars = vec![
-            "cust!1", "cust@1", "cust#1", "cust$1", "cust%1",
-            "cust^1", "cust&1", "cust*1", "cust(1", "cust)1",
-            "cust-1", "cust+1", "cust=1", "cust[1", "cust]1",
-            "cust{1", "cust}1", "cust|1", "cust\\1", "cust:1",
-            "cust;1", "cust\"1", "cust'1", "cust<1", "cust>1",
-            "cust,1", "cust.1", "cust?1", "cust/1", "cust 1",
-        ];
-        
-        for invalid_id in invalid_chars {
-            let result = CorticalID::from_string(invalid_id.to_string());
-            assert!(result.is_err(), "Expected error for invalid ID: {}", invalid_id);
-        }
-    }
-
-    #[test]
-    fn test_cortical_id_valid_characters() {
-        // Test that all valid characters work (alphanumeric + underscore)
-        let _valid_chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
-        
-        // Create valid IDs using these characters
-        let result1 = CorticalID::from_string("custom".to_string());
-        let result2 = CorticalID::from_string("CUSTOM".to_string()); // not valid
-        let result3 = CorticalID::from_string("cust01".to_string());
-        let result4 = CorticalID::from_string("c_st01".to_string());
-        
-        assert!(result1.is_ok());
-        assert!(!result2.is_ok());
-        assert!(result3.is_ok());
-        assert!(result4.is_ok());
-    }
 
     #[test]
     fn test_maximum_index_values() {
@@ -819,7 +826,7 @@ mod test_error_handling_edge_cases {
     #[test]
     fn test_coordinate_extreme_values() {
         // Test coordinates at extreme values
-        let max_unsigned = CorticalCoordinate::new(u32::MAX, u32::MAX, u32::MAX);
+        let max_unsigned = NeuronVoxelCoordinate::new(u32::MAX, u32::MAX, u32::MAX);
         let min_signed = GenomeCoordinate::new(i32::MIN, i32::MIN, i32::MIN);
         let max_signed = GenomeCoordinate::new(i32::MAX, i32::MAX, i32::MAX);
         
@@ -827,5 +834,78 @@ mod test_error_handling_edge_cases {
         assert_eq!(min_signed.x, i32::MIN);
         assert_eq!(max_signed.x, i32::MAX);
     }
+
+    #[test]
+    fn test_neuron_depth_with_coordinates() {
+        // Test neuron depth in realistic scenarios
+        let depth = NeuronDepth::new(100).unwrap();
+        let coord = NeuronVoxelCoordinate::new(10, 20, *depth - 1);
+        
+        assert_eq!(*depth, 100);
+        assert_eq!(coord.z, 99); // Within depth bounds
+    }
+
+    #[test]
+    fn test_agent_device_channel_mapping() {
+        // Test a realistic scenario of mapping agent devices to channels
+        let agent_device = AgentDeviceIndex::from(1001u32);
+        let cortical_group = CorticalGroupIndex::from(5u8);
+        let cortical_channel = CorticalChannelIndex::from(0u32);
+        
+        assert_eq!(*agent_device, 1001);
+        assert_eq!(*cortical_group, 5);
+        assert_eq!(*cortical_channel, 0);
+    }
+
+    #[test]
+    fn test_sensory_unit_with_multiple_parameters() {
+        // Test creating IDs with various parameter combinations
+        let params = [
+            (FrameChangeHandling::Absolute, PercentageNeuronPositioning::Linear),
+            (FrameChangeHandling::Absolute, PercentageNeuronPositioning::Fractional),
+            (FrameChangeHandling::Incremental, PercentageNeuronPositioning::Linear),
+            (FrameChangeHandling::Incremental, PercentageNeuronPositioning::Fractional),
+        ];
+        
+        let group = CorticalGroupIndex::from(0u8);
+        let mut all_ids = Vec::new();
+        
+        for (frame, pos) in params.iter() {
+            let ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(*frame, *pos, group);
+            all_ids.push(ids[0]);
+        }
+        
+        // All IDs should be unique
+        for (i, id1) in all_ids.iter().enumerate() {
+            for (j, id2) in all_ids.iter().enumerate() {
+                if i != j {
+                    assert_ne!(id1, id2, "IDs at positions {} and {} should be different", i, j);
+                }
+            }
+        }
+    }
 }
 
+#[cfg(test)]
+mod test_error_handling {
+    use super::*;
+
+    #[test]
+    fn test_zero_values_in_counts() {
+        // All count types should reject zero
+        assert!(CorticalChannelCount::new(0).is_err());
+        assert!(NeuronDepth::new(0).is_err());
+    }
+
+    #[test]
+    fn test_zero_values_in_dimensions() {
+        // All dimension types should reject zero in any axis
+        assert!(CorticalChannelDimensions::new(0, 10, 10).is_err());
+        assert!(CorticalChannelDimensions::new(10, 0, 10).is_err());
+        assert!(CorticalChannelDimensions::new(10, 10, 0).is_err());
+        
+        assert!(CorticalAreaDimensions::new(0, 10, 10).is_err());
+        assert!(CorticalAreaDimensions::new(10, 0, 10).is_err());
+        assert!(CorticalAreaDimensions::new(10, 10, 0).is_err());
+    }
+}

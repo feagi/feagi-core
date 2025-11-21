@@ -4,9 +4,11 @@
 //! including custom, memory, core, sensory, and motor cortical regions.
 #![doc = include_str!("../../docs/genomic.md")]
 
-mod cortical_id;
-mod cortical_type;
 pub mod descriptors;
+pub mod cortical_area;
+mod brain_regions;
+mod sensory_cortical_unit;
+mod motor_cortical_unit;
 
-pub use cortical_id::CorticalID;
-pub use cortical_type::{CorticalType, CoreCorticalType, SensorCorticalType, MotorCorticalType};
+pub use sensory_cortical_unit::SensoryCorticalUnit;
+pub use motor_cortical_unit::MotorCorticalUnit;

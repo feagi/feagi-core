@@ -1,4 +1,4 @@
-// Region Index / Count
+//region Index / Count
 
 /// Creates a strongly-typed index wrapper around an integer type.
 /// 
@@ -22,6 +22,19 @@ macro_rules! define_index {
             Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord
         )]
         pub struct $name($inner);
+
+        impl $name {
+
+            // const constructor
+            pub const fn from(var: $inner) -> Self {
+                Self(var)
+            }
+
+            // const return method
+            pub const fn get(&self) -> $inner {
+                self.0
+            }
+        }
 
         impl std::ops::Deref for $name {
             type Target = $inner;

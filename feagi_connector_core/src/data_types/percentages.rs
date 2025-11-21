@@ -29,6 +29,10 @@ impl Percentage {
 
 //region Constructors
 
+    pub const fn new_zero() -> Self {
+        Percentage { value: 0.0 }
+    }
+
     /// Creates a percentage from a value in [0.0, 1.0] without validation.
     ///
     /// # Safety
@@ -45,7 +49,6 @@ impl Percentage {
         Ok(Percentage { value })
     }
 
-    /// Creates percentage from signed value in [-1.0, 1.0], mapping to [0.0, 1.0].
     pub fn new_from_interp_m1_1(value: f32) -> Result<Percentage, FeagiDataError> {
     if value > 1.0 || value < -1.0 {
     return Err(FeagiDataError::BadParameters("Signed Percentage Value to interp from must be between -1 and 1!".into()));
@@ -53,17 +56,14 @@ impl Percentage {
         Ok(Percentage { value: (value + 1.0) / 2.0 })
     }
 
-    /// Creates percentage from signed value in [-1.0, 1.0] without validation.
     pub fn new_from_interp_m1_1_unchecked(value: f32) -> Self {
         Percentage { value: (value + 1.0) / 2.0 }
     }
 
-    /// Creates percentage from u8 value [0-255].
     pub fn new_from_u8_0_255(value: u8) -> Result<Percentage, FeagiDataError> {
         Percentage::new_from_0_1(value as f32 / u8::MAX as f32)
     }
 
-    /// Creates percentage from value in [0.0-100.0].
     pub fn new_from_0_100(value: f32) -> Result<Percentage, FeagiDataError> {
         if value > 100.0 || value < 0.0 {
             return Err(FeagiDataError::BadParameters("Percentage Value must be between 0 and 100!".into()));
@@ -71,7 +71,6 @@ impl Percentage {
         Ok(Percentage { value: value / 100.0 })
     }
 
-    /// Creates percentage by linearly interpolating value within given range.
     pub fn new_from_linear_interp(value: f32, range: &std::ops::Range<f32>) -> Result<Percentage, FeagiDataError> {
         if value < range.start || value > range.end {
             return Err(FeagiDataError::BadParameters(format!("Given value {} is out of range {:?}!", value, range)));
@@ -87,7 +86,6 @@ impl Percentage {
         self.value = value;
     }
 
-    /// Updates this percentage from a value in [0.0, 1.0].
     pub fn inplace_update_from_0_1(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if value > 1.0 || value < 0.0 {
             return Err(FeagiDataError::BadParameters("Percentage Value must be between 0 and 1!".into()));
@@ -96,12 +94,10 @@ impl Percentage {
         Ok(())
     }
 
-    /// Updates this percentage from a u8 value [0-255].
     pub fn inplace_update_u8_0_255(&mut self, value: u8) -> Result<(), FeagiDataError> {
         self.inplace_update_from_0_1(value as f32 / u8::MAX as f32)
     }
 
-    /// Updates this percentage from a value in [0.0-100.0].
     pub fn inplace_update_0_100(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if value > 100.0 || value < 0.0 {
             return Err(FeagiDataError::BadParameters("Percentage Value must be between 0 and 100!".into()));
@@ -110,7 +106,6 @@ impl Percentage {
         Ok(())
     }
 
-    /// Updates this percentage by linearly interpolating value within given range.
     pub fn inplace_update_linear_interp(&mut self, value: f32, range: &std::ops::Range<f32>) -> Result<(), FeagiDataError> {
         if value < range.start || value > range.end {
             return Err(FeagiDataError::BadParameters(format!("Given value {} is out of range {:?}!", value, range)));
@@ -123,17 +118,14 @@ impl Percentage {
 
 //region Properties
 
-    /// Returns the percentage as a value in [0.0, 1.0].
     pub fn get_as_0_1(&self) -> f32 {
         self.value
     }
 
-    /// Returns the percentage as a u8 value [0-255].
     pub fn get_as_u8(&self) -> u8 {
         (self.value * u8::MAX as f32) as u8
     }
 
-    /// Returns the percentage as a value in [0.0-100.0].
     pub fn get_as_0_100(&self) -> f32 {
         self.value * 100.0
     }

@@ -3,12 +3,15 @@
 use feagi_data_structures::neuron_voxels::xyzp::{
     NeuronVoxelXYZP, NeuronVoxelXYZPArrays, CorticalMappedXYZPNeuronVoxels
 };
-use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
+use feagi_data_structures::genomic::SensoryCorticalUnit;
 use std::ops::RangeInclusive;
 
 #[cfg(test)]
 mod xyzp_tests {
-    use feagi_data_structures::genomic::{SensorCorticalType};
+    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
     use super::*;
     //region NeuronVoxelXYZP Tests
 
@@ -16,9 +19,9 @@ mod xyzp_tests {
     fn test_neuron_voxel_creation() {
         let voxel = NeuronVoxelXYZP::new(10, 20, 30, 0.75);
 
-        assert_eq!(voxel.cortical_coordinate.x, 10);
-        assert_eq!(voxel.cortical_coordinate.y, 20);
-        assert_eq!(voxel.cortical_coordinate.z, 30);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 10);
+        assert_eq!(voxel.neuron_voxel_coordinate.y, 20);
+        assert_eq!(voxel.neuron_voxel_coordinate.z, 30);
         assert_eq!(voxel.potential, 0.75);
     }
 
@@ -82,9 +85,9 @@ mod xyzp_tests {
         assert_eq!(arrays.len(), 3);
 
         let voxel = arrays.get(1).unwrap();
-        assert_eq!(voxel.cortical_coordinate.x, 4);
-        assert_eq!(voxel.cortical_coordinate.y, 5);
-        assert_eq!(voxel.cortical_coordinate.z, 6);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 4);
+        assert_eq!(voxel.neuron_voxel_coordinate.y, 5);
+        assert_eq!(voxel.neuron_voxel_coordinate.z, 6);
         assert_eq!(voxel.potential, 0.2);
     }
 
@@ -96,7 +99,7 @@ mod xyzp_tests {
 
         assert_eq!(arrays.len(), 1);
         let voxel = arrays.get(0).unwrap();
-        assert_eq!(voxel.cortical_coordinate.x, 10);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 10);
         assert_eq!(voxel.potential, 0.7);
     }
 
@@ -119,11 +122,11 @@ mod xyzp_tests {
         arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
 
         let popped = arrays.pop().unwrap();
-        assert_eq!(popped.cortical_coordinate.x, 4);
+        assert_eq!(popped.neuron_voxel_coordinate.x, 4);
         assert_eq!(arrays.len(), 1);
 
         let popped = arrays.pop().unwrap();
-        assert_eq!(popped.cortical_coordinate.x, 1);
+        assert_eq!(popped.neuron_voxel_coordinate.x, 1);
         assert_eq!(arrays.len(), 0);
 
         assert!(arrays.pop().is_none());
@@ -187,7 +190,7 @@ mod xyzp_tests {
 
         let collected: Vec<_> = arrays.iter().collect();
         assert_eq!(collected.len(), 3);
-        assert_eq!(collected[1].cortical_coordinate.x, 4);
+        assert_eq!(collected[1].neuron_voxel_coordinate.x, 4);
     }
 
     #[test]
@@ -201,9 +204,9 @@ mod xyzp_tests {
 
         assert_eq!(indexed.len(), 2);
         assert_eq!(indexed[0].0, 0);
-        assert_eq!(indexed[0].1.cortical_coordinate.x, 10);
+        assert_eq!(indexed[0].1.neuron_voxel_coordinate.x, 10);
         assert_eq!(indexed[1].0, 1);
-        assert_eq!(indexed[1].1.cortical_coordinate.x, 40);
+        assert_eq!(indexed[1].1.neuron_voxel_coordinate.x, 40);
     }
 
     #[test]
@@ -216,7 +219,7 @@ mod xyzp_tests {
         let collected: Vec<_> = arrays.into_iter().collect();
 
         assert_eq!(collected.len(), 2);
-        assert_eq!(collected[0].cortical_coordinate.x, 1);
+        assert_eq!(collected[0].neuron_voxel_coordinate.x, 1);
         assert_eq!(collected[1].potential, 0.7);
     }
 
@@ -231,7 +234,7 @@ mod xyzp_tests {
 
         assert_eq!(arrays.len(), 3);
         let voxel = arrays.get(1).unwrap();
-        assert_eq!(voxel.cortical_coordinate.x, 2);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 2);
         assert_eq!(voxel.potential, 0.2);
     }
 
@@ -271,7 +274,7 @@ mod xyzp_tests {
         let vec = arrays.copy_as_neuron_xyzp_vec();
 
         assert_eq!(vec.len(), 2);
-        assert_eq!(vec[0].cortical_coordinate.x, 1);
+        assert_eq!(vec[0].neuron_voxel_coordinate.x, 1);
         assert_eq!(vec[1].potential, 0.7);
     }
 
@@ -335,10 +338,10 @@ mod xyzp_tests {
         assert_eq!(filtered.len(), 2); // Only voxels at (5,6,7) and (10,11,12) match
 
         let first = filtered.get(0).unwrap();
-        assert_eq!(first.cortical_coordinate.x, 5);
+        assert_eq!(first.neuron_voxel_coordinate.x, 5);
 
         let second = filtered.get(1).unwrap();
-        assert_eq!(second.cortical_coordinate.x, 10);
+        assert_eq!(second.neuron_voxel_coordinate.x, 10);
     }
 
     #[test]
@@ -357,9 +360,9 @@ mod xyzp_tests {
         assert!(result.is_ok());
 
         let voxel = arrays.get(0).unwrap();
-        assert_eq!(voxel.cortical_coordinate.x, 10);
-        assert_eq!(voxel.cortical_coordinate.y, 20);
-        assert_eq!(voxel.cortical_coordinate.z, 30);
+        assert_eq!(voxel.neuron_voxel_coordinate.x, 10);
+        assert_eq!(voxel.neuron_voxel_coordinate.y, 20);
+        assert_eq!(voxel.neuron_voxel_coordinate.z, 30);
         assert_eq!(voxel.potential, 0.9);
     }
 
@@ -387,7 +390,12 @@ mod xyzp_tests {
     fn test_cortical_mapped_insert_and_get() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = CorticalID::from_string("iic400".into()).unwrap();
+        // Use a proper sensory cortical ID
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
@@ -404,7 +412,11 @@ mod xyzp_tests {
     fn test_cortical_mapped_get_mut() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         let arrays = NeuronVoxelXYZPArrays::new();
 
         mapped.insert(cortical_id, arrays);
@@ -420,7 +432,11 @@ mod xyzp_tests {
     fn test_cortical_mapped_remove() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         mapped.insert(cortical_id, NeuronVoxelXYZPArrays::new());
 
         assert_eq!(mapped.len(), 1);
@@ -434,8 +450,16 @@ mod xyzp_tests {
     fn test_cortical_mapped_clear() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
-        let id2 = SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
+        let id2 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
         mapped.insert(id2, NeuronVoxelXYZPArrays::new());
@@ -452,7 +476,11 @@ mod xyzp_tests {
     fn test_cortical_mapped_clear_neurons_only() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
@@ -469,8 +497,16 @@ mod xyzp_tests {
     fn test_cortical_mapped_iter() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
-        let id2 = SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
+        let id2 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         let mut arrays1 = NeuronVoxelXYZPArrays::new();
         arrays1.push_raw(1, 2, 3, 0.5);
@@ -489,7 +525,7 @@ mod xyzp_tests {
     fn test_cortical_mapped_iter_mut() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = CorticalID::from_string("mut123".into()).unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
@@ -507,8 +543,16 @@ mod xyzp_tests {
     fn test_cortical_mapped_keys() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
-        let id2 = SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
+        let id2 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
         mapped.insert(id2, NeuronVoxelXYZPArrays::new());
@@ -521,8 +565,16 @@ mod xyzp_tests {
     fn test_cortical_mapped_into_iter() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
-        let id2 = SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
+        let id2 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
         mapped.insert(id2, NeuronVoxelXYZPArrays::new());
@@ -535,7 +587,11 @@ mod xyzp_tests {
     fn test_cortical_mapped_ensure_clear_and_borrow_mut() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         // First call - creates new empty array
         let neurons = mapped.ensure_clear_and_borrow_mut(&cortical_id);
@@ -557,7 +613,11 @@ mod xyzp_tests {
         mapped.reserve(50);
         assert!(mapped.capacity() >= 50);
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
 
         mapped.shrink_to_fit();

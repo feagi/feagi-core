@@ -2,7 +2,7 @@ use std::ops::{RangeInclusive};
 use ndarray::Array1;
 use rayon::prelude::*;
 use crate::FeagiDataError;
-use crate::genomic::descriptors::CorticalCoordinate;
+use crate::genomic::cortical_area::descriptors::NeuronVoxelCoordinate;
 use crate::neuron_voxels::xyzp::NeuronVoxelXYZP;
 
 
@@ -268,9 +268,9 @@ impl NeuronVoxelXYZPArrays {
     /// assert_eq!(arrays.len(), 1);
     /// ```
     pub fn push(&mut self, neuron: &NeuronVoxelXYZP) {
-        self.x.push(neuron.cortical_coordinate.x);
-        self.y.push(neuron.cortical_coordinate.y);
-        self.z.push(neuron.cortical_coordinate.z);
+        self.x.push(neuron.neuron_voxel_coordinate.x);
+        self.y.push(neuron.neuron_voxel_coordinate.y);
+        self.z.push(neuron.neuron_voxel_coordinate.z);
         self.p.push(neuron.potential);
     }
 
@@ -312,7 +312,7 @@ impl NeuronVoxelXYZPArrays {
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// let neuron = arrays.get(0).unwrap();
-    /// assert_eq!(neuron.cortical_coordinate.x, 1);
+    /// assert_eq!(neuron.neuron_voxel_coordinate.x, 1);
     /// ```
     pub fn get(&self, index: usize) -> Result<NeuronVoxelXYZP, FeagiDataError> {
         if index >= self.len()  {
@@ -322,7 +322,7 @@ impl NeuronVoxelXYZPArrays {
         let y = self.y[index];
         let z = self.z[index];
         let potential = self.p[index];
-        Ok(NeuronVoxelXYZP {cortical_coordinate: CorticalCoordinate::new(x, y, z), potential})
+        Ok(NeuronVoxelXYZP { neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z), potential})
     }
 
     /// Gets the X component of the neuron at the specified index
@@ -369,7 +369,7 @@ impl NeuronVoxelXYZPArrays {
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
     /// let neuron = arrays.pop().unwrap();
-    /// assert_eq!(neuron.cortical_coordinate.x, 1);
+    /// assert_eq!(neuron.neuron_voxel_coordinate.x, 1);
     /// assert!(arrays.is_empty());
     /// ```
     pub fn pop(&mut self) -> Option<NeuronVoxelXYZP> {
@@ -380,7 +380,7 @@ impl NeuronVoxelXYZPArrays {
         match x {
             Some(x) => {
                 Some(NeuronVoxelXYZP {
-                    cortical_coordinate: CorticalCoordinate::new(x, y.unwrap(), z.unwrap()),
+                    neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y.unwrap(), z.unwrap()),
                     potential: p.unwrap()
                 })
             }
@@ -431,12 +431,12 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// let mut iter = arrays.iter();
     /// let first = iter.next().unwrap();
-    /// assert_eq!(first.cortical_coordinate.x, 1);
+    /// assert_eq!(first.neuron_voxel_coordinate.x, 1);
     /// assert_eq!(first.potential, 0.5);
     ///
     /// let second = iter.next().unwrap();
-    /// assert_eq!(second.cortical_coordinate.y, 5);
-    /// assert_eq!(second.cortical_coordinate.z, 6);
+    /// assert_eq!(second.neuron_voxel_coordinate.y, 5);
+    /// assert_eq!(second.neuron_voxel_coordinate.z, 6);
     /// ```
     pub fn iter(&self) -> impl Iterator<Item=NeuronVoxelXYZP> + '_ {
         self.x.iter()
@@ -444,7 +444,7 @@ impl NeuronVoxelXYZPArrays {
             .zip(&self.z)
             .zip(&self.p)
             .map(|(((x,y),z),p)| NeuronVoxelXYZP {
-                cortical_coordinate: CorticalCoordinate::new(*x, *y, *z),
+                neuron_voxel_coordinate: NeuronVoxelCoordinate::new(*x, *y, *z),
                 potential: *p
             })
     }
@@ -463,7 +463,7 @@ impl NeuronVoxelXYZPArrays {
     /// arrays.push(&NeuronVoxelXYZP::new(4, 5, 6, 0.7));
     ///
     /// for (index, neuron) in arrays.enumerate() {
-    ///     println!("Neuron {} at position {}", neuron.cortical_coordinate.x, index);
+    ///     println!("Neuron {} at position {}", neuron.neuron_voxel_coordinate.x, index);
     /// }
     /// ```
     pub fn enumerate(&self) -> impl Iterator<Item=(usize, NeuronVoxelXYZP)> + '_ {
@@ -474,7 +474,7 @@ impl NeuronVoxelXYZPArrays {
             .map(|(((x,y),z),p)|
                 (x.0,
                  NeuronVoxelXYZP {
-                    cortical_coordinate: CorticalCoordinate::new(*x.1, *y, *z),
+                    neuron_voxel_coordinate: NeuronVoxelCoordinate::new(*x.1, *y, *z),
                     potential: *p
             }))
     }
@@ -512,7 +512,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// let neuron_voxels = arrays.copy_as_neuron_xyzp_vec();
     /// assert_eq!(neuron_voxels.len(), 2);
-    /// assert_eq!(neuron_voxels[0].cortical_coordinate.x, 1);
+    /// assert_eq!(neuron_voxels[0].neuron_voxel_coordinate.x, 1);
     /// assert_eq!(neuron_voxels[1].potential, 0.7);
     /// ```
     pub fn copy_as_neuron_xyzp_vec(&self) -> Vec<NeuronVoxelXYZP> {
@@ -700,7 +700,7 @@ impl Iterator for NeuronVoxelXYZPArraysIntoIter {
         match (self.x.next(), self.y.next(), self.z.next(), self.p.next()) {
             (Some(x), Some(y), Some(z), Some(p)) => {
                 Some(NeuronVoxelXYZP {
-                    cortical_coordinate: CorticalCoordinate::new(x, y, z),
+                    neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z),
                     potential: p,
                 })
             }
@@ -755,7 +755,7 @@ impl ParallelIterator for NeuronVoxelXYZPArraysParIter {
             .zip(self.z.into_par_iter())
             .zip(self.p.into_par_iter())
             .map(|(((x, y), z), p)| NeuronVoxelXYZP {
-                cortical_coordinate: CorticalCoordinate::new(x, y, z),
+                neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z),
                 potential: p,
             })
             .drive_unindexed(consumer)
@@ -776,7 +776,7 @@ impl IndexedParallelIterator for NeuronVoxelXYZPArraysParIter {
             .zip(self.z.into_par_iter())
             .zip(self.p.into_par_iter())
             .map(|(((x, y), z), p)| NeuronVoxelXYZP {
-                cortical_coordinate: CorticalCoordinate::new(x, y, z),
+                neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z),
                 potential: p,
             })
             .drive(consumer)
@@ -791,7 +791,7 @@ impl IndexedParallelIterator for NeuronVoxelXYZPArraysParIter {
             .zip(self.z.into_par_iter())
             .zip(self.p.into_par_iter())
             .map(|(((x, y), z), p)| NeuronVoxelXYZP {
-                cortical_coordinate: CorticalCoordinate::new(x, y, z),
+                neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z),
                 potential: p,
             })
             .with_producer(callback)

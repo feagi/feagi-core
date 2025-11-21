@@ -1,7 +1,7 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::{SignedPercentage2D};
@@ -61,24 +61,24 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage2DExponentialNeuronVoxelXYZPDeco
         for neuron in neuron_array.iter() {
 
             // Ignoring any neuron_voxels that have no potential (if sent for some reason).
-            if neuron.cortical_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+            if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            if neuron.cortical_coordinate.x >= max_possible_x_index || neuron.cortical_coordinate.z >= z_depth {
+            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index || neuron.neuron_voxel_coordinate.z >= z_depth {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
             let z_row_vector;
-            if neuron.cortical_coordinate.x % 2 == 0 {
+            if neuron.neuron_voxel_coordinate.x % 2 == 0 {
                 // even, positive
-                z_row_vector = self.z_depth_scratch_space_positive.get_mut(neuron.cortical_coordinate.x as usize).unwrap();
+                z_row_vector = self.z_depth_scratch_space_positive.get_mut(neuron.neuron_voxel_coordinate.x as usize).unwrap();
             }
             else {
                 // odd, negative
-                z_row_vector = self.z_depth_scratch_space_negative.get_mut(neuron.cortical_coordinate.x as usize).unwrap();
+                z_row_vector = self.z_depth_scratch_space_negative.get_mut(neuron.neuron_voxel_coordinate.x as usize).unwrap();
             }
-            z_row_vector.push(neuron.cortical_coordinate.z)
+            z_row_vector.push(neuron.neuron_voxel_coordinate.z)
         };
 
         // At this point, we have numbers in scratch space to average out
@@ -112,11 +112,11 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage2DExponentialNeuronVoxelXYZPDeco
 
 impl SignedPercentage2DExponentialNeuronVoxelXYZPDecoder {
 
-    pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+    pub fn new_box(cortical_read_target: CorticalID, z_resolution: NeuronDepth, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
         let decoder = SignedPercentage2DExponentialNeuronVoxelXYZPDecoder {
-            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
+            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, *z_resolution)?,
             cortical_read_target,
             z_depth_scratch_space_positive: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],
             z_depth_scratch_space_negative: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],

@@ -1,17 +1,12 @@
 use std::time::Instant;
 use rayon::prelude::*;
 use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-/// Manages multiple motor output streams with independent processing pipelines per channel.
-///
-/// Handles decoding neuron voxels to motor commands, pipeline processing for each channel,
-/// and callback signals when motor values are updated. Each channel can have its own
-/// pipeline stages for postprocessing decoded motor commands.
 #[derive(Debug)]
 pub(crate) struct MotorChannelStreamCaches {
     neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
@@ -116,6 +111,23 @@ impl MotorChannelStreamCaches {
     pub fn try_replace_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
+    }
+
+    /// Removes all pipeline stages from a specific channel.
+    ///
+    /// This is only possible if the channel's input and output types are the same,
+    /// allowing data to pass through unchanged.
+    ///
+    /// # Arguments
+    /// * `cortical_channel_index` - The channel to clear
+    ///
+    /// # Returns
+    /// * `Ok(())` - If all stages were successfully removed
+    /// * `Err(FeagiDataError)` - If channel is invalid or input/output types don't match
+    pub fn try_removing_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        pipeline_runner.try_removing_all_stages()?;
+        Ok(())
     }
 
     //endregion

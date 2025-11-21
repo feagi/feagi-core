@@ -1,8 +1,8 @@
 use std::time::Instant;
 use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::Percentage4D;
@@ -75,7 +75,6 @@ impl NeuronVoxelXYZPEncoder for Percentage4DExponentialNeuronVoxelXYZPEncoder {
 
 impl Percentage4DExponentialNeuronVoxelXYZPEncoder {
     pub fn new_box(cortical_write_target: CorticalID, z_resolution: NeuronDepth, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
-        use feagi_data_structures::genomic::descriptors::CorticalChannelDimensions;
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
         let encoder = Percentage4DExponentialNeuronVoxelXYZPEncoder {

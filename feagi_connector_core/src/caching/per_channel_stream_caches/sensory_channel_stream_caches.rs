@@ -1,6 +1,6 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex};
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
@@ -24,7 +24,7 @@ pub(crate) struct SensoryChannelStreamCaches {
 
 impl SensoryChannelStreamCaches {
 
-    /// Creates a new multi-channel sensory stream cache system.
+    /// Creates a new multichannel sensory stream cache system.
     ///
     /// Initializes a pipeline runner for each channel with the provided stage properties.
     /// Each channel processes data independently through its own pipeline before encoding.

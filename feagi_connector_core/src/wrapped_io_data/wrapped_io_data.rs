@@ -97,10 +97,12 @@ macro_rules! define_wrapped_io_data_enum {
 }
 
 define_wrapped_io_data_enum!(
+    /*
     F32: f32 => "f32({})",
     F32_2D: (f32, f32) => "f32_2d({:?})",
     F32_3D: (f32, f32, f32) => "f32_3d({:?})",
     F32_4D: (f32, f32, f32, f32) => "f32_4d({:?})",
+     */
     Percentage: Percentage => "{}",
     Percentage_2D: Percentage2D => "{}",
     Percentage_3D: Percentage3D => "{}",

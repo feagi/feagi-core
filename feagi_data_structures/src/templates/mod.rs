@@ -3,5 +3,5 @@
 //! Provides macro-based definitions for all supported sensory input
 //! and motor output types in FEAGI's I/O system.
 
-pub mod sensor_types;
-pub mod motor_types;
+mod sensor_cortical_units;
+mod motor_cortical_units;

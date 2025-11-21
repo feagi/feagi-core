@@ -1,8 +1,8 @@
 use std::time::Instant;
 use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::{CorticalID, SensorCorticalType};
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalGroupIndex};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;

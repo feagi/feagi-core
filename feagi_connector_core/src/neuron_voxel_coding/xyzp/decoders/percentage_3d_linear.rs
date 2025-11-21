@@ -1,7 +1,7 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::CorticalID;
-use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::Percentage3D;
@@ -56,16 +56,16 @@ impl NeuronVoxelXYZPDecoder for Percentage3DLinearNeuronVoxelXYZPDecoder {
         for neuron in neuron_array.iter() {
 
             // Ignoring any neuron_voxels that have no potential (if sent for some reason).
-            if neuron.cortical_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
+            if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            if neuron.cortical_coordinate.x >= max_possible_x_index || neuron.cortical_coordinate.z >= z_depth {
+            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index || neuron.neuron_voxel_coordinate.z >= z_depth {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            let z_row_vector = self.z_depth_scratch_space.get_mut(neuron.cortical_coordinate.x as usize).unwrap();
-            z_row_vector.push(neuron.cortical_coordinate.z)
+            let z_row_vector = self.z_depth_scratch_space.get_mut(neuron.neuron_voxel_coordinate.x as usize).unwrap();
+            z_row_vector.push(neuron.neuron_voxel_coordinate.z)
         };
 
         let z_depth_float = self.channel_dimensions.depth as f32;
@@ -103,11 +103,11 @@ impl NeuronVoxelXYZPDecoder for Percentage3DLinearNeuronVoxelXYZPDecoder {
 
 impl Percentage3DLinearNeuronVoxelXYZPDecoder {
 
-    pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+    pub fn new_box(cortical_read_target: CorticalID, z_resolution: NeuronDepth, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
         let decoder = Percentage3DLinearNeuronVoxelXYZPDecoder {
-            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
+            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, *z_resolution)?,
             cortical_read_target,
             z_depth_scratch_space: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],
         };
