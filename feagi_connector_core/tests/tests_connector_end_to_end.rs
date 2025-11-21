@@ -23,8 +23,10 @@ mod test_connector_cache_sensor_load_image {
     use feagi_connector_core::data_types::MiscData;
     use feagi_connector_core::wrapped_io_data::WrappedIOData;
     use feagi_data_serialization::{FeagiByteContainer, FeagiSerializable};
-    use feagi_data_structures::genomic::{CorticalID, MotorCorticalType, SensorCorticalType};
-    use feagi_data_structures::genomic::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
+    use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_data_structures::genomic::cortical_area::CorticalID;
+    use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
+    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
     use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
     use crate::load_bird_image;
 
@@ -115,8 +117,9 @@ mod test_connector_cache_sensor_load_image {
 
 
         let mut connector_cache = feagi_connector_core::IOCache::new();
-        connector_cache.sensor_segmented_vision_absolute_try_register(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
-        connector_cache.motor_gaze_absolute_linear_try_register(cortical_group, number_channels, 10.try_into().unwrap());
+        connector_cache.sensor_se(cortical_group, number_channels, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
+        connector_cache.motor_g(cortical_group, number_channels, 10.try_into().unwrap()).unwrap();
+        //connector_cache.motor_gaze_absolute_linear_try_register(cortical_group, number_channels, 10.try_into().unwrap()).unwrap();
 
         connector_cache.sensor_segmented_vision_absolute_try_write(cortical_group, channel_index, bird_image.into()).unwrap();
 
@@ -150,9 +153,11 @@ mod test_connector_cache_sensor_load_image {
         let sensor_neuron_struct: CorticalMappedXYZPNeuronVoxels = neuron_struct_box.try_into().unwrap();
 
         // Since the output of the sensor is under cortical ID imis00, to read it to the motor, we need to assign it to omis00,
-        let neuron_data = sensor_neuron_struct.get_neurons_of(&CorticalID::new_sensor_cortical_area_id(SensorCorticalType::MiscellaneousAbsolute, cortical_group).unwrap()).unwrap();
+        let sensor_cortical_id = SensoryCorticalUnit::get_miscellaneous_cortical_ids_array(FrameChangeHandling::Absolute, cortical_group)[0];
+        let motor_cortical_id = MotorCorticalUnit::get_miscellaneous_cortical_ids_array(FrameChangeHandling::Absolute, cortical_group)[0];
+        let neuron_data = sensor_neuron_struct.get_neurons_of(&sensor_cortical_id).unwrap();
         let mut motor_neuron_struct = CorticalMappedXYZPNeuronVoxels::new();
-        motor_neuron_struct.insert(CorticalID::new_motor_cortical_area_id(MotorCorticalType::MiscellaneousAbsolute, cortical_group).unwrap(), neuron_data.clone());
+        motor_neuron_struct.insert(motor_cortical_id, neuron_data.clone());
 
 
 
