@@ -12,4 +12,5 @@ serde_json = { workspace = true}
 ndarray = { workspace = true}
 rayon = { workspace = true}
 paste = "1.0"
+base64 = "0.22.1"
 
