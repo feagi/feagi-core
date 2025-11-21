@@ -4,11 +4,14 @@ use feagi_data_structures::neuron_voxels::xyzp::{
     NeuronVoxelXYZP, NeuronVoxelXYZPArrays, CorticalMappedXYZPNeuronVoxels
 };
 use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
+use feagi_data_structures::genomic::SensoryCorticalUnit;
 use std::ops::RangeInclusive;
 
 #[cfg(test)]
 mod xyzp_tests {
-    use feagi_data_structures::genomic::{SensorCorticalType};
+    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
     use super::*;
     //region NeuronVoxelXYZP Tests
 
@@ -387,7 +390,12 @@ mod xyzp_tests {
     fn test_cortical_mapped_insert_and_get() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = CorticalID::from_string("iic400".into()).unwrap();
+        // Use a proper sensory cortical ID
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
@@ -404,7 +412,11 @@ mod xyzp_tests {
     fn test_cortical_mapped_get_mut() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         let arrays = NeuronVoxelXYZPArrays::new();
 
         mapped.insert(cortical_id, arrays);
@@ -420,7 +432,11 @@ mod xyzp_tests {
     fn test_cortical_mapped_remove() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         mapped.insert(cortical_id, NeuronVoxelXYZPArrays::new());
 
         assert_eq!(mapped.len(), 1);
@@ -434,8 +450,16 @@ mod xyzp_tests {
     fn test_cortical_mapped_clear() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
-        let id2 = SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
+        let id2 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
         mapped.insert(id2, NeuronVoxelXYZPArrays::new());
@@ -452,7 +476,11 @@ mod xyzp_tests {
     fn test_cortical_mapped_clear_neurons_only() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
@@ -469,8 +497,16 @@ mod xyzp_tests {
     fn test_cortical_mapped_iter() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
-        let id2 = SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
+        let id2 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         let mut arrays1 = NeuronVoxelXYZPArrays::new();
         arrays1.push_raw(1, 2, 3, 0.5);
@@ -489,7 +525,7 @@ mod xyzp_tests {
     fn test_cortical_mapped_iter_mut() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = CorticalID::from_string("mut123".into()).unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let mut arrays = NeuronVoxelXYZPArrays::new();
         arrays.push_raw(1, 2, 3, 0.5);
 
@@ -507,8 +543,16 @@ mod xyzp_tests {
     fn test_cortical_mapped_keys() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
-        let id2 = SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
+        let id2 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
         mapped.insert(id2, NeuronVoxelXYZPArrays::new());
@@ -521,8 +565,16 @@ mod xyzp_tests {
     fn test_cortical_mapped_into_iter() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
-        let id2 = SensorCorticalType::ImageCameraCenterIncremental.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
+        let id2 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Incremental,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
         mapped.insert(id2, NeuronVoxelXYZPArrays::new());
@@ -535,7 +587,11 @@ mod xyzp_tests {
     fn test_cortical_mapped_ensure_clear_and_borrow_mut() {
         let mut mapped = CorticalMappedXYZPNeuronVoxels::new();
 
-        let cortical_id = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let cortical_id = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
 
         // First call - creates new empty array
         let neurons = mapped.ensure_clear_and_borrow_mut(&cortical_id);
@@ -557,7 +613,11 @@ mod xyzp_tests {
         mapped.reserve(50);
         assert!(mapped.capacity() >= 50);
 
-        let id1 = SensorCorticalType::ImageCameraCenterAbsolute.to_cortical_id(0.into());
+        let id1 = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+            CorticalGroupIndex::from(0u8)
+        )[0];
         mapped.insert(id1, NeuronVoxelXYZPArrays::new());
 
         mapped.shrink_to_fit();
