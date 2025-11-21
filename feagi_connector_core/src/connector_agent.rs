@@ -9,6 +9,13 @@ pub struct ConnectorAgent {
 
 impl ConnectorAgent {
 
+    pub fn new() -> Self {
+        ConnectorAgent {
+            sensor_cache: Arc::new(Mutex::new(SensorDeviceCache::new())),
+            motor_cache: Arc::new(Mutex::new(MotorDeviceCache::new())),
+        }
+    }
+
     pub fn get_sensor_cache(&self) -> MutexGuard<SensorDeviceCache> {
         self.sensor_cache.lock().unwrap()
     }

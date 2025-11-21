@@ -63,14 +63,13 @@ macro_rules! sensor_unit_functions {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel: CorticalChannelIndex,
-                data: $wrapped_data_type,
+                data: WrappedIOData,
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
-                let wrapped_data: WrappedIOData = data.into();
                 let instant = Instant::now();
 
-                self.try_update_value(SENSOR_TYPE, group, channel, wrapped_data, instant)?;
+                self.try_update_value(SENSOR_TYPE, group, channel, data, instant)?;
                 Ok(())
             }
 
@@ -199,7 +198,14 @@ macro_rules! sensor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, Vec::new(), initial_val)?;
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for _i in 0..*number_channels {
+                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
+                    };
+                    output
+                };
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
                 Ok(())
             }
         }
@@ -239,6 +245,8 @@ macro_rules! sensor_unit_functions {
                 Ok(())
             }
         }
+
+        sensor_unit_functions!(@generate_similar_functions $sensory_unit, $snake_case_name, SegmentedImageFrame);
     };
 
     // Arm for WrappedIOType::MiscData
@@ -259,8 +267,15 @@ macro_rules! sensor_unit_functions {
                 let cortical_id: CorticalID = SensoryCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, group)[0];
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
-                let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;;
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, Vec::new(), initial_val)?;
+                let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for _i in 0..*number_channels {
+                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
+                    };
+                    output
+                };
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
                 Ok(())
             }
         }
@@ -295,7 +310,7 @@ macro_rules! sensor_unit_functions {
     };
 }
 
-pub(crate) struct SensorDeviceCache {
+pub struct SensorDeviceCache {
     stream_caches: HashMap<(SensoryCorticalUnit, CorticalGroupIndex), SensoryChannelStreamCaches>,
     agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(SensoryCorticalUnit, CorticalGroupIndex)>>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
