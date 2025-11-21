@@ -1,7 +1,7 @@
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions};
+use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::data_pipeline::PipelineStageRunner;
 use crate::data_types::{Percentage2D};
@@ -99,11 +99,11 @@ impl NeuronVoxelXYZPDecoder for Percentage2DLinearNeuronVoxelXYZPDecoder {
 
 impl Percentage2DLinearNeuronVoxelXYZPDecoder {
 
-    pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+    pub fn new_box(cortical_read_target: CorticalID, z_resolution: NeuronDepth, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
         let decoder = Percentage2DLinearNeuronVoxelXYZPDecoder {
-            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
+            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, *z_resolution)?,
             cortical_read_target,
             z_depth_scratch_space: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],
         };

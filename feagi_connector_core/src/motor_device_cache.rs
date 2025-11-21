@@ -84,7 +84,7 @@ macro_rules! motor_unit_functions {
                 Ok(val)
             }
 
-            pub fn [<motor_ $snake_case_identifier _try_register_motor_callback>]<F>(
+            pub fn [<motor_ $snake_case_name _try_register_motor_callback>]<F>(
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
@@ -92,7 +92,7 @@ macro_rules! motor_unit_functions {
             ) -> Result<FeagiSignalIndex, FeagiDataError>
             where F: Fn(&WrappedIOData) + Send + Sync + 'static,
             {
-                const MOTOR_TYPE: MotorCorticalType = MotorCorticalType::$cortical_type_key_name;
+                const MOTOR_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
                 let signal_index = self.try_register_motor_callback(MOTOR_TYPE, group, channel_index, callback)?;
                 Ok(signal_index)
             }
@@ -218,6 +218,72 @@ macro_rules! motor_unit_functions {
         motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
     };
 
+    // Arm for WrappedIOType::Percentage3D
+    (@generate_functions
+        $motor_unit:ident,
+        $snake_case_name:expr,
+        Percentage_3D
+    ) => {
+        ::paste::paste! {
+            pub fn [<$snake_case_name _register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                z_neuron_resolution: NeuronDepth,
+                percentage_neuron_positioning: PercentageNeuronPositioning
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
+                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
+                        PercentageNeuronPositioning::Linear => Percentage3DLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
+                        PercentageNeuronPositioning::Fractional => Percentage3DExponentialNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
+                    }
+                };
+
+                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, Vec::new(), initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+    };
+
+    // Arm for WrappedIOType::SignedPercentage
+    (@generate_functions
+        $motor_unit:ident,
+        $snake_case_name:expr,
+        SignedPercentage
+    ) => {
+        ::paste::paste! {
+            pub fn [<$snake_case_name _register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                z_neuron_resolution: NeuronDepth,
+                percentage_neuron_positioning: PercentageNeuronPositioning
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
+                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
+                        PercentageNeuronPositioning::Linear => SignedPercentageLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
+                        PercentageNeuronPositioning::Fractional => SignedPercentageExponentialNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
+                    }
+                };
+
+                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, Vec::new(), initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+    };
+
     // Arm for WrappedIOType::MiscData
     (@generate_functions
         $motor_unit:ident,
@@ -234,9 +300,9 @@ macro_rules! motor_unit_functions {
                 ) -> Result<(), FeagiDataError>
             {
                 let cortical_id: CorticalID = MotorCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, group)[0];
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = NeuronVoxelXYZPDecoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
-                let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;;
+                let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;
                 self.register(MotorCorticalUnit::$motor_unit, group, decoder, Vec::new(), initial_val)?;
                 Ok(())
             }
@@ -323,7 +389,7 @@ impl MotorDeviceCache {
         motor_stream_caches.try_get_single_stage_properties(channel_index, stage_index)
     }
 
-    fn get_all_stage_properties(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
+    fn try_get_all_stage_properties(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         motor_stream_caches.get_all_stage_properties(channel_index)
     }
