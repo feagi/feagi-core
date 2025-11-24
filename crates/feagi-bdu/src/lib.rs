@@ -56,7 +56,7 @@ pub use types::{AreaId, BduError, BduResult, NeuronId, Weight};
 
 // Re-export core types from feagi-types
 pub use feagi_types::{
-    BrainRegion, BrainRegionHierarchy, CorticalArea, AreaType, RegionType,
+    BrainRegion, BrainRegionHierarchy, CorticalArea, RegionType,
     Dimensions, Position
 };
 

@@ -56,6 +56,7 @@ pub use genome::{
     load_genome_from_file, load_genome_from_json,
     save_genome_to_file, save_genome_to_json,
     peek_quantization_precision,
+    migrate_genome, MigrationResult,
 };
 pub use runtime::{
     RuntimeGenome, GenomeMetadata, MorphologyRegistry, Morphology, 

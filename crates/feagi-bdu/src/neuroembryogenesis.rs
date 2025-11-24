@@ -272,15 +272,7 @@ impl Neuroembryogenesis {
                         Some("CORE") => "CORE",
                         Some("MEMORY") => "MEMORY",
                         Some("CUSTOM") => "CUSTOM",
-                        _ => {
-                            // Final fallback to old area_type
-                            match area.area_type {
-                                feagi_types::AreaType::Sensory => "IPU",
-                                feagi_types::AreaType::Motor => "OPU",
-                                feagi_types::AreaType::Memory => "MEMORY",
-                                _ => "CUSTOM",
-                            }
-                        }
+                        _ => "CUSTOM", // Default fallback
                     }
                 };
                 
@@ -291,7 +283,7 @@ impl Neuroembryogenesis {
                     } else if area.properties.contains_key("cortical_group") {
                         "cortical_group"
                     } else {
-                        "area_type"
+                        "default_fallback"
                     };
                     
                     // Phase 3: Show detailed type information if available
@@ -347,20 +339,20 @@ impl Neuroembryogenesis {
             
             // Analyze connections to determine actual inputs/outputs for root
             let (root_inputs, root_outputs) = Self::analyze_region_io(
-                &root_area_ids,
-                &genome.cortical_areas,
-            );
-            
-            // Convert CorticalID to String for with_areas()
-            let root_area_strs: Vec<String> = root_area_ids.iter().map(|id| id.to_string()).collect();
-            
-            let mut root_region = BrainRegion::new(
-                "root".to_string(),
-                "Root Brain Region".to_string(),
-                RegionType::Custom,
-            )
-            .expect("Failed to create root region")
-            .with_areas(root_area_strs);
+            &root_area_ids,
+            &genome.cortical_areas,
+        );
+        
+        // Convert CorticalID to base64 for with_areas()
+        let root_area_strs: Vec<String> = root_area_ids.iter().map(|id| id.as_base_64()).collect();
+        
+        let mut root_region = BrainRegion::new(
+            "root".to_string(),
+            "Root Brain Region".to_string(),
+            RegionType::Custom,
+        )
+        .expect("Failed to create root region")
+        .with_areas(root_area_strs);
             
             // Store inputs/outputs based on connection analysis
             if !root_inputs.is_empty() {
@@ -377,9 +369,9 @@ impl Neuroembryogenesis {
             // Step 2: Create subregion for CUSTOM/MEMORY areas if any exist
             let mut subregion_id = None;
             if !custom_memory_areas.is_empty() {
-                // Convert CorticalID to String for sorting and hashing
+                // Convert CorticalID to base64 for sorting and hashing
                 let mut custom_memory_strs: Vec<String> = custom_memory_areas.iter()
-                    .map(|id| id.to_string())
+                    .map(|id| id.as_base_64())
                     .collect();
                 custom_memory_strs.sort(); // Sort for deterministic hash
                 let combined = custom_memory_strs.join("|");
@@ -525,15 +517,16 @@ impl Neuroembryogenesis {
         
         // Process each cortical area via ConnectomeManager (each area = one SIMD batch)
         // NOTE: Loop is over AREAS, not neurons. Each area creates all its neurons in ONE batch call.
-        for (idx, (cortical_id, area)) in genome.cortical_areas.iter().enumerate() {
+        for (idx, (_cortical_id, area)) in genome.cortical_areas.iter().enumerate() {
             // Get per_voxel_neuron_cnt from area properties
             let per_voxel_count = area.properties
                 .get("per_voxel_neuron_cnt")
                 .and_then(|v| v.as_i64())
                 .unwrap_or(1);
             
-            // 🔍 DIAGNOSTIC: Log core area properties
-            let cortical_id_str = cortical_id.to_string();
+            // 🔍 DIAGNOSTIC: Use area.cortical_id (the actual ID stored in ConnectomeManager)
+            // This MUST match what was registered during corticogenesis!
+            let cortical_id_str = &area.cortical_id;
             // Note: Core IDs are 8-byte padded: "___power" and "___death"
             if cortical_id_str == "___power" || cortical_id_str == "___death" {
                 info!(target: "feagi-bdu","  🔍 [CORE-AREA] {} - dimensions: {:?}, per_voxel: {}", 
@@ -550,7 +543,7 @@ impl Neuroembryogenesis {
             let neurons_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
-                manager.create_neurons_for_area(&cortical_id_str)
+                manager.create_neurons_for_area(cortical_id_str)
             }; // Lock released immediately
             
             match neurons_created {
@@ -608,7 +601,7 @@ impl Neuroembryogenesis {
         
         // Process each source area via ConnectomeManager (each mapping = one SIMD batch)
         // NOTE: Loop is over AREAS, not synapses. Each area applies all mappings in batch calls.
-        for (idx, (src_cortical_id, src_area)) in genome.cortical_areas.iter().enumerate() {
+        for (idx, (_src_cortical_id, src_area)) in genome.cortical_areas.iter().enumerate() {
             // Check if area has mappings
             let has_dstmap = src_area.properties.get("cortical_mapping_dst")
                 .and_then(|v| v.as_object())
@@ -616,17 +609,18 @@ impl Neuroembryogenesis {
                 .unwrap_or(false);
             
             if !has_dstmap {
-                debug!(target: "feagi-bdu","  No dstmap for area {}", src_cortical_id);
+                debug!(target: "feagi-bdu","  No dstmap for area {}", &src_area.cortical_id);
                 continue;
             }
             
             // Call ConnectomeManager to apply cortical mappings (delegates to NPU)
             // CRITICAL: Minimize lock scope - only hold lock during synapse creation
-            let src_cortical_id_str = src_cortical_id.to_string();
+            // Use src_area.cortical_id (the actual ID stored in ConnectomeManager)
+            let src_cortical_id_str = &src_area.cortical_id;
             let synapses_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
-                manager.apply_cortical_mapping(&src_cortical_id_str)
+                manager.apply_cortical_mapping(src_cortical_id_str)
             }; // Lock released immediately
             
             match synapses_created {
@@ -778,7 +772,7 @@ impl Neuroembryogenesis {
                     .collect();
                 
                 if !external_destinations.is_empty() {
-                    outputs.push(area_id.to_string());
+                    outputs.push(area_id.as_base_64());
                 }
             }
         }
@@ -794,7 +788,7 @@ impl Neuroembryogenesis {
             for dest_str in destinations {
                 if let Ok(dest_id) = feagi_evo::string_to_cortical_id(&dest_str) {
                     if area_set.contains(&dest_id) {
-                        let dest_string = dest_id.to_string();
+                        let dest_string = dest_id.as_base_64();
                         if !inputs.contains(&dest_string) {
                             inputs.push(dest_string);
                         }

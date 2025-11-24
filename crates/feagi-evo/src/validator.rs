@@ -11,6 +11,7 @@ Licensed under the Apache License, Version 2.0
 use std::collections::HashSet;
 use serde_json::Value;
 use crate::{RuntimeGenome, MorphologyParameters};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Validation result
 #[derive(Debug, Clone)]
@@ -205,9 +206,10 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
     }
     
     for (cortical_id, area) in &genome.cortical_areas {
-        // CorticalID is always valid (8 bytes), no need to check format
-        // Just validate that the string stored in area.cortical_id matches expectations
         let cortical_id_display = cortical_id.to_string();
+        
+        // CRITICAL: Validate cortical ID format and compliance with feagi-data-processing templates
+        validate_cortical_id_format(cortical_id, &cortical_id_display, result);
         
         // Validate dimensions - AUTO-FIX zeros to 1
         if area.dimensions.width == 0 || area.dimensions.height == 0 || area.dimensions.depth == 0 {
@@ -244,6 +246,128 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
                 cortical_id_display
             ));
         }
+    }
+}
+
+/// Validate cortical ID format and compliance with feagi-data-processing templates
+fn validate_cortical_id_format(_cortical_id: &CorticalID, display: &str, result: &mut ValidationResult) {
+    // Check if display format is 8 characters (required)
+    if display.len() != 8 {
+        result.add_error(format!(
+            "Invalid cortical ID length: '{}' is {} characters (must be exactly 8)",
+            display, display.len()
+        ));
+        return;
+    }
+    
+    // Check if it's a CORE area (starts with underscore)
+    if display.starts_with('_') {
+        validate_core_area_id(display, result);
+        return;
+    }
+    
+    // Check if it's a CUSTOM/MEMORY area (starts with 'c')
+    if display.starts_with('c') {
+        // Custom areas: No strict validation yet, but should follow naming conventions
+        // Just check that it's properly padded
+        if !display.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            result.add_warning(format!(
+                "Custom cortical ID '{}' contains non-alphanumeric characters",
+                display
+            ));
+        }
+        return;
+    }
+    
+    // Check if it's an IPU/OPU area (3-char prefix + 5 chars)
+    validate_io_area_id(display, result);
+}
+
+/// Validate CORE area IDs (power, death, health, energy, etc.)
+fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
+    // Known valid CORE area IDs
+    const VALID_CORE_IDS: &[&str] = &[
+        "_power__",  // Power injector
+        "_death__",  // Death detector
+        "_health_",  // Health monitor (7 chars + 1 padding)
+        "_energy_",  // Energy monitor (7 chars + 1 padding)
+    ];
+    
+    if !VALID_CORE_IDS.contains(&display) {
+        result.add_error(format!(
+            "Invalid CORE cortical ID: '{}' - must be one of: {:?}",
+            display, VALID_CORE_IDS
+        ));
+    }
+}
+
+/// Validate IPU/OPU area IDs (should follow template system)
+fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
+    // Extract 3-character prefix
+    let prefix = &display[0..3];
+    
+    // Known valid IPU prefixes from feagi-data-processing templates
+    const VALID_IPU_PREFIXES: &[&str] = &[
+        "svi",  // SegmentedVision (9 areas: svi0____ to svi8____)
+        "aud",  // Audio
+        "tac",  // Tactile
+        "olf",  // Olfactory
+        "vis",  // Vision (generic)
+    ];
+    
+    // Known valid OPU prefixes from feagi-data-processing templates
+    const VALID_OPU_PREFIXES: &[&str] = &[
+        "mot",  // Motor
+        "voc",  // Vocal
+        "gaz",  // Gaze control
+    ];
+    
+    let is_valid_ipu = VALID_IPU_PREFIXES.contains(&prefix);
+    let is_valid_opu = VALID_OPU_PREFIXES.contains(&prefix);
+    
+    if !is_valid_ipu && !is_valid_opu {
+        // Check for OLD invalid formats
+        if prefix.starts_with("iic") || prefix.starts_with("opu") || prefix.starts_with("omo") || prefix.starts_with("oga") {
+            result.add_error(format!(
+                "INVALID OLD-FORMAT cortical ID: '{}' - prefix '{}' is not compliant with feagi-data-processing templates. \
+                Valid IPU prefixes: {:?}, Valid OPU prefixes: {:?}. \
+                This genome needs migration to the new format.",
+                display, prefix, VALID_IPU_PREFIXES, VALID_OPU_PREFIXES
+            ));
+        } else {
+            result.add_warning(format!(
+                "Unknown cortical ID prefix: '{}' in '{}' - may not follow feagi-data-processing template system. \
+                Valid IPU prefixes: {:?}, Valid OPU prefixes: {:?}",
+                prefix, display, VALID_IPU_PREFIXES, VALID_OPU_PREFIXES
+            ));
+        }
+        return;
+    }
+    
+    // Validate the index/suffix part (characters 3-7)
+    let suffix = &display[3..];
+    
+    // For SegmentedVision (svi), indices should be 0-8
+    if prefix == "svi" {
+        if let Some(first_char) = suffix.chars().next() {
+            if first_char.is_ascii_digit() {
+                let digit = first_char as u8 - b'0';
+                if digit > 8 {
+                    result.add_error(format!(
+                        "Invalid SegmentedVision index: '{}' in '{}' - SegmentedVision has 9 areas (indices 0-8)",
+                        digit, display
+                    ));
+                }
+            }
+        }
+    }
+    
+    // Check that suffix is properly padded with underscores
+    if !suffix.chars().all(|c| c.is_alphanumeric() || c == '_') {
+        result.add_warning(format!(
+            "Cortical ID '{}' has invalid characters in suffix (should be alphanumeric or underscore)",
+            display
+        ));
     }
 }
 

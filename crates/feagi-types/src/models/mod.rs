@@ -26,7 +26,7 @@ pub mod brain_region;
 pub mod brain_region_hierarchy;
 
 // Re-export core types
-pub use cortical_area::{CorticalArea, AreaType};
+pub use cortical_area::CorticalArea;
 pub use brain_region::{BrainRegion, RegionType};
 pub use brain_region_hierarchy::BrainRegionHierarchy;
 

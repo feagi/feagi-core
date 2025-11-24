@@ -43,7 +43,7 @@ use std::collections::HashMap;
 use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
-use feagi_types::{BrainRegion, CorticalArea, AreaType, RegionType, Dimensions};
+use feagi_types::{BrainRegion, CorticalArea, RegionType, Dimensions};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Parsed genome data ready for ConnectomeManager
@@ -309,9 +309,6 @@ impl GenomeParser {
                 (0, 0, 0)
             };
             
-            // Parse area type (old system, deprecated)
-            let area_type = Self::parse_area_type(raw_area.cortical_type.as_deref())?;
-            
             // Create cortical area with normalized base64 format
             let mut area = CorticalArea::new(
                 cortical_id.as_base_64(),
@@ -319,7 +316,6 @@ impl GenomeParser {
                 name,
                 dimensions,
                 position,
-                area_type,
             )?;
             
             // Store cortical_type as cortical_group for new type system
@@ -448,10 +444,20 @@ impl GenomeParser {
                 region_type,
             )?;
             
-            // Add cortical areas to region
+            // Add cortical areas to region (convert to base64 format)
             if let Some(areas) = &raw_region.areas {
                 for area_id in areas {
-                    region.add_area(area_id.clone());
+                    // Convert area_id to CorticalID, then to base64
+                    match string_to_cortical_id(area_id) {
+                        Ok(cortical_id) => {
+                            region.add_area(cortical_id.as_base_64());
+                        }
+                        Err(e) => {
+                            warn!(target: "feagi-evo", 
+                                "Failed to convert brain region area ID '{}' to CorticalID: {}. Skipping.", 
+                                area_id, e);
+                        }
+                    }
                 }
             }
             
@@ -465,11 +471,38 @@ impl GenomeParser {
             if let Some(coord_3d) = &raw_region.coordinate_3d {
                 region.properties.insert("coordinate_3d".to_string(), serde_json::json!(coord_3d));
             }
+            // Convert inputs/outputs to base64 format
             if let Some(inputs) = &raw_region.inputs {
-                region.properties.insert("inputs".to_string(), serde_json::json!(inputs));
+                let converted_inputs: Vec<String> = inputs.iter()
+                    .filter_map(|id| {
+                        match string_to_cortical_id(id) {
+                            Ok(cortical_id) => Some(cortical_id.as_base_64()),
+                            Err(e) => {
+                                warn!(target: "feagi-evo", 
+                                    "Failed to convert brain region input ID '{}': {}. Skipping.", 
+                                    id, e);
+                                None
+                            }
+                        }
+                    })
+                    .collect();
+                region.properties.insert("inputs".to_string(), serde_json::json!(converted_inputs));
             }
             if let Some(outputs) = &raw_region.outputs {
-                region.properties.insert("outputs".to_string(), serde_json::json!(outputs));
+                let converted_outputs: Vec<String> = outputs.iter()
+                    .filter_map(|id| {
+                        match string_to_cortical_id(id) {
+                            Ok(cortical_id) => Some(cortical_id.as_base_64()),
+                            Err(e) => {
+                                warn!(target: "feagi-evo", 
+                                    "Failed to convert brain region output ID '{}': {}. Skipping.", 
+                                    id, e);
+                                None
+                            }
+                        }
+                    })
+                    .collect();
+                region.properties.insert("outputs".to_string(), serde_json::json!(converted_outputs));
             }
             if let Some(signature) = &raw_region.signature {
                 region.properties.insert("signature".to_string(), serde_json::json!(signature));
@@ -482,21 +515,6 @@ impl GenomeParser {
         }
         
         Ok(regions)
-    }
-    
-    /// Parse area type string to AreaType enum
-    fn parse_area_type(type_str: Option<&str>) -> EvoResult<AreaType> {
-        match type_str {
-            Some("IPU") => Ok(AreaType::Sensory),
-            Some("OPU") => Ok(AreaType::Motor),
-            Some("MEMORY") => Ok(AreaType::Memory),
-            Some("CORE") => Ok(AreaType::Custom), // CORE maps to Custom for now
-            Some("CUSTOM") | None => Ok(AreaType::Custom),
-            Some(other) => {
-                warn!(target: "feagi-evo","Unknown cortical_type '{}', defaulting to Custom", other);
-                Ok(AreaType::Custom)
-            }
-        }
     }
 }
 

@@ -25,6 +25,12 @@ use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
 };
 use thiserror::Error;
 
+/// Type alias for the authoritative CorticalAreaType from feagi-data-processing
+/// 
+/// This is NOT a duplicate - it's just a convenient alias for external crates.
+/// The single source of truth is feagi_data_structures::genomic::cortical_area::CorticalAreaType
+pub type NewCorticalAreaType = CorticalAreaType;
+
 #[derive(Debug, Error)]
 pub enum CorticalTypeError {
     #[error("Unknown cortical_group: {0}")]

@@ -10,7 +10,7 @@ Licensed under the Apache License, Version 2.0
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use feagi_types::{CorticalArea, BrainRegion, AreaType};
+use feagi_types::{CorticalArea, BrainRegion};
 use crate::types::{EvoError, EvoResult};
 
 /// Genome saver
@@ -61,13 +61,8 @@ impl GenomeSaver {
                 area.position.2
             ]));
             
-            // Area type
-            let cortical_type = match area.area_type {
-                AreaType::Sensory => "IPU",
-                AreaType::Motor => "OPU",
-                AreaType::Memory => "MEMORY",
-                AreaType::Custom => "CUSTOM",
-            };
+            // Area type (use cortical_type_new if available)
+            let cortical_type = area.get_cortical_group();
             area_data.insert("cortical_type".to_string(), json!(cortical_type));
             
             // Add all properties from the area's properties HashMap

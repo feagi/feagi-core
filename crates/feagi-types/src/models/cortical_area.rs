@@ -13,46 +13,6 @@ use crate::{FeagiError, Dimensions, Position};
 /// Result type for cortical area operations
 pub type Result<T> = std::result::Result<T, FeagiError>;
 
-/// Type of cortical area (functional classification)
-/// 
-/// **DEPRECATED (Phase 6)**: Use `NewCorticalAreaType` (from feagi-data-processing) instead.
-/// This simple enum is being replaced with a richer type system that includes:
-/// - Detailed I/O data types (CartesianPlane, Percentage, etc.)
-/// - Frame handling (Absolute vs Incremental)
-/// - Neuron positioning strategies
-/// 
-/// This enum will be removed in a future release.
-#[deprecated(note = "Use NewCorticalAreaType from feagi-data-processing instead")]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AreaType {
-    /// Sensory input areas
-    Sensory,
-    /// Motor output areas
-    Motor,
-    /// Memory/association areas
-    Memory,
-    /// Custom/user-defined areas
-    Custom,
-}
-
-impl Default for AreaType {
-    fn default() -> Self {
-        Self::Custom
-    }
-}
-
-impl std::fmt::Display for AreaType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Sensory => write!(f, "sensory"),
-            Self::Motor => write!(f, "motor"),
-            Self::Memory => write!(f, "memory"),
-            Self::Custom => write!(f, "custom"),
-        }
-    }
-}
-
 /// Cortical area metadata (genome representation)
 ///
 /// This struct contains only the static metadata that defines a cortical area.
@@ -84,18 +44,11 @@ pub struct CorticalArea {
     /// This is the origin point (min corner) of the area
     pub position: (i32, i32, i32),
 
-    /// Functional type of this area (DEPRECATED - Phase 6)
-    /// Use cortical_type_new for new code
-    /// This field will be removed in a future release
-    #[deprecated(note = "Use cortical_type_new instead. Will be removed in Phase 6.")]
-    pub area_type: AreaType,
-    
-    /// New strongly-typed cortical area classification (from feagi-data-processing)
-    /// This is the authoritative type system as of Phase 6
-    /// Populated during genome parsing (Phase 2+)
+    /// Strongly-typed cortical area classification (from feagi-data-processing)
+    /// This is the authoritative type system
+    /// Populated during genome parsing
     /// 
-    /// NOTE: Not serialized directly (feagi-data-processing types don't impl Serialize yet)
-    /// Use the API conversion utilities (to_cortical_type_info) for serialization
+    /// NOTE: Skipped during serialization (use get_cortical_group() for JSON)
     #[serde(skip)]
     pub cortical_type_new: Option<NewCorticalAreaType>,
     
@@ -239,7 +192,6 @@ impl CorticalArea {
         name: String,
         dimensions: Dimensions,
         position: (i32, i32, i32),
-        area_type: AreaType,
     ) -> Result<Self> {
         // Validate cortical_id (accept 6-char legacy, 8-char, or base64)
         if cortical_id.is_empty() || cortical_id.len() > 16 {
@@ -270,8 +222,7 @@ impl CorticalArea {
             name,
             dimensions,
             position,
-            area_type,
-            cortical_type_new: None,  // Set during genome parsing (Phase 2+)
+            cortical_type_new: None,  // Set during genome parsing or API creation
             // Neural parameters with sensible defaults
             visible: default_visible(),
             sub_group: None,
@@ -403,6 +354,54 @@ impl CorticalArea {
     pub fn with_burst_engine_active(mut self, active: bool) -> Self {
         self.burst_engine_active = active;
         self
+    }
+
+    /// Check if this is an input (sensory/IPU) area
+    pub fn is_input_area(&self) -> bool {
+        use crate::CorticalTypeAdapter;
+        if let Some(ref new_type) = self.cortical_type_new {
+            CorticalTypeAdapter::is_input(new_type)
+        } else if let Some(group) = self.properties.get("cortical_group").and_then(|v| v.as_str()) {
+            group.to_uppercase() == "IPU"
+        } else {
+            false
+        }
+    }
+
+    /// Check if this is an output (motor/OPU) area
+    pub fn is_output_area(&self) -> bool {
+        use crate::CorticalTypeAdapter;
+        if let Some(ref new_type) = self.cortical_type_new {
+            CorticalTypeAdapter::is_output(new_type)
+        } else if let Some(group) = self.properties.get("cortical_group").and_then(|v| v.as_str()) {
+            group.to_uppercase() == "OPU"
+        } else {
+            false
+        }
+    }
+
+    /// Check if this is a memory area
+    pub fn is_memory_area(&self) -> bool {
+        use crate::CorticalTypeAdapter;
+        if let Some(ref new_type) = self.cortical_type_new {
+            CorticalTypeAdapter::is_memory(new_type)
+        } else if let Some(group) = self.properties.get("cortical_group").and_then(|v| v.as_str()) {
+            group.to_uppercase() == "MEMORY"
+        } else {
+            false
+        }
+    }
+
+    /// Get cortical group string ("IPU", "OPU", "CORE", "MEMORY", "CUSTOM")
+    pub fn get_cortical_group(&self) -> String {
+        use crate::CorticalTypeAdapter;
+        if let Some(ref new_type) = self.cortical_type_new {
+            CorticalTypeAdapter::to_cortical_group(new_type).to_string()
+        } else if let Some(group) = self.properties.get("cortical_group").and_then(|v| v.as_str()) {
+            group.to_uppercase()
+        } else {
+            "CUSTOM".to_string()
+        }
     }
 
     /// Check if a 3D position is within this area's bounds

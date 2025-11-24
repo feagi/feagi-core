@@ -1617,10 +1617,12 @@ dependencies = [
  "feagi-bdu",
  "feagi-burst-engine",
  "feagi-connectome-serialization",
+ "feagi-evo",
  "feagi-plasticity",
  "feagi-pns",
  "feagi-state-manager",
  "feagi-types",
+ "serde_json",
 ]
 
 [[package]]

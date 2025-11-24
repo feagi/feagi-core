@@ -44,13 +44,13 @@ pub use npu::*;
 pub use id_manager::NeuronArrayType;
 
 // Export brain architecture models
-pub use models::{CorticalArea, BrainRegion, BrainRegionHierarchy, AreaType, RegionType};
+pub use models::{CorticalArea, BrainRegion, BrainRegionHierarchy, RegionType};
 
 // Export numeric quantization types
 pub use numeric::{NeuralValue, INT8Value, INT8LeakCoefficient, Precision, QuantizationSpec};
 
 // Export cortical type adapter for migration
-pub use cortical_type_adapter::{CorticalTypeAdapter, CorticalTypeError};
+pub use cortical_type_adapter::{CorticalTypeAdapter, CorticalTypeError, NewCorticalAreaType};
 
 /// Neuron ID (globally unique across the entire brain)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

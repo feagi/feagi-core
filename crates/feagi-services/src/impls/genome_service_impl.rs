@@ -685,12 +685,7 @@ impl GenomeServiceImpl {
         let neuron_count = manager.get_neuron_count_in_area(cortical_id);
         let synapse_count = manager.get_synapse_count_in_area(cortical_id);
         
-        let cortical_group = match area.area_type {
-            feagi_types::AreaType::Sensory => "IPU",
-            feagi_types::AreaType::Motor => "OPU",
-            feagi_types::AreaType::Memory => "MEMORY",
-            feagi_types::AreaType::Custom => "CUSTOM",
-        };
+        let cortical_group = area.get_cortical_group();
         
         Ok(CorticalAreaInfo {
             cortical_id: area.cortical_id.clone(),
@@ -698,8 +693,8 @@ impl GenomeServiceImpl {
             name: area.name.clone(),
             dimensions: (area.dimensions.width, area.dimensions.height, area.dimensions.depth),
             position: area.position,
-            area_type: format!("{:?}", area.area_type),
-            cortical_group: cortical_group.to_string(),
+            area_type: cortical_group.clone(),
+            cortical_group,
             neuron_count,
             synapse_count,
             visible: area.visible,
@@ -740,13 +735,8 @@ impl GenomeServiceImpl {
         let neuron_count = manager.get_neuron_count_in_area(cortical_id);
         let synapse_count = manager.get_synapse_count_in_area(cortical_id);
         
-        // Derive cortical_group from area_type
-        let cortical_group = match area.area_type {
-            feagi_types::AreaType::Sensory => "IPU",
-            feagi_types::AreaType::Motor => "OPU",
-            feagi_types::AreaType::Memory => "MEMORY",
-            feagi_types::AreaType::Custom => "CUSTOM",
-        };
+        // Get cortical_group from the area (uses cortical_type_new if available)
+        let cortical_group = area.get_cortical_group();
         
         Ok(CorticalAreaInfo {
             cortical_id: area.cortical_id.clone(),
@@ -754,8 +744,8 @@ impl GenomeServiceImpl {
             name: area.name.clone(),
             dimensions: (area.dimensions.width, area.dimensions.height, area.dimensions.depth),
             position: area.position,
-            area_type: format!("{:?}", area.area_type),
-            cortical_group: cortical_group.to_string(),
+            area_type: cortical_group.clone(),
+            cortical_group,
             neuron_count,
             synapse_count,
             visible: area.visible,

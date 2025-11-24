@@ -270,13 +270,33 @@ impl ConnectomeManager {
         }
         
         // CRITICAL: Reserve cortical_idx 0 for _death, 1 for _power
-        // Note: Core IDs are 8-byte padded: "___death" and "___power"
-        let cortical_id_str = area.cortical_id.to_string();
-        if cortical_id_str == "___death" {
-            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=0 to ___death area");
+        // Note: Core IDs may be base64 encoded, so we need to check all possible formats
+        use feagi_data_structures::genomic::cortical_area::CorticalID;
+        
+        // Helper to check if cortical_id matches a core area (handles base64 or display format)
+        let is_core_area = |id_str: &str, core_name: &str| -> bool {
+            // Check direct string match (legacy, display, or padded format)
+            if id_str == core_name || id_str == format!("{:_<8}", core_name) {
+                return true;
+            }
+            // Try to decode as base64 and check
+            if let Ok(cid) = CorticalID::try_from_base_64(id_str) {
+                let decoded = cid.to_string();
+                if decoded == core_name || decoded == format!("{:_<8}", core_name) {
+                    return true;
+                }
+            }
+            false
+        };
+        
+        let is_death_area = is_core_area(&area.cortical_id, "_death");
+        let is_power_area = is_core_area(&area.cortical_id, "_power");
+        
+        if is_death_area {
+            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=0 to _death area (id={})", area.cortical_id);
             area.cortical_idx = 0;
-        } else if cortical_id_str == "___power" {
-            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=1 to ___power area");
+        } else if is_power_area {
+            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=1 to _power area (id={})", area.cortical_id);
             area.cortical_idx = 1;
         } else {
             // Regular areas: assign cortical_idx if not set (will be ≥2 due to next_cortical_idx=2 initialization)
@@ -2566,7 +2586,7 @@ impl ConnectomeManager {
     ///
     pub fn list_ipu_areas(&self) -> Vec<String> {
         self.cortical_areas.values()
-            .filter(|area| area.area_type == feagi_types::AreaType::Sensory)
+            .filter(|area| area.is_input_area())
             .map(|area| area.cortical_id.clone())
             .collect()
     }
@@ -2579,7 +2599,7 @@ impl ConnectomeManager {
     ///
     pub fn list_opu_areas(&self) -> Vec<String> {
         self.cortical_areas.values()
-            .filter(|area| area.area_type == feagi_types::AreaType::Motor)
+            .filter(|area| area.is_output_area())
             .map(|area| area.cortical_id.clone())
             .collect()
     }
@@ -2618,7 +2638,7 @@ impl ConnectomeManager {
         properties.insert("cortical_id".to_string(), serde_json::json!(area.cortical_id));
         properties.insert("cortical_idx".to_string(), serde_json::json!(area.cortical_idx));
         properties.insert("name".to_string(), serde_json::json!(area.name));
-        properties.insert("area_type".to_string(), serde_json::json!(format!("{:?}", area.area_type)));
+        properties.insert("area_type".to_string(), serde_json::json!(area.get_cortical_group()));
         properties.insert("dimensions".to_string(), serde_json::json!({
             "width": area.dimensions.width,
             "height": area.dimensions.height,

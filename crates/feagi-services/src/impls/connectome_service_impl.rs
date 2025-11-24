@@ -9,7 +9,7 @@ use crate::traits::ConnectomeService;
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
-use feagi_types::{AreaType, BrainRegion, CorticalArea, Dimensions, RegionType};
+use feagi_types::{BrainRegion, CorticalArea, Dimensions, RegionType};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -23,30 +23,6 @@ pub struct ConnectomeServiceImpl {
 impl ConnectomeServiceImpl {
     pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
         Self { connectome }
-    }
-    
-    /// Convert AreaType enum to string
-    fn area_type_to_string(area_type: &AreaType) -> String {
-        match area_type {
-            AreaType::Sensory => "Sensory".to_string(),
-            AreaType::Motor => "Motor".to_string(),
-            AreaType::Memory => "Memory".to_string(),
-            AreaType::Custom => "Custom".to_string(),
-        }
-    }
-    
-    /// Convert string to AreaType enum
-    fn string_to_area_type(s: &str) -> Result<AreaType, ServiceError> {
-        match s {
-            "Sensory" => Ok(AreaType::Sensory),
-            "Motor" => Ok(AreaType::Motor),
-            "Memory" => Ok(AreaType::Memory),
-            "Custom" => Ok(AreaType::Custom),
-            _ => Err(ServiceError::InvalidInput(format!(
-                "Invalid area type: {}",
-                s
-            ))),
-        }
     }
     
     /// Convert RegionType enum to string
@@ -86,18 +62,22 @@ impl ConnectomeService for ConnectomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services","Creating cortical area: {}", params.cortical_id);
         
-        // Convert string to AreaType
-        let area_type = Self::string_to_area_type(&params.area_type)?;
+        // Parse cortical type from params.area_type
+        use feagi_types::CorticalTypeAdapter;
+        let cortical_type_new = CorticalTypeAdapter::parse_from_cortical_group(&params.area_type)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical type: {}", e)))?;
         
-        // Create CorticalArea (cortical_idx=0 will be auto-assigned by ConnectomeManager)
+        // Create CorticalArea
         let mut area = CorticalArea::new(
             params.cortical_id.clone(),
             0,  // Auto-assigned by ConnectomeManager
             params.name.clone(),
             Dimensions::new(params.dimensions.0, params.dimensions.1, params.dimensions.2),
             params.position,
-            area_type,
         ).map_err(ServiceError::from)?;
+        
+        // Set the cortical type
+        area.cortical_type_new = Some(cortical_type_new);
         
         // Apply all neural parameters from params (direct field assignment)
         if let Some(visible) = params.visible {
@@ -208,15 +188,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let neuron_count = manager.get_neuron_count_in_area(cortical_id);
         let synapse_count = manager.get_synapse_count_in_area(cortical_id);
         
-        // Derive cortical_group from area_type (matching Python logic)
-        // Python logic: cortical_group = str(raw_group).upper() if raw_group else "CUSTOM"
-        // Maps: Sensory → IPU, Motor → OPU, Memory → MEMORY, Custom → CUSTOM
-        let cortical_group = match area.area_type {
-            feagi_types::AreaType::Sensory => "IPU",
-            feagi_types::AreaType::Motor => "OPU",
-            feagi_types::AreaType::Memory => "MEMORY",
-            feagi_types::AreaType::Custom => "CUSTOM",
-        }.to_string();
+        // Get cortical_group from the area (uses cortical_type_new if available)
+        let cortical_group = area.get_cortical_group();
         
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
@@ -224,7 +197,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             name: area.name.clone(),
             dimensions: area.dimensions.to_tuple(),
             position: area.position,
-            area_type: Self::area_type_to_string(&area.area_type),
+            area_type: cortical_group.clone(),
             cortical_group,
             neuron_count,
             synapse_count,

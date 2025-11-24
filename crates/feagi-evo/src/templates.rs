@@ -12,7 +12,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{RuntimeGenome, GenomeMetadata, MorphologyRegistry, PhysiologyConfig, GenomeSignatures, GenomeStats};
-use feagi_types::{CorticalArea, AreaType, Dimensions};
+use feagi_types::{CorticalArea, Dimensions};
 use std::collections::HashMap;
 use serde_json::Value;
 
@@ -59,7 +59,6 @@ pub fn create_death_area() -> CorticalArea {
         "Death".to_string(),
         Dimensions::new(1, 1, 1),
         (0, 0, -10), // coordinate_3d
-        AreaType::Custom, // CORE maps to Custom
     ).expect("Failed to create _death area");
     
     let mut props = get_default_neural_properties();
@@ -77,7 +76,6 @@ pub fn create_power_area() -> CorticalArea {
         "Brain_Power".to_string(),
         Dimensions::new(1, 1, 1),
         (0, 0, -20), // coordinate_3d
-        AreaType::Custom, // CORE maps to Custom
     ).expect("Failed to create _power area");
     
     let mut props = get_default_neural_properties();
