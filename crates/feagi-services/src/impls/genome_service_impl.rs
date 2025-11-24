@@ -397,9 +397,13 @@ impl GenomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
         
+        // Convert cortical_id to CorticalID
+        let cortical_id_typed = feagi_evo::string_to_cortical_id(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e)))?;
+        
         // Update RuntimeGenome if available
         if let Some(genome) = self.current_genome.write().as_mut() {
-            if let Some(area) = genome.cortical_areas.get_mut(cortical_id) {
+            if let Some(area) = genome.cortical_areas.get_mut(&cortical_id_typed) {
                 for (key, value) in &changes {
                     match key.as_str() {
                         "cortical_name" | "name" => {
@@ -483,13 +487,17 @@ impl GenomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!("[STRUCTURAL-REBUILD] Starting localized rebuild for {}", cortical_id);
         
+        // Convert cortical_id to CorticalID
+        let cortical_id_typed = feagi_evo::string_to_cortical_id(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e)))?;
+        
         // Step 1: Update RuntimeGenome dimensions/density
         let (old_dimensions, old_density, new_dimensions, new_density) = {
             let mut genome_guard = genome_store.write();
             let genome = genome_guard.as_mut()
                 .ok_or_else(|| ServiceError::Backend("No genome loaded".to_string()))?;
             
-            let area = genome.cortical_areas.get_mut(cortical_id)
+            let area = genome.cortical_areas.get_mut(&cortical_id_typed)
                 .ok_or_else(|| ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: cortical_id.to_string(),
@@ -583,7 +591,7 @@ impl GenomeServiceImpl {
             
             let mut total = 0u32;
             for (src_id, src_area) in &genome.cortical_areas {
-                if src_id == cortical_id {
+                if src_id == &cortical_id_typed {
                     continue; // Skip self (already handled in outgoing)
                 }
                 
@@ -593,7 +601,8 @@ impl GenomeServiceImpl {
                         if obj.contains_key(cortical_id) {
                             // This area has mappings to our target - rebuild them
                             let mut manager = connectome.write();
-                            let count = manager.apply_cortical_mapping(src_id)
+                            let src_id_str = src_id.to_string();
+                            let count = manager.apply_cortical_mapping(&src_id_str)
                                 .map_err(|e| ServiceError::Backend(format!("Failed to rebuild incoming synapses from {}: {}", src_id, e)))?;
                             total += count;
                             info!("[STRUCTURAL-REBUILD] Rebuilt {} incoming synapses from {}", count, src_id);

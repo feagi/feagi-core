@@ -212,7 +212,8 @@ mod tests {
         assert_eq!(parsed.brain_regions.len(), 1);
         
         let area = &parsed.cortical_areas[0];
-        assert_eq!(area.cortical_id, "_power");
+        // cortical_id is now stored in base64 format after roundtrip
+        assert_eq!(area.cortical_id, "X3Bvd2VyICA=");
         assert_eq!(area.name, "Test Area");
         assert_eq!(area.dimensions.width, 10);
         assert_eq!(area.position, (5, 5, 5));

@@ -237,7 +237,7 @@ impl GenomeParser {
             }
             
             // Convert string cortical_id to CorticalID (handles 6-char legacy and base64)
-            let _cortical_id = match string_to_cortical_id(cortical_id_str) {
+            let cortical_id = match string_to_cortical_id(cortical_id_str) {
                 Ok(id) => id,
                 Err(e) => {
                     warn!(target: "feagi-evo","Skipping invalid cortical_id '{}': {}", cortical_id_str, e);
@@ -246,7 +246,6 @@ impl GenomeParser {
             };
             
             // Extract required fields
-            // Note: CorticalArea still stores the original 6-char string for backward compatibility
             let name = raw_area.cortical_name.clone()
                 .unwrap_or_else(|| cortical_id_str.clone());
             
@@ -285,9 +284,9 @@ impl GenomeParser {
             // Parse area type
             let area_type = Self::parse_area_type(raw_area.cortical_type.as_deref())?;
             
-            // Create cortical area (pass original string for now)
+            // Create cortical area with normalized base64 format
             let mut area = CorticalArea::new(
-                cortical_id_str.clone(),
+                cortical_id.as_base_64(),
                 0, // cortical_idx will be assigned by ConnectomeManager
                 name,
                 dimensions,
@@ -486,7 +485,8 @@ mod tests {
         
         assert_eq!(parsed.version, "2.1");
         assert_eq!(parsed.cortical_areas.len(), 1);
-        assert_eq!(parsed.cortical_areas[0].cortical_id, "_power");
+        // cortical_id is now stored in base64 format
+        assert_eq!(parsed.cortical_areas[0].cortical_id, "X3Bvd2VyICA=");
         assert_eq!(parsed.cortical_areas[0].name, "Test Area");
         assert_eq!(parsed.brain_regions.len(), 1);
     }
