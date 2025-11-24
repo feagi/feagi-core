@@ -30,6 +30,7 @@ pub mod fire_structures;
 pub mod npu;
 pub mod models;
 pub mod numeric;
+pub mod cortical_type_adapter;
 
 // Multi-model neuron architecture (Phase 0: ID management only)
 // See: feagi-core/docs/MULTI_MODEL_NEURON_ARCHITECTURE.md
@@ -47,6 +48,9 @@ pub use models::{CorticalArea, BrainRegion, BrainRegionHierarchy, AreaType, Regi
 
 // Export numeric quantization types
 pub use numeric::{NeuralValue, INT8Value, INT8LeakCoefficient, Precision, QuantizationSpec};
+
+// Export cortical type adapter for migration
+pub use cortical_type_adapter::{CorticalTypeAdapter, CorticalTypeError};
 
 /// Neuron ID (globally unique across the entire brain)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -304,6 +308,7 @@ mod tests {
             ..synapse
         };
         let contribution = inhibitory.calculate_contribution();
-        assert!((contribution.0 + 1.0).abs() < 0.01); // Should be ~-1.0
+        // Direct cast: 255 * 255 * (-1.0) = -65,025
+        assert_eq!(contribution.0, -65025.0);
     }
 }

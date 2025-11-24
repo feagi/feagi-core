@@ -1658,6 +1658,7 @@ dependencies = [
  "feagi-services",
  "feagi-transports",
  "feagi-types",
+ "feagi_data_structures",
  "http-body-util",
  "hyper 1.7.0",
  "insta",
@@ -1984,6 +1985,7 @@ name = "feagi-types"
 version = "2.0.0"
 dependencies = [
  "ahash",
+ "feagi_data_structures",
  "serde",
  "serde_json",
  "thiserror 1.0.69",

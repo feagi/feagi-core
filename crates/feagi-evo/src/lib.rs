@@ -46,6 +46,7 @@ pub mod converter_flat;
 pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
 pub mod templates;
+pub mod cortical_type_parser;
 
 // Re-export commonly used types
 pub use types::{EvoError, EvoResult};
@@ -65,6 +66,7 @@ pub use validator::{validate_genome, ValidationResult};
 pub use converter_flat::convert_flat_to_hierarchical;
 pub use converter_flat_full::convert_flat_to_hierarchical_full;
 pub use converter_hierarchical_to_flat::convert_hierarchical_to_flat;
+pub use cortical_type_parser::{parse_cortical_type, validate_cortical_type};
 pub use templates::{
     create_minimal_genome, 
     create_genome_with_core_areas,

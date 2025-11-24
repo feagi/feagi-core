@@ -6,6 +6,7 @@ Represents a 3D cortical area containing neurons with specific functional roles.
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use feagi_data_structures::genomic::cortical_area::CorticalAreaType as NewCorticalAreaType;
 
 use crate::{FeagiError, Dimensions, Position};
 
@@ -74,8 +75,15 @@ pub struct CorticalArea {
     /// This is the origin point (min corner) of the area
     pub position: (i32, i32, i32),
 
-    /// Functional type of this area
+    /// Functional type of this area (OLD, deprecated)
+    /// Use cortical_type_new for new code
     pub area_type: AreaType,
+    
+    /// New strongly-typed cortical area classification (from feagi-data-processing)
+    /// This will become the primary type system in Phase 6
+    /// During migration, this field holds the parsed type from genome
+    #[serde(skip)]  // Not serialized yet (Phase 2+)
+    pub cortical_type_new: Option<NewCorticalAreaType>,
     
     // ========================================================================
     // NEURAL PARAMETERS (Python API compatibility)
@@ -249,6 +257,7 @@ impl CorticalArea {
             dimensions,
             position,
             area_type,
+            cortical_type_new: None,  // Set during genome parsing (Phase 2+)
             // Neural parameters with sensible defaults
             visible: default_visible(),
             sub_group: None,
@@ -267,6 +276,13 @@ impl CorticalArea {
             burst_engine_active: default_burst_engine_active(),
             properties: HashMap::new(),
         })
+    }
+
+    /// Set the new cortical area type (from feagi-data-processing)
+    /// This should be called during genome parsing to populate the strongly-typed classification
+    pub fn with_cortical_type_new(mut self, cortical_type: NewCorticalAreaType) -> Self {
+        self.cortical_type_new = Some(cortical_type);
+        self
     }
 
     /// Create a cortical area with custom properties
@@ -486,16 +502,27 @@ mod tests {
 
     #[test]
     fn test_invalid_cortical_id() {
-        let result = CorticalArea::new(
-            "short".to_string(), // Too short
+        // Test empty ID
+        let result1 = CorticalArea::new(
+            "".to_string(),
             0,
             "Test".to_string(),
             Dimensions::new(10, 10, 10),
             (0, 0, 0),
             AreaType::Custom,
         );
+        assert!(result1.is_err());
 
-        assert!(result.is_err());
+        // Test too long ID (>16 chars)
+        let result2 = CorticalArea::new(
+            "this_is_way_too_long_cortical_id".to_string(),
+            0,
+            "Test".to_string(),
+            Dimensions::new(10, 10, 10),
+            (0, 0, 0),
+            AreaType::Custom,
+        );
+        assert!(result2.is_err());
     }
 
     #[test]

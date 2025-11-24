@@ -15,6 +15,7 @@ feagi-transports = { path = "../feagi-transports", features = ["zmq-server"] }
 feagi-pns = { path = "../feagi-pns" }  # For registration and domain logic
 feagi-bdu = { path = "../feagi-bdu" }  # For examples
 feagi-burst-engine = { path = "../feagi-burst-engine" }  # For examples
+feagi_data_structures = { version = "0.0.50-beta.52" }
 
 # HTTP/REST
 axum = "0.7"
