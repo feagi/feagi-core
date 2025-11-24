@@ -1,5 +1,5 @@
 use crate::FeagiDataError;
-use crate::{define_xyz_dimensions, define_xyz_dimension_range, define_xyz_coordinates, define_index, define_nonzero_count};
+use crate::{define_xyz_dimensions, define_xyz_coordinates, define_index, define_nonzero_count};
 
 //region Cortical Indexing
 
