@@ -247,21 +247,25 @@ impl Neuroembryogenesis {
             let mut custom_memory_areas = Vec::new(); // CUSTOM/MEMORY (go to subregion)
             
             for (area_id, area) in genome.cortical_areas.iter() {
-                // Get cortical_group from properties (extracted by converter)
-                let cortical_group = area.properties.get("cortical_group")
-                    .and_then(|v| v.as_str())
-                    .map(|s| s.to_uppercase());
-                
-                // Classify following Python's logic:
+                // Classify following Python's logic with gradual migration to new type system:
                 // 1. Areas starting with "_" are always CORE
-                // 2. Check cortical_group property
-                // 3. Fallback to area_type
+                // 2. Check cortical_type_new (new strongly-typed system) - Phase 2+
+                // 3. Check cortical_group property (parsed from genome)
+                // 4. Fallback to area_type (old simple enum)
                 
                 let area_id_str = area_id.to_string();
                 // Note: Core IDs are 8-byte padded and start with "___" (three underscores)
                 let category = if area_id_str.starts_with("___") {
                     "CORE"
+                } else if let Some(ref cortical_type_new) = area.cortical_type_new {
+                    // NEW: Use strongly-typed cortical type if available (Phase 2+)
+                    feagi_types::CorticalTypeAdapter::to_cortical_group(cortical_type_new)
                 } else {
+                    // Fallback to cortical_group property or area_type
+                    let cortical_group = area.properties.get("cortical_group")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_uppercase());
+                    
                     match cortical_group.as_deref() {
                         Some("IPU") => "IPU",
                         Some("OPU") => "OPU",
@@ -269,7 +273,7 @@ impl Neuroembryogenesis {
                         Some("MEMORY") => "MEMORY",
                         Some("CUSTOM") => "CUSTOM",
                         _ => {
-                            // Fallback to area_type
+                            // Final fallback to old area_type
                             match area.area_type {
                                 feagi_types::AreaType::Sensory => "IPU",
                                 feagi_types::AreaType::Motor => "OPU",
@@ -280,10 +284,32 @@ impl Neuroembryogenesis {
                     }
                 };
                 
-                // Log first few classifications
+                // Phase 3: Enhanced logging with detailed type information
                 if ipu_areas.len() + opu_areas.len() + core_areas.len() + custom_memory_areas.len() < 5 {
-                    info!(target: "feagi-bdu","    🔍 Area {}: category={}, group={:?}", 
-                          area_id_str, category, cortical_group);
+                    let source = if area.cortical_type_new.is_some() {
+                        "cortical_type_new"
+                    } else if area.properties.contains_key("cortical_group") {
+                        "cortical_group"
+                    } else {
+                        "area_type"
+                    };
+                    
+                    // Phase 3: Show detailed type information if available
+                    if area.cortical_type_new.is_some() {
+                        let type_desc = crate::cortical_type_utils::describe_cortical_type(area);
+                        let frame_handling = if crate::cortical_type_utils::uses_absolute_frames(area) {
+                            "absolute"
+                        } else if crate::cortical_type_utils::uses_incremental_frames(area) {
+                            "incremental"
+                        } else {
+                            "n/a"
+                        };
+                        info!(target: "feagi-bdu","    🔍 {}, frames={}, source={}", 
+                              type_desc, frame_handling, source);
+                    } else {
+                        info!(target: "feagi-bdu","    🔍 Area {}: category={}, source={}", 
+                              area_id_str, category, source);
+                    }
                 }
                 
                 // Assign to appropriate list

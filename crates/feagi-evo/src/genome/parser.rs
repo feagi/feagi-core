@@ -309,7 +309,7 @@ impl GenomeParser {
                 (0, 0, 0)
             };
             
-            // Parse area type
+            // Parse area type (old system, deprecated)
             let area_type = Self::parse_area_type(raw_area.cortical_type.as_deref())?;
             
             // Create cortical area with normalized base64 format
@@ -321,6 +321,11 @@ impl GenomeParser {
                 position,
                 area_type,
             )?;
+            
+            // Store cortical_type as cortical_group for new type system
+            if let Some(ref cortical_type_str) = raw_area.cortical_type {
+                area.properties.insert("cortical_group".to_string(), serde_json::json!(cortical_type_str));
+            }
             
             // Store all properties in the properties HashMap
             // Neural properties
@@ -410,6 +415,15 @@ impl GenomeParser {
                 area.properties.insert(key.clone(), value.clone());
             }
             
+            // Parse and populate the new cortical type system (Phase 2)
+            // This allows gradual migration to the strongly-typed system
+            if let Ok(cortical_type_new) = crate::cortical_type_parser::parse_cortical_type(&area.properties) {
+                area = area.with_cortical_type_new(cortical_type_new);
+            } else {
+                // Log warning but continue (not all genomes have cortical_group yet)
+                warn!(target: "feagi-evo", "Could not parse cortical_type_new for area {}", cortical_id_str);
+            }
+            
             areas.push(area);
         }
         
@@ -492,6 +506,8 @@ mod tests {
     
     #[test]
     fn test_parse_minimal_genome() {
+        // Test backward compatibility: parsing v2.1 genome with old 6-byte cortical ID
+        // Parser should convert old format to base64 for storage
         let json = r#"{
             "version": "2.1",
             "blueprint": {
@@ -499,7 +515,7 @@ mod tests {
                     "cortical_name": "Test Area",
                     "block_boundaries": [10, 10, 10],
                     "relative_coordinate": [0, 0, 0],
-                    "cortical_type": "IPU"
+                    "cortical_type": "CORE"
                 }
             },
             "brain_regions": {
@@ -515,24 +531,31 @@ mod tests {
         
         assert_eq!(parsed.version, "2.1");
         assert_eq!(parsed.cortical_areas.len(), 1);
-        // cortical_id is now stored in base64 format (underscore-padded)
+        // OLD: Input was "_power" (6 bytes)
+        // NEW: Converted to "_power__" (8 bytes, padded at end with underscores) then base64 encoded
         assert_eq!(parsed.cortical_areas[0].cortical_id, "X3Bvd2VyX18=");
         assert_eq!(parsed.cortical_areas[0].name, "Test Area");
         assert_eq!(parsed.brain_regions.len(), 1);
+        
+        // Phase 2: Verify cortical_type_new is populated
+        assert!(parsed.cortical_areas[0].cortical_type_new.is_some());
     }
     
     #[test]
     fn test_parse_multiple_areas() {
+        // Test parsing multiple cortical areas with old format IDs
         let json = r#"{
             "version": "2.1",
             "blueprint": {
                 "_power": {
                     "cortical_name": "Area 1",
+                    "cortical_type": "CORE",
                     "block_boundaries": [5, 5, 5],
                     "relative_coordinate": [0, 0, 0]
                 },
                 "_death": {
                     "cortical_name": "Area 2",
+                    "cortical_type": "CORE",
                     "block_boundaries": [10, 10, 10],
                     "relative_coordinate": [5, 0, 0]
                 }
@@ -542,6 +565,12 @@ mod tests {
         let parsed = GenomeParser::parse(json).unwrap();
         
         assert_eq!(parsed.cortical_areas.len(), 2);
+        
+        // Phase 2: Verify both areas have cortical_type_new populated
+        for area in &parsed.cortical_areas {
+            assert!(area.cortical_type_new.is_some(), 
+                    "Area {} should have cortical_type_new populated", area.cortical_id);
+        }
     }
     
     #[test]
@@ -565,9 +594,22 @@ mod tests {
         
         assert_eq!(parsed.cortical_areas.len(), 1);
         let area = &parsed.cortical_areas[0];
+        
+        // Old type system (deprecated)
         assert_eq!(area.area_type, AreaType::Memory);
+        
+        // Properties stored correctly
         assert!(area.properties.contains_key("is_mem_type"));
         assert!(area.properties.contains_key("firing_threshold"));
+        assert!(area.properties.contains_key("cortical_group"));
+        
+        // NEW: cortical_type_new should be populated (Phase 2)
+        assert!(area.cortical_type_new.is_some(), 
+                "cortical_type_new should be populated from cortical_type property");
+        if let Some(ref cortical_type) = area.cortical_type_new {
+            assert!(feagi_types::CorticalTypeAdapter::is_memory(cortical_type),
+                    "Should be classified as MEMORY type");
+        }
     }
     
     #[test]
@@ -587,6 +629,59 @@ mod tests {
         
         let result = GenomeParser::parse(json);
         assert!(result.is_err());
+    }
+    
+    #[test]
+    fn test_cortical_type_new_population() {
+        // Test that cortical_type_new field is populated during parsing (Phase 2)
+        // This tests BACKWARD COMPATIBILITY: loading existing v2.1 genomes with old cortical IDs
+        // and populating the new cortical_type_new field based on cortical_type property
+        let json = r#"{
+            "version": "2.1",
+            "blueprint": {
+                "iic000": {
+                    "cortical_name": "Test IPU",
+                    "cortical_type": "IPU",
+                    "block_boundaries": [10, 10, 1],
+                    "relative_coordinate": [0, 0, 0]
+                },
+                "omot00": {
+                    "cortical_name": "Test OPU",
+                    "cortical_type": "OPU",
+                    "block_boundaries": [5, 5, 1],
+                    "relative_coordinate": [0, 0, 0]
+                },
+                "_power": {
+                    "cortical_name": "Test Core",
+                    "cortical_type": "CORE",
+                    "block_boundaries": [1, 1, 1],
+                    "relative_coordinate": [0, 0, 0]
+                }
+            }
+        }"#;
+        
+        let parsed = GenomeParser::parse(json).unwrap();
+        assert_eq!(parsed.cortical_areas.len(), 3);
+        
+        // Verify all areas have cortical_type_new populated
+        for area in &parsed.cortical_areas {
+            assert!(area.cortical_type_new.is_some(), 
+                    "Area {} should have cortical_type_new populated", area.cortical_id);
+            
+            // Verify cortical_group property is also set
+            assert!(area.properties.contains_key("cortical_group"),
+                    "Area {} should have cortical_group property", area.cortical_id);
+            
+            // Verify the type matches the property
+            if let Some(ref cortical_type_new) = area.cortical_type_new {
+                let group_from_type = feagi_types::CorticalTypeAdapter::to_cortical_group(cortical_type_new);
+                let group_from_prop = area.properties.get("cortical_group")
+                    .and_then(|v| v.as_str())
+                    .unwrap();
+                assert_eq!(group_from_type, group_from_prop,
+                          "Area {} type group mismatch", area.cortical_id);
+            }
+        }
     }
 }
 

@@ -33,6 +33,7 @@ pub mod connectome_manager;
 pub mod spatial;
 pub mod types;
 pub mod neuroembryogenesis;
+pub mod cortical_type_utils;
 
 // Note: models/ and genome/ have been moved to feagi-types and feagi-evo respectively
 
@@ -67,6 +68,13 @@ pub use connectome_manager::{ConnectomeConfig, ConnectomeManager};
 
 // Re-export neuroembryogenesis
 pub use neuroembryogenesis::{Neuroembryogenesis, DevelopmentStage, DevelopmentProgress};
+
+// Re-export cortical type utilities (Phase 3)
+pub use cortical_type_utils::{
+    get_io_data_type, uses_absolute_frames, uses_incremental_frames,
+    uses_percentage_encoding, uses_cartesian_encoding, describe_cortical_type,
+    validate_connectivity,
+};
 
 #[cfg(test)]
 mod tests {
