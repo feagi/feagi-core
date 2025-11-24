@@ -308,6 +308,13 @@ impl BrainRegionHierarchy {
     pub fn region_count(&self) -> usize {
         self.regions.len()
     }
+    
+    /// Get all regions as a cloned HashMap
+    /// 
+    /// This is useful for extracting all brain regions to sync with RuntimeGenome
+    pub fn get_all_regions(&self) -> HashMap<String, BrainRegion> {
+        self.regions.clone()
+    }
 }
 
 impl Default for BrainRegionHierarchy {

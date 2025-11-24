@@ -121,6 +121,30 @@ impl GenomeService for GenomeServiceImpl {
             progress.synapses_created
         );
         
+        // CRITICAL: Sync auto-generated brain regions back to RuntimeGenome
+        // BDU may auto-generate brain regions if the genome didn't have any.
+        // We need to sync these back to current_genome so they're included when saving.
+        let brain_regions_from_bdu = {
+            let manager = self.connectome.read();
+            let hierarchy = manager.get_brain_region_hierarchy();
+            hierarchy.get_all_regions()
+        };
+        
+        if !brain_regions_from_bdu.is_empty() {
+            let mut current_genome_guard = self.current_genome.write();
+            if let Some(ref mut genome) = *current_genome_guard {
+                // Only update if BDU has more regions (handles auto-generation case)
+                if brain_regions_from_bdu.len() > genome.brain_regions.len() {
+                    info!(
+                        target: "feagi-services",
+                        "Syncing {} auto-generated brain regions from BDU to RuntimeGenome",
+                        brain_regions_from_bdu.len()
+                    );
+                    genome.brain_regions = brain_regions_from_bdu;
+                }
+            }
+        }
+        
         // Return genome info with simulation_timestep
         let (cortical_area_count, brain_region_count) = {
             let manager = self.connectome.read();
