@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn, error, debug};
 use ahash::AHashSet;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Registration request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -317,11 +318,31 @@ impl RegistrationHandler {
                         burst_lock_duration
                     );
                     
+                    // Convert String keys to CorticalID for zero-copy hot path optimization
+                    let area_mapping: HashMap<CorticalID, u32> = sensory.cortical_mappings
+                        .iter()
+                        .filter_map(|(name, &idx)| {
+                            match CorticalID::try_from_bytes(&{
+                                let mut bytes = [b' '; 8];
+                                let name_bytes = name.as_bytes();
+                                let copy_len = name_bytes.len().min(8);
+                                bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+                                bytes
+                            }) {
+                                Ok(id) => Some((id, idx)),
+                                Err(e) => {
+                                    warn!("[REGISTRATION] Invalid cortical ID '{}': {:?}", name, e);
+                                    None
+                                }
+                            }
+                        })
+                        .collect();
+                    
                     let config = feagi_burst_engine::AgentConfig {
                         agent_id: request.agent_id.clone(),
                         shm_path: std::path::PathBuf::from(shm_path),
                         rate_hz: sensory.rate_hz,
-                        area_mapping: sensory.cortical_mappings.clone(),
+                        area_mapping,
                     };
                     
                     let register_start = std::time::Instant::now();

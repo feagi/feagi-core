@@ -61,7 +61,9 @@ fn genome_to_json_value(genome: &RuntimeGenome) -> EvoResult<Value> {
             area_data.insert(key.clone(), value.clone());
         }
         
-        blueprint.insert(cortical_id.clone(), Value::Object(area_data));
+        // Use base64 encoding for cortical_id (new format)
+        let cortical_id_base64 = cortical_id.as_base_64();
+        blueprint.insert(cortical_id_base64, Value::Object(area_data));
     }
     
     // Build brain_regions section

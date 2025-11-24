@@ -144,19 +144,20 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
     }
     
     for (cortical_id, area) in &mut genome.cortical_areas {
+        let cortical_id_display = cortical_id.to_string();
         // Fix zero dimensions
         if area.dimensions.width == 0 {
-            info!("🔧 AUTO-FIX: Cortical area '{}' width 0 → 1", cortical_id);
+            info!("🔧 AUTO-FIX: Cortical area '{}' width 0 → 1", cortical_id_display);
             area.dimensions.width = 1;
             fixes_applied += 1;
         }
         if area.dimensions.height == 0 {
-            info!("🔧 AUTO-FIX: Cortical area '{}' height 0 → 1", cortical_id);
+            info!("🔧 AUTO-FIX: Cortical area '{}' height 0 → 1", cortical_id_display);
             area.dimensions.height = 1;
             fixes_applied += 1;
         }
         if area.dimensions.depth == 0 {
-            info!("🔧 AUTO-FIX: Cortical area '{}' depth 0 → 1", cortical_id);
+            info!("🔧 AUTO-FIX: Cortical area '{}' depth 0 → 1", cortical_id_display);
             area.dimensions.depth = 1;
             fixes_applied += 1;
         }
@@ -164,7 +165,7 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
         // Fix zero per_voxel_neuron_cnt
         if let Some(per_voxel_value) = area.properties.get_mut("per_voxel_neuron_cnt") {
             if let Some(0) = per_voxel_value.as_i64() {
-                info!("🔧 AUTO-FIX: Cortical area '{}' per_voxel_neuron_cnt 0 → 1", cortical_id);
+                info!("🔧 AUTO-FIX: Cortical area '{}' per_voxel_neuron_cnt 0 → 1", cortical_id_display);
                 *per_voxel_value = serde_json::Value::from(1);
                 fixes_applied += 1;
             }
@@ -204,19 +205,15 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
     }
     
     for (cortical_id, area) in &genome.cortical_areas {
-        // Validate cortical ID format (should be 6 characters)
-        if cortical_id.len() != 6 {
-            result.add_error(format!(
-                "Cortical ID '{}' has invalid length {} (expected 6 characters)",
-                cortical_id, cortical_id.len()
-            ));
-        }
+        // CorticalID is always valid (8 bytes), no need to check format
+        // Just validate that the string stored in area.cortical_id matches expectations
+        let cortical_id_display = cortical_id.to_string();
         
         // Validate dimensions - AUTO-FIX zeros to 1
         if area.dimensions.width == 0 || area.dimensions.height == 0 || area.dimensions.depth == 0 {
             result.add_warning(format!(
                 "AUTO-FIX: Cortical area '{}' has zero dimension(s): {}x{}x{} - will be corrected to minimum (1,1,1)",
-                cortical_id, area.dimensions.width, area.dimensions.height, area.dimensions.depth
+                cortical_id_display, area.dimensions.width, area.dimensions.height, area.dimensions.depth
             ));
             // Note: Auto-fix happens in auto_fix_genome() - this just detects the issue
         }
@@ -226,7 +223,7 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
             if per_voxel == 0 {
                 result.add_warning(format!(
                     "AUTO-FIX: Cortical area '{}' has per_voxel_neuron_cnt=0 - will be corrected to 1",
-                    cortical_id
+                    cortical_id_display
                 ));
             }
         }
@@ -236,7 +233,7 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
         if total_voxels > 1_000_000 {
             result.add_warning(format!(
                 "Cortical area '{}' has very large dimensions: {} total voxels",
-                cortical_id, total_voxels
+                cortical_id_display, total_voxels
             ));
         }
         
@@ -244,7 +241,7 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
         if area.name.is_empty() {
             result.add_warning(format!(
                 "Cortical area '{}' has empty name",
-                cortical_id
+                cortical_id_display
             ));
         }
     }
@@ -410,13 +407,21 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
     
     // Check if cortical areas reference morphologies in their properties
     for (cortical_id, area) in &genome.cortical_areas {
+        let cortical_id_display = cortical_id.to_string();
         if let Some(Value::Object(dstmap)) = area.properties.get("dstmap") {
             for (dest_area, rules) in dstmap {
-                // Check if destination area exists
-                if !genome.cortical_areas.contains_key(dest_area) {
+                // Check if destination area exists (convert string to CorticalID)
+                if let Ok(dest_cortical_id) = crate::genome::parser::string_to_cortical_id(&dest_area) {
+                    if !genome.cortical_areas.contains_key(&dest_cortical_id) {
+                        result.add_error(format!(
+                            "Cortical area '{}' references non-existent destination area '{}' in dstmap",
+                            cortical_id_display, dest_area
+                        ));
+                    }
+                } else {
                     result.add_error(format!(
-                        "Cortical area '{}' references non-existent destination area '{}' in dstmap",
-                        cortical_id, dest_area
+                        "Cortical area '{}' has invalid destination area ID '{}' in dstmap",
+                        cortical_id_display, dest_area
                     ));
                 }
                 
@@ -428,7 +433,7 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
                                 if !morphology_ids.contains(morph_id) {
                                     result.add_error(format!(
                                         "Cortical area '{}' references undefined morphology '{}' in dstmap rule",
-                                        cortical_id, morph_id
+                                        cortical_id_display, morph_id
                                     ));
                                 }
                             }
@@ -442,11 +447,19 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
     // Validate brain region references
     for (region_id, region) in &genome.brain_regions {
         // Check if cortical areas in region exist
-        for cortical_id in &region.cortical_areas {
-            if !genome.cortical_areas.contains_key(cortical_id) {
+        for cortical_id_str in &region.cortical_areas {
+            // Convert string to CorticalID for lookup
+            if let Ok(cortical_id) = crate::genome::parser::string_to_cortical_id(cortical_id_str) {
+                if !genome.cortical_areas.contains_key(&cortical_id) {
+                    result.add_error(format!(
+                        "Brain region '{}' references non-existent cortical area '{}'",
+                        region_id, cortical_id_str
+                    ));
+                }
+            } else {
                 result.add_error(format!(
-                    "Brain region '{}' references non-existent cortical area '{}'",
-                    region_id, cortical_id
+                    "Brain region '{}' has invalid cortical area ID '{}'",
+                    region_id, cortical_id_str
                 ));
             }
         }
@@ -524,16 +537,18 @@ mod tests {
             stats: GenomeStats::default(),
         };
         
-        // Add a valid cortical area
+        // Add a valid cortical area (use _power which is a valid core ID)
         let area = feagi_types::CorticalArea::new(
-            "test01".to_string(),
+            "_power".to_string(),
             0,
             "Test Area".to_string(),
             feagi_types::Dimensions::new(10, 10, 10),
             (0, 0, 0),
             feagi_types::AreaType::Custom,
         ).expect("Failed to create cortical area");
-        genome.cortical_areas.insert("test01".to_string(), area);
+        
+        let test_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+        genome.cortical_areas.insert(test_id, area);
         
         let result = validate_genome(&genome);
         
@@ -583,8 +598,8 @@ mod tests {
         
         let fixes = auto_fix_genome(&mut genome);
         assert!(fixes > 0, "Should apply at least one fix");
-        assert_eq!(genome.physiology.quantization_precision, "fp32", 
-                   "Should default to fp32");
+        assert_eq!(genome.physiology.quantization_precision, "int8", 
+                   "Should default to int8");
         
         // Test 2: Non-canonical (i8 → int8)
         genome.physiology.quantization_precision = "i8".to_string();
@@ -595,8 +610,8 @@ mod tests {
         // Test 3: Invalid → default
         genome.physiology.quantization_precision = "invalid".to_string();
         let _fixes = auto_fix_genome(&mut genome);
-        assert_eq!(genome.physiology.quantization_precision, "fp32",
-                   "Invalid should default to fp32");
+        assert_eq!(genome.physiology.quantization_precision, "int8",
+                   "Invalid should default to int8");
     }
     
     fn create_minimal_genome() -> RuntimeGenome {

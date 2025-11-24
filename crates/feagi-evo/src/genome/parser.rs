@@ -44,6 +44,7 @@ use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
 use feagi_types::{BrainRegion, CorticalArea, AreaType, RegionType, Dimensions};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]
@@ -141,6 +142,36 @@ pub struct RawBrainRegion {
     pub signature: Option<String>,
 }
 
+/// Convert a string cortical_id to CorticalID
+/// Handles both old 6-char format and new base64 format
+pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
+    // Try base64 first (new format)
+    if let Ok(cortical_id) = CorticalID::try_from_base_64(id_str) {
+        return Ok(cortical_id);
+    }
+    
+    // Fall back to ASCII (old 6-char format → pad to 8 bytes)
+    if id_str.len() == 6 {
+        let mut bytes = [b' '; 8];  // Pad with spaces
+        bytes[..6].copy_from_slice(id_str.as_bytes());
+        
+        CorticalID::try_from_bytes(&bytes)
+            .map_err(|e| EvoError::InvalidArea(format!("Failed to convert cortical_id '{}': {}", id_str, e)))
+    } else if id_str.len() == 8 {
+        // Already 8 bytes - convert directly
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(id_str.as_bytes());
+        
+        CorticalID::try_from_bytes(&bytes)
+            .map_err(|e| EvoError::InvalidArea(format!("Failed to convert cortical_id '{}': {}", id_str, e)))
+    } else {
+        Err(EvoError::InvalidArea(format!(
+            "Invalid cortical_id length: '{}' (expected 6 or 8 ASCII chars, or base64)",
+            id_str
+        )))
+    }
+}
+
 /// Genome parser
 pub struct GenomeParser;
 
@@ -198,22 +229,32 @@ impl GenomeParser {
     ) -> EvoResult<Vec<CorticalArea>> {
         let mut areas = Vec::with_capacity(blueprint.len());
         
-        for (cortical_id, raw_area) in blueprint.iter() {
-            // Skip invalid IDs
-            if cortical_id.is_empty() || cortical_id.len() != 6 {
-                warn!(target: "feagi-evo","Skipping invalid cortical_id: {}", cortical_id);
+        for (cortical_id_str, raw_area) in blueprint.iter() {
+            // Skip empty IDs
+            if cortical_id_str.is_empty() {
+                warn!(target: "feagi-evo","Skipping empty cortical_id");
                 continue;
             }
             
+            // Convert string cortical_id to CorticalID (handles 6-char legacy and base64)
+            let _cortical_id = match string_to_cortical_id(cortical_id_str) {
+                Ok(id) => id,
+                Err(e) => {
+                    warn!(target: "feagi-evo","Skipping invalid cortical_id '{}': {}", cortical_id_str, e);
+                    continue;
+                }
+            };
+            
             // Extract required fields
+            // Note: CorticalArea still stores the original 6-char string for backward compatibility
             let name = raw_area.cortical_name.clone()
-                .unwrap_or_else(|| cortical_id.clone());
+                .unwrap_or_else(|| cortical_id_str.clone());
             
             let dimensions = if let Some(boundaries) = &raw_area.block_boundaries {
                 if boundaries.len() != 3 {
                     return Err(EvoError::InvalidArea(format!(
                         "Invalid block_boundaries for {}: expected 3 values, got {}",
-                        cortical_id, boundaries.len()
+                        cortical_id_str, boundaries.len()
                     )));
                 }
                 Dimensions::new(
@@ -223,7 +264,7 @@ impl GenomeParser {
                 )
             } else {
                 // Default to 1x1x1 if not specified (should not happen in valid genomes)
-                warn!(target: "feagi-evo","Cortical area {} missing block_boundaries, defaulting to 1x1x1", cortical_id);
+                warn!(target: "feagi-evo","Cortical area {} missing block_boundaries, defaulting to 1x1x1", cortical_id_str);
                 Dimensions::new(1, 1, 1)
             };
             
@@ -231,22 +272,22 @@ impl GenomeParser {
                 if coords.len() != 3 {
                     return Err(EvoError::InvalidArea(format!(
                         "Invalid relative_coordinate for {}: expected 3 values, got {}",
-                        cortical_id, coords.len()
+                        cortical_id_str, coords.len()
                     )));
                 }
                 (coords[0], coords[1], coords[2])
             } else {
                 // Default to origin if not specified
-                warn!(target: "feagi-evo","Cortical area {} missing relative_coordinate, defaulting to (0,0,0)", cortical_id);
+                warn!(target: "feagi-evo","Cortical area {} missing relative_coordinate, defaulting to (0,0,0)", cortical_id_str);
                 (0, 0, 0)
             };
             
             // Parse area type
             let area_type = Self::parse_area_type(raw_area.cortical_type.as_deref())?;
             
-            // Create cortical area
+            // Create cortical area (pass original string for now)
             let mut area = CorticalArea::new(
-                cortical_id.clone(),
+                cortical_id_str.clone(),
                 0, // cortical_idx will be assigned by ConnectomeManager
                 name,
                 dimensions,
@@ -425,7 +466,7 @@ mod tests {
         let json = r#"{
             "version": "2.1",
             "blueprint": {
-                "test01": {
+                "_power": {
                     "cortical_name": "Test Area",
                     "block_boundaries": [10, 10, 10],
                     "relative_coordinate": [0, 0, 0],
@@ -436,7 +477,7 @@ mod tests {
                 "root": {
                     "title": "Root",
                     "parent_region_id": null,
-                    "areas": ["test01"]
+                    "areas": ["_power"]
                 }
             }
         }"#;
@@ -445,7 +486,7 @@ mod tests {
         
         assert_eq!(parsed.version, "2.1");
         assert_eq!(parsed.cortical_areas.len(), 1);
-        assert_eq!(parsed.cortical_areas[0].cortical_id, "test01");
+        assert_eq!(parsed.cortical_areas[0].cortical_id, "_power");
         assert_eq!(parsed.cortical_areas[0].name, "Test Area");
         assert_eq!(parsed.brain_regions.len(), 1);
     }
@@ -455,12 +496,12 @@ mod tests {
         let json = r#"{
             "version": "2.1",
             "blueprint": {
-                "area01": {
+                "_power": {
                     "cortical_name": "Area 1",
                     "block_boundaries": [5, 5, 5],
                     "relative_coordinate": [0, 0, 0]
                 },
-                "area02": {
+                "_death": {
                     "cortical_name": "Area 2",
                     "block_boundaries": [10, 10, 10],
                     "relative_coordinate": [5, 0, 0]

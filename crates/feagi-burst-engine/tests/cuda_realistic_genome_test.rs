@@ -99,7 +99,9 @@ mod cuda_realistic_genome_tests {
         
         println!("   Creating synaptic connections:");
         
-        // _power → Area A
+        // _power → Area A (PSP UNIFORMITY ENABLED)
+        // With PSP uniformity: Each synapse gets full cortical area PSP value (not divided)
+        // Power area PSP = 5 → all synapses get PSP=5
         let power_psp = 5;
         for target_offset in 0..1000 {
             if idx >= synapse_count { break; }
@@ -107,13 +109,15 @@ mod cuda_realistic_genome_tests {
             synapse_array.source_neurons[idx] = power_start as u32;
             synapse_array.target_neurons[idx] = target as u32;
             synapse_array.weights[idx] = 10;
-            synapse_array.postsynaptic_potentials[idx] = power_psp;
+            synapse_array.postsynaptic_potentials[idx] = power_psp; // Full PSP value (uniformity)
             synapse_array.types[idx] = 0;
             idx += 1;
         }
-        println!("   _power → A: {} synapses (uniform PSP={})", 1000, power_psp);
+        println!("   _power → A: {} synapses (PSP uniformity: PSP={} per synapse)", 1000, power_psp);
         
-        // Area A → Area B
+        // Area A → Area B (PSP UNIFORMITY ENABLED)
+        // Area A PSP = 1 → all synapses get PSP=1
+        let area_a_psp = 1;
         for src_offset in 0..100 {
             let src = a_start + (src_offset * 2621) % area_a_neurons;
             for dst_offset in 0..100 {
@@ -122,25 +126,27 @@ mod cuda_realistic_genome_tests {
                 synapse_array.source_neurons[idx] = src as u32;
                 synapse_array.target_neurons[idx] = dst as u32;
                 synapse_array.weights[idx] = 10;
-                synapse_array.postsynaptic_potentials[idx] = 1;
+                synapse_array.postsynaptic_potentials[idx] = area_a_psp; // Full PSP value (uniformity)
                 synapse_array.types[idx] = 0;
                 idx += 1;
             }
         }
-        println!("   A → B: {} synapses (PSP=1)", 10000);
+        println!("   A → B: {} synapses (PSP uniformity: PSP={} per synapse)", 10000, area_a_psp);
         
-        // Area B → Area C
+        // Area B → Area C (PSP UNIFORMITY ENABLED)
+        // Area B PSP = 1 → all synapses get PSP=1
+        let area_b_psp = 1;
         for src_offset in 0..1000 {
             if idx >= synapse_count { break; }
             let src = b_start + (src_offset * 1048) % area_b_neurons;
             synapse_array.source_neurons[idx] = src as u32;
             synapse_array.target_neurons[idx] = c_start as u32;
             synapse_array.weights[idx] = 10;
-            synapse_array.postsynaptic_potentials[idx] = 1;
+            synapse_array.postsynaptic_potentials[idx] = area_b_psp; // Full PSP value (uniformity)
             synapse_array.types[idx] = 0;
             idx += 1;
         }
-        println!("   B → C: {} synapses (gauge summation)", 1000);
+        println!("   B → C: {} synapses (PSP uniformity: PSP={} per synapse)", 1000, area_b_psp);
         
         synapse_array.count = idx;
         println!("   Total synapses: {}", idx);

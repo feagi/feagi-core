@@ -91,7 +91,11 @@ impl AgentClient {
     /// This will:
     /// 1. Create ZMQ sockets
     /// 2. Register with FEAGI
-    /// 3. Start heartbeat service
+    /// 3. Start heartbeat service (ONLY after successful registration)
+    ///
+    /// IMPORTANT: Background threads are ONLY started AFTER successful registration.
+    /// This prevents thread interference with GUI event loops (e.g., MuJoCo, Godot).
+    /// If registration fails, NO threads are spawned.
     pub fn connect(&mut self) -> Result<()> {
         if self.registered {
             return Err(SdkError::AlreadyConnected);
@@ -102,7 +106,7 @@ impl AgentClient {
             self.config.registration_endpoint
         );
 
-        // Create sockets with retry
+        // Step 1: Create sockets with retry
         let mut socket_strategy = ReconnectionStrategy::new(
             self.config.retry_backoff_ms,
             self.config.registration_retries,
@@ -113,16 +117,20 @@ impl AgentClient {
             "Socket creation",
         )?;
 
-        // Register with FEAGI with retry
+        // Step 2: Register with FEAGI with retry
         let mut reg_strategy = ReconnectionStrategy::new(
             self.config.retry_backoff_ms,
             self.config.registration_retries,
         );
         retry_with_backoff(|| self.register(), &mut reg_strategy, "Registration")?;
 
-        // Start heartbeat service
+        // Step 3: Start heartbeat service (ONLY after successful registration)
+        // This is critical: threads are only spawned AFTER we know FEAGI is reachable
         if self.config.heartbeat_interval > 0.0 {
+            debug!("[CLIENT] Starting heartbeat service (post-registration)");
             self.start_heartbeat()?;
+        } else {
+            debug!("[CLIENT] Heartbeat disabled (interval = 0)");
         }
 
         info!(
@@ -357,7 +365,7 @@ impl AgentClient {
 
         // ARCHITECTURE COMPLIANCE: Use binary XYZP format, NOT JSON
         // This serializes data using feagi_data_structures for cross-platform compatibility
-        use feagi_data_structures::genomic::CorticalID;
+        use feagi_data_structures::genomic::cortical_area::CorticalID;
         use feagi_data_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
@@ -374,11 +382,11 @@ impl AgentClient {
         let cortical_area = &vision_cap.target_cortical_area;
 
         // Create CorticalID from area name
-        let mut bytes = [b' '; 6];
+        let mut bytes = [b' '; 8];
         let name_bytes = cortical_area.as_bytes();
-        let copy_len = name_bytes.len().min(6);
+        let copy_len = name_bytes.len().min(8);
         bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-        let cortical_id = CorticalID::from_bytes(&bytes).map_err(|e| {
+        let cortical_id = CorticalID::try_from_bytes(&bytes).map_err(|e| {
             SdkError::Other(format!("Invalid cortical ID '{}': {:?}", cortical_area, e))
         })?;
 
@@ -619,15 +627,26 @@ impl AgentClient {
 
 impl Drop for AgentClient {
     fn drop(&mut self) {
-        // Stop heartbeat
+        debug!("[CLIENT] Dropping AgentClient: {}", self.config.agent_id);
+        
+        // Step 1: Stop heartbeat service first (this stops background threads)
         if let Some(mut heartbeat) = self.heartbeat.take() {
+            debug!("[CLIENT] Stopping heartbeat service before cleanup");
             heartbeat.stop();
+            debug!("[CLIENT] Heartbeat service stopped");
         }
 
-        // Deregister from FEAGI
+        // Step 2: Deregister from FEAGI (after threads stopped)
         if self.registered {
-            let _ = self.deregister();
+            debug!("[CLIENT] Deregistering agent: {}", self.config.agent_id);
+            if let Err(e) = self.deregister() {
+                warn!("[CLIENT] Deregistration failed during drop: {}", e);
+                // Continue cleanup even if deregistration fails
+            }
         }
+        
+        // Step 3: Sockets will be dropped automatically
+        debug!("[CLIENT] AgentClient dropped cleanly: {}", self.config.agent_id);
     }
 }
 

@@ -19,6 +19,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use feagi_evo::RuntimeGenome;
 use feagi_types::{Precision, QuantizationSpec};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
 use tracing::{info, warn, debug};
@@ -227,9 +228,13 @@ impl Neuroembryogenesis {
             info!(target: "feagi-bdu","  📊 Genome has {} cortical areas to process", genome.cortical_areas.len());
             
             // Collect all cortical area IDs
-            let all_cortical_ids: Vec<String> = genome.cortical_areas.keys().cloned().collect();
+            let all_cortical_ids: Vec<CorticalID> = genome.cortical_areas.keys().cloned().collect();
             info!(target: "feagi-bdu","  📊 Collected {} cortical area IDs: {:?}", all_cortical_ids.len(), 
-                  if all_cortical_ids.len() <= 5 { format!("{:?}", all_cortical_ids) } else { format!("{:?}...", &all_cortical_ids[0..5]) });
+                  if all_cortical_ids.len() <= 5 { 
+                      format!("{:?}", all_cortical_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>()) 
+                  } else { 
+                      format!("{:?}...", all_cortical_ids[0..5].iter().map(|id| id.to_string()).collect::<Vec<_>>()) 
+                  });
             
             // Classify areas into inputs/outputs based on their AreaType
             let mut auto_inputs = Vec::new();
@@ -252,7 +257,9 @@ impl Neuroembryogenesis {
                 // 2. Check cortical_group property
                 // 3. Fallback to area_type
                 
-                let category = if area_id.starts_with("_") {
+                let area_id_str = area_id.to_string();
+                // Note: Core IDs are 8-byte padded and start with "___" (three underscores)
+                let category = if area_id_str.starts_with("___") {
                     "CORE"
                 } else {
                     match cortical_group.as_deref() {
@@ -276,7 +283,7 @@ impl Neuroembryogenesis {
                 // Log first few classifications
                 if ipu_areas.len() + opu_areas.len() + core_areas.len() + custom_memory_areas.len() < 5 {
                     info!(target: "feagi-bdu","    🔍 Area {}: category={}, group={:?}", 
-                          area_id, category, cortical_group);
+                          area_id_str, category, cortical_group);
                 }
                 
                 // Assign to appropriate list
@@ -318,13 +325,16 @@ impl Neuroembryogenesis {
                 &genome.cortical_areas,
             );
             
+            // Convert CorticalID to String for with_areas()
+            let root_area_strs: Vec<String> = root_area_ids.iter().map(|id| id.to_string()).collect();
+            
             let mut root_region = BrainRegion::new(
                 "root".to_string(),
                 "Root Brain Region".to_string(),
                 RegionType::Custom,
             )
             .expect("Failed to create root region")
-            .with_areas(root_area_ids.clone());
+            .with_areas(root_area_strs);
             
             // Store inputs/outputs based on connection analysis
             if !root_inputs.is_empty() {
@@ -341,9 +351,12 @@ impl Neuroembryogenesis {
             // Step 2: Create subregion for CUSTOM/MEMORY areas if any exist
             let mut subregion_id = None;
             if !custom_memory_areas.is_empty() {
-                // Generate deterministic subregion ID using hash (matching Python)
-                custom_memory_areas.sort(); // Sort for deterministic hash
-                let combined = custom_memory_areas.join("|");
+                // Convert CorticalID to String for sorting and hashing
+                let mut custom_memory_strs: Vec<String> = custom_memory_areas.iter()
+                    .map(|id| id.to_string())
+                    .collect();
+                custom_memory_strs.sort(); // Sort for deterministic hash
+                let combined = custom_memory_strs.join("|");
                 
                 // Use a simple hash (matching Python's sha1[:8])
                 use std::collections::hash_map::DefaultHasher;
@@ -362,14 +375,14 @@ impl Neuroembryogenesis {
                     &genome.cortical_areas,
                 );
                 
-                // Create subregion
+                // Create subregion (with_areas expects Vec<String>)
                 let mut subregion = BrainRegion::new(
                     region_id.clone(),
                     "Autogen Region".to_string(),
                     RegionType::Custom,
                 )
                 .expect("Failed to create subregion")
-                .with_areas(custom_memory_areas.clone());
+                .with_areas(custom_memory_strs.clone());
                 
                 // Store inputs/outputs for subregion
                 if !subregion_inputs.is_empty() {
@@ -494,13 +507,15 @@ impl Neuroembryogenesis {
                 .unwrap_or(1);
             
             // 🔍 DIAGNOSTIC: Log core area properties
-            if cortical_id == "_power" || cortical_id == "_death" {
+            let cortical_id_str = cortical_id.to_string();
+            // Note: Core IDs are 8-byte padded: "___power" and "___death"
+            if cortical_id_str == "___power" || cortical_id_str == "___death" {
                 info!(target: "feagi-bdu","  🔍 [CORE-AREA] {} - dimensions: {:?}, per_voxel: {}", 
-                    cortical_id, area.dimensions, per_voxel_count);
+                    cortical_id_str, area.dimensions, per_voxel_count);
             }
             
             if per_voxel_count == 0 {
-                warn!(target: "feagi-bdu","  ⚠️ Skipping area {} - per_voxel_neuron_cnt is 0 (will have NO neurons!)", cortical_id);
+                warn!(target: "feagi-bdu","  ⚠️ Skipping area {} - per_voxel_neuron_cnt is 0 (will have NO neurons!)", cortical_id_str);
                 continue;
             }
             
@@ -509,18 +524,18 @@ impl Neuroembryogenesis {
             let neurons_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
-                manager.create_neurons_for_area(cortical_id)
+                manager.create_neurons_for_area(&cortical_id_str)
             }; // Lock released immediately
             
             match neurons_created {
                 Ok(count) => {
                     total_neurons_created += count as usize;
-                    info!(target: "feagi-bdu","  Created {} neurons for area {}", count, cortical_id);
+                    info!(target: "feagi-bdu","  Created {} neurons for area {}", count, cortical_id_str);
                 }
                 Err(e) => {
                     // If NPU not connected, calculate expected count
                     warn!(target: "feagi-bdu","  Failed to create neurons for {}: {} (NPU may not be connected)", 
-                        cortical_id, e);
+                        cortical_id_str, e);
                     let total_voxels = area.dimensions.width * area.dimensions.height * area.dimensions.depth;
                     let expected = total_voxels * per_voxel_count as usize;
                     total_neurons_created += expected;
@@ -581,21 +596,22 @@ impl Neuroembryogenesis {
             
             // Call ConnectomeManager to apply cortical mappings (delegates to NPU)
             // CRITICAL: Minimize lock scope - only hold lock during synapse creation
+            let src_cortical_id_str = src_cortical_id.to_string();
             let synapses_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
-                manager.apply_cortical_mapping(src_cortical_id)
+                manager.apply_cortical_mapping(&src_cortical_id_str)
             }; // Lock released immediately
             
             match synapses_created {
                 Ok(count) => {
                     total_synapses_created += count as usize;
-                    info!(target: "feagi-bdu","  Created {} synapses for area {}", count, src_cortical_id);
+                    info!(target: "feagi-bdu","  Created {} synapses for area {}", count, src_cortical_id_str);
                 }
                 Err(e) => {
                     // If NPU not connected, estimate count
                     warn!(target: "feagi-bdu","  Failed to create synapses for {}: {} (NPU may not be connected)", 
-                        src_cortical_id, e);
+                        src_cortical_id_str, e);
                     let estimated = estimate_synapses_for_area(src_area, genome);
                     total_synapses_created += estimated;
                 }
@@ -649,7 +665,12 @@ fn estimate_synapses_for_area(
     let mut total = 0;
     
     for (dst_id, rules) in dstmap {
-        let dst_area = match genome.cortical_areas.get(dst_id) {
+        // Convert string dst_id to CorticalID for lookup
+        let dst_cortical_id = match feagi_evo::string_to_cortical_id(dst_id) {
+            Ok(id) => id,
+            Err(_) => continue,
+        };
+        let dst_area = match genome.cortical_areas.get(&dst_cortical_id) {
             Some(area) => area,
             None => continue,
         };
@@ -705,14 +726,14 @@ impl Neuroembryogenesis {
     /// - OUTPUT: Any area in the region that connects to an area OUTSIDE the region
     /// - INPUT: Any area in the region that receives connection from OUTSIDE the region
     fn analyze_region_io(
-        region_area_ids: &[String],
-        all_cortical_areas: &std::collections::HashMap<String, feagi_types::CorticalArea>,
+        region_area_ids: &[CorticalID],
+        all_cortical_areas: &std::collections::HashMap<CorticalID, feagi_types::CorticalArea>,
     ) -> (Vec<String>, Vec<String>) {
         let area_set: std::collections::HashSet<_> = region_area_ids.iter().cloned().collect();
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         
-        // Helper to extract destination area IDs from cortical_mapping_dst
+        // Helper to extract destination area IDs from cortical_mapping_dst (as strings)
         let extract_destinations = |area: &feagi_types::CorticalArea| -> Vec<String> {
             area.properties.get("cortical_mapping_dst")
                 .and_then(|v| v.as_object())
@@ -724,12 +745,14 @@ impl Neuroembryogenesis {
         for area_id in region_area_ids {
             if let Some(area) = all_cortical_areas.get(area_id) {
                 let destinations = extract_destinations(area);
+                // Convert destination strings to CorticalID for comparison
                 let external_destinations: Vec<_> = destinations.iter()
-                    .filter(|dest| !area_set.contains(*dest))
+                    .filter_map(|dest| feagi_evo::string_to_cortical_id(dest).ok())
+                    .filter(|dest_id| !area_set.contains(dest_id))
                     .collect();
                 
                 if !external_destinations.is_empty() {
-                    outputs.push(area_id.clone());
+                    outputs.push(area_id.to_string());
                 }
             }
         }
@@ -742,9 +765,14 @@ impl Neuroembryogenesis {
             }
             
             let destinations = extract_destinations(source_area);
-            for dest in destinations {
-                if area_set.contains(&dest) && !inputs.contains(&dest) {
-                    inputs.push(dest);
+            for dest_str in destinations {
+                if let Ok(dest_id) = feagi_evo::string_to_cortical_id(&dest_str) {
+                    if area_set.contains(&dest_id) {
+                        let dest_string = dest_id.to_string();
+                        if !inputs.contains(&dest_string) {
+                            inputs.push(dest_string);
+                        }
+                    }
                 }
             }
         }

@@ -57,7 +57,7 @@ impl std::fmt::Display for AreaType {
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalArea {
-    /// Unique 6-character identifier
+    /// Unique identifier (6-char legacy, 8-char padded, or base64-encoded)
     pub cortical_id: String,
 
     /// Integer index assigned by ConnectomeManager
@@ -197,7 +197,7 @@ impl CorticalArea {
     ///
     /// # Arguments
     ///
-    /// * `cortical_id` - Unique 6-character identifier
+    /// * `cortical_id` - Unique identifier (6-char legacy, 8-char padded, or 11-12 char base64)
     /// * `cortical_idx` - Integer index for fast lookups
     /// * `name` - Human-readable name
     /// * `dimensions` - 3D dimensions (width, height, depth)
@@ -207,7 +207,7 @@ impl CorticalArea {
     /// # Errors
     ///
     /// Returns error if:
-    /// - cortical_id is not exactly 6 characters
+    /// - cortical_id is empty or too long (>16 chars)
     /// - dimensions are zero
     /// - name is empty
     ///
@@ -219,11 +219,11 @@ impl CorticalArea {
         position: (i32, i32, i32),
         area_type: AreaType,
     ) -> Result<Self> {
-        // Validate cortical_id (must be 6 characters)
-        if cortical_id.len() != 6 {
+        // Validate cortical_id (accept 6-char legacy, 8-char, or base64)
+        if cortical_id.is_empty() || cortical_id.len() > 16 {
             return Err(FeagiError::InvalidArea(format!(
-                "cortical_id must be exactly 6 characters, got '{}'",
-                cortical_id
+                "cortical_id must be between 1-16 characters, got {} chars: '{}'",
+                cortical_id.len(), cortical_id
             )));
         }
 

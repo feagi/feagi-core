@@ -34,6 +34,7 @@ use crate::neural_dynamics::*;
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
 use feagi_types::*;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use tracing::{debug, info, warn, error};
 
 /// Burst processing result
@@ -885,18 +886,19 @@ impl<T: NeuralValue> RustNPU<T> {
         None
     }
 
-    /// Inject sensory neurons using cortical area name and XYZ coordinates
+    /// Inject sensory neurons using cortical area CorticalID and XYZ coordinates
     /// This is the high-level API for sensory injection from agents
-    pub fn inject_sensory_xyzp(
+    /// OPTIMIZATION: Takes CorticalID directly to avoid string conversion in hot path
+    pub fn inject_sensory_xyzp_by_id(
         &mut self,
-        cortical_name: &str,
+        cortical_id: &CorticalID,
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> usize {
-        // Find cortical area ID
-        let cortical_area = match self.get_cortical_area_id(cortical_name) {
+        // Convert CorticalID to cortical_area index
+        let cortical_area = match self.get_cortical_area_id(&cortical_id.to_string()) {
             Some(id) => id,
             None => {
-                error!("[NPU] ❌ Unknown cortical area: '{}'", cortical_name);
+                error!("[NPU] ❌ Unknown cortical area: '{}'", cortical_id);
                 error!(
                     "[NPU] ❌ Available cortical areas: {:?}",
                     self.area_id_to_name.read().unwrap().values().collect::<Vec<_>>()
@@ -925,6 +927,41 @@ impl<T: NeuralValue> RustNPU<T> {
             self.inject_sensory_with_potentials(&neuron_potential_pairs);
         }
 
+        found_count
+    }
+    
+    /// Inject sensory neurons using cortical area name (backward compatibility)
+    /// For hot paths, use inject_sensory_xyzp_by_id() to avoid string allocations
+    pub fn inject_sensory_xyzp(
+        &mut self,
+        cortical_name: &str,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> usize {
+        // Find cortical area ID
+        let cortical_area = match self.get_cortical_area_id(cortical_name) {
+            Some(id) => id,
+            None => {
+                error!("[NPU] ❌ Unknown cortical area: '{}'", cortical_name);
+                error!(
+                    "[NPU] ❌ Available cortical areas: {:?}",
+                    self.area_id_to_name.read().unwrap().values().collect::<Vec<_>>()
+                );
+                error!("[NPU] ❌ Total registered: {}", self.area_id_to_name.read().unwrap().len());
+                return 0;
+            }
+        };
+        
+        // Same logic as inject_sensory_xyzp_by_id but converted from string
+        let coords: Vec<(u32, u32, u32)> = xyzp_data.iter().map(|(x, y, z, _p)| (*x, *y, *z)).collect();
+        let neuron_ids = self.neuron_array.read().unwrap().batch_coordinate_lookup(cortical_area, &coords);
+        let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
+        for (neuron_id, (_x, _y, _z, potential)) in neuron_ids.iter().zip(xyzp_data.iter()) {
+            neuron_potential_pairs.push((*neuron_id, *potential));
+        }
+        let found_count = neuron_potential_pairs.len();
+        if !neuron_potential_pairs.is_empty() {
+            self.inject_sensory_with_potentials(&neuron_potential_pairs);
+        }
         found_count
     }
 
@@ -3130,7 +3167,16 @@ impl DynamicNPU {
         dispatch!(self, get_neuron_state(neuron_id))
     }
     
-    /// Inject sensory XYZP data (for PNS)
+    /// Inject sensory XYZP data by CorticalID (for PNS - hot path optimized)
+    pub fn inject_sensory_xyzp_by_id(
+        &mut self,
+        cortical_id: &CorticalID,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> usize {
+        dispatch_mut!(self, inject_sensory_xyzp_by_id(cortical_id, xyzp_data))
+    }
+    
+    /// Inject sensory XYZP data by name (for backward compatibility)
     pub fn inject_sensory_xyzp(
         &mut self,
         cortical_area: &str,

@@ -504,7 +504,7 @@ fn encode_fire_data_to_xyzp(
     fire_data: RawFireQueueSnapshot,
     cortical_id_filter: Option<&ahash::AHashSet<String>>,
 ) -> Result<Vec<u8>, String> {
-    use feagi_data_structures::genomic::CorticalID;
+    use feagi_data_structures::genomic::cortical_area::CorticalID;
     use feagi_data_structures::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
     };
@@ -540,12 +540,12 @@ fn encode_fire_data_to_xyzp(
         
         // Create CorticalID from area name (already in RawFireQueueData)
         let cortical_id = {
-            let mut bytes = [b' '; 6];
+            let mut bytes = [b' '; 8];
             let name_bytes = area_data.cortical_area_name.as_bytes();
-            let copy_len = name_bytes.len().min(6);
+            let copy_len = name_bytes.len().min(8);
             bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
 
-            match CorticalID::from_bytes(&bytes) {
+            match CorticalID::try_from_bytes(&bytes) {
                 Ok(id) => id,
                 Err(e) => {
                     error!("[ENCODE-XYZP] ❌ Failed to create CorticalID for '{}': {:?}", area_data.cortical_area_name, e);

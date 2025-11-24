@@ -131,9 +131,9 @@ mod tests {
         let mut cortical_areas = HashMap::new();
         let mut brain_regions = HashMap::new();
         
-        // Create a test cortical area
+        // Create a test cortical area (use valid core ID)
         let area = CorticalArea::new(
-            "test01".to_string(),
+            "_power".to_string(),
             0,
             "Test Area".to_string(),
             Dimensions::new(10, 10, 10),
@@ -141,7 +141,7 @@ mod tests {
             AreaType::Sensory,
         ).unwrap();
         
-        cortical_areas.insert("test01".to_string(), area);
+        cortical_areas.insert("_power".to_string(), area);
         
         // Create a test brain region
         let region = BrainRegion::new(
@@ -174,17 +174,17 @@ mod tests {
     fn test_roundtrip() {
         use crate::genome::GenomeParser;
         
-        // Create test data
+        // Create test data (use valid core ID)
         let mut cortical_areas = HashMap::new();
         let area = CorticalArea::new(
-            "test01".to_string(),
+            "_power".to_string(),
             0,
             "Test Area".to_string(),
             Dimensions::new(10, 10, 10),
             (5, 5, 5),
             AreaType::Motor,
         ).unwrap();
-        cortical_areas.insert("test01".to_string(), area);
+        cortical_areas.insert("_power".to_string(), area);
         
         let mut brain_regions = HashMap::new();
         let region = BrainRegion::new(
@@ -212,7 +212,7 @@ mod tests {
         assert_eq!(parsed.brain_regions.len(), 1);
         
         let area = &parsed.cortical_areas[0];
-        assert_eq!(area.cortical_id, "test01");
+        assert_eq!(area.cortical_id, "_power");
         assert_eq!(area.name, "Test Area");
         assert_eq!(area.dimensions.width, 10);
         assert_eq!(area.position, (5, 5, 5));

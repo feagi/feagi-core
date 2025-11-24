@@ -270,11 +270,13 @@ impl ConnectomeManager {
         }
         
         // CRITICAL: Reserve cortical_idx 0 for _death, 1 for _power
-        if area.cortical_id == "_death" {
-            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=0 to _death area");
+        // Note: Core IDs are 8-byte padded: "___death" and "___power"
+        let cortical_id_str = area.cortical_id.to_string();
+        if cortical_id_str == "___death" {
+            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=0 to ___death area");
             area.cortical_idx = 0;
-        } else if area.cortical_id == "_power" {
-            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=1 to _power area");
+        } else if cortical_id_str == "___power" {
+            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=1 to ___power area");
             area.cortical_idx = 1;
         } else {
             // Regular areas: assign cortical_idx if not set (will be ≥2 due to next_cortical_idx=2 initialization)

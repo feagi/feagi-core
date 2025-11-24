@@ -39,10 +39,12 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         timestamp: raw_value["timestamp"].as_f64().unwrap_or(0.0),
     };
     
-    // Convert cortical areas to HashMap
+    // Convert cortical areas to HashMap with CorticalID keys
     let mut cortical_areas = HashMap::new();
     for area in parsed.cortical_areas {
-        cortical_areas.insert(area.cortical_id.clone(), area);
+        // Convert cortical_id string to CorticalID
+        let cortical_id = crate::genome::parser::string_to_cortical_id(&area.cortical_id)?;
+        cortical_areas.insert(cortical_id, area);
     }
     
     // Convert brain regions to HashMap

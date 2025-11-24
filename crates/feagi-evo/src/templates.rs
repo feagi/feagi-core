@@ -124,9 +124,12 @@ pub fn create_genome_with_core_areas(
 ) -> RuntimeGenome {
     let mut genome = create_minimal_genome(genome_id, genome_title);
     
-    // Add core areas
-    genome.cortical_areas.insert("_death".to_string(), create_death_area());
-    genome.cortical_areas.insert("_power".to_string(), create_power_area());
+    // Add core areas (convert 6-char strings to CorticalID)
+    let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid cortical ID");
+    let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical ID");
+    
+    genome.cortical_areas.insert(death_id, create_death_area());
+    genome.cortical_areas.insert(power_id, create_power_area());
     
     genome
 }
@@ -162,17 +165,21 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
     let mut areas_added = 0;
     let mut morphologies_added = 0;
     
+    // Convert core area IDs
+    let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid cortical ID");
+    let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical ID");
+    
     // 1. Ensure core cortical areas exist
-    if !genome.cortical_areas.contains_key("_death") {
+    if !genome.cortical_areas.contains_key(&death_id) {
         let death_area = create_death_area();
-        genome.cortical_areas.insert("_death".to_string(), death_area);
+        genome.cortical_areas.insert(death_id, death_area);
         areas_added += 1;
         tracing::info!("Added missing core area: _death (cortical_idx=0)");
     }
     
-    if !genome.cortical_areas.contains_key("_power") {
+    if !genome.cortical_areas.contains_key(&power_id) {
         let power_area = create_power_area();
-        genome.cortical_areas.insert("_power".to_string(), power_area);
+        genome.cortical_areas.insert(power_id, power_area);
         areas_added += 1;
         tracing::info!("Added missing core area: _power (cortical_idx=1)");
     }
@@ -444,11 +451,14 @@ mod tests {
         
         assert_eq!(genome.metadata.genome_id, "test_genome");
         assert_eq!(genome.cortical_areas.len(), 2);
-        assert!(genome.cortical_areas.contains_key("_death"));
-        assert!(genome.cortical_areas.contains_key("_power"));
+        
+        let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
+        let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+        assert!(genome.cortical_areas.contains_key(&death_id));
+        assert!(genome.cortical_areas.contains_key(&power_id));
         
         // Verify _power has correct properties
-        let power = genome.cortical_areas.get("_power").unwrap();
+        let power = genome.cortical_areas.get(&power_id).unwrap();
         assert_eq!(power.cortical_id, "_power");
         assert_eq!(power.cortical_idx, 1);
         assert_eq!(power.dimensions.width, 1);
@@ -498,7 +508,8 @@ mod tests {
         let genome = load_essential_genome().expect("Failed to load essential genome");
         assert!(genome.cortical_areas.len() > 0);
         // Essential genome should have _power
-        assert!(genome.cortical_areas.contains_key("_power"));
+        let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+        assert!(genome.cortical_areas.contains_key(&power_id));
     }
     
     #[test]
@@ -516,12 +527,15 @@ mod tests {
         
         // Should have added _death and _power
         assert_eq!(areas_added, 2);
-        assert!(genome.cortical_areas.contains_key("_death"));
-        assert!(genome.cortical_areas.contains_key("_power"));
+        
+        let death_id = crate::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
+        let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+        assert!(genome.cortical_areas.contains_key(&death_id));
+        assert!(genome.cortical_areas.contains_key(&power_id));
         
         // Verify cortical_idx assignments
-        assert_eq!(genome.cortical_areas.get("_death").unwrap().cortical_idx, 0);
-        assert_eq!(genome.cortical_areas.get("_power").unwrap().cortical_idx, 1);
+        assert_eq!(genome.cortical_areas.get(&death_id).unwrap().cortical_idx, 0);
+        assert_eq!(genome.cortical_areas.get(&power_id).unwrap().cortical_idx, 1);
     }
     
     #[test]

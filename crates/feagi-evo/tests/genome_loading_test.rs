@@ -6,6 +6,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use feagi_evo::load_genome_from_file;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 #[test]
 fn test_load_barebones_genome() {
@@ -23,8 +24,11 @@ fn test_load_barebones_genome() {
     // Verify cortical areas (should have _death and _power)
     assert!(genome.cortical_areas.len() >= 2, 
         "Expected at least 2 cortical areas, got {}", genome.cortical_areas.len());
-    assert!(genome.cortical_areas.contains_key("_death"), "Missing _death cortical area");
-    assert!(genome.cortical_areas.contains_key("_power"), "Missing _power cortical area");
+    
+    let death_id = feagi_evo::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
+    let power_id = feagi_evo::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+    assert!(genome.cortical_areas.contains_key(&death_id), "Missing _death cortical area");
+    assert!(genome.cortical_areas.contains_key(&power_id), "Missing _power cortical area");
     
     // Verify morphologies
     assert!(!genome.morphologies.count() == 0, "Should have morphologies");

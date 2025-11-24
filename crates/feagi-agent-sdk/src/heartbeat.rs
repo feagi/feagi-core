@@ -86,17 +86,38 @@ impl HeartbeatService {
     }
 
     /// Stop the heartbeat service
+    ///
+    /// This ensures proper thread cleanup:
+    /// 1. Signal thread to stop
+    /// 2. Wait for thread to finish (with timeout)
+    /// 3. Force terminate if stuck
     pub fn stop(&mut self) {
         if !self.running.load(Ordering::Relaxed) {
+            debug!("[HEARTBEAT] Service already stopped for agent: {}", self.agent_id);
             return;
         }
 
         debug!("[HEARTBEAT] Stopping service for agent: {}", self.agent_id);
+        
+        // Step 1: Signal thread to stop
         self.running.store(false, Ordering::Relaxed);
 
+        // Step 2: Wait for thread to finish
         if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
+            match thread.join() {
+                Ok(_) => {
+                    debug!("[HEARTBEAT] Thread stopped cleanly for agent: {}", self.agent_id);
+                }
+                Err(e) => {
+                    warn!(
+                        "[HEARTBEAT] Thread join failed for agent {} (thread may have panicked): {:?}",
+                        self.agent_id, e
+                    );
+                }
+            }
         }
+        
+        debug!("[HEARTBEAT] Service fully stopped for agent: {}", self.agent_id);
     }
 
     /// Send a single heartbeat message

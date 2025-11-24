@@ -18,6 +18,7 @@ use feagi_evo::{
     load_genome_from_json,
     validate_genome,
 };
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 #[test]
 fn test_complete_genome_workflow() {
@@ -27,16 +28,18 @@ fn test_complete_genome_workflow() {
         "End-to-End Test Genome".to_string(),
     );
     
-    // Add a cortical area
+    // Add a cortical area (use valid core ID)
     let area = feagi_types::CorticalArea::new(
-        "test01".to_string(),
+        "_power".to_string(),
         0,
         "Test Area".to_string(),
         feagi_types::Dimensions::new(10, 10, 10),
         (0, 0, 0),
         feagi_types::AreaType::Custom,
     ).expect("Failed to create cortical area");
-    genome.cortical_areas.insert("test01".to_string(), area);
+    
+    let test_id = feagi_evo::string_to_cortical_id("_power").expect("Valid ID");
+    genome.cortical_areas.insert(test_id, area);
     
     // 2. Validate genome
     let validation = validate_genome(&genome);
@@ -45,7 +48,7 @@ fn test_complete_genome_workflow() {
     // 3. Save to JSON
     let json_str = save_genome_to_json(&genome).expect("Failed to save genome");
     assert!(json_str.contains("test_workflow_genome"));
-    assert!(json_str.contains("test01"));
+    // Note: saved as base64, not "_power" directly
     assert!(json_str.contains("block_to_block"));
     
     // 4. Load from JSON
@@ -58,7 +61,9 @@ fn test_complete_genome_workflow() {
     // 6. Verify data integrity
     assert_eq!(loaded_genome.metadata.genome_id, "test_workflow_genome");
     assert_eq!(loaded_genome.cortical_areas.len(), 1);
-    assert!(loaded_genome.cortical_areas.contains_key("test01"));
+    
+    let test_id = feagi_evo::string_to_cortical_id("_power").expect("Valid ID");
+    assert!(loaded_genome.cortical_areas.contains_key(&test_id));
     assert!(loaded_genome.morphologies.contains("block_to_block"));
     assert!(loaded_genome.morphologies.contains("projector"));
     assert_eq!(loaded_genome.metadata.version, "2.0");
@@ -100,14 +105,14 @@ fn test_flat_to_hierarchical_conversion() {
         "genome_title": "Flat Test Genome",
         "version": "2.0",
         "blueprint": {
-            "_____10c-test01-cx-__name-t": "Test Area",
-            "_____10c-test01-cx-___bbx-i": 10,
-            "_____10c-test01-cx-___bby-i": 10,
-            "_____10c-test01-cx-___bbz-i": 10,
-            "_____10c-test01-cx-rcordx-i": 0,
-            "_____10c-test01-cx-rcordy-i": 0,
-            "_____10c-test01-cx-rcordz-i": 0,
-            "_____10c-test01-cx-_group-t": "CUSTOM"
+            "_____10c-_power-cx-__name-t": "Test Area",
+            "_____10c-_power-cx-___bbx-i": 10,
+            "_____10c-_power-cx-___bby-i": 10,
+            "_____10c-_power-cx-___bbz-i": 10,
+            "_____10c-_power-cx-rcordx-i": 0,
+            "_____10c-_power-cx-rcordy-i": 0,
+            "_____10c-_power-cx-rcordz-i": 0,
+            "_____10c-_power-cx-_group-t": "CUSTOM"
         },
         "neuron_morphologies": {
             "block_to_block": {
@@ -128,9 +133,9 @@ fn test_flat_to_hierarchical_conversion() {
     // Verify conversion
     assert!(hierarchical.get("blueprint").is_some());
     let blueprint = hierarchical.get("blueprint").unwrap().as_object().unwrap();
-    assert!(blueprint.contains_key("test01"), "Blueprint should contain test01 area");
+    assert!(blueprint.contains_key("_power"), "Blueprint should contain _power area");
     
-    let area = blueprint.get("test01").unwrap().as_object().unwrap();
+    let area = blueprint.get("_power").unwrap().as_object().unwrap();
     assert_eq!(area.get("cortical_name").unwrap(), "Test Area");
     assert_eq!(area.get("cortical_type").unwrap(), "CUSTOM");
     

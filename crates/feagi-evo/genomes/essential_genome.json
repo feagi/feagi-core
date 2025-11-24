@@ -1545,7 +1545,8 @@
     "evolution_burst_count": 50,
     "ipu_idle_threshold": 1000,
     "plasticity_queue_depth": 3,
-    "lifespan_mgmt_interval": 1
+    "lifespan_mgmt_interval": 1,
+    "quantization_precision": "f16"
   },
   "stats": {
     "innate_cortical_area_count": 23,

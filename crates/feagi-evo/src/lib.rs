@@ -48,6 +48,7 @@ pub mod templates;
 
 // Re-export commonly used types
 pub use types::{EvoError, EvoResult};
+pub use genome::parser::string_to_cortical_id;
 pub use genome::{
     GenomeParser, GenomeSaver, ParsedGenome,
     load_genome_from_file, load_genome_from_json,

@@ -20,6 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use tracing::{debug, info, warn, error};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Agent registration info
 #[derive(Debug, Clone)]
@@ -29,7 +30,8 @@ pub struct AgentConfig {
     pub shm_path: PathBuf,
     pub rate_hz: f64,
     /// Cortical area ID → cortical_idx mapping (for coordinate lookup)
-    pub area_mapping: HashMap<String, u32>,
+    /// OPTIMIZATION: Use CorticalID directly to avoid String allocations in hot path
+    pub area_mapping: HashMap<CorticalID, u32>,
 }
 
 /// Callback for injecting decoded sensory data into FCL
@@ -402,13 +404,13 @@ fn agent_polling_loop(
 
             // Iterate over cortical areas
             for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
-                let area_id = cortical_id.as_ascii_string();
-
+                // OPTIMIZATION: Use CorticalID directly - no string allocation!
+                
                 // Get cortical_idx for this area
-                let cortical_idx = match config.area_mapping.get(&area_id) {
+                let cortical_idx = match config.area_mapping.get(cortical_id) {
                     Some(&idx) => idx,
                     None => {
-                        warn!("[SENSORY-{}] Unknown area '{}'", config.agent_id, area_id);
+                        warn!("[SENSORY-{}] Unknown area '{}'", config.agent_id, cortical_id);
                         continue;
                     }
                 };
@@ -444,7 +446,7 @@ fn agent_polling_loop(
                     std::sync::atomic::AtomicBool::new(false);
                 if !FIRST_INJECTION_LOGGED.load(Ordering::Relaxed) && !xyzp_data.is_empty() {
                     info!("[SENSORY-{}] ✅ First injection: area='{}', cortical_area={}, neuron_count={}", 
-                        config.agent_id, area_id, cortical_idx, xyzp_data.len());
+                        config.agent_id, cortical_id, cortical_idx, xyzp_data.len());
                     info!(
                         "[SENSORY-{}]    First 3 XYZP: {:?}",
                         config.agent_id,

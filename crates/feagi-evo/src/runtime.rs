@@ -11,6 +11,7 @@ Licensed under the Apache License, Version 2.0
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use feagi_types::{CorticalArea, BrainRegion};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Complete runtime genome representation
 #[derive(Debug, Clone)]
@@ -18,8 +19,8 @@ pub struct RuntimeGenome {
     /// Genome metadata
     pub metadata: GenomeMetadata,
     
-    /// Cortical areas (by cortical_id)
-    pub cortical_areas: HashMap<String, CorticalArea>,
+    /// Cortical areas (by cortical_id as CorticalID)
+    pub cortical_areas: HashMap<CorticalID, CorticalArea>,
     
     /// Brain regions (by region_id)
     pub brain_regions: HashMap<String, BrainRegion>,

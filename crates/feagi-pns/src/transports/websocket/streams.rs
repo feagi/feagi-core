@@ -229,7 +229,7 @@ impl WebSocketStreams {
     /// Serialize raw fire queue data to FeagiByteContainer format
     /// Same logic as ZMQ visualization stream
     fn serialize_fire_queue(fire_data: &feagi_burst_engine::RawFireQueueSnapshot) -> std::result::Result<Vec<u8>, String> {
-        use feagi_data_structures::genomic::CorticalID;
+        use feagi_data_structures::genomic::cortical_area::CorticalID;
         use feagi_data_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
@@ -243,12 +243,12 @@ impl WebSocketStreams {
             }
             
             // Create CorticalID from area name
-            let mut bytes = [b' '; 6];
+            let mut bytes = [b' '; 8];
             let name_bytes = area_data.cortical_area_name.as_bytes();
-            let copy_len = name_bytes.len().min(6);
+            let copy_len = name_bytes.len().min(8);
             bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
             
-            let cortical_id = CorticalID::from_bytes(&bytes)
+            let cortical_id = CorticalID::try_from_bytes(&bytes)
                 .map_err(|e| format!("Failed to create CorticalID for '{}': {:?}", area_data.cortical_area_name, e))?;
             
             // Create neuron voxel arrays

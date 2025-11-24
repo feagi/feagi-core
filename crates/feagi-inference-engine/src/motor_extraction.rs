@@ -6,7 +6,7 @@
 use anyhow::Result;
 use feagi_burst_engine::RustNPU;
 use feagi_data_serialization::FeagiSerializable;
-use feagi_data_structures::genomic::CorticalID;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
 };
@@ -115,14 +115,14 @@ impl MotorExtractor {
             total_motor_neurons += neuron_count;
 
             // Create CorticalID from area name
-            // CorticalID expects exactly 6 bytes
+            // CorticalID expects exactly 8 bytes
             let area_name_str = area_name.as_ref().map(|s| s.as_str()).unwrap_or("unknown");
             let area_bytes = area_name_str.as_bytes();
-            let mut cortical_id_bytes = [0u8; 6]; // CorticalID::CORTICAL_ID_LENGTH
-            let copy_len = area_bytes.len().min(6);
+            let mut cortical_id_bytes = [0u8; 8]; // CorticalID::CORTICAL_ID_LENGTH
+            let copy_len = area_bytes.len().min(8);
             cortical_id_bytes[..copy_len].copy_from_slice(&area_bytes[..copy_len]);
 
-            let cortical_id = match CorticalID::from_bytes(&cortical_id_bytes) {
+            let cortical_id = match CorticalID::try_from_bytes(&cortical_id_bytes) {
                 Ok(id) => id,
                 Err(e) => {
                     debug!(

@@ -414,7 +414,7 @@ impl SensoryStream {
         let mut total_injected = 0;
         
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
-            let cortical_name = cortical_id.as_ascii_string();
+            // OPTIMIZATION: Use CorticalID directly - no string allocation!
             
             // Step 1: Extract raw XYZP data (NO LOCKS)
             let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
@@ -425,15 +425,15 @@ impl SensoryStream {
                 .map(|i| (x_coords[i], y_coords[i], z_coords[i], potentials[i]))
                 .collect();
             
-            debug!("🔍 [ZMQ-SENSORY] Injecting {} XYZP data points for cortical area '{}'", num_neurons, cortical_name);
+            debug!("🔍 [ZMQ-SENSORY] Injecting {} XYZP data points for cortical area '{}'", num_neurons, cortical_id);
             
             // Step 2: Quick lock - NPU handles everything (name resolution + coordinate conversion + injection)
             let area_start = std::time::Instant::now();
             let mut npu = npu_arc.lock().unwrap();
             debug!("🔍 [ZMQ-SENSORY] NPU lock acquired in {:?}", area_start.elapsed());
             
-            // NPU handles: cortical name → ID, coordinates → neuron IDs, injection
-            let injected = npu.inject_sensory_xyzp(&cortical_name, &xyzp_data);
+            // NPU handles: CorticalID → cortical_idx, coordinates → neuron IDs, injection
+            let injected = npu.inject_sensory_xyzp_by_id(cortical_id, &xyzp_data);
             total_injected += injected;
             
             drop(npu);

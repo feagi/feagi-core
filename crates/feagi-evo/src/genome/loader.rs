@@ -130,7 +130,7 @@ mod tests {
             "genome_description": "A test genome",
             "version": "2.0",
             "blueprint": {
-                "tst001": {
+                "_power": {
                     "cortical_name": "Test Area",
                     "block_boundaries": [10, 10, 10],
                     "relative_coordinate": [0, 0, 0],
