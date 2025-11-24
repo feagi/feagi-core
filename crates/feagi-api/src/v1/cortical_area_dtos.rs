@@ -5,6 +5,37 @@
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
+/// Detailed cortical type information (Phase 5)
+///
+/// Provides rich type information from the new CorticalAreaType system.
+/// This enables clients to understand data encoding, frame handling, and more.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[schema(example = json!({
+    "category": "IPU",
+    "data_type": "CartesianPlane",
+    "frame_handling": "Absolute",
+    "encoding_details": {
+        "positioning": "Linear",
+        "signed": false
+    }
+}))]
+pub struct CorticalTypeInfo {
+    /// High-level category: IPU, OPU, CORE, MEMORY, CUSTOM
+    pub category: String,
+    
+    /// Data type: CartesianPlane, Percentage, SignedPercentage, Misc, etc.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_type: Option<String>,
+    
+    /// Frame change handling: Absolute or Incremental
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub frame_handling: Option<String>,
+    
+    /// Additional encoding details (optional)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding_details: Option<serde_json::Value>,
+}
+
 /// Cortical area information (summary)
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[schema(example = json!({
@@ -22,7 +53,12 @@ use utoipa::ToSchema;
         "z": 10
     },
     "neuron_count": 1000,
-    "cortical_visibility": true
+    "cortical_visibility": true,
+    "cortical_type_info": {
+        "category": "IPU",
+        "data_type": "CartesianPlane",
+        "frame_handling": "Absolute"
+    }
 }))]
 pub struct CorticalAreaSummary {
     /// Cortical area ID
@@ -45,6 +81,10 @@ pub struct CorticalAreaSummary {
     
     /// Is this area visible in visualization?
     pub cortical_visibility: bool,
+    
+    /// Phase 5: Detailed cortical type information (optional for backward compatibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_type_info: Option<CorticalTypeInfo>,
 }
 
 /// Detailed cortical area information
@@ -147,6 +187,10 @@ pub struct CorticalAreaDetail {
     
     /// Burst engine activation
     pub burst_engine_activation: bool,
+    
+    /// Phase 5: Detailed cortical type information (optional for backward compatibility)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_type_info: Option<CorticalTypeInfo>,
 }
 
 /// Create cortical area request

@@ -14,6 +14,7 @@ pub mod events;
 pub mod heartbeat;
 pub mod registration;
 pub mod types;
+pub mod type_validation;
 
 // Re-export commonly used types
 pub use agent_registry::{
@@ -28,3 +29,7 @@ pub use events::{
 pub use heartbeat::HeartbeatTracker;
 pub use registration::{RegistrationHandler, RegistrationRequest, RegistrationResponse, TransportConfig};
 pub use types::{PNSError, Result, SharedFBC, StreamType};
+pub use type_validation::{
+    validate_sensory_compatibility, validate_motor_compatibility,
+    get_recommended_buffer_size, should_use_compression, ValidationResult,
+};
