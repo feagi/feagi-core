@@ -63,6 +63,8 @@ impl GenomeService for GenomeServiceImpl {
         info!(target: "feagi-services", "Genome simulation_timestep: {} seconds", simulation_timestep);
         
         // Store genome for future updates (source of truth for structural changes)
+        info!(target: "feagi-services", "Storing RuntimeGenome with {} cortical areas, {} morphologies", 
+            genome.cortical_areas.len(), genome.morphologies.iter().count());
         *self.current_genome.write() = Some(genome.clone());
         
         // Load into connectome via ConnectomeManager
@@ -141,15 +143,30 @@ impl GenomeService for GenomeServiceImpl {
     async fn save_genome(&self, params: SaveGenomeParams) -> ServiceResult<String> {
         info!(target: "feagi-services", "Saving genome to JSON");
         
-        // Delegate to ConnectomeManager
-        let json_str = self.connectome
-            .read()
-            .save_genome_to_json(
-                params.genome_id,
-                params.genome_title,
-            )
-            .map_err(ServiceError::from)?;
+        // Check if we have a RuntimeGenome stored (includes morphologies, physiology, etc.)
+        let genome_opt = self.current_genome.read().clone();
         
+        let mut genome = genome_opt.ok_or_else(|| {
+            ServiceError::Internal(
+                "No RuntimeGenome stored. Genome must be loaded via load_genome() before it can be saved.".to_string()
+            )
+        })?;
+        
+        info!(target: "feagi-services", "✅ RuntimeGenome loaded, exporting in flat format v3.0");
+        
+        // Update metadata if provided
+        if let Some(id) = params.genome_id {
+            genome.metadata.genome_id = id;
+        }
+        if let Some(title) = params.genome_title {
+            genome.metadata.genome_title = title;
+        }
+        
+        // Use the full RuntimeGenome saver (produces flat format v3.0)
+        let json_str = feagi_evo::save_genome_to_json(&genome)
+            .map_err(|e| ServiceError::Internal(format!("Failed to save genome: {}", e)))?;
+        
+        info!(target: "feagi-services", "✅ Genome exported successfully (flat format v3.0)");
         Ok(json_str)
     }
 

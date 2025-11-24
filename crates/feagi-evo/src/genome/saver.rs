@@ -19,6 +19,11 @@ pub struct GenomeSaver;
 impl GenomeSaver {
     /// Save connectome to genome JSON
     ///
+    /// **DEPRECATED**: This method produces incomplete hierarchical format v2.1 without morphologies/physiology.
+    /// Use `feagi_evo::save_genome_to_json(RuntimeGenome)` instead, which produces complete flat format v3.0.
+    ///
+    /// This method is kept only for legacy tests. Production code MUST use the RuntimeGenome saver.
+    ///
     /// # Arguments
     ///
     /// * `cortical_areas` - Map of cortical areas
@@ -28,8 +33,9 @@ impl GenomeSaver {
     ///
     /// # Returns
     ///
-    /// JSON string of the genome
+    /// JSON string of the genome (hierarchical v2.1, incomplete)
     ///
+    #[deprecated(note = "Use feagi_evo::save_genome_to_json(RuntimeGenome) instead. This produces incomplete v2.1 format.")]
     pub fn save_to_json(
         cortical_areas: &HashMap<String, CorticalArea>,
         brain_regions: &HashMap<String, (BrainRegion, Option<String>)>,
@@ -212,8 +218,8 @@ mod tests {
         assert_eq!(parsed.brain_regions.len(), 1);
         
         let area = &parsed.cortical_areas[0];
-        // cortical_id is now stored in base64 format after roundtrip
-        assert_eq!(area.cortical_id, "X3Bvd2VyICA=");
+        // cortical_id is now stored in base64 format after roundtrip (underscore-padded)
+        assert_eq!(area.cortical_id, "X3Bvd2VyX18=");
         assert_eq!(area.name, "Test Area");
         assert_eq!(area.dimensions.width, 10);
         assert_eq!(area.position, (5, 5, 5));

@@ -142,6 +142,34 @@ pub struct RawBrainRegion {
     pub signature: Option<String>,
 }
 
+/// Convert cortical_mapping_dst keys from old format to base64
+///
+/// This ensures all destination cortical IDs in dstmap are stored in the new base64 format.
+fn convert_dstmap_keys_to_base64(dstmap: &Value) -> Value {
+    if let Some(dstmap_obj) = dstmap.as_object() {
+        let mut converted = serde_json::Map::new();
+        
+        for (dest_id_str, mapping_value) in dstmap_obj {
+            // Convert destination cortical_id to base64 format
+            match string_to_cortical_id(dest_id_str) {
+                Ok(dest_cortical_id) => {
+                    converted.insert(dest_cortical_id.as_base_64(), mapping_value.clone());
+                }
+                Err(e) => {
+                    // If conversion fails, keep original and log warning
+                    tracing::warn!("Failed to convert dstmap key '{}' to base64: {}, keeping original", dest_id_str, e);
+                    converted.insert(dest_id_str.clone(), mapping_value.clone());
+                }
+            }
+        }
+        
+        Value::Object(converted)
+    } else {
+        // Not an object, return as-is
+        dstmap.clone()
+    }
+}
+
 /// Convert a string cortical_id to CorticalID
 /// Handles both old 6-char format and new base64 format
 pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
@@ -150,9 +178,9 @@ pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
         return Ok(cortical_id);
     }
     
-    // Fall back to ASCII (old 6-char format → pad to 8 bytes)
+    // Fall back to ASCII (old 6-char format → pad to 8 bytes with underscores)
     if id_str.len() == 6 {
-        let mut bytes = [b' '; 8];  // Pad with spaces
+        let mut bytes = [b'_'; 8];  // Pad with underscores
         bytes[..6].copy_from_slice(id_str.as_bytes());
         
         CorticalID::try_from_bytes(&bytes)
@@ -369,7 +397,9 @@ impl GenomeParser {
                 area.properties.insert("per_voxel_neuron_cnt".to_string(), serde_json::json!(v));
             }
             if let Some(v) = &raw_area.cortical_mapping_dst {
-                area.properties.insert("cortical_mapping_dst".to_string(), v.clone());
+                // Convert dstmap keys from old format to base64
+                let converted_dstmap = convert_dstmap_keys_to_base64(v);
+                area.properties.insert("cortical_mapping_dst".to_string(), converted_dstmap);
             }
             if let Some(v) = &raw_area.coordinate_2d {
                 area.properties.insert("2d_coordinate".to_string(), serde_json::json!(v));
@@ -485,8 +515,8 @@ mod tests {
         
         assert_eq!(parsed.version, "2.1");
         assert_eq!(parsed.cortical_areas.len(), 1);
-        // cortical_id is now stored in base64 format
-        assert_eq!(parsed.cortical_areas[0].cortical_id, "X3Bvd2VyICA=");
+        // cortical_id is now stored in base64 format (underscore-padded)
+        assert_eq!(parsed.cortical_areas[0].cortical_id, "X3Bvd2VyX18=");
         assert_eq!(parsed.cortical_areas[0].name, "Test Area");
         assert_eq!(parsed.brain_regions.len(), 1);
     }

@@ -273,9 +273,23 @@ pub async fn post_upload(
         (status = 200, description = "Genome JSON", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_download(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    // TODO: Implement proper genome export from genome service
-    Ok(Json(HashMap::new()))
+pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde_json::Value>> {
+    let genome_service = state.genome_service.as_ref();
+    
+    // Get genome as JSON string
+    let genome_json_str = genome_service
+        .save_genome(feagi_services::types::SaveGenomeParams {
+            genome_id: None,
+            genome_title: None,
+        })
+        .await
+        .map_err(|e| ApiError::internal(format!("Failed to export genome: {}", e)))?;
+    
+    // Parse to Value for JSON response
+    let genome_value: serde_json::Value = serde_json::from_str(&genome_json_str)
+        .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
+    
+    Ok(Json(genome_value))
 }
 
 /// GET /v1/genome/properties

@@ -1582,6 +1582,11 @@ impl ConnectomeManager {
     
     /// Save the connectome as a genome JSON
     ///
+    /// **DEPRECATED**: This method produces incomplete hierarchical format v2.1 without morphologies/physiology.
+    /// Use `GenomeService::save_genome()` instead, which produces complete flat format v3.0.
+    ///
+    /// This method is kept only for legacy tests. Production code MUST use GenomeService.
+    ///
     /// # Arguments
     ///
     /// * `genome_id` - Optional custom genome ID (generates timestamp-based ID if None)
@@ -1589,8 +1594,9 @@ impl ConnectomeManager {
     ///
     /// # Returns
     ///
-    /// JSON string representation of the genome
+    /// JSON string representation of the genome (hierarchical v2.1, incomplete)
     ///
+    #[deprecated(note = "Use GenomeService::save_genome() instead. This produces incomplete v2.1 format without morphologies/physiology.")]
     pub fn save_genome_to_json(
         &self,
         genome_id: Option<String>,
