@@ -2,7 +2,7 @@ use std::fmt::{Display, Formatter};
 use crate::{sensor_cortical_units, FeagiDataError};
 use crate::genomic::cortical_area::{CorticalID, CorticalAreaType, IOCorticalAreaDataType};
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
-use crate::genomic::cortical_area::io_cortical_area_data_type::{DataTypeConfigurationFlag, FrameChangeHandling, PercentageNeuronPositioning};
+use crate::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
 use paste;
 
 macro_rules! define_sensory_cortical_units_enum {

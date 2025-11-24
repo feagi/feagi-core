@@ -1,4 +1,3 @@
-use crate::FeagiDataError;
 use crate::{define_xyz_coordinates, define_index};
 
 
