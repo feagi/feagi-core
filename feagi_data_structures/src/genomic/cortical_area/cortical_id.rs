@@ -1,5 +1,6 @@
 use std::fmt::{Display};
 use base64::{Engine as _, engine::general_purpose};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::FeagiDataError;
 use crate::genomic::cortical_area::cortical_type::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
 
@@ -140,6 +141,29 @@ impl CorticalID {
 impl Display for CorticalID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", String::from_utf8_lossy(&self.bytes))
+    }
+}
+
+// Implement Serialize for CorticalID - uses base64 format for JSON compatibility
+impl Serialize for CorticalID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Serialize as base64 string for JSON compatibility
+        serializer.serialize_str(&self.as_base_64())
+    }
+}
+
+// Implement Deserialize for CorticalID - accepts base64 format
+impl<'de> Deserialize<'de> for CorticalID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        CorticalID::try_from_base_64(&s)
+            .map_err(|e| serde::de::Error::custom(format!("Invalid CorticalID: {}", e)))
     }
 }
 

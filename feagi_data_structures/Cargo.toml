@@ -8,6 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+serde = { workspace = true }
 serde_json = { workspace = true}
 ndarray = { workspace = true}
 rayon = { workspace = true}

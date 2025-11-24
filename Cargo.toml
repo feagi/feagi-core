@@ -18,6 +18,7 @@ documentation = "https://docs.rs/feagi_core_data_structures_and_processing"
 
 
 [workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.140"
 ndarray = { version = "0.16.1", features = ["rayon"] }
 image = "0.25"
