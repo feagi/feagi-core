@@ -14,6 +14,15 @@ use crate::{FeagiError, Dimensions, Position};
 pub type Result<T> = std::result::Result<T, FeagiError>;
 
 /// Type of cortical area (functional classification)
+/// 
+/// **DEPRECATED (Phase 6)**: Use `NewCorticalAreaType` (from feagi-data-processing) instead.
+/// This simple enum is being replaced with a richer type system that includes:
+/// - Detailed I/O data types (CartesianPlane, Percentage, etc.)
+/// - Frame handling (Absolute vs Incremental)
+/// - Neuron positioning strategies
+/// 
+/// This enum will be removed in a future release.
+#[deprecated(note = "Use NewCorticalAreaType from feagi-data-processing instead")]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AreaType {
@@ -75,14 +84,19 @@ pub struct CorticalArea {
     /// This is the origin point (min corner) of the area
     pub position: (i32, i32, i32),
 
-    /// Functional type of this area (OLD, deprecated)
+    /// Functional type of this area (DEPRECATED - Phase 6)
     /// Use cortical_type_new for new code
+    /// This field will be removed in a future release
+    #[deprecated(note = "Use cortical_type_new instead. Will be removed in Phase 6.")]
     pub area_type: AreaType,
     
     /// New strongly-typed cortical area classification (from feagi-data-processing)
-    /// This will become the primary type system in Phase 6
-    /// During migration, this field holds the parsed type from genome
-    #[serde(skip)]  // Not serialized yet (Phase 2+)
+    /// This is the authoritative type system as of Phase 6
+    /// Populated during genome parsing (Phase 2+)
+    /// 
+    /// NOTE: Not serialized directly (feagi-data-processing types don't impl Serialize yet)
+    /// Use the API conversion utilities (to_cortical_type_info) for serialization
+    #[serde(skip)]
     pub cortical_type_new: Option<NewCorticalAreaType>,
     
     // ========================================================================
