@@ -19,7 +19,6 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use feagi_evo::RuntimeGenome;
 use feagi_types::{Precision, QuantizationSpec};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
 use tracing::{info, warn, debug};
@@ -228,7 +227,7 @@ impl Neuroembryogenesis {
             info!(target: "feagi-bdu","  📊 Genome has {} cortical areas to process", genome.cortical_areas.len());
             
             // Collect all cortical area IDs
-            let all_cortical_ids: Vec<CorticalID> = genome.cortical_areas.keys().cloned().collect();
+            let all_cortical_ids = genome.cortical_areas.keys().cloned().collect::<Vec<_>>();
             info!(target: "feagi-bdu","  📊 Collected {} cortical area IDs: {:?}", all_cortical_ids.len(), 
                   if all_cortical_ids.len() <= 5 { 
                       format!("{:?}", all_cortical_ids.iter().map(|id| id.to_string()).collect::<Vec<_>>()) 
@@ -526,9 +525,10 @@ impl Neuroembryogenesis {
             
             // 🔍 DIAGNOSTIC: Use area.cortical_id (the actual ID stored in ConnectomeManager)
             // This MUST match what was registered during corticogenesis!
-            let cortical_id_str = &area.cortical_id;
-            // Note: Core IDs are 8-byte padded: "___power" and "___death"
-            if cortical_id_str == "___power" || cortical_id_str == "___death" {
+            let cortical_id_str = area.cortical_id.to_string();
+            // Note: Core IDs are 8-byte padded: "___power" and "___death" or "_power__" and "_death__"
+            if cortical_id_str == "___power" || cortical_id_str == "___death" || 
+               cortical_id_str == "_power__" || cortical_id_str == "_death__" {
                 info!(target: "feagi-bdu","  🔍 [CORE-AREA] {} - dimensions: {:?}, per_voxel: {}", 
                     cortical_id_str, area.dimensions, per_voxel_count);
             }
@@ -543,7 +543,7 @@ impl Neuroembryogenesis {
             let neurons_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
-                manager.create_neurons_for_area(cortical_id_str)
+                manager.create_neurons_for_area(&area.cortical_id)
             }; // Lock released immediately
             
             match neurons_created {
@@ -616,11 +616,12 @@ impl Neuroembryogenesis {
             // Call ConnectomeManager to apply cortical mappings (delegates to NPU)
             // CRITICAL: Minimize lock scope - only hold lock during synapse creation
             // Use src_area.cortical_id (the actual ID stored in ConnectomeManager)
-            let src_cortical_id_str = &src_area.cortical_id;
+            let src_cortical_id = &src_area.cortical_id;
+            let src_cortical_id_str = src_cortical_id.to_string(); // For logging
             let synapses_created = {
                 let manager_arc = self.connectome_manager.clone();
                 let mut manager = manager_arc.write();
-                manager.apply_cortical_mapping(src_cortical_id_str)
+                manager.apply_cortical_mapping(src_cortical_id)
             }; // Lock released immediately
             
             match synapses_created {
@@ -746,8 +747,8 @@ impl Neuroembryogenesis {
     /// - OUTPUT: Any area in the region that connects to an area OUTSIDE the region
     /// - INPUT: Any area in the region that receives connection from OUTSIDE the region
     fn analyze_region_io(
-        region_area_ids: &[CorticalID],
-        all_cortical_areas: &std::collections::HashMap<CorticalID, feagi_types::CorticalArea>,
+        region_area_ids: &[feagi_data_structures::genomic::cortical_area::CorticalID],
+        all_cortical_areas: &std::collections::HashMap<feagi_data_structures::genomic::cortical_area::CorticalID, feagi_types::CorticalArea>,
     ) -> (Vec<String>, Vec<String>) {
         let area_set: std::collections::HashSet<_> = region_area_ids.iter().cloned().collect();
         let mut inputs = Vec::new();
@@ -826,8 +827,8 @@ mod tests {
     
     #[test]
     fn test_neuroembryogenesis_creation() {
-        let manager = ConnectomeManager::<f32>::instance();
-        let neuro = Neuroembryogenesis::<f32>::new(manager);
+        let manager = ConnectomeManager::instance();
+        let neuro = Neuroembryogenesis::new(manager);
         
         let progress = neuro.get_progress();
         assert_eq!(progress.stage, DevelopmentStage::Initialization);
@@ -836,8 +837,8 @@ mod tests {
     
     #[test]
     fn test_development_from_minimal_genome() {
-        let manager = ConnectomeManager::<f32>::instance();
-        let mut neuro = Neuroembryogenesis::<f32>::new(manager.clone());
+        let manager = ConnectomeManager::instance();
+        let mut neuro = Neuroembryogenesis::new(manager.clone());
         
         // Create a minimal genome with one cortical area
         let mut genome = create_genome_with_core_morphologies(
@@ -845,15 +846,15 @@ mod tests {
             "Test Genome".to_string(),
         );
         
+        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
         let area = feagi_types::CorticalArea::new(
-            "test01".to_string(),
+            cortical_id.clone(),
             0,
             "Test Area".to_string(),
             feagi_types::Dimensions::new(10, 10, 10),
             (0, 0, 0),
-            feagi_types::AreaType::Custom,
         ).expect("Failed to create cortical area");
-        genome.cortical_areas.insert("test01".to_string(), area);
+        genome.cortical_areas.insert(cortical_id, area);
         
         // Run neuroembryogenesis
         let result = neuro.develop_from_genome(&genome);

@@ -13,6 +13,7 @@ use std::sync::Arc;
 use tracing::{info, warn, error};
 
 use crate::traits::agent_service::*;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_bdu::ConnectomeManager;
 use feagi_pns::{
     AgentRegistry, AgentInfo, AgentType, AgentCapabilities, AgentTransport,
@@ -341,7 +342,7 @@ impl AgentService for AgentServiceImpl {
         let mut failed_areas = Vec::new();
         
         for (cortical_id, coordinates) in stimulation_payload.iter() {
-            match manager.get_cortical_area(cortical_id) {
+            match manager.get_cortical_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| AgentError::Internal(format!("Invalid cortical ID: {}", e)))?) {
                 Some(_area) => {
                     // For each coordinate, we would trigger neuron activation
                     // This requires NPU integration for setting fire candidates

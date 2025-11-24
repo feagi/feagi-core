@@ -13,7 +13,7 @@ ahash.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tracing = { workspace = true }
-feagi_data_structures = { version = "0.0.50-beta.52" }
+feagi_data_structures = { workspace = true }
 
 [features]
 default = []

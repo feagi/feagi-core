@@ -34,6 +34,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{info, warn, debug};
 
 use feagi_types::{BrainRegion, BrainRegionHierarchy, CorticalArea};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::types::{BduError, BduResult, NeuronId};
 
 // NPU integration (optional dependency)
@@ -89,13 +90,13 @@ impl Default for ConnectomeConfig {
 ///
 pub struct ConnectomeManager {
     /// Map of cortical_id -> CorticalArea metadata
-    cortical_areas: HashMap<String, CorticalArea>,
+    cortical_areas: HashMap<CorticalID, CorticalArea>,
     
     /// Map of cortical_id -> cortical_idx (fast reverse lookup)
-    cortical_id_to_idx: HashMap<String, u32>,
+    cortical_id_to_idx: HashMap<CorticalID, u32>,
     
     /// Map of cortical_idx -> cortical_id (fast reverse lookup)
-    cortical_idx_to_id: HashMap<u32, String>,
+    cortical_idx_to_id: HashMap<u32, CorticalID>,
     
     /// Next available cortical index
     next_cortical_idx: u32,
@@ -289,8 +290,9 @@ impl ConnectomeManager {
             false
         };
         
-        let is_death_area = is_core_area(&area.cortical_id, "_death");
-        let is_power_area = is_core_area(&area.cortical_id, "_power");
+        let cortical_id_str = area.cortical_id.to_string();
+        let is_death_area = is_core_area(&cortical_id_str, "_death");
+        let is_power_area = is_core_area(&cortical_id_str, "_power");
         
         if is_death_area {
             info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=0 to _death area (id={})", area.cortical_id);
@@ -355,7 +357,7 @@ impl ConnectomeManager {
     ///
     /// This does NOT remove neurons from the NPU - that must be done separately.
     ///
-    pub fn remove_cortical_area(&mut self, cortical_id: &str) -> BduResult<()> {
+    pub fn remove_cortical_area(&mut self, cortical_id: &CorticalID) -> BduResult<()> {
         let area = self.cortical_areas.remove(cortical_id).ok_or_else(|| {
             BduError::InvalidArea(format!("Cortical area {} does not exist", cortical_id))
         })?;
@@ -368,27 +370,27 @@ impl ConnectomeManager {
     }
     
     /// Get a cortical area by ID
-    pub fn get_cortical_area(&self, cortical_id: &str) -> Option<&CorticalArea> {
+    pub fn get_cortical_area(&self, cortical_id: &CorticalID) -> Option<&CorticalArea> {
         self.cortical_areas.get(cortical_id)
     }
     
     /// Get a mutable reference to a cortical area
-    pub fn get_cortical_area_mut(&mut self, cortical_id: &str) -> Option<&mut CorticalArea> {
+    pub fn get_cortical_area_mut(&mut self, cortical_id: &CorticalID) -> Option<&mut CorticalArea> {
         self.cortical_areas.get_mut(cortical_id)
     }
     
     /// Get cortical index by ID
-    pub fn get_cortical_idx(&self, cortical_id: &str) -> Option<u32> {
+    pub fn get_cortical_idx(&self, cortical_id: &CorticalID) -> Option<u32> {
         self.cortical_id_to_idx.get(cortical_id).copied()
     }
     
     /// Get cortical ID by index
-    pub fn get_cortical_id(&self, cortical_idx: u32) -> Option<&String> {
+    pub fn get_cortical_id(&self, cortical_idx: u32) -> Option<&CorticalID> {
         self.cortical_idx_to_id.get(&cortical_idx)
     }
     
     /// Get all cortical area IDs
-    pub fn get_cortical_area_ids(&self) -> Vec<&String> {
+    pub fn get_cortical_area_ids(&self) -> Vec<&CorticalID> {
         self.cortical_areas.keys().collect()
     }
     
@@ -398,7 +400,7 @@ impl ConnectomeManager {
     }
     
     /// Check if a cortical area exists
-    pub fn has_cortical_area(&self, cortical_id: &str) -> bool {
+    pub fn has_cortical_area(&self, cortical_id: &CorticalID) -> bool {
         self.cortical_areas.contains_key(cortical_id)
     }
     
@@ -478,8 +480,8 @@ impl ConnectomeManager {
     /// * `BduResult<()>` - Ok if successful, Err otherwise
     pub fn update_cortical_mapping(
         &mut self,
-        src_area_id: &str,
-        dst_area_id: &str,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
         mapping_data: Vec<serde_json::Value>,
     ) -> BduResult<()> {
         use tracing::info;
@@ -513,11 +515,11 @@ impl ConnectomeManager {
         // Update or add the mapping for this destination
         if mapping_data.is_empty() {
             // Empty mapping_data = delete the connection
-            cortical_mapping_dst.remove(dst_area_id);
+            cortical_mapping_dst.remove(&dst_area_id.as_base_64());
             info!(target: "feagi-bdu", "Removed mapping from {} to {}", src_area_id, dst_area_id);
         } else {
             cortical_mapping_dst.insert(
-                dst_area_id.to_string(),
+                dst_area_id.as_base_64(),
                 serde_json::Value::Array(mapping_data.clone())
             );
             info!(target: "feagi-bdu", "Updated mapping from {} to {} with {} connections",
@@ -540,8 +542,8 @@ impl ConnectomeManager {
     /// * `BduResult<usize>` - Number of synapses created
     pub fn regenerate_synapses_for_mapping(
         &mut self,
-        src_area_id: &str,
-        dst_area_id: &str,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
     ) -> BduResult<usize> {
         use tracing::info;
         
@@ -573,8 +575,8 @@ impl ConnectomeManager {
     /// Apply cortical mapping for a specific area pair
     fn apply_cortical_mapping_for_pair(
         &mut self,
-        src_area_id: &str,
-        dst_area_id: &str,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
     ) -> BduResult<usize> {
         // Clone the rules to avoid borrow checker issues
         let rules = {
@@ -591,7 +593,7 @@ impl ConnectomeManager {
                 ))?;
             
             // Get rules for this destination
-            let rules = mapping_dst.get(dst_area_id)
+            let rules = mapping_dst.get(&dst_area_id.as_base_64())
                 .and_then(|v| v.as_array())
                 .ok_or_else(|| crate::types::BduError::InvalidMorphology(
                     format!("No mapping rules from {} to {}", src_area_id, dst_area_id)
@@ -617,8 +619,8 @@ impl ConnectomeManager {
     /// Apply a single morphology rule
     fn apply_single_morphology_rule(
         &mut self,
-        src_area_id: &str,
-        dst_area_id: &str,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
         rule: &serde_json::Value,
     ) -> BduResult<usize> {
         // Extract morphology_id from rule (array or dict format)
@@ -772,7 +774,7 @@ impl ConnectomeManager {
     ///
     /// Number of neurons created
     ///
-    pub fn create_neurons_for_area(&mut self, cortical_id: &str) -> BduResult<u32> {
+    pub fn create_neurons_for_area(&mut self, cortical_id: &CorticalID) -> BduResult<u32> {
         // Get cortical area
         let area = self.cortical_areas.get(cortical_id)
             .ok_or_else(|| BduError::InvalidArea(format!("Cortical area {} not found", cortical_id)))?
@@ -881,7 +883,7 @@ impl ConnectomeManager {
     ///
     pub fn add_neuron(
         &mut self,
-        cortical_id: &str,
+        cortical_id: &CorticalID,
         x: u32,
         y: u32,
         z: u32,
@@ -972,7 +974,7 @@ impl ConnectomeManager {
     ///
     /// Number of synapses created
     ///
-    pub fn apply_cortical_mapping(&mut self, src_cortical_id: &str) -> BduResult<u32> {
+    pub fn apply_cortical_mapping(&mut self, src_cortical_id: &CorticalID) -> BduResult<u32> {
         // Get source area
         let src_area = self.cortical_areas.get(src_cortical_id)
             .ok_or_else(|| BduError::InvalidArea(format!("Source area {} not found", src_cortical_id)))?
@@ -994,13 +996,22 @@ impl ConnectomeManager {
         let mut total_synapses = 0u32;
         
         // Process each destination area
-        for (dst_cortical_id, rules) in dstmap {
+        for (dst_cortical_id_str, rules) in dstmap {
             let rules_array = match rules.as_array() {
                 Some(arr) => arr,
                 None => continue,
             };
             
-            let dst_cortical_idx = match self.cortical_id_to_idx.get(dst_cortical_id) {
+            // Convert string to CorticalID
+            let dst_cortical_id = match CorticalID::try_from_base_64(dst_cortical_id_str) {
+                Ok(id) => id,
+                Err(_) => {
+                    warn!(target: "feagi-bdu","Invalid cortical ID format: {}, skipping", dst_cortical_id_str);
+                    continue;
+                }
+            };
+            
+            let dst_cortical_idx = match self.cortical_id_to_idx.get(&dst_cortical_id) {
                 Some(idx) => *idx,
                 None => {
                     warn!(target: "feagi-bdu","Destination area {} not found, skipping", dst_cortical_id);
@@ -1249,7 +1260,7 @@ impl ConnectomeManager {
     ///
     /// Vec of neuron IDs in the area, or empty vec if area doesn't exist or NPU not connected
     ///
-    pub fn get_neurons_in_area(&self, cortical_id: &str) -> Vec<NeuronId> {
+    pub fn get_neurons_in_area(&self, cortical_id: &CorticalID) -> Vec<NeuronId> {
         // Get cortical_idx from cortical_id
         let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
             Some(idx) => *idx,
@@ -1325,7 +1336,7 @@ impl ConnectomeManager {
     ///
     /// Number of neurons in the area, or 0 if area doesn't exist or NPU not connected
     ///
-    pub fn get_neuron_count_in_area(&self, cortical_id: &str) -> usize {
+    pub fn get_neuron_count_in_area(&self, cortical_id: &CorticalID) -> usize {
         self.get_neurons_in_area(cortical_id).len()
     }
     
@@ -1358,7 +1369,7 @@ impl ConnectomeManager {
     ///
     /// `true` if the area has at least one neuron, `false` otherwise
     ///
-    pub fn is_area_populated(&self, cortical_id: &str) -> bool {
+    pub fn is_area_populated(&self, cortical_id: &CorticalID) -> bool {
         self.get_neuron_count_in_area(cortical_id) > 0
     }
     
@@ -1372,7 +1383,7 @@ impl ConnectomeManager {
     ///
     /// Total number of outgoing synapses from neurons in this area
     ///
-    pub fn get_synapse_count_in_area(&self, cortical_id: &str) -> usize {
+    pub fn get_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
         let neurons = self.get_neurons_in_area(cortical_id);
         let mut total = 0;
         
@@ -1427,7 +1438,7 @@ impl ConnectomeManager {
     ///
     /// (neuron_count, total_synapses, avg_synapses_per_neuron)
     ///
-    pub fn get_area_connectivity_stats(&self, cortical_id: &str) -> (usize, usize, f32) {
+    pub fn get_area_connectivity_stats(&self, cortical_id: &CorticalID) -> (usize, usize, f32) {
         let neurons = self.get_neurons_in_area(cortical_id);
         let neuron_count = neurons.len();
         
@@ -1453,11 +1464,11 @@ impl ConnectomeManager {
     ///
     /// # Returns
     ///
-    /// The cortical area ID string, or None if neuron doesn't exist
+    /// The cortical area ID, or None if neuron doesn't exist
     ///
-    pub fn get_neuron_cortical_id(&self, neuron_id: NeuronId) -> Option<String> {
+    pub fn get_neuron_cortical_id(&self, neuron_id: NeuronId) -> Option<CorticalID> {
         let cortical_idx = self.get_neuron_cortical_idx(neuron_id);
-        self.cortical_idx_to_id.get(&cortical_idx).cloned()
+        self.cortical_idx_to_id.get(&cortical_idx).copied()
     }
     
     /// Get neuron density (neurons per voxel) for a cortical area
@@ -1470,7 +1481,7 @@ impl ConnectomeManager {
     ///
     /// Neuron density (neurons per voxel), or 0.0 if area doesn't exist
     ///
-    pub fn get_neuron_density(&self, cortical_id: &str) -> f32 {
+    pub fn get_neuron_density(&self, cortical_id: &CorticalID) -> f32 {
         let area = match self.cortical_areas.get(cortical_id) {
             Some(a) => a,
             None => return 0.0,
@@ -1617,6 +1628,7 @@ impl ConnectomeManager {
     /// JSON string representation of the genome (hierarchical v2.1, incomplete)
     ///
     #[deprecated(note = "Use GenomeService::save_genome() instead. This produces incomplete v2.1 format without morphologies/physiology.")]
+    #[allow(deprecated)]
     pub fn save_genome_to_json(
         &self,
         genome_id: Option<String>,
@@ -2012,7 +2024,7 @@ impl ConnectomeManager {
     ///
     pub fn batch_create_neurons(
         &mut self,
-        cortical_id: &str,
+        cortical_id: &CorticalID,
         neurons: Vec<(u32, u32, u32, f32, f32, f32, i32, u16, f32, u16, u16, bool)>,
     ) -> BduResult<Vec<u64>> {
         // Get NPU
@@ -2286,7 +2298,7 @@ impl ConnectomeManager {
     ///
     pub fn resize_cortical_area(
         &mut self,
-        cortical_id: &str,
+        cortical_id: &CorticalID,
         new_dimensions: feagi_types::Dimensions,
     ) -> BduResult<()> {
         // Validate dimensions
@@ -2387,7 +2399,7 @@ impl ConnectomeManager {
     ///
     pub fn get_neuron_by_coordinates(
         &self,
-        cortical_id: &str,
+        cortical_id: &CorticalID,
         x: u32,
         y: u32,
         z: u32,
@@ -2437,7 +2449,7 @@ impl ConnectomeManager {
     ///
     /// `Some(cortical_id)` if found, `None` otherwise
     ///
-    pub fn get_cortical_area_for_neuron(&self, neuron_id: u64) -> Option<String> {
+    pub fn get_cortical_area_for_neuron(&self, neuron_id: u64) -> Option<CorticalID> {
         let npu = self.npu.as_ref()?;
         let npu_lock = npu.lock().ok()?;
         
@@ -2452,7 +2464,7 @@ impl ConnectomeManager {
         // Look up cortical_id from index
         self.cortical_areas.values()
             .find(|area| area.cortical_idx == cortical_idx)
-            .map(|area| area.cortical_id.clone())
+            .map(|area| area.cortical_id)
     }
     
     /// Get all properties of a neuron
@@ -2550,8 +2562,8 @@ impl ConnectomeManager {
     ///
     /// Vector of all cortical area IDs
     ///
-    pub fn get_all_cortical_ids(&self) -> Vec<String> {
-        self.cortical_areas.keys().cloned().collect()
+    pub fn get_all_cortical_ids(&self) -> Vec<CorticalID> {
+        self.cortical_areas.keys().copied().collect()
     }
     
     /// Get all cortical area indices
@@ -2584,10 +2596,10 @@ impl ConnectomeManager {
     ///
     /// Vector of IPU/sensory area IDs
     ///
-    pub fn list_ipu_areas(&self) -> Vec<String> {
+    pub fn list_ipu_areas(&self) -> Vec<CorticalID> {
         self.cortical_areas.values()
             .filter(|area| area.is_input_area())
-            .map(|area| area.cortical_id.clone())
+            .map(|area| area.cortical_id)
             .collect()
     }
     
@@ -2597,10 +2609,10 @@ impl ConnectomeManager {
     ///
     /// Vector of OPU/motor area IDs
     ///
-    pub fn list_opu_areas(&self) -> Vec<String> {
+    pub fn list_opu_areas(&self) -> Vec<CorticalID> {
         self.cortical_areas.values()
             .filter(|area| area.is_output_area())
-            .map(|area| area.cortical_id.clone())
+            .map(|area| area.cortical_id)
             .collect()
     }
     
@@ -2631,7 +2643,7 @@ impl ConnectomeManager {
     ///
     /// `Some(properties)` if found, `None` otherwise
     ///
-    pub fn get_cortical_area_properties(&self, cortical_id: &str) -> Option<std::collections::HashMap<String, serde_json::Value>> {
+    pub fn get_cortical_area_properties(&self, cortical_id: &CorticalID) -> Option<std::collections::HashMap<String, serde_json::Value>> {
         let area = self.get_cortical_area(cortical_id)?;
         
         let mut properties = std::collections::HashMap::new();
@@ -2747,7 +2759,7 @@ impl ConnectomeManager {
     ///
     /// `true` if area exists, `false` otherwise
     ///
-    pub fn cortical_area_exists(&self, cortical_id: &str) -> bool {
+    pub fn cortical_area_exists(&self, cortical_id: &CorticalID) -> bool {
         self.cortical_areas.contains_key(cortical_id)
     }
     
@@ -2785,7 +2797,7 @@ impl ConnectomeManager {
     ///
     /// Vector of neuron IDs in the area
     ///
-    pub fn get_neurons_by_cortical_area(&self, cortical_id: &str) -> Vec<u64> {
+    pub fn get_neurons_by_cortical_area(&self, cortical_id: &CorticalID) -> Vec<u64> {
         // This is an alias for get_neurons_in_area, which already exists
         // Keeping it for Python API compatibility
         // Note: The signature says Vec<NeuronId> but implementation returns Vec<u64>
@@ -2809,7 +2821,7 @@ impl std::fmt::Debug for ConnectomeManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_types::{AreaType, Dimensions};
+    use feagi_types::{Dimensions};
     
     #[test]
     fn test_singleton_instance() {
@@ -2828,12 +2840,11 @@ mod tests {
         let mut manager = instance.write();
         
         let area = CorticalArea::new(
-            "iav001".to_string(),
+            feagi_evo::genome::parser::string_to_cortical_id("iav001").unwrap(),
             0,
             "Visual Input".to_string(),
             Dimensions::new(128, 128, 20),
             (0, 0, 0),
-            AreaType::Sensory,
         )
         .unwrap();
         
@@ -2841,7 +2852,7 @@ mod tests {
         
         assert_eq!(cortical_idx, 0);
         assert_eq!(manager.get_cortical_area_count(), 1);
-        assert!(manager.has_cortical_area("iav001"));
+        assert!(manager.has_cortical_area(&feagi_evo::genome::parser::string_to_cortical_id("iav001").unwrap()));
         assert!(manager.is_initialized());
     }
     
@@ -2853,25 +2864,24 @@ mod tests {
         let mut manager = instance.write();
         
         let area = CorticalArea::new(
-            "test01".to_string(),
+            feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap(),
             0,
             "Test Area".to_string(),
             Dimensions::new(10, 10, 10),
             (0, 0, 0),
-            AreaType::Custom,
         )
         .unwrap();
         
         manager.add_cortical_area(area).unwrap();
         
         // ID -> idx lookup
-        assert_eq!(manager.get_cortical_idx("test01"), Some(0));
+        assert_eq!(manager.get_cortical_idx(&feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap()), Some(0));
         
         // idx -> ID lookup
-        assert_eq!(manager.get_cortical_id(0), Some(&"test01".to_string()));
+        assert_eq!(manager.get_cortical_id(0), Some(feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap()));
         
         // Get area
-        let retrieved_area = manager.get_cortical_area("test01").unwrap();
+        let retrieved_area = manager.get_cortical_area(&feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap()).unwrap();
         assert_eq!(retrieved_area.name, "Test Area");
     }
     
@@ -2883,21 +2893,20 @@ mod tests {
         let mut manager = instance.write();
         
         let area = CorticalArea::new(
-            "test02".to_string(),
+            feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap(),
             0,
             "Test".to_string(),
             Dimensions::new(10, 10, 10),
             (0, 0, 0),
-            AreaType::Custom,
         )
         .unwrap();
         
         manager.add_cortical_area(area).unwrap();
         assert_eq!(manager.get_cortical_area_count(), 1);
         
-        manager.remove_cortical_area("test02").unwrap();
+        manager.remove_cortical_area(&feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap()).unwrap();
         assert_eq!(manager.get_cortical_area_count(), 0);
-        assert!(!manager.has_cortical_area("test02"));
+        assert!(!manager.has_cortical_area(&feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap()));
     }
     
     #[test]
@@ -2908,12 +2917,11 @@ mod tests {
         let mut manager = instance.write();
         
         let area1 = CorticalArea::new(
-            "dup001".to_string(),
+            feagi_evo::genome::parser::string_to_cortical_id("dup001").unwrap(),
             0,
             "First".to_string(),
             Dimensions::new(10, 10, 10),
             (0, 0, 0),
-            AreaType::Custom,
         )
         .unwrap();
         
@@ -2993,20 +3001,25 @@ mod tests {
         
         // Verify cortical areas loaded
         assert_eq!(manager.get_cortical_area_count(), 2);
-        assert!(manager.has_cortical_area("test01"));
-        assert!(manager.has_cortical_area("test02"));
+        
+        // Convert test IDs to CorticalID (genome loader will have converted them)
+        let test01_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
+        let test02_id = feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap();
+        
+        assert!(manager.has_cortical_area(&test01_id));
+        assert!(manager.has_cortical_area(&test02_id));
         
         // Verify area details
-        let area1 = manager.get_cortical_area("test01").unwrap();
+        let area1 = manager.get_cortical_area(&test01_id).unwrap();
         assert_eq!(area1.name, "Test Area 1");
         assert_eq!(area1.dimensions.width, 10);
-        assert_eq!(area1.area_type, AreaType::Sensory);
+        // Note: area_type is deprecated, cortical_type_new should be used
         assert!(area1.properties.contains_key("firing_threshold"));
         
-        let area2 = manager.get_cortical_area("test02").unwrap();
+        let area2 = manager.get_cortical_area(&test02_id).unwrap();
         assert_eq!(area2.name, "Test Area 2");
         assert_eq!(area2.dimensions.width, 5);
-        assert_eq!(area2.area_type, AreaType::Motor);
+        // Note: area_type is deprecated, cortical_type_new should be used
         
         // Verify brain regions loaded
         assert_eq!(manager.get_brain_region_ids().len(), 1);
@@ -3029,7 +3042,7 @@ mod tests {
         let manager_arc = ConnectomeManager::instance();
         
         // Create and attach NPU
-        let npu = Arc::new(Mutex::new(RustNPU::new(100, 1000, 10)));
+        let npu = Arc::new(Mutex::new(RustNPU::new(100, 1000, 10, None)));
         {
             let mut manager = manager_arc.write();
             manager.set_npu(npu.clone());
@@ -3038,19 +3051,19 @@ mod tests {
         let mut manager = manager_arc.write();
         
         // First create a cortical area to add neurons to
+        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
         let area = feagi_types::CorticalArea::new(
-            "test01".to_string(),
+            cortical_id.clone(),
             0, // cortical_idx
             "Test Area".to_string(),
             feagi_types::Dimensions { width: 10, height: 10, depth: 1 },
             (0, 0, 0), // position
-            feagi_types::AreaType::Sensory,
         ).unwrap();
         manager.add_cortical_area(area).unwrap();
         
         // Create two neurons
         let neuron1_id = manager.add_neuron(
-            "test01", 
+            &cortical_id, 
             0, 0, 0, // coordinates
             100.0, // firing_threshold
             0.1, // leak_coefficient
@@ -3064,7 +3077,7 @@ mod tests {
         ).unwrap();
         
         let neuron2_id = manager.add_neuron(
-            "test01",
+            &cortical_id,
             1, 0, 0, // coordinates
             100.0,
             0.1,

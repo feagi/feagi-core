@@ -13,7 +13,7 @@ name = "feagi_evo"
 [dependencies]
 # Core types from existing FEAGI crates  
 feagi-types = { path = "../feagi-types" }
-feagi_data_structures = { version = "0.0.50-beta.52" }
+feagi_data_structures = { workspace = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

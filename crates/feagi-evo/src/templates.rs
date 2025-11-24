@@ -13,6 +13,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::{RuntimeGenome, GenomeMetadata, MorphologyRegistry, PhysiologyConfig, GenomeSignatures, GenomeStats};
 use feagi_types::{CorticalArea, Dimensions};
+use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
 use std::collections::HashMap;
 use serde_json::Value;
 
@@ -54,7 +55,7 @@ pub fn get_default_neural_properties() -> HashMap<String, Value> {
 /// Create _death cortical area (cortical_idx = 0) from template
 pub fn create_death_area() -> CorticalArea {
     let mut area = CorticalArea::new(
-        "_death".to_string(),
+        CoreCorticalType::Death.to_cortical_id(),
         0, // cortical_idx = 0 (reserved)
         "Death".to_string(),
         Dimensions::new(1, 1, 1),
@@ -71,7 +72,7 @@ pub fn create_death_area() -> CorticalArea {
 /// Create _power cortical area (cortical_idx = 1) from template
 pub fn create_power_area() -> CorticalArea {
     let mut area = CorticalArea::new(
-        "_power".to_string(),
+        CoreCorticalType::Power.to_cortical_id(),
         1, // cortical_idx = 1 (reserved)
         "Brain_Power".to_string(),
         Dimensions::new(1, 1, 1),
@@ -457,7 +458,7 @@ mod tests {
         
         // Verify _power has correct properties
         let power = genome.cortical_areas.get(&power_id).unwrap();
-        assert_eq!(power.cortical_id, "_power");
+        assert_eq!(power.cortical_id.to_string(), "_power__");
         assert_eq!(power.cortical_idx, 1);
         assert_eq!(power.dimensions.width, 1);
         assert_eq!(power.dimensions.height, 1);

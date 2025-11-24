@@ -7,6 +7,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::traits::NeuronService;
 use crate::types::*;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
 use parking_lot::RwLock;
@@ -28,6 +29,10 @@ impl NeuronServiceImpl {
 impl NeuronService for NeuronServiceImpl {
     async fn create_neuron(&self, params: CreateNeuronParams) -> ServiceResult<NeuronInfo> {
         debug!(target: "feagi-services", "Creating neuron in area {} at {:?}", params.cortical_id, params.coordinates);
+        
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(&params.cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
         
         let mut manager = self.connectome.write();
         
@@ -81,7 +86,7 @@ impl NeuronService for NeuronServiceImpl {
         
         // Add neuron via ConnectomeManager
         let neuron_id = manager.add_neuron(
-            &params.cortical_id,
+            &cortical_id_typed,
             params.coordinates.0,
             params.coordinates.1,
             params.coordinates.2,
@@ -96,7 +101,7 @@ impl NeuronService for NeuronServiceImpl {
             mp_charge_accumulation,
         ).map_err(ServiceError::from)?;
         
-        let cortical_idx = manager.get_cortical_idx(&params.cortical_id)
+        let cortical_idx = manager.get_cortical_idx(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: params.cortical_id.clone(),
@@ -143,6 +148,7 @@ impl NeuronService for NeuronServiceImpl {
         let coordinates = manager.get_neuron_coordinates(neuron_id);
         let cortical_idx = manager.get_neuron_cortical_idx(neuron_id);
         let cortical_id = manager.get_neuron_cortical_id(neuron_id)
+            .map(|id| id.as_base_64())
             .unwrap_or_else(|| "unknown".to_string());
         
         Ok(NeuronInfo {
@@ -164,7 +170,7 @@ impl NeuronService for NeuronServiceImpl {
         let manager = self.connectome.read();
         
         // Verify area exists
-        if !manager.has_cortical_area(cortical_id) {
+        if !manager.has_cortical_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?) {
             return Err(ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
@@ -172,7 +178,7 @@ impl NeuronService for NeuronServiceImpl {
         }
         
         // Get all neurons in the area and find one at coordinates
-        let neurons = manager.get_neurons_in_area(cortical_id);
+        let neurons = manager.get_neurons_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
         
         for neuron_id in neurons {
             let neuron_coords = manager.get_neuron_coordinates(neuron_id);
@@ -201,7 +207,7 @@ impl NeuronService for NeuronServiceImpl {
         
         // Get neurons from ConnectomeManager
         let manager = self.connectome.read();
-        let neuron_ids = manager.get_neurons_in_area(cortical_id);
+        let neuron_ids = manager.get_neurons_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
         
         let neurons: Vec<NeuronInfo> = neuron_ids
             .iter()
@@ -229,9 +235,13 @@ impl NeuronService for NeuronServiceImpl {
     async fn get_neuron_count(&self, cortical_id: &str) -> ServiceResult<usize> {
         debug!(target: "feagi-services","Getting neuron count for area: {}", cortical_id);
         
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
         let count = self.connectome
             .read()
-            .get_neuron_count_in_area(cortical_id);
+            .get_neuron_count_in_area(&cortical_id_typed);
         
         Ok(count)
     }

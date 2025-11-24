@@ -59,7 +59,9 @@ struct PNSForCallbacks {
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
     #[cfg(feature = "websocket-transport")]
     websocket_streams: Arc<Mutex<Option<WebSocketStreams>>>,
+    #[allow(dead_code)]
     websocket_enabled: bool,
+    #[allow(dead_code)]
     websocket_viz_port: u16,
     sensory_stream_state: Arc<Mutex<StreamState>>,
     motor_stream_state: Arc<Mutex<StreamState>>,

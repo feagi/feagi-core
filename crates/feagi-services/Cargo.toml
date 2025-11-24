@@ -18,7 +18,7 @@ feagi-evo = { path = "../feagi-evo" }
 feagi-bdu = { path = "../feagi-bdu" }
 feagi-burst-engine = { path = "../feagi-burst-engine" }
 feagi-pns = { path = "../feagi-pns" }
-feagi_data_structures = "0.0.50-beta.52"
+feagi_data_structures = { workspace = true }
 
 # Async runtime (optional for embedded)
 async-trait = "0.1"

@@ -7,6 +7,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::traits::AnalyticsService;
 use crate::types::*;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
 use feagi_burst_engine::BurstLoopRunner;
@@ -69,9 +70,9 @@ impl AnalyticsService for AnalyticsServiceImpl {
         debug!(target: "feagi-services","Getting cortical area stats: {}", cortical_id);
         
         let manager = self.connectome.read();
-        let neuron_count = manager.get_neuron_count_in_area(cortical_id);
-        let synapse_count = manager.get_synapse_count_in_area(cortical_id);
-        let density = manager.get_neuron_density(cortical_id);
+        let neuron_count = manager.get_neuron_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
+        let synapse_count = manager.get_synapse_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
+        let density = manager.get_neuron_density(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
         let populated = neuron_count > 0;
         
         Ok(CorticalAreaStats {
@@ -113,16 +114,22 @@ impl AnalyticsService for AnalyticsServiceImpl {
             target_area
         );
         
+        // Convert String to CorticalID
+        let source_id = CorticalID::try_from_base_64(source_area)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e)))?;
+        let target_id = CorticalID::try_from_base_64(target_area)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid target cortical ID: {}", e)))?;
+        
         let manager = self.connectome.read();
         
         // Verify both areas exist
-        if !manager.has_cortical_area(source_area) {
+        if !manager.has_cortical_area(&source_id) {
             return Err(ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: source_area.to_string(),
             });
         }
-        if !manager.has_cortical_area(target_area) {
+        if !manager.has_cortical_area(&target_id) {
             return Err(ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: target_area.to_string(),
@@ -130,7 +137,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
         }
         
         // Get all neurons in source area
-        let source_neurons = manager.get_neurons_in_area(source_area);
+        let source_neurons = manager.get_neurons_in_area(&source_id);
         
         // Count synapses going from source to target
         let mut synapse_count = 0;
@@ -145,7 +152,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
             for (target_neuron_id, weight, _conductance, synapse_type) in outgoing {
                 // Check if target neuron is in target area
                 if let Some(target_cortical_id) = manager.get_neuron_cortical_id(target_neuron_id as u64) {
-                    if target_cortical_id == target_area {
+                    if target_cortical_id.as_base_64() == target_area {
                         synapse_count += 1;
                         total_weight += weight as u64;
                         
@@ -200,7 +207,11 @@ impl AnalyticsService for AnalyticsServiceImpl {
     async fn get_neuron_density(&self, cortical_id: &str) -> ServiceResult<f32> {
         debug!(target: "feagi-services","Getting neuron density for area: {}", cortical_id);
         
-        let density = self.connectome.read().get_neuron_density(cortical_id);
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
+        let density = self.connectome.read().get_neuron_density(&cortical_id_typed);
         Ok(density)
     }
 

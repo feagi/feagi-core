@@ -7,6 +7,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::traits::ConnectomeService;
 use crate::types::*;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
 use feagi_types::{BrainRegion, CorticalArea, Dimensions, RegionType};
@@ -67,9 +68,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let cortical_type_new = CorticalTypeAdapter::parse_from_cortical_group(&params.area_type)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical type: {}", e)))?;
         
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(&params.cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
         // Create CorticalArea
         let mut area = CorticalArea::new(
-            params.cortical_id.clone(),
+            cortical_id_typed,
             0,  // Auto-assigned by ConnectomeManager
             params.name.clone(),
             Dimensions::new(params.dimensions.0, params.dimensions.1, params.dimensions.2),
@@ -142,9 +147,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn delete_cortical_area(&self, cortical_id: &str) -> ServiceResult<()> {
         info!(target: "feagi-services","Deleting cortical area: {}", cortical_id);
         
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
         self.connectome
             .write()
-            .remove_cortical_area(cortical_id)
+            .remove_cortical_area(&cortical_id_typed)
             .map_err(ServiceError::from)?;
         
         Ok(())
@@ -169,24 +178,28 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
         debug!(target: "feagi-services","Getting cortical area: {}", cortical_id);
         
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
         let manager = self.connectome.read();
         
         let area = manager
-            .get_cortical_area(cortical_id)
+            .get_cortical_area(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
         
         let cortical_idx = manager
-            .get_cortical_idx(cortical_id)
+            .get_cortical_idx(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
         
-        let neuron_count = manager.get_neuron_count_in_area(cortical_id);
-        let synapse_count = manager.get_synapse_count_in_area(cortical_id);
+        let neuron_count = manager.get_neuron_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
+        let synapse_count = manager.get_synapse_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
         
         // Get cortical_group from the area (uses cortical_type_new if available)
         let cortical_group = area.get_cortical_group();
@@ -226,7 +239,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         
         let cortical_ids: Vec<String> = {
             let manager = self.connectome.read();
-            manager.get_cortical_area_ids().into_iter().cloned().collect()
+            manager.get_cortical_area_ids().into_iter().map(|id| id.as_base_64()).collect()
         };
         
         let mut areas = Vec::new();
@@ -257,7 +270,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             let ids_refs = manager.get_cortical_area_ids();
             info!(target: "feagi-services", "Found {} cortical areas in ConnectomeManager", area_count);
             info!(target: "feagi-services", "Cortical area IDs (references): {:?}", ids_refs.iter().take(10).collect::<Vec<_>>());
-            ids_refs.into_iter().cloned().collect()
+            ids_refs.into_iter().map(|id| id.as_base_64()).collect()
         }; // Lock dropped here
         info!(target: "feagi-services", "Returning {} cortical area IDs: {:?}", ids.len(), ids.iter().take(10).collect::<Vec<_>>());
         Ok(ids)
@@ -265,7 +278,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {
         debug!(target: "feagi-services","Checking if cortical area exists: {}", cortical_id);
-        Ok(self.connectome.read().has_cortical_area(cortical_id))
+        
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
+        Ok(self.connectome.read().has_cortical_area(&cortical_id_typed))
     }
 
     async fn get_cortical_area_properties(
@@ -274,9 +292,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
     ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>> {
         debug!(target: "feagi-services","Getting cortical area properties: {}", cortical_id);
         
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
         let manager = self.connectome.read();
         manager
-            .get_cortical_area_properties(cortical_id)
+            .get_cortical_area_properties(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
@@ -433,13 +455,20 @@ impl ConnectomeService for ConnectomeServiceImpl {
         info!(target: "feagi-services", "Updating cortical mapping: {} -> {} with {} connections",
               src_area_id, dst_area_id, mapping_data.len());
         
+        // Convert String to CorticalID
+        use feagi_data_structures::genomic::cortical_area::CorticalID;
+        let src_id = CorticalID::try_from_base_64(&src_area_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e)))?;
+        let dst_id = CorticalID::try_from_base_64(&dst_area_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e)))?;
+        
         // Update the cortical_mapping_dst property in ConnectomeManager
         let mut manager = self.connectome.write();
-        manager.update_cortical_mapping(&src_area_id, &dst_area_id, mapping_data.clone())
+        manager.update_cortical_mapping(&src_id, &dst_id, mapping_data.clone())
             .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
         
         // Regenerate synapses for this mapping
-        let synapse_count = manager.regenerate_synapses_for_mapping(&src_area_id, &dst_area_id)
+        let synapse_count = manager.regenerate_synapses_for_mapping(&src_id, &dst_id)
             .map_err(|e| ServiceError::Backend(format!("Failed to regenerate synapses: {}", e)))?;
         
         info!(target: "feagi-services", "Cortical mapping updated: {} synapses created", synapse_count);

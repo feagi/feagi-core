@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use tracing::{info, warn, debug};
 use feagi_bdu::neuroembryogenesis::Neuroembryogenesis;
 use serde_json::Value;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
@@ -260,10 +261,14 @@ impl GenomeService for GenomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "Updating cortical area: {} with {} changes", cortical_id, changes.len());
         
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
         // Verify cortical area exists
         {
             let manager = self.connectome.read();
-            if !manager.has_cortical_area(cortical_id) {
+            if !manager.has_cortical_area(&cortical_id_typed) {
                 return Err(ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: cortical_id.to_string(),
@@ -328,12 +333,16 @@ impl GenomeServiceImpl {
         cortical_id: &str,
         changes: HashMap<String, Value>,
     ) -> ServiceResult<CorticalAreaInfo> {
-        info!(target: "feagi-services", "[FAST-UPDATE] Parameter-only update for {}", cortical_id);
+info!(target: "feagi-services", "[FAST-UPDATE] Parameter-only update for {}", cortical_id);
         
+        
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
         // Get cortical index for NPU updates
         let cortical_idx = {
             let manager = self.connectome.read();
-            manager.get_cortical_idx(cortical_id)
+            manager.get_cortical_idx(&cortical_id_typed)
                 .ok_or_else(|| ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: cortical_id.to_string(),
@@ -363,7 +372,7 @@ impl GenomeServiceImpl {
         // Update ConnectomeManager metadata for consistency
         {
             let mut manager = self.connectome.write();
-            let area = manager.get_cortical_area_mut(cortical_id)
+            let area = manager.get_cortical_area_mut(&cortical_id_typed)
                 .ok_or_else(|| ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: cortical_id.to_string(),
@@ -436,7 +445,8 @@ impl GenomeServiceImpl {
         cortical_id: &str,
         changes: HashMap<String, Value>,
     ) -> ServiceResult<CorticalAreaInfo> {
-        info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
+info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
+        
         
         // Convert cortical_id to CorticalID
         let cortical_id_typed = feagi_evo::string_to_cortical_id(cortical_id)
@@ -461,7 +471,7 @@ impl GenomeServiceImpl {
         // Update ConnectomeManager metadata
         {
             let mut manager = self.connectome.write();
-            let area = manager.get_cortical_area_mut(cortical_id)
+            let area = manager.get_cortical_area_mut(&cortical_id_typed)
                 .ok_or_else(|| ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: cortical_id.to_string(),
@@ -506,6 +516,10 @@ impl GenomeServiceImpl {
         changes: HashMap<String, Value>,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "[STRUCTURAL-REBUILD] Localized rebuild for {}", cortical_id);
+        
+        // Validate cortical ID format
+        let _cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
         
         // Must run on blocking thread due to heavy ConnectomeManager operations
         let connectome = Arc::clone(&self.connectome);
@@ -581,7 +595,7 @@ impl GenomeServiceImpl {
         // Step 2: Delete all neurons in the cortical area
         let neurons_to_delete = {
             let manager = connectome.read();
-            manager.get_neurons_in_area(cortical_id)
+            manager.get_neurons_in_area(&cortical_id_typed)
         };
         
         let deleted_count = if !neurons_to_delete.is_empty() {
@@ -598,11 +612,11 @@ impl GenomeServiceImpl {
         // Step 3: Update cortical area dimensions in ConnectomeManager
         {
             let mut manager = connectome.write();
-            manager.resize_cortical_area(cortical_id, new_dimensions)
+            manager.resize_cortical_area(&cortical_id_typed, new_dimensions)
                 .map_err(|e| ServiceError::Backend(format!("Failed to resize area: {}", e)))?;
             
             // Update neurons_per_voxel
-            if let Some(area) = manager.get_cortical_area_mut(cortical_id) {
+            if let Some(area) = manager.get_cortical_area_mut(&cortical_id_typed) {
                 area.neurons_per_voxel = new_density;
             }
         }
@@ -610,7 +624,7 @@ impl GenomeServiceImpl {
         // Step 4: Recreate neurons with new dimensions/density
         let neurons_created = {
             let mut manager = connectome.write();
-            manager.create_neurons_for_area(cortical_id)
+            manager.create_neurons_for_area(&cortical_id_typed)
                 .map_err(|e| ServiceError::Backend(format!("Failed to create neurons: {}", e)))?
         };
         
@@ -619,7 +633,7 @@ impl GenomeServiceImpl {
         // Step 5: Rebuild outgoing synapses (this area -> others)
         let outgoing_synapses = {
             let mut manager = connectome.write();
-            manager.apply_cortical_mapping(cortical_id)
+            manager.create_neurons_for_area(&cortical_id_typed)
                 .map_err(|e| ServiceError::Backend(format!("Failed to rebuild outgoing synapses: {}", e)))?
         };
         
@@ -642,8 +656,7 @@ impl GenomeServiceImpl {
                         if obj.contains_key(cortical_id) {
                             // This area has mappings to our target - rebuild them
                             let mut manager = connectome.write();
-                            let src_id_str = src_id.to_string();
-                            let count = manager.apply_cortical_mapping(&src_id_str)
+                            let count = manager.apply_cortical_mapping(&src_id)
                                 .map_err(|e| ServiceError::Backend(format!("Failed to rebuild incoming synapses from {}: {}", src_id, e)))?;
                             total += count;
                             info!("[STRUCTURAL-REBUILD] Rebuilt {} incoming synapses from {}", count, src_id);
@@ -668,27 +681,31 @@ impl GenomeServiceImpl {
         cortical_id: &str,
         connectome: &Arc<RwLock<ConnectomeManager>>,
     ) -> ServiceResult<CorticalAreaInfo> {
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
         let manager = connectome.read();
         
-        let area = manager.get_cortical_area(cortical_id)
+        let area = manager.get_cortical_area(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
         
-        let cortical_idx = manager.get_cortical_idx(cortical_id)
+        let cortical_idx = manager.get_cortical_idx(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
         
-        let neuron_count = manager.get_neuron_count_in_area(cortical_id);
-        let synapse_count = manager.get_synapse_count_in_area(cortical_id);
+        let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
+        let synapse_count = manager.get_synapse_count_in_area(&cortical_id_typed);
         
         let cortical_group = area.get_cortical_group();
         
         Ok(CorticalAreaInfo {
-            cortical_id: area.cortical_id.clone(),
+            cortical_id: area.cortical_id.as_base_64(),
             cortical_idx,
             name: area.name.clone(),
             dimensions: (area.dimensions.width, area.dimensions.height, area.dimensions.depth),
@@ -718,28 +735,32 @@ impl GenomeServiceImpl {
     
     /// Helper to get cortical area info
     async fn get_cortical_area_info(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
+        // Convert String to CorticalID
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
         let manager = self.connectome.read();
         
-        let area = manager.get_cortical_area(cortical_id)
+        let area = manager.get_cortical_area(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
         
-        let cortical_idx = manager.get_cortical_idx(cortical_id)
+        let cortical_idx = manager.get_cortical_idx(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
         
-        let neuron_count = manager.get_neuron_count_in_area(cortical_id);
-        let synapse_count = manager.get_synapse_count_in_area(cortical_id);
+        let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
+        let synapse_count = manager.get_synapse_count_in_area(&cortical_id_typed);
         
         // Get cortical_group from the area (uses cortical_type_new if available)
         let cortical_group = area.get_cortical_group();
         
         Ok(CorticalAreaInfo {
-            cortical_id: area.cortical_id.clone(),
+            cortical_id: area.cortical_id.as_base_64(),
             cortical_idx,
             name: area.name.clone(),
             dimensions: (area.dimensions.width, area.dimensions.height, area.dimensions.depth),

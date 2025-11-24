@@ -17,6 +17,8 @@ Licensed under the Apache License, Version 2.0
 use feagi_data_structures::genomic::cortical_area::{
     CorticalAreaType, IOCorticalAreaDataType,
 };
+#[cfg(test)]
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_types::CorticalArea;
 
@@ -171,19 +173,18 @@ pub fn validate_connectivity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_types::{AreaType, Dimensions};
+    use feagi_types::{Dimensions};
     use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
 
     #[test]
     fn test_get_io_data_type() {
         // Create area with IOCorticalAreaDataType
         let mut area = CorticalArea::new(
-            "aWljMDAwX18=".to_string(),
+            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Test IPU".to_string(),
             Dimensions::new(10, 10, 1),
             (0, 0, 0),
-            AreaType::Sensory,
         ).unwrap();
         
         // Initially None
@@ -201,12 +202,11 @@ mod tests {
     #[test]
     fn test_uses_absolute_frames() {
         let mut area = CorticalArea::new(
-            "aWljMDAwX18=".to_string(),
+            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Test IPU".to_string(),
             Dimensions::new(10, 10, 1),
             (0, 0, 0),
-            AreaType::Sensory,
         ).unwrap();
         
         area = area.with_cortical_type_new(CorticalAreaType::BrainInput(
@@ -220,12 +220,11 @@ mod tests {
     #[test]
     fn test_uses_cartesian_encoding() {
         let mut area = CorticalArea::new(
-            "aWljMDAwX18=".to_string(),
+            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Test Vision".to_string(),
             Dimensions::new(10, 10, 1),
             (0, 0, 0),
-            AreaType::Sensory,
         ).unwrap();
         
         area = area.with_cortical_type_new(CorticalAreaType::BrainInput(
@@ -239,12 +238,11 @@ mod tests {
     #[test]
     fn test_uses_percentage_encoding() {
         let mut area = CorticalArea::new(
-            "b21vdDAwX18=".to_string(),
+            CorticalID::try_from_base_64("b21vdDAwX18=").unwrap(),
             0,
             "Test Motor".to_string(),
             Dimensions::new(5, 5, 1),
             (0, 0, 0),
-            AreaType::Motor,
         ).unwrap();
         
         area = area.with_cortical_type_new(CorticalAreaType::BrainOutput(
@@ -261,12 +259,11 @@ mod tests {
     #[test]
     fn test_describe_cortical_type() {
         let mut area = CorticalArea::new(
-            "aWljMDAwX18=".to_string(),
+            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Test IPU".to_string(),
             Dimensions::new(10, 10, 1),
             (0, 0, 0),
-            AreaType::Sensory,
         ).unwrap();
         
         area = area.with_cortical_type_new(CorticalAreaType::BrainInput(

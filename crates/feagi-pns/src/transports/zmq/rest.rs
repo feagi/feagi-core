@@ -17,6 +17,7 @@ pub struct RestRequest {
 }
 
 /// REST response to agent
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RestResponse {
     pub status: u16,

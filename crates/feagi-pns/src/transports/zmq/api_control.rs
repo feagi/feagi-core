@@ -21,6 +21,7 @@ pub struct ApiRequest {
 }
 
 /// API response to FastAPI process
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiResponse {
     pub status: u16,

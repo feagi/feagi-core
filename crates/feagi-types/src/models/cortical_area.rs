@@ -7,6 +7,7 @@ Represents a 3D cortical area containing neurons with specific functional roles.
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use feagi_data_structures::genomic::cortical_area::CorticalAreaType as NewCorticalAreaType;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 use crate::{FeagiError, Dimensions, Position};
 
@@ -27,8 +28,9 @@ pub type Result<T> = std::result::Result<T, FeagiError>;
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalArea {
-    /// Unique identifier (6-char legacy, 8-char padded, or base64-encoded)
-    pub cortical_id: String,
+    /// Unique identifier (8-byte CorticalID from feagi-data-processing)
+    /// Zero-copy, type-safe identifier for performance in hot paths
+    pub cortical_id: CorticalID,
 
     /// Integer index assigned by ConnectomeManager
     /// Used for fast array indexing in NPU
@@ -187,20 +189,14 @@ impl CorticalArea {
     /// - name is empty
     ///
     pub fn new(
-        cortical_id: String,
+        cortical_id: CorticalID,
         cortical_idx: u32,
         name: String,
         dimensions: Dimensions,
         position: (i32, i32, i32),
     ) -> Result<Self> {
-        // Validate cortical_id (accept 6-char legacy, 8-char, or base64)
-        if cortical_id.is_empty() || cortical_id.len() > 16 {
-            return Err(FeagiError::InvalidArea(format!(
-                "cortical_id must be between 1-16 characters, got {} chars: '{}'",
-                cortical_id.len(), cortical_id
-            )));
-        }
-
+        // No need to validate cortical_id - CorticalID is already validated at construction
+        
         // Validate dimensions (must be > 0)
         if dimensions.width == 0 || dimensions.height == 0 || dimensions.depth == 0 {
             return Err(FeagiError::InvalidArea(format!(
@@ -499,12 +495,11 @@ mod tests {
     #[test]
     fn test_cortical_area_creation() {
         let area = CorticalArea::new(
-            "iav001".to_string(),
+            feagi_data_structures::genomic::cortical_area::CorticalID::try_from_base_64("iav001").unwrap(),
             0,
             "Visual Input".to_string(),
             Dimensions::new(128, 128, 20),
             (0, 0, 0),
-            AreaType::Sensory,
         )
         .unwrap();
 
@@ -528,12 +523,11 @@ mod tests {
 
         // Test too long ID (>16 chars)
         let result2 = CorticalArea::new(
-            "this_is_way_too_long_cortical_id".to_string(),
+            feagi_data_structures::genomic::cortical_area::CorticalID::try_from_base_64("this_is_way_too_long_cortical_id").unwrap(),
             0,
             "Test".to_string(),
             Dimensions::new(10, 10, 10),
             (0, 0, 0),
-            AreaType::Custom,
         );
         assert!(result2.is_err());
     }
@@ -541,12 +535,11 @@ mod tests {
     #[test]
     fn test_contains_position() {
         let area = CorticalArea::new(
-            "test01".to_string(),
+            feagi_data_structures::genomic::cortical_area::CorticalID::try_from_base_64("test01").unwrap(),
             0,
             "Test Area".to_string(),
             Dimensions::new(10, 10, 10),
             (5, 5, 5),
-            AreaType::Custom,
         )
         .unwrap();
 
@@ -559,12 +552,11 @@ mod tests {
     #[test]
     fn test_position_conversion() {
         let area = CorticalArea::new(
-            "test02".to_string(),
+            feagi_data_structures::genomic::cortical_area::CorticalID::try_from_base_64("test02").unwrap(),
             0,
             "Test Area".to_string(),
             Dimensions::new(10, 10, 10),
             (100, 200, 300),
-            AreaType::Custom,
         )
         .unwrap();
 
@@ -585,12 +577,11 @@ mod tests {
     #[test]
     fn test_properties() {
         let area = CorticalArea::new(
-            "test03".to_string(),
+            feagi_data_structures::genomic::cortical_area::CorticalID::try_from_base_64("test03").unwrap(),
             0,
             "Test".to_string(),
             Dimensions::new(10, 10, 10),
             (0, 0, 0),
-            AreaType::Sensory,
         )
         .unwrap()
         .add_property("resolution".to_string(), serde_json::json!(128))

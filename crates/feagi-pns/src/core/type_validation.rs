@@ -211,17 +211,17 @@ pub fn should_use_compression(area: &CorticalArea) -> bool {
 mod tests {
     use super::*;
     use feagi_types::{AreaType, Dimensions};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
     #[test]
     fn test_validate_sensory_compatibility() {
         // Create IPU area with CartesianPlane
         let mut area = CorticalArea::new(
-            "aWljMDAwX18=".to_string(),
+            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Vision Input".to_string(),
             Dimensions::new(128, 128, 3),
             (0, 0, 0),
-            AreaType::Sensory,
         )
         .unwrap();
 
@@ -245,12 +245,11 @@ mod tests {
     fn test_validate_motor_compatibility() {
         // Create OPU area
         let mut area = CorticalArea::new(
-            "b21vdDAwX18=".to_string(),
+            CorticalID::try_from_base_64("b21vdDAwX18=").unwrap(),
             0,
             "Motor Output".to_string(),
             Dimensions::new(10, 10, 1),
             (0, 0, 0),
-            AreaType::Motor,
         )
         .unwrap();
 
@@ -269,12 +268,11 @@ mod tests {
     #[test]
     fn test_get_recommended_buffer_size() {
         let mut area = CorticalArea::new(
-            "aWljMDAwX18=".to_string(),
+            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Vision Input".to_string(),
             Dimensions::new(128, 128, 3),
             (0, 0, 0),
-            AreaType::Sensory,
         )
         .unwrap();
 
@@ -292,12 +290,11 @@ mod tests {
     #[test]
     fn test_should_use_compression() {
         let mut large_area = CorticalArea::new(
-            "aWljMDAwX18=".to_string(),
+            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Large Vision".to_string(),
             Dimensions::new(128, 128, 3),
             (0, 0, 0),
-            AreaType::Sensory,
         )
         .unwrap();
 

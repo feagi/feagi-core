@@ -309,9 +309,9 @@ impl GenomeParser {
                 (0, 0, 0)
             };
             
-            // Create cortical area with normalized base64 format
+            // Create cortical area with CorticalID object (zero-copy, type-safe)
             let mut area = CorticalArea::new(
-                cortical_id.as_base_64(),
+                cortical_id,
                 0, // cortical_idx will be assigned by ConnectomeManager
                 name,
                 dimensions,

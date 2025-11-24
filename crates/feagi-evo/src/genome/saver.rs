@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 use feagi_types::{CorticalArea, BrainRegion};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::types::{EvoError, EvoResult};
 
 /// Genome saver
@@ -37,7 +38,7 @@ impl GenomeSaver {
     ///
     #[deprecated(note = "Use feagi_evo::save_genome_to_json(RuntimeGenome) instead. This produces incomplete v2.1 format.")]
     pub fn save_to_json(
-        cortical_areas: &HashMap<String, CorticalArea>,
+        cortical_areas: &HashMap<CorticalID, CorticalArea>,
         brain_regions: &HashMap<String, (BrainRegion, Option<String>)>,
         genome_id: Option<String>,
         genome_title: Option<String>,
@@ -46,6 +47,7 @@ impl GenomeSaver {
         let mut blueprint = serde_json::Map::new();
         
         for (cortical_id, area) in cortical_areas {
+            let cortical_id_str = cortical_id.as_base_64();
             let mut area_data = serde_json::Map::new();
             
             // Required fields
@@ -70,7 +72,7 @@ impl GenomeSaver {
                 area_data.insert(key.clone(), value.clone());
             }
             
-            blueprint.insert(cortical_id.clone(), Value::Object(area_data));
+            blueprint.insert(cortical_id_str, Value::Object(area_data));
         }
         
         // Build brain_regions section

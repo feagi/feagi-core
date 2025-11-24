@@ -42,9 +42,8 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
     // Convert cortical areas to HashMap with CorticalID keys
     let mut cortical_areas = HashMap::new();
     for area in parsed.cortical_areas {
-        // Convert cortical_id string to CorticalID
-        let cortical_id = crate::genome::parser::string_to_cortical_id(&area.cortical_id)?;
-        cortical_areas.insert(cortical_id, area);
+        // area.cortical_id is already a CorticalID - use it directly
+        cortical_areas.insert(area.cortical_id, area);
     }
     
     // Convert brain regions to HashMap

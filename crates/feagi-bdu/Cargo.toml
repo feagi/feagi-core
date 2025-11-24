@@ -14,7 +14,7 @@ name = "feagi_bdu"
 feagi-types = { path = "../feagi-types" }
 feagi-evo = { path = "../feagi-evo" }
 feagi-burst-engine = { path = "../feagi-burst-engine" }
-feagi_data_structures = "0.0.50-beta.52"
+feagi_data_structures = { workspace = true }
 
 # Performance (using workspace versions)
 rayon = { workspace = true }
