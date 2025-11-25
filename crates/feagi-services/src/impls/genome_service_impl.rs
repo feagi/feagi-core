@@ -27,6 +27,10 @@ pub struct GenomeServiceImpl {
     /// Currently loaded genome (source of truth for structural changes)
     /// This is updated when genome is loaded or when cortical areas are modified
     current_genome: Arc<RwLock<Option<feagi_evo::RuntimeGenome>>>,
+    /// Counter tracking how many genomes have been loaded (increments on each load)
+    genome_load_counter: Arc<RwLock<i32>>,
+    /// Timestamp of when the current genome was loaded
+    genome_load_timestamp: Arc<RwLock<Option<i64>>>,
 }
 
 impl GenomeServiceImpl {
@@ -35,6 +39,8 @@ impl GenomeServiceImpl {
             connectome,
             parameter_queue: None,
             current_genome: Arc::new(RwLock::new(None)),
+            genome_load_counter: Arc::new(RwLock::new(0)),
+            genome_load_timestamp: Arc::new(RwLock::new(None)),
         }
     }
     
@@ -46,6 +52,8 @@ impl GenomeServiceImpl {
             connectome,
             parameter_queue: Some(parameter_queue),
             current_genome: Arc::new(RwLock::new(None)),
+            genome_load_counter: Arc::new(RwLock::new(0)),
+            genome_load_timestamp: Arc::new(RwLock::new(None)),
         }
     }
 }
@@ -67,6 +75,22 @@ impl GenomeService for GenomeServiceImpl {
         info!(target: "feagi-services", "Storing RuntimeGenome with {} cortical areas, {} morphologies", 
             genome.cortical_areas.len(), genome.morphologies.iter().count());
         *self.current_genome.write() = Some(genome.clone());
+        
+        // Increment genome load counter and set timestamp
+        let genome_num = {
+            let mut counter = self.genome_load_counter.write();
+            *counter += 1;
+            *counter
+        };
+        
+        let genome_timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_secs() as i64);
+        
+        *self.genome_load_timestamp.write() = genome_timestamp;
+        
+        info!(target: "feagi-services", "Genome load #{}, timestamp: {:?}", genome_num, genome_timestamp);
         
         // Load into connectome via ConnectomeManager
         // This involves synaptogenesis which can be CPU-intensive, so run it on a blocking thread
@@ -162,6 +186,8 @@ impl GenomeService for GenomeServiceImpl {
             cortical_area_count,
             brain_region_count,
             simulation_timestep,  // From genome physiology
+            genome_num: Some(genome_num),  // Actual load counter
+            genome_timestamp,  // Timestamp when genome was loaded
         })
     }
 
@@ -209,13 +235,36 @@ impl GenomeService for GenomeServiceImpl {
             (cortical_area_count, brain_region_count)
         }; // Lock dropped here
         
+        // Get simulation_timestep from stored genome if available
+        let simulation_timestep = {
+            let genome_opt = self.current_genome.read();
+            genome_opt
+                .as_ref()
+                .map(|g| g.physiology.simulation_timestep)
+                .unwrap_or(0.025)  // Default if no genome loaded
+        };
+        
+        // Get actual genome load counter and timestamp
+        let genome_num = {
+            let counter = self.genome_load_counter.read();
+            if *counter > 0 {
+                Some(*counter)
+            } else {
+                None  // No genome loaded yet
+            }
+        };
+        
+        let genome_timestamp = *self.genome_load_timestamp.read();
+        
         Ok(GenomeInfo {
-            genome_id: "current".to_string(),  // TODO: Track genome_id in ConnectomeManager
+            genome_id: "current".to_string(),
             genome_title: "Current Genome".to_string(),
             version: "2.1".to_string(),
             cortical_area_count,
             brain_region_count,
-            simulation_timestep: 0.025,  // Default value (TODO: Store in ConnectomeManager)
+            simulation_timestep,
+            genome_num,
+            genome_timestamp,
         })
     }
 

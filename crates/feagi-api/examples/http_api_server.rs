@@ -92,15 +92,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("🌐 Creating API state...");
 
+    // Get FEAGI session timestamp (when this instance started)
+    let feagi_session_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
     let api_state = ApiState {
+        agent_service: None,
         analytics_service,
         connectome_service,
         genome_service,
         neuron_service,
         runtime_service,
+        snapshot_service: None,
+        feagi_session_timestamp,
     };
 
-    println!("✅ API state created\n");
+    println!("✅ API state created (FEAGI session: {})\n", feagi_session_timestamp);
 
     // ========================================================================
     // STEP 4: Create and Start HTTP Server

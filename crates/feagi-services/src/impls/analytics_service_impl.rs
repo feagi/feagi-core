@@ -228,5 +228,43 @@ impl AnalyticsService for AnalyticsServiceImpl {
         let ready = self.connectome.read().has_npu();
         Ok(ready)
     }
+
+    async fn get_regular_neuron_count(&self) -> ServiceResult<usize> {
+        debug!(target: "feagi-services","Getting regular (non-memory) neuron count");
+        
+        let manager = self.connectome.read();
+        let mut regular_count = 0;
+        
+        // Iterate through all cortical areas and sum neurons from non-memory areas
+        for cortical_id in manager.get_cortical_area_ids() {
+            if let Some(area) = manager.get_cortical_area(&cortical_id) {
+                let cortical_group = area.get_cortical_group();
+                if cortical_group != "MEMORY" {
+                    regular_count += manager.get_neuron_count_in_area(&cortical_id);
+                }
+            }
+        }
+        
+        Ok(regular_count)
+    }
+
+    async fn get_memory_neuron_count(&self) -> ServiceResult<usize> {
+        debug!(target: "feagi-services","Getting memory neuron count");
+        
+        let manager = self.connectome.read();
+        let mut memory_count = 0;
+        
+        // Iterate through all cortical areas and sum neurons from memory areas
+        for cortical_id in manager.get_cortical_area_ids() {
+            if let Some(area) = manager.get_cortical_area(&cortical_id) {
+                let cortical_group = area.get_cortical_group();
+                if cortical_group == "MEMORY" {
+                    memory_count += manager.get_neuron_count_in_area(&cortical_id);
+                }
+            }
+        }
+        
+        Ok(memory_count)
+    }
 }
 

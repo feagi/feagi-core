@@ -83,12 +83,21 @@ async fn create_test_server() -> axum::Router {
     let runtime_service = Arc::new(MockRuntimeService) as Arc<dyn feagi_services::RuntimeService + Send + Sync>;
     
     // Create API state
+    // Get FEAGI session timestamp (when this instance started)
+    let feagi_session_timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0);
+
     let state = ApiState {
+        agent_service: None,
         analytics_service,
         connectome_service,
         genome_service,
         neuron_service,
         runtime_service,
+        snapshot_service: None,
+        feagi_session_timestamp,
     };
     
     // Create router

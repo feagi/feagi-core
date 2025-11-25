@@ -167,6 +167,8 @@ pub struct GenomeInfo {
     pub cortical_area_count: usize,
     pub brain_region_count: usize,
     pub simulation_timestep: f64,  // Simulation timestep in seconds from physiology
+    pub genome_num: Option<i32>,   // Genome version/generation number
+    pub genome_timestamp: Option<i64>,  // Unix timestamp when genome was loaded/created
 }
 
 /// Parameters for loading a genome

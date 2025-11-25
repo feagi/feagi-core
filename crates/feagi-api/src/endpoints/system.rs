@@ -80,30 +80,78 @@ pub async fn get_health_check(
         .map(|status| status.is_running)
         .unwrap_or(false);
 
-    let _burst_count = state.runtime_service  // Will be used in response when wired
+    let _burst_count = state.runtime_service
         .get_burst_count()
         .await
         .ok();
 
-    // TODO: Get these from actual services when available
-    let connected_agents = None; // TODO: Get from agent service
+    // Get connected agents count from agent service
+    let connected_agents = if let Some(agent_service) = state.agent_service.as_ref() {
+        agent_service
+            .list_agents()
+            .await
+            .ok()
+            .map(|agents| agents.len() as i32)
+    } else {
+        None
+    };
+
+    // Get total synapse count from analytics service
+    let synapse_count = analytics_service
+        .get_total_synapse_count()
+        .await
+        .ok()
+        .map(|count| count as i64);
+
+    // Get regular and memory neuron counts
+    let regular_neuron_count = analytics_service
+        .get_regular_neuron_count()
+        .await
+        .ok()
+        .map(|count| count as i64);
+    
+    let memory_neuron_count = analytics_service
+        .get_memory_neuron_count()
+        .await
+        .ok()
+        .map(|count| count as i64);
+
+    // Get genome info for simulation_timestep, genome_num, and genome_timestamp
+    let genome_info = state.genome_service
+        .get_genome_info()
+        .await
+        .ok();
+    
+    let simulation_timestep = genome_info.as_ref().map(|info| info.simulation_timestep);
+    let genome_num = genome_info.as_ref().and_then(|info| info.genome_num);
+    let genome_timestamp = genome_info.as_ref().and_then(|info| info.genome_timestamp);
+
+    // Calculate estimated brain size in MB
+    // Rough estimates: ~64 bytes per neuron + ~16 bytes per synapse + metadata
+    #[allow(non_snake_case)]  // Matching Python API field name for compatibility
+    let estimated_brain_size_in_MB = {
+        let neuron_bytes = health.neuron_count * 64;
+        let synapse_bytes = synapse_count.unwrap_or(0) as usize * 16;
+        let metadata_bytes = health.cortical_area_count * 512; // ~512 bytes per area
+        let total_bytes = neuron_bytes + synapse_bytes + metadata_bytes;
+        Some((total_bytes as f64) / (1024.0 * 1024.0))
+    };
+
+    // Configuration values (should eventually come from config service)
     let influxdb_availability = false; // TODO: Get from monitoring service
     let neuron_count_max = 1_000_000; // TODO: Get from config
     let synapse_count_max = 10_000_000; // TODO: Get from config
     let latest_changes_saved_externally = false; // TODO: Get from state manager
     let genome_availability = health.cortical_area_count > 0;
     let genome_validity = Some(health.brain_readiness);
-    let feagi_session = None; // TODO: Get from state manager
+    
+    // Get FEAGI session timestamp (unique identifier for this FEAGI instance)
+    let feagi_session = Some(state.feagi_session_timestamp);
+    
+    // Fields requiring future service implementations
     let fitness = None; // TODO: Get from evolution service
-    let memory_neuron_count = None; // TODO: Get from NPU when available
-    let regular_neuron_count = None; // TODO: Get from NPU when available
-    #[allow(non_snake_case)]  // Matching Python API field name for compatibility
-    let estimated_brain_size_in_MB = None; // TODO: Calculate from NPU
-    let genome_num = None; // TODO: Get from genome service
-    let genome_timestamp = None; // TODO: Get from genome service
-    let simulation_timestep = None; // TODO: Get from burst engine config
-    let memory_area_stats = None; // TODO: Get from NPU
-    let amalgamation_pending = None; // TODO: Get from genome service
+    let memory_area_stats = None; // TODO: Requires memory area analysis
+    let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
 
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,
@@ -121,7 +169,7 @@ pub async fn get_health_check(
         neuron_count: Some(health.neuron_count as i64),
         memory_neuron_count,
         regular_neuron_count,
-        synapse_count: Some(0), // TODO: Get from NPU
+        synapse_count,
         estimated_brain_size_in_MB,
         genome_num,
         genome_timestamp,

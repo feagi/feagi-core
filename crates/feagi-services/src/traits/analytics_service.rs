@@ -110,6 +110,20 @@ pub trait AnalyticsService: Send + Sync {
     /// * `bool` - True if burst engine is active
     ///
     async fn is_burst_engine_ready(&self) -> ServiceResult<bool>;
+
+    /// Get count of neurons in non-memory cortical areas
+    ///
+    /// # Returns
+    /// * `usize` - Count of regular (non-memory) neurons
+    ///
+    async fn get_regular_neuron_count(&self) -> ServiceResult<usize>;
+
+    /// Get count of neurons in memory-type cortical areas
+    ///
+    /// # Returns
+    /// * `usize` - Count of memory neurons
+    ///
+    async fn get_memory_neuron_count(&self) -> ServiceResult<usize>;
 }
 
 

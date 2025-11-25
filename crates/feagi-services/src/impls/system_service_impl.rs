@@ -42,6 +42,14 @@ impl SystemServiceImpl {
             .unwrap_or(0)
     }
 
+    /// Get FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
+    pub fn get_feagi_session_timestamp(&self) -> i64 {
+        self.start_time
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map(|d| d.as_millis() as i64)
+            .unwrap_or(0)
+    }
+
     /// Get current timestamp in ISO 8601 format
     fn get_timestamp() -> String {
         chrono::Utc::now().to_rfc3339()

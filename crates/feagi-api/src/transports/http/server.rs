@@ -34,6 +34,9 @@ pub struct ApiState {
     pub neuron_service: Arc<dyn NeuronService + Send + Sync>,
     pub runtime_service: Arc<dyn RuntimeService + Send + Sync>,
     pub snapshot_service: Option<Arc<dyn feagi_services::SnapshotService + Send + Sync>>,
+    /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
+    /// This is a unique identifier for each FEAGI instance/session
+    pub feagi_session_timestamp: i64,
 }
 
 /// Create the main HTTP server application
