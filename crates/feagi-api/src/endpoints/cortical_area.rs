@@ -144,6 +144,9 @@ pub async fn get_cortical_types(State(_state): State<ApiState>) -> ApiResult<Jso
 }
 
 /// GET /v1/cortical_area/cortical_map_detailed
+/// 
+/// Returns cortical mapping data (src -> dst mappings) for all cortical areas.
+/// Format: { "src_id": { "dst_id": [mapping_rules], ... }, ... }
 #[utoipa::path(
     get, 
     path = "/v1/cortical_area/cortical_map_detailed",
@@ -157,9 +160,17 @@ pub async fn get_cortical_map_detailed(State(state): State<ApiState>) -> ApiResu
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {
         Ok(areas) => {
-            let map: HashMap<String, serde_json::Value> = areas.into_iter()
-                .map(|area| (area.cortical_id.clone(), serde_json::to_value(area).unwrap_or_default()))
-                .collect();
+            let mut map: HashMap<String, serde_json::Value> = HashMap::new();
+            
+            for area in areas {
+                // Extract cortical_mapping_dst from area properties
+                if let Some(cortical_mapping_dst) = area.properties.get("cortical_mapping_dst") {
+                    if !cortical_mapping_dst.is_null() && cortical_mapping_dst.as_object().map_or(false, |obj| !obj.is_empty()) {
+                        map.insert(area.cortical_id.clone(), cortical_mapping_dst.clone());
+                    }
+                }
+            }
+            
             Ok(Json(map))
         },
         Err(e) => Err(ApiError::internal(format!("Failed to get detailed map: {}", e))),
