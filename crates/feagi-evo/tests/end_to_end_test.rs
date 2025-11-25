@@ -29,16 +29,15 @@ fn test_complete_genome_workflow() {
     );
     
     // Add a cortical area (use valid core ID)
+    let test_id = feagi_evo::string_to_cortical_id("_power").expect("Valid ID");
     let area = feagi_types::CorticalArea::new(
-        "_power".to_string(),
+        test_id.clone(),
         0,
         "Test Area".to_string(),
         feagi_types::Dimensions::new(10, 10, 10),
         (0, 0, 0),
-        feagi_types::AreaType::Custom,
     ).expect("Failed to create cortical area");
     
-    let test_id = feagi_evo::string_to_cortical_id("_power").expect("Valid ID");
     genome.cortical_areas.insert(test_id, area);
     
     // 2. Validate genome
@@ -105,14 +104,14 @@ fn test_flat_to_hierarchical_conversion() {
         "genome_title": "Flat Test Genome",
         "version": "2.0",
         "blueprint": {
-            "_____10c-_power-cx-__name-t": "Test Area",
-            "_____10c-_power-cx-___bbx-i": 10,
-            "_____10c-_power-cx-___bby-i": 10,
-            "_____10c-_power-cx-___bbz-i": 10,
-            "_____10c-_power-cx-rcordx-i": 0,
-            "_____10c-_power-cx-rcordy-i": 0,
-            "_____10c-_power-cx-rcordz-i": 0,
-            "_____10c-_power-cx-_group-t": "CUSTOM"
+            "_____10c-___power-cx-__name-t": "Test Area",
+            "_____10c-___power-cx-___bbx-i": 10,
+            "_____10c-___power-cx-___bby-i": 10,
+            "_____10c-___power-cx-___bbz-i": 10,
+            "_____10c-___power-cx-rcordx-i": 0,
+            "_____10c-___power-cx-rcordy-i": 0,
+            "_____10c-___power-cx-rcordz-i": 0,
+            "_____10c-___power-cx-_group-t": "CORE"
         },
         "neuron_morphologies": {
             "block_to_block": {
@@ -133,11 +132,11 @@ fn test_flat_to_hierarchical_conversion() {
     // Verify conversion
     assert!(hierarchical.get("blueprint").is_some());
     let blueprint = hierarchical.get("blueprint").unwrap().as_object().unwrap();
-    assert!(blueprint.contains_key("_power"), "Blueprint should contain _power area");
+    assert!(blueprint.contains_key("___power"), "Blueprint should contain ___power area");
     
-    let area = blueprint.get("_power").unwrap().as_object().unwrap();
+    let area = blueprint.get("___power").unwrap().as_object().unwrap();
     assert_eq!(area.get("cortical_name").unwrap(), "Test Area");
-    assert_eq!(area.get("cortical_type").unwrap(), "CUSTOM");
+    assert_eq!(area.get("cortical_type").unwrap(), "CORE");
     
     // Load as RuntimeGenome
     let json_str = serde_json::to_string_pretty(&hierarchical).unwrap();

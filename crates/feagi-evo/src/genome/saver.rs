@@ -215,8 +215,9 @@ mod tests {
         assert_eq!(parsed.brain_regions.len(), 1);
         
         let area = &parsed.cortical_areas[0];
-        // cortical_id is now stored in base64 format after roundtrip (underscore-padded)
-        assert_eq!(area.cortical_id, "X3Bvd2VyX18=");
+        // cortical_id is now stored as CorticalID object after roundtrip
+        let expected_power_id = feagi_data_structures::genomic::cortical_area::CoreCorticalType::Power.to_cortical_id();
+        assert_eq!(area.cortical_id, expected_power_id);
         assert_eq!(area.name, "Test Area");
         assert_eq!(area.dimensions.width, 10);
         assert_eq!(area.position, (5, 5, 5));

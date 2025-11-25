@@ -283,20 +283,20 @@ fn validate_cortical_id_format(_cortical_id: &CorticalID, display: &str, result:
     validate_io_area_id(display, result);
 }
 
-/// Validate CORE area IDs (power, death, health, energy, etc.)
+/// Validate CORE area IDs (power, death, etc.) using feagi-data-processing types
 fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
-    // Known valid CORE area IDs
-    const VALID_CORE_IDS: &[&str] = &[
-        "_power__",  // Power injector
-        "_death__",  // Death detector
-        "_health_",  // Health monitor (7 chars + 1 padding)
-        "_energy_",  // Energy monitor (7 chars + 1 padding)
+    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+    
+    // Generate valid CORE IDs from the authoritative source (feagi-data-processing)
+    let valid_core_ids: Vec<String> = vec![
+        CoreCorticalType::Power.to_cortical_id().to_string(),  // "___power"
+        CoreCorticalType::Death.to_cortical_id().to_string(),  // "___death"
     ];
     
-    if !VALID_CORE_IDS.contains(&display) {
+    if !valid_core_ids.contains(&display.to_string()) {
         result.add_error(format!(
             "Invalid CORE cortical ID: '{}' - must be one of: {:?}",
-            display, VALID_CORE_IDS
+            display, valid_core_ids
         ));
     }
 }
@@ -662,16 +662,15 @@ mod tests {
         };
         
         // Add a valid cortical area (use _power which is a valid core ID)
+        let test_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
         let area = feagi_types::CorticalArea::new(
-            "_power".to_string(),
+            test_id.clone(),
             0,
             "Test Area".to_string(),
             feagi_types::Dimensions::new(10, 10, 10),
             (0, 0, 0),
-            feagi_types::AreaType::Custom,
         ).expect("Failed to create cortical area");
         
-        let test_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
         genome.cortical_areas.insert(test_id, area);
         
         let result = validate_genome(&genome);

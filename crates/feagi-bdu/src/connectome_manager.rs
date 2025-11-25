@@ -271,28 +271,14 @@ impl ConnectomeManager {
         }
         
         // CRITICAL: Reserve cortical_idx 0 for _death, 1 for _power
-        // Note: Core IDs may be base64 encoded, so we need to check all possible formats
-        use feagi_data_structures::genomic::cortical_area::CorticalID;
+        // Use feagi-data-processing types as single source of truth
+        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
         
-        // Helper to check if cortical_id matches a core area (handles base64 or display format)
-        let is_core_area = |id_str: &str, core_name: &str| -> bool {
-            // Check direct string match (legacy, display, or padded format)
-            if id_str == core_name || id_str == format!("{:_<8}", core_name) {
-                return true;
-            }
-            // Try to decode as base64 and check
-            if let Ok(cid) = CorticalID::try_from_base_64(id_str) {
-                let decoded = cid.to_string();
-                if decoded == core_name || decoded == format!("{:_<8}", core_name) {
-                    return true;
-                }
-            }
-            false
-        };
+        let death_id = CoreCorticalType::Death.to_cortical_id();
+        let power_id = CoreCorticalType::Power.to_cortical_id();
         
-        let cortical_id_str = area.cortical_id.to_string();
-        let is_death_area = is_core_area(&cortical_id_str, "_death");
-        let is_power_area = is_core_area(&cortical_id_str, "_power");
+        let is_death_area = &area.cortical_id == &death_id;
+        let is_power_area = &area.cortical_id == &power_id;
         
         if is_death_area {
             info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=0 to _death area (id={})", area.cortical_id);
@@ -852,8 +838,9 @@ impl ConnectomeManager {
         .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
         
         // CRITICAL: Register cortical area name in NPU for visualization/burst loop lookups
-        // Use base64 format to match what BV stores in its cache (from API responses)
-        npu_lock.register_cortical_area(*cortical_idx, cortical_id.as_base_64());
+        // Use raw 8-byte ASCII format (NOT base64) for visualization serialization
+        // Note: API responses use base64, but visualization data stream uses raw ASCII
+        npu_lock.register_cortical_area(*cortical_idx, cortical_id.to_string());
         
         info!(target: "feagi-bdu","Created {} neurons for area {} via NPU", neuron_count, cortical_id);
         

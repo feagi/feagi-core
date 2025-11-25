@@ -172,15 +172,27 @@ fn convert_dstmap_keys_to_base64(dstmap: &Value) -> Value {
 
 /// Convert a string cortical_id to CorticalID
 /// Handles both old 6-char format and new base64 format
+/// CRITICAL: Uses feagi-data-processing types as single source of truth for core areas
 pub fn string_to_cortical_id(id_str: &str) -> EvoResult<CorticalID> {
+    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+    
     // Try base64 first (new format)
     if let Ok(cortical_id) = CorticalID::try_from_base_64(id_str) {
         return Ok(cortical_id);
     }
     
-    // Fall back to ASCII (old 6-char format → pad to 8 bytes with underscores)
+    // Handle legacy CORE area names (6-char format) - use proper types from feagi-data-processing
+    if id_str == "_power" {
+        return Ok(CoreCorticalType::Power.to_cortical_id());
+    }
+    if id_str == "_death" {
+        return Ok(CoreCorticalType::Death.to_cortical_id());
+    }
+    
+    // For non-core areas, handle 6-char and 8-char ASCII formats
     if id_str.len() == 6 {
-        let mut bytes = [b'_'; 8];  // Pad with underscores
+        // Legacy 6-char non-core IDs: pad with underscores on the right
+        let mut bytes = [b'_'; 8];
         bytes[..6].copy_from_slice(id_str.as_bytes());
         
         CorticalID::try_from_bytes(&bytes)
