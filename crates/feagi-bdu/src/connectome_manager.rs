@@ -852,7 +852,8 @@ impl ConnectomeManager {
         .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
         
         // CRITICAL: Register cortical area name in NPU for visualization/burst loop lookups
-        npu_lock.register_cortical_area(*cortical_idx, cortical_id.to_string());
+        // Use base64 format to match what BV stores in its cache (from API responses)
+        npu_lock.register_cortical_area(*cortical_idx, cortical_id.as_base_64());
         
         info!(target: "feagi-bdu","Created {} neurons for area {} via NPU", neuron_count, cortical_id);
         
