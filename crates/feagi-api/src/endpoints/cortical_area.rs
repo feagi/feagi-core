@@ -287,25 +287,49 @@ pub async fn post_cortical_area_properties(
     let connectome_service = state.connectome_service.as_ref();
     let cortical_id = request.get("cortical_id").ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
     
-    match connectome_service.get_cortical_area_properties(cortical_id).await {
-        Ok(properties) => Ok(Json(serde_json::to_value(properties).unwrap_or_default())),
+    match connectome_service.get_cortical_area(cortical_id).await {
+        Ok(area_info) => Ok(Json(serde_json::to_value(area_info).unwrap_or_default())),
         Err(e) => Err(ApiError::internal(format!("Failed to get properties: {}", e))),
     }
 }
 
 /// POST /v1/cortical_area/multi/cortical_area_properties
+/// 
+/// Supports two request formats for backward compatibility:
+/// 1. Array format: ["id1", "id2"] (Python SDK format)
+/// 2. Object format: {"cortical_id_list": ["id1", "id2"]} (Brain Visualizer format)
 #[utoipa::path(post, path = "/v1/cortical_area/multi/cortical_area_properties", tag = "cortical_area")]
 #[allow(unused_variables)]  // In development
 pub async fn post_multi_cortical_area_properties(
     State(state): State<ApiState>,
-    Json(request): Json<Vec<String>>,
+    Json(request): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
     let mut result = HashMap::new();
     
-    for cortical_id in request {
-        if let Ok(properties) = connectome_service.get_cortical_area_properties(&cortical_id).await {
-            result.insert(cortical_id, serde_json::to_value(properties).unwrap_or_default());
+    // Support both formats for backward compatibility
+    let cortical_ids: Vec<String> = if request.is_array() {
+        // Format 1: Direct array ["id1", "id2"] (Python SDK)
+        request.as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect()
+    } else if request.is_object() {
+        // Format 2: Object with cortical_id_list {"cortical_id_list": ["id1", "id2"]} (Brain Visualizer)
+        request.get("cortical_id_list")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| ApiError::invalid_input("cortical_id_list required in object format"))?
+            .iter()
+            .filter_map(|v| v.as_str().map(|s| s.to_string()))
+            .collect()
+    } else {
+        return Err(ApiError::invalid_input("Request must be an array of IDs or object with cortical_id_list"));
+    };
+    
+    for cortical_id in cortical_ids {
+        if let Ok(area_info) = connectome_service.get_cortical_area(&cortical_id).await {
+            result.insert(cortical_id, serde_json::to_value(area_info).unwrap_or_default());
         }
     }
     Ok(Json(result))

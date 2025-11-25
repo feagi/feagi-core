@@ -154,6 +154,25 @@ pub trait ConnectomeService: Send + Sync {
     ///
     async fn delete_brain_region(&self, region_id: &str) -> ServiceResult<()>;
 
+    /// Update a brain region
+    ///
+    /// # Arguments
+    /// * `region_id` - Brain region identifier
+    /// * `properties` - Map of property names to new values
+    ///
+    /// # Returns
+    /// * `BrainRegionInfo` - Updated brain region information
+    ///
+    /// # Errors
+    /// * `ServiceError::NotFound` - Brain region not found
+    /// * `ServiceError::InvalidInput` - Invalid parameters
+    ///
+    async fn update_brain_region(
+        &self,
+        region_id: &str,
+        properties: std::collections::HashMap<String, serde_json::Value>,
+    ) -> ServiceResult<BrainRegionInfo>;
+
     /// Get brain region information
     ///
     /// # Arguments

@@ -31,6 +31,7 @@ pub mod npu;
 pub mod models;
 pub mod numeric;
 pub mod cortical_type_adapter;
+pub mod cortical_id_decoder;
 
 // Multi-model neuron architecture (Phase 0: ID management only)
 // See: feagi-core/docs/MULTI_MODEL_NEURON_ARCHITECTURE.md
@@ -51,6 +52,9 @@ pub use numeric::{NeuralValue, INT8Value, INT8LeakCoefficient, Precision, Quanti
 
 // Export cortical type adapter for migration
 pub use cortical_type_adapter::{CorticalTypeAdapter, CorticalTypeError, NewCorticalAreaType};
+
+// Export cortical ID decoder for IPU/OPU metadata extraction
+pub use cortical_id_decoder::{decode_cortical_id, DecodedCorticalId};
 
 /// Neuron ID (globally unique across the entire brain)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

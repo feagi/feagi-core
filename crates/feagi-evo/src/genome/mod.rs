@@ -26,4 +26,4 @@ pub use signatures::generate_signatures;
 pub use converter::to_runtime_genome;
 pub use loader::{load_genome_from_file, load_genome_from_json, peek_quantization_precision};
 pub use runtime_saver::{save_genome_to_file, save_genome_to_json};
-pub use migrator::{migrate_genome, MigrationResult};
+pub use migrator::{migrate_genome, MigrationResult, map_old_id_to_new};

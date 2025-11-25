@@ -10,7 +10,7 @@ use crate::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
-use feagi_types::{BrainRegion, CorticalArea, Dimensions, RegionType};
+use feagi_types::{BrainRegion, CorticalArea, Dimensions, RegionType, decode_cortical_id};
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -204,8 +204,16 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Get cortical_group from the area (uses cortical_type_new if available)
         let cortical_group = area.get_cortical_group();
         
+        // Decode cortical ID for IPU/OPU areas to extract additional metadata
+        let decoded_id = if cortical_group == "IPU" || cortical_group == "OPU" {
+            decode_cortical_id(cortical_id)
+        } else {
+            None
+        };
+        
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
+            cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
             name: area.name.clone(),
             dimensions: area.dimensions.to_tuple(),
@@ -231,6 +239,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
             leak_variability: area.leak_variability,
             burst_engine_active: area.burst_engine_active,
             properties: area.properties.clone(),
+            // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
+            cortical_subtype: decoded_id.as_ref().map(|d| d.cortical_subtype.clone()),
+            encoding_type: decoded_id.as_ref().map(|d| d.encoding_type.clone()),
+            encoding_format: decoded_id.as_ref().map(|d| d.encoding_format.clone()),
+            unit_id: decoded_id.as_ref().map(|d| d.unit_id),
+            group_id: decoded_id.as_ref().map(|d| d.group_id),
         })
     }
 
@@ -353,6 +367,22 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .map_err(ServiceError::from)?;
         
         Ok(())
+    }
+
+    async fn update_brain_region(
+        &self,
+        region_id: &str,
+        properties: std::collections::HashMap<String, serde_json::Value>,
+    ) -> ServiceResult<BrainRegionInfo> {
+        info!(target: "feagi-services", "Updating brain region: {}", region_id);
+        
+        self.connectome
+            .write()
+            .update_brain_region_properties(region_id, properties)
+            .map_err(ServiceError::from)?;
+        
+        // Return updated info
+        self.get_brain_region(region_id).await
     }
 
     async fn get_brain_region(&self, region_id: &str) -> ServiceResult<BrainRegionInfo> {

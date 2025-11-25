@@ -72,8 +72,37 @@ pub fn load_genome_from_json(json_str: &str) -> EvoResult<RuntimeGenome> {
         json_value
     };
     
+    // CRITICAL: Migrate old cortical ID formats to new feagi-data-processing compliant format
+    // This converts old IDs like iic000 → svi0____, _power → ___power, etc.
+    let migrated_json = match crate::genome::migrator::migrate_genome(&hierarchical_json) {
+        Ok(migration_result) => {
+            if migration_result.cortical_ids_migrated > 0 {
+                tracing::info!(
+                    "🔄 [GENOME-LOAD] Migrated {} cortical IDs from old format to new format",
+                    migration_result.cortical_ids_migrated
+                );
+                // Log some example migrations for debugging
+                for (old_id, new_id) in migration_result.id_mapping.iter().take(5) {
+                    tracing::info!("🔄 [GENOME-LOAD]   Example: '{}' → '{}'", old_id, new_id);
+                }
+                if !migration_result.warnings.is_empty() {
+                    for warning in &migration_result.warnings {
+                        tracing::warn!("⚠️  [GENOME-LOAD] Migration warning: {}", warning);
+                    }
+                }
+            } else {
+                tracing::debug!("🔄 [GENOME-LOAD] No cortical IDs needed migration");
+            }
+            migration_result.genome
+        }
+        Err(e) => {
+            tracing::warn!("⚠️  [GENOME-LOAD] Migration failed: {}, continuing without migration", e);
+            hierarchical_json
+        }
+    };
+    
     // Convert back to JSON string for parsing
-    let hierarchical_json_str = serde_json::to_string(&hierarchical_json)
+    let hierarchical_json_str = serde_json::to_string(&migrated_json)
         .map_err(|e| crate::types::EvoError::InvalidGenome(format!("Failed to serialize converted genome: {}", e)))?;
     
     // Parse JSON to ParsedGenome

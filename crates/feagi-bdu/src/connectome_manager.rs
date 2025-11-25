@@ -2368,6 +2368,76 @@ impl ConnectomeManager {
         Ok(())
     }
     
+    /// Update brain region properties with generic property map
+    ///
+    /// Supports updating any brain region property including coordinates, title, description, etc.
+    ///
+    /// # Arguments
+    ///
+    /// * `region_id` - Target region ID
+    /// * `properties` - Map of property names to new values
+    ///
+    /// # Returns
+    ///
+    /// `Ok(())` if updated successfully
+    ///
+    pub fn update_brain_region_properties(
+        &mut self,
+        region_id: &str,
+        properties: std::collections::HashMap<String, serde_json::Value>,
+    ) -> BduResult<()> {
+        use tracing::{debug, info};
+        
+        let region = self.brain_regions.get_region_mut(region_id)
+            .ok_or_else(|| BduError::InvalidArea(format!("Brain region {} not found", region_id)))?;
+        
+        for (key, value) in properties {
+            match key.as_str() {
+                "title" | "name" => {
+                    if let Some(name) = value.as_str() {
+                        region.name = name.to_string();
+                        debug!(target: "feagi-bdu", "Updated brain region {} name = {}", region_id, name);
+                    }
+                }
+                "coordinate_3d" | "coordinates_3d" => {
+                    region.properties.insert("coordinate_3d".to_string(), value.clone());
+                    debug!(target: "feagi-bdu", "Updated brain region {} coordinate_3d = {:?}", region_id, value);
+                }
+                "coordinate_2d" | "coordinates_2d" => {
+                    region.properties.insert("coordinate_2d".to_string(), value.clone());
+                    debug!(target: "feagi-bdu", "Updated brain region {} coordinate_2d = {:?}", region_id, value);
+                }
+                "description" => {
+                    region.properties.insert("description".to_string(), value.clone());
+                    debug!(target: "feagi-bdu", "Updated brain region {} description", region_id);
+                }
+                "region_type" => {
+                    if let Some(type_str) = value.as_str() {
+                        // Parse and update region type
+                        let new_type = match type_str.to_lowercase().as_str() {
+                            "sensory" => feagi_types::RegionType::Sensory,
+                            "motor" => feagi_types::RegionType::Motor,
+                            "memory" => feagi_types::RegionType::Memory,
+                            "custom" => feagi_types::RegionType::Custom,
+                            _ => return Err(BduError::InvalidArea(format!("Invalid region_type: {}", type_str))),
+                        };
+                        region.region_type = new_type;
+                        debug!(target: "feagi-bdu", "Updated brain region {} type = {}", region_id, type_str);
+                    }
+                }
+                // Store any other properties in the properties map
+                _ => {
+                    region.properties.insert(key.clone(), value.clone());
+                    debug!(target: "feagi-bdu", "Updated brain region {} property {} = {:?}", region_id, key, value);
+                }
+            }
+        }
+        
+        info!(target: "feagi-bdu", "Updated brain region {} properties", region_id);
+        
+        Ok(())
+    }
+    
     // ========================================================================
     // NEURON QUERY METHODS (P6)
     // ========================================================================
@@ -2636,6 +2706,7 @@ impl ConnectomeManager {
         
         let mut properties = std::collections::HashMap::new();
         properties.insert("cortical_id".to_string(), serde_json::json!(area.cortical_id));
+        properties.insert("cortical_id_s".to_string(), serde_json::json!(area.cortical_id.to_string()));
         properties.insert("cortical_idx".to_string(), serde_json::json!(area.cortical_idx));
         properties.insert("name".to_string(), serde_json::json!(area.name));
         properties.insert("area_type".to_string(), serde_json::json!(area.get_cortical_group()));

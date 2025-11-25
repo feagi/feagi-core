@@ -511,6 +511,17 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                                 area.name = name.to_string();
                             }
                         }
+                        "coordinates_3d" | "coordinate_3d" | "coordinates" | "position" => {
+                            // Parse coordinates array [x, y, z]
+                            if let Some(arr) = value.as_array() {
+                                if arr.len() >= 3 {
+                                    let x = arr[0].as_i64().unwrap_or(0) as i32;
+                                    let y = arr[1].as_i64().unwrap_or(0) as i32;
+                                    let z = arr[2].as_i64().unwrap_or(0) as i32;
+                                    area.position = (x, y, z);
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -537,6 +548,17 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                     "visible" => {
                         if let Some(v) = value.as_bool() {
                             area.visible = v;
+                        }
+                    }
+                    "coordinates_3d" | "coordinate_3d" | "coordinates" | "position" => {
+                        // Parse coordinates array [x, y, z]
+                        if let Some(arr) = value.as_array() {
+                            if arr.len() >= 3 {
+                                let x = arr[0].as_i64().unwrap_or(0) as i32;
+                                let y = arr[1].as_i64().unwrap_or(0) as i32;
+                                let z = arr[2].as_i64().unwrap_or(0) as i32;
+                                area.position = (x, y, z);
+                            }
                         }
                     }
                     _ => {}
@@ -755,6 +777,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
         
         Ok(CorticalAreaInfo {
             cortical_id: area.cortical_id.as_base_64(),
+            cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
             name: area.name.clone(),
             dimensions: (area.dimensions.width, area.dimensions.height, area.dimensions.depth),
@@ -779,6 +802,12 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             leak_variability: area.leak_variability,
             burst_engine_active: area.burst_engine_active,
             properties: HashMap::new(),
+            // IPU/OPU-specific fields (None for genome service - not decoded here)
+            cortical_subtype: None,
+            encoding_type: None,
+            encoding_format: None,
+            unit_id: None,
+            group_id: None,
         })
     }
     
@@ -810,6 +839,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
         
         Ok(CorticalAreaInfo {
             cortical_id: area.cortical_id.as_base_64(),
+            cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
             name: area.name.clone(),
             dimensions: (area.dimensions.width, area.dimensions.height, area.dimensions.depth),
@@ -834,6 +864,12 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             leak_variability: area.leak_variability,
             burst_engine_active: area.burst_engine_active,
             properties: HashMap::new(),
+            // IPU/OPU-specific fields (None for genome service - not decoded here)
+            cortical_subtype: None,
+            encoding_type: None,
+            encoding_format: None,
+            unit_id: None,
+            group_id: None,
         })
     }
 }

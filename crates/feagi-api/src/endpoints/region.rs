@@ -90,8 +90,30 @@ pub async fn post_region(State(_state): State<ApiState>, Json(_req): Json<HashMa
 
 /// PUT /v1/region/region
 #[utoipa::path(put, path = "/v1/region/region", tag = "region")]
-pub async fn put_region(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Err(ApiError::internal("Not yet implemented"))
+pub async fn put_region(
+    State(state): State<ApiState>,
+    Json(mut request): Json<HashMap<String, serde_json::Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    let connectome_service = state.connectome_service.as_ref();
+    
+    // Extract region_id
+    let region_id = request
+        .get("region_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("region_id required"))?
+        .to_string();
+    
+    // Remove region_id from properties (it's not a property to update)
+    request.remove("region_id");
+    
+    // Update the brain region
+    match connectome_service.update_brain_region(&region_id, request).await {
+        Ok(_) => Ok(Json(HashMap::from([
+            ("message".to_string(), "Brain region updated".to_string()),
+            ("region_id".to_string(), region_id),
+        ]))),
+        Err(e) => Err(ApiError::internal(format!("Failed to update brain region: {}", e))),
+    }
 }
 
 /// DELETE /v1/region/region

@@ -57,11 +57,6 @@ impl CorticalChangeClassifier {
             "neuron_density",
             "neurons_per_voxel",
             
-            // Position changes → may affect connection patterns
-            "coordinates_3d",
-            "coordinates",
-            "position",
-            
             // Type/role changes
             "cortical_type",
             "area_type",
@@ -82,11 +77,23 @@ impl CorticalChangeClassifier {
     }
     
     /// Simple metadata that can be updated without affecting neurons/synapses
+    /// 
+    /// NOTE: Position/coordinates are visualization metadata only - they don't affect
+    /// neural structure or connections in FEAGI (connections are topology-based, not spatial)
     pub fn metadata_changes() -> HashSet<&'static str> {
-        ["cortical_name", "name", "visible"]
-            .iter()
-            .copied()
-            .collect()
+        [
+            "cortical_name",
+            "name",
+            "visible",
+            // Position changes are purely for visualization
+            "coordinates_3d",
+            "coordinate_3d",
+            "coordinates",
+            "position",
+        ]
+        .iter()
+        .copied()
+        .collect()
     }
     
     /// Parameters mappable to direct neuron array updates (NO synapse rebuild)

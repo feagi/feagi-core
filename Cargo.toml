@@ -128,8 +128,8 @@ pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
 # Published FEAGI data crates
-feagi_data_structures = { version = "0.0.50-beta.54" }
-feagi_data_serialization = { version = "0.0.50-beta.54" }
+feagi_data_structures = { version = "0.0.50-beta.55" }
+feagi_data_serialization = { version = "0.0.50-beta.55" }
 
 # Workspace-internal crates
 feagi-connectome-serialization = { path = "crates/feagi-connectome-serialization" }

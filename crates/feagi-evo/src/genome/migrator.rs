@@ -85,6 +85,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
                     // First time seeing this ID
                     if needs_migration(&cortical_id) {
                         if let Some(new_id) = map_old_id_to_new(&cortical_id) {
+                            tracing::debug!("🔄 [MIGRATION] Flat format: '{}' → '{}'", cortical_id, new_id);
                             result.id_mapping.insert(cortical_id.clone(), new_id.clone());
                             result.cortical_ids_migrated += 1;
                         } else {
@@ -102,6 +103,7 @@ fn build_id_mapping(genome_json: &Value, result: &mut MigrationResult) -> EvoRes
         for old_id in blueprint.keys() {
             if needs_migration(old_id) {
                 if let Some(new_id) = map_old_id_to_new(old_id) {
+                    tracing::debug!("🔄 [MIGRATION] Hierarchical format: '{}' → '{}'", old_id, new_id);
                     result.id_mapping.insert(old_id.clone(), new_id.clone());
                     result.cortical_ids_migrated += 1;
                 } else {
@@ -155,40 +157,80 @@ fn needs_migration(id: &str) -> bool {
 /// Map old cortical ID to new template-compliant ID
 ///
 /// Mapping rules:
-/// - iic000 → svi0____ (SegmentedVision index 0)
-/// - iic100 → svi1____ (SegmentedVision index 1)
-/// - iic200 → svi2____ (SegmentedVision index 2)
-/// - ... up to iic800 → svi8____
-/// - omot00 → mot0____ (Motor index 0)
-/// - ogaz00 → gaz0____ (Gaze index 0)
-/// - _power → ___power (CoreCorticalType::Power from feagi-data-processing)
-/// - _death → ___death (CoreCorticalType::Death from feagi-data-processing)
-fn map_old_id_to_new(old_id: &str) -> Option<String> {
-    // IPU: iicXYZ → sviX____ (SegmentedVision)
+/// - iic000 → Proper 8-byte SegmentedVision ID (index 0, Absolute frame handling, group 0)
+/// - iic100 → Proper 8-byte SegmentedVision ID (index 1, Absolute frame handling, group 0)
+/// - iic200 → Proper 8-byte SegmentedVision ID (index 2, Absolute frame handling, group 0)
+/// - ... up to iic800 → Proper 8-byte SegmentedVision ID (index 8, Absolute frame handling, group 0)
+/// - omot00 → Proper 8-byte Motor ID (index 0, Absolute frame handling, group 0)
+/// - ogaz00 → Proper 8-byte Gaze ID (index 0, Absolute frame handling, group 0)
+/// - _power → Proper 8-byte Core ID (CoreCorticalType::Power from feagi-data-processing)
+/// - _death → Proper 8-byte Core ID (CoreCorticalType::Death from feagi-data-processing)
+///
+/// NOTE: Old format doesn't encode frame handling, so we default to Absolute.
+/// This function is public so it can be used by string_to_cortical_id for individual ID conversions.
+pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
+    use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
+    use feagi_data_structures::genomic::SensoryCorticalUnit;
+    
+    // IPU: iicXYZ → Proper 8-byte SegmentedVision ID
     if old_id.starts_with("iic") && old_id.len() >= 6 {
-        // Extract index from iicX00 format
+        // Extract index from iicX00 format (e.g., iic400 → index '4')
         if let Some(index_char) = old_id.chars().nth(3) {
             if index_char.is_ascii_digit() {
-                let index = index_char;
-                return Some(format!("svi{}____", index));
+                let unit_index = index_char as u8 - b'0';
+                if unit_index <= 8 {
+                    // Generate proper 8-byte ID using SensoryCorticalUnit
+                    // Priority: Absolute over Incremental (segmented vision doesn't use positioning)
+                    let frame_handling = FrameChangeHandling::Absolute;
+                    let group_index: CorticalGroupIndex = 0.into();
+                    let cortical_ids = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index);
+                    
+                    if (unit_index as usize) < cortical_ids.len() {
+                        let new_id = cortical_ids[unit_index as usize].as_base_64();
+                        tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64, Absolute+Linear)", old_id, new_id);
+                        return Some(new_id);
+                    }
+                }
             }
         }
     }
     
-    // OPU: omot00 → mot0____
+    // OPU: omot00 → Proper 8-byte Motor ID (Absolute + Linear, priority)
+    use feagi_data_structures::genomic::MotorCorticalUnit;
     if old_id.starts_with("omot") && old_id.len() >= 6 {
         if let Some(index_chars) = old_id.get(4..6) {
-            if let Ok(index) = index_chars.parse::<u32>() {
-                return Some(format!("mot{}____", index));
+            if let Ok(unit_index) = index_chars.parse::<u8>() {
+                // Priority: Absolute over Incremental, Linear over Fractional
+                let frame_handling = FrameChangeHandling::Absolute;
+                let positioning = PercentageNeuronPositioning::Linear;
+                let group_index: CorticalGroupIndex = 0.into();
+                let cortical_ids = MotorCorticalUnit::get_rotary_motor_cortical_ids_array(frame_handling, positioning, group_index);
+                
+                if unit_index == 0 && !cortical_ids.is_empty() {
+                    let new_id = cortical_ids[0].as_base_64();
+                    tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64, Absolute+Linear)", old_id, new_id);
+                    return Some(new_id);
+                }
             }
         }
     }
     
-    // OPU: ogaz00 → gaz0____
+    // OPU: ogaz00 → Proper 8-byte Gaze ID (Absolute + Linear, priority)
     if old_id.starts_with("ogaz") && old_id.len() >= 6 {
         if let Some(index_chars) = old_id.get(4..6) {
-            if let Ok(index) = index_chars.parse::<u32>() {
-                return Some(format!("gaz{}____", index));
+            if let Ok(unit_index) = index_chars.parse::<u8>() {
+                // Priority: Absolute over Incremental, Linear over Fractional
+                let frame_handling = FrameChangeHandling::Absolute;
+                let positioning = PercentageNeuronPositioning::Linear;
+                let group_index: CorticalGroupIndex = 0.into();
+                let cortical_ids = MotorCorticalUnit::get_gaze_control_cortical_ids_array(frame_handling, positioning, group_index);
+                
+                if (unit_index as usize) < cortical_ids.len() {
+                    let new_id = cortical_ids[unit_index as usize].as_base_64();
+                    tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64, Absolute+Linear)", old_id, new_id);
+                    return Some(new_id);
+                }
             }
         }
     }
@@ -196,10 +238,14 @@ fn map_old_id_to_new(old_id: &str) -> Option<String> {
     // CORE: Use feagi-data-processing types as single source of truth
     use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
     if old_id == "_power" {
-        return Some(CoreCorticalType::Power.to_cortical_id().to_string());
+        let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
+        tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)", old_id, new_id);
+        return Some(new_id);
     }
     if old_id == "_death" {
-        return Some(CoreCorticalType::Death.to_cortical_id().to_string());
+        let new_id = CoreCorticalType::Death.to_cortical_id().as_base_64();
+        tracing::debug!("🔄 [MIGRATION] Converting old ID '{}' → '{}' (base64)", old_id, new_id);
+        return Some(new_id);
     }
     
     None
@@ -341,32 +387,46 @@ mod tests {
     #[test]
     fn test_map_old_id_to_new() {
         use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+        use feagi_data_structures::genomic::SensoryCorticalUnit;
+        use feagi_data_structures::genomic::MotorCorticalUnit;
+        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
         
-        // IPU migrations
-        assert_eq!(map_old_id_to_new("iic000"), Some("svi0____".to_string()));
-        assert_eq!(map_old_id_to_new("iic100"), Some("svi1____".to_string()));
-        assert_eq!(map_old_id_to_new("iic800"), Some("svi8____".to_string()));
+        // IPU migrations - should return base64 IDs with Absolute frame handling
+        let group_index: CorticalGroupIndex = 0.into();
+        let frame_handling = FrameChangeHandling::Absolute;
+        let expected_svi0 = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index)[0].as_base_64();
+        let expected_svi1 = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index)[1].as_base_64();
+        let expected_svi4 = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index)[4].as_base_64();
+        let expected_svi8 = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index)[8].as_base_64();
         
-        // OPU migrations
-        assert_eq!(map_old_id_to_new("omot00"), Some("mot0____".to_string()));
-        assert_eq!(map_old_id_to_new("ogaz00"), Some("gaz0____".to_string()));
+        assert_eq!(map_old_id_to_new("iic000"), Some(expected_svi0));
+        assert_eq!(map_old_id_to_new("iic100"), Some(expected_svi1));
+        assert_eq!(map_old_id_to_new("iic400"), Some(expected_svi4));
+        assert_eq!(map_old_id_to_new("iic800"), Some(expected_svi8));
+        
+        // OPU migrations - should return base64 IDs with Absolute + Linear
+        let positioning = PercentageNeuronPositioning::Linear;
+        let expected_mot0 = MotorCorticalUnit::get_rotary_motor_cortical_ids_array(frame_handling, positioning, group_index)[0].as_base_64();
+        let expected_gaz0 = MotorCorticalUnit::get_gaze_control_cortical_ids_array(frame_handling, positioning, group_index)[0].as_base_64();
+        
+        assert_eq!(map_old_id_to_new("omot00"), Some(expected_mot0));
+        assert_eq!(map_old_id_to_new("ogaz00"), Some(expected_gaz0));
         
         // CORE migrations - use types from feagi-data-processing (single source of truth)
         assert_eq!(
             map_old_id_to_new("_power"), 
-            Some(CoreCorticalType::Power.to_cortical_id().to_string())
+            Some(CoreCorticalType::Power.to_cortical_id().as_base_64())
         );
         assert_eq!(
             map_old_id_to_new("_death"), 
-            Some(CoreCorticalType::Death.to_cortical_id().to_string())
+            Some(CoreCorticalType::Death.to_cortical_id().as_base_64())
         );
         
-        // No migration needed
+        // No migration needed for already-migrated IDs
         assert_eq!(map_old_id_to_new("svi0____"), None);
-        assert_eq!(
-            map_old_id_to_new(&CoreCorticalType::Power.to_cortical_id().to_string()), 
-            None
-        );
+        assert_eq!(map_old_id_to_new(&CoreCorticalType::Power.to_cortical_id().as_base_64()), None);
     }
     
     #[test]

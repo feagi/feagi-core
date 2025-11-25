@@ -42,6 +42,7 @@ pub struct CreateNeuronParams {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalAreaInfo {
     pub cortical_id: String,
+    pub cortical_id_s: String, // Human-readable ASCII string (e.g., "___power" instead of "X19fcG93ZXI=")
     pub cortical_idx: u32,
     pub name: String,
     pub dimensions: (usize, usize, usize),
@@ -66,6 +67,27 @@ pub struct CorticalAreaInfo {
     pub leak_variability: f64,
     pub burst_engine_active: bool,
     pub properties: HashMap<String, serde_json::Value>,
+    
+    // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)
+    /// 4-character cortical subtype (e.g., "isvi", "imot", "ibat") - only for IPU/OPU
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_subtype: Option<String>,
+    
+    /// Encoding type: "Absolute" or "Incremental" - only for IPU/OPU
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding_type: Option<String>,
+    
+    /// Encoding format: "Linear" or "Fractional" - only for IPU/OPU
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encoding_format: Option<String>,
+    
+    /// Unit ID (0, 1, 2, ...) - only for IPU/OPU
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unit_id: Option<u8>,
+    
+    /// Group ID (0, 1, 2, ...) - only for IPU/OPU
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub group_id: Option<u8>,
 }
 
 /// Parameters for creating a cortical area
