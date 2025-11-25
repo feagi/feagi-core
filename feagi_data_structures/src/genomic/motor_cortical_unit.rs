@@ -73,7 +73,15 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
-
+            /// Returns all available motor cortical unit types.
+            /// This is useful for enumerating all possible motor types in the system.
+            pub const fn list_all() -> &'static [MotorCorticalUnit] {
+                &[
+                    $(
+                        MotorCorticalUnit::$variant_name,
+                    )*
+                ]
+            }
 
         }
 

@@ -73,7 +73,15 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-
+            /// Returns all available sensory cortical unit types.
+            /// This is useful for enumerating all possible sensor types in the system.
+            pub const fn list_all() -> &'static [SensoryCorticalUnit] {
+                &[
+                    $(
+                        SensoryCorticalUnit::$variant_name,
+                    )*
+                ]
+            }
 
         }
 
