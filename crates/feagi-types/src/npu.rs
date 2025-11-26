@@ -165,9 +165,10 @@ impl<T: NeuralValue> NeuronArray<T> {
             cortical_area, self.count);
 
         if self.count >= self.capacity {
-            return Err(FeagiError::MemoryAllocationError(
-                "Neuron array capacity exceeded".to_string(),
-            ));
+            return Err(FeagiError::MemoryAllocationError(format!(
+                "❌ NPU CAPACITY EXCEEDED: Cannot add neuron (current: {}/{} capacity)",
+                self.count, self.capacity
+            )));
         }
 
         let id = self.count;
@@ -223,9 +224,11 @@ impl<T: NeuralValue> NeuronArray<T> {
 
         // Capacity check
         if self.count + n > self.capacity {
+            let available = self.capacity - self.count;
+            let overflow = (self.count + n) - self.capacity;
             return Err(FeagiError::MemoryAllocationError(format!(
-                "Cannot add {} neurons: would exceed capacity {} (current: {})",
-                n, self.capacity, self.count
+                "❌ NPU CAPACITY EXCEEDED: Cannot add {} neurons (available: {}, would overflow by: {}, current: {}/{} capacity)",
+                n, available, overflow, self.count, self.capacity
             )));
         }
 

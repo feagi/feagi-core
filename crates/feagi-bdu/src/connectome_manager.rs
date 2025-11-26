@@ -291,7 +291,7 @@ impl ConnectomeManager {
             if area.cortical_idx == 0 {
                 area.cortical_idx = self.next_cortical_idx;
                 self.next_cortical_idx += 1;
-                info!("📍 [REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be ≥2)", area.cortical_idx, area.cortical_id);
+                info!("📍 [REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be ≥2)", area.cortical_idx, area.cortical_id.as_base_64());
             } else {
                 // Check for reserved index collision
                 if area.cortical_idx == 0 || area.cortical_idx == 1 {
@@ -774,11 +774,8 @@ impl ConnectomeManager {
         let npu = self.npu.as_ref()
             .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
         
-        // Extract neural parameters from area properties
-        let per_voxel_cnt = area.properties
-            .get("per_voxel_neuron_cnt")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(1) as u32;
+        // Extract neural parameters from area (use typed field - single source of truth)
+        let per_voxel_cnt = area.neurons_per_voxel;
         
         let firing_threshold = area.properties
             .get("firing_threshold")
@@ -815,6 +812,20 @@ impl ConnectomeManager {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
         
+        // Calculate expected neuron count for logging
+        let voxels = area.dimensions.width * area.dimensions.height * area.dimensions.depth;
+        let expected_neurons = voxels * per_voxel_cnt as usize;
+        
+        tracing::debug!(target: "feagi-bdu", 
+            "Creating neurons for area {}: {}x{}x{} voxels × {} neurons/voxel = {} total neurons",
+            cortical_id.as_base_64(),
+            area.dimensions.width,
+            area.dimensions.height,
+            area.dimensions.depth,
+            per_voxel_cnt,
+            expected_neurons
+        );
+        
         // Call NPU to create neurons
         let mut npu_lock = npu.lock()
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
@@ -842,7 +853,7 @@ impl ConnectomeManager {
         // Note: API responses use base64, but visualization data stream uses raw ASCII
         npu_lock.register_cortical_area(*cortical_idx, cortical_id.to_string());
         
-        info!(target: "feagi-bdu","Created {} neurons for area {} via NPU", neuron_count, cortical_id);
+        info!(target: "feagi-bdu","Created {} neurons for area {} via NPU", neuron_count, cortical_id.as_base_64());
         
         Ok(neuron_count)
     }

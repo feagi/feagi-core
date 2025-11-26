@@ -98,6 +98,30 @@ pub trait GenomeService: Send + Sync {
         cortical_id: &str,
         changes: std::collections::HashMap<String, serde_json::Value>,
     ) -> ServiceResult<CorticalAreaInfo>;
+    
+    /// Create new cortical areas and add them to the genome
+    ///
+    /// ARCHITECTURE: This is the proper entry point for creating new cortical areas.
+    /// It follows the correct flow:
+    /// 1. Updates runtime genome (source of truth)
+    /// 2. Calls neuroembryogenesis to create structures in ConnectomeManager
+    /// 3. Creates neurons and synapses via NPU
+    /// 4. Returns created area information
+    ///
+    /// # Arguments
+    /// * `params` - Vector of cortical area creation parameters
+    ///
+    /// # Returns
+    /// * `Vec<CorticalAreaInfo>` - Information about all created areas
+    ///
+    /// # Errors
+    /// * `ServiceError::InvalidInput` - Invalid parameters
+    /// * `ServiceError::Backend` - Creation failed
+    ///
+    async fn create_cortical_areas(
+        &self,
+        params: Vec<CreateCorticalAreaParams>,
+    ) -> ServiceResult<Vec<CorticalAreaInfo>>;
 }
 
 

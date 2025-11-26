@@ -1662,6 +1662,7 @@ dependencies = [
  "argon2",
  "assert-json-diff",
  "axum 0.7.9",
+ "base64 0.21.7",
  "chacha20poly1305",
  "chrono",
  "feagi-bdu",
@@ -2011,8 +2012,6 @@ dependencies = [
 [[package]]
 name = "feagi_data_serialization"
 version = "0.0.50-beta.55"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b025c2c121e985a7fac15b68a7fecf2d36238f3afa0fe2947ccbc85d5f396e8d"
 dependencies = [
  "byteorder",
  "feagi_data_structures",
@@ -2022,8 +2021,6 @@ dependencies = [
 [[package]]
 name = "feagi_data_structures"
 version = "0.0.50-beta.55"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdd460d1a044d3e8c611281cb8871f8dbd753dad1f964024a4b612fe4b9ba90c"
 dependencies = [
  "base64 0.22.1",
  "ndarray",

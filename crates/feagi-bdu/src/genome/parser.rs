@@ -327,8 +327,9 @@ impl GenomeParser {
             if let Some(v) = &raw_area.sub_group_id {
                 area.properties.insert("sub_group_id".to_string(), serde_json::json!(v));
             }
+            // Set neurons_per_voxel typed field (single source of truth - NOT in properties)
             if let Some(v) = raw_area.per_voxel_neuron_cnt {
-                area.properties.insert("per_voxel_neuron_cnt".to_string(), serde_json::json!(v));
+                area.neurons_per_voxel = v;
             }
             if let Some(v) = &raw_area.cortical_mapping_dst {
                 area.properties.insert("cortical_mapping_dst".to_string(), v.clone());

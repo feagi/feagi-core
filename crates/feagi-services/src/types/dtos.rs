@@ -44,14 +44,18 @@ pub struct CorticalAreaInfo {
     pub cortical_id: String,
     pub cortical_id_s: String, // Human-readable ASCII string (e.g., "___power" instead of "X19fcG93ZXI=")
     pub cortical_idx: u32,
+    #[serde(rename = "cortical_name", alias = "name")]
     pub name: String,
+    #[serde(rename = "cortical_dimensions", alias = "dimensions")]
     pub dimensions: (usize, usize, usize),
+    #[serde(rename = "coordinates_3d", alias = "position")]
     pub position: (i32, i32, i32),
     pub area_type: String, // "Sensory", "Motor", "Memory", "Custom"
     pub cortical_group: String, // "IPU", "OPU", "CORE", "CUSTOM", "MEMORY" - uppercase classification
     pub neuron_count: usize,
     pub synapse_count: usize,
     pub visible: bool,
+    #[serde(rename = "cortical_sub_group", alias = "sub_group", skip_serializing_if = "Option::is_none")]
     pub sub_group: Option<String>,
     pub neurons_per_voxel: u32,
     pub postsynaptic_current: f64,

@@ -11,9 +11,11 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use base64::{Engine as _, engine::general_purpose};
 
 use crate::common::{ApiError, ApiResult};
 use crate::transports::http::server::ApiState;
+use feagi_data_structures::genomic::{SensoryCorticalUnit, MotorCorticalUnit};
 
 // ============================================================================
 // REQUEST/RESPONSE MODELS
@@ -27,6 +29,23 @@ pub struct CorticalAreaIdListResponse {
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CorticalAreaNameListResponse {
     pub cortical_area_name_list: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct UnitTopologyData {
+    pub relative_position: [i32; 3],
+    pub dimensions: [u32; 3],
+}
+
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CorticalTypeMetadata {
+    pub description: String,
+    pub encodings: Vec<String>,
+    pub formats: Vec<String>,
+    pub units: u32,
+    pub resolution: Vec<i32>,
+    pub structure: String,
+    pub unit_default_topology: HashMap<usize, UnitTopologyData>,
 }
 
 // ============================================================================
@@ -288,7 +307,12 @@ pub async fn post_cortical_area_properties(
     let cortical_id = request.get("cortical_id").ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
     
     match connectome_service.get_cortical_area(cortical_id).await {
-        Ok(area_info) => Ok(Json(serde_json::to_value(area_info).unwrap_or_default())),
+        Ok(area_info) => {
+            tracing::debug!(target: "feagi-api", "Cortical area properties for {}: cortical_group={}, area_type={}", cortical_id, area_info.cortical_group, area_info.area_type);
+            let json_value = serde_json::to_value(&area_info).unwrap_or_default();
+            tracing::debug!(target: "feagi-api", "Serialized JSON keys: {:?}", json_value.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+            Ok(Json(json_value))
+        },
         Err(e) => Err(ApiError::internal(format!("Failed to get properties: {}", e))),
     }
 }
@@ -341,10 +365,194 @@ pub async fn post_multi_cortical_area_properties(
 pub async fn post_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
-) -> ApiResult<Json<HashMap<String, String>>> {
-    let connectome_service = state.connectome_service.as_ref();
-    // TODO: Parse request and create cortical area
-    Err(ApiError::internal("Not yet implemented"))
+) -> ApiResult<Json<serde_json::Value>> {
+    use feagi_services::types::CreateCorticalAreaParams;
+    use feagi_data_structures::genomic::{SensoryCorticalUnit, MotorCorticalUnit};
+    
+    // ARCHITECTURE: Use genome_service (proper entry point) instead of connectome_service
+    let genome_service = state.genome_service.as_ref();
+    
+    // Extract required fields
+    let cortical_type_key = request.get("cortical_id")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?;
+    
+    let group_id = request.get("group_id")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u8;
+    
+    let device_count = request.get("device_count")
+        .and_then(|v| v.as_u64())
+        .ok_or_else(|| ApiError::invalid_input("device_count required"))? as usize;
+    
+    let coordinates_3d: Vec<i32> = request.get("coordinates_3d")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            if arr.len() == 3 {
+                Some(vec![
+                    arr[0].as_i64()? as i32,
+                    arr[1].as_i64()? as i32,
+                    arr[2].as_i64()? as i32,
+                ])
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| ApiError::invalid_input("coordinates_3d must be [x, y, z]"))?;
+    
+    let cortical_type_str = request.get("cortical_type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| ApiError::invalid_input("cortical_type required"))?;
+    
+    // Extract neurons_per_voxel from request (default to 1 if not provided)
+    let neurons_per_voxel = request.get("neurons_per_voxel")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1) as u32;
+    
+    tracing::info!(target: "feagi-api", "Creating cortical areas for {} with neurons_per_voxel={}", cortical_type_key, neurons_per_voxel);
+    
+    // Determine number of units and get topology
+    let (num_units, unit_topology) = if cortical_type_str == "IPU" {
+        // Find the matching sensory cortical unit
+        let unit = SensoryCorticalUnit::list_all()
+            .iter()
+            .find(|u| {
+                let id_ref = u.get_cortical_id_unit_reference();
+                let key = format!("i{}", std::str::from_utf8(&id_ref).unwrap_or(""));
+                key == cortical_type_key
+            })
+            .ok_or_else(|| ApiError::invalid_input(format!("Unknown IPU type: {}", cortical_type_key)))?;
+        
+        (unit.get_number_cortical_areas(), unit.get_unit_default_topology())
+    } else if cortical_type_str == "OPU" {
+        // Find the matching motor cortical unit
+        let unit = MotorCorticalUnit::list_all()
+            .iter()
+            .find(|u| {
+                let id_ref = u.get_cortical_id_unit_reference();
+                let key = format!("o{}", std::str::from_utf8(&id_ref).unwrap_or(""));
+                key == cortical_type_key
+            })
+            .ok_or_else(|| ApiError::invalid_input(format!("Unknown OPU type: {}", cortical_type_key)))?;
+        
+        (unit.get_number_cortical_areas(), unit.get_unit_default_topology())
+    } else {
+        return Err(ApiError::invalid_input("cortical_type must be IPU or OPU"));
+    };
+    
+    tracing::info!("Creating {} units for cortical type: {}", num_units, cortical_type_key);
+    
+    // Build creation parameters for all units
+    let mut creation_params = Vec::new();
+    for unit_idx in 0..num_units {
+        // Get dimensions for this unit from topology
+        let dimensions = if let Some(topo) = unit_topology.get(&unit_idx) {
+            let dims = topo.dimensions;
+            (dims[0] as usize, dims[1] as usize, dims[2] as usize)
+        } else {
+            (1, 1, 1)  // Fallback
+        };
+        
+        // Calculate position for this unit
+        let position = if let Some(topo) = unit_topology.get(&unit_idx) {
+            let rel_pos = topo.relative_position;
+            (
+                coordinates_3d[0] + rel_pos[0],
+                coordinates_3d[1] + rel_pos[1],
+                coordinates_3d[2] + rel_pos[2],
+            )
+        } else {
+            (coordinates_3d[0], coordinates_3d[1], coordinates_3d[2])
+        };
+        
+        // Construct proper 8-byte cortical ID
+        // Byte structure: [type(i/o), subtype[0], subtype[1], subtype[2], encoding_type, encoding_format, unit_idx, group_id]
+        // Extract the 3-character subtype from cortical_type_key (e.g., "isvi" -> "svi")
+        let subtype_bytes = if cortical_type_key.len() >= 4 {
+            let subtype_str = &cortical_type_key[1..4]; // Skip the 'i' or 'o' prefix
+            let mut bytes = [0u8; 3];
+            for (i, c) in subtype_str.chars().take(3).enumerate() {
+                bytes[i] = c as u8;
+            }
+            bytes
+        } else {
+            return Err(ApiError::invalid_input("Invalid cortical_type_key"));
+        };
+        
+        // Construct the 8-byte cortical ID
+        // For now, use default encoding: byte 4 = 0 (absolute), byte 5 = 0 (linear)
+        let cortical_id_bytes = [
+            if cortical_type_str == "IPU" { b'i' } else { b'o' },  // Byte 0: type
+            subtype_bytes[0],  // Byte 1: subtype[0]
+            subtype_bytes[1],  // Byte 2: subtype[1]
+            subtype_bytes[2],  // Byte 3: subtype[2]
+            0,                 // Byte 4: encoding type (0 = absolute)
+            0,                 // Byte 5: encoding format (0 = linear)
+            unit_idx as u8,    // Byte 6: unit index
+            group_id,          // Byte 7: group ID
+        ];
+        
+        // Encode to base64 for use as cortical_id string
+        let cortical_id = general_purpose::STANDARD.encode(&cortical_id_bytes);
+        
+        tracing::debug!(target: "feagi-api", 
+            "  Unit {}: dims={}x{}x{}, neurons_per_voxel={}, total_neurons={}", 
+            unit_idx, dimensions.0, dimensions.1, dimensions.2, neurons_per_voxel,
+            dimensions.0 * dimensions.1 * dimensions.2 * neurons_per_voxel as usize
+        );
+        
+        let params = CreateCorticalAreaParams {
+            cortical_id: cortical_id.clone(),
+            name: format!("{} Unit {}", cortical_type_key, unit_idx),
+            dimensions,
+            position,
+            area_type: cortical_type_str.to_string(),
+            visible: Some(true),
+            sub_group: None,
+            neurons_per_voxel: Some(neurons_per_voxel),
+            postsynaptic_current: Some(0.0),
+            plasticity_constant: Some(0.0),
+            degeneration: Some(0.0),
+            psp_uniform_distribution: Some(false),
+            firing_threshold_increment: Some(0.0),
+            firing_threshold_limit: Some(0.0),
+            consecutive_fire_count: Some(0),
+            snooze_period: Some(0),
+            refractory_period: Some(0),
+            leak_coefficient: Some(0.0),
+            leak_variability: Some(0.0),
+            burst_engine_active: Some(true),
+            properties: Some(HashMap::new()),
+        };
+        
+        creation_params.push(params);
+    }
+    
+    tracing::info!("Calling GenomeService to create {} cortical areas", creation_params.len());
+    
+    // ARCHITECTURE: Call genome_service.create_cortical_areas (proper flow)
+    // This will: 1) Update runtime genome, 2) Call neuroembryogenesis, 3) Create neurons/synapses
+    let areas_details = genome_service.create_cortical_areas(creation_params).await
+        .map_err(|e| ApiError::internal(format!("Failed to create cortical areas: {}", e)))?;
+    
+    tracing::info!("✅ Successfully created {} cortical areas via GenomeService", areas_details.len());
+    
+    // Serialize as JSON
+    let areas_json = serde_json::to_value(&areas_details).unwrap_or_default();
+    
+    // Extract cortical IDs from created areas
+    let created_ids: Vec<String> = areas_details.iter().map(|a| a.cortical_id.clone()).collect();
+    
+    // Return comprehensive response
+    let first_id = created_ids.first().cloned().unwrap_or_default();
+    let mut response = serde_json::Map::new();
+    response.insert("message".to_string(), serde_json::Value::String(format!("Created {} cortical areas", created_ids.len())));
+    response.insert("cortical_id".to_string(), serde_json::Value::String(first_id));  // For backward compatibility
+    response.insert("cortical_ids".to_string(), serde_json::Value::String(created_ids.join(", ")));
+    response.insert("unit_count".to_string(), serde_json::Value::Number(created_ids.len().into()));
+    response.insert("areas".to_string(), areas_json);  // Full details for all areas
+    
+    Ok(Json(serde_json::Value::Object(response)))
 }
 
 /// PUT /v1/cortical_area/cortical_area
@@ -533,6 +741,183 @@ pub async fn post_voxel_neurons(State(_state): State<ApiState>, Json(_req): Json
     let mut response = HashMap::new();
     response.insert("neurons".to_string(), serde_json::json!([]));
     Ok(Json(response))
+}
+
+/// GET /v1/cortical_area/ipu/types
+/// 
+/// Returns metadata for all available IPU (Input Processing Unit) types.
+/// This information is used by Brain Visualizer to populate the "Add Input Cortical Area" window.
+/// 
+/// Response format:
+/// ```json
+/// {
+///   "isvi": {
+///     "description": "Segmented Vision",
+///     "encodings": ["absolute", "incremental"],
+///     "formats": [],
+///     "units": 9
+///   },
+///   "iinf": {
+///     "description": "Infrared Sensor",
+///     "encodings": ["absolute", "incremental"],
+///     "formats": ["linear", "fractional"],
+///     "units": 1
+///   }
+/// }
+/// ```
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/ipu/types",
+    tag = "cortical_area",
+    responses(
+        (status = 200, description = "IPU type metadata", body = HashMap<String, CorticalTypeMetadata>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_ipu_types(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, CorticalTypeMetadata>>> {
+    let mut types = HashMap::new();
+    
+    // Dynamically generate metadata from feagi_data_structures templates
+    for unit in SensoryCorticalUnit::list_all() {
+        let id_ref = unit.get_cortical_id_unit_reference();
+        let key = format!("i{}", std::str::from_utf8(&id_ref).unwrap_or("???"));
+        
+        // All IPU types support both absolute and incremental encodings
+        let encodings = vec!["absolute".to_string(), "incremental".to_string()];
+        
+        // Determine if formats are supported based on snake_case_name
+        // Vision and SegmentedVision use CartesianPlane (no formats)
+        // MiscData uses Misc (no formats)
+        // All others use Percentage-based types (have formats)
+        let snake_name = unit.get_snake_case_name();
+        let formats = if snake_name == "vision" 
+            || snake_name == "segmented_vision" 
+            || snake_name == "miscellaneous" {
+            vec![]
+        } else {
+            vec!["linear".to_string(), "fractional".to_string()]
+        };
+        
+        // Default resolution based on type
+        let resolution = if snake_name == "vision" {
+            vec![64, 64, 1]  // Vision sensors typically 64x64
+        } else if snake_name == "segmented_vision" {
+            vec![32, 32, 1]  // Segmented vision segments are smaller
+        } else {
+            vec![1, 1, 1]  // Most sensors are scalar (1x1x1)
+        };
+        
+        // Most sensors are asymmetric
+        let structure = "asymmetric".to_string();
+        
+        // Get unit default topology
+        let topology_map = unit.get_unit_default_topology();
+        let unit_default_topology: HashMap<usize, UnitTopologyData> = topology_map
+            .into_iter()
+            .map(|(idx, topo)| {
+                (idx, UnitTopologyData {
+                    relative_position: topo.relative_position,
+                    dimensions: topo.dimensions,
+                })
+            })
+            .collect();
+        
+        types.insert(key, CorticalTypeMetadata {
+            description: unit.get_friendly_name().to_string(),
+            encodings,
+            formats,
+            units: unit.get_number_cortical_areas() as u32,
+            resolution,
+            structure,
+            unit_default_topology,
+        });
+    }
+    
+    Ok(Json(types))
+}
+
+/// GET /v1/cortical_area/opu/types
+/// 
+/// Returns metadata for all available OPU (Output Processing Unit) types.
+/// This information is used by Brain Visualizer to populate the "Add Output Cortical Area" window.
+/// 
+/// Response format:
+/// ```json
+/// {
+///   "omot": {
+///     "description": "Rotary Motor",
+///     "encodings": ["absolute", "incremental"],
+///     "formats": ["linear", "fractional"],
+///     "units": 1
+///   },
+///   "opse": {
+///     "description": "Positional Servo",
+///     "encodings": ["absolute", "incremental"],
+///     "formats": ["linear", "fractional"],
+///     "units": 1
+///   }
+/// }
+/// ```
+#[utoipa::path(
+    get,
+    path = "/v1/cortical_area/opu/types",
+    tag = "cortical_area",
+    responses(
+        (status = 200, description = "OPU type metadata", body = HashMap<String, CorticalTypeMetadata>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_opu_types(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, CorticalTypeMetadata>>> {
+    let mut types = HashMap::new();
+    
+    // Dynamically generate metadata from feagi_data_structures templates
+    for unit in MotorCorticalUnit::list_all() {
+        let id_ref = unit.get_cortical_id_unit_reference();
+        let key = format!("o{}", std::str::from_utf8(&id_ref).unwrap_or("???"));
+        
+        // All OPU types support both absolute and incremental encodings
+        let encodings = vec!["absolute".to_string(), "incremental".to_string()];
+        
+        // Determine if formats are supported based on snake_case_name
+        // MiscData uses Misc (no formats)
+        // All others use Percentage-based types (have formats)
+        let snake_name = unit.get_snake_case_name();
+        let formats = if snake_name == "miscellaneous" {
+            vec![]
+        } else {
+            vec!["linear".to_string(), "fractional".to_string()]
+        };
+        
+        // Default resolution - all motors/actuators are typically scalar
+        let resolution = vec![1, 1, 1];
+        
+        // All actuators are asymmetric
+        let structure = "asymmetric".to_string();
+        
+        // Get unit default topology
+        let topology_map = unit.get_unit_default_topology();
+        let unit_default_topology: HashMap<usize, UnitTopologyData> = topology_map
+            .into_iter()
+            .map(|(idx, topo)| {
+                (idx, UnitTopologyData {
+                    relative_position: topo.relative_position,
+                    dimensions: topo.dimensions,
+                })
+            })
+            .collect();
+        
+        types.insert(key, CorticalTypeMetadata {
+            description: unit.get_friendly_name().to_string(),
+            encodings,
+            formats,
+            units: unit.get_number_cortical_areas() as u32,
+            resolution,
+            structure,
+            unit_default_topology,
+        });
+    }
+    
+    Ok(Json(types))
 }
 
 // EXACT Python paths:

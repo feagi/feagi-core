@@ -19,6 +19,21 @@ pub trait ConnectomeService: Send + Sync {
 
     /// Create a cortical area
     ///
+    /// ⚠️ INTERNAL USE ONLY - DO NOT CALL FROM API ENDPOINTS ⚠️
+    ///
+    /// ARCHITECTURE VIOLATION WARNING:
+    /// This method directly modifies ConnectomeManager and bypasses:
+    /// - Runtime genome updates (source of truth)
+    /// - Neuroembryogenesis process
+    /// - Neuron and synapse creation
+    ///
+    /// PROPER FLOW: API endpoints MUST use GenomeService::create_cortical_areas()
+    /// which follows: genome update → neuroembryogenesis → connectome → NPU
+    ///
+    /// This method should ONLY be called by:
+    /// - Neuroembryogenesis (during genome loading)
+    /// - GenomeService internal implementation
+    ///
     /// # Arguments
     /// * `params` - Cortical area creation parameters
     ///
@@ -36,6 +51,12 @@ pub trait ConnectomeService: Send + Sync {
 
     /// Update a cortical area
     ///
+    /// ⚠️ DEPRECATED - Use GenomeService::update_cortical_area() instead ⚠️
+    ///
+    /// This method is blocked and returns NotImplemented.
+    /// All cortical area updates MUST go through GenomeService for proper
+    /// genome synchronization and change classification.
+    ///
     /// # Arguments
     /// * `cortical_id` - Cortical area identifier
     /// * `params` - Update parameters
@@ -43,6 +64,7 @@ pub trait ConnectomeService: Send + Sync {
     /// # Errors
     /// * `ServiceError::NotFound` - Cortical area not found
     /// * `ServiceError::InvalidInput` - Invalid parameters
+    /// * `ServiceError::NotImplemented` - Always returned (use GenomeService)
     ///
     async fn update_cortical_area(
         &self,
@@ -51,6 +73,14 @@ pub trait ConnectomeService: Send + Sync {
     ) -> ServiceResult<CorticalAreaInfo>;
 
     /// Delete a cortical area
+    ///
+    /// ⚠️ ARCHITECTURE WARNING - Should use GenomeService ⚠️
+    ///
+    /// This method directly modifies ConnectomeManager without:
+    /// - Updating runtime genome (source of truth)
+    /// - Proper cleanup of neurons/synapses
+    ///
+    /// Consider adding GenomeService::delete_cortical_areas() for proper flow.
     ///
     /// # Arguments
     /// * `cortical_id` - Cortical area identifier

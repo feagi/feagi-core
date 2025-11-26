@@ -473,9 +473,15 @@ impl<T: NeuralValue> RustNPU<T> {
         );
 
         if !failed.is_empty() {
+            let current_count = self.neuron_array.read().unwrap().count;
+            let capacity = self.neuron_array.read().unwrap().capacity;
             return Err(FeagiError::ComputationError(format!(
-                "Failed to create {} neurons",
-                failed.len()
+                "Failed to create {} neurons (requested: {}, succeeded: {}, current: {}/{} capacity) - NPU CAPACITY EXCEEDED",
+                failed.len(),
+                total_neurons,
+                success_count,
+                current_count,
+                capacity
             )));
         }
 

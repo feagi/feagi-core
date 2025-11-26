@@ -163,13 +163,11 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
             fixes_applied += 1;
         }
         
-        // Fix zero per_voxel_neuron_cnt
-        if let Some(per_voxel_value) = area.properties.get_mut("per_voxel_neuron_cnt") {
-            if let Some(0) = per_voxel_value.as_i64() {
-                info!("🔧 AUTO-FIX: Cortical area '{}' per_voxel_neuron_cnt 0 → 1", cortical_id_display);
-                *per_voxel_value = serde_json::Value::from(1);
-                fixes_applied += 1;
-            }
+        // Fix zero neurons_per_voxel (use typed field - single source of truth)
+        if area.neurons_per_voxel == 0 {
+            info!("🔧 AUTO-FIX: Cortical area '{}' neurons_per_voxel 0 → 1", cortical_id_display);
+            area.neurons_per_voxel = 1;
+            fixes_applied += 1;
         }
     }
     
@@ -220,14 +218,12 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
             // Note: Auto-fix happens in auto_fix_genome() - this just detects the issue
         }
         
-        // Validate per_voxel_neuron_cnt
-        if let Some(per_voxel) = area.properties.get("per_voxel_neuron_cnt").and_then(|v| v.as_i64()) {
-            if per_voxel == 0 {
-                result.add_warning(format!(
-                    "AUTO-FIX: Cortical area '{}' has per_voxel_neuron_cnt=0 - will be corrected to 1",
-                    cortical_id_display
-                ));
-            }
+        // Validate neurons_per_voxel (use typed field - single source of truth)
+        if area.neurons_per_voxel == 0 {
+            result.add_warning(format!(
+                "AUTO-FIX: Cortical area '{}' has neurons_per_voxel=0 - will be corrected to 1",
+                cortical_id_display
+            ));
         }
         
         // Warn about very large dimensions

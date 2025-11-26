@@ -21,7 +21,7 @@ use feagi_evo::RuntimeGenome;
 use feagi_types::{Precision, QuantizationSpec};
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
-use tracing::{info, warn, debug};
+use tracing::{info, warn, debug, error};
 
 /// Development stage tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -103,6 +103,91 @@ impl Neuroembryogenesis {
     /// Get current development progress
     pub fn get_progress(&self) -> DevelopmentProgress {
         self.progress.read().clone()
+    }
+    
+    /// Incrementally add cortical areas to an existing connectome
+    ///
+    /// This is for adding new cortical areas after the initial genome has been loaded.
+    /// Unlike `develop_from_genome()`, this only processes the new areas.
+    ///
+    /// # Arguments
+    /// * `areas` - The cortical areas to add
+    /// * `genome` - The full runtime genome (needed for synaptogenesis context)
+    ///
+    /// # Returns
+    /// * Number of neurons created and synapses created
+    pub fn add_cortical_areas(
+        &mut self,
+        areas: Vec<feagi_types::CorticalArea>,
+        genome: &RuntimeGenome,
+    ) -> BduResult<(usize, usize)> {
+        info!(target: "feagi-bdu", "🧬 Incrementally adding {} cortical areas", areas.len());
+        
+        let mut total_neurons = 0;
+        let mut total_synapses = 0;
+        
+        // Stage 1: Add cortical area structures (Corticogenesis)
+        for area in &areas {
+            let mut manager = self.connectome_manager.write();
+            manager.add_cortical_area(area.clone())?;
+            info!(target: "feagi-bdu", "  ✓ Added cortical area structure: {}", area.cortical_id.as_base_64());
+        }
+        
+        // Stage 2: Create neurons for each area (Neurogenesis)
+        for area in &areas {
+            let neurons_created = {
+                let mut manager = self.connectome_manager.write();
+                manager.create_neurons_for_area(&area.cortical_id)
+            };
+            
+            match neurons_created {
+                Ok(count) => {
+                    total_neurons += count as usize;
+                    info!(target: "feagi-bdu", "  ✓ Created {} neurons for area {}", count, area.cortical_id.as_base_64());
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ FATAL: Failed to create neurons for {}: {}", area.cortical_id.as_base_64(), e);
+                    // CRITICAL: NPU capacity errors must propagate to UI
+                    return Err(e);
+                }
+            }
+        }
+        
+        // Stage 3: Create synapses for each area (Synaptogenesis)
+        for area in &areas {
+            // Check if area has mappings
+            let has_dstmap = area.properties.get("cortical_mapping_dst")
+                .and_then(|v| v.as_object())
+                .map(|m| !m.is_empty())
+                .unwrap_or(false);
+            
+            if !has_dstmap {
+                debug!(target: "feagi-bdu", "  No mappings for area {}", area.cortical_id.as_base_64());
+                continue;
+            }
+            
+            let synapses_created = {
+                let mut manager = self.connectome_manager.write();
+                manager.apply_cortical_mapping(&area.cortical_id)
+            };
+            
+            match synapses_created {
+                Ok(count) => {
+                    total_synapses += count as usize;
+                    info!(target: "feagi-bdu", "  ✓ Created {} synapses for area {}", count, area.cortical_id);
+                }
+                Err(e) => {
+                    warn!(target: "feagi-bdu", "  ⚠️ Failed to create synapses for {}: {}", area.cortical_id, e);
+                    let estimated = estimate_synapses_for_area(area, genome);
+                    total_synapses += estimated;
+                }
+            }
+        }
+        
+        info!(target: "feagi-bdu", "✅ Incremental add complete: {} areas, {} neurons, {} synapses", 
+              areas.len(), total_neurons, total_synapses);
+        
+        Ok((total_neurons, total_synapses))
     }
     
     /// Develop the brain from a genome
@@ -517,11 +602,8 @@ impl Neuroembryogenesis {
         // Process each cortical area via ConnectomeManager (each area = one SIMD batch)
         // NOTE: Loop is over AREAS, not neurons. Each area creates all its neurons in ONE batch call.
         for (idx, (_cortical_id, area)) in genome.cortical_areas.iter().enumerate() {
-            // Get per_voxel_neuron_cnt from area properties
-            let per_voxel_count = area.properties
-                .get("per_voxel_neuron_cnt")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(1);
+            // Get neurons_per_voxel from typed field (single source of truth)
+            let per_voxel_count = area.neurons_per_voxel as i64;
             
             // 🔍 DIAGNOSTIC: Use area.cortical_id (the actual ID stored in ConnectomeManager)
             // This MUST match what was registered during corticogenesis!
@@ -710,14 +792,8 @@ fn estimate_synapses_for_area(
                 .unwrap_or(1) as usize;
             
             // Simplified estimation
-            let src_per_voxel = src_area.properties
-                .get("per_voxel_neuron_cnt")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(1) as usize;
-            let dst_per_voxel = dst_area.properties
-                .get("per_voxel_neuron_cnt")
-                .and_then(|v| v.as_i64())
-                .unwrap_or(1) as usize;
+            let src_per_voxel = src_area.neurons_per_voxel as usize;
+            let dst_per_voxel = dst_area.neurons_per_voxel as usize;
             
             let src_voxels = src_area.dimensions.width * src_area.dimensions.height * src_area.dimensions.depth;
             let dst_voxels = dst_area.dimensions.width * dst_area.dimensions.height * dst_area.dimensions.depth;

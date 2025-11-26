@@ -174,9 +174,11 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/system/db/influxdb/test", get(system::get_influxdb_test))
         .route("/system/register", axum::routing::post(system::post_register_system))
         
-        // ===== CORTICAL_AREA MODULE (23 endpoints) =====
+        // ===== CORTICAL_AREA MODULE (25 endpoints) =====
         .route("/cortical_area/ipu", get(cortical_area::get_ipu))
+        .route("/cortical_area/ipu/types", get(cortical_area::get_ipu_types))
         .route("/cortical_area/opu", get(cortical_area::get_opu))
+        .route("/cortical_area/opu/types", get(cortical_area::get_opu_types))
         .route("/cortical_area/cortical_area_id_list", get(cortical_area::get_cortical_area_id_list))
         .route("/cortical_area/cortical_area_name_list", get(cortical_area::get_cortical_area_name_list))
         .route("/cortical_area/cortical_id_name_mapping", get(cortical_area::get_cortical_id_name_mapping))

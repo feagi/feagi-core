@@ -303,6 +303,144 @@ impl GenomeService for GenomeServiceImpl {
         Ok(())
     }
     
+    async fn create_cortical_areas(
+        &self,
+        params: Vec<CreateCorticalAreaParams>,
+    ) -> ServiceResult<Vec<CorticalAreaInfo>> {
+        info!(target: "feagi-services", "Creating {} new cortical areas via GenomeService", params.len());
+        
+        // Step 1: Build CorticalArea structures
+        let mut areas_to_add = Vec::new();
+        for param in &params {
+            // Parse cortical type
+            use feagi_types::CorticalTypeAdapter;
+            let cortical_type_new = CorticalTypeAdapter::parse_from_cortical_group(&param.area_type)
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical type: {}", e)))?;
+            
+            // Convert String to CorticalID
+            let cortical_id_typed = CorticalID::try_from_base_64(&param.cortical_id)
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+            
+            // Create CorticalArea
+            let mut area = feagi_types::CorticalArea::new(
+                cortical_id_typed,
+                0,  // Auto-assigned by ConnectomeManager
+                param.name.clone(),
+                feagi_types::Dimensions::new(param.dimensions.0, param.dimensions.1, param.dimensions.2),
+                param.position,
+            ).map_err(ServiceError::from)?;
+            
+            // Set cortical type
+            area.cortical_type_new = Some(cortical_type_new);
+            
+            // Apply all neural parameters
+            if let Some(visible) = param.visible {
+                area.visible = visible;
+            }
+            if let Some(sub_group) = &param.sub_group {
+                area.sub_group = Some(sub_group.clone());
+            }
+            if let Some(neurons_per_voxel) = param.neurons_per_voxel {
+                area.neurons_per_voxel = neurons_per_voxel;
+            }
+            if let Some(postsynaptic_current) = param.postsynaptic_current {
+                area.postsynaptic_current = postsynaptic_current;
+            }
+            if let Some(plasticity_constant) = param.plasticity_constant {
+                area.plasticity_constant = plasticity_constant;
+            }
+            if let Some(degeneration) = param.degeneration {
+                area.degeneration = degeneration;
+            }
+            if let Some(psp_uniform_distribution) = param.psp_uniform_distribution {
+                area.psp_uniform_distribution = psp_uniform_distribution;
+            }
+            if let Some(firing_threshold_increment) = param.firing_threshold_increment {
+                area.firing_threshold_increment = firing_threshold_increment;
+            }
+            if let Some(firing_threshold_limit) = param.firing_threshold_limit {
+                area.firing_threshold_limit = firing_threshold_limit;
+            }
+            if let Some(consecutive_fire_count) = param.consecutive_fire_count {
+                area.consecutive_fire_count = consecutive_fire_count;
+            }
+            if let Some(snooze_period) = param.snooze_period {
+                area.snooze_period = snooze_period;
+            }
+            if let Some(refractory_period) = param.refractory_period {
+                area.refractory_period = refractory_period;
+            }
+            if let Some(leak_coefficient) = param.leak_coefficient {
+                area.leak_coefficient = leak_coefficient;
+            }
+            if let Some(leak_variability) = param.leak_variability {
+                area.leak_variability = leak_variability;
+            }
+            if let Some(burst_engine_active) = param.burst_engine_active {
+                area.burst_engine_active = burst_engine_active;
+            }
+            if let Some(properties) = &param.properties {
+                area.properties = properties.clone();
+            }
+            
+            areas_to_add.push(area);
+        }
+        
+        // Step 2: Add to runtime genome (source of truth)
+        {
+            let mut genome_lock = self.current_genome.write();
+            if let Some(ref mut genome) = *genome_lock {
+                for area in &areas_to_add {
+                    genome.cortical_areas.insert(area.cortical_id.clone(), area.clone());
+                    info!(target: "feagi-services", "Added {} to runtime genome", area.cortical_id.as_base_64());
+                }
+            } else {
+                return Err(ServiceError::Backend("No genome loaded".to_string()));
+            }
+        }
+        
+        // Step 3: Get genome for neuroembryogenesis context
+        let genome_clone = {
+            let genome_lock = self.current_genome.read();
+            genome_lock.as_ref()
+                .ok_or_else(|| ServiceError::Backend("No genome loaded".to_string()))?
+                .clone()
+        };
+        
+        // Step 4: Call neuroembryogenesis to create structures, neurons, and synapses
+        let (neurons_created, synapses_created) = {
+            let connectome_clone = self.connectome.clone();
+            tokio::task::spawn_blocking(move || {
+                let mut neuro = Neuroembryogenesis::new(connectome_clone);
+                neuro.add_cortical_areas(areas_to_add.clone(), &genome_clone)
+            })
+            .await
+            .map_err(|e| ServiceError::Backend(format!("Neuroembryogenesis task failed: {}", e)))?
+            .map_err(|e| ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e)))?
+        };
+        
+        info!(target: "feagi-services", 
+              "✅ Created {} cortical areas: {} neurons, {} synapses",
+              params.len(), neurons_created, synapses_created);
+        
+        // Step 5: Fetch and return area information
+        let mut created_areas = Vec::new();
+        for param in &params {
+            match self.get_cortical_area_info(&param.cortical_id).await {
+                Ok(area_info) => created_areas.push(area_info),
+                Err(e) => {
+                    warn!(target: "feagi-services", "Created area {} but failed to fetch info: {}", param.cortical_id, e);
+                    return Err(ServiceError::Backend(format!(
+                        "Created areas but failed to fetch info for {}: {}",
+                        param.cortical_id, e
+                    )));
+                }
+            }
+        }
+        
+        Ok(created_areas)
+    }
+    
     async fn update_cortical_area(
         &self,
         cortical_id: &str,
@@ -678,13 +816,10 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             }
             
             // Apply density changes
+            // Update neurons_per_voxel from any of the legacy parameter names
             for density_param in ["neurons_per_voxel", "per_voxel_neuron_cnt", "neuron_density"] {
                 if let Some(density) = changes.get(density_param).and_then(|v| v.as_u64()) {
                     area.neurons_per_voxel = density as u32;
-                    area.properties.insert(
-                        "per_voxel_neuron_cnt".to_string(),
-                        serde_json::json!(density),
-                    );
                     break;
                 }
             }

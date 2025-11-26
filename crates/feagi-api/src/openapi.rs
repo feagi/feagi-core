@@ -105,7 +105,9 @@ use crate::{
         
         // Cortical Area endpoints
         crate::endpoints::cortical_area::get_ipu,
+        crate::endpoints::cortical_area::get_ipu_types,
         crate::endpoints::cortical_area::get_opu,
+        crate::endpoints::cortical_area::get_opu_types,
         crate::endpoints::cortical_area::get_cortical_area_id_list,
         crate::endpoints::cortical_area::get_cortical_area_name_list,
         crate::endpoints::cortical_area::get_cortical_id_name_mapping,
@@ -483,6 +485,7 @@ use crate::{
             // Cortical Area
             crate::endpoints::cortical_area::CorticalAreaIdListResponse,
             crate::endpoints::cortical_area::CorticalAreaNameListResponse,
+            crate::endpoints::cortical_area::CorticalTypeMetadata,
             
             // Morphology
             crate::endpoints::morphology::MorphologyListResponse,
