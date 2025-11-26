@@ -34,6 +34,9 @@ macro_rules! motor_unit_functions {
                     },
                     cortical_area_types: {
                         $(($cortical_area_type_expr:expr, $area_index:expr)),* $(,)?
+                    },
+                    unit_default_topology: {
+                        $($unit_idx:tt => { relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], dimensions: [$dim_x:expr, $dim_y:expr, $dim_z:expr] }),* $(,)?
                     }
                 }
             ),* $(,)?

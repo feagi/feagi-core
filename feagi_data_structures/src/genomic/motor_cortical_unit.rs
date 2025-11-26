@@ -1,8 +1,10 @@
 use std::fmt::{Display, Formatter};
+use std::collections::HashMap;
 use crate::{motor_cortical_units, FeagiDataError};
 use crate::genomic::cortical_area::{CorticalID, CorticalAreaType, IOCorticalAreaDataType};
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
 use crate::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
+use crate::genomic::sensory_cortical_unit::UnitTopology;
 use paste;
 
 macro_rules! define_motor_cortical_units_enum {
@@ -21,6 +23,9 @@ macro_rules! define_motor_cortical_units_enum {
                     },
                     cortical_area_types: {
                         $(($cortical_area_type_expr:expr, $area_index:expr)),* $(,)?
+                    },
+                    unit_default_topology: {
+                        $($unit_idx:tt => { relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], dimensions: [$dim_x:expr, $dim_y:expr, $dim_z:expr] }),* $(,)?
                     }
                 }
             ),* $(,)?
@@ -81,6 +86,54 @@ macro_rules! define_motor_cortical_units_enum {
                         MotorCorticalUnit::$variant_name,
                     )*
                 ]
+            }
+
+            /// Returns the friendly (human-readable) name for this motor cortical unit type.
+            pub const fn get_friendly_name(&self) -> &'static str {
+                match self {
+                    $(
+                        MotorCorticalUnit::$variant_name => $friendly_name,
+                    )*
+                }
+            }
+
+            /// Returns the 3-byte cortical ID unit reference for this type.
+            pub const fn get_cortical_id_unit_reference(&self) -> [u8; 3] {
+                match self {
+                    $(
+                        MotorCorticalUnit::$variant_name => $cortical_id_unit_reference,
+                    )*
+                }
+            }
+
+            /// Returns the number of cortical areas this type creates.
+            pub const fn get_number_cortical_areas(&self) -> usize {
+                match self {
+                    $(
+                        MotorCorticalUnit::$variant_name => $number_cortical_areas,
+                    )*
+                }
+            }
+
+            /// Returns the default topology for all units of this cortical type.
+            pub fn get_unit_default_topology(&self) -> HashMap<usize, UnitTopology> {
+                match self {
+                    $(
+                        MotorCorticalUnit::$variant_name => {
+                            let mut topology = HashMap::new();
+                            $(
+                                topology.insert(
+                                    $unit_idx,
+                                    UnitTopology {
+                                        relative_position: [$rel_x, $rel_y, $rel_z],
+                                        dimensions: [$dim_x, $dim_y, $dim_z],
+                                    }
+                                );
+                            )*
+                            topology
+                        }
+                    )*
+                }
             }
 
         }

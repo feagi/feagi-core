@@ -17,6 +17,9 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -33,6 +36,9 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -49,6 +55,9 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -65,6 +74,9 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -81,6 +93,9 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -97,6 +112,9 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -112,6 +130,9 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Misc(frame_change_handling), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -127,6 +148,9 @@ macro_rules! sensor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [64, 64, 3] }
                     }
                 },
 
@@ -152,6 +176,17 @@ macro_rules! sensor_cortical_units {
                         (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 6),
                         (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 7),
                         (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 8),
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [-70, -70, 0], dimensions: [32, 32, 1] },
+                        1 => { relative_position: [60, -70, 0], dimensions: [32, 32, 1] },
+                        2 => { relative_position: [150, -70, 0], dimensions: [32, 32, 1] },
+                        3 => { relative_position: [-70, 60, 0], dimensions: [32, 32, 1] },
+                        4 => { relative_position: [0, 0, 0], dimensions: [128, 128, 3] },
+                        5 => { relative_position: [150, 60, 0], dimensions: [32, 32, 1] },
+                        6 => { relative_position: [-70, 150, 0], dimensions: [32, 32, 1] },
+                        7 => { relative_position: [60, 150, 0], dimensions: [32, 32, 1] },
+                        8 => { relative_position: [150, 150, 0], dimensions: [32, 32, 1] }
                     }
                 },
 
