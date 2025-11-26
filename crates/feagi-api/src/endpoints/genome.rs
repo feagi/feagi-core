@@ -5,6 +5,7 @@
 
 use axum::{extract::State, response::Json};
 use std::collections::HashMap;
+use tracing::info;
 use crate::common::{ApiError, ApiResult};
 use crate::transports::http::server::ApiState;
 use feagi_services::types::LoadGenomeParams;
@@ -188,12 +189,57 @@ pub async fn get_timestamp(State(_state): State<ApiState>) -> ApiResult<Json<i64
     )
 )]
 pub async fn post_save(
-    State(_state): State<ApiState>,
-    Json(_request): Json<HashMap<String, String>>,
+    State(state): State<ApiState>,
+    Json(request): Json<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Implement genome save
+    use std::fs;
+    use std::path::Path;
+    
+    info!("Saving genome to file");
+    
+    // Get parameters
+    let genome_id = request.get("genome_id").cloned();
+    let genome_title = request.get("genome_title").cloned();
+    let file_path = request.get("file_path").cloned();
+    
+    // Create save parameters
+    let params = feagi_services::SaveGenomeParams {
+        genome_id,
+        genome_title,
+    };
+    
+    // Call genome service to generate JSON
+    let genome_service = state.genome_service.as_ref();
+    let genome_json = genome_service.save_genome(params).await
+        .map_err(|e| ApiError::internal(format!("Failed to save genome: {}", e)))?;
+    
+    // Determine file path
+    let save_path = if let Some(path) = file_path {
+        path
+    } else {
+        // Default to genomes directory with timestamp
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        format!("genomes/saved_genome_{}.json", timestamp)
+    };
+    
+    // Ensure parent directory exists
+    if let Some(parent) = Path::new(&save_path).parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| ApiError::internal(format!("Failed to create directory: {}", e)))?;
+    }
+    
+    // Write to file
+    fs::write(&save_path, genome_json)
+        .map_err(|e| ApiError::internal(format!("Failed to write file: {}", e)))?;
+    
+    info!("✅ Genome saved successfully to: {}", save_path);
+    
     Ok(Json(HashMap::from([
-        ("message".to_string(), "Genome save not yet implemented".to_string())
+        ("message".to_string(), "Genome saved successfully".to_string()),
+        ("file_path".to_string(), save_path)
     ])))
 }
 

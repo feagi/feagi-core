@@ -512,14 +512,23 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                             }
                         }
                         "coordinates_3d" | "coordinate_3d" | "coordinates" | "position" => {
-                            // Parse coordinates array [x, y, z]
+                            // Parse coordinates - support both array [x, y, z] and object {"x": x, "y": y, "z": z}
                             if let Some(arr) = value.as_array() {
+                                // Array format: [x, y, z]
                                 if arr.len() >= 3 {
                                     let x = arr[0].as_i64().unwrap_or(0) as i32;
                                     let y = arr[1].as_i64().unwrap_or(0) as i32;
                                     let z = arr[2].as_i64().unwrap_or(0) as i32;
                                     area.position = (x, y, z);
+                                    info!(target: "feagi-services", "[GENOME-UPDATE] Updated position (array format): ({}, {}, {})", x, y, z);
                                 }
+                            } else if let Some(obj) = value.as_object() {
+                                // Object format: {"x": x, "y": y, "z": z}
+                                let x = obj.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                                let y = obj.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                                let z = obj.get("z").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                                area.position = (x, y, z);
+                                info!(target: "feagi-services", "[GENOME-UPDATE] Updated position (object format): ({}, {}, {})", x, y, z);
                             }
                         }
                         _ => {}
@@ -551,14 +560,23 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                         }
                     }
                     "coordinates_3d" | "coordinate_3d" | "coordinates" | "position" => {
-                        // Parse coordinates array [x, y, z]
+                        // Parse coordinates - support both array [x, y, z] and object {"x": x, "y": y, "z": z}
                         if let Some(arr) = value.as_array() {
+                            // Array format: [x, y, z]
                             if arr.len() >= 3 {
                                 let x = arr[0].as_i64().unwrap_or(0) as i32;
                                 let y = arr[1].as_i64().unwrap_or(0) as i32;
                                 let z = arr[2].as_i64().unwrap_or(0) as i32;
                                 area.position = (x, y, z);
+                                info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated position (array format): ({}, {}, {})", x, y, z);
                             }
+                        } else if let Some(obj) = value.as_object() {
+                            // Object format: {"x": x, "y": y, "z": z}
+                            let x = obj.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                            let y = obj.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                            let z = obj.get("z").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                            area.position = (x, y, z);
+                            info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated position (object format): ({}, {}, {})", x, y, z);
                         }
                     }
                     _ => {}

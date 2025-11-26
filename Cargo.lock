@@ -2000,6 +2000,7 @@ name = "feagi-types"
 version = "2.0.0"
 dependencies = [
  "ahash",
+ "base64 0.22.1",
  "feagi_data_structures",
  "serde",
  "serde_json",
