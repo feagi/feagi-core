@@ -652,15 +652,29 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             
             // Apply dimensional changes
             if let Some(dims) = changes.get("dimensions").or_else(|| changes.get("cortical_dimensions")) {
-                if let Some(arr) = dims.as_array() {
+                let (width, height, depth) = if let Some(arr) = dims.as_array() {
+                    // Handle array format: [width, height, depth]
                     if arr.len() >= 3 {
-                        area.dimensions = feagi_types::Dimensions::new(
+                        (
                             arr[0].as_u64().unwrap_or(1) as usize,
                             arr[1].as_u64().unwrap_or(1) as usize,
                             arr[2].as_u64().unwrap_or(1) as usize,
-                        );
+                        )
+                    } else {
+                        (1, 1, 1)
                     }
-                }
+                } else if let Some(obj) = dims.as_object() {
+                    // Handle object format: {"x": width, "y": height, "z": depth}
+                    (
+                        obj.get("x").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
+                        obj.get("y").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
+                        obj.get("z").and_then(|v| v.as_u64()).unwrap_or(1) as usize,
+                    )
+                } else {
+                    (1, 1, 1)
+                };
+                
+                area.dimensions = feagi_types::Dimensions::new(width, height, depth);
             }
             
             // Apply density changes
