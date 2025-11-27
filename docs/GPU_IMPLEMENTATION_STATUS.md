@@ -93,8 +93,8 @@ gpu_memory_fraction = 0.8       # ✅ Already there!
 
 ```rust
 let npu = Arc::new(Mutex::new(RustNPU::new(
-    config.connectome.min_neuron_space,
-    config.connectome.min_synapse_space,
+    config.connectome.neuron_space,
+    config.connectome.synapse_space,
     10,
     // ❌ GPU config NOT passed!
 )));

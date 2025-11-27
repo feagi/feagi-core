@@ -1546,7 +1546,19 @@
     "ipu_idle_threshold": 1000,
     "plasticity_queue_depth": 3,
     "lifespan_mgmt_interval": 1,
-    "quantization_precision": "f16"
+    "quantization_precision": "f16",
+    "sleep": {
+      "light_sleep_frequency_hz": 10.0,
+      "light_sleep_ipu_threshold_neurons": 100,
+      "light_sleep_activity_window_bursts": 50,
+      "deep_sleep_enabled": true,
+      "deep_sleep_frequency_hz": 5.0,
+      "deep_sleep_ipu_threshold_neurons": 10,
+      "deep_sleep_min_light_sleep_duration_bursts": 500,
+      "deep_sleep_compaction_fragmentation_threshold": 0.20,
+      "wake_ipu_threshold_neurons": 200,
+      "wake_activity_window_bursts": 10
+    }
   },
   "stats": {
     "innate_cortical_area_count": 23,

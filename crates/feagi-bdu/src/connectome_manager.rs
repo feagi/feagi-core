@@ -744,6 +744,36 @@ impl ConnectomeManager {
         self.npu.as_ref()
     }
     
+    /// Get neuron capacity from NPU
+    /// 
+    /// # Returns
+    /// 
+    /// * `usize` - Maximum neuron capacity, or 0 if NPU not connected
+    /// 
+    pub fn get_neuron_capacity(&self) -> usize {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                return npu_lock.get_neuron_capacity();
+            }
+        }
+        0
+    }
+    
+    /// Get synapse capacity from NPU
+    /// 
+    /// # Returns
+    /// 
+    /// * `usize` - Maximum synapse capacity, or 0 if NPU not connected
+    /// 
+    pub fn get_synapse_capacity(&self) -> usize {
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                return npu_lock.get_synapse_capacity();
+            }
+        }
+        0
+    }
+    
     // ======================================================================
     // Neuron/Synapse Creation Methods (Delegates to NPU)
     // ======================================================================

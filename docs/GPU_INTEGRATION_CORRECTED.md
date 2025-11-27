@@ -139,8 +139,8 @@ From `feagi/src/main.rs` (line 153-160):
 
 ```rust
 let npu = Arc::new(Mutex::new(RustNPU::new(
-    config.connectome.min_neuron_space,
-    config.connectome.min_synapse_space,
+    config.connectome.neuron_space,
+    config.connectome.synapse_space,
     10, // cortical_area_count
 )));
 ```
@@ -290,8 +290,8 @@ use feagi_burst_engine::GpuConfig;
 let gpu_config = GpuConfig::from((&config.neural.hybrid, &config.resources));
 
 let npu = Arc::new(Mutex::new(RustNPU::new(
-    config.connectome.min_neuron_space,
-    config.connectome.min_synapse_space,
+    config.connectome.neuron_space,
+    config.connectome.synapse_space,
     10,
     Some(&gpu_config),  // NEW: Pass GPU config
 )));

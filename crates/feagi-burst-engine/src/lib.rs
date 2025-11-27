@@ -41,6 +41,7 @@ pub mod neuron_models; // Neuron model trait system (LIF, Izhikevich, etc.)
 pub mod npu;
 pub mod parameter_update_queue;
 pub mod sensory; // Rust sensory injection system
+pub mod sleep; // Sleep manager for energy efficiency and memory optimization
 pub mod synaptic_propagation;
 pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
 
@@ -54,6 +55,7 @@ pub use neuron_models::*;
 pub use npu::*;
 pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
 pub use sensory::*;
+pub use sleep::*;
 pub use synaptic_propagation::*;
 pub use viz_shm_writer::*;
 

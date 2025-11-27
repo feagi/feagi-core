@@ -2780,11 +2780,27 @@ impl DynamicNPU {
         }
     }
     
+    /// Get neuron capacity (MAXIMUM allocated capacity)
+    pub fn get_neuron_capacity(&self) -> usize {
+        match self {
+            DynamicNPU::F32(npu) => npu.neuron_array.read().unwrap().capacity,
+            DynamicNPU::INT8(npu) => npu.neuron_array.read().unwrap().capacity,
+        }
+    }
+    
     /// Get current synapse count
     pub fn synapse_count(&self) -> usize {
         match self {
             DynamicNPU::F32(npu) => npu.synapse_array.read().unwrap().count,
             DynamicNPU::INT8(npu) => npu.synapse_array.read().unwrap().count,
+        }
+    }
+    
+    /// Get synapse capacity (MAXIMUM allocated capacity)
+    pub fn get_synapse_capacity(&self) -> usize {
+        match self {
+            DynamicNPU::F32(npu) => npu.synapse_array.read().unwrap().capacity,
+            DynamicNPU::INT8(npu) => npu.synapse_array.read().unwrap().capacity,
         }
     }
     

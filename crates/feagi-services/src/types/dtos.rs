@@ -265,6 +265,8 @@ pub struct SystemHealth {
     pub burst_engine_active: bool,
     pub brain_readiness: bool,
     pub neuron_count: usize,
+    pub neuron_capacity: usize,
+    pub synapse_capacity: usize,
     pub cortical_area_count: usize,
     pub burst_count: u64,
 }

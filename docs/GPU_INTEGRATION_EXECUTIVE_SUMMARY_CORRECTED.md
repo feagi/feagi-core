@@ -79,8 +79,8 @@ pub struct ResourcesConfig {
 **Current Code** (`feagi/src/main.rs:153`):
 ```rust
 let npu = Arc::new(Mutex::new(RustNPU::new(
-    config.connectome.min_neuron_space,
-    config.connectome.min_synapse_space,
+    config.connectome.neuron_space,
+    config.connectome.synapse_space,
     10,  // cortical_area_count
     // ❌ GPU config NOT passed!
 )));
@@ -91,8 +91,8 @@ let npu = Arc::new(Mutex::new(RustNPU::new(
 let gpu_config = GpuConfig::from((&config.neural.hybrid, &config.resources));
 
 let npu = Arc::new(Mutex::new(RustNPU::new(
-    config.connectome.min_neuron_space,
-    config.connectome.min_synapse_space,
+    config.connectome.neuron_space,
+    config.connectome.synapse_space,
     10,
     Some(&gpu_config),  // ✅ Pass GPU config
 )));

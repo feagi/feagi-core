@@ -15,6 +15,8 @@ pub enum BurstEngineState {
     Running = 3,
     Paused = 4,
     Error = 5,
+    LightSleep = 6,
+    DeepSleep = 7,
 }
 
 impl From<u8> for BurstEngineState {
@@ -25,6 +27,8 @@ impl From<u8> for BurstEngineState {
             3 => BurstEngineState::Running,
             4 => BurstEngineState::Paused,
             5 => BurstEngineState::Error,
+            6 => BurstEngineState::LightSleep,
+            7 => BurstEngineState::DeepSleep,
             _ => BurstEngineState::Unavailable,
         }
     }

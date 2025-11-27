@@ -137,10 +137,12 @@ pub async fn get_health_check(
         Some((total_bytes as f64) / (1024.0 * 1024.0))
     };
 
+    // Get actual NPU capacity from SystemHealth (single source of truth from config)
+    let neuron_count_max = health.neuron_capacity as i64;
+    let synapse_count_max = health.synapse_capacity as i64;
+    
     // Configuration values (should eventually come from config service)
     let influxdb_availability = false; // TODO: Get from monitoring service
-    let neuron_count_max = 1_000_000; // TODO: Get from config
-    let synapse_count_max = 10_000_000; // TODO: Get from config
     let latest_changes_saved_externally = false; // TODO: Get from state manager
     let genome_availability = health.cortical_area_count > 0;
     let genome_validity = Some(health.brain_readiness);
@@ -312,12 +314,17 @@ pub async fn get_versions(State(_state): State<ApiState>) -> ApiResult<Json<Hash
         (status = 200, description = "System configuration", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_configuration(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_configuration(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    // Get actual NPU capacity from analytics service
+    let health = state.analytics_service.get_system_health().await
+        .map_err(|e| ApiError::internal(format!("Failed to get system health: {}", e)))?;
+    
     let mut config = HashMap::new();
     config.insert("api_host".to_string(), serde_json::json!("0.0.0.0"));
     config.insert("api_port".to_string(), serde_json::json!(8000));
-    config.insert("max_neurons".to_string(), serde_json::json!(1000000));
-    config.insert("max_synapses".to_string(), serde_json::json!(10000000));
+    // Use actual NPU capacity from system health (NOT hardcoded values)
+    config.insert("max_neurons".to_string(), serde_json::json!(health.neuron_capacity));
+    config.insert("max_synapses".to_string(), serde_json::json!(health.synapse_capacity));
     
     Ok(Json(config))
 }

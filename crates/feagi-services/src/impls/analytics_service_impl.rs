@@ -41,6 +41,8 @@ impl AnalyticsService for AnalyticsServiceImpl {
         let neuron_count = self.get_total_neuron_count().await?;
         let manager = self.connectome.read();
         let cortical_area_count = manager.get_cortical_area_count();
+        let neuron_capacity = manager.get_neuron_capacity();
+        let synapse_capacity = manager.get_synapse_capacity();
         
         // Get burst engine status from BurstLoopRunner
         let (burst_engine_active, burst_count) = if let Some(ref runner) = self.burst_runner {
@@ -58,6 +60,8 @@ impl AnalyticsService for AnalyticsServiceImpl {
             burst_engine_active,
             brain_readiness,
             neuron_count,
+            neuron_capacity,
+            synapse_capacity,
             cortical_area_count,
             burst_count,
         })

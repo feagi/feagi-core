@@ -221,14 +221,6 @@ fn validate_value_ranges(config: &FeagiConfig, errors: &mut Vec<ConfigValidation
         });
     }
 
-    // Buffer multiplier must be >= 1.0
-    if config.connectome.buffer_multiplier < 1.0 {
-        errors.push(ConfigValidationError::InvalidValue {
-            field: "connectome.buffer_multiplier".to_string(),
-            reason: "must be >= 1.0".to_string(),
-        });
-    }
-
     // Burst engine mode must be "inference" or "design"
     if config.burst_engine.mode != "inference" && config.burst_engine.mode != "design" {
         errors.push(ConfigValidationError::InvalidValue {

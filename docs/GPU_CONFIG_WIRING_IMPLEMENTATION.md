@@ -243,15 +243,15 @@ info!("    - GPU threshold: {} synapses", gpu_config.gpu_threshold);
 info!("    - GPU memory fraction: {:.1}%", gpu_config.gpu_memory_fraction * 100.0);
 
 let npu = Arc::new(Mutex::new(RustNPU::new(
-    config.connectome.min_neuron_space,
-    config.connectome.min_synapse_space,
+    config.connectome.neuron_space,
+    config.connectome.synapse_space,
     10, // cortical_area_count - will be resized as needed
     Some(&gpu_config),  // Pass GPU config
 )));
 
 info!("    ✓ NPU initialized (capacity: {} neurons, {} synapses)",
-      config.connectome.min_neuron_space,
-      config.connectome.min_synapse_space);
+      config.connectome.neuron_space,
+      config.connectome.synapse_space);
 ```
 
 **Update genome loading** (replace lines 226-256 in `load_genome` function):

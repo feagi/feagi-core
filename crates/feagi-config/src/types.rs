@@ -552,38 +552,55 @@ impl Default for MemoryConfig {
 #[serde(default)]
 pub struct BurstEngineConfig {
     pub mode: String,
-    pub max_supported_neurons: usize,
-    pub design_mode_allocation_percent: usize,
     pub fcl_capacity_multiplier: f64,
     pub fire_queue_capacity_multiplier: f64,
     pub memory_area_multiplier: f64,
     pub enable_preallocation: bool,
     pub enable_capacity_warnings: bool,
+    pub sleep: BurstEngineSleepConfig,
 }
 
 impl Default for BurstEngineConfig {
     fn default() -> Self {
         Self {
             mode: "inference".to_string(),
-            max_supported_neurons: 10_000_000,
-            design_mode_allocation_percent: 80,
             fcl_capacity_multiplier: 1.5,
             fire_queue_capacity_multiplier: 1.2,
             memory_area_multiplier: 2.0,
             enable_preallocation: true,
             enable_capacity_warnings: true,
+            sleep: BurstEngineSleepConfig::default(),
         }
     }
 }
 
-/// Connectome sizing and memory allocation
+/// Burst Engine sleep mode configuration (system-level)
+/// Note: All sleep parameters (thresholds, frequencies) come from genome physiology
+/// This only contains the master enable/disable flag
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub struct BurstEngineSleepConfig {
+    /// Master kill switch for sleep mode (all params come from genome)
+    pub enabled: bool,
+}
+
+impl Default for BurstEngineSleepConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+        }
+    }
+}
+
+/// Connectome sizing and memory allocation (SINGLE SOURCE OF TRUTH)
+/// These values define MAXIMUM capacity allocated at NPU initialization.
+/// There is NO dynamic growth - these ARE the hard limits.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ConnectomeConfig {
-    pub min_neuron_space: usize,
-    pub min_synapse_space: usize,
-    pub min_memory_neuron_space: usize,
-    pub buffer_multiplier: f64,
+    pub neuron_space: usize,
+    pub synapse_space: usize,
+    pub memory_neuron_space: usize,
     pub memory_processing_batch_size: usize,
     pub memory_pattern_cache_size: usize,
     pub memory_neuron_limit_per_area: usize,
@@ -592,10 +609,9 @@ pub struct ConnectomeConfig {
 impl Default for ConnectomeConfig {
     fn default() -> Self {
         Self {
-            min_neuron_space: 100_000,
-            min_synapse_space: 500_000,
-            min_memory_neuron_space: 50_000,
-            buffer_multiplier: 1.5,
+            neuron_space: 100_000,
+            synapse_space: 500_000,
+            memory_neuron_space: 50_000,
             memory_processing_batch_size: 100,
             memory_pattern_cache_size: 10_000,
             memory_neuron_limit_per_area: 10_000,
