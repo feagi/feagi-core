@@ -644,7 +644,7 @@ mod test_io_cortical_area_data_type {
             let output_bytes = output_id.as_bytes();
             
             assert_eq!(input_bytes[0], b'i');
-            assert_eq!(output_bytes[0], b'0');
+            assert_eq!(output_bytes[0], b'o');
         }
     }
 }
