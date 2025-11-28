@@ -17,6 +17,9 @@ macro_rules! motor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::SignedPercentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -33,6 +36,9 @@ macro_rules! motor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::SignedPercentage(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -49,6 +55,9 @@ macro_rules! motor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Percentage3D(frame_change_handling, percentage_neuron_positioning), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
@@ -65,6 +74,9 @@ macro_rules! motor_cortical_units {
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::Misc(frame_change_handling), 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
                     }
                 },
 
