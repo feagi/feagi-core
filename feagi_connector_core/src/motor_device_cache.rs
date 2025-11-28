@@ -251,7 +251,7 @@ macro_rules! motor_unit_functions {
                     }
                 };
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                let initial_val: WrappedIOData = WrappedIOData::Percentage_3D(Percentage3D::new_zero());
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
                     for _i in 0..*number_channels {
@@ -264,7 +264,7 @@ macro_rules! motor_unit_functions {
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage3D);
     };
 
     // Arm for WrappedIOType::SignedPercentage
@@ -291,7 +291,7 @@ macro_rules! motor_unit_functions {
                     }
                 };
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                let initial_val: WrappedIOData = WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0));
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
                     for _i in 0..*number_channels {
@@ -304,7 +304,7 @@ macro_rules! motor_unit_functions {
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, SignedPercentage);
     };
 
     // Arm for WrappedIOType::MiscData
@@ -396,7 +396,7 @@ impl MotorDeviceCache {
         Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
     }
 
-    fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
     }

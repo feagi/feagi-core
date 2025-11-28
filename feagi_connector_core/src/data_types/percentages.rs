@@ -130,6 +130,12 @@ impl Percentage {
         self.value * 100.0
     }
 
+    /// Convenience method for Python bindings and conversions
+    /// Returns the raw f32 value in [0.0, 1.0] range
+    pub fn as_f32(&self) -> f32 {
+        self.value
+    }
+
 //endregion
 
 //region Internal
@@ -268,6 +274,12 @@ impl SignedPercentage {
 
     pub fn get_as_m100_100(&self) -> f32 {
         self.value * 100.0
+    }
+
+    /// Convenience method for Python bindings and conversions
+    /// Returns the raw f32 value in [-1.0, 1.0] range
+    pub fn as_f32(&self) -> f32 {
+        self.value
     }
 
     //endregion
