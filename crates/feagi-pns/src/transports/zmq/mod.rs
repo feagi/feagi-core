@@ -204,10 +204,10 @@ impl ZmqStreams {
             agent_id, data.len()
         );
 
-        // TODO: Add topic prefix for agent-specific delivery
-        // For now, publish to all (agents filter by agent_id in the data)
+        // Publish with agent_id as topic prefix for agent-specific delivery
+        // ZMQ PUB/SUB uses multipart messages: [topic, data]
         self.motor_stream
-            .publish(data)
+            .publish_with_topic(agent_id.as_bytes(), data)
             .map_err(|e| PNSError::Zmq(format!("Motor publish: {}", e)))
     }
 }

@@ -41,9 +41,8 @@ impl MotorStream {
         socket
             .set_sndhwm(1000) // High water mark for send buffer
             .map_err(|e| e.to_string())?;
-        socket
-            .set_conflate(true) // Keep only latest message (real-time data)
-            .map_err(|e| e.to_string())?;
+        // NOTE: CONFLATE disabled - it BREAKS multipart messages!
+        // For real-time data, subscribers should use DONTWAIT and discard old messages
 
         // Bind socket
         socket.bind(&self.bind_address).map_err(|e| e.to_string())?;
@@ -78,6 +77,35 @@ impl MotorStream {
         };
 
         sock.send(data, 0).map_err(|e| e.to_string())?;
+
+        Ok(())
+    }
+    
+    /// Publish motor data with agent_id as ZMQ topic for filtering
+    pub fn publish_with_topic(&self, topic: &[u8], data: &[u8]) -> Result<(), String> {
+        // Fast path: If stream not running, don't try to send
+        if !*self.running.lock() {
+            return Ok(()); // Silently discard - no agents connected
+        }
+        
+        let sock_guard = self.socket.lock();
+        let sock = match sock_guard.as_ref() {
+            Some(s) => s,
+            None => return Err("Motor stream not started".to_string()),
+        };
+
+        // Send as multipart message: [topic, data]
+        use tracing::info;
+        info!("[MOTOR-STREAM] 📤 Publishing multipart: topic='{}' ({} bytes), data={} bytes",
+              String::from_utf8_lossy(topic), topic.len(), data.len());
+        
+        // Use send_multipart with Vec (zmq crate API compatibility)
+        let parts: Vec<&[u8]> = vec![topic, data];
+        sock.send_multipart(parts, 0).map_err(|e| {
+            info!("[MOTOR-STREAM] ❌ send_multipart failed: {}", e);
+            e.to_string()
+        })?;
+        info!("[MOTOR-STREAM] ✅ Multipart sent successfully");
 
         Ok(())
     }

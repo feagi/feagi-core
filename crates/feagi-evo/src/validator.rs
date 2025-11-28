@@ -299,12 +299,15 @@ fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
 
 /// Validate IPU/OPU area IDs (should follow template system)
 fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
-    // Extract 3-character prefix
-    let prefix = &display[0..3];
+    // IO cortical IDs have format: [i/o][3-char-unit][4-config-bytes]
+    // For IPU: 'i' + 3-char prefix (e.g., "isvi____")
+    // For OPU: 'o' + 3-char prefix (e.g., "omot____")
+    let first_char = display.chars().next().unwrap_or('_');
+    let unit_prefix = &display[1..4];  // Skip first char (i/o), get 3-char unit identifier
     
     // Known valid IPU prefixes from feagi-data-processing templates
     const VALID_IPU_PREFIXES: &[&str] = &[
-        "svi",  // SegmentedVision (9 areas: svi0____ to svi8____)
+        "svi",  // SegmentedVision (9 areas: isvi____ variants)
         "aud",  // Audio
         "tac",  // Tactile
         "olf",  // Olfactory
@@ -313,41 +316,45 @@ fn validate_io_area_id(display: &str, result: &mut ValidationResult) {
     
     // Known valid OPU prefixes from feagi-data-processing templates
     const VALID_OPU_PREFIXES: &[&str] = &[
-        "mot",  // Motor
+        "mot",  // Motor (omot____ variants)
         "voc",  // Vocal
         "gaz",  // Gaze control
+        "pse",  // Positional Servo
+        "mis",  // Miscellaneous
     ];
     
-    let is_valid_ipu = VALID_IPU_PREFIXES.contains(&prefix);
-    let is_valid_opu = VALID_OPU_PREFIXES.contains(&prefix);
+    let is_valid_ipu = first_char == 'i' && VALID_IPU_PREFIXES.contains(&unit_prefix);
+    let is_valid_opu = first_char == 'o' && VALID_OPU_PREFIXES.contains(&unit_prefix);
     
     if !is_valid_ipu && !is_valid_opu {
-        // Check for OLD invalid formats
-        if prefix.starts_with("iic") || prefix.starts_with("opu") || prefix.starts_with("omo") || prefix.starts_with("oga") {
+        // Check for OLD invalid formats (old format didn't have i/o prefix)
+        if display.starts_with("iic") || display.starts_with("omot") || display.starts_with("ogaz") {
             result.add_error(format!(
-                "INVALID OLD-FORMAT cortical ID: '{}' - prefix '{}' is not compliant with feagi-data-processing templates. \
-                Valid IPU prefixes: {:?}, Valid OPU prefixes: {:?}. \
+                "INVALID OLD-FORMAT cortical ID: '{}' - not compliant with feagi-data-processing templates. \
+                Valid IPU format: 'i' + unit_prefix (e.g., 'isvi____'). \
+                Valid OPU format: 'o' + unit_prefix (e.g., 'omot____'). \
+                Valid IPU units: {:?}, Valid OPU units: {:?}. \
                 This genome needs migration to the new format.",
-                display, prefix, VALID_IPU_PREFIXES, VALID_OPU_PREFIXES
+                display, VALID_IPU_PREFIXES, VALID_OPU_PREFIXES
             ));
         } else {
             result.add_warning(format!(
-                "Unknown cortical ID prefix: '{}' in '{}' - may not follow feagi-data-processing template system. \
-                Valid IPU prefixes: {:?}, Valid OPU prefixes: {:?}",
-                prefix, display, VALID_IPU_PREFIXES, VALID_OPU_PREFIXES
+                "Unknown cortical ID: '{}' (first char: '{}', unit: '{}') - may not follow feagi-data-processing template system. \
+                Valid IPU format: 'i' + {:?}. Valid OPU format: 'o' + {:?}",
+                display, first_char, unit_prefix, VALID_IPU_PREFIXES, VALID_OPU_PREFIXES
             ));
         }
         return;
     }
     
-    // Validate the index/suffix part (characters 3-7)
-    let suffix = &display[3..];
+    // Validate the index/suffix part (characters 4-7, skipping i/o and unit prefix)
+    let suffix = &display[4..];
     
-    // For SegmentedVision (svi), indices should be 0-8
-    if prefix == "svi" {
-        if let Some(first_char) = suffix.chars().next() {
-            if first_char.is_ascii_digit() {
-                let digit = first_char as u8 - b'0';
+    // For SegmentedVision (isvi), validate index (byte 4 should be 0-8)
+    if first_char == 'i' && unit_prefix == "svi" {
+        if let Some(index_char) = display.chars().nth(4) {
+            if index_char.is_ascii_digit() {
+                let digit = index_char as u8 - b'0';
                 if digit > 8 {
                     result.add_error(format!(
                         "Invalid SegmentedVision index: '{}' in '{}' - SegmentedVision has 9 areas (indices 0-8)",

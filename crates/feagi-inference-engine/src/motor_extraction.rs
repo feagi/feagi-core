@@ -5,6 +5,7 @@
 
 use anyhow::Result;
 use feagi_burst_engine::RustNPU;
+use feagi_types::NeuralValue;
 use feagi_data_serialization::FeagiSerializable;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::neuron_voxels::xyzp::{
@@ -72,7 +73,7 @@ impl MotorExtractor {
     ///
     /// Gets the current fire queue data, filters for motor cortical areas,
     /// and encodes the XYZP coordinates using feagi-data-processing.
-    pub fn extract_motor_output(&mut self, npu: &mut RustNPU) -> Result<Option<Vec<u8>>> {
+    pub fn extract_motor_output<T: NeuralValue>(&mut self, npu: &mut RustNPU<T>) -> Result<Option<Vec<u8>>> {
         self.total_extractions += 1;
 
         // Get fire queue data (area_id -> (ids, xs, ys, zs, ps))

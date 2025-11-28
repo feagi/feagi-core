@@ -363,28 +363,88 @@ impl RegistrationHandler {
             }
         }
 
+        // DEBUG: Log all capabilities received
+        info!("🦀 [REGISTRATION] 📋 DEBUG: Full capabilities for '{}': {:?}", request.agent_id, agent_info.capabilities);
+        
         // Register motor subscriptions with burst engine (if motor capability exists)
         if let Some(ref motor) = agent_info.capabilities.motor {
+            info!(
+                "🦀 [REGISTRATION] 🎮 Motor capability DETECTED for '{}': modality='{}', output_count={}, source_cortical_areas={:?}",
+                request.agent_id, motor.modality, motor.output_count, motor.source_cortical_areas
+            );
+            
             if let Some(burst_runner_lock) = self.burst_runner.lock().as_ref() {
-                info!(
-                    "🦀 [REGISTRATION] 🎮 Agent {} has motor capability with {} cortical areas: {:?}",
-                    request.agent_id, motor.source_cortical_areas.len(), motor.source_cortical_areas
-                );
+                // Convert cortical area names to proper 8-byte CorticalID strings
+                // SDK may send either plain names ("omot") or base64 encoded IDs ("b21vdAQAAAA=")
+                use feagi_data_structures::genomic::cortical_area::CorticalID;
+                use base64::{Engine as _, engine::general_purpose};
                 
-                // Store cortical_id strings (matching sensory stream pattern)
-                // Resolution to area_idx happens during encoding, just like sensory
-                let cortical_ids: AHashSet<String> = motor.source_cortical_areas.iter().cloned().collect();
+                let mut cortical_ids: AHashSet<String> = AHashSet::new();
+                for area_input in &motor.source_cortical_areas {
+                    info!("🦀 [REGISTRATION] 🎮 Processing motor cortical area: '{}'", area_input);
+                    
+                    // Try to parse as base64 first (if coming from Python SDK)
+                    let cortical_id = if let Ok(decoded) = general_purpose::STANDARD.decode(area_input) {
+                        info!("🦀 [REGISTRATION] 🎮   → Decoded as base64: {} bytes: {:02x?}", decoded.len(), decoded);
+                        // It's base64 - decode to get the 8-byte cortical ID
+                        if decoded.len() == 8 {
+                            let mut bytes = [0u8; 8];
+                            bytes.copy_from_slice(&decoded);
+                            match CorticalID::try_from_bytes(&bytes) {
+                                Ok(id) => Some(id),
+                                Err(e) => {
+                                    warn!("🦀 [REGISTRATION] ⚠️   → CorticalID validation failed: {:?}", e);
+                                    None
+                                }
+                            }
+                        } else {
+                            warn!("🦀 [REGISTRATION] ⚠️   → Wrong length: {} (expected 8)", decoded.len());
+                            None
+                        }
+                    } else {
+                        info!("🦀 [REGISTRATION] 🎮   → Not base64, treating as plain name");
+                        // It's a plain name - pad to 8 bytes with null bytes
+                        let mut bytes = [b'\0'; 8];
+                        let name_bytes = area_input.as_bytes();
+                        let copy_len = name_bytes.len().min(8);
+                        bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+                        info!("🦀 [REGISTRATION] 🎮   → Padded to 8 bytes: {:02x?}", bytes);
+                        match CorticalID::try_from_bytes(&bytes) {
+                            Ok(id) => Some(id),
+                            Err(e) => {
+                                warn!("🦀 [REGISTRATION] ⚠️   → CorticalID validation failed: {:?}", e);
+                                None
+                            }
+                        }
+                    };
+                    
+                    if let Some(id) = cortical_id {
+                        // Use to_string() to get the proper 8-byte representation
+                        let full_name = id.to_string();
+                        info!("🦀 [REGISTRATION] ✅ Motor subscription added: '{}' → '{}' (bytes: {:02x?})", 
+                              area_input, full_name.escape_debug(), id.as_bytes());
+                        cortical_ids.insert(full_name);
+                    } else {
+                        warn!("🦀 [REGISTRATION] ❌ Failed to create cortical ID from '{}'", area_input);
+                    }
+                }
+                
+                info!(
+                    "🦀 [REGISTRATION] 🎮 Registering {} cortical IDs for motor subscriptions",
+                    cortical_ids.len()
+                );
                 
                 burst_runner_lock.read().register_motor_subscriptions(
                     request.agent_id.clone(),
                     cortical_ids.clone(),
                 );
                 
-                info!("🦀 [REGISTRATION] ✅ Motor subscriptions registered for '{}' with cortical_ids: {:?}", 
-                      request.agent_id, cortical_ids);
+                info!("🦀 [REGISTRATION] ✅ Motor subscriptions CONFIRMED registered for '{}'", request.agent_id);
             } else {
-                info!("🦀 [REGISTRATION] 🎮 Agent {} has motor capability but burst runner not connected yet", request.agent_id);
+                info!("🦀 [REGISTRATION] ⚠️ Agent {} has motor capability but burst runner not connected yet", request.agent_id);
             }
+        } else {
+            info!("🦀 [REGISTRATION] 🎮 DEBUG: Agent {} has NO motor capability in registration", request.agent_id);
         }
 
         // Invoke Python callback if set
