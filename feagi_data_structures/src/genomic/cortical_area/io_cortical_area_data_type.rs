@@ -71,7 +71,7 @@ impl IOCorticalAreaDataType {
         
 
         let cortical_id_bytes: [u8; CorticalID::NUMBER_OF_BYTES] = [
-            if is_input { b'i' } else { b'0' },
+            if is_input { b'i' } else { b'o' },
             cortical_unit_identifier[0],
             cortical_unit_identifier[1],
             cortical_unit_identifier[2],
