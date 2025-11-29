@@ -47,6 +47,12 @@ pub mod hal;
 /// Concrete platform implementations (ESP32, STM32, etc.).
 pub mod platforms;
 
+/// Bluetooth Low Energy protocol and abstractions
+pub mod bluetooth;
+
+/// Transport layer (protocol that works with BLE, USB CDC, UART, etc.)
+pub mod transports;
+
 // Re-export commonly used types
 pub use hal::{
     Platform, 
@@ -57,7 +63,17 @@ pub use hal::{
     LogLevel,
     NeuralAccelerator,
     AcceleratorCapabilities,
+    BluetoothProvider,
+    ConnectionStatus,
+    UsbCdcProvider,
+    UsbConnectionStatus,
 };
+
+#[cfg(feature = "async")]
+pub use hal::{AsyncBluetoothProvider, AsyncUsbCdcProvider};
+
+// Re-export transport protocol
+pub use transports::{Protocol, Command, PacketCommand};
 
 // Re-export platform implementations
 #[cfg(feature = "esp32")]

@@ -18,6 +18,10 @@ pub mod gpio;
 pub mod logger;
 /// Neural accelerator control traits.
 pub mod accelerator;
+/// Bluetooth Low Energy communication traits.
+pub mod bluetooth;
+/// USB CDC Serial communication traits.
+pub mod usb_cdc;
 
 // Re-export trait types
 pub use time::TimeProvider;
@@ -25,6 +29,14 @@ pub use serial::SerialIO;
 pub use gpio::GpioProvider;
 pub use logger::{Logger, LogLevel};
 pub use accelerator::{NeuralAccelerator, AcceleratorCapabilities};
+pub use bluetooth::{BluetoothProvider, ConnectionStatus};
+pub use usb_cdc::{UsbCdcProvider, UsbConnectionStatus};
+
+#[cfg(feature = "async")]
+pub use bluetooth::AsyncBluetoothProvider;
+
+#[cfg(feature = "async")]
+pub use usb_cdc::AsyncUsbCdcProvider;
 
 /// Convenience trait combining common platform capabilities
 /// 
