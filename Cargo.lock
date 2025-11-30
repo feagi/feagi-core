@@ -1889,6 +1889,7 @@ dependencies = [
  "ahash",
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "crossbeam",
  "feagi-burst-engine",
  "feagi-transports",
@@ -2012,7 +2013,7 @@ dependencies = [
 
 [[package]]
 name = "feagi_data_serialization"
-version = "0.0.50-beta.55"
+version = "0.0.50-beta.56"
 dependencies = [
  "byteorder",
  "feagi_data_structures",
@@ -2021,7 +2022,7 @@ dependencies = [
 
 [[package]]
 name = "feagi_data_structures"
-version = "0.0.50-beta.55"
+version = "0.0.50-beta.56"
 dependencies = [
  "base64 0.22.1",
  "ndarray",

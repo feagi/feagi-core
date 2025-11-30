@@ -789,7 +789,12 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             let old_dens = area.neurons_per_voxel;
             
             // Apply dimensional changes
-            if let Some(dims) = changes.get("dimensions").or_else(|| changes.get("cortical_dimensions")) {
+            // CRITICAL: For IPU/OPU areas, cortical_dimensions_per_device must be multiplied by dev_count
+            let is_per_device = changes.contains_key("cortical_dimensions_per_device");
+            
+            if let Some(dims) = changes.get("dimensions")
+                .or_else(|| changes.get("cortical_dimensions"))
+                .or_else(|| changes.get("cortical_dimensions_per_device")) {
                 let (width, height, depth) = if let Some(arr) = dims.as_array() {
                     // Handle array format: [width, height, depth]
                     if arr.len() >= 3 {
@@ -812,7 +817,26 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                     (1, 1, 1)
                 };
                 
-                area.dimensions = feagi_types::Dimensions::new(width, height, depth);
+                // If this is per-device dimensions, multiply depth by dev_count to get total dimensions
+                let final_depth = if is_per_device {
+                    // Get dev_count from changes or from existing area properties
+                    let dev_count = changes.get("dev_count")
+                        .and_then(|v| v.as_u64())
+                        .or_else(|| {
+                            area.properties.get("dev_count")
+                                .and_then(|v| v.as_u64())
+                        })
+                        .unwrap_or(1) as usize;
+                    
+                    info!("[STRUCTURAL-REBUILD] Per-device dimensions: [{}, {}, {}] × dev_count={} → total depth={}",
+                          width, height, depth, dev_count, depth * dev_count);
+                    
+                    depth * dev_count
+                } else {
+                    depth
+                };
+                
+                area.dimensions = feagi_types::Dimensions::new(width, height, final_depth);
             }
             
             // Apply density changes
@@ -822,6 +846,14 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                     area.neurons_per_voxel = density as u32;
                     break;
                 }
+            }
+            
+            // Store dev_count and cortical_dimensions_per_device in properties for IPU/OPU areas
+            if let Some(dev_count) = changes.get("dev_count") {
+                area.properties.insert("dev_count".to_string(), dev_count.clone());
+            }
+            if let Some(per_device_dims) = changes.get("cortical_dimensions_per_device") {
+                area.properties.insert("cortical_dimensions_per_device".to_string(), per_device_dims.clone());
             }
             
             (old_dims, old_dens, area.dimensions, area.neurons_per_voxel)
@@ -847,15 +879,23 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
         
         info!("[STRUCTURAL-REBUILD] Deleted {} neurons", deleted_count);
         
-        // Step 3: Update cortical area dimensions in ConnectomeManager
+        // Step 3: Update cortical area dimensions and properties in ConnectomeManager
         {
             let mut manager = connectome.write();
             manager.resize_cortical_area(&cortical_id_typed, new_dimensions)
                 .map_err(|e| ServiceError::Backend(format!("Failed to resize area: {}", e)))?;
             
-            // Update neurons_per_voxel
+            // Update neurons_per_voxel and properties
             if let Some(area) = manager.get_cortical_area_mut(&cortical_id_typed) {
                 area.neurons_per_voxel = new_density;
+                
+                // Store IPU/OPU properties
+                if let Some(dev_count) = changes.get("dev_count") {
+                    area.properties.insert("dev_count".to_string(), dev_count.clone());
+                }
+                if let Some(per_device_dims) = changes.get("cortical_dimensions_per_device") {
+                    area.properties.insert("cortical_dimensions_per_device".to_string(), per_device_dims.clone());
+                }
             }
         }
         

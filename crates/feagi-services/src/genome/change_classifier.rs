@@ -49,6 +49,7 @@ impl CorticalChangeClassifier {
         [
             // Dimension changes → neuron count changes → synapse rebuild required
             "cortical_dimensions",
+            "cortical_dimensions_per_device",
             "dimensions",
             
             // Neuron density changes → neuron count changes → synapse rebuild required

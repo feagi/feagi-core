@@ -409,7 +409,17 @@ pub async fn post_cortical_area(
         .and_then(|v| v.as_u64())
         .unwrap_or(1) as u32;
     
-    tracing::info!(target: "feagi-api", "Creating cortical areas for {} with neurons_per_voxel={}", cortical_type_key, neurons_per_voxel);
+    // Extract data_type_config from request (default to 0 for backward compatibility)
+    let data_type_config = request.get("data_type_config")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u16;
+    
+    // Split data_type_config into two bytes for cortical ID
+    let config_byte_4 = (data_type_config & 0xFF) as u8;        // Lower byte
+    let config_byte_5 = ((data_type_config >> 8) & 0xFF) as u8; // Upper byte
+    
+    tracing::info!(target: "feagi-api", "Creating cortical areas for {} with neurons_per_voxel={}, data_type_config={} (bytes: {}, {})", 
+        cortical_type_key, neurons_per_voxel, data_type_config, config_byte_4, config_byte_5);
     
     // Determine number of units and get topology
     let (num_units, unit_topology) = if cortical_type_str == "IPU" {
@@ -480,14 +490,14 @@ pub async fn post_cortical_area(
         };
         
         // Construct the 8-byte cortical ID
-        // For now, use default encoding: byte 4 = 0 (absolute), byte 5 = 0 (linear)
+        // Use data_type_config from request for bytes 4-5
         let cortical_id_bytes = [
             if cortical_type_str == "IPU" { b'i' } else { b'o' },  // Byte 0: type
             subtype_bytes[0],  // Byte 1: subtype[0]
             subtype_bytes[1],  // Byte 2: subtype[1]
             subtype_bytes[2],  // Byte 3: subtype[2]
-            0,                 // Byte 4: encoding type (0 = absolute)
-            0,                 // Byte 5: encoding format (0 = linear)
+            config_byte_4,     // Byte 4: data type config (lower byte)
+            config_byte_5,     // Byte 5: data type config (upper byte)
             unit_idx as u8,    // Byte 6: unit index
             group_id,          // Byte 7: group ID
         ];

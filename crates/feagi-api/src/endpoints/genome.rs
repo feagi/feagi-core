@@ -529,9 +529,124 @@ pub async fn get_amalgamation_history_exact(State(_state): State<ApiState>) -> A
 }
 
 /// GET /v1/genome/cortical_template
+/// 
+/// Returns metadata about all available cortical types (motor, sensory, memory, etc.)
+/// including their supported encodings, formats, and data type configurations.
 #[utoipa::path(get, path = "/v1/genome/cortical_template", tag = "genome")]
 pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    Ok(Json(HashMap::new()))
+    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+        IOCorticalAreaDataType, FrameChangeHandling, PercentageNeuronPositioning
+    };
+    use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use serde_json::json;
+    
+    let mut templates = HashMap::new();
+    
+    // Helper to convert data type to human-readable format
+    let data_type_to_json = |dt: IOCorticalAreaDataType| -> serde_json::Value {
+        let (variant, frame, positioning) = match dt {
+            IOCorticalAreaDataType::Percentage(f, p) => 
+                ("Percentage", f, Some(p)),
+            IOCorticalAreaDataType::Percentage2D(f, p) => 
+                ("Percentage2D", f, Some(p)),
+            IOCorticalAreaDataType::Percentage3D(f, p) => 
+                ("Percentage3D", f, Some(p)),
+            IOCorticalAreaDataType::Percentage4D(f, p) => 
+                ("Percentage4D", f, Some(p)),
+            IOCorticalAreaDataType::SignedPercentage(f, p) => 
+                ("SignedPercentage", f, Some(p)),
+            IOCorticalAreaDataType::SignedPercentage2D(f, p) => 
+                ("SignedPercentage2D", f, Some(p)),
+            IOCorticalAreaDataType::SignedPercentage3D(f, p) => 
+                ("SignedPercentage3D", f, Some(p)),
+            IOCorticalAreaDataType::SignedPercentage4D(f, p) => 
+                ("SignedPercentage4D", f, Some(p)),
+            IOCorticalAreaDataType::CartesianPlane(f) => 
+                ("CartesianPlane", f, None),
+            IOCorticalAreaDataType::Misc(f) => 
+                ("Misc", f, None),
+        };
+        
+        let frame_str = match frame {
+            FrameChangeHandling::Absolute => "Absolute",
+            FrameChangeHandling::Incremental => "Incremental",
+        };
+        
+        let positioning_str = positioning.map(|p| match p {
+            PercentageNeuronPositioning::Linear => "Linear",
+            PercentageNeuronPositioning::Fractional => "Fractional",
+        });
+        
+        json!({
+            "variant": variant,
+            "frame_change_handling": frame_str,
+            "percentage_positioning": positioning_str,
+            "config_value": dt.to_data_type_configuration_flag()
+        })
+    };
+    
+    // Add motor types
+    for motor_unit in MotorCorticalUnit::list_all() {
+        let friendly_name = motor_unit.get_friendly_name();
+        let cortical_id_ref = motor_unit.get_cortical_id_unit_reference();
+        let num_areas = motor_unit.get_number_cortical_areas();
+        let topology = motor_unit.get_unit_default_topology();
+        
+        // Get supported data types for this motor unit
+        // Most motor units support SignedPercentage with both frame modes and both positioning modes
+        let mut data_types = vec![];
+        for frame in [FrameChangeHandling::Absolute, FrameChangeHandling::Incremental] {
+            for positioning in [PercentageNeuronPositioning::Linear, PercentageNeuronPositioning::Fractional] {
+                let dt = IOCorticalAreaDataType::SignedPercentage(frame, positioning);
+                data_types.push(data_type_to_json(dt));
+            }
+        }
+        
+        templates.insert(
+            format!("o{}", String::from_utf8_lossy(&cortical_id_ref)),
+            json!({
+                "type": "motor",
+                "friendly_name": friendly_name,
+                "cortical_id_prefix": String::from_utf8_lossy(&cortical_id_ref).to_string(),
+                "number_of_cortical_areas": num_areas,
+                "unit_default_topology": topology,
+                "supported_data_types": data_types,
+                "description": format!("Motor output: {}", friendly_name)
+            })
+        );
+    }
+    
+    // Add sensory types
+    for sensory_unit in SensoryCorticalUnit::list_all() {
+        let friendly_name = sensory_unit.get_friendly_name();
+        let cortical_id_ref = sensory_unit.get_cortical_id_unit_reference();
+        let num_areas = sensory_unit.get_number_cortical_areas();
+        let topology = sensory_unit.get_unit_default_topology();
+        
+        // Sensory units can support various data types depending on their nature
+        let mut data_types = vec![];
+        for frame in [FrameChangeHandling::Absolute, FrameChangeHandling::Incremental] {
+            for positioning in [PercentageNeuronPositioning::Linear, PercentageNeuronPositioning::Fractional] {
+                let dt = IOCorticalAreaDataType::Percentage(frame, positioning);
+                data_types.push(data_type_to_json(dt));
+            }
+        }
+        
+        templates.insert(
+            format!("i{}", String::from_utf8_lossy(&cortical_id_ref)),
+            json!({
+                "type": "sensory",
+                "friendly_name": friendly_name,
+                "cortical_id_prefix": String::from_utf8_lossy(&cortical_id_ref).to_string(),
+                "number_of_cortical_areas": num_areas,
+                "unit_default_topology": topology,
+                "supported_data_types": data_types,
+                "description": format!("Sensory input: {}", friendly_name)
+            })
+        );
+    }
+    
+    Ok(Json(templates))
 }
 
 /// GET /v1/genome/defaults/files
