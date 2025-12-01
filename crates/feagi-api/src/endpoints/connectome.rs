@@ -364,5 +364,92 @@ pub async fn post_upload_cortical_area(State(_state): State<ApiState>, Json(_dat
     Ok(Json(HashMap::from([("message".to_string(), "Upload not yet implemented".to_string())])))
 }
 
+/// GET /v1/connectome/cortical_area/list/types
+#[utoipa::path(
+    get,
+    path = "/v1/connectome/cortical_area/list/types",
+    tag = "connectome",
+    responses(
+        (status = 200, description = "List of cortical types with their cortical IDs and group IDs", body = HashMap<String, serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    )
+)]
+pub async fn get_cortical_area_list_types(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    use feagi_types::decode_cortical_id;
+    use std::collections::{HashMap, HashSet};
+    
+    let connectome_service = state.connectome_service.as_ref();
+    let areas = connectome_service.list_cortical_areas().await
+        .map_err(|e| ApiError::internal(format!("Failed to list cortical areas: {}", e)))?;
+    
+    // Helper function to map cortical subtype to human-readable title
+    fn get_cortical_type_title(subtype: &str) -> String {
+        match subtype {
+            "svi" => "segmented vision".to_string(),
+            "mot" => "motor".to_string(),
+            "bat" => "battery".to_string(),
+            "mis" => "miscellaneous".to_string(),
+            "gaz" => "gaze control".to_string(),
+            "pow" => "power".to_string(),
+            "dea" => "death".to_string(),
+            _ => {
+                // For unknown types, capitalize first letter and add spaces
+                if subtype.len() > 0 {
+                    let mut chars = subtype.chars();
+                    let first = chars.next().unwrap().to_uppercase().collect::<String>();
+                    let rest: String = chars.collect();
+                    format!("{}{}", first, rest)
+                } else {
+                    "unknown".to_string()
+                }
+            }
+        }
+    }
+    
+    // Group areas by cortical subtype
+    let mut type_map: HashMap<String, (String, Vec<String>, HashSet<u8>)> = HashMap::new();
+    
+    for area in areas {
+        // Decode cortical ID to get subtype and group_id (only for IPU/OPU)
+        if let Some(decoded) = decode_cortical_id(&area.cortical_id) {
+            // Extract subtype without the 'i' or 'o' prefix (e.g., "isvi" -> "svi")
+            let subtype = if decoded.cortical_subtype.len() >= 2 {
+                decoded.cortical_subtype[1..].to_lowercase()
+            } else {
+                decoded.cortical_subtype.to_lowercase()
+            };
+            
+            let entry = type_map.entry(subtype.clone()).or_insert_with(|| {
+                let title = get_cortical_type_title(&subtype);
+                (title, Vec::new(), HashSet::new())
+            });
+            
+            // Add cortical ID in base64 format
+            entry.1.push(area.cortical_id);
+            
+            // Add group_id
+            entry.2.insert(decoded.group_id);
+        }
+    }
+    
+    // Convert to response format
+    let mut response: HashMap<String, serde_json::Value> = HashMap::new();
+    for (subtype, (title, mut cortical_ids, group_ids)) in type_map {
+        // Sort cortical_ids for consistent output
+        cortical_ids.sort();
+        
+        let mut group_ids_vec: Vec<u8> = group_ids.into_iter().collect();
+        group_ids_vec.sort_unstable();
+        
+        response.insert(subtype, serde_json::json!({
+            "title": title,
+            "cortical_ids": cortical_ids,
+            "group_ids": group_ids_vec
+        }));
+    }
+    
+    Ok(Json(response))
+}
+
 
 

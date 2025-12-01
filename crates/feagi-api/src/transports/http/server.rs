@@ -285,6 +285,7 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/connectome/synapses/batch", axum::routing::post(connectome::post_synapses_batch))
         .route("/connectome/cortical_areas/list/summary", get(connectome::get_cortical_areas_list_summary))
         .route("/connectome/cortical_areas/list/transforming", get(connectome::get_cortical_areas_list_transforming))
+        .route("/connectome/cortical_area/list/types", get(connectome::get_cortical_area_list_types))
         .route("/connectome/cortical_area/:cortical_id/neurons", get(connectome::get_cortical_area_neurons))
         .route("/connectome/:cortical_area_id/synapses", get(connectome::get_area_synapses))
         .route("/connectome/cortical_info/:cortical_area", get(connectome::get_cortical_info))

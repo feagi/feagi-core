@@ -252,6 +252,7 @@ use crate::{
         crate::endpoints::connectome::post_synapses_batch,
         crate::endpoints::connectome::get_cortical_areas_list_summary,
         crate::endpoints::connectome::get_cortical_areas_list_transforming,
+        crate::endpoints::connectome::get_cortical_area_list_types,
         crate::endpoints::connectome::get_cortical_area_neurons,
         crate::endpoints::connectome::get_area_synapses,
         crate::endpoints::connectome::get_cortical_info,
