@@ -65,7 +65,7 @@ macro_rules! motor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaDataType::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], , channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
+                        0 => (IOCorticalAreaDataType::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
                     }
                 },
 

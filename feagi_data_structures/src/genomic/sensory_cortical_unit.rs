@@ -1,7 +1,7 @@
 use std::fmt::{Display, Formatter};
 use std::collections::HashMap;
 use crate::{sensor_cortical_units, FeagiDataError};
-use crate::genomic::cortical_area::{CorticalID, CorticalAreaType, IOCorticalAreaDataType};
+use crate::genomic::cortical_area::{CorticalID, CorticalAreaType, IOCorticalAreaDataFlag};
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
 use crate::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
 use paste;
@@ -9,7 +9,9 @@ use paste;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct UnitTopology {
     pub relative_position: [i32; 3],
-    pub dimensions: [u32; 3],
+    pub channel_dimensions_default: [u32; 3],
+    pub channel_dimensions_min: [u32; 3],
+    pub channel_dimensions_max: [u32; 3],
 }
 
 macro_rules! define_sensory_cortical_units_enum {
@@ -26,11 +28,8 @@ macro_rules! define_sensory_cortical_units_enum {
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
-                    cortical_area_types: {
-                        $(($cortical_area_type_expr:expr, $area_index:expr)),* $(,)?
-                    },
-                    unit_default_topology: {
-                        $($unit_idx:tt => { relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], dimensions: [$dim_x:expr, $dim_y:expr, $dim_z:expr] }),* $(,)?
+                    cortical_area_properties: {
+                        $($area_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
                 }
             ),* $(,)?
@@ -128,10 +127,12 @@ macro_rules! define_sensory_cortical_units_enum {
                             let mut topology = HashMap::new();
                             $(
                                 topology.insert(
-                                    $unit_idx,
+                                    $area_index,
                                     UnitTopology {
                                         relative_position: [$rel_x, $rel_y, $rel_z],
-                                        dimensions: [$dim_x, $dim_y, $dim_z],
+                                        channel_dimensions_default: [$dim_default_x, $dim_default_y, $dim_default_z],
+                                        channel_dimensions_min: [$dim_min_x, $dim_min_y, $dim_min_z],
+                                        channel_dimensions_max: [$dim_max_x, $dim_max_y, $dim_max_z],
                                     }
                                 );
                             )*
