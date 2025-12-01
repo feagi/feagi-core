@@ -3,7 +3,7 @@
 
 use parking_lot::Mutex;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{debug, error, info};
 
 /// Motor stream for publishing motor commands
 #[derive(Clone)]
@@ -95,17 +95,16 @@ impl MotorStream {
         };
 
         // Send as multipart message: [topic, data]
-        use tracing::info;
-        info!("[MOTOR-STREAM] 📤 Publishing multipart: topic='{}' ({} bytes), data={} bytes",
+        debug!("[MOTOR-STREAM] 📤 Publishing multipart: topic='{}' ({} bytes), data={} bytes",
               String::from_utf8_lossy(topic), topic.len(), data.len());
         
         // Use send_multipart with Vec (zmq crate API compatibility)
         let parts: Vec<&[u8]> = vec![topic, data];
         sock.send_multipart(parts, 0).map_err(|e| {
-            info!("[MOTOR-STREAM] ❌ send_multipart failed: {}", e);
+            error!("[MOTOR-STREAM] ❌ send_multipart failed: {}", e);
             e.to_string()
         })?;
-        info!("[MOTOR-STREAM] ✅ Multipart sent successfully");
+        debug!("[MOTOR-STREAM] ✅ Multipart sent successfully");
 
         Ok(())
     }

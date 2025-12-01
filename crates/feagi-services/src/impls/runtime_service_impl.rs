@@ -9,6 +9,7 @@ Licensed under the Apache License, Version 2.0
 
 use async_trait::async_trait;
 use feagi_burst_engine::BurstLoopRunner;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -256,6 +257,40 @@ impl RuntimeService for RuntimeServiceImpl {
         
         info!(target: "feagi-services", "Set FCL sample rate for area {} to {}Hz", area_id, sample_rate);
         Ok(())
+    }
+    
+    async fn inject_sensory_by_coordinates(
+        &self,
+        cortical_id: &str,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> ServiceResult<usize> {
+        // Parse cortical ID from base64 string
+        let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID format: {}", e)))?;
+        
+        // Get NPU from burst runner
+        let runner = self.burst_runner.read();
+        let npu = runner.get_npu();
+        
+        // Inject using NPU's service layer method
+        let injected_count = {
+            let mut npu_lock = npu.lock()
+                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+            
+            npu_lock.inject_sensory_xyzp_by_id(&cortical_id_typed, xyzp_data)
+        };
+        
+        if injected_count == 0 && !xyzp_data.is_empty() {
+            warn!(target: "feagi-services", 
+                "No neurons found for injection: cortical_id={}, coordinates={}", 
+                cortical_id, xyzp_data.len());
+        } else if injected_count > 0 {
+            info!(target: "feagi-services", 
+                "Injected {} neurons into FCL for cortical area {}", 
+                injected_count, cortical_id);
+        }
+        
+        Ok(injected_count)
     }
 }
 

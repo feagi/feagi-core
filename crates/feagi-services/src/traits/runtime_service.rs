@@ -174,6 +174,28 @@ pub trait RuntimeService: Send + Sync {
     /// * `sample_rate` - Sample rate in Hz
     ///
     async fn set_area_fcl_sample_rate(&self, area_id: u32, sample_rate: f64) -> ServiceResult<()>;
+    
+    /// Inject sensory data by cortical area ID and coordinates
+    ///
+    /// Takes cortical ID (base64 string) and coordinates with potential values,
+    /// converts coordinates to neuron IDs, and injects them into FCL.
+    ///
+    /// # Arguments
+    /// * `cortical_id` - Base64 encoded cortical area ID
+    /// * `xyzp_data` - Vector of (x, y, z, potential) tuples
+    ///
+    /// # Returns
+    /// * Number of neurons successfully injected
+    ///
+    /// # Errors
+    /// * `ServiceError::NotFound` - Cortical area not found
+    /// * `ServiceError::InvalidInput` - Invalid cortical ID format
+    ///
+    async fn inject_sensory_by_coordinates(
+        &self,
+        cortical_id: &str,
+        xyzp_data: &[(u32, u32, u32, f32)],
+    ) -> ServiceResult<usize>;
 }
 
 

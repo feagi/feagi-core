@@ -127,6 +127,12 @@ pub trait AgentService: Send + Sync {
         &self,
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
     ) -> AgentResult<HashMap<String, serde_json::Value>>;
+    
+    /// Set runtime service for sensory injection (optional, implementations can ignore if not needed)
+    /// This allows runtime service to be connected after AgentService is wrapped in Arc
+    fn try_set_runtime_service(&self, _runtime_service: std::sync::Arc<dyn crate::traits::RuntimeService + Send + Sync>) {
+        // Default implementation: no-op (for implementations that don't need runtime service)
+    }
 }
 
 

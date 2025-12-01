@@ -282,6 +282,10 @@ pub async fn manual_stimulation(
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
 
+    // Ensure runtime service is connected to agent service (if not already connected)
+    // This allows runtime_service to be set after AgentServiceImpl is wrapped in Arc
+    agent_service.try_set_runtime_service(state.runtime_service.clone());
+
     match agent_service
         .manual_stimulation(request.stimulation_payload)
         .await

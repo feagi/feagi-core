@@ -533,15 +533,15 @@ fn encode_fire_data_to_xyzp(
         
         // Apply cortical_id filter if specified (for motor subscriptions)
         if let Some(filter) = cortical_id_filter {
-            info!("[ENCODE-XYZP] 🎮 Checking area '{}' (bytes: {:02x?}) against filter: {:?}", 
+            debug!("[ENCODE-XYZP] 🎮 Checking area '{}' (bytes: {:02x?}) against filter: {:?}", 
                    area_data.cortical_area_name.escape_debug(), 
                    area_data.cortical_area_name.as_bytes(),
                    filter.iter().map(|s| format!("{} ({:02x?})", s.escape_debug(), s.as_bytes())).collect::<Vec<_>>());
             if !filter.contains(&area_data.cortical_area_name) {
-                info!("[ENCODE-XYZP] ❌ Area '{}' NOT in filter - skipping", area_data.cortical_area_name.escape_debug());
+                debug!("[ENCODE-XYZP] ❌ Area '{}' NOT in filter - skipping", area_data.cortical_area_name.escape_debug());
                 continue; // Skip - not in agent's motor subscriptions
             }
-            info!("[ENCODE-XYZP] ✅ Area '{}' IS in filter - including", area_data.cortical_area_name.escape_debug());
+            debug!("[ENCODE-XYZP] ✅ Area '{}' IS in filter - including", area_data.cortical_area_name.escape_debug());
         }
         
         // Create CorticalID from area name (already in RawFireQueueData)
@@ -969,11 +969,11 @@ fn burst_loop(
         }
         
         if needs_motor {
-            info!("[BURST-LOOP] 🎮 MOTOR: Starting motor output generation (shared_fire_data available={})", shared_fire_data_opt.is_some());
+            debug!("[BURST-LOOP] 🎮 MOTOR: Starting motor output generation (shared_fire_data available={})", shared_fire_data_opt.is_some());
             
             // Use shared fire data from above (Arc - zero cost!)
             if let Some(ref fire_data_arc) = shared_fire_data_opt {
-                info!("[BURST-LOOP] 🎮 MOTOR: Processing fire data with {} cortical areas", (**fire_data_arc).len());
+                debug!("[BURST-LOOP] 🎮 MOTOR: Processing fire data with {} cortical areas", (**fire_data_arc).len());
                 // Convert to RawFireQueueSnapshot (clone data for motor processing)
                 let mut motor_snapshot = RawFireQueueSnapshot::new();
                 for (area_id, (neuron_ids, coords_x, coords_y, coords_z, potentials)) in fire_data_arc.iter() {
@@ -985,7 +985,7 @@ fn burst_loop(
                         .get_cortical_area_name(*area_id)
                         .unwrap_or_else(|| format!("area_{}", area_id));
                     
-                    info!("[BURST-LOOP] 🎮 MOTOR: Area {} ('{}') has {} neurons firing", 
+                    debug!("[BURST-LOOP] 🎮 MOTOR: Area {} ('{}') has {} neurons firing", 
                            area_id, area_name.escape_debug(), neuron_ids.len());
                     
                     motor_snapshot.insert(*area_id, RawFireQueueData {
@@ -999,7 +999,7 @@ fn burst_loop(
                     });
                 }
                 
-                info!("[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas", motor_snapshot.len());
+                debug!("[BURST-LOOP] 🎮 MOTOR: Built snapshot with {} areas", motor_snapshot.len());
                 
                 // Get motor subscriptions
                 let subscriptions = motor_subscriptions.read();
@@ -1034,7 +1034,7 @@ fn burst_loop(
                     // Generate motor output for each subscribed agent
                     // Note: We clone motor_snapshot for each agent (acceptable overhead for typical 1-2 agents)
                     for (agent_id, subscribed_cortical_ids) in subscriptions.iter() {
-                        info!("[BURST-LOOP] 🎮 MOTOR: Encoding for agent '{}' with filter: {:?}", 
+                        debug!("[BURST-LOOP] 🎮 MOTOR: Encoding for agent '{}' with filter: {:?}", 
                                agent_id, subscribed_cortical_ids.iter().map(|s| s.escape_debug().to_string()).collect::<Vec<_>>());
                         
                         // Filter by cortical_id strings (e.g., {"omot00"})
@@ -1044,10 +1044,10 @@ fn burst_loop(
                         // Clone for each agent (minimal overhead, and allows zero-copy within encode function)
                         match encode_fire_data_to_xyzp(motor_snapshot.clone(), cortical_id_filter) {
                             Ok(motor_bytes) => {
-                                info!("[BURST-LOOP] 🎮 MOTOR: Encoded {} bytes for agent '{}'", motor_bytes.len(), agent_id);
+                                debug!("[BURST-LOOP] 🎮 MOTOR: Encoded {} bytes for agent '{}'", motor_bytes.len(), agent_id);
                                 // Skip if no data (no neurons fired in subscribed areas)
                                 if motor_bytes.is_empty() {
-                                    info!("[BURST-LOOP] 🎮 MOTOR: Skipping agent '{}' - no matching neurons", agent_id);
+                                    debug!("[BURST-LOOP] 🎮 MOTOR: Skipping agent '{}' - no matching neurons", agent_id);
                                     continue;
                                 }
                                 
@@ -1068,7 +1068,7 @@ fn burst_loop(
                                     match publisher.publish_motor(agent_id, &motor_bytes) {
                                         Ok(_) => {
                                             // Log every motor send (not just first) for debugging
-                                            info!(
+                                            debug!(
                                                 "[BURST-LOOP] ✅ PUBLISHED motor data to agent '{}': {} bytes",
                                                 agent_id, motor_bytes.len()
                                             );
