@@ -5,4 +5,3 @@
 
 mod sensor_cortical_units;
 mod motor_cortical_units;
-mod motor_types; // Legacy motor type definitions for backward compatibility
