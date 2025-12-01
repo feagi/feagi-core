@@ -44,7 +44,7 @@ mod test_connector_cache_sensor_load_image {
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_space());
-        let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), (0.5, 0.5).try_into().unwrap());
+        let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
 
         let connector_agent = feagi_connector_core::ConnectorAgent::new();
@@ -75,7 +75,7 @@ mod test_connector_cache_sensor_load_image {
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_space());
-        let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), (0.5, 0.5).try_into().unwrap());
+        let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
         let connector_agent = feagi_connector_core::ConnectorAgent::new();
         {
@@ -114,8 +114,8 @@ mod test_connector_cache_sensor_load_image {
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_space());
-        let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), (0.5, 0.5).try_into().unwrap());
-        let second_gaze = GazeProperties::new((0.3, 0.3).try_into().unwrap(), (0.2, 0.3).try_into().unwrap());
+        let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
+        let second_gaze = GazeProperties::new((0.3, 0.3).try_into().unwrap(), 0.2.try_into().unwrap());
 
 
         let connector_agent = feagi_connector_core::ConnectorAgent::new();

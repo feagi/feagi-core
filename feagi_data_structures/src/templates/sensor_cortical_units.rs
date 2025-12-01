@@ -178,15 +178,15 @@ macro_rules! sensor_cortical_units {
                         (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 8),
                     },
                     unit_default_topology: {
-                        0 => { relative_position: [-70, -70, 0], dimensions: [32, 32, 1] },
-                        1 => { relative_position: [60, -70, 0], dimensions: [32, 32, 1] },
-                        2 => { relative_position: [150, -70, 0], dimensions: [32, 32, 1] },
-                        3 => { relative_position: [-70, 60, 0], dimensions: [32, 32, 1] },
-                        4 => { relative_position: [0, 0, 0], dimensions: [128, 128, 3] },
-                        5 => { relative_position: [150, 60, 0], dimensions: [32, 32, 1] },
-                        6 => { relative_position: [-70, 150, 0], dimensions: [32, 32, 1] },
-                        7 => { relative_position: [60, 150, 0], dimensions: [32, 32, 1] },
-                        8 => { relative_position: [150, 150, 0], dimensions: [32, 32, 1] }
+                        0 => { relative_position: [-70, -70, 0], dimensions: [32, 32, 1] }, // Lower Left
+                        1 => { relative_position: [60, -70, 0], dimensions: [32, 32, 1] }, // Lower Middle
+                        2 => { relative_position: [150, -70, 0], dimensions: [32, 32, 1] }, // Lower Right
+                        3 => { relative_position: [-70, 60, 0], dimensions: [32, 32, 1] }, // Middle Left
+                        4 => { relative_position: [0, 0, 0], dimensions: [128, 128, 3] }, // Middle Middle
+                        5 => { relative_position: [150, 60, 0], dimensions: [32, 32, 1] }, // Middle Right
+                        6 => { relative_position: [-70, 150, 0], dimensions: [32, 32, 1] }, // Upper Left
+                        7 => { relative_position: [60, 150, 0], dimensions: [32, 32, 1] }, // Upper Middle
+                        8 => { relative_position: [150, 150, 0], dimensions: [32, 32, 1] } // Upper Right
                     }
                 },
 
