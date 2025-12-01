@@ -536,5 +536,45 @@ impl MotorDeviceCache {
 
     //endregion
 
+    //region Neuron Processing
+
+    /// Process incoming neuron burst data from FEAGI
+    /// 
+    /// This method:
+    /// 1. Deserializes the byte array into CorticalMappedXYZPNeuronVoxels
+    /// 2. Iterates through all registered motor stream caches
+    /// 3. Updates each motor's state based on decoded neuron data
+    /// 4. Triggers callbacks for channels that were updated
+    pub fn process_burst_data(&mut self, motor_burst_bytes: &[u8]) -> Result<(), FeagiDataError> {
+        use std::time::Instant;
+        use feagi_data_serialization::FeagiByteStructureType;
+        
+        // Load bytes into the byte container
+        self.byte_data.try_write_data_by_copy_and_verify(motor_burst_bytes)?;
+        
+        // Deserialize neuron voxels from the byte container
+        let neuron_struct = match self.byte_data.try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::NeuronCategoricalXYZP)? {
+            Some(s) => s,
+            None => {
+                // No neuron data found in this burst, skip processing
+                return Ok(());
+            }
+        };
+        
+        // Convert to CorticalMappedXYZPNeuronVoxels
+        self.neuron_data = neuron_struct.try_into()?;
+        
+        let time_of_decode = Instant::now();
+        
+        // Process each registered motor stream cache
+        for ((_motor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
+            stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(&self.neuron_data, time_of_decode)?;
+        }
+        
+        Ok(())
+    }
+
+    //endregion
+
 
 }

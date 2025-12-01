@@ -12,8 +12,20 @@ pub(crate) fn decode_unsigned_percentage_from_linear_neurons(neuron_indexes_alon
 #[inline]
 pub(crate) fn decode_signed_percentage_from_linear_neurons(neuron_indexes_along_z_positive: &Vec<u32>, neuron_indexes_along_z_negative: &Vec<u32>, z_max_depth: u32, replace_val: &mut SignedPercentage) {
     let z_max_depth: f32 = z_max_depth as f32;
-    let positive = neuron_indexes_along_z_positive.iter().copied().sum::<u32>() as f32 / (z_max_depth * neuron_indexes_along_z_positive.len() as f32);
-    let negative = neuron_indexes_along_z_negative.iter().copied().sum::<u32>() as f32 / (z_max_depth * neuron_indexes_along_z_negative.len() as f32);
+    
+    // Handle division by zero: if vector is empty, use 0.0
+    let positive = if neuron_indexes_along_z_positive.is_empty() {
+        0.0
+    } else {
+        neuron_indexes_along_z_positive.iter().copied().sum::<u32>() as f32 / (z_max_depth * neuron_indexes_along_z_positive.len() as f32)
+    };
+    
+    let negative = if neuron_indexes_along_z_negative.is_empty() {
+        0.0
+    } else {
+        neuron_indexes_along_z_negative.iter().copied().sum::<u32>() as f32 / (z_max_depth * neuron_indexes_along_z_negative.len() as f32)
+    };
+    
     replace_val.inplace_update_unchecked(positive - negative);
 }
 

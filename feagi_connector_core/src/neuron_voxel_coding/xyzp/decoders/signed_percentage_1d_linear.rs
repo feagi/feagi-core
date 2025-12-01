@@ -33,7 +33,7 @@ impl NeuronVoxelXYZPDecoder for SignedPercentageLinearNeuronVoxelXYZPDecoder {
 
         // NOTE: Expecting channel_changed to be all false. Do not reset write_target, we will write to it if we got a value for the channel!
         const ONLY_ALLOWED_Y: u32 = 0; // This structure never has height
-
+        
         let neuron_array = neurons_to_read.get_neurons_of(&self.cortical_read_target);
 
         if neuron_array.is_none() {
@@ -65,18 +65,29 @@ impl NeuronVoxelXYZPDecoder for SignedPercentageLinearNeuronVoxelXYZPDecoder {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index || neuron.neuron_voxel_coordinate.z >= z_depth {
+            // Check Z depth bounds
+            if neuron.neuron_voxel_coordinate.z >= z_depth {
                 continue; // Something is wrong, but currently we will just skip these
             }
+            
+            // X coordinate bounds check will be done after mapping to channel_index
 
+            // Map X coordinate to channel index: X=0,1 -> channel 0; X=2,3 -> channel 1; X=4,5 -> channel 2; etc.
+            let channel_index = (neuron.neuron_voxel_coordinate.x / 2) as usize;
+            
+            // Check if channel_index is within bounds
+            if channel_index >= number_of_channels as usize {
+                continue;
+            }
+            
             let z_row_vector;
             if neuron.neuron_voxel_coordinate.x % 2 == 0 {
                 // even, positive
-                z_row_vector = self.z_depth_scratch_space_positive.get_mut(neuron.neuron_voxel_coordinate.x as usize).unwrap();
+                z_row_vector = self.z_depth_scratch_space_positive.get_mut(channel_index).unwrap();
             }
             else {
                 // odd, negative
-                z_row_vector = self.z_depth_scratch_space_negative.get_mut(neuron.neuron_voxel_coordinate.x as usize).unwrap();
+                z_row_vector = self.z_depth_scratch_space_negative.get_mut(channel_index).unwrap();
             }
             z_row_vector.push(neuron.neuron_voxel_coordinate.z)
         };
