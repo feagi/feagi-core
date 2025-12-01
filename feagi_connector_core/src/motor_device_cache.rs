@@ -251,7 +251,7 @@ macro_rules! motor_unit_functions {
                     }
                 };
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                let initial_val: WrappedIOData = WrappedIOData::Percentage_3D(Percentage3D::new_zero());
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
                     for _i in 0..*number_channels {
@@ -264,7 +264,7 @@ macro_rules! motor_unit_functions {
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage3D);
     };
 
     // Arm for WrappedIOType::SignedPercentage
@@ -291,7 +291,7 @@ macro_rules! motor_unit_functions {
                     }
                 };
 
-                let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
+                let initial_val: WrappedIOData = WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0));
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
                     for _i in 0..*number_channels {
@@ -304,7 +304,7 @@ macro_rules! motor_unit_functions {
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, SignedPercentage);
     };
 
     // Arm for WrappedIOType::MiscData
@@ -396,7 +396,7 @@ impl MotorDeviceCache {
         Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
     }
 
-    fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
     }
@@ -533,6 +533,46 @@ impl MotorDeviceCache {
     }
 
     //endregion
+
+    //endregion
+
+    //region Neuron Processing
+
+    /// Process incoming neuron burst data from FEAGI
+    /// 
+    /// This method:
+    /// 1. Deserializes the byte array into CorticalMappedXYZPNeuronVoxels
+    /// 2. Iterates through all registered motor stream caches
+    /// 3. Updates each motor's state based on decoded neuron data
+    /// 4. Triggers callbacks for channels that were updated
+    pub fn process_burst_data(&mut self, motor_burst_bytes: &[u8]) -> Result<(), FeagiDataError> {
+        use std::time::Instant;
+        use feagi_data_serialization::FeagiByteStructureType;
+        
+        // Load bytes into the byte container
+        self.byte_data.try_write_data_by_copy_and_verify(motor_burst_bytes)?;
+        
+        // Deserialize neuron voxels from the byte container
+        let neuron_struct = match self.byte_data.try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::NeuronCategoricalXYZP)? {
+            Some(s) => s,
+            None => {
+                // No neuron data found in this burst, skip processing
+                return Ok(());
+            }
+        };
+        
+        // Convert to CorticalMappedXYZPNeuronVoxels
+        self.neuron_data = neuron_struct.try_into()?;
+        
+        let time_of_decode = Instant::now();
+        
+        // Process each registered motor stream cache
+        for ((_motor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
+            stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(&self.neuron_data, time_of_decode)?;
+        }
+        
+        Ok(())
+    }
 
     //endregion
 

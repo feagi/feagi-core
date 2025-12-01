@@ -328,7 +328,10 @@ fn verify_pipeline_stage_properties(pipeline_stage_properties: &Vec<Box<dyn Pipe
 
     if number_of_stages == 0 {
         if expected_input != expected_output {
-            return Err(FeagiDataError::BadParameters("If no pipeline stages are given, the expected input data properties must match the expected output data properties!".into()));
+            return Err(FeagiDataError::BadParameters(format!(
+                "If no pipeline stages are given, the expected input data properties must match the expected output data properties! Input: {:?}, Output: {:?}",
+                expected_input, expected_output
+            )));
         }
         return Ok(())
     }
