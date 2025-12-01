@@ -19,7 +19,7 @@ macro_rules! sensor_cortical_units {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
                     },
                     unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                        0 => { relative_position: [0, 0, 0], dimensions: [1, 1, 10] }
                     }
                 },
 
@@ -38,7 +38,7 @@ macro_rules! sensor_cortical_units {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
                     },
                     unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                        0 => { relative_position: [0, 0, 0], dimensions: [1, 1, 10] }
                     }
                 },
 
@@ -57,7 +57,7 @@ macro_rules! sensor_cortical_units {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
                     },
                     unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                        0 => { relative_position: [0, 0, 0], dimensions: [1, 1, 10] }
                     }
                 },
 
@@ -76,7 +76,7 @@ macro_rules! sensor_cortical_units {
                         (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
                     },
                     unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                        0 => { relative_position: [0, 0, 0], dimensions: [1, 1, 10] }
                     }
                 },
 
@@ -115,6 +115,22 @@ macro_rules! sensor_cortical_units {
                     },
                     unit_default_topology: {
                         0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    }
+                },
+
+                #[doc = "Digital GPIO input, such as an input from the GPIO pins on a Raspberry pi"]
+                DigitalGPIO => {
+                    friendly_name: "Digital GPIO Sensor",
+                    snake_case_name: "digital_gpio",
+                    accepted_wrapped_io_data_type: Boolean,
+                    cortical_id_unit_reference: *b"dgp",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {},
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::Boolean, 0)
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [1, 1, 1] }
                     }
                 },
 
@@ -191,24 +207,44 @@ macro_rules! sensor_cortical_units {
                 },
 
 
-                #[doc = "IMU, allows for relative tracking of position and rotation"]
-                InertialMeasurementUnit => {
-                    friendly_name: "Inertial measurement unit",
-                    snake_case_name: "inertial_measurement_unit",
+                #[doc = "Accelerometer, allows for relative tracking of position and motion"]
+                Accelerometer => {
+                    friendly_name: "Accelerometer",
+                    snake_case_name: "accelerometer",
                     accepted_wrapped_io_data_type: Percentage3D,
-                    cortical_id_unit_reference: *b"imu",
-                    number_cortical_areas: 2,
+                    cortical_id_unit_reference: *b"acc",
+                    number_cortical_areas: 1,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_types: {
                         (IOCorticalAreaDataType::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), 0),
-                        (IOCorticalAreaDataType::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), 1),
                     },
                     unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 2] },
-                        1 => { relative_position: [-10, 0, 0], dimensions: [8, 8, 1] }
+                        0 => { relative_position: [0, 0, 0], dimensions: [3, 1, 10] },
+
+                    }
+                },
+
+
+
+                #[doc = "Gyroscope (Quaternion), Allows for tracking rotation without gimbal lock"]
+                Gyroscope => {
+                    friendly_name: "Gyroscope",
+                    snake_case_name: "gyroscope",
+                    accepted_wrapped_io_data_type: SignedPercentage4D,
+                    cortical_id_unit_reference: *b"gyq",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_types: {
+                        (IOCorticalAreaDataType::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), 0),
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [4, 1, 10] },
 
                     }
                 },
