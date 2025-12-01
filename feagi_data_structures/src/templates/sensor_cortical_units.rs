@@ -138,8 +138,8 @@ macro_rules! sensor_cortical_units {
 
                 #[doc = "Camera vision input"]
                 Vision => {
-                    friendly_name: "Vision Sensor",
-                    snake_case_name: "vision",
+                    friendly_name: "Simple Vision",
+                    snake_case_name: "simple_vision",
                     accepted_wrapped_io_data_type: ImageFrame,
                     cortical_id_unit_reference: *b"img",
                     number_cortical_areas: 1,
@@ -191,12 +191,11 @@ macro_rules! sensor_cortical_units {
                 },
 
 
-                /*
                 #[doc = "IMU, allows for relative tracking of position and rotation"]
                 InertialMeasurementUnit => {
                     friendly_name: "Inertial measurement unit",
                     snake_case_name: "inertial_measurement_unit",
-                    accepted_wrapped_io_data_type: SegmentedImageFrame,
+                    accepted_wrapped_io_data_type: Percentage3D,
                     cortical_id_unit_reference: *b"imu",
                     number_cortical_areas: 2,
                     cortical_type_parameters: {
@@ -206,9 +205,13 @@ macro_rules! sensor_cortical_units {
                     cortical_area_types: {
                         (IOCorticalAreaDataType::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), 0),
                         (IOCorticalAreaDataType::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), 1),
+                    },
+                    unit_default_topology: {
+                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 2] },
+                        1 => { relative_position: [-10, 0, 0], dimensions: [8, 8, 1] }
+
                     }
                 },
-                 */
 
 
 

@@ -1,6 +1,6 @@
 use feagi_data_structures::FeagiDataError;
-use crate::data_types::descriptors::{ColorChannelLayout, GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
-use crate::data_types::{ImageFrame, ImageFrameProcessor, SegmentedImageFrame};
+use crate::data_types::descriptors::{ColorChannelLayout, ImageFrameProperties, SegmentedImageFrameProperties};
+use crate::data_types::{GazeProperties, ImageFrame, ImageFrameProcessor, SegmentedImageFrame};
 
 #[derive(Debug, Clone)]
 pub struct ImageFrameSegmentator {

@@ -145,7 +145,7 @@ macro_rules! define_motor_cortical_units_enum {
                         MotorCorticalUnit::$variant_name => write!(f, $friendly_name),
                     )*
                 }
-    }
+            }
         }
     };
 
