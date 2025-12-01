@@ -410,9 +410,49 @@ pub async fn post_cortical_area(
         .unwrap_or(1) as u32;
     
     // Extract data_type_config from request (default to 0 for backward compatibility)
-    let data_type_config = request.get("data_type_config")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u16;
+    // Handle multiple number types: u64, i64, f64, and string representations
+    let raw_data_type_config = request.get("data_type_config");
+    if let Some(raw_val) = raw_data_type_config {
+        tracing::debug!(target: "feagi-api", "Raw data_type_config value: {:?} (type: {:?})", raw_val, raw_val);
+    }
+    let data_type_config = raw_data_type_config
+        .and_then(|v| {
+            // Try u64 first (most common case)
+            if let Some(u) = v.as_u64() {
+                return Some(u);
+            }
+            // Try i64 (signed integer)
+            if let Some(i) = v.as_i64() {
+                if i >= 0 {
+                    return Some(i as u64);
+                }
+            }
+            // Try f64 (float) - round to nearest integer
+            if let Some(f) = v.as_f64() {
+                if f >= 0.0 && f <= u16::MAX as f64 {
+                    return Some(f.round() as u64);
+                }
+            }
+            // Try string representation
+            if let Some(s) = v.as_str() {
+                if let Ok(parsed) = s.parse::<u64>() {
+                    return Some(parsed);
+                }
+            }
+            None
+        })
+        .map(|v| {
+            if v > u16::MAX as u64 {
+                tracing::warn!(target: "feagi-api", "data_type_config value {} exceeds u16::MAX, clamping to {}", v, u16::MAX);
+                u16::MAX
+            } else {
+                v as u16
+            }
+        })
+        .unwrap_or_else(|| {
+            tracing::warn!(target: "feagi-api", "data_type_config missing or invalid in request, defaulting to 0 (backward compatibility)");
+            0
+        });
     
     // Split data_type_config into two bytes for cortical ID
     let config_byte_4 = (data_type_config & 0xFF) as u8;        // Lower byte
