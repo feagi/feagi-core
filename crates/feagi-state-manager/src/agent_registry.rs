@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Agent registry - track connected agents
 //!
 //! Platform-specific locking implementation:

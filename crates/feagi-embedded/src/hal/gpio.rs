@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// GPIO abstraction for embedded platforms
 pub trait GpioProvider {
     /// Platform-specific pin type (must be Copy for ease of use)

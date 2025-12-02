@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Worker thread patterns for blocking transports
 //!
 //! Provides reusable worker thread abstractions for handling asynchronous

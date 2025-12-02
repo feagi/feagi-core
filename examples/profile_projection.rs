@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Standalone profiling tool for projection performance analysis
 ///
 /// This creates a minimal genome with power00 area (128x128) and optionally

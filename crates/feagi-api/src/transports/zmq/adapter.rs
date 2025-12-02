@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! ZMQ Transport Adapter for FEAGI API
 //!
 //! This adapter uses feagi-transports to handle ZMQ communication and routes

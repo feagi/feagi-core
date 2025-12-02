@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Configuration type definitions
 //!
 //! This module defines all configuration structs that map to sections in

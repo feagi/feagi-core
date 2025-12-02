@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Configuration file loading with override support
 //!
 //! This module implements the 3-tier configuration loading system:

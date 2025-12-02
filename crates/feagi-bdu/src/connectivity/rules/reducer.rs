@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /*!
 Reducer morphology - binary encoding/decoding for position mapping.
 */

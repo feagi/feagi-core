@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // API Version 1 - DTOs and mappings
 
 pub mod agent_dtos;

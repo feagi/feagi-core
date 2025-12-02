@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! UDP transport implementations
 //!
 //! This module provides UDP-based transport for both client and server.

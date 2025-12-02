@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Transport selection and configuration
 //!
 //! Provides types and utilities for parsing FEAGI's transport

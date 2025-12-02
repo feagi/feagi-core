@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Heartbeat Tracker - monitors agent health and deregisters stale agents
 
 use super::agent_registry::AgentRegistry;

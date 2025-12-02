@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! FEAGI Peripheral Nervous System (PNS)
 //!
 //! Handles all agent I/O: registration, ZMQ, SHM, heartbeat tracking.

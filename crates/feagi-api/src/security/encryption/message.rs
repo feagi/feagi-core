@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Application-level message encryption (stub for future ChaCha20-Poly1305)
 pub struct MessageEncryptor {
     #[allow(dead_code)]

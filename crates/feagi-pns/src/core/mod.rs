@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Core types and utilities shared across all transports
 //!
 //! This module contains transport-agnostic components:

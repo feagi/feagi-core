@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Dump OpenAPI JSON to verify tags
 use feagi_api::openapi::ApiDoc;
 use utoipa::OpenApi;

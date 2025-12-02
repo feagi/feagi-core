@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! ZMQ PUB pattern (server-side publish-subscribe)
 //!
 //! PUB sockets are used for one-to-many distribution where the publisher

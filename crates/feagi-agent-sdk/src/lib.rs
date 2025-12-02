@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! FEAGI Agent SDK - Rust client library for building FEAGI agents
 //!
 //! This SDK provides a production-ready client for building agents that connect to FEAGI.

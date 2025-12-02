@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket SUB pattern (client-side subscribe)
 //!
 //! Subscribes to messages from a WebSocket publisher.

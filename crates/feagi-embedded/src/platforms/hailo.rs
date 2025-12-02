@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Hailo-8 Neural Accelerator Platform
 /// 
 /// Hailo-8 is a neural network accelerator delivering 26 TOPS (Tera Operations Per Second)

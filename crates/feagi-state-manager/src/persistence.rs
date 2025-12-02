@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! State persistence (save/load)
 //!
 //! Uses `serde` + bincode for fast binary serialization on `std` targets.

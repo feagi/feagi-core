@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Transport Layer for FEAGI Communication
 //!
 //! This module provides transport-agnostic protocol handling for FEAGI embodiments.

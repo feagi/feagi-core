@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! API Control stream using feagi-transports
 //!
 //! This is a refactored version using the feagi-transports abstraction layer.

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Blocking I/O infrastructure for thread-based transports
 //!
 //! This module provides reusable infrastructure for transports that use

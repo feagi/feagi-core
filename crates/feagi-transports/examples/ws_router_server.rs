@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket Router Server Example
 //!
 //! Demonstrates request-reply pattern with routing.

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Sensory stream for receiving sensory data from agents
 // Uses PULL socket pattern for receiving data from multiple agents (agents use PUSH)
 

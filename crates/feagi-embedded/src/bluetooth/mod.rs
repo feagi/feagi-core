@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Bluetooth Low Energy (BLE) support for FEAGI embedded systems
 //!
 //! This module provides a platform-agnostic BLE abstraction layer for embedded

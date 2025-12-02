@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Nordic UART Service (NUS) and FEAGI Service UUID Definitions
 //!
 //! This module defines the BLE service and characteristic UUIDs used for

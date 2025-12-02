@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket ROUTER pattern (server-side request-reply)
 //!
 //! Handles request-reply communication with routing to specific clients.

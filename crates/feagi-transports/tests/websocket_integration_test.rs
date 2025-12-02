@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket transport integration tests
 //!
 //! Tests the WebSocket transport implementations end-to-end.

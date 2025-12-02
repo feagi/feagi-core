@@ -104,7 +104,7 @@ members = [
     "crates/feagi-agent-sdk",          # Agent SDK (Rust client library)
     
     # === Applications ===
-    "crates/feagi-inference-engine", "crates/feagi-transports",   # Standalone inference binary
+    "crates/feagi-transports",   # Transport layer abstractions
 ]
 
 [workspace.package]

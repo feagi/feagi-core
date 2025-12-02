@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! # FEAGI - Framework for Evolutionary Artificial General Intelligence
 //!
 //! FEAGI is a pure neural computation framework for building artificial general intelligence

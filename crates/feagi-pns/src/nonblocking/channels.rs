@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Async channel helpers for nonblocking transports
 //!
 //! Provides utilities for creating and managing async channels (tokio::sync::mpsc).

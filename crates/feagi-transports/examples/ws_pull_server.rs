@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket Pull Server Example
 //!
 //! Demonstrates receiving messages from multiple WebSocket push clients.

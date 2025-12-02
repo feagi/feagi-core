@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 #[cfg(all(test, feature = "cuda"))]
 mod cuda_small_realistic_tests {
     use feagi_burst_engine::backend::{GpuConfig, is_cuda_available};

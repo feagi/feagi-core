@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// ESP32 platform implementation
 /// 
 /// Supports ESP32, ESP32-S3, ESP32-C3 (RISC-V) variants

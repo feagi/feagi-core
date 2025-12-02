@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /*!
 Convert hierarchical genome format (RuntimeGenome) to flat genome format (3.0).
 

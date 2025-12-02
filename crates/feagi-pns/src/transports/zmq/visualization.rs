@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Visualization stream for sending neuron activity to Brain Visualizer (ZMQ fallback for remote clients)
 // Uses PUB socket pattern for one-to-many distribution with an asynchronous sender to avoid frame loss.
 

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Motor stream for sending motor commands to agents (ZMQ fallback for remote clients)
 // Uses PUB socket pattern for one-to-many distribution
 

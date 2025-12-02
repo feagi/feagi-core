@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! ZMQ ROUTER pattern (server-side request-reply)
 //!
 //! ROUTER sockets are used for asynchronous request-reply patterns where the server

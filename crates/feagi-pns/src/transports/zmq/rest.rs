@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // REST stream for agent registration, heartbeat, and deregistration
 // Uses ROUTER socket pattern for request-reply with agent identity tracking
 
