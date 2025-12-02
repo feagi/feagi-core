@@ -74,16 +74,16 @@ impl IOCorticalAreaDataFlag {
     pub const fn to_data_type_configuration_flag(&self) -> DataTypeConfigurationFlag {
         let (variant, frame_handling, positioning) = match self {
             IOCorticalAreaDataFlag::Boolean => (0u16, None, None),
-            IOCorticalAreaDataFlag::Percentage(f, p) => (0u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::Percentage2D(f, p) => (1u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::Percentage3D(f, p) => (2u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::Percentage4D(f, p) => (3u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::SignedPercentage(f, p) => (4u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::SignedPercentage2D(f, p) => (5u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::SignedPercentage3D(f, p) => (6u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::SignedPercentage4D(f, p) => (7u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::CartesianPlane(f) => (8u16, Some(*f), None),
-            IOCorticalAreaDataFlag::Misc(f) => (9u16, Some(*f), None),
+            IOCorticalAreaDataFlag::Percentage(f, p) => (1u16, Some(*f), Some(*p)),
+            IOCorticalAreaDataFlag::Percentage2D(f, p) => (2u16, Some(*f), Some(*p)),
+            IOCorticalAreaDataFlag::Percentage3D(f, p) => (3u16, Some(*f), Some(*p)),
+            IOCorticalAreaDataFlag::Percentage4D(f, p) => (4u16, Some(*f), Some(*p)),
+            IOCorticalAreaDataFlag::SignedPercentage(f, p) => (5u16, Some(*f), Some(*p)),
+            IOCorticalAreaDataFlag::SignedPercentage2D(f, p) => (6u16, Some(*f), Some(*p)),
+            IOCorticalAreaDataFlag::SignedPercentage3D(f, p) => (7u16, Some(*f), Some(*p)),
+            IOCorticalAreaDataFlag::SignedPercentage4D(f, p) => (8u16, Some(*f), Some(*p)),
+            IOCorticalAreaDataFlag::CartesianPlane(f) => (9u16, Some(*f), None),
+            IOCorticalAreaDataFlag::Misc(f) => (10u16, Some(*f), None),
         };
 
         let frame_bits = match frame_handling {
