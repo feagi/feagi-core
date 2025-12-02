@@ -67,7 +67,7 @@ pub(crate) fn encode_unsigned_percentage_to_fractional_exponential_neuron_z_inde
     let mut processing: f32 = replace_val.get_as_0_1();
     for z in 0..number_neurons_along_z {
         let compare: f32 = 0.5f32.powi(z as i32);
-        if processing > compare {
+        if processing >= compare {
             processing - compare;
             neuron_indexes_along_z.push(z);
         }
@@ -78,11 +78,11 @@ pub(crate) fn encode_unsigned_percentage_to_fractional_exponential_neuron_z_inde
 pub(crate) fn encode_signed_percentage_to_linear_neuron_z_index(val: &SignedPercentage, z_length_as_float: f32, neuron_indexes_along_z_positive: &mut Vec<u32>, neuron_indexes_along_z_negative: &mut Vec<u32>) {
     neuron_indexes_along_z_positive.clear();
     neuron_indexes_along_z_negative.clear();
-    if val.is_positive() {
-        neuron_indexes_along_z_positive.push((val.get_as_m1_1() * z_length_as_float).floor() as u32);
+    if val.is_positive_or_zero() {
+        neuron_indexes_along_z_positive.push(((1.0 - val.get_as_m1_1()) * z_length_as_float).floor() as u32);
     }
     else {
-        neuron_indexes_along_z_negative.push((val.get_as_m1_1() * -1.0 * z_length_as_float).floor() as u32);
+        neuron_indexes_along_z_negative.push(((-1.0 - (val.get_as_m1_1() * -1.0)) * z_length_as_float).floor() as u32);
     }
 }
 
@@ -182,7 +182,7 @@ mod tests {
             let mut neuron_indexes_neg = Vec::new();
             
             encode_signed_percentage_to_linear_neuron_z_index(&percentage, z_max_depth_float, &mut neuron_indexes_pos, &mut neuron_indexes_neg);
-            assert_eq!(neuron_indexes_pos.len(), 0, "Zero should have no positive neurons");
+            assert_eq!(neuron_indexes_pos.len(), 1, "Zero should have one positive neuron");
             assert_eq!(neuron_indexes_neg.len(), 0, "Zero should have no negative neurons");
             
             decode_signed_percentage_from_linear_neurons(&neuron_indexes_pos, &neuron_indexes_neg, z_max_depth, &mut percentage);
@@ -198,7 +198,7 @@ mod tests {
             encode_signed_percentage_to_linear_neuron_z_index(&percentage, z_max_depth_float, &mut neuron_indexes_pos, &mut neuron_indexes_neg);
             assert_eq!(neuron_indexes_pos.len(), 1, "Positive value should have positive neurons");
             assert_eq!(neuron_indexes_neg.len(), 0, "Positive value should have no negative neurons");
-            assert_eq!(neuron_indexes_pos[0], 10, "Value 1.0 should map to max z index");
+            assert_eq!(neuron_indexes_pos[0], 0, "Value 1.0 should map to min z index");
             
             decode_signed_percentage_from_linear_neurons(&neuron_indexes_pos, &neuron_indexes_neg, z_max_depth, &mut percentage);
             assert!((percentage.get_as_m1_1() - 1.0).abs() < tolerance, "Round trip should preserve 1.0");
@@ -213,7 +213,7 @@ mod tests {
             encode_signed_percentage_to_linear_neuron_z_index(&percentage, z_max_depth_float, &mut neuron_indexes_pos, &mut neuron_indexes_neg);
             assert_eq!(neuron_indexes_pos.len(), 0, "Negative value should have no positive neurons");
             assert_eq!(neuron_indexes_neg.len(), 1, "Negative value should have negative neurons");
-            assert_eq!(neuron_indexes_neg[0], 10, "Value -1.0 should map to max z index");
+            assert_eq!(neuron_indexes_neg[0], 0, "Value -1.0 should map to min z index");
             
             decode_signed_percentage_from_linear_neurons(&neuron_indexes_pos, &neuron_indexes_neg, z_max_depth, &mut percentage);
             assert!((percentage.get_as_m1_1() - (-1.0)).abs() < tolerance, "Round trip should preserve -1.0");
