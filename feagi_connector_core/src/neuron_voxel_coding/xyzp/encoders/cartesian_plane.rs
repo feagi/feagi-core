@@ -11,13 +11,13 @@ use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{ WrappedIOType};
 
 #[derive(Debug)]
-pub struct ImageFrameNeuronVoxelXYZPEncoder {
+pub struct CartesianPlaneNeuronVoxelXYZPEncoder {
     image_properties: ImageFrameProperties,
     cortical_write_target: CorticalID,
     scratch_space: Vec<NeuronVoxelXYZPArrays>,
 }
 
-impl NeuronVoxelXYZPEncoder for ImageFrameNeuronVoxelXYZPEncoder {
+impl NeuronVoxelXYZPEncoder for CartesianPlaneNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::ImageFrame(Some(self.image_properties))
     }
@@ -62,9 +62,9 @@ impl NeuronVoxelXYZPEncoder for ImageFrameNeuronVoxelXYZPEncoder {
     }
 }
 
-impl ImageFrameNeuronVoxelXYZPEncoder {
+impl CartesianPlaneNeuronVoxelXYZPEncoder {
     pub fn new_box(cortical_write_target: CorticalID, image_properties: &ImageFrameProperties, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
-        let encoder = ImageFrameNeuronVoxelXYZPEncoder{
+        let encoder = CartesianPlaneNeuronVoxelXYZPEncoder {
             image_properties: image_properties.clone(),
             cortical_write_target,
             scratch_space: vec![NeuronVoxelXYZPArrays::new(); *number_channels as usize],

@@ -15,11 +15,8 @@ macro_rules! motor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::SignedPercentage(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -34,11 +31,8 @@ macro_rules! motor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::SignedPercentage(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -46,18 +40,16 @@ macro_rules! motor_cortical_units {
                 Shock => {
                     friendly_name: "Gaze Control",
                     snake_case_name: "gaze_control",
-                    accepted_wrapped_io_data_type: Percentage_3D,
+                    accepted_wrapped_io_data_type: GazeProperties,
                     cortical_id_unit_reference: *b"gaz",
-                    number_cortical_areas: 1,
+                    number_cortical_areas: 2,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Percentage3D(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1]), // Eccentricity
+                        1 => (IOCorticalAreaDataFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]) // Modularity
                     }
                 },
 
@@ -72,11 +64,8 @@ macro_rules! motor_cortical_units {
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Misc(frame_change_handling), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
                     }
                 },
 

@@ -15,11 +15,8 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -34,11 +31,8 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -53,11 +47,8 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -72,11 +63,8 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
@@ -91,11 +79,8 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
                     }
                 },
 
@@ -110,11 +95,21 @@ macro_rules! sensor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Percentage(frame_change_handling, percentage_neuron_positioning), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
+                    }
+                },
+
+                #[doc = "Digital GPIO input, such as an input from the GPIO pins on a Raspberry pi"]
+                DigitalGPIO => {
+                    friendly_name: "Digital GPIO Sensor",
+                    snake_case_name: "digital_gpio",
+                    accepted_wrapped_io_data_type: Boolean,
+                    cortical_id_unit_reference: *b"dgp",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {},
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Boolean, relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1])
                     }
                 },
 
@@ -128,29 +123,23 @@ macro_rules! sensor_cortical_units {
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::Misc(frame_change_handling), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [8, 8, 1] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1])
                     }
                 },
 
                 #[doc = "Camera vision input"]
                 Vision => {
-                    friendly_name: "Vision Sensor",
-                    snake_case_name: "vision",
+                    friendly_name: "Simple Vision",
+                    snake_case_name: "simple_vision",
                     accepted_wrapped_io_data_type: ImageFrame,
                     cortical_id_unit_reference: *b"img",
                     number_cortical_areas: 1,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 0)
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [0, 0, 0], dimensions: [64, 64, 3] }
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [64, 64, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
                     }
                 },
 
@@ -166,49 +155,53 @@ macro_rules! sensor_cortical_units {
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 0),
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 1),
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 2),
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 3),
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 4),
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 5),
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 6),
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 7),
-                        (IOCorticalAreaDataType::CartesianPlane(frame_change_handling), 8),
-                    },
-                    unit_default_topology: {
-                        0 => { relative_position: [-70, -70, 0], dimensions: [32, 32, 1] }, // Lower Left
-                        1 => { relative_position: [60, -70, 0], dimensions: [32, 32, 1] }, // Lower Middle
-                        2 => { relative_position: [150, -70, 0], dimensions: [32, 32, 1] }, // Lower Right
-                        3 => { relative_position: [-70, 60, 0], dimensions: [32, 32, 1] }, // Middle Left
-                        4 => { relative_position: [0, 0, 0], dimensions: [128, 128, 3] }, // Middle Middle
-                        5 => { relative_position: [150, 60, 0], dimensions: [32, 32, 1] }, // Middle Right
-                        6 => { relative_position: [-70, 150, 0], dimensions: [32, 32, 1] }, // Upper Left
-                        7 => { relative_position: [60, 150, 0], dimensions: [32, 32, 1] }, // Upper Middle
-                        8 => { relative_position: [150, 150, 0], dimensions: [32, 32, 1] } // Upper Right
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [-70, -70, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]), // Lower Left
+                        1 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [60, -70, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]), // Lower Middle
+                        2 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [150, -70, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]), // Lower Right
+                        3 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [-70, 60, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]), // Middle Left
+                        4 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]), // Middle Middle
+                        5 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [150, 60, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]), // Middle Right
+                        6 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [-70, 150, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]), // Upper Left
+                        7 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [60, 150, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]), // Upper Middle
+                        8 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [150, 150, 0], channel_dimensions_default: [32, 32, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3]) // Upper Right
                     }
                 },
 
 
-                /*
-                #[doc = "IMU, allows for relative tracking of position and rotation"]
-                InertialMeasurementUnit => {
-                    friendly_name: "Inertial measurement unit",
-                    snake_case_name: "inertial_measurement_unit",
-                    accepted_wrapped_io_data_type: SegmentedImageFrame,
-                    cortical_id_unit_reference: *b"imu",
-                    number_cortical_areas: 2,
+                #[doc = "Accelerometer, allows for relative tracking of position and motion"]
+                Accelerometer => {
+                    friendly_name: "Accelerometer",
+                    snake_case_name: "accelerometer",
+                    accepted_wrapped_io_data_type: Percentage_3D,
+                    cortical_id_unit_reference: *b"acc",
+                    number_cortical_areas: 1,
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
-                    cortical_area_types: {
-                        (IOCorticalAreaDataType::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), 0),
-                        (IOCorticalAreaDataType::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), 1),
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::SignedPercentage3D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [3, 1, 10], channel_dimensions_min: [3, 1, 1], channel_dimensions_max: [3, 1, 1024])
                     }
                 },
-                 */
+
+
+
+                #[doc = "Gyroscope (Quaternion), Allows for tracking rotation without gimbal lock"]
+                Gyroscope => {
+                    friendly_name: "Gyroscope",
+                    snake_case_name: "gyroscope",
+                    accepted_wrapped_io_data_type: SignedPercentage_4D,
+                    cortical_id_unit_reference: *b"gyq",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                        percentage_neuron_positioning: PercentageNeuronPositioning
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::SignedPercentage4D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [4, 1, 10], channel_dimensions_min: [4, 1, 1], channel_dimensions_max: [4, 1, 1024])
+                    }
+                },
 
 
 

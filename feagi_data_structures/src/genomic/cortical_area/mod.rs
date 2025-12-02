@@ -5,5 +5,5 @@ pub mod io_cortical_area_data_type;
 pub mod descriptors;
 
 pub use cortical_type::{CorticalAreaType, MemoryCorticalType, CustomCorticalType, CoreCorticalType};
-pub use io_cortical_area_data_type::{IOCorticalAreaDataType};
+pub use io_cortical_area_data_type::{IOCorticalAreaDataFlag};
 pub use cortical_id::CorticalID;

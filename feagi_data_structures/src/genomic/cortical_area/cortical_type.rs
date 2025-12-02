@@ -1,7 +1,7 @@
 use std::fmt;
 use crate::FeagiDataError;
 use crate::genomic::cortical_area::cortical_id::CorticalID;
-use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataType;
+use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataFlag;
 
 // Describes the method data is encoded within a cortical area
 
@@ -10,8 +10,8 @@ pub enum CorticalAreaType {
     Core(CoreCorticalType),
     Custom(CustomCorticalType),
     Memory(MemoryCorticalType),
-    BrainInput(IOCorticalAreaDataType),
-    BrainOutput(IOCorticalAreaDataType)
+    BrainInput(IOCorticalAreaDataFlag),
+    BrainOutput(IOCorticalAreaDataFlag)
 }
 
 //region Core

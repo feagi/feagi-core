@@ -3,8 +3,8 @@ use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_pipeline::PipelineStage;
 use crate::data_pipeline::stages::ImageFrameSegmentatorStage;
-use crate::data_types::descriptors::{GazeProperties, ImageFrameProperties, SegmentedImageFrameProperties};
-use crate::data_types::ImageFrameSegmentator;
+use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
+use crate::data_types::{GazeProperties, ImageFrameSegmentator};
 use crate::pipeline_stage_property_implementations;
 use crate::wrapped_io_data::WrappedIOType;
 

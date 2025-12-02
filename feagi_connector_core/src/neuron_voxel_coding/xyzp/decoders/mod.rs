@@ -17,6 +17,8 @@ mod signed_percentage_2d_exponential;
 mod signed_percentage_3d_exponential;
 mod signed_percentage_4d_exponential;
 mod misc_data;
+mod gaze_properties_exponential;
+mod gaze_properties_linear;
 
 pub(crate) use percentage_1d_linear::PercentageLinearNeuronVoxelXYZPDecoder;
 pub(crate) use percentage_2d_linear::Percentage2DLinearNeuronVoxelXYZPDecoder;
@@ -35,3 +37,5 @@ pub(crate) use signed_percentage_2d_exponential::SignedPercentage2DExponentialNe
 pub(crate) use signed_percentage_3d_exponential::SignedPercentage3DExponentialNeuronVoxelXYZPDecoder;
 pub(crate) use signed_percentage_4d_exponential::SignedPercentage4DExponentialNeuronVoxelXYZPDecoder;
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPDecoder;
+pub(crate) use gaze_properties_linear::GazePropertiesLinearNeuronVoxelXYZPDecoder;
+pub(crate) use gaze_properties_exponential::GazePropertiesExponentialNeuronVoxelXYZPDecoder;

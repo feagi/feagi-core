@@ -32,11 +32,8 @@ macro_rules! motor_unit_functions {
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
-                    cortical_area_types: {
-                        $(($cortical_area_type_expr:expr, $area_index:expr)),* $(,)?
-                    },
-                    unit_default_topology: {
-                        $($unit_idx:tt => { relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], dimensions: [$dim_x:expr, $dim_y:expr, $dim_z:expr] }),* $(,)?
+                    cortical_area_properties: {
+                        $($area_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
                 }
             ),* $(,)?
@@ -186,6 +183,48 @@ macro_rules! motor_unit_functions {
     };
     //endregion
 
+    // Arm for WrappedIOType::GazeProperties
+    (@generate_functions
+        $motor_unit:ident,
+        $snake_case_name:expr,
+        GazeProperties
+    ) => {
+        ::paste::paste! {
+            pub fn [<$snake_case_name _register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                eccentricity_z_neuron_resolution: NeuronDepth,
+                modulation_z_neuron_resolution: NeuronDepth,
+                percentage_neuron_positioning: PercentageNeuronPositioning
+                ) -> Result<(), FeagiDataError>
+            {
+                let eccentricity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let modularity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[1];
+
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
+                    match percentage_neuron_positioning {
+                        PercentageNeuronPositioning::Linear => GazePropertiesLinearNeuronVoxelXYZPDecoder::new_box(eccentricity_cortical_id, modularity_cortical_id, eccentricity_z_neuron_resolution, modulation_z_neuron_resolution, number_channels)?,
+                        PercentageNeuronPositioning::Fractional => GazePropertiesExponentialNeuronVoxelXYZPDecoder::new_box(eccentricity_cortical_id, modularity_cortical_id, eccentricity_z_neuron_resolution, modulation_z_neuron_resolution, number_channels)?
+                    }
+                };
+
+                let initial_val: WrappedIOData = WrappedIOData::GazeProperties(GazeProperties::create_default_centered());
+                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
+                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
+                    for _i in 0..*number_channels {
+                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
+                    };
+                    output
+                };
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, default_pipeline, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+    };
 
     // Arm for WrappedIOType::Percentage
     (@generate_functions
@@ -203,7 +242,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
                     match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
                         PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
@@ -243,7 +282,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
                     match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
                         PercentageNeuronPositioning::Linear => Percentage3DLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
@@ -283,7 +322,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
                     match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
                         PercentageNeuronPositioning::Linear => SignedPercentageLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
@@ -322,7 +361,7 @@ macro_rules! motor_unit_functions {
                 misc_data_dimensions: MiscDataDimensions
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_ $snake_case_name _cortical_ids_array>](frame_change_handling, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, group)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
                 let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;

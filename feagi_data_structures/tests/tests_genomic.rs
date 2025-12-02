@@ -318,7 +318,7 @@ mod test_cortical_types {
 
         #[test]
         fn test_cortical_area_type_brain_input_variant() {
-            let io_type = IOCorticalAreaDataType::Percentage(
+            let io_type = IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear
             );
@@ -332,7 +332,7 @@ mod test_cortical_types {
 
         #[test]
         fn test_cortical_area_type_brain_output_variant() {
-            let io_type = IOCorticalAreaDataType::Percentage(
+            let io_type = IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Fractional
             );
@@ -484,62 +484,62 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_percentage_variant() {
-            let io_type = IOCorticalAreaDataType::Percentage(
+            let io_type = IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear
             );
             
             match io_type {
-                IOCorticalAreaDataType::Percentage(_, _) => (),
+                IOCorticalAreaDataFlag::Percentage(_, _) => (),
                 _ => panic!("Expected Percentage variant"),
             }
         }
 
         #[test]
         fn test_signed_percentage_variant() {
-            let io_type = IOCorticalAreaDataType::SignedPercentage(
+            let io_type = IOCorticalAreaDataFlag::SignedPercentage(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Fractional
             );
             
             match io_type {
-                IOCorticalAreaDataType::SignedPercentage(_, _) => (),
+                IOCorticalAreaDataFlag::SignedPercentage(_, _) => (),
                 _ => panic!("Expected SignedPercentage variant"),
             }
         }
 
         #[test]
         fn test_cartesian_plane_variant() {
-            let io_type = IOCorticalAreaDataType::CartesianPlane(FrameChangeHandling::Absolute);
+            let io_type = IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute);
             
             match io_type {
-                IOCorticalAreaDataType::CartesianPlane(_) => (),
+                IOCorticalAreaDataFlag::CartesianPlane(_) => (),
                 _ => panic!("Expected CartesianPlane variant"),
             }
         }
 
         #[test]
         fn test_percentage_3d_variant() {
-            let io_type = IOCorticalAreaDataType::SignedPercentage3D(
+            let io_type = IOCorticalAreaDataFlag::SignedPercentage3D(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear
             );
             
             match io_type {
-                IOCorticalAreaDataType::SignedPercentage3D(_, _) => (),
+                IOCorticalAreaDataFlag::SignedPercentage3D(_, _) => (),
                 _ => panic!("Expected SignedPercentage3D variant"),
             }
         }
 
         #[test]
         fn test_percentage_4d_variant() {
-            let io_type = IOCorticalAreaDataType::SignedPercentage4D(
+            let io_type = IOCorticalAreaDataFlag::SignedPercentage4D(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Fractional
             );
             
             match io_type {
-                IOCorticalAreaDataType::SignedPercentage4D(_, _) => (),
+                IOCorticalAreaDataFlag::SignedPercentage4D(_, _) => (),
                 _ => panic!("Expected SignedPercentage4D variant"),
             }
         }
@@ -550,7 +550,7 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_to_configuration_flag_percentage() {
-            let io_type = IOCorticalAreaDataType::Percentage(
+            let io_type = IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Linear
             );
@@ -563,35 +563,35 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_configuration_flag_roundtrip_percentage() {
-            let original = IOCorticalAreaDataType::Percentage(
+            let original = IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear
             );
             
             let flag = original.to_data_type_configuration_flag();
-            let recovered = IOCorticalAreaDataType::try_from_data_type_configuration_flag(flag).unwrap();
+            let recovered = IOCorticalAreaDataFlag::try_from_data_type_configuration_flag(flag).unwrap();
             
             assert_eq!(original, recovered);
         }
 
         #[test]
         fn test_configuration_flag_roundtrip_cartesian_plane() {
-            let original = IOCorticalAreaDataType::CartesianPlane(FrameChangeHandling::Incremental);
+            let original = IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Incremental);
             
             let flag = original.to_data_type_configuration_flag();
-            let recovered = IOCorticalAreaDataType::try_from_data_type_configuration_flag(flag).unwrap();
+            let recovered = IOCorticalAreaDataFlag::try_from_data_type_configuration_flag(flag).unwrap();
             
             assert_eq!(original, recovered);
         }
 
         #[test]
         fn test_different_types_produce_different_flags() {
-            let type1 = IOCorticalAreaDataType::Percentage(
+            let type1 = IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear
             );
             
-            let type2 = IOCorticalAreaDataType::SignedPercentage(
+            let type2 = IOCorticalAreaDataFlag::SignedPercentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear
             );
@@ -608,7 +608,7 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_as_io_cortical_id_creates_valid_id() {
-            let io_type = IOCorticalAreaDataType::Percentage(
+            let io_type = IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear
             );
@@ -626,7 +626,7 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_as_io_cortical_id_input_vs_output() {
-            let io_type = IOCorticalAreaDataType::Percentage(
+            let io_type = IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear
             );
@@ -673,7 +673,7 @@ mod test_sensory_cortical_unit {
         let frame_handling = FrameChangeHandling::Absolute;
         let positioning = PercentageNeuronPositioning::Linear;
         
-        let types = SensoryCorticalUnit::get_infrared_cortical_area_types_array(frame_handling, positioning);
+        let types = SensoryCorticalUnit::get_cortical_area_types_array_for_infrared(frame_handling, positioning);
         
         assert_eq!(types.len(), 1);
         match types[0] {
@@ -689,7 +689,7 @@ mod test_sensory_cortical_unit {
         let positioning = PercentageNeuronPositioning::Linear;
         let group = CorticalGroupIndex::from(5u8);
         
-        let ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(frame_handling, positioning, group);
+        let ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(frame_handling, positioning, group);
         
         assert_eq!(ids.len(), 1);
         
@@ -704,7 +704,7 @@ mod test_sensory_cortical_unit {
         // Test that segmented vision generates 9 cortical area types
         let frame_handling = FrameChangeHandling::Incremental;
         
-        let types = SensoryCorticalUnit::get_segmented_vision_cortical_area_types_array(frame_handling);
+        let types = SensoryCorticalUnit::get_cortical_area_types_array_for_segmented_vision(frame_handling);
         
         assert_eq!(types.len(), 9);
         
@@ -723,7 +723,7 @@ mod test_sensory_cortical_unit {
         let frame_handling = FrameChangeHandling::Incremental;
         let group = CorticalGroupIndex::from(3u8);
         
-        let ids = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group);
+        let ids = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(frame_handling, group);
         
         assert_eq!(ids.len(), 9);
         
@@ -748,13 +748,13 @@ mod test_sensory_cortical_unit {
         let positioning = PercentageNeuronPositioning::Linear;
         let group = CorticalGroupIndex::from(0u8);
         
-        let absolute_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let absolute_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             FrameChangeHandling::Absolute,
             positioning,
             group
         );
         
-        let incremental_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let incremental_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             FrameChangeHandling::Incremental,
             positioning,
             group
@@ -769,13 +769,13 @@ mod test_sensory_cortical_unit {
         let frame_handling = FrameChangeHandling::Absolute;
         let group = CorticalGroupIndex::from(0u8);
         
-        let linear_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let linear_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             PercentageNeuronPositioning::Linear,
             group
         );
         
-        let fractional_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let fractional_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             PercentageNeuronPositioning::Fractional,
             group
@@ -790,13 +790,13 @@ mod test_sensory_cortical_unit {
         let frame_handling = FrameChangeHandling::Absolute;
         let positioning = PercentageNeuronPositioning::Linear;
         
-        let group0_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let group0_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             positioning,
             CorticalGroupIndex::from(0u8)
         );
         
-        let group1_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let group1_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             positioning,
             CorticalGroupIndex::from(1u8)
@@ -871,7 +871,7 @@ mod test_comprehensive_scenarios {
         let mut all_ids = Vec::new();
         
         for (frame, pos) in params.iter() {
-            let ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(*frame, *pos, group);
+            let ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(*frame, *pos, group);
             all_ids.push(ids[0]);
         }
         
