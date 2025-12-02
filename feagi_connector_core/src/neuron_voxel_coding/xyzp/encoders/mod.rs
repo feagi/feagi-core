@@ -9,7 +9,7 @@ mod signed_percentage_fractional_exponential;
 */
 // TODO there is a bug on all encoders in that they will send all channel data even if not updated since scratch is cleared only if channel is active!
 mod misc_data;
-mod image_frame;
+mod cartesian_plane;
 mod segmented_image_frame;
 mod percentage_1d_exponential;
 mod percentage_1d_linear;
@@ -27,10 +27,10 @@ mod signed_percentage_3d_linear;
 mod signed_percentage_3d_exponential;
 mod signed_percentage_4d_linear;
 mod signed_percentage_4d_exponential;
-
+mod boolean;
 
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
-pub(crate) use image_frame::ImageFrameNeuronVoxelXYZPEncoder;
+pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPEncoder;
 pub(crate) use segmented_image_frame::SegmentedImageFrameNeuronVoxelXYZPEncoder;
 pub(crate) use percentage_1d_exponential::PercentageExponentialNeuronVoxelXYZPEncoder;
 pub(crate) use percentage_1d_linear::PercentageLinearNeuronVoxelXYZPEncoder;

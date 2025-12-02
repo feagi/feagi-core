@@ -40,7 +40,7 @@ macro_rules! define_motor_cortical_units_enum {
             $(
                 paste::paste! {
                     #[doc = "Get cortical area types array for " $friendly_name "."]
-                    pub const fn [<get_ $snake_case_name _cortical_area_types_array>](
+                    pub const fn [<get_cortical_area_types_array_for_ $snake_case_name >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
                         [
                             $(CorticalAreaType::BrainOutput($cortical_area_type_expr)),*
@@ -48,7 +48,7 @@ macro_rules! define_motor_cortical_units_enum {
                     }
 
                     #[doc = "Get cortical IDs array for " $friendly_name "."]
-                    pub const fn [<get_ $snake_case_name _cortical_ids_array>](
+                    pub const fn [<get_cortical_ids_array_for_ $snake_case_name >](
                         $($param_name: $param_type,)* cortical_group_index: CorticalGroupIndex) -> [CorticalID; $number_cortical_areas] {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
@@ -59,13 +59,6 @@ macro_rules! define_motor_cortical_units_enum {
                     }
                 }
             )*
-
-            pub const fn get_type_from_cortical_id_bytes(bytes: &[u8; CorticalID::NUMBER_OF_BYTES]) -> Result<MotorCorticalUnit, FeagiDataError> {
-                if bytes[0] != b'o' {
-                    return Err(FeagiDataError::ConstError("Given Cortical ID cannot be decoded into a motor cortical unit as it does not start with 'o'"));
-                }
-                todo!();
-            }
 
             pub const fn get_snake_case_name(&self) -> &'static str {
                 match self {
