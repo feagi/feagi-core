@@ -29,6 +29,7 @@ mod signed_percentage_4d_linear;
 mod signed_percentage_4d_exponential;
 mod boolean;
 
+pub(crate) use boolean::BooleanNeuronVoxelXYZPEncoder;
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
 pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPEncoder;
 pub(crate) use segmented_image_frame::SegmentedImageFrameNeuronVoxelXYZPEncoder;
