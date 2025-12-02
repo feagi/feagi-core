@@ -173,7 +173,7 @@ macro_rules! sensor_cortical_units {
                 Accelerometer => {
                     friendly_name: "Accelerometer",
                     snake_case_name: "accelerometer",
-                    accepted_wrapped_io_data_type: Percentage3D,
+                    accepted_wrapped_io_data_type: Percentage_3D,
                     cortical_id_unit_reference: *b"acc",
                     number_cortical_areas: 1,
                     cortical_type_parameters: {
@@ -191,7 +191,7 @@ macro_rules! sensor_cortical_units {
                 Gyroscope => {
                     friendly_name: "Gyroscope",
                     snake_case_name: "gyroscope",
-                    accepted_wrapped_io_data_type: SignedPercentage4D,
+                    accepted_wrapped_io_data_type: SignedPercentage_4D,
                     cortical_id_unit_reference: *b"gyq",
                     number_cortical_areas: 1,
                     cortical_type_parameters: {
