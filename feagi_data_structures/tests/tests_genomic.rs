@@ -673,7 +673,7 @@ mod test_sensory_cortical_unit {
         let frame_handling = FrameChangeHandling::Absolute;
         let positioning = PercentageNeuronPositioning::Linear;
         
-        let types = SensoryCorticalUnit::get_infrared_cortical_area_types_array(frame_handling, positioning);
+        let types = SensoryCorticalUnit::get_cortical_area_types_array_for_infrared(frame_handling, positioning);
         
         assert_eq!(types.len(), 1);
         match types[0] {
@@ -689,7 +689,7 @@ mod test_sensory_cortical_unit {
         let positioning = PercentageNeuronPositioning::Linear;
         let group = CorticalGroupIndex::from(5u8);
         
-        let ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(frame_handling, positioning, group);
+        let ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(frame_handling, positioning, group);
         
         assert_eq!(ids.len(), 1);
         
@@ -704,7 +704,7 @@ mod test_sensory_cortical_unit {
         // Test that segmented vision generates 9 cortical area types
         let frame_handling = FrameChangeHandling::Incremental;
         
-        let types = SensoryCorticalUnit::get_segmented_vision_cortical_area_types_array(frame_handling);
+        let types = SensoryCorticalUnit::get_cortical_area_types_array_for_segmented_vision(frame_handling);
         
         assert_eq!(types.len(), 9);
         
@@ -723,7 +723,7 @@ mod test_sensory_cortical_unit {
         let frame_handling = FrameChangeHandling::Incremental;
         let group = CorticalGroupIndex::from(3u8);
         
-        let ids = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group);
+        let ids = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(frame_handling, group);
         
         assert_eq!(ids.len(), 9);
         
@@ -748,13 +748,13 @@ mod test_sensory_cortical_unit {
         let positioning = PercentageNeuronPositioning::Linear;
         let group = CorticalGroupIndex::from(0u8);
         
-        let absolute_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let absolute_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             FrameChangeHandling::Absolute,
             positioning,
             group
         );
         
-        let incremental_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let incremental_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             FrameChangeHandling::Incremental,
             positioning,
             group
@@ -769,13 +769,13 @@ mod test_sensory_cortical_unit {
         let frame_handling = FrameChangeHandling::Absolute;
         let group = CorticalGroupIndex::from(0u8);
         
-        let linear_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let linear_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             PercentageNeuronPositioning::Linear,
             group
         );
         
-        let fractional_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let fractional_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             PercentageNeuronPositioning::Fractional,
             group
@@ -790,13 +790,13 @@ mod test_sensory_cortical_unit {
         let frame_handling = FrameChangeHandling::Absolute;
         let positioning = PercentageNeuronPositioning::Linear;
         
-        let group0_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let group0_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             positioning,
             CorticalGroupIndex::from(0u8)
         );
         
-        let group1_ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(
+        let group1_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             positioning,
             CorticalGroupIndex::from(1u8)
@@ -871,7 +871,7 @@ mod test_comprehensive_scenarios {
         let mut all_ids = Vec::new();
         
         for (frame, pos) in params.iter() {
-            let ids = SensoryCorticalUnit::get_infrared_cortical_ids_array(*frame, *pos, group);
+            let ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(*frame, *pos, group);
             all_ids.push(ids[0]);
         }
         

@@ -17,8 +17,8 @@ fn load_bird_image() -> ImageFrame {
 #[cfg(test)]
 mod test_connector_cache_sensor_load_image {
     use std::time::Instant;
-    use feagi_connector_core::data_types::descriptors::{GazeProperties, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
-    use feagi_connector_core::data_types::MiscData;
+    use feagi_connector_core::data_types::descriptors::{SegmentedImageFrameProperties, SegmentedXYImageResolutions};
+    use feagi_connector_core::data_types::{GazeProperties, MiscData};
     use feagi_connector_core::wrapped_io_data::WrappedIOData;
     use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex};
@@ -94,6 +94,7 @@ mod test_connector_cache_sensor_load_image {
         }
     }
 
+    /*
     #[test]
     fn test_segment_bird_image_with_moving_gaze() {
         return; // TODO temp
@@ -135,6 +136,8 @@ mod test_connector_cache_sensor_load_image {
         }
     }
 
+     */
+
     #[test]
     fn test_encode_of_misc_then_reencode() {
         let time_of_previous_burst: Instant = Instant::now();
@@ -158,8 +161,8 @@ mod test_connector_cache_sensor_load_image {
 
             // Test encoding/decoding cycle
             // Since the output of the sensor is under cortical ID imis00, to read it to the motor, we need to assign it to omis00,
-            let sensor_cortical_id = SensoryCorticalUnit::get_miscellaneous_cortical_ids_array(FrameChangeHandling::Absolute, cortical_group)[0];
-            let motor_cortical_id = MotorCorticalUnit::get_miscellaneous_cortical_ids_array(FrameChangeHandling::Absolute, cortical_group)[0];
+            let sensor_cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_miscellaneous(FrameChangeHandling::Absolute, cortical_group)[0];
+            let motor_cortical_id = MotorCorticalUnit::get_cortical_ids_array_for_miscellaneous(FrameChangeHandling::Absolute, cortical_group)[0];
             
             // Note: This test needs reworking for the new architecture where encoding/decoding is handled differently
             // For now, we verify the registration works
