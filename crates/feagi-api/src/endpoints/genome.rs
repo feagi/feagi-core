@@ -545,6 +545,8 @@ pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<
     // Helper to convert data type to human-readable format
     let data_type_to_json = |dt: IOCorticalAreaDataFlag| -> serde_json::Value {
         let (variant, frame, positioning) = match dt {
+            IOCorticalAreaDataFlag::Boolean => 
+                ("Boolean", FrameChangeHandling::Absolute, None),
             IOCorticalAreaDataFlag::Percentage(f, p) => 
                 ("Percentage", f, Some(p)),
             IOCorticalAreaDataFlag::Percentage2D(f, p) => 

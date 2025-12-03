@@ -497,7 +497,7 @@ pub async fn post_cortical_area(
     for unit_idx in 0..num_units {
         // Get dimensions for this unit from topology
         let dimensions = if let Some(topo) = unit_topology.get(&unit_idx) {
-            let dims = topo.dimensions;
+            let dims = topo.channel_dimensions_default;
             (dims[0] as usize, dims[1] as usize, dims[2] as usize)
         } else {
             (1, 1, 1)  // Fallback
@@ -867,7 +867,7 @@ pub async fn get_ipu_types(State(_state): State<ApiState>) -> ApiResult<Json<Has
             .map(|(idx, topo)| {
                 (idx, UnitTopologyData {
                     relative_position: topo.relative_position,
-                    dimensions: topo.dimensions,
+                    dimensions: topo.channel_dimensions_default,
                 })
             })
             .collect();
@@ -951,7 +951,7 @@ pub async fn get_opu_types(State(_state): State<ApiState>) -> ApiResult<Json<Has
             .map(|(idx, topo)| {
                 (idx, UnitTopologyData {
                     relative_position: topo.relative_position,
-                    dimensions: topo.dimensions,
+                    dimensions: topo.channel_dimensions_default,
                 })
             })
             .collect();

@@ -48,6 +48,11 @@ fn extract_io_type_details(
     use IOCorticalAreaDataFlag::*;
     
     match io_type {
+        Boolean => (
+            Some("Boolean".to_string()),
+            None,
+            None,
+        ),
         CartesianPlane(frame_handling) => (
             Some("CartesianPlane".to_string()),
             Some(frame_handling_to_string(frame_handling)),
