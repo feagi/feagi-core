@@ -29,16 +29,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi = "2.0"
+feagi-core = "2.0"
 ```
 
-Or use specific components:
+Or with specific features:
 
 ```toml
 [dependencies]
-feagi-burst-engine = "2.0"  # Neural processing engine
-feagi-types = "2.0"          # Core data structures
-feagi-plasticity = "2.0"     # Learning algorithms
+feagi-core = { version = "2.0", features = ["gpu"] }
 ```
 
 ## Quick Start
@@ -46,7 +44,7 @@ feagi-plasticity = "2.0"     # Learning algorithms
 ### Create and Run a Neural Network
 
 ```rust
-use feagi::prelude::*;
+use feagi_core::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize neural processing unit
@@ -66,8 +64,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 #![no_std]
-use feagi_neural::NeuronDynamics;
-use feagi_runtime_embedded::EmbeddedRuntime;
+use feagi_core::neural::NeuronDynamics;
+use feagi_core::runtime_embedded::EmbeddedRuntime;
 
 // Configure for resource-constrained systems
 let runtime = EmbeddedRuntime::new(1000, 5000);
@@ -161,7 +159,7 @@ FEAGI Core delivers significant performance improvements over interpreted implem
 
 ## Feature Flags
 
-### Main Crate
+### Main Crate (feagi-core)
 
 ```toml
 [features]
@@ -187,20 +185,20 @@ all-gpu = [...]       # All GPU backends
 
 ```bash
 # Clone repository
-git clone https://github.com/Neuraville/FEAGI-2.0
+git clone https://github.com/feagi/feagi-core
 cd feagi-core
 
-# Build entire workspace
-cargo build --workspace --release
+# Build the crate
+cargo build --release
 
 # Run tests
 cargo test --workspace
 
 # Build with GPU support
-cargo build --release -p feagi-burst-engine --features gpu
+cargo build --release --features gpu
 
 # Generate documentation
-cargo doc --workspace --open
+cargo doc --open
 ```
 
 ## Contributing
@@ -254,14 +252,13 @@ cargo build --workspace --release
 
 ## Documentation
 
-- **API Reference**: [docs.rs/feagi](https://docs.rs/feagi)
+- **API Reference**: [docs.rs/feagi-core](https://docs.rs/feagi-core)
 - **Architecture Guide**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
-- **Crate-Specific**: Each crate contains its own README
 
 Generate local documentation:
 
 ```bash
-cargo doc --workspace --open
+cargo doc --open
 ```
 
 ## Testing
@@ -314,6 +311,7 @@ FEAGI Core is under active development. The core APIs are stabilizing, but break
 
 - **Discord**: [discord.gg/neuraville](https://discord.gg/PTVC8fyGN8)
 - **Website**: [neuraville.com/feagi](https://neuraville.com/feagi)
+- **Repository**: [github.com/feagi/feagi-core](https://github.com/feagi/feagi-core)
 - **Issues**: [GitHub Issues](https://github.com/feagi/feagi-core/issues)
 - **Email**: feagi@neuraville.com
 

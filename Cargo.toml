@@ -1,18 +1,19 @@
 # ============================================================================
-# MAIN FACADE CRATE: feagi
+# MAIN CRATE: feagi-core
 # 
 # This is the primary crate that users import. It re-exports all components
 # with feature flags for selective compilation.
+# All workspace members are internal organization only (publish = false).
 # ============================================================================
 
 [package]
-name = "feagi"
+name = "feagi-core"
 version = "2.0.0"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
 description = "Framework for Evolutionary Artificial General Intelligence - Core Neural Computation"
-repository = "https://github.com/Neuraville/FEAGI-2.0"
+repository = "https://github.com/feagi/feagi-core"
 readme = "README.md"
 keywords = ["neuroscience", "ai", "neural-network", "brain", "agi"]
 categories = ["science", "simulation"]
