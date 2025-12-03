@@ -9,15 +9,15 @@ description = "Platform-agnostic neural computation: types, algorithms, and neur
 
 [features]
 default = ["std"]
-std = ["serde"]
+std = ["serde", "serde_json", "ahash"]
+alloc = []
 
 [dependencies]
 # Optional std dependencies
 serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 ahash = { workspace = true, optional = true }  # For FireCandidateList
-
-# Temporary during migration (Phase 2c)
-feagi-types = { path = "../feagi-types", optional = true }
+thiserror = { workspace = true }  # For error types
 
 [dev-dependencies]
 # For tests only

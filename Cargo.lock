@@ -1586,7 +1586,6 @@ dependencies = [
  "feagi-plasticity",
  "feagi-pns",
  "feagi-state-manager",
- "feagi-types",
  "serde_json",
 ]
 
@@ -1621,11 +1620,11 @@ dependencies = [
  "feagi-bdu",
  "feagi-burst-engine",
  "feagi-evo",
+ "feagi-neural",
  "feagi-observability",
  "feagi-pns",
  "feagi-services",
  "feagi-transports",
- "feagi-types",
  "feagi_data_structures",
  "http-body-util",
  "hyper 1.8.1",
@@ -1661,8 +1660,8 @@ dependencies = [
  "criterion",
  "feagi-burst-engine",
  "feagi-evo",
+ "feagi-neural",
  "feagi-observability",
- "feagi-types",
  "feagi_data_structures",
  "ndarray",
  "once_cell",
@@ -1689,9 +1688,9 @@ dependencies = [
  "feagi-connectome-serialization",
  "feagi-neural",
  "feagi-observability",
+ "feagi-runtime",
+ "feagi-runtime-std",
  "feagi-state-manager",
- "feagi-synapse",
- "feagi-types",
  "feagi_data_serialization",
  "feagi_data_structures",
  "half",
@@ -1743,8 +1742,6 @@ dependencies = [
  "esp-idf-sys",
  "feagi-neural",
  "feagi-runtime-embedded",
- "feagi-synapse",
- "feagi-types",
  "heapless",
  "log",
  "panic-halt",
@@ -1759,8 +1756,8 @@ version = "2.0.0"
 dependencies = [
  "chrono",
  "env_logger",
+ "feagi-neural",
  "feagi-observability",
- "feagi-types",
  "feagi_data_structures",
  "rand 0.8.5",
  "serde",
@@ -1774,7 +1771,10 @@ dependencies = [
 name = "feagi-neural"
 version = "2.0.0"
 dependencies = [
- "feagi-types",
+ "ahash",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -1802,7 +1802,7 @@ name = "feagi-plasticity"
 version = "2.0.0"
 dependencies = [
  "ahash",
- "feagi-types",
+ "feagi-neural",
  "rayon",
  "sha2",
  "thiserror 1.0.69",
@@ -1818,8 +1818,8 @@ dependencies = [
  "base64 0.22.1",
  "crossbeam",
  "feagi-burst-engine",
+ "feagi-neural",
  "feagi-transports",
- "feagi-types",
  "feagi_data_serialization",
  "feagi_data_structures",
  "lz4",
@@ -1835,12 +1835,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "feagi-runtime"
+version = "2.0.0"
+dependencies = [
+ "feagi-neural",
+]
+
+[[package]]
 name = "feagi-runtime-embedded"
 version = "2.0.0"
 dependencies = [
  "feagi-neural",
- "feagi-synapse",
- "feagi-types",
+ "feagi-runtime",
  "spin",
 ]
 
@@ -1850,8 +1856,7 @@ version = "2.0.0"
 dependencies = [
  "ahash",
  "feagi-neural",
- "feagi-synapse",
- "feagi-types",
+ "feagi-runtime",
  "rayon",
  "thiserror 1.0.69",
 ]
@@ -1865,9 +1870,9 @@ dependencies = [
  "feagi-bdu",
  "feagi-burst-engine",
  "feagi-evo",
+ "feagi-neural",
  "feagi-observability",
  "feagi-pns",
- "feagi-types",
  "feagi_data_structures",
  "parking_lot",
  "serde",
@@ -1896,13 +1901,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm_sync",
  "web-sys",
-]
-
-[[package]]
-name = "feagi-synapse"
-version = "2.0.0"
-dependencies = [
- "feagi-types",
 ]
 
 [[package]]

@@ -4,7 +4,7 @@
 //! Error types for FEAGI operations
 
 use core::fmt;
-use super::NeuronId;
+use super::ids::NeuronId;
 
 #[cfg(feature = "std")]
 extern crate std;

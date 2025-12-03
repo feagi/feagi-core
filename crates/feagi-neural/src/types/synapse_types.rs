@@ -3,7 +3,6 @@
 
 //! Synapse type definitions
 
-use core::fmt;
 
 /// Synaptic weight (0-255, stored as u8 for memory efficiency)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

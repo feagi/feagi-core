@@ -5,13 +5,14 @@
 //!
 //! Moved from feagi-types/src/models/ (Phase 2c)
 
+use super::spatial::Dimensions;
+
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+use std::{collections::HashMap, string::String, vec::Vec};
 
-use super::Dimensions;
 
 /// Cortical area (runtime representation)
 #[cfg(feature = "std")]

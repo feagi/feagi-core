@@ -16,6 +16,9 @@ use feagi_neural::{update_neuron_lif, is_refractory};
 use feagi_neural::types::NeuralValue;
 use feagi_runtime::{NeuronStorage, Result, RuntimeError};
 
+#[cfg(any(feature = "std", feature = "alloc"))]
+extern crate alloc;
+
 /// Fixed-size neuron array for embedded systems
 ///
 /// All data is stack-allocated with compile-time size limits.
@@ -344,6 +347,8 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         y_coords: &[u32],
         z_coords: &[u32],
     ) -> Result<Vec<usize>> {
+        use alloc::vec::Vec;
+        
         let n = thresholds.len();
         
         if self.count + n > N {

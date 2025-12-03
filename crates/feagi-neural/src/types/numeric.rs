@@ -108,7 +108,12 @@ impl NeuralValue for INT8Value {
     fn from_f32(value: f32) -> Self {
         let normalized = (value - Self::MEMBRANE_MIN) / Self::MEMBRANE_RANGE;
         let scaled = (normalized * Self::SCALE) - 127.0;
-        let quantized = scaled.round().clamp(-127.0, 127.0) as i8;
+        // Use manual rounding (no_std compatible)
+        let quantized = if scaled >= 0.0 {
+            (scaled + 0.5).min(127.0) as i8
+        } else {
+            (scaled - 0.5).max(-127.0) as i8
+        };
         Self(quantized)
     }
     
@@ -172,7 +177,13 @@ impl INT8LeakCoefficient {
     
     #[inline]
     pub fn from_f32(value: f32) -> Self {
-        let scaled = (value * Self::SCALE as f32).round() as i16;
+        // Use manual rounding (no_std compatible)
+        let scaled_f = value * Self::SCALE as f32;
+        let scaled = if scaled_f >= 0.0 {
+            (scaled_f + 0.5) as i16
+        } else {
+            (scaled_f - 0.5) as i16
+        };
         Self(scaled.clamp(0, Self::SCALE as i16))
     }
     

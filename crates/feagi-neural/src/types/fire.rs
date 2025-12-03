@@ -5,13 +5,17 @@
 //!
 //! Moved from feagi-types/src/fire_structures.rs (Phase 2c)
 
+use super::ids::NeuronId;
+
 #[cfg(feature = "std")]
 extern crate std;
 
 #[cfg(feature = "std")]
-use std::collections::VecDeque;
+use std::{collections::{HashMap, VecDeque}, vec::Vec};
 
-use super::NeuronId;
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
 
 /// Fire Candidate List (FCL) - neurons that might fire this burst
 #[cfg(feature = "std")]

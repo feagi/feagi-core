@@ -8,7 +8,8 @@ repository.workspace = true
 description = "Embedded runtime adapter for FEAGI (ESP32, RTOS, no_std)"
 
 [features]
-default = []
+default = ["alloc"]
+alloc = []
 std = []
 
 [dependencies]

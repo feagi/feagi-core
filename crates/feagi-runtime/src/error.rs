@@ -28,6 +28,10 @@ pub enum RuntimeError {
         requested_bytes: usize,
     },
     
+    /// Invalid parameters provided
+    #[cfg(feature = "std")]
+    InvalidParameters(String),
+    
     /// Invalid operation (only available with std feature)
     #[cfg(feature = "std")]
     InvalidOperation(String),
@@ -57,6 +61,10 @@ impl fmt::Display for RuntimeError {
             }
             RuntimeError::OutOfMemory { requested_bytes } => {
                 write!(f, "Out of memory: requested {} bytes", requested_bytes)
+            }
+            #[cfg(feature = "std")]
+            RuntimeError::InvalidParameters(msg) => {
+                write!(f, "Invalid parameters: {}", msg)
             }
             #[cfg(feature = "std")]
             RuntimeError::InvalidOperation(msg) => {
