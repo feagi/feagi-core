@@ -5,15 +5,19 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Platform-agnostic neural dynamics algorithms for FEAGI"
+description = "Platform-agnostic neural computation: types, algorithms, and neuron models"
 
 [features]
-default = []
-std = []
+default = ["std"]
+std = ["serde"]
 
 [dependencies]
-# Pure no_std dependencies only
-feagi-types = { path = "../feagi-types" }
+# Optional std dependencies
+serde = { workspace = true, optional = true }
+ahash = { workspace = true, optional = true }
+
+# Temporary during migration (Phase 2c)
+feagi-types = { path = "../feagi-types", optional = true }
 
 [dev-dependencies]
 # For tests only

@@ -8,45 +8,65 @@
  * you may not use this file except in compliance with the License.
  */
 
-//! # FEAGI Neural Dynamics (Platform-Agnostic)
+//! # FEAGI Neural Computation (Platform-Agnostic)
 //!
-//! Pure neural computation algorithms that work on any platform:
-//! - Desktop (std)
-//! - ESP32 (no_std)
-//! - HPC clusters (std + MPI)
-//! - GPU (WGPU/CUDA)
+//! ALL neural computation in one place:
+//! - **Types**: Core type definitions (NeuronId, SynapseType, NeuralValue, etc.)
+//! - **Synapse**: Synaptic contribution algorithms
+//! - **Dynamics**: Membrane potential updates
+//! - **Models**: Neuron models (LIF, Izhikevich, etc.)
 //!
-//! ## Design Principles
-//! - **No allocations**: All functions work on borrowed slices
-//! - **No I/O**: Pure computation only
-//! - **No platform dependencies**: Works with `no_std`
-//! - **SIMD-friendly**: Data layouts optimized for vectorization
+//! Merged from:
+//! - feagi-types (Phase 2c)
+//! - feagi-synapse (Phase 2a)
+//! - feagi-burst-engine/neuron_models (Phase 2b)
 //!
 //! ## Target Platforms
 //! - ✅ Desktop (Linux, macOS, Windows)
 //! - ✅ Embedded (ESP32, ARM Cortex-M)
 //! - ✅ RTOS (FreeRTOS, Zephyr)
 //! - ✅ WASM (browser, Node.js)
+//! - ✅ GPU (CUDA, WebGPU)
 
 #![no_std]
 
 #[cfg(feature = "std")]
 extern crate std;
 
+// Core type definitions (merged from feagi-types)
+pub mod types;
+
+// Neural dynamics algorithms
 pub mod dynamics;
 pub mod firing;
 pub mod utils;
+
+// Synaptic algorithms (merged from feagi-synapse)
 pub mod synapse;
+
+// Neuron models (moved from feagi-burst-engine)
 pub mod models;
 
+// Re-export everything for convenience
 pub use dynamics::*;
 pub use firing::*;
 pub use utils::*;
 
-// Re-export synapse module for convenience
+// Re-export types
+pub use types::{
+    NeuronId, SynapseId,
+    NeuralValue, INT8Value, INT8LeakCoefficient, Precision, QuantizationSpec,
+    Synapse, SynapticWeight, SynapticConductance, SynapticContribution,
+    Dimensions, Position,
+    FeagiError, Result, Error,
+    FireCandidateList, FireQueue, FireLedger,
+    CorticalArea, BrainRegion, BrainRegionHierarchy, RegionType,
+};
+
+// Re-export synapse module
 pub use synapse::{SynapseType, compute_synaptic_contribution, compute_synaptic_contributions_batch};
 
-// Re-export neuron models for convenience
+// Re-export neuron models
 pub use models::{NeuronModel, ModelParameters, LIFModel, LIFParameters};
 
 
