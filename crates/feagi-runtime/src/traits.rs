@@ -266,36 +266,9 @@ pub trait SynapseStorage: Send + Sync {
     ) -> Result<usize>;
 }
 
-/// Neural value trait: Abstracts numeric types for membrane potentials
-///
-/// This trait is already defined in feagi-types but listed here for completeness.
-/// It will be moved to feagi-neural::types as part of Phase 2.
-///
-/// Implementations: f32, INT8Value, f16 (future)
-pub trait NeuralValue: Copy + Send + Sync + 'static {
-    /// Zero value
-    fn zero() -> Self;
-    
-    /// Convert from f32
-    fn from_f32(v: f32) -> Self;
-    
-    /// Convert to f32
-    fn to_f32(self) -> f32;
-    
-    /// Add two values
-    fn add(self, other: Self) -> Self;
-    
-    /// Subtract two values
-    fn sub(self, other: Self) -> Self;
-    
-    /// Multiply by scalar
-    fn mul_scalar(self, scalar: f32) -> Self;
-    
-    /// Compare if greater than
-    fn gt(self, other: Self) -> bool;
-}
-
-// Note: Concrete implementations (f32, INT8Value) are in feagi-types (to be moved to feagi-neural in Phase 2)
+// Note: NeuralValue trait is now in feagi-neural::types
+// Re-export it here for convenience
+pub use feagi_neural::types::NeuralValue;
 
 #[cfg(test)]
 mod tests {

@@ -81,7 +81,10 @@ pub mod traits;
 
 // Re-export key types
 pub use error::{Result, RuntimeError};
-pub use traits::{NeuralValue, NeuronStorage, Runtime, SynapseStorage};
+pub use traits::{NeuronStorage, Runtime, SynapseStorage};
+
+// Re-export NeuralValue from feagi-neural
+pub use feagi_neural::types::NeuralValue;
 
 /// Version of the runtime trait API
 ///

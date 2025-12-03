@@ -23,7 +23,6 @@ default = ["std", "full"]
 
 # Platform targets
 std = [
-    "feagi-types/default",
     "feagi-state-manager/std",
     "feagi-burst-engine/default",
 ]
@@ -50,7 +49,6 @@ agent-sdk = ["feagi-agent-sdk"]
 
 [dependencies]
 # Foundation (vendored into feagi-core when published)
-feagi-types = { version = "2.0.0", path = "crates/feagi-types" }
 feagi-evo = { version = "2.0.0", path = "crates/feagi-evo" }
 serde_json = "1.0"
 
