@@ -330,7 +330,6 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         Ok(idx)
     }
     
-    #[cfg(any(feature = "std", feature = "alloc"))]
     fn add_neurons_batch(
         &mut self,
         thresholds: &[Self::Value],
@@ -346,8 +345,7 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         x_coords: &[u32],
         y_coords: &[u32],
         z_coords: &[u32],
-    ) -> Result<Vec<usize>> {
-        use alloc::vec::Vec;
+    ) -> Result<()> {
         
         let n = thresholds.len();
         
@@ -358,9 +356,8 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
             });
         }
         
-        let mut indices = Vec::with_capacity(n);
         for i in 0..n {
-            let idx = self.add_neuron(
+            self.add_neuron(
                 thresholds[i],
                 leak_coefficients[i],
                 resting_potentials[i],
@@ -375,10 +372,9 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
                 y_coords[i],
                 z_coords[i],
             )?;
-            indices.push(idx);
         }
         
-        Ok(indices)
+        Ok(())
     }
 }
 

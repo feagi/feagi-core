@@ -72,6 +72,7 @@ pub struct BurstResult {
 ///   - `f32`: 32-bit floating point (default, highest precision)
 ///   - `INT8Value`: 8-bit integer (memory efficient, 42% memory reduction)
 ///   - `f16`: 16-bit floating point (future, GPU-optimized)
+/// - **B: ComputeBackend**: The compute backend (CPUBackend, CUDABackend, WGPUBackend, etc.)
 /// 
 /// ## Locking Strategy (Performance-Critical)
 /// 
@@ -90,13 +91,14 @@ pub struct BurstResult {
 /// - Burst processing can read neurons while sensory data is being injected
 /// - Visualization can sample fire queue without blocking burst processing
 /// - Stats queries never block any operation
+/// - No dynamic dispatch (backend is monomorphized at compile time)
 /// 
 /// ## Multi-Core Performance
 /// 
 /// With 30 Hz burst rate + 30 FPS video injection:
 /// - **Before**: All operations serialized on one mutex (API unresponsive)
 /// - **After**: Concurrent sensory injection + burst processing + API queries
-pub struct RustNPU<R: Runtime, T: NeuralValue> {
+pub struct RustNPU<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>> {
     // Runtime (provides platform-specific storage)
     runtime: std::sync::Arc<R>,
     
@@ -114,10 +116,8 @@ pub struct RustNPU<R: Runtime, T: NeuralValue> {
     pub(crate) propagation_engine: std::sync::RwLock<SynapticPropagationEngine>,
 
     // Compute backend (Mutex: exclusive access during burst processing)
-    // This is the CPU/GPU backend that processes bursts
-    // TODO: Integrate backend into process_burst() method to replace direct CPU code
-    #[allow(dead_code)]  // Will be used when backend integration is complete
-    pub(crate) backend: std::sync::Mutex<Box<dyn crate::backend::ComputeBackend<T>>>,
+    // No longer Box<dyn> - monomorphized for better performance
+    pub(crate) backend: std::sync::Mutex<B>,
 
     // Atomic stats (lock-free reads)
     burst_count: std::sync::atomic::AtomicU64,
@@ -137,53 +137,27 @@ pub(crate) struct FireStructures {
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
 }
 
-impl<R: Runtime, T: NeuralValue> RustNPU<R, T> {
+impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>> RustNPU<R, T, B> {
     /// Create a new Rust NPU with specified capacities
     ///
     /// # Type Parameters
     /// - `R: Runtime`: Runtime implementation (StdRuntime, EmbeddedRuntime, etc.)
     /// - `T: NeuralValue`: Numeric type for membrane potentials (f32, INT8Value, etc.)
+    /// - `B: ComputeBackend`: Compute backend implementation (CPUBackend, CUDABackend, etc.)
     ///
     /// # Arguments
     /// * `runtime` - Runtime implementation providing storage
+    /// * `backend` - Compute backend for processing
     /// * `neuron_capacity` - Maximum number of neurons
     /// * `synapse_capacity` - Maximum number of synapses
     /// * `fire_ledger_window` - Fire ledger history window size
-    /// * `gpu_config` - Optional GPU configuration (None = default to CPU)
     pub fn new(
         runtime: R,
+        backend: B,
         neuron_capacity: usize,
         synapse_capacity: usize,
         fire_ledger_window: usize,
-        gpu_config: Option<&crate::backend::GpuConfig>,
     ) -> Result<Self, FeagiError> {
-        use tracing::info;
-        
-        // Determine backend based on GPU config
-        let (backend_type, backend_config) = if let Some(config) = gpu_config {
-            info!("🎮 GPU Configuration:");
-            info!("   GPU enabled: {}", config.use_gpu);
-            info!("   Hybrid mode: {}", config.hybrid_enabled);
-            info!("   GPU threshold: {} synapses", config.gpu_threshold);
-            info!("   GPU memory fraction: {:.1}%", config.gpu_memory_fraction * 100.0);
-            config.to_backend_selection()
-        } else {
-            info!("   No GPU config provided, using CPU backend");
-            (crate::backend::BackendType::CPU, crate::backend::BackendConfig::default())
-        };
-        
-        info!("   Creating backend: {}", backend_type);
-        
-        // Create backend
-        let backend = crate::backend::create_backend(
-            backend_type,
-            neuron_capacity,
-            synapse_capacity,
-            &backend_config,
-        ).expect("Failed to create compute backend");
-        
-        info!("   ✓ Backend selected: {}", backend.backend_name());
-        
         // Create storage using runtime
         let neuron_storage = runtime.create_neuron_storage(neuron_capacity)
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to create neuron storage: {:?}", e)))?;
@@ -215,44 +189,22 @@ impl<R: Runtime, T: NeuralValue> RustNPU<R, T> {
     /// 
     /// This is a convenience wrapper for tests that don't need GPU configuration.
     /// Production code should use `new()` with explicit GPU config.
-    /// Create a new Rust NPU with CPU-only backend (convenience method)
-    ///
-    /// # Type Parameters
-    /// - `R: Runtime`: Runtime implementation
-    /// - `T: NeuralValue`: Numeric type for membrane potentials (f32, INT8Value, etc.)
-    pub fn new_cpu_only(
-        runtime: R,
+}
+
+// Backward compatibility: StdRuntime with f32 and CPUBackend
+impl RustNPU<StdRuntime, f32, crate::backend::CPUBackend> {
+    /// Create a new Rust NPU with StdRuntime, f32, and CPU backend (backward compatible)
+    pub fn new_std_cpu(
         neuron_capacity: usize,
         synapse_capacity: usize,
         fire_ledger_window: usize,
     ) -> Result<Self, FeagiError> {
-        Self::new(runtime, neuron_capacity, synapse_capacity, fire_ledger_window, None)
+        let backend = crate::backend::CPUBackend::new();
+        Self::new(StdRuntime::new(), backend, neuron_capacity, synapse_capacity, fire_ledger_window)
     }
 }
 
-// Backward compatibility: StdRuntime with f32
-impl RustNPU<StdRuntime, f32> {
-    /// Create a new Rust NPU with StdRuntime and f32 (backward compatible)
-    pub fn new_std(
-        neuron_capacity: usize,
-        synapse_capacity: usize,
-        fire_ledger_window: usize,
-        gpu_config: Option<&crate::backend::GpuConfig>,
-    ) -> Result<Self, FeagiError> {
-        Self::new(StdRuntime::new(), neuron_capacity, synapse_capacity, fire_ledger_window, gpu_config)
-    }
-    
-    /// Create a new Rust NPU with StdRuntime, f32, and CPU-only (backward compatible)
-    pub fn new_std_cpu_only(
-        neuron_capacity: usize,
-        synapse_capacity: usize,
-        fire_ledger_window: usize,
-    ) -> Result<Self, FeagiError> {
-        Self::new_std(neuron_capacity, synapse_capacity, fire_ledger_window, None)
-    }
-}
-
-impl<R: Runtime, T: NeuralValue> RustNPU<R, T> {
+impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>> RustNPU<R, T, B> {
 
     /// Set power injection amount (lock-free atomic operation)
     pub fn set_power_amount(&self, amount: f32) {

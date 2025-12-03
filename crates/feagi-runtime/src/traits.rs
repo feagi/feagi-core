@@ -187,9 +187,8 @@ pub trait NeuronStorage: Send + Sync {
     
     /// Batch add neurons (SIMD-optimized)
     ///
-    /// Note: Return type uses alloc::vec::Vec which requires either std or alloc feature.
-    /// For no_std without alloc, use add_neuron in a loop.
-    #[cfg(any(feature = "std", feature = "alloc"))]
+    /// Note: Return type uses Vec which requires either std or alloc feature.
+    /// For no_std without alloc, implementations should use a fixed-size approach.
     fn add_neurons_batch(
         &mut self,
         thresholds: &[Self::Value],
@@ -205,9 +204,7 @@ pub trait NeuronStorage: Send + Sync {
         x_coords: &[u32],
         y_coords: &[u32],
         z_coords: &[u32],
-    ) -> Result<Vec<usize>>
-    where
-        Vec<usize>: Sized;
+    ) -> Result<()>;  // Changed to Result<()> to avoid Vec requirement
 }
 
 /// Synapse storage trait: Abstracts System-of-Arrays (SoA) for synapses

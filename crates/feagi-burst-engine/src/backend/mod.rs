@@ -27,6 +27,7 @@ pub use wgpu_backend::WGPUBackend;
 pub use cuda_backend::{CUDABackend, is_cuda_available, enumerate_cuda_devices};
 
 use feagi_neural::types::*;
+use feagi_runtime::{NeuronStorage, SynapseStorage};
 use tracing::info;
 
 /// Result of processing a burst on any backend
@@ -66,18 +67,21 @@ pub struct BurstTiming {
 /// not the entire neuron array. This enables efficient sparse processing on GPU.
 /// Compute backend trait (CPU, GPU, NPU, Hailo)
 ///
-/// Generic over `T: NeuralValue` to support different quantization levels
-pub trait ComputeBackend<T: NeuralValue>: Send + Sync {
+/// Generic over:
+/// - `T: NeuralValue` - Numeric type for membrane potentials
+/// - `N: NeuronStorage` - Neuron storage implementation
+/// - `S: SynapseStorage` - Synapse storage implementation
+pub trait ComputeBackend<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage>: Send + Sync {
     /// Get backend type name for logging/debugging
     fn backend_name(&self) -> &str;
 
     /// Process synaptic propagation: fired neurons → membrane potential updates
     ///
-    /// **FCL Integration**: Results are accumulated into FCL, not written to NeuronArray.
+    /// **FCL Integration**: Results are accumulated into FCL, not written to storage.
     ///
     /// # Arguments
     /// * `fired_neurons` - Neurons that fired in previous burst (sparse list)
-    /// * `synapse_array` - All synapses (SoA structure)
+    /// * `synapse_storage` - All synapses (trait-based storage)
     /// * `fcl` - Fire Candidate List (accumulates synaptic contributions)
     ///
     /// # Returns
@@ -85,7 +89,7 @@ pub trait ComputeBackend<T: NeuralValue>: Send + Sync {
     fn process_synaptic_propagation(
         &mut self,
         fired_neurons: &[u32],
-        synapse_array: &SynapseArray,
+        synapse_storage: &S,
         fcl: &mut FireCandidateList,
     ) -> Result<usize>;
 
@@ -96,7 +100,7 @@ pub trait ComputeBackend<T: NeuralValue>: Send + Sync {
     ///
     /// # Arguments
     /// * `fcl` - Fire Candidate List (which neurons to process)
-    /// * `neuron_array` - Full neuron array (read state, update refractory/consecutive counts)
+    /// * `neuron_storage` - Full neuron storage (trait-based)
     /// * `burst_count` - Current burst number (for excitability randomness)
     ///
     /// # Returns
@@ -104,7 +108,7 @@ pub trait ComputeBackend<T: NeuralValue>: Send + Sync {
     fn process_neural_dynamics(
         &mut self,
         fcl: &FireCandidateList,
-        neuron_array: &mut NeuronArray<T>,
+        neuron_storage: &mut N,
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)>;
 

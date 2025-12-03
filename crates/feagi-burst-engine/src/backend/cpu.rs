@@ -17,6 +17,7 @@ use super::ComputeBackend;
 use crate::neural_dynamics;
 use feagi_neural::models::{NeuronModel, LIFModel};
 use feagi_neural::types::*;
+use feagi_runtime::{NeuronStorage, SynapseStorage};
 
 /// CPU backend with SIMD optimization (current implementation)
 pub struct CPUBackend {
@@ -48,7 +49,7 @@ impl Default for CPUBackend {
     }
 }
 
-impl<T: NeuralValue> ComputeBackend<T> for CPUBackend {
+impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBackend<T, N, S> for CPUBackend {
     fn backend_name(&self) -> &str {
         &self.name
     }
@@ -56,7 +57,7 @@ impl<T: NeuralValue> ComputeBackend<T> for CPUBackend {
     fn process_synaptic_propagation(
         &mut self,
         fired_neurons: &[u32],
-        synapse_array: &SynapseArray,
+        synapse_storage: &S,
         fcl: &mut FireCandidateList,
     ) -> Result<usize> {
         // FCL-aware: Accumulate synaptic contributions into FCL
@@ -99,7 +100,7 @@ impl<T: NeuralValue> ComputeBackend<T> for CPUBackend {
     fn process_neural_dynamics(
         &mut self,
         fcl: &FireCandidateList,
-        neuron_array: &mut NeuronArray<T>,
+        neuron_storage: &mut N,
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // FCL-aware: Process only FCL neurons (existing neural_dynamics already supports this!)

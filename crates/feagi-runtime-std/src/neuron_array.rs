@@ -369,7 +369,6 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         Ok(idx)
     }
     
-    #[cfg(any(feature = "std", feature = "alloc"))]
     fn add_neurons_batch(
         &mut self,
         thresholds: &[Self::Value],
@@ -385,7 +384,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         x_coords: &[u32],
         y_coords: &[u32],
         z_coords: &[u32],
-    ) -> Result<Vec<usize>> {
+    ) -> Result<()> {
         let n = thresholds.len();
         
         // Validate all slices are same length
@@ -398,9 +397,8 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             return Err(RuntimeError::InvalidParameters("Batch neuron creation: all slices must have same length".into()));
         }
         
-        let mut indices = Vec::with_capacity(n);
         for i in 0..n {
-            let idx = self.add_neuron(
+            self.add_neuron(
                 thresholds[i],
                 leak_coefficients[i],
                 resting_potentials[i],
@@ -415,10 +413,9 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
                 y_coords[i],
                 z_coords[i],
             )?;
-            indices.push(idx);
         }
         
-        Ok(indices)
+        Ok(())
     }
 }
 

@@ -1032,7 +1032,7 @@ impl WGPUBackend {
 
     /// Download FCL potentials from GPU atomic buffer and populate CPU-side FCL
     fn download_fcl_from_gpu(&self, fcl: &mut FireCandidateList) -> Result<()> {
-        use feagi_types::NeuronId;
+        use feagi_neural::types::NeuronId;
 
         // Get the FCL atomic potentials buffer
         let fcl_atomic_buffer = self.buffers.fcl_potentials_atomic.as_ref()

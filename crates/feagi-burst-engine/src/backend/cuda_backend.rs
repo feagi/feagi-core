@@ -33,7 +33,8 @@
 //! - Any future NVIDIA GPU with CUDA support
 
 use crate::backend::ComputeBackend;
-use feagi_neural::types::{Error, Result, FireCandidateList, NeuronArray, NeuronId, SynapseArray};
+use feagi_neural::types::{Error, Result, FireCandidateList, NeuronId};
+use feagi_runtime::{NeuronStorage, SynapseStorage};
 use std::sync::Arc;
 use tracing::{info, warn, debug};
 
