@@ -12,7 +12,7 @@
 //!
 //! Uses stack-allocated arrays for predictable memory usage.
 
-use feagi_synapse::{compute_synaptic_contribution, SynapseType};
+use feagi_neural::synapse::{compute_synaptic_contribution, SynapseType};
 
 /// Fixed-size synapse array for embedded systems
 ///

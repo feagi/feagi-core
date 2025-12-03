@@ -79,8 +79,8 @@ members = [
     "crates/feagi-config",             # Configuration loader (TOML + overrides)
     
     # === Platform-Agnostic Core (NEW - Phase 1) ===
-    "crates/feagi-neural",             # Pure neural dynamics (no_std)
-    "crates/feagi-synapse",            # Pure synaptic algorithms (no_std)
+    "crates/feagi-neural",             # Pure neural + synaptic algorithms (no_std)
+    "crates/feagi-synapse",            # DEPRECATED - merged into feagi-neural (remove after Phase 2a)
     
     # === Runtime Abstraction (NEW - Refactor Phase 1) ===
     "crates/feagi-runtime",            # Runtime trait definitions (no_std)

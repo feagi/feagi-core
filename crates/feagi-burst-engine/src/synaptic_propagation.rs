@@ -42,8 +42,8 @@ use ahash::AHashMap;
 use feagi_types::*;
 use rayon::prelude::*;
 
-// Use platform-agnostic synaptic algorithms (Phase 1 - NO DUPLICATION)
-use feagi_synapse::{compute_synaptic_contribution, SynapseType as FeagiSynapseType};
+// Use platform-agnostic synaptic algorithms (now in feagi-neural)
+use feagi_neural::synapse::{compute_synaptic_contribution, SynapseType as FeagiSynapseType};
 
 /// Synapse lookup index: maps source neuron → list of synapse indices
 pub type SynapseIndex = AHashMap<NeuronId, Vec<usize>>;

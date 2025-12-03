@@ -9,9 +9,8 @@ description = "High-performance burst engine for FEAGI neural processing"
 
 [dependencies]
 feagi-types = { path = "../feagi-types" }
-# Platform-agnostic core algorithms (Phase 1)
+# Platform-agnostic core algorithms (includes synapse logic now)
 feagi-neural = { path = "../feagi-neural" }
-feagi-synapse = { path = "../feagi-synapse" }
 feagi-state-manager = { path = "../feagi-state-manager" }  # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime

@@ -36,9 +36,17 @@ extern crate std;
 pub mod dynamics;
 pub mod firing;
 pub mod utils;
+pub mod synapse;
+pub mod models;
 
 pub use dynamics::*;
 pub use firing::*;
 pub use utils::*;
+
+// Re-export synapse module for convenience
+pub use synapse::{SynapseType, compute_synaptic_contribution, compute_synaptic_contributions_batch};
+
+// Re-export neuron models for convenience
+pub use models::{NeuronModel, ModelParameters, LIFModel, LIFParameters};
 
 

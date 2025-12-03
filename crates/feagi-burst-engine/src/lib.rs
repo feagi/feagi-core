@@ -40,7 +40,7 @@ pub mod fire_structures;
 pub mod fq_sampler;
 pub mod motor_shm_writer;
 pub mod neural_dynamics;
-pub mod neuron_models; // Neuron model trait system (LIF, Izhikevich, etc.)
+// Neuron models moved to feagi-neural::models (Phase 2b)
 pub mod npu;
 pub mod parameter_update_queue;
 pub mod sensory; // Rust sensory injection system
@@ -54,7 +54,7 @@ pub use fire_ledger::*;
 pub use fire_structures::*;
 pub use fq_sampler::*;
 pub use neural_dynamics::*;
-pub use neuron_models::*;
+// Neuron models now in feagi-neural::models
 pub use npu::*;
 pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
 pub use sensory::*;

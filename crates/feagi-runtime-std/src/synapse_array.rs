@@ -13,7 +13,7 @@
 //! Uses `Vec` and `HashMap` for dynamic growth and fast lookups.
 
 use ahash::AHashMap;
-use feagi_synapse::{compute_synaptic_contribution, SynapseType};
+use feagi_neural::synapse::{compute_synaptic_contribution, SynapseType};
 use rayon::prelude::*;
 
 /// Dynamic synapse array for desktop/server environments
