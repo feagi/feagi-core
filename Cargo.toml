@@ -49,23 +49,23 @@ pns = ["feagi-pns"]
 agent-sdk = ["feagi-agent-sdk"]
 
 [dependencies]
-# Foundation
-feagi-types = { version = "2.0", path = "crates/feagi-types" }
-feagi-evo = { version = "2.0", path = "crates/feagi-evo" }
+# Foundation (vendored into feagi-core when published)
+feagi-types = { version = "2.0.0", path = "crates/feagi-types" }
+feagi-evo = { version = "2.0.0", path = "crates/feagi-evo" }
 serde_json = "1.0"
 
-# Infrastructure
-feagi-state-manager = { version = "2.0", path = "crates/feagi-state-manager", optional = true }
+# Infrastructure (vendored)
+feagi-state-manager = { version = "2.0.0", path = "crates/feagi-state-manager", optional = true }
 
-# Algorithms
-feagi-burst-engine = { version = "2.0", path = "crates/feagi-burst-engine", optional = true }
-feagi-bdu = { version = "2.0", path = "crates/feagi-bdu", optional = true }
-feagi-plasticity = { version = "2.0", path = "crates/feagi-plasticity", optional = true }
-feagi-connectome-serialization = { version = "2.0", path = "crates/feagi-connectome-serialization", optional = true }
+# Algorithms (vendored)
+feagi-burst-engine = { version = "2.0.0", path = "crates/feagi-burst-engine", optional = true }
+feagi-bdu = { version = "2.0.0", path = "crates/feagi-bdu", optional = true }
+feagi-plasticity = { version = "2.0.0", path = "crates/feagi-plasticity", optional = true }
+feagi-connectome-serialization = { version = "2.0.0", path = "crates/feagi-connectome-serialization", optional = true }
 
-# I/O (will move to feagi-io later)
-feagi-pns = { version = "2.0", path = "crates/feagi-pns", optional = true }
-feagi-agent-sdk = { version = "2.0", path = "crates/feagi-agent-sdk", optional = true }
+# I/O (vendored)
+feagi-pns = { version = "2.0.0", path = "crates/feagi-pns", optional = true }
+feagi-agent-sdk = { version = "2.0.0", path = "crates/feagi-agent-sdk", optional = true }
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
