@@ -4,6 +4,7 @@ version = "2.0.0"
 edition = "2021"
 authors = ["FEAGI Team"]
 description = "Brain Development Utilities - Synaptogenesis and Connectivity"
+publish = false
 
 [lib]
 crate-type = ["rlib"]

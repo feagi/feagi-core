@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "High-performance burst engine for FEAGI neural processing"
+publish = false
 
 [dependencies]
 feagi-types = { path = "../feagi-types" }
