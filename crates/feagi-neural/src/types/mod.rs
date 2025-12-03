@@ -19,6 +19,7 @@ pub mod spatial;
 pub mod error;
 pub mod fire;
 pub mod brain;
+pub mod id_manager;
 
 // Re-export commonly used types
 pub use ids::{NeuronId, SynapseId};
@@ -28,6 +29,7 @@ pub use spatial::{Dimensions, Position};
 pub use error::{FeagiError, Result, Error};
 pub use fire::{FireCandidateList, FireQueue, FireLedger};
 pub use brain::{CorticalArea, BrainRegion, BrainRegionHierarchy, RegionType};
+pub use id_manager::NeuronArrayType;
 
 // Note: SynapseType is in crate::synapse module (shared with algorithms)
 // Import it here for convenience

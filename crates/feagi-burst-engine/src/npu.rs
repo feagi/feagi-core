@@ -36,7 +36,7 @@ use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::neural_dynamics::*;
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
-use feagi_types::*;
+use feagi_neural::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use tracing::{debug, info, warn, error};
 

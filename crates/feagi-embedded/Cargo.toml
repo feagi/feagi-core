@@ -13,9 +13,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Core FEAGI crates (always included)
-feagi-types = { path = "../feagi-types" }
-feagi-neural = { path = "../feagi-neural" }
-feagi-synapse = { path = "../feagi-synapse" }
+feagi-neural = { path = "../feagi-neural" }  # Includes types + synapse + models
 feagi-runtime-embedded = { path = "../feagi-runtime-embedded" }
 
 # Error handling

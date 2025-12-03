@@ -14,7 +14,7 @@
 //! Supports Metal (macOS), Vulkan (Linux), DirectX 12 (Windows).
 
 use super::ComputeBackend;
-use feagi_types::*;
+use feagi_neural::types::*;
 use tracing::info;
 
 /// WGPU backend for GPU acceleration

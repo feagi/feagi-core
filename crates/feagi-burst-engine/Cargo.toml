@@ -8,8 +8,7 @@ repository.workspace = true
 description = "High-performance burst engine for FEAGI neural processing"
 
 [dependencies]
-feagi-types = { path = "../feagi-types" }
-# Platform-agnostic core algorithms (includes synapse logic now)
+# Platform-agnostic core (types + algorithms + models, includes synapse logic)
 feagi-neural = { path = "../feagi-neural" }
 feagi-state-manager = { path = "../feagi-state-manager" }  # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)

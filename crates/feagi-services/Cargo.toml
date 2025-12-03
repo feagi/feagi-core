@@ -13,7 +13,7 @@ name = "feagi_services"
 
 [dependencies]
 # Core FEAGI crates (backend)
-feagi-types = { path = "../feagi-types" }
+feagi-neural = { path = "../feagi-neural" }  # For types
 feagi-evo = { path = "../feagi-evo" }
 feagi-bdu = { path = "../feagi-bdu" }
 feagi-burst-engine = { path = "../feagi-burst-engine" }

@@ -14,7 +14,8 @@
 //! Used for synaptic propagation and archiving to Fire Ledger.
 
 use ahash::AHashMap;
-use feagi_types::{CorticalAreaId, NeuronId};
+use feagi_neural::types::NeuronId;
+// Note: CorticalAreaId removed - use feagi_data_structures::CorticalID
 
 /// A single neuron that fired in the current burst
 #[derive(Debug, Clone)]

@@ -13,7 +13,7 @@
 //! Uses stack-allocated arrays for predictable memory usage.
 
 use feagi_neural::{update_neuron_lif, is_refractory};
-use feagi_types::NeuralValue;
+use feagi_neural::types::NeuralValue;
 
 /// Fixed-size neuron array for embedded systems
 ///

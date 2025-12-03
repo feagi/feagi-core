@@ -21,7 +21,7 @@
 //! 3. **Cache-friendly**: Sequential access patterns, no pointer chasing
 
 use crate::fire_structures::{FireQueue, FiringNeuron};
-use feagi_types::*;
+use feagi_neural::types::*;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
 use feagi_neural::{

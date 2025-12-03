@@ -11,7 +11,7 @@ PERFORMANCE TARGET: <100ms for 128×128×3 → 128×128×1 projection (400x fast
 */
 
 use crate::types::{BduError, BduResult, Position};
-use feagi_types::Dimensions;
+use feagi_neural::types::Dimensions;
 use rayon::prelude::*;
 
 /// Parameters for projection mapping

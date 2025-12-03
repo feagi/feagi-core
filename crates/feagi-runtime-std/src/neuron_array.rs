@@ -13,7 +13,7 @@
 //! Uses `Vec` for dynamic growth and Rayon for parallel processing.
 
 use feagi_neural::{update_neuron_lif, is_refractory};
-use feagi_types::NeuralValue;
+use feagi_neural::types::NeuralValue;
 use rayon::prelude::*;
 
 /// Dynamic neuron array for desktop/server environments

@@ -16,7 +16,7 @@
 use super::ComputeBackend;
 use crate::neural_dynamics;
 use feagi_neural::models::{NeuronModel, LIFModel};
-use feagi_types::*;
+use feagi_neural::types::*;
 
 /// CPU backend with SIMD optimization (current implementation)
 pub struct CPUBackend {

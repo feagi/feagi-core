@@ -36,7 +36,8 @@ use crate::connectivity::rules::{
     apply_vector_offset, match_patterns_batch, syn_block_connection, syn_expander, syn_projector,
 };
 use crate::types::BduResult;
-use feagi_types::{NeuronId, SynapseType, SynapticConductance, SynapticWeight};
+use feagi_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_neural::SynapseType;
 // use feagi_burst_engine::npu::RustNPU; // Now using DynamicNPU
 
 /// Apply projector morphology directly on NPU

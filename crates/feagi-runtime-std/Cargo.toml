@@ -12,9 +12,8 @@ default = ["std"]
 std = []
 
 [dependencies]
-# Platform-agnostic core
-feagi-types = { path = "../feagi-types" }
-feagi-neural = { path = "../feagi-neural" }  # Now includes synapse logic
+# Platform-agnostic core (types + algorithms)
+feagi-neural = { path = "../feagi-neural" }
 
 # Standard library dependencies
 rayon = { workspace = true }  # Parallel processing

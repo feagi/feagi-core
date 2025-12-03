@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{info, warn, debug};
 
-use feagi_types::{BrainRegion, BrainRegionHierarchy, CorticalArea};
+use feagi_neural::types::{BrainRegion, BrainRegionHierarchy, CorticalArea};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::types::{BduError, BduResult, NeuronId};
 

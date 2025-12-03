@@ -46,7 +46,7 @@ use std::collections::HashMap;
 use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
-use feagi_types::{BrainRegion, CorticalArea, RegionType, Dimensions};
+use feagi_neural::types::{BrainRegion, CorticalArea, RegionType, Dimensions};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Parsed genome data ready for ConnectomeManager

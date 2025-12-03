@@ -9,7 +9,7 @@
 extern crate std;
 
 #[cfg(feature = "std")]
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 use super::NeuronId;
 

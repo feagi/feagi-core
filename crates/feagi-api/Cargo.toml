@@ -9,7 +9,7 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 [dependencies]
 # Core FEAGI
 feagi-services = { path = "../feagi-services" }
-feagi-types = { path = "../feagi-types" }
+feagi-neural = { path = "../feagi-neural" }  # For types
 feagi-evo = { path = "../feagi-evo" }  # For embedded default genomes
 feagi-transports = { path = "../feagi-transports", features = ["zmq-server"] }
 feagi-pns = { path = "../feagi-pns" }  # For registration and domain logic

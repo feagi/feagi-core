@@ -14,7 +14,7 @@ std = ["serde"]
 [dependencies]
 # Optional std dependencies
 serde = { workspace = true, optional = true }
-ahash = { workspace = true, optional = true }
+ahash = { workspace = true, optional = true }  # For FireCandidateList
 
 # Temporary during migration (Phase 2c)
 feagi-types = { path = "../feagi-types", optional = true }

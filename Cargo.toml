@@ -75,12 +75,10 @@ feagi-agent-sdk = { version = "2.0.0", path = "crates/feagi-agent-sdk", optional
 resolver = "2"
 members = [
     # === Foundation Layer ===
-    "crates/feagi-types",              # Core data structures (Neuron, Synapse, etc.)
     "crates/feagi-config",             # Configuration loader (TOML + overrides)
     
-    # === Platform-Agnostic Core (NEW - Phase 1) ===
-    "crates/feagi-neural",             # Pure neural + synaptic algorithms (no_std)
-    "crates/feagi-synapse",            # DEPRECATED - merged into feagi-neural (remove after Phase 2a)
+    # === Platform-Agnostic Core ===
+    "crates/feagi-neural",             # ALL neural computation: types + algorithms + models (no_std)
     
     # === Runtime Abstraction (NEW - Refactor Phase 1) ===
     "crates/feagi-runtime",            # Runtime trait definitions (no_std)

@@ -12,9 +12,8 @@ default = []
 std = []
 
 [dependencies]
-# Platform-agnostic core (no_std compatible)
-feagi-types = { path = "../feagi-types" }
-feagi-neural = { path = "../feagi-neural" }  # Now includes synapse logic
+# Platform-agnostic core (no_std compatible, types + algorithms)
+feagi-neural = { path = "../feagi-neural" }
 
 # Embedded dependencies (no_std)
 spin = "0.9"  # Spinlock-based Mutex (no OS required)

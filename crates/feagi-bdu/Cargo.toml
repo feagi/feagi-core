@@ -11,7 +11,7 @@ name = "feagi_bdu"
 
 [dependencies]
 # Core types from existing FEAGI crates
-feagi-types = { path = "../feagi-types" }
+feagi-neural = { path = "../feagi-neural" }  # For types (CorticalArea, Dimensions, etc.)
 feagi-evo = { path = "../feagi-evo" }
 feagi-burst-engine = { path = "../feagi-burst-engine" }
 feagi_data_structures = { workspace = true }

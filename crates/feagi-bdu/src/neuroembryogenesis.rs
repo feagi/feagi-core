@@ -21,7 +21,7 @@ Licensed under the Apache License, Version 2.0
 use std::sync::Arc;
 use parking_lot::RwLock;
 use feagi_evo::RuntimeGenome;
-use feagi_types::{Precision, QuantizationSpec};
+use feagi_neural::types::{Precision, QuantizationSpec};
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
 use tracing::{info, warn, debug, error};
