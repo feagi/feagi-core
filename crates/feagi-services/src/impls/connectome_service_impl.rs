@@ -13,7 +13,8 @@ use crate::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
-use feagi_types::{BrainRegion, CorticalArea, Dimensions, RegionType, decode_cortical_id};
+use feagi_neural::types::{BrainRegion, CorticalArea, Dimensions, RegionType};
+// Note: decode_cortical_id removed - use feagi_data_structures::CorticalID directly
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::collections::HashMap;

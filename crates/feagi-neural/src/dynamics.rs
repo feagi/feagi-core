@@ -18,7 +18,7 @@
 //! Algorithms are generic over `T: NeuralValue` to support multiple numeric
 //! precisions (f32, f16, int8) configured via genome.
 
-use feagi_types::NeuralValue;
+use crate::types::NeuralValue;
 
 /// Update a single LIF (Leaky Integrate-and-Fire) neuron
 ///
@@ -46,7 +46,7 @@ use feagi_types::NeuralValue;
 /// # Example
 /// ```
 /// use feagi_neural::update_neuron_lif;
-/// use feagi_types::NeuralValue;
+/// use crate::types::NeuralValue;
 ///
 /// // Works with f32 (zero-cost)
 /// let mut potential = 0.5f32;
@@ -54,7 +54,7 @@ use feagi_types::NeuralValue;
 /// assert!(fired);
 ///
 /// // Works with INT8 (quantized)
-/// use feagi_types::INT8Value;
+/// use feagi_neural::types::INT8Value;
 /// let mut potential_i8 = INT8Value::from_f32(0.5);
 /// let fired = update_neuron_lif(
 ///     &mut potential_i8,
@@ -267,7 +267,7 @@ mod tests {
     #[test]
     #[ignore] // TODO (Phase 6): Fix INT8 quantization accuracy
     fn test_int8_neuron_fires_when_above_threshold() {
-        use feagi_types::INT8Value;
+        use crate::types::INT8Value;
         
         // Use well-separated values to avoid saturation
         let mut potential = INT8Value::from_f32(-20.0);
@@ -286,7 +286,7 @@ mod tests {
     #[test]
     #[ignore] // TODO (Phase 6): Fix INT8 quantization accuracy
     fn test_int8_neuron_does_not_fire_below_threshold() {
-        use feagi_types::INT8Value;
+        use crate::types::INT8Value;
         
         // Use well-separated values to avoid saturation
         let mut potential = INT8Value::from_f32(-30.0);
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     #[ignore] // TODO (Phase 6): Fix INT8 quantization accuracy
     fn test_int8_leak_application() {
-        use feagi_types::INT8Value;
+        use crate::types::INT8Value;
         
         let mut potential = INT8Value::from_f32(50.0);
         let leak = 0.05f32; // Lose 5%, keep 95%
@@ -320,7 +320,7 @@ mod tests {
     #[test]
     #[ignore] // TODO (Phase 6): Fix INT8 quantization accuracy
     fn test_int8_batch_update() {
-        use feagi_types::INT8Value;
+        use crate::types::INT8Value;
         
         // Use well-separated values to avoid saturation
         let mut potentials = [

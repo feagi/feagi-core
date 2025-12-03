@@ -39,7 +39,7 @@
 //! - Rust Target: <3ms (50-100x speedup)
 
 use ahash::AHashMap;
-use feagi_types::*;
+use feagi_neural::types::*;
 use rayon::prelude::*;
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)

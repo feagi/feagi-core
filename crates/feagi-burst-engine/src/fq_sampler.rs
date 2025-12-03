@@ -271,7 +271,8 @@ impl FQSampler {
 mod tests {
     use super::*;
     use crate::fire_structures::FiringNeuron;
-    use feagi_types::{CorticalAreaId, NeuronId};
+    use feagi_neural::types::NeuronId;
+// Note: CorticalAreaId removed - use feagi_data_structures::CorticalID
 
     #[test]
     fn test_fq_sampler_basic() {

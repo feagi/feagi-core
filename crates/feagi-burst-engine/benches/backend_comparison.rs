@@ -14,7 +14,7 @@
 //! Tests multiple genome sizes to find the crossover point where GPU becomes beneficial.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use feagi_types::{NeuronArray, SynapseArray, FireCandidateList, NeuronId};
+use feagi_neural::types::{NeuronArray, SynapseArray, FireCandidateList, NeuronId};
 
 /// Create a test genome with specified size
 fn create_test_genome(

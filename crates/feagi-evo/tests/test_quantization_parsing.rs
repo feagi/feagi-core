@@ -11,7 +11,7 @@
 //! Test that quantization_precision is correctly parsed from genome JSON
 
 use feagi_evo::genome::loader::load_genome_from_file;
-use feagi_types::{Precision, QuantizationSpec};
+use feagi_neural::types::{Precision, QuantizationSpec};
 use std::path::PathBuf;
 
 #[test]

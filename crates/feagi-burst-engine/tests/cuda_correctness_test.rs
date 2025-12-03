@@ -11,7 +11,7 @@
 #[cfg(all(test, feature = "cuda"))]
 mod cuda_correctness_tests {
     use feagi_burst_engine::backend::{CPUBackend, CUDABackend, ComputeBackend, is_cuda_available};
-    use feagi_types::{FireCandidateList, NeuronArray, SynapseArray, NeuronId};
+    use feagi_neural::types::{FireCandidateList, NeuronArray, SynapseArray, NeuronId};
     
     /// Helper to create a small deterministic test genome
     fn create_test_genome(neuron_count: usize, synapse_count: usize) -> (NeuronArray<f32>, SynapseArray) {

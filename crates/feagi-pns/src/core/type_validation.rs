@@ -19,7 +19,8 @@ Licensed under the Apache License, Version 2.0
 use feagi_data_structures::genomic::cortical_area::{
     CorticalAreaType, IOCorticalAreaDataFlag,
 };
-use feagi_types::{CorticalArea, CorticalTypeAdapter};
+use feagi_neural::types::CorticalArea;
+// Note: CorticalTypeAdapter removed - use feagi_data_structures::CorticalID directly
 
 /// Validation result for agent-area compatibility
 #[derive(Debug, Clone)]

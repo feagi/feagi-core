@@ -14,7 +14,7 @@
 //! - Dispatch overhead
 
 use feagi_burst_engine::{RustNPU, DynamicNPU};
-use feagi_types::{INT8Value, NeuronId};
+use feagi_neural::types::{INT8Value, NeuronId};
 use std::time::Instant;
 
 fn main() {

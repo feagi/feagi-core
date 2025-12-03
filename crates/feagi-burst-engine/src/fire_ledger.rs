@@ -183,7 +183,8 @@ impl CorticalHistory {
 mod tests {
     use super::*;
     use crate::fire_structures::{FireQueue, FiringNeuron};
-    use feagi_types::{CorticalAreaId, NeuronId};
+    use feagi_neural::types::NeuronId;
+// Note: CorticalAreaId removed - use feagi_data_structures::CorticalID
 
     #[test]
     fn test_fire_ledger_basic() {

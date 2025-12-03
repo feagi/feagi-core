@@ -21,7 +21,7 @@
 //!   cargo test --test gpu_synaptic_hash_test --features gpu
 
 use feagi_burst_engine::backend::{create_backend, BackendConfig, BackendType};
-use feagi_types::{FireCandidateList, NeuronArray, SynapseArray};
+use feagi_neural::types::{FireCandidateList, NeuronArray, SynapseArray};
 
 /// Helper: Create test genome
 fn create_test_genome(

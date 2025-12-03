@@ -12,7 +12,8 @@
 //!
 //! Defines the core trait interface that all neuron models must implement.
 
-use feagi_types::*;
+// Neuron models moved to feagi-neural::models (this file is now deprecated)
+// use feagi_types::*;
 
 /// Core trait for neuron model computational behavior
 ///

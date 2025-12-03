@@ -15,7 +15,8 @@ use feagi_data_structures::genomic::cortical_area::{
     CorticalAreaType, IOCorticalAreaDataFlag,
 };
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-use feagi_types::{CorticalArea, CorticalTypeAdapter};
+use feagi_neural::types::CorticalArea;
+// Note: CorticalTypeAdapter removed - use feagi_data_structures::CorticalID directly
 
 /// Convert internal CorticalArea to API CorticalTypeInfo
 ///

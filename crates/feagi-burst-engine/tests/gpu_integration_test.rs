@@ -28,7 +28,7 @@
 #[cfg(feature = "gpu")]
 mod gpu_integration {
     use feagi_burst_engine::backend::{create_backend, BackendType};
-    use feagi_types::{NeuronArray, SynapseArray};
+    use feagi_neural::types::{NeuronArray, SynapseArray};
 
     #[test]
     fn test_gpu_neural_dynamics_small_genome() {
@@ -58,7 +58,7 @@ mod gpu_integration {
         println!("✅ GPU buffers uploaded");
 
         // Create test FCL with some candidates
-        use feagi_types::FireCandidateList;
+        use feagi_neural::types::FireCandidateList;
         let mut fcl = FireCandidateList::new();
 
         // Add 10% of neurons to FCL (simulating realistic burst scenario)
@@ -114,7 +114,7 @@ mod gpu_integration {
 
     /// Helper: Create test neuron array
     fn create_test_neurons(count: usize) -> NeuronArray<f32> {
-        use feagi_types::*;
+        use feagi_neural::types::*;
         use ahash::AHashMap;
 
         NeuronArray {
@@ -142,7 +142,7 @@ mod gpu_integration {
 
     /// Helper: Create test synapse array
     fn create_test_synapses(neuron_count: usize, synapse_count: usize) -> SynapseArray {
-        use feagi_types::*;
+        use feagi_neural::types::*;
         use ahash::AHashMap;
 
         let source_neurons: Vec<u32> = (0..synapse_count)

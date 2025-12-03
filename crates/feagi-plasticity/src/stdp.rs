@@ -13,7 +13,7 @@
 //! Pure functions for computing synaptic weight changes based on spike timing.
 //! RTOS-friendly with deterministic execution and no dynamic allocation in hot paths.
 
-use feagi_types::*;
+use feagi_neural::types::*;
 use std::collections::HashMap;
 
 /// STDP configuration parameters

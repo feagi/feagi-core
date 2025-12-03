@@ -18,7 +18,8 @@
 //! - Fire Ledger history tracking
 
 use feagi_burst_engine::RustNPU;
-use feagi_types::{NeuronId, SynapseType, SynapticConductance, SynapticWeight};
+use feagi_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
+use feagi_neural::SynapseType;
 
 // ═══════════════════════════════════════════════════════════
 // Helper Functions

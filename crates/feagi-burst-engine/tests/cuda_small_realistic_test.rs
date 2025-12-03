@@ -5,7 +5,8 @@
 mod cuda_small_realistic_tests {
     use feagi_burst_engine::backend::{GpuConfig, is_cuda_available};
     use feagi_burst_engine::RustNPU;
-    use feagi_types::{NeuronId, SynapticWeight, SynapticConductance, SynapseType};
+    use feagi_neural::types::{NeuronId, SynapticWeight, SynapticConductance};
+use feagi_neural::SynapseType;
 
     /// Create a small realistic network for fast testing
     fn create_small_network_cpu() -> RustNPU<f32> {

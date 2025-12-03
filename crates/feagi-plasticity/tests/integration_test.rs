@@ -199,7 +199,7 @@ fn test_neuron_id_allocation_integration() {
 
 #[test]
 fn test_stdp_with_pattern_detection() {
-    use feagi_types::NeuronId;
+    use feagi_neural::types::NeuronId;
 
     let config = STDPConfig::default();
 

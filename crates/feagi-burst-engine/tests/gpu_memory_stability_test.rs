@@ -20,7 +20,7 @@
 //!   cargo test --test gpu_memory_stability_test --features gpu
 
 use feagi_burst_engine::backend::{create_backend, BackendConfig, BackendType};
-use feagi_types::{FireCandidateList, NeuronArray, NeuronId, SynapseArray};
+use feagi_neural::types::{FireCandidateList, NeuronArray, NeuronId, SynapseArray};
 
 /// Helper: Create test genome
 fn create_test_genome(

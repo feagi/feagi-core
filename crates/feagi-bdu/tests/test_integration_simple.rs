@@ -7,7 +7,8 @@
 
 use feagi_bdu::ConnectomeManager;
 use feagi_burst_engine::RustNPU;
-use feagi_types::{CorticalArea, Dimensions, AreaType};
+use feagi_neural::types::{CorticalArea, Dimensions};
+// Note: AreaType may not exist - check if needed
 use std::sync::{Arc, Mutex};
 
 /// Helper to create an isolated test manager with NPU

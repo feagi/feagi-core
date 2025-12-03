@@ -57,7 +57,8 @@
 //! and the GPU shaders to keep them synchronized.
 
 use super::traits::{NeuronModel, ModelParameters};
-use feagi_types::*;
+// Neuron models moved to feagi-neural::models (this file is now deprecated)
+// use feagi_types::*;
 
 /// LIF (Leaky Integrate-and-Fire) neuron model
 ///

@@ -8,7 +8,7 @@
 //! GPU Performance Test - Measures actual speedup with full GPU pipeline
 
 use feagi_burst_engine::*;
-use feagi_types::*;
+use feagi_neural::types::*;
 use std::time::Instant;
 
 /// Create test genome with specified size

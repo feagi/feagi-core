@@ -20,7 +20,7 @@
 //!   cargo test --test gpu_error_handling_test --features gpu
 
 use feagi_burst_engine::backend::{create_backend, BackendConfig, BackendType};
-use feagi_types::{NeuronArray, SynapseArray};
+use feagi_neural::types::{NeuronArray, SynapseArray};
 
 /// Helper: Create test genome
 fn create_test_genome(
@@ -155,7 +155,7 @@ fn test_invalid_capacity() {
 #[cfg(feature = "gpu")]
 #[test]
 fn test_gpu_buffer_size_validation() {
-    use feagi_types::FireCandidateList;
+    use feagi_neural::types::FireCandidateList;
 
     let config = BackendConfig::default();
     let (neuron_array, synapse_array) = create_test_genome(1000, 100);
@@ -184,7 +184,7 @@ fn test_gpu_buffer_size_validation() {
 #[cfg(feature = "gpu")]
 #[test]
 fn test_empty_fired_neurons() {
-    use feagi_types::FireCandidateList;
+    use feagi_neural::types::FireCandidateList;
 
     let config = BackendConfig::default();
     let (neuron_array, synapse_array) = create_test_genome(1000, 100);
