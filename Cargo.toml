@@ -82,6 +82,9 @@ members = [
     "crates/feagi-neural",             # Pure neural dynamics (no_std)
     "crates/feagi-synapse",            # Pure synaptic algorithms (no_std)
     
+    # === Runtime Abstraction (NEW - Refactor Phase 1) ===
+    "crates/feagi-runtime",            # Runtime trait definitions (no_std)
+    
     # === Runtime Adapters (NEW - Phase 2) ===
     "crates/feagi-runtime-std",        # Desktop/Server (Vec, Rayon)
     "crates/feagi-runtime-embedded",   # ESP32/RTOS (fixed arrays, no_std)
