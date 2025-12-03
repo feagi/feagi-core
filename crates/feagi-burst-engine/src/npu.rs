@@ -40,6 +40,10 @@ use feagi_neural::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use tracing::{debug, info, warn, error};
 
+// Import Runtime trait and StdRuntime for backward compatibility
+use feagi_runtime::{Runtime, NeuronStorage, SynapseStorage};
+use feagi_runtime_std::StdRuntime;
+
 /// Burst processing result
 #[derive(Debug, Clone)]
 pub struct BurstResult {
@@ -61,8 +65,9 @@ pub struct BurstResult {
 
 /// Complete Rust Neural Processing Unit with Fine-Grained Locking
 /// 
-/// ## Generic Type Parameter
+/// ## Generic Type Parameters
 /// 
+/// - **R: Runtime**: The runtime implementation (StdRuntime, EmbeddedRuntime, CudaRuntime, etc.)
 /// - **T: NeuralValue**: The numeric type for membrane potentials, thresholds, and resting potentials
 ///   - `f32`: 32-bit floating point (default, highest precision)
 ///   - `INT8Value`: 8-bit integer (memory efficient, 42% memory reduction)
@@ -72,9 +77,9 @@ pub struct BurstResult {
 /// 
 /// This structure uses fine-grained locking to enable concurrent operations:
 /// 
-/// - **RwLock<NeuronArray<T>>**: Multiple readers (burst processing reads many neurons),
+/// - **RwLock<R::NeuronStorage<T>>**: Multiple readers (burst processing reads many neurons),
 ///   exclusive writer (neurogenesis, parameter updates)
-/// - **RwLock<SynapseArray>**: Multiple readers (burst processing reads synapses),
+/// - **RwLock<R::SynapseStorage>**: Multiple readers (burst processing reads synapses),
 ///   exclusive writer (synaptogenesis, plasticity)
 /// - **Mutex<FireStructures>**: Exclusive access (FCL clear, FQ swap, sensory injection)
 /// - **AtomicU64**: Lock-free stats (burst_count, neuron_count, etc.)
@@ -91,10 +96,13 @@ pub struct BurstResult {
 /// With 30 Hz burst rate + 30 FPS video injection:
 /// - **Before**: All operations serialized on one mutex (API unresponsive)
 /// - **After**: Concurrent sensory injection + burst processing + API queries
-pub struct RustNPU<T: NeuralValue> {
+pub struct RustNPU<R: Runtime, T: NeuralValue> {
+    // Runtime (provides platform-specific storage)
+    runtime: std::sync::Arc<R>,
+    
     // Core data structures (RwLock: many readers, one writer)
-    pub(crate) neuron_array: std::sync::RwLock<NeuronArray<T>>,
-    pub(crate) synapse_array: std::sync::RwLock<SynapseArray>,
+    pub(crate) neuron_storage: std::sync::RwLock<R::NeuronStorage<T>>,
+    pub(crate) synapse_storage: std::sync::RwLock<R::SynapseStorage>,
 
     // Fire structures (Mutex: exclusive access for FCL/FQ operations)
     pub(crate) fire_structures: std::sync::Mutex<FireStructures>,
@@ -129,23 +137,26 @@ pub(crate) struct FireStructures {
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
 }
 
-impl<T: NeuralValue> RustNPU<T> {
+impl<R: Runtime, T: NeuralValue> RustNPU<R, T> {
     /// Create a new Rust NPU with specified capacities
     ///
     /// # Type Parameters
+    /// - `R: Runtime`: Runtime implementation (StdRuntime, EmbeddedRuntime, etc.)
     /// - `T: NeuralValue`: Numeric type for membrane potentials (f32, INT8Value, etc.)
     ///
     /// # Arguments
+    /// * `runtime` - Runtime implementation providing storage
     /// * `neuron_capacity` - Maximum number of neurons
     /// * `synapse_capacity` - Maximum number of synapses
     /// * `fire_ledger_window` - Fire ledger history window size
     /// * `gpu_config` - Optional GPU configuration (None = default to CPU)
     pub fn new(
+        runtime: R,
         neuron_capacity: usize,
         synapse_capacity: usize,
         fire_ledger_window: usize,
         gpu_config: Option<&crate::backend::GpuConfig>,
-    ) -> Self {
+    ) -> Result<Self, FeagiError> {
         use tracing::info;
         
         // Determine backend based on GPU config
