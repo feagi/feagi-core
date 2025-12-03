@@ -312,10 +312,9 @@ FEAGI Core is under active development. The core APIs are stabilizing, but break
 
 ## Community and Support
 
-- **Discord**: [discord.gg/feagi](https://discord.gg/feagi)
-- **Website**: [feagi.org](https://feagi.org)
-- **Documentation**: [docs.feagi.org](https://docs.feagi.org)
-- **Issues**: [GitHub Issues](https://github.com/Neuraville/FEAGI-2.0/issues)
+- **Discord**: [discord.gg/neuraville](https://discord.gg/PTVC8fyGN8)
+- **Website**: [neuraville.com/feagi](https://neuraville.com/feagi)
+- **Issues**: [GitHub Issues](https://github.com/feagi/feagi-core/issues)
 - **Email**: feagi@neuraville.com
 
 ## License
