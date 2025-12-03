@@ -90,7 +90,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
 
             // Count refractory neurons (neuron_id == array index)
             let idx = neuron_id.0 as usize;
-            if idx < neuron_array.count() && neuron_array.refractory_countdowns()[idx] > 0 {
+            if idx < neuron_array.count() && neuron_array.refractory_countdowns_mut()[idx] > 0 {
                 refractory += 1;
             }
         }
@@ -135,7 +135,7 @@ fn process_single_neuron<T: NeuralValue>(
     // if neuron_id.0 == 16438 {
     //     println!("[RUST-16438] Burst {}: START - countdown={}, count={}/{}, potential={:.6}, threshold={:.6}, candidate={:.6}",
     //              burst_count,
-    //              neuron_array.refractory_countdowns()[idx],
+    //              neuron_array.refractory_countdowns_mut()[idx],
     //              neuron_array.consecutive_fire_counts()[idx],
     //              neuron_array.consecutive_fire_limits()[idx],
     //              neuron_array.membrane_potentials()[idx],
@@ -147,12 +147,12 @@ fn process_single_neuron<T: NeuralValue>(
     // CRITICAL: Decrement countdown, but BLOCK THIS ENTIRE BURST
     // Semantics: refractory_period=1 → fire, block 1 burst, fire
     // When countdown=1, this burst is blocked, then countdown becomes 0 for next burst
-    if neuron_array.refractory_countdowns()[idx] > 0 {
-        let _old_countdown = neuron_array.refractory_countdowns()[idx];
+    if neuron_array.refractory_countdowns_mut()[idx] > 0 {
+        let _old_countdown = neuron_array.refractory_countdowns_mut()[idx];
 
         // Decrement countdown for next burst
-        neuron_array.refractory_countdowns()[idx] -= 1;
-        let new_countdown = neuron_array.refractory_countdowns()[idx];
+        neuron_array.refractory_countdowns_mut()[idx] -= 1;
+        let new_countdown = neuron_array.refractory_countdowns_mut()[idx];
 
         // Check if extended refractory just expired → reset consecutive fire count
         // This happens AFTER this burst is blocked, ready for next burst
@@ -163,7 +163,7 @@ fn process_single_neuron<T: NeuralValue>(
         {
             // Reset happens when countdown expires (Option A logic)
             let _old_count = neuron_array.consecutive_fire_counts()[idx];
-            neuron_array.consecutive_fire_counts()[idx] = 0;
+            neuron_array.consecutive_fire_counts_mut()[idx] = 0;
             // if neuron_id.0 == 16438 {
             //     println!("[RUST-16438] → BLOCKED by refrac (countdown {} → {}), count reset {} → 0",
             //              old_countdown, new_countdown, old_count);
@@ -179,7 +179,7 @@ fn process_single_neuron<T: NeuralValue>(
     // 2. Add candidate potential (matches Python: add BEFORE checking threshold)
     let old_potential = neuron_array.membrane_potentials()[idx];
     let current_potential = old_potential.saturating_add(candidate_potential);
-    neuron_array.membrane_potentials()[idx] = current_potential;
+    neuron_array.membrane_potentials_mut()[idx] = current_potential;
 
     // 3. Check threshold (matches Python: "Check firing conditions BEFORE decay")
     let threshold = neuron_array.thresholds()[idx];
@@ -199,7 +199,7 @@ fn process_single_neuron<T: NeuralValue>(
             // Neuron exceeded consecutive fire limit - prevent firing
             // CRITICAL: Reset count to 0 (matches Python SIMD: all non-firing neurons get count reset)
             // This allows the neuron to fire again after being blocked for one burst
-            neuron_array.consecutive_fire_counts()[idx] = 0;
+            neuron_array.consecutive_fire_counts_mut()[idx] = 0;
 
             // CRITICAL FIX: Don't apply leak when blocked by consecutive fire limit
             // The neuron will enter refractory period, and leak will be applied during refractory
@@ -227,10 +227,10 @@ fn process_single_neuron<T: NeuralValue>(
 
         if should_fire {
             // Reset membrane potential
-            neuron_array.membrane_potentials()[idx] = T::zero();
+            neuron_array.membrane_potentials_mut()[idx] = T::zero();
 
             // Increment consecutive fire count
-            neuron_array.consecutive_fire_counts()[idx] += 1;
+            neuron_array.consecutive_fire_counts_mut()[idx] += 1;
             let new_count = neuron_array.consecutive_fire_counts()[idx];
 
             // Apply refractory period (additive if hit consecutive fire limit)
@@ -246,7 +246,7 @@ fn process_single_neuron<T: NeuralValue>(
                 // e.g., refrac=1, snooze=2, cfc_limit=3 → 1_1_1___1_1_1___
                 let snooze_period = neuron_array.snooze_periods()[idx];
                 let countdown = refractory_period + snooze_period;
-                neuron_array.refractory_countdowns()[idx] = countdown;
+                neuron_array.refractory_countdowns_mut()[idx] = countdown;
                 // if neuron_id.0 == 16438 {
                 //     println!("[RUST-16438] → FIRED! count {} → {} (HIT LIMIT), extended refrac={}+{}={}",
                 //              new_count-1, new_count, refractory_period, snooze_period, countdown);
@@ -256,7 +256,7 @@ fn process_single_neuron<T: NeuralValue>(
                 // Normal fire → normal refractory only
                 // countdown = refrac (bursts to skip)
                 // e.g., refrac=1 → countdown=1 → fire, 1 blocked, fire
-                neuron_array.refractory_countdowns()[idx] = refractory_period;
+                neuron_array.refractory_countdowns_mut()[idx] = refractory_period;
                 // if neuron_id.0 == 16438 {
                 //     println!("[RUST-16438] → FIRED! count {} → {}, refrac={}",
                 //              new_count-1, new_count, refractory_period);
@@ -288,12 +288,12 @@ fn process_single_neuron<T: NeuralValue>(
     // Reset consecutive fire count (matches Python SIMD implementation)
     let consecutive_fire_limit = neuron_array.consecutive_fire_limits()[idx];
     if consecutive_fire_limit > 0 {
-        neuron_array.consecutive_fire_counts()[idx] = 0;
+        neuron_array.consecutive_fire_counts_mut()[idx] = 0;
     }
 
     // Apply LIF leak (using platform-agnostic function from feagi-neural)
     let leak_coefficient = neuron_array.leak_coefficients()[idx];
-    apply_leak(&mut neuron_array.membrane_potentials()[idx], leak_coefficient);
+    apply_leak(&mut neuron_array.membrane_potentials_mut()[idx], leak_coefficient);
 
     None
 }
