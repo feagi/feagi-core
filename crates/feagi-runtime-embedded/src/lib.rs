@@ -35,9 +35,11 @@ extern crate std;
 
 pub mod neuron_array;
 pub mod synapse_array;
+pub mod runtime;
 
 pub use neuron_array::NeuronArray;
 pub use synapse_array::SynapseArray;
+pub use runtime::EmbeddedRuntime;
 
 /// Runtime configuration for embedded platforms
 #[derive(Debug, Clone, Copy)]

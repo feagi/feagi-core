@@ -24,9 +24,11 @@
 
 pub mod neuron_array;
 pub mod synapse_array;
+pub mod runtime;
 
 pub use neuron_array::NeuronArray;
 pub use synapse_array::SynapseArray;
+pub use runtime::StdRuntime;
 
 /// Runtime configuration for std platform
 #[derive(Debug, Clone)]

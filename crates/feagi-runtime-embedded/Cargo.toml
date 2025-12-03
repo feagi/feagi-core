@@ -12,6 +12,9 @@ default = []
 std = []
 
 [dependencies]
+# Runtime trait definitions
+feagi-runtime = { path = "../feagi-runtime" }
+
 # Platform-agnostic core (no_std compatible, types + algorithms)
 feagi-neural = { path = "../feagi-neural" }
 
