@@ -9,7 +9,7 @@ pub struct NeuronVoxelXYZP {
     /// coordinate within the cortical area.
     pub neuron_voxel_coordinate: NeuronVoxelCoordinate,
     /// potential (voltage) of the voxel
-    pub potential: f32
+    pub potential: f32 // TODO: We may decided to have multiple ways to hold potential
 }
 
 impl NeuronVoxelXYZP {

@@ -65,11 +65,16 @@ pub(crate) fn encode_unsigned_percentage_to_linear_neuron_z_index(val: &Percenta
 pub(crate) fn encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(replace_val: &Percentage, number_neurons_along_z: u32, neuron_indexes_along_z: &mut Vec<u32>) {
     neuron_indexes_along_z.clear();
     let mut processing: f32 = replace_val.get_as_0_1();
-    for z in 0..number_neurons_along_z {
+    if processing == 0.0 {
+        // In the case of 0, lets push the positive smallest value they have
+        neuron_indexes_along_z.push(number_neurons_along_z - 1);
+        return;
+    }
+    for z in 1..(number_neurons_along_z + 1) {
         let compare: f32 = 0.5f32.powi(z as i32);
         if processing >= compare {
-            processing - compare;
-            neuron_indexes_along_z.push(z);
+            processing -= compare;
+            neuron_indexes_along_z.push(z - 1);
         }
     }
 }
@@ -92,23 +97,32 @@ pub(crate) fn encode_signed_percentage_to_fractional_exponential_neuron_z_indexe
     neuron_indexes_along_z_negative.clear();
 
     let mut processing: f32 = replace_val.get_as_m1_1();
+    if processing == 0.0 {
+        // In the case of 0, lets push both the positive and negative smallest value they have
+        neuron_indexes_along_z_positive.push(number_neurons_along_z - 1);
+        neuron_indexes_along_z_negative.push(number_neurons_along_z - 1);
+        return;
+    }
+
     if processing < 0.0f32 {
-        processing *= -1.0; // make positive
-        for z in 0..number_neurons_along_z {
+        // negative non-zero
+        processing *= -1.0; // make positive once
+        for z in 1..(number_neurons_along_z + 1) {
             let compare: f32 = 0.5f32.powi(z as i32);
-            if processing > compare {
-                processing - compare;
-                neuron_indexes_along_z_negative.push(z);
+            if processing >= compare {
+                processing -= compare;
+                neuron_indexes_along_z_negative.push(z - 1);
             }
         }
         return;
     }
     else {
-        for z in 0..number_neurons_along_z {
-            let compare: f32 = 0.5f32.powi(z as i32);
-            if processing > compare {
-                processing - compare;
-                neuron_indexes_along_z_positive.push(z);
+        // positive non-zero
+        for z in 1..(number_neurons_along_z + 1) {
+            let compare: f32 = (0.5f32.powi(z as i32));
+            if processing >= compare {
+                processing -= compare;
+                neuron_indexes_along_z_positive.push(z - 1);
             }
         }
         return;
@@ -243,10 +257,11 @@ mod tests {
             let mut neuron_indexes = Vec::new();
             
             encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(&percentage, z_max_depth, &mut neuron_indexes);
-            assert_eq!(neuron_indexes.len(), 0, "Zero should produce no active neurons");
+            assert_eq!(neuron_indexes.len(), 1, "Zero should produce 1 neuron");
+            assert_eq!(neuron_indexes[0], z_max_depth - 1, "The neuron should be at the min value");
             
             decode_unsigned_percentage_from_fractional_exponential_neurons(&neuron_indexes, &mut percentage);
-            assert!((percentage.get_as_0_1() - 0.0).abs() < tolerance, "Round trip should preserve 0.0");
+            assert!((percentage.get_as_0_1() - (0.5f32.powi(z_max_depth as i32))).abs() < tolerance, "Round trip should preserve close to 0");
         }
         
         // Test encode/decode unsigned percentage with fractional neurons - value 0.5
@@ -289,8 +304,8 @@ mod tests {
             let mut neuron_indexes_neg = Vec::new();
             
             encode_signed_percentage_to_fractional_exponential_neuron_z_indexes(&percentage, z_max_depth, &mut neuron_indexes_pos, &mut neuron_indexes_neg);
-            assert_eq!(neuron_indexes_pos.len(), 0, "Zero should have no positive neurons");
-            assert_eq!(neuron_indexes_neg.len(), 0, "Zero should have no negative neurons");
+            assert_eq!(neuron_indexes_pos.len(), 1, "Zero should have 1 positive neuron");
+            assert_eq!(neuron_indexes_neg.len(), 1, "Zero should have 1 negative neuron");
             
             decode_signed_percentage_from_fractional_exponential_neurons(&neuron_indexes_pos, &neuron_indexes_neg, &mut percentage);
             assert!((percentage.get_as_m1_1() - 0.0).abs() < tolerance, "Round trip should preserve 0.0");
@@ -343,7 +358,7 @@ mod tests {
         
         // Test encode/decode signed percentage with fractional neurons - value -1.0
         {
-            let mut percentage = SignedPercentage::new_from_m1_1(0.0).unwrap();
+            let mut percentage = SignedPercentage::new_from_m1_1(-1.0).unwrap();
             let mut neuron_indexes_pos = Vec::new();
             let mut neuron_indexes_neg = Vec::new();
             
