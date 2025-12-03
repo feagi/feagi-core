@@ -16,8 +16,6 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::neuron_voxel_coding::xyzp::decoders::*;
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder};
 
-
-
 macro_rules! motor_unit_functions {
     (
         MotorCorticalUnit {
