@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Platform-agnostic neural dynamics algorithms for FEAGI"
-publish = false
 
 [features]
 default = []

@@ -5,7 +5,6 @@ edition = "2021"
 rust-version = "1.75"
 license = "Apache-2.0"
 description = "Transport abstraction layer for FEAGI - supports ZMQ, UDP, and shared memory for both client and server"
-publish = false
 repository = "https://github.com/feagi/feagi"
 keywords = ["feagi", "transport", "zmq", "udp", "neuromorphic"]
 categories = ["network-programming", "science"]

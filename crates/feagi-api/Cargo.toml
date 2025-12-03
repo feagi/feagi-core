@@ -5,7 +5,6 @@ edition = "2021"
 authors = ["FEAGI Team"]
 license = "Apache-2.0"
 description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
-publish = false
 
 [dependencies]
 # Core FEAGI

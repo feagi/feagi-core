@@ -1575,6 +1575,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37909eebbb50d72f9059c3b6d82c0463f2ff062c9e95845c43a6c9c0355411be"
 
 [[package]]
+name = "feagi"
+version = "2.0.0"
+dependencies = [
+ "feagi-agent-sdk",
+ "feagi-bdu",
+ "feagi-burst-engine",
+ "feagi-connectome-serialization",
+ "feagi-evo",
+ "feagi-plasticity",
+ "feagi-pns",
+ "feagi-state-manager",
+ "feagi-types",
+ "serde_json",
+]
+
+[[package]]
 name = "feagi-agent-sdk"
 version = "2.0.0"
 dependencies = [
@@ -1712,22 +1728,6 @@ dependencies = [
  "serde",
  "tempfile",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "feagi-core"
-version = "2.0.0"
-dependencies = [
- "feagi-agent-sdk",
- "feagi-bdu",
- "feagi-burst-engine",
- "feagi-connectome-serialization",
- "feagi-evo",
- "feagi-plasticity",
- "feagi-pns",
- "feagi-state-manager",
- "feagi-types",
- "serde_json",
 ]
 
 [[package]]

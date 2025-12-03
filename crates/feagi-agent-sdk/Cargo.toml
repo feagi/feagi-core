@@ -4,7 +4,6 @@ version = "2.0.0"
 edition = "2021"
 authors = ["FEAGI Team"]
 description = "Client SDK for building FEAGI agents in Rust"
-publish = false
 license = "Apache-2.0"
 readme = "README.md"
 

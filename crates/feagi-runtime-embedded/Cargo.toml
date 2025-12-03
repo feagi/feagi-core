@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Embedded runtime adapter for FEAGI (ESP32, RTOS, no_std)"
-publish = false
 
 [features]
 default = []

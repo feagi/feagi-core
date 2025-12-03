@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Standard runtime adapter for FEAGI (Desktop/Server)"
-publish = false
 
 [features]
 default = ["std"]

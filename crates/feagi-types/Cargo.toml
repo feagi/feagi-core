@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Core types for FEAGI neural processing framework"
-publish = false
 
 [dependencies]
 thiserror.workspace = true

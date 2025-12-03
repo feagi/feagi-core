@@ -4,7 +4,6 @@ version = "2.0.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "Runtime state management for FEAGI - cross-platform, RTOS-compatible"
-publish = false
 repository = "https://github.com/Neuraville/FEAGI-2.0"
 authors = ["Neuraville Inc."]
 

@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Connectome serialization/deserialization for FEAGI inference engine"
-publish = false
 
 [dependencies]
 feagi-types = { path = "../feagi-types" }

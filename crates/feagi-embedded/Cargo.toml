@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "Platform abstraction and implementations for FEAGI embedded systems"
-publish = false
 
 [lib]
 name = "feagi_embedded"

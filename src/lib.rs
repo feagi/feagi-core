@@ -11,7 +11,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi-core = "2.0"  # Default: std + full features
+//! feagi = "2.0"  # Umbrella crate (default: std + full features)
 //! ```
 //!
 //! ## Feature Flags
@@ -41,11 +41,11 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi-core = "2.0"
+//! feagi = "2.0"
 //! ```
 //!
 //! ```rust,no_run
-//! use feagi_core::prelude::*;
+//! use feagi::prelude::*;
 //!
 //! // Create NPU
 //! let mut npu = RustNPU::new_cpu_only(100_000, 1_000_000, 20);
@@ -74,12 +74,12 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi-core = { version = "2.0", features = ["burst-engine", "serialization"] }
+//! feagi = { version = "2.0", features = ["burst-engine", "serialization"] }
 //! ```
 //!
 //! ```rust,no_run
-//! use feagi_core::burst_engine::RustNPU;
-//! use feagi_core::serialization::load_connectome;
+//! use feagi::burst_engine::RustNPU;
+//! use feagi::serialization::load_connectome;
 //!
 //! // Load pre-trained brain
 //! let snapshot = load_connectome("brain.connectome")?;
@@ -97,7 +97,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi-core = { version = "2.0", features = ["wasm", "compute"], default-features = false }
+//! feagi = { version = "2.0", features = ["wasm", "compute"], default-features = false }
 //! ```
 //!
 //! ## Architecture

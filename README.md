@@ -1,6 +1,6 @@
-# FEAGI Core
+# FEAGI
 
-High-performance Rust libraries for bio-inspired neural computation and evolutionary artificial general intelligence.
+Framework for Evolutionary Artificial General Intelligence - High-performance Rust libraries for bio-inspired neural computation.
 
 ## What is FEAGI?
 
@@ -29,14 +29,22 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi-core = "2.0"
+feagi = "2.0"  # Umbrella crate (includes everything)
 ```
 
-Or with specific features:
+Or use individual building blocks:
 
 ```toml
 [dependencies]
-feagi-core = { version = "2.0", features = ["gpu"] }
+feagi-burst-engine = "2.0"  # Just the NPU
+feagi-types = "2.0"          # Just core types
+```
+
+Or umbrella with specific features:
+
+```toml
+[dependencies]
+feagi = { version = "2.0", features = ["gpu"] }
 ```
 
 ## Quick Start
@@ -44,7 +52,7 @@ feagi-core = { version = "2.0", features = ["gpu"] }
 ### Create and Run a Neural Network
 
 ```rust
-use feagi_core::prelude::*;
+use feagi::prelude::*;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize neural processing unit
@@ -64,8 +72,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 #![no_std]
-use feagi_core::neural::NeuronDynamics;
-use feagi_core::runtime_embedded::EmbeddedRuntime;
+use feagi_neural::NeuronDynamics;
+use feagi_runtime_embedded::EmbeddedRuntime;
 
 // Configure for resource-constrained systems
 let runtime = EmbeddedRuntime::new(1000, 5000);
@@ -159,7 +167,7 @@ FEAGI Core delivers significant performance improvements over interpreted implem
 
 ## Feature Flags
 
-### Main Crate (feagi-core)
+### Umbrella Crate (feagi)
 
 ```toml
 [features]
@@ -252,7 +260,7 @@ cargo build --workspace --release
 
 ## Documentation
 
-- **API Reference**: [docs.rs/feagi-core](https://docs.rs/feagi-core)
+- **API Reference**: [docs.rs/feagi](https://docs.rs/feagi)
 - **Architecture Guide**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 Generate local documentation:

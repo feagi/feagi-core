@@ -5,7 +5,6 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Unified observability infrastructure for FEAGI (logging, telemetry, profiling)"
-publish = false
 
 [dependencies]
 # Logging
