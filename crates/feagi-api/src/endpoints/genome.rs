@@ -535,7 +535,7 @@ pub async fn get_amalgamation_history_exact(State(_state): State<ApiState>) -> A
 #[utoipa::path(get, path = "/v1/genome/cortical_template", tag = "genome")]
 pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
-        IOCorticalAreaDataType, FrameChangeHandling, PercentageNeuronPositioning
+        IOCorticalAreaDataFlag, FrameChangeHandling, PercentageNeuronPositioning
     };
     use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use serde_json::json;
@@ -543,27 +543,27 @@ pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<
     let mut templates = HashMap::new();
     
     // Helper to convert data type to human-readable format
-    let data_type_to_json = |dt: IOCorticalAreaDataType| -> serde_json::Value {
+    let data_type_to_json = |dt: IOCorticalAreaDataFlag| -> serde_json::Value {
         let (variant, frame, positioning) = match dt {
-            IOCorticalAreaDataType::Percentage(f, p) => 
+            IOCorticalAreaDataFlag::Percentage(f, p) => 
                 ("Percentage", f, Some(p)),
-            IOCorticalAreaDataType::Percentage2D(f, p) => 
+            IOCorticalAreaDataFlag::Percentage2D(f, p) => 
                 ("Percentage2D", f, Some(p)),
-            IOCorticalAreaDataType::Percentage3D(f, p) => 
+            IOCorticalAreaDataFlag::Percentage3D(f, p) => 
                 ("Percentage3D", f, Some(p)),
-            IOCorticalAreaDataType::Percentage4D(f, p) => 
+            IOCorticalAreaDataFlag::Percentage4D(f, p) => 
                 ("Percentage4D", f, Some(p)),
-            IOCorticalAreaDataType::SignedPercentage(f, p) => 
+            IOCorticalAreaDataFlag::SignedPercentage(f, p) => 
                 ("SignedPercentage", f, Some(p)),
-            IOCorticalAreaDataType::SignedPercentage2D(f, p) => 
+            IOCorticalAreaDataFlag::SignedPercentage2D(f, p) => 
                 ("SignedPercentage2D", f, Some(p)),
-            IOCorticalAreaDataType::SignedPercentage3D(f, p) => 
+            IOCorticalAreaDataFlag::SignedPercentage3D(f, p) => 
                 ("SignedPercentage3D", f, Some(p)),
-            IOCorticalAreaDataType::SignedPercentage4D(f, p) => 
+            IOCorticalAreaDataFlag::SignedPercentage4D(f, p) => 
                 ("SignedPercentage4D", f, Some(p)),
-            IOCorticalAreaDataType::CartesianPlane(f) => 
+            IOCorticalAreaDataFlag::CartesianPlane(f) => 
                 ("CartesianPlane", f, None),
-            IOCorticalAreaDataType::Misc(f) => 
+            IOCorticalAreaDataFlag::Misc(f) => 
                 ("Misc", f, None),
         };
         
@@ -597,7 +597,7 @@ pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<
         let mut data_types = vec![];
         for frame in [FrameChangeHandling::Absolute, FrameChangeHandling::Incremental] {
             for positioning in [PercentageNeuronPositioning::Linear, PercentageNeuronPositioning::Fractional] {
-                let dt = IOCorticalAreaDataType::SignedPercentage(frame, positioning);
+                let dt = IOCorticalAreaDataFlag::SignedPercentage(frame, positioning);
                 data_types.push(data_type_to_json(dt));
             }
         }
@@ -627,7 +627,7 @@ pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<
         let mut data_types = vec![];
         for frame in [FrameChangeHandling::Absolute, FrameChangeHandling::Incremental] {
             for positioning in [PercentageNeuronPositioning::Linear, PercentageNeuronPositioning::Fractional] {
-                let dt = IOCorticalAreaDataType::Percentage(frame, positioning);
+                let dt = IOCorticalAreaDataFlag::Percentage(frame, positioning);
                 data_types.push(data_type_to_json(dt));
             }
         }

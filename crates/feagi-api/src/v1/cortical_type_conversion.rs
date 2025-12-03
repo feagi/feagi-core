@@ -12,7 +12,7 @@ Licensed under the Apache License, Version 2.0
 
 use super::cortical_area_dtos::CorticalTypeInfo;
 use feagi_data_structures::genomic::cortical_area::{
-    CorticalAreaType, IOCorticalAreaDataType,
+    CorticalAreaType, IOCorticalAreaDataFlag,
 };
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_types::{CorticalArea, CorticalTypeAdapter};
@@ -41,11 +41,11 @@ pub fn to_cortical_type_info(area: &CorticalArea) -> Option<CorticalTypeInfo> {
     })
 }
 
-/// Extract detailed information from IOCorticalAreaDataType
+/// Extract detailed information from IOCorticalAreaDataFlag
 fn extract_io_type_details(
-    io_type: &IOCorticalAreaDataType,
+    io_type: &IOCorticalAreaDataFlag,
 ) -> (Option<String>, Option<String>, Option<serde_json::Value>) {
-    use IOCorticalAreaDataType::*;
+    use IOCorticalAreaDataFlag::*;
     
     match io_type {
         CartesianPlane(frame_handling) => (
@@ -169,7 +169,7 @@ mod tests {
         .unwrap();
 
         area = area.with_cortical_type_new(CorticalAreaType::BrainInput(
-            IOCorticalAreaDataType::CartesianPlane(FrameChangeHandling::Absolute),
+            IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute),
         ));
 
         let type_info = to_cortical_type_info(&area).unwrap();
@@ -191,7 +191,7 @@ mod tests {
         .unwrap();
 
         area = area.with_cortical_type_new(CorticalAreaType::BrainOutput(
-            IOCorticalAreaDataType::Percentage(
+            IOCorticalAreaDataFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning::Linear,
             ),

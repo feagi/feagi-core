@@ -17,7 +17,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use feagi_data_structures::genomic::cortical_area::{
-    CorticalAreaType, IOCorticalAreaDataType,
+    CorticalAreaType, IOCorticalAreaDataFlag,
 };
 use feagi_types::{CorticalArea, CorticalTypeAdapter};
 
@@ -60,7 +60,7 @@ impl ValidationResult {
 /// Validate that an agent's sensory capability is compatible with a cortical area
 ///
 /// Phase 4: Basic compatibility checks
-/// Future: Add detailed validation based on IOCorticalAreaDataType
+/// Future: Add detailed validation based on IOCorticalAreaDataFlag
 pub fn validate_sensory_compatibility(
     agent_id: &str,
     agent_modality: &str,
@@ -75,12 +75,12 @@ pub fn validate_sensory_compatibility(
             ));
         }
 
-        // Phase 4: Provide recommendations based on IOCorticalAreaDataType
+        // Phase 4: Provide recommendations based on IOCorticalAreaDataFlag
         if let CorticalAreaType::BrainInput(io_type) = cortical_type {
             let mut result = ValidationResult::compatible();
 
             match io_type {
-                IOCorticalAreaDataType::CartesianPlane(_) => {
+                IOCorticalAreaDataFlag::CartesianPlane(_) => {
                     if !agent_modality.to_lowercase().contains("vision")
                         && !agent_modality.to_lowercase().contains("camera")
                     {
@@ -90,8 +90,8 @@ pub fn validate_sensory_compatibility(
                         ));
                     }
                 }
-                IOCorticalAreaDataType::Percentage(_, _)
-                | IOCorticalAreaDataType::SignedPercentage(_, _) => {
+                IOCorticalAreaDataFlag::Percentage(_, _)
+                | IOCorticalAreaDataFlag::SignedPercentage(_, _) => {
                     result = result.with_recommendation(format!(
                         "Area {} uses percentage encoding - ensure data is normalized 0-100%",
                         area.cortical_id
@@ -111,7 +111,7 @@ pub fn validate_sensory_compatibility(
 /// Validate that an agent's motor capability is compatible with a cortical area
 ///
 /// Phase 4: Basic compatibility checks
-/// Future: Add detailed validation based on IOCorticalAreaDataType
+/// Future: Add detailed validation based on IOCorticalAreaDataFlag
 pub fn validate_motor_compatibility(
     agent_id: &str,
     agent_modality: &str,
@@ -126,13 +126,13 @@ pub fn validate_motor_compatibility(
             ));
         }
 
-        // Phase 4: Provide recommendations based on IOCorticalAreaDataType
+        // Phase 4: Provide recommendations based on IOCorticalAreaDataFlag
         if let CorticalAreaType::BrainOutput(io_type) = cortical_type {
             let mut result = ValidationResult::compatible();
 
             match io_type {
-                IOCorticalAreaDataType::Percentage(_, _)
-                | IOCorticalAreaDataType::SignedPercentage(_, _) => {
+                IOCorticalAreaDataFlag::Percentage(_, _)
+                | IOCorticalAreaDataFlag::SignedPercentage(_, _) => {
                     result = result.with_recommendation(format!(
                         "Area {} outputs percentage values (0-100%) - ensure actuators are calibrated accordingly",
                         area.cortical_id
@@ -161,12 +161,12 @@ pub fn get_recommended_buffer_size(area: &CorticalArea) -> usize {
             _ => None,
         } {
             return match io_type {
-                IOCorticalAreaDataType::CartesianPlane(_) => {
+                IOCorticalAreaDataFlag::CartesianPlane(_) => {
                     // Vision typically needs larger buffers
                     area.dimensions.volume() * 4 // 4 bytes per voxel
                 }
-                IOCorticalAreaDataType::Percentage(_, _)
-                | IOCorticalAreaDataType::SignedPercentage(_, _) => {
+                IOCorticalAreaDataFlag::Percentage(_, _)
+                | IOCorticalAreaDataFlag::SignedPercentage(_, _) => {
                     // Percentage encoding is compact
                     area.dimensions.volume() * 2 // 2 bytes per voxel
                 }
@@ -194,7 +194,7 @@ pub fn should_use_compression(area: &CorticalArea) -> bool {
             _ => None,
         } {
             return match io_type {
-                IOCorticalAreaDataType::CartesianPlane(_) => {
+                IOCorticalAreaDataFlag::CartesianPlane(_) => {
                     // Vision data benefits from compression
                     area.dimensions.volume() > 1000
                 }
@@ -229,7 +229,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
         .unwrap();
 
         area = area.with_cortical_type_new(CorticalAreaType::BrainInput(
-            IOCorticalAreaDataType::CartesianPlane(
+            IOCorticalAreaDataFlag::CartesianPlane(
                 feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute,
             ),
         ));
@@ -257,7 +257,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
         .unwrap();
 
         area = area.with_cortical_type_new(CorticalAreaType::BrainOutput(
-            IOCorticalAreaDataType::Percentage(
+            IOCorticalAreaDataFlag::Percentage(
                 feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute,
                 feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning::Linear,
             ),
@@ -280,7 +280,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
         .unwrap();
 
         area = area.with_cortical_type_new(CorticalAreaType::BrainInput(
-            IOCorticalAreaDataType::CartesianPlane(
+            IOCorticalAreaDataFlag::CartesianPlane(
                 feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute,
             ),
         ));
@@ -302,7 +302,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
         .unwrap();
 
         large_area = large_area.with_cortical_type_new(CorticalAreaType::BrainInput(
-            IOCorticalAreaDataType::CartesianPlane(
+            IOCorticalAreaDataFlag::CartesianPlane(
                 feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute,
             ),
         ));

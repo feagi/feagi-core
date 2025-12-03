@@ -21,7 +21,7 @@ Licensed under the Apache License, Version 2.0
 
 use feagi_data_structures::genomic::cortical_area::{
     CorticalAreaType, CoreCorticalType, CustomCorticalType, MemoryCorticalType,
-    IOCorticalAreaDataType,
+    IOCorticalAreaDataFlag,
 };
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
@@ -67,10 +67,10 @@ impl CorticalTypeAdapter {
         match cortical_group.to_uppercase().as_str() {
             "CORE" => Ok(CorticalAreaType::Core(CoreCorticalType::Power)),
             "IPU" => Ok(CorticalAreaType::BrainInput(
-                IOCorticalAreaDataType::CartesianPlane(FrameChangeHandling::Absolute)
+                IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute)
             )),
             "OPU" => Ok(CorticalAreaType::BrainOutput(
-                IOCorticalAreaDataType::Percentage(
+                IOCorticalAreaDataFlag::Percentage(
                     FrameChangeHandling::Absolute,
                     PercentageNeuronPositioning::Linear
                 )
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn test_is_input() {
         let input_type = CorticalAreaType::BrainInput(
-            IOCorticalAreaDataType::CartesianPlane(FrameChangeHandling::Absolute)
+            IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute)
         );
         assert!(CorticalTypeAdapter::is_input(&input_type));
         assert!(!CorticalTypeAdapter::is_output(&input_type));

@@ -158,7 +158,7 @@ mod tests {
     #[test]
     fn test_validate_ipu_type() {
         let cortical_type = CorticalAreaType::BrainInput(
-            IOCorticalAreaDataType::CartesianPlane(FrameChangeHandling::Absolute)
+            IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute)
         );
         let properties = HashMap::new();
         
