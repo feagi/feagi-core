@@ -1,0 +1,143 @@
+# Copyright 2025 Neuraville Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Staging PR Tests
+
+on:
+  pull_request_target:
+    branches: staging
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test-and-version-check:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout PR code
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.event.pull_request.head.repo.full_name }}
+        ref: ${{ github.event.pull_request.head.ref }}
+    
+    - name: Check version number increase
+      run: |
+        # Get current version from PR branch (HEAD)
+        CURRENT_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        echo "PR branch version: $CURRENT_VERSION"
+        
+        # Download main branch Cargo.toml directly from GitHub
+        echo "Downloading main Cargo.toml..."
+        curl -s https://raw.githubusercontent.com/feagi/feagi-core/refs/heads/main/Cargo.toml -o main_cargo.toml
+        
+        # Download staging branch Cargo.toml directly from GitHub
+        echo "Downloading staging Cargo.toml..."
+        curl -s https://raw.githubusercontent.com/feagi/feagi-core/refs/heads/staging/Cargo.toml -o staging_cargo.toml
+        
+        # Get version from main branch
+        MAIN_VERSION=$(grep '^version = ' main_cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        echo "Main branch version: $MAIN_VERSION"
+        
+        # Get version from staging branch
+        STAGING_VERSION=$(grep '^version = ' staging_cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        echo "Staging branch version: $STAGING_VERSION"
+        
+        # Clean up temporary files
+        rm main_cargo.toml staging_cargo.toml
+        
+        # Parse current PR version
+        if [[ ! "$CURRENT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]]; then
+          echo "❌ Error: PR version must be in format X.Y.Z-beta.N (e.g., 2.0.1-beta.1)"
+          echo "Current version: $CURRENT_VERSION"
+          exit 1
+        fi
+        
+        CURRENT_SEMANTIC="${BASH_REMATCH[1]}"
+        CURRENT_BETA="${BASH_REMATCH[2]}"
+        echo "PR semantic version: $CURRENT_SEMANTIC, beta: $CURRENT_BETA"
+        
+        # Parse main version (should be semantic only)
+        if [[ ! "$MAIN_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          echo "❌ Error: Main version should be semantic only (X.Y.Z)"
+          echo "Main version: $MAIN_VERSION"
+          exit 1
+        fi
+        
+        MAIN_SEMANTIC="$MAIN_VERSION"
+        echo "Main semantic version: $MAIN_SEMANTIC"
+        
+        # Parse staging version
+        STAGING_SEMANTIC=""
+        STAGING_BETA="0"
+        
+        if [[ "$STAGING_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]]; then
+          STAGING_SEMANTIC="${BASH_REMATCH[1]}"
+          STAGING_BETA="${BASH_REMATCH[2]}"
+          echo "Staging semantic version: $STAGING_SEMANTIC, beta: $STAGING_BETA"
+        elif [[ "$STAGING_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          STAGING_SEMANTIC="$STAGING_VERSION"
+          STAGING_BETA="0"
+          echo "Staging semantic version: $STAGING_SEMANTIC, no beta (assuming beta 0)"
+        else
+          echo "❌ Error: Invalid staging version format: $STAGING_VERSION"
+          exit 1
+        fi
+        
+        # Check that PR semantic version is > main semantic version
+        HIGHER_SEMANTIC=$(printf '%s\n%s\n' "$MAIN_SEMANTIC" "$CURRENT_SEMANTIC" | sort -V | tail -n1)
+        if [ "$HIGHER_SEMANTIC" != "$CURRENT_SEMANTIC" ] || [ "$CURRENT_SEMANTIC" = "$MAIN_SEMANTIC" ]; then
+          echo "❌ Error: PR semantic version must be greater than main version"
+          echo "PR semantic: $CURRENT_SEMANTIC, Main semantic: $MAIN_SEMANTIC"
+          exit 1
+        fi
+        
+        # Check beta version requirements
+        if [ "$CURRENT_SEMANTIC" = "$STAGING_SEMANTIC" ]; then
+          # Same semantic version, beta must be higher
+          if [ "$CURRENT_BETA" -le "$STAGING_BETA" ]; then
+            echo "❌ Error: For same semantic version, beta must be higher than staging"
+            echo "PR: $CURRENT_SEMANTIC-beta.$CURRENT_BETA, Staging: $STAGING_SEMANTIC-beta.$STAGING_BETA"
+            exit 1
+          fi
+          echo "✅ Beta version incremented: $STAGING_SEMANTIC-beta.$STAGING_BETA → $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
+        else
+          # Different semantic version, any beta >= 1 is fine
+          if [ "$CURRENT_BETA" -lt "1" ]; then
+            echo "❌ Error: Beta version must be at least 1"
+            echo "PR: $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
+            exit 1
+          fi
+          echo "✅ New semantic version with beta: $MAIN_SEMANTIC → $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
+        fi
+        
+        echo "✅ Version check passed: $STAGING_VERSION → $CURRENT_VERSION"
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    
+    - name: Run tests
+      run: cargo test --workspace --verbose
+    
+    - name: Check if builds
+      run: cargo build --workspace --verbose
+    
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+    
+    - name: Run Clippy
+      run: cargo clippy --workspace --all-targets -- -D warnings
+
