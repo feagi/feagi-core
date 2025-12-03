@@ -14,6 +14,7 @@
 
 use feagi_neural::{update_neuron_lif, is_refractory};
 use feagi_neural::types::NeuralValue;
+use feagi_runtime::{NeuronStorage, Result, RuntimeError};
 use rayon::prelude::*;
 
 /// Dynamic neuron array for desktop/server environments
@@ -29,8 +30,14 @@ pub struct NeuronArray<T: NeuralValue> {
     /// Firing thresholds (quantized to T)
     pub thresholds: Vec<T>,
     
-    /// Leak coefficients (kept as f32 for precision - see QUANTIZATION_ISSUES_LOG.md #1)
+    /// Leak coefficients (kept as f32 for precision)
     pub leak_coefficients: Vec<f32>,
+    
+    /// Resting potentials
+    pub resting_potentials: Vec<T>,
+    
+    /// Neuron types (0=excitatory, 1=inhibitory)
+    pub neuron_types: Vec<i32>,
     
     /// Refractory periods
     pub refractory_periods: Vec<u16>,
@@ -40,6 +47,24 @@ pub struct NeuronArray<T: NeuralValue> {
     
     /// Excitability factors
     pub excitabilities: Vec<f32>,
+    
+    /// Consecutive fire counts
+    pub consecutive_fire_counts: Vec<u16>,
+    
+    /// Consecutive fire limits
+    pub consecutive_fire_limits: Vec<u16>,
+    
+    /// Snooze periods (extended refractory)
+    pub snooze_periods: Vec<u16>,
+    
+    /// Membrane potential charge accumulation flags
+    pub mp_charge_accumulation: Vec<bool>,
+    
+    /// Cortical area IDs
+    pub cortical_areas: Vec<u32>,
+    
+    /// 3D coordinates (flat: [x0,y0,z0, x1,y1,z1, ...])
+    pub coordinates: Vec<u32>,
     
     /// Valid mask
     pub valid_mask: Vec<bool>,
@@ -53,42 +78,44 @@ impl<T: NeuralValue> NeuronArray<T> {
             membrane_potentials: vec![T::zero(); capacity],
             thresholds: vec![T::from_f32(1.0); capacity],
             leak_coefficients: vec![0.1; capacity],
+            resting_potentials: vec![T::zero(); capacity],
+            neuron_types: vec![0; capacity],
             refractory_periods: vec![0; capacity],
             refractory_countdowns: vec![0; capacity],
             excitabilities: vec![1.0; capacity],
+            consecutive_fire_counts: vec![0; capacity],
+            consecutive_fire_limits: vec![0; capacity],
+            snooze_periods: vec![0; capacity],
+            mp_charge_accumulation: vec![true; capacity],
+            cortical_areas: vec![0; capacity],
+            coordinates: vec![0; capacity * 3], // x,y,z per neuron
             valid_mask: vec![false; capacity],
         }
     }
     
-    /// Add a neuron
-    pub fn add_neuron(
+    /// Add a neuron with simplified parameters (for backward compatibility)
+    pub fn add_neuron_simple(
         &mut self,
         threshold: T,
         leak: f32,
         refractory_period: u16,
         excitability: f32,
     ) -> usize {
-        let idx = self.count;
-        
-        // Grow if needed
-        if idx >= self.membrane_potentials.len() {
-            self.membrane_potentials.push(T::zero());
-            self.thresholds.push(threshold);
-            self.leak_coefficients.push(leak);
-            self.refractory_periods.push(refractory_period);
-            self.refractory_countdowns.push(0);
-            self.excitabilities.push(excitability);
-            self.valid_mask.push(true);
-        } else {
-            self.thresholds[idx] = threshold;
-            self.leak_coefficients[idx] = leak;
-            self.refractory_periods[idx] = refractory_period;
-            self.excitabilities[idx] = excitability;
-            self.valid_mask[idx] = true;
-        }
-        
-        self.count += 1;
-        idx
+        // Call the full version with defaults
+        NeuronStorage::add_neuron(
+            self,
+            threshold,
+            leak,
+            T::zero(),  // resting potential
+            0,  // neuron type (excitatory)
+            refractory_period,
+            excitability,
+            0,  // consecutive fire limit (unlimited)
+            0,  // snooze period
+            true,  // mp_charge_accumulation
+            0,  // cortical area
+            0, 0, 0,  // x, y, z coords
+        ).expect("Failed to add neuron")
     }
     
     /// Process burst in parallel using Rayon
@@ -188,6 +215,213 @@ impl<T: NeuralValue> NeuronArray<T> {
     }
 }
 
+// Implement NeuronStorage trait for runtime abstraction
+impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
+    type Value = T;
+    
+    // Read-only property accessors
+    fn membrane_potentials(&self) -> &[Self::Value] {
+        &self.membrane_potentials[..self.count]
+    }
+    
+    fn thresholds(&self) -> &[Self::Value] {
+        &self.thresholds[..self.count]
+    }
+    
+    fn leak_coefficients(&self) -> &[f32] {
+        &self.leak_coefficients[..self.count]
+    }
+    
+    fn resting_potentials(&self) -> &[Self::Value] {
+        &self.resting_potentials[..self.count]
+    }
+    
+    fn neuron_types(&self) -> &[i32] {
+        &self.neuron_types[..self.count]
+    }
+    
+    fn refractory_periods(&self) -> &[u16] {
+        &self.refractory_periods[..self.count]
+    }
+    
+    fn refractory_countdowns(&self) -> &[u16] {
+        &self.refractory_countdowns[..self.count]
+    }
+    
+    fn excitabilities(&self) -> &[f32] {
+        &self.excitabilities[..self.count]
+    }
+    
+    fn consecutive_fire_counts(&self) -> &[u16] {
+        &self.consecutive_fire_counts[..self.count]
+    }
+    
+    fn consecutive_fire_limits(&self) -> &[u16] {
+        &self.consecutive_fire_limits[..self.count]
+    }
+    
+    fn snooze_periods(&self) -> &[u16] {
+        &self.snooze_periods[..self.count]
+    }
+    
+    fn mp_charge_accumulation(&self) -> &[bool] {
+        &self.mp_charge_accumulation[..self.count]
+    }
+    
+    fn cortical_areas(&self) -> &[u32] {
+        &self.cortical_areas[..self.count]
+    }
+    
+    fn coordinates(&self) -> &[u32] {
+        &self.coordinates[..self.count * 3]
+    }
+    
+    fn valid_mask(&self) -> &[bool] {
+        &self.valid_mask[..self.count]
+    }
+    
+    // Mutable property accessors
+    fn membrane_potentials_mut(&mut self) -> &mut [Self::Value] {
+        let count = self.count;
+        &mut self.membrane_potentials[..count]
+    }
+    
+    fn refractory_countdowns_mut(&mut self) -> &mut [u16] {
+        let count = self.count;
+        &mut self.refractory_countdowns[..count]
+    }
+    
+    fn consecutive_fire_counts_mut(&mut self) -> &mut [u16] {
+        let count = self.count;
+        &mut self.consecutive_fire_counts[..count]
+    }
+    
+    fn valid_mask_mut(&mut self) -> &mut [bool] {
+        let count = self.count;
+        &mut self.valid_mask[..count]
+    }
+    
+    // Metadata
+    fn count(&self) -> usize {
+        self.count
+    }
+    
+    fn capacity(&self) -> usize {
+        self.membrane_potentials.len()
+    }
+    
+    // Neuron creation
+    fn add_neuron(
+        &mut self,
+        threshold: Self::Value,
+        leak: f32,
+        resting: Self::Value,
+        neuron_type: i32,
+        refractory_period: u16,
+        excitability: f32,
+        consecutive_fire_limit: u16,
+        snooze_period: u16,
+        mp_charge_accumulation: bool,
+        cortical_area: u32,
+        x: u32,
+        y: u32,
+        z: u32,
+    ) -> Result<usize> {
+        let idx = self.count;
+        
+        // Grow if needed
+        if idx >= self.membrane_potentials.len() {
+            self.membrane_potentials.push(T::zero());
+            self.thresholds.push(threshold);
+            self.leak_coefficients.push(leak);
+            self.resting_potentials.push(resting);
+            self.neuron_types.push(neuron_type);
+            self.refractory_periods.push(refractory_period);
+            self.refractory_countdowns.push(0);
+            self.excitabilities.push(excitability);
+            self.consecutive_fire_counts.push(0);
+            self.consecutive_fire_limits.push(consecutive_fire_limit);
+            self.snooze_periods.push(snooze_period);
+            self.mp_charge_accumulation.push(mp_charge_accumulation);
+            self.cortical_areas.push(cortical_area);
+            self.coordinates.push(x);
+            self.coordinates.push(y);
+            self.coordinates.push(z);
+            self.valid_mask.push(true);
+        } else {
+            self.thresholds[idx] = threshold;
+            self.leak_coefficients[idx] = leak;
+            self.resting_potentials[idx] = resting;
+            self.neuron_types[idx] = neuron_type;
+            self.refractory_periods[idx] = refractory_period;
+            self.excitabilities[idx] = excitability;
+            self.consecutive_fire_limits[idx] = consecutive_fire_limit;
+            self.snooze_periods[idx] = snooze_period;
+            self.mp_charge_accumulation[idx] = mp_charge_accumulation;
+            self.cortical_areas[idx] = cortical_area;
+            self.coordinates[idx * 3] = x;
+            self.coordinates[idx * 3 + 1] = y;
+            self.coordinates[idx * 3 + 2] = z;
+            self.valid_mask[idx] = true;
+        }
+        
+        self.count += 1;
+        Ok(idx)
+    }
+    
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn add_neurons_batch(
+        &mut self,
+        thresholds: &[Self::Value],
+        leak_coefficients: &[f32],
+        resting_potentials: &[Self::Value],
+        neuron_types: &[i32],
+        refractory_periods: &[u16],
+        excitabilities: &[f32],
+        consecutive_fire_limits: &[u16],
+        snooze_periods: &[u16],
+        mp_charge_accumulations: &[bool],
+        cortical_areas: &[u32],
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+    ) -> Result<Vec<usize>> {
+        let n = thresholds.len();
+        
+        // Validate all slices are same length
+        if leak_coefficients.len() != n || resting_potentials.len() != n 
+            || neuron_types.len() != n || refractory_periods.len() != n
+            || excitabilities.len() != n || consecutive_fire_limits.len() != n
+            || snooze_periods.len() != n || mp_charge_accumulations.len() != n
+            || cortical_areas.len() != n || x_coords.len() != n
+            || y_coords.len() != n || z_coords.len() != n {
+            return Err(RuntimeError::InvalidParameters("Batch neuron creation: all slices must have same length".into()));
+        }
+        
+        let mut indices = Vec::with_capacity(n);
+        for i in 0..n {
+            let idx = self.add_neuron(
+                thresholds[i],
+                leak_coefficients[i],
+                resting_potentials[i],
+                neuron_types[i],
+                refractory_periods[i],
+                excitabilities[i],
+                consecutive_fire_limits[i],
+                snooze_periods[i],
+                mp_charge_accumulations[i],
+                cortical_areas[i],
+                x_coords[i],
+                y_coords[i],
+                z_coords[i],
+            )?;
+            indices.push(idx);
+        }
+        
+        Ok(indices)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,7 +429,7 @@ mod tests {
     #[test]
     fn test_add_neuron_f32() {
         let mut array = NeuronArray::<f32>::new(10);
-        let idx = array.add_neuron(1.0, 0.1, 5, 1.0);
+        let idx = array.add_neuron_simple(1.0, 0.1, 5, 1.0);
         assert_eq!(idx, 0);
         assert_eq!(array.count, 1);
     }
@@ -203,8 +437,8 @@ mod tests {
     #[test]
     fn test_process_burst_sequential_f32() {
         let mut array = NeuronArray::<f32>::new(10);
-        array.add_neuron(1.0, 0.1, 5, 1.0);
-        array.add_neuron(1.0, 0.1, 5, 1.0);
+        array.add_neuron_simple(1.0, 0.1, 5, 1.0);
+        array.add_neuron_simple(1.0, 0.1, 5, 1.0);
         
         // High input - should fire
         let inputs = vec![1.5, 0.5]; // First fires, second doesn't
@@ -218,7 +452,7 @@ mod tests {
     fn test_process_burst_parallel_f32() {
         let mut array = NeuronArray::<f32>::new(100);
         for _ in 0..100 {
-            array.add_neuron(1.0, 0.1, 5, 1.0);
+            array.add_neuron_simple(1.0, 0.1, 5, 1.0);
         }
         
         let inputs = vec![1.5; 100]; // All should fire
