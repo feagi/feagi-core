@@ -133,13 +133,13 @@ pub trait ComputeBackend<T: NeuralValue, N: NeuronStorage<Value = T>, S: Synapse
         // Phase 1: Synaptic propagation → FCL
         let synaptic_start = std::time::Instant::now();
         let _synapses_processed =
-            self.process_synaptic_propagation(fired_neurons, synapse_array, fcl)?;
+            self.process_synaptic_propagation(fired_neurons, synapse_storage, fcl)?;
         let synaptic_us = synaptic_start.elapsed().as_micros() as f64;
 
         // Phase 2: Neural dynamics (FCL → fired neurons)
         let neural_start = std::time::Instant::now();
         let (new_fired, processed, in_refractory) =
-            self.process_neural_dynamics(fcl, neuron_array, burst_count)?;
+            self.process_neural_dynamics(fcl, neuron_storage, burst_count)?;
         let neural_us = neural_start.elapsed().as_micros() as f64;
 
         let total_us = start.elapsed().as_micros() as f64;

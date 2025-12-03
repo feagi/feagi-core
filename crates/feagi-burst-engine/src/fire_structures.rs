@@ -54,7 +54,7 @@ impl FireQueue {
 
     /// Add a firing neuron to the queue
     pub fn add_neuron(&mut self, neuron: FiringNeuron) {
-        let cortical_idx = neuron.cortical_area.value();
+        let cortical_idx = neuron.cortical_area.as_u64() as u32;
         self.neurons_by_area
             .entry(cortical_idx)
             .or_insert_with(Vec::new)
