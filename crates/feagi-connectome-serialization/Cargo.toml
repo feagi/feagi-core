@@ -8,7 +8,8 @@ repository.workspace = true
 description = "Connectome serialization/deserialization for FEAGI inference engine"
 
 [dependencies]
-feagi-types = { path = "../feagi-types" }
+# feagi-types merged into feagi-neural (Phase 2)
+# feagi-neural = { path = "../feagi-neural" }  # Not currently needed
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

@@ -18,7 +18,7 @@ Licensed under the Apache License, Version 2.0
 
 use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
 // CorticalTypeAdapter removed - use feagi_data_structures::CorticalID directly
-// use feagi_types::{CorticalTypeAdapter, CorticalTypeError};
+// use feagi_neural::types::{CorticalTypeAdapter, CorticalTypeError};
 use std::collections::HashMap;
 
 /// Parse CorticalAreaType from genome properties

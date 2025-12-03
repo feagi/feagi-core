@@ -130,7 +130,7 @@ impl GenomeSaver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_types::{AreaType, RegionType, Dimensions};
+    use feagi_neural::types::{AreaType, RegionType, Dimensions};
     
     #[test]
     fn test_save_minimal_genome() {

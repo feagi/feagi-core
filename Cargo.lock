@@ -1722,7 +1722,6 @@ version = "2.0.0"
 dependencies = [
  "ahash",
  "bincode",
- "feagi-types",
  "lz4",
  "serde",
  "tempfile",
@@ -1920,19 +1919,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "zmq",
-]
-
-[[package]]
-name = "feagi-types"
-version = "2.0.0"
-dependencies = [
- "ahash",
- "base64 0.22.1",
- "feagi_data_structures",
- "serde",
- "serde_json",
- "thiserror 1.0.69",
- "tracing",
 ]
 
 [[package]]
