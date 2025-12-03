@@ -2,7 +2,6 @@ use crate::{define_xyz_coordinates, define_index};
 
 
 
-//region Cortical Areas
 
 define_xyz_coordinates!(GenomeCoordinate, i32, "GenomeCoordinate",
     "Coordinate local to the FEAGI Genome space.
@@ -16,13 +15,10 @@ Used for absolute positioning of cortical areas within the genome
 and for calculating spatial relationships between different brain regions."
 );
 
-//endregion
 
-//region Agent Device
 
 define_index!(AgentDeviceIndex, u32,
 "An index for a specific channel on a specific cortical group (or multiple). An alternate way to refer to channels"
 );
 
-//endregion
 

@@ -14,6 +14,18 @@ pub enum CorticalAreaType {
     BrainOutput(IOCorticalAreaDataFlag)
 }
 
+impl fmt::Display for CorticalAreaType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CorticalAreaType::Core(c) => write!(f, "Core({})", c),
+            CorticalAreaType::Custom(c) => write!(f, "Custom({})", c),
+            CorticalAreaType::Memory(c) => write!(f, "Memory({})", c),
+            CorticalAreaType::BrainInput(c) => write!(f, "BrainInput({})", c),
+            CorticalAreaType::BrainOutput(c) => write!(f, "BrainOutput({})", c)
+        }
+    }
+}
+
 //region Core
 /// Core cortical area types for fundamental brain functions.
 ///
@@ -65,6 +77,14 @@ pub enum CustomCorticalType {
     LeakyIntegrateFire
 }
 
+impl fmt::Display for CustomCorticalType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::LeakyIntegrateFire => write!(f, "Leaky IntegrateFire"),
+        }
+    }
+}
+
 
 //endregion
 
@@ -74,6 +94,14 @@ pub enum CustomCorticalType {
 pub enum MemoryCorticalType {
     #[default]
     Memory
+}
+
+impl fmt::Display for MemoryCorticalType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Memory => write!(f, "Memory"),
+        }
+    }
 }
 
 //endregion

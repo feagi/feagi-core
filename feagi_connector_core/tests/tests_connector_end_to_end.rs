@@ -112,7 +112,8 @@ mod test_connector_cache_sensor_load_image {
         let bird_image_properties = bird_image.get_image_frame_properties();
         let segmented_bird_properties = SegmentedImageFrameProperties::new(
             &segmented_image_resolutions,
-            &bird_image_properties.get_color_channel_layout(),
+            &bird_image_properties.get_color_ch
+            annel_layout(),
             &bird_image_properties.get_color_channel_layout(),
             &bird_image_properties.get_color_space());
         let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
@@ -230,6 +231,16 @@ mod test_connector_cache_sensor_load_image {
             // let bytes_multi = sensor_cache.sensor_copy_feagi_byte_container();
             // dbg!(bytes_multi.get_number_of_bytes_used());
         }
+    }
+
+}
+
+#[cfg(test)]
+mod test_xyzp_coders {
+
+    #[test]
+    fn test_shared_coder_functions() {
+       // NOTE: the tests for this is in the shared coder func file as the methods are private
     }
 
 

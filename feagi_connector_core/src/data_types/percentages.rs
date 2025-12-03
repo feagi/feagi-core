@@ -232,6 +232,10 @@ impl SignedPercentage {
         self.value > 0.0
     }
 
+    pub fn is_positive_or_zero(&self) -> bool {
+        self.value >= 0.0
+    }
+
     //endregion
 
     //region Update

@@ -1,3 +1,5 @@
+use std::fmt;
+use std::fmt::write;
 use crate::FeagiDataError;
 use crate::genomic::cortical_area::CorticalID;
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
@@ -145,6 +147,24 @@ impl TryFrom<DataTypeConfigurationFlag> for IOCorticalAreaDataFlag {
     }
 }
 
+impl fmt::Display for IOCorticalAreaDataFlag {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            IOCorticalAreaDataFlag::Boolean => write!(f, "Boolean()"),
+            IOCorticalAreaDataFlag::Percentage(frame, percentage) => write!(f, "Percentage({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::Percentage2D(frame, percentage) => write!(f, "Percentage2D({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::Percentage3D(frame, percentage) => write!(f, "Percentage3D({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::Percentage4D(frame, percentage) => write!(f, "Percentage4D({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::SignedPercentage(frame, percentage) => write!(f, "SignedPercentage({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::SignedPercentage2D(frame, percentage) => write!(f, "SignedPercentage2D({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::SignedPercentage3D(frame, percentage) => write!(f, "SignedPercentage3D({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::SignedPercentage4D(frame, percentage) => write!(f, "SignedPercentage4D({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::CartesianPlane(frame) => write!(f, "CartesianPlane({})", frame),
+            IOCorticalAreaDataFlag::Misc(frame) => write!(f, "Misc({})", frame),
+        }
+    }
+}
+
 //region SubEnums
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum PercentageNeuronPositioning {
@@ -153,10 +173,28 @@ pub enum PercentageNeuronPositioning {
     Fractional,
 }
 
+impl fmt::Display for PercentageNeuronPositioning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PercentageNeuronPositioning::Linear => write!(f, "Linear"),
+            PercentageNeuronPositioning::Fractional => write!(f, "Fractional"),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
 pub enum FrameChangeHandling {
     #[default]
     Absolute,
     Incremental,
+}
+
+impl fmt::Display for FrameChangeHandling {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FrameChangeHandling::Absolute => write!(f, "Absolute"),
+            FrameChangeHandling::Incremental => write!(f, "Incremental"),
+        }
+    }
 }
 //endregion

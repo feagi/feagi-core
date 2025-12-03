@@ -8,7 +8,7 @@ members = [
 ]
 
 [workspace.package] # Shared across all crates
-version = "0.0.50-beta.59"
+version = "0.0.50-beta.60"
 edition = "2024"
 license = "Apache-2.0"
 description = "A set of core libraries intended for fast data processing for various FEAGI applications"
@@ -18,15 +18,15 @@ documentation = "https://docs.rs/feagi_core_data_structures_and_processing"
 
 
 [workspace.dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.140"
-ndarray = { version = "0.16.1", features = ["rayon"] }
-image = "0.25"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+ndarray = { version = "0.17.1", features = ["rayon"] }
+image = "0.25.9"
 
 rayon = "1.11.0"
 paste = "1.0.15"
-feagi_data_structures = { path = "feagi_data_structures", version = "0.0.50-beta.59" }
-feagi_data_serialization = { path = "feagi_data_serialization", version = "0.0.50-beta.59"}
+feagi_data_structures = { path = "feagi_data_structures", version = "0.0.50-beta.60" }
+feagi_data_serialization = { path = "feagi_data_serialization", version = "0.0.50-beta.60"}
 
 
 [profile.test]
