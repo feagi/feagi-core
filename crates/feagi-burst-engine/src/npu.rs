@@ -263,7 +263,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         self.propagation_engine
             .write().unwrap()
             .neuron_to_area
-            .insert(neuron_id, CorticalAreaId(cortical_area));
+            .insert(neuron_id, CorticalID(cortical_area));
 
         Ok(neuron_id)
     }
@@ -326,7 +326,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
                 for (i, neuron_id) in neuron_ids.iter().enumerate() {
                     self.propagation_engine
                         .write().unwrap().neuron_to_area
-                        .insert(*neuron_id, CorticalAreaId(cortical_areas[i]));
+                        .insert(*neuron_id, CorticalID(cortical_areas[i]));
                 }
                 let insert_time = insert_start.elapsed();
 
@@ -596,7 +596,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     }
 
     /// Set neuron to cortical area mapping for propagation engine
-    pub fn set_neuron_mapping(&mut self, mapping: AHashMap<NeuronId, CorticalAreaId>) {
+    pub fn set_neuron_mapping(&mut self, mapping: AHashMap<NeuronId, CorticalID>) {
         self.propagation_engine.write().unwrap().set_neuron_mapping(mapping);
     }
 
@@ -2714,512 +2714,510 @@ pub type RustNPUINT8 = RustNPU<INT8Value>;
 ///     _ => return Err("Unsupported precision"),
 /// };
 /// ```
-pub enum DynamicNPU {
-    /// 32-bit floating point (highest precision, baseline memory)
-    F32(RustNPU<f32>),
-    
-    /// 8-bit integer (memory efficient, 42% reduction)
-    INT8(RustNPU<INT8Value>),
-}
+// TODO: DynamicNPU and dispatch macros removed
+// With new generic signature, use concrete type aliases instead:
+//   type F32NPU = RustNPU<StdRuntime, f32, CPUBackend>;
+//   type INT8NPU = RustNPU<StdRuntime, INT8Value, CPUBackend>;
 
-/// Macro to generate dispatch methods that forward to the underlying NPU
+/* COMMENTED OUT - DynamicNPU removed for generic architecture
 macro_rules! dispatch {
-    // Immutable method
-    ($self:expr, $method:ident($($arg:expr),*)) => {
-        match $self {
-            DynamicNPU::F32(npu) => npu.$method($($arg),*),
-            DynamicNPU::INT8(npu) => npu.$method($($arg),*),
-        }
-    };
-}
-
-/// Macro for mutable dispatch methods
-macro_rules! dispatch_mut {
-    ($self:expr, $method:ident($($arg:expr),*)) => {
-        match $self {
-            DynamicNPU::F32(npu) => npu.$method($($arg),*),
-            DynamicNPU::INT8(npu) => npu.$method($($arg),*),
-        }
-    };
-}
-
-impl DynamicNPU {
-    /// Get the precision type as a string (for logging/debugging)
-    pub fn precision_name(&self) -> &'static str {
-        match self {
-            DynamicNPU::F32(_) => "FP32",
-            DynamicNPU::INT8(_) => "INT8",
-        }
-    }
-    
-    /// Get direct access to F32 NPU (panics if not F32)
-    pub fn as_f32(&self) -> &RustNPU<f32> {
-        match self {
-            DynamicNPU::F32(npu) => npu,
-            _ => panic!("NPU is not F32 variant"),
-        }
-    }
-    
-    /// Get direct mutable access to F32 NPU (panics if not F32)
-    pub fn as_f32_mut(&mut self) -> &mut RustNPU<f32> {
-        match self {
-            DynamicNPU::F32(npu) => npu,
-            _ => panic!("NPU is not F32 variant"),
-        }
-    }
-    
-    /// Get direct access to INT8 NPU (panics if not INT8)
-    pub fn as_int8(&self) -> &RustNPU<INT8Value> {
-        match self {
-            DynamicNPU::INT8(npu) => npu,
-            _ => panic!("NPU is not INT8 variant"),
-        }
-    }
-    
-    /// Get direct mutable access to INT8 NPU (panics if not INT8)
-    pub fn as_int8_mut(&mut self) -> &mut RustNPU<INT8Value> {
-        match self {
-            DynamicNPU::INT8(npu) => npu,
-            _ => panic!("NPU is not INT8 variant"),
-        }
-    }
-    
-    // ========================================
-    // Core NPU Operations (Dispatched)
-    // ========================================
-    
-    /// Get current neuron count
-    pub fn neuron_count(&self) -> usize {
-        match self {
-            DynamicNPU::F32(npu) => npu.neuron_storage.read().unwrap().count,
-            DynamicNPU::INT8(npu) => npu.neuron_storage.read().unwrap().count,
-        }
-    }
-    
-    /// Get neuron capacity (MAXIMUM allocated capacity)
-    pub fn get_neuron_capacity(&self) -> usize {
-        match self {
-            DynamicNPU::F32(npu) => npu.neuron_storage.read().unwrap().capacity,
-            DynamicNPU::INT8(npu) => npu.neuron_storage.read().unwrap().capacity,
-        }
-    }
-    
-    /// Get current synapse count
-    pub fn synapse_count(&self) -> usize {
-        match self {
-            DynamicNPU::F32(npu) => npu.synapse_storage.read().unwrap().count,
-            DynamicNPU::INT8(npu) => npu.synapse_storage.read().unwrap().count,
-        }
-    }
-    
-    /// Get synapse capacity (MAXIMUM allocated capacity)
-    pub fn get_synapse_capacity(&self) -> usize {
-        match self {
-            DynamicNPU::F32(npu) => npu.synapse_storage.read().unwrap().capacity,
-            DynamicNPU::INT8(npu) => npu.synapse_storage.read().unwrap().capacity,
-        }
-    }
-    
-    /// Get burst count
-    pub fn get_burst_count(&self) -> u64 {
-        dispatch!(self, get_burst_count())
-    }
-    
-    /// Set power amount
-    pub fn set_power_amount(&self, amount: f32) {
-        dispatch!(self, set_power_amount(amount))
-    }
-    
-    /// Get power amount
-    pub fn get_power_amount(&self) -> f32 {
-        dispatch!(self, get_power_amount())
-    }
-    
-    /// Process burst
-    pub fn process_burst(&self) -> Result<BurstResult> {
-        dispatch!(self, process_burst())
-    }
-    
-    /// Inject sensory batch
-    pub fn inject_sensory_batch(&mut self, neuron_ids: &[NeuronId], potential: f32) {
-        dispatch!(self, inject_sensory_batch(neuron_ids, potential))
-    }
-    
-    /// Inject sensory with individual potentials
-    pub fn inject_sensory_with_potentials(&mut self, neurons: &[(NeuronId, f32)]) {
-        dispatch!(self, inject_sensory_with_potentials(neurons))
-    }
-    
-    /// Register cortical area
-    pub fn register_cortical_area(&mut self, area_id: u32, cortical_name: String) {
-        dispatch!(self, register_cortical_area(area_id, cortical_name))
-    }
-    
-    /// Get cortical area name
-    pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
-        dispatch!(self, get_cortical_area_name(area_id))
-    }
-    
-    /// Check if genome is loaded
-    pub fn is_genome_loaded(&self) -> bool {
-        dispatch!(self, is_genome_loaded())
-    }
-    
-    /// Get all cortical areas
-    pub fn get_all_cortical_areas(&self) -> Vec<(u32, String)> {
-        dispatch!(self, get_all_cortical_areas())
-    }
-    
-    /// Get registered cortical area count
-    pub fn get_registered_cortical_area_count(&self) -> usize {
-        dispatch!(self, get_registered_cortical_area_count())
-    }
-    
-    /// Rebuild indexes (synapses, etc.)
-    pub fn rebuild_indexes(&mut self) {
-        dispatch!(self, rebuild_indexes())
-    }
-    
-    /// Get FCL clone
-    pub fn get_fcl_clone(&self) -> FireCandidateList {
-        dispatch!(self, get_fcl_clone())
-    }
-    
-    /// Get last FCL snapshot
-    pub fn get_last_fcl_snapshot(&self) -> Vec<(NeuronId, f32)> {
-        dispatch!(self, get_last_fcl_snapshot())
-    }
-    
-    /// Sample fire queue (for visualization)
-    pub fn sample_fire_queue(&mut self) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
-        dispatch_mut!(self, sample_fire_queue())
-    }
-    
-    /// Get batch neuron IDs from coordinates (for sensory injection)
-    pub fn batch_get_neuron_ids_from_coordinates(
-        &self,
-        area: u32,
-        coords: &[(u32, u32, u32)],
-    ) -> Vec<NeuronId> {
-        dispatch!(self, batch_get_neuron_ids_from_coordinates(area, coords))
-    }
-    
-    /// Get all fire ledger configs
-    pub fn get_all_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
-        dispatch!(self, get_all_fire_ledger_configs())
-    }
-    
-    /// Configure fire ledger window
-    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
-        dispatch_mut!(self, configure_fire_ledger_window(cortical_idx, window_size))
-    }
-    
-    /// Force sample fire queue (bypasses sampling logic)
-    pub fn force_sample_fire_queue(&mut self) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
-        dispatch_mut!(self, force_sample_fire_queue())
-    }
-    
-    /// Update cortical area threshold (returns count of neurons updated)
-    pub fn update_cortical_area_threshold(&mut self, cortical_idx: u32, threshold: f32) -> usize {
-        dispatch_mut!(self, update_cortical_area_threshold(cortical_idx, threshold))
-    }
-    
-    /// Update cortical area refractory period (returns count of neurons updated)
-    pub fn update_cortical_area_refractory_period(&mut self, cortical_idx: u32, period: u16) -> usize {
-        dispatch_mut!(self, update_cortical_area_refractory_period(cortical_idx, period))
-    }
-    
-    /// Update cortical area leak coefficient (returns count of neurons updated)
-    pub fn update_cortical_area_leak(&mut self, cortical_idx: u32, leak: f32) -> usize {
-        dispatch_mut!(self, update_cortical_area_leak(cortical_idx, leak))
-    }
-    
-    /// Update cortical area consecutive fire limit (returns count of neurons updated)
-    pub fn update_cortical_area_consecutive_fire_limit(&mut self, cortical_idx: u32, limit: u16) -> usize {
-        dispatch_mut!(self, update_cortical_area_consecutive_fire_limit(cortical_idx, limit))
-    }
-    
-    /// Update cortical area snooze period (returns count of neurons updated)
-    pub fn update_cortical_area_snooze_period(&mut self, cortical_idx: u32, snooze: u16) -> usize {
-        dispatch_mut!(self, update_cortical_area_snooze_period(cortical_idx, snooze))
-    }
-    
-    /// Update cortical area excitability (returns count of neurons updated)
-    pub fn update_cortical_area_excitability(&mut self, cortical_idx: u32, excitability: f32) -> usize {
-        dispatch_mut!(self, update_cortical_area_excitability(cortical_idx, excitability))
-    }
-    
-    /// Update cortical area MP charge accumulation (returns count of neurons updated)
-    pub fn update_cortical_area_mp_charge_accumulation(&mut self, cortical_idx: u32, accumulation: bool) -> usize {
-        dispatch_mut!(self, update_cortical_area_mp_charge_accumulation(cortical_idx, accumulation))
-    }
-    
-    /// Rebuild synapse index
-    pub fn rebuild_synapse_index(&mut self) {
-        dispatch_mut!(self, rebuild_synapse_index())
-    }
-    
-    /// Create cortical area neurons (3D grid with defaults)
-    pub fn create_cortical_area_neurons(
-        &mut self,
-        cortical_idx: u32,
-        width: u32,
-        height: u32,
-        depth: u32,
-        neurons_per_voxel: u32,
-        default_threshold: f32,
-        default_leak_coefficient: f32,
-        default_resting_potential: f32,
-        default_neuron_type: i32,
-        default_refractory_period: u16,
-        default_excitability: f32,
-        default_consecutive_fire_limit: u16,
-        default_snooze_period: u16,
-        default_mp_charge_accumulation: bool,
-    ) -> Result<u32> {
-        dispatch_mut!(self, create_cortical_area_neurons(
-            cortical_idx, width, height, depth, neurons_per_voxel,
-            default_threshold, default_leak_coefficient, default_resting_potential,
-            default_neuron_type, default_refractory_period, default_excitability,
-            default_consecutive_fire_limit, default_snooze_period, default_mp_charge_accumulation
-        ))
-    }
-    
-    /// Add single neuron (accepts f32, converts internally)
-    pub fn add_neuron(
-        &mut self,
-        threshold: f32,
-        leak_coefficient: f32,
-        resting_potential: f32,
-        neuron_type: i32,
-        refractory_period: u16,
-        excitability: f32,
-        consecutive_fire_limit: u16,
-        snooze_period: u16,
-        mp_charge_accumulation: bool,
-        cortical_area: u32,
-        x: u32,
-        y: u32,
-        z: u32,
-    ) -> Result<NeuronId> {
-        match self {
-            DynamicNPU::F32(npu) => npu.add_neuron(
-                <f32 as feagi_types::NeuralValue>::from_f32(threshold),
-                leak_coefficient,
-                <f32 as feagi_types::NeuralValue>::from_f32(resting_potential),
-                neuron_type,
-                refractory_period,
-                excitability,
-                consecutive_fire_limit,
-                snooze_period,
-                mp_charge_accumulation,
-                cortical_area,
-                x, y, z,
-            ),
-            DynamicNPU::INT8(npu) => npu.add_neuron(
-                <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(threshold),
-                leak_coefficient,
-                <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(resting_potential),
-                neuron_type,
-                refractory_period,
-                excitability,
-                consecutive_fire_limit,
-                snooze_period,
-                mp_charge_accumulation,
-                cortical_area,
-                x, y, z,
-            ),
-        }
-    }
-    
-    /// Delete neuron
-    pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {
-        dispatch_mut!(self, delete_neuron(neuron_id))
-    }
-    
-    /// Check if neuron is valid
-    pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
-        dispatch!(self, is_neuron_valid(neuron_id))
-    }
-    
-    /// Get neuron count
-    pub fn get_neuron_count(&self) -> usize {
-        self.neuron_count()
-    }
-    
-    /// Get synapse count
-    pub fn get_synapse_count(&self) -> usize {
-        self.synapse_count()
-    }
-    
-    /// Get neuron coordinates (returns cortical_area, x, y, z)
-    pub fn get_neuron_coordinates(&self, neuron_id: u32) -> (u32, u32, u32) {
-        dispatch!(self, get_neuron_coordinates(neuron_id))
-    }
-    
-    /// Add neurons batch (accepts f32, converts internally based on precision)
-    pub fn add_neurons_batch(
-        &mut self,
-        thresholds: Vec<f32>,
-        leak_coefficients: Vec<f32>,
-        resting_potentials: Vec<f32>,
-        neuron_types: Vec<i32>,
-        refractory_periods: Vec<u16>,
-        excitabilities: Vec<f32>,
-        consecutive_fire_limits: Vec<u16>,
-        snooze_periods: Vec<u16>,
-        mp_charge_accumulations: Vec<bool>,
-        cortical_areas: Vec<u32>,
-        x_coords: Vec<u32>,
-        y_coords: Vec<u32>,
-        z_coords: Vec<u32>,
-    ) -> (u32, Vec<usize>) {
-        match self {
-            DynamicNPU::F32(npu) => {
-                let thresholds_t: Vec<f32> = thresholds;
-                let resting_t: Vec<f32> = resting_potentials;
-                npu.add_neurons_batch(thresholds_t, leak_coefficients, resting_t, neuron_types, 
-                    refractory_periods, excitabilities, consecutive_fire_limits, snooze_periods,
-                    mp_charge_accumulations, cortical_areas, x_coords, y_coords, z_coords)
-            }
-            DynamicNPU::INT8(npu) => {
-                let thresholds_t: Vec<feagi_types::INT8Value> = thresholds.into_iter()
-                    .map(feagi_types::NeuralValue::from_f32).collect();
-                let resting_t: Vec<feagi_types::INT8Value> = resting_potentials.into_iter()
-                    .map(feagi_types::NeuralValue::from_f32).collect();
-                npu.add_neurons_batch(thresholds_t, leak_coefficients, resting_t, neuron_types,
-                    refractory_periods, excitabilities, consecutive_fire_limits, snooze_periods,
-                    mp_charge_accumulations, cortical_areas, x_coords, y_coords, z_coords)
-            }
-        }
-    }
-    
-    /// Add synapse (returns Result<usize> - synapse count after add)
-    pub fn add_synapse(
-        &mut self,
-        source: NeuronId,
-        target: NeuronId,
-        weight: feagi_types::SynapticWeight,
-        postsynaptic_potential: feagi_types::SynapticConductance,
-        synapse_type: feagi_types::SynapseType,
-    ) -> Result<usize> {
-        dispatch_mut!(self, add_synapse(source, target, weight, postsynaptic_potential, synapse_type))
-    }
-    
-    /// Add synapses batch (returns count, errors)
-    pub fn add_synapses_batch(
-        &mut self,
-        source_neurons: Vec<NeuronId>,
-        target_neurons: Vec<NeuronId>,
-        weights: Vec<feagi_types::SynapticWeight>,
-        postsynaptic_potentials: Vec<feagi_types::SynapticConductance>,
-        synapse_types: Vec<feagi_types::SynapseType>,
-    ) -> (usize, Vec<usize>) {
-        dispatch_mut!(self, add_synapses_batch(source_neurons, target_neurons, weights, postsynaptic_potentials, synapse_types))
-    }
-    
-    /// Set neuron mapping
-    pub fn set_neuron_mapping(&mut self, mapping: ahash::AHashMap<NeuronId, feagi_types::CorticalAreaId>) {
-        dispatch_mut!(self, set_neuron_mapping(mapping))
-    }
-    
-    /// Get neuron ID at coordinate
-    pub fn get_neuron_id_at_coordinate(&self, cortical_area: u32, x: u32, y: u32, z: u32) -> Option<u32> {
-        dispatch!(self, get_neuron_id_at_coordinate(cortical_area, x, y, z))
-    }
-    
-    /// Update neuron threshold (accepts f32, converts internally)
-    pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: f32) -> bool {
-        match self {
-            DynamicNPU::F32(npu) => npu.update_neuron_threshold(neuron_id, threshold),
-            DynamicNPU::INT8(npu) => {
-                let threshold_int8 = <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(threshold);
-                npu.update_neuron_threshold(neuron_id, threshold_int8)
-            },
-        }
-    }
-    
-    /// Update neuron resting potential (accepts f32, converts internally)
-    pub fn update_neuron_resting_potential(&mut self, neuron_id: u32, resting_potential: f32) -> bool {
-        match self {
-            DynamicNPU::F32(npu) => npu.update_neuron_resting_potential(neuron_id, resting_potential),
-            DynamicNPU::INT8(npu) => {
-                let resting_int8 = <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(resting_potential);
-                npu.update_neuron_resting_potential(neuron_id, resting_int8)
-            },
-        }
-    }
-    
-    /// Update neuron leak
-    pub fn update_neuron_leak(&mut self, neuron_id: u32, leak: f32) -> bool {
-        dispatch_mut!(self, update_neuron_leak(neuron_id, leak))
-    }
-    
-    /// Update neuron excitability
-    pub fn update_neuron_excitability(&mut self, neuron_id: u32, excitability: f32) -> bool {
-        dispatch_mut!(self, update_neuron_excitability(neuron_id, excitability))
-    }
-    
-    /// Remove synapse
-    pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
-        dispatch_mut!(self, remove_synapse(source, target))
-    }
-    
-    /// Update synapse weight
-    pub fn update_synapse_weight(&mut self, source: NeuronId, target: NeuronId, weight: feagi_types::SynapticWeight) -> bool {
-        dispatch_mut!(self, update_synapse_weight(source, target, weight))
-    }
-    
-    /// Get incoming synapses
-    pub fn get_incoming_synapses(&self, target_neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
-        dispatch!(self, get_incoming_synapses(target_neuron_id))
-    }
-    
-    /// Get outgoing synapses
-    pub fn get_outgoing_synapses(&self, source_neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
-        dispatch!(self, get_outgoing_synapses(source_neuron_id))
-    }
-    
-    /// Get neurons in cortical area
-    pub fn get_neurons_in_cortical_area(&self, cortical_area_id: u32) -> Vec<u32> {
-        dispatch!(self, get_neurons_in_cortical_area(cortical_area_id))
-    }
-    
-    /// Get neuron cortical area
-    pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> u32 {
-        dispatch!(self, get_neuron_cortical_area(neuron_id))
-    }
-    
-    /// Get neuron property by index
-    pub fn get_neuron_property_by_index(&self, idx: usize, property: &str) -> Option<f32> {
-        dispatch!(self, get_neuron_property_by_index(idx, property))
-    }
-    
-    /// Get neuron property u16 by index
-    pub fn get_neuron_property_u16_by_index(&self, idx: usize, property: &str) -> Option<u16> {
-        dispatch!(self, get_neuron_property_u16_by_index(idx, property))
-    }
-    
-    /// Get neuron state (for diagnostics)
-    pub fn get_neuron_state(&self, neuron_id: NeuronId) -> Option<(u16, u16, u16, f32, f32, u16)> {
-        dispatch!(self, get_neuron_state(neuron_id))
-    }
-    
-    /// Inject sensory XYZP data by CorticalID (for PNS - hot path optimized)
-    pub fn inject_sensory_xyzp_by_id(
-        &mut self,
-        cortical_id: &CorticalID,
-        xyzp_data: &[(u32, u32, u32, f32)],
-    ) -> usize {
-        dispatch_mut!(self, inject_sensory_xyzp_by_id(cortical_id, xyzp_data))
-    }
-    
-    /// Inject sensory XYZP data by name (for backward compatibility)
-    pub fn inject_sensory_xyzp(
-        &mut self,
-        cortical_area: &str,
-        xyzp_data: &[(u32, u32, u32, f32)],
-    ) -> usize {
-        dispatch_mut!(self, inject_sensory_xyzp(cortical_area, xyzp_data))
-    }
-}
+//     // Immutable method
+//     ($self:expr, $method:ident($($arg:expr),*)) => {
+//         match $self {
+//             DynamicNPU::F32(npu) => npu.$method($($arg),*),
+//             DynamicNPU::INT8(npu) => npu.$method($($arg),*),
+//         }
+//     };
+// }
+// 
+// // Macros and impl removed with DynamicNPU
+// macro_rules! dispatch_mut {
+//     ($self:expr, $method:ident($($arg:expr),*)) => {
+//         match $self {
+//             DynamicNPU::F32(npu) => npu.$method($($arg),*),
+//             DynamicNPU::INT8(npu) => npu.$method($($arg),*),
+//         }
+//     };
+// }
+// 
+// impl DynamicNPU {
+//     /// Get the precision type as a string (for logging/debugging)
+//     pub fn precision_name(&self) -> &'static str {
+//         match self {
+//             DynamicNPU::F32(_) => "FP32",
+//             DynamicNPU::INT8(_) => "INT8",
+//         }
+//     }
+//     
+//     /// Get direct access to F32 NPU (panics if not F32)
+//     pub fn as_f32(&self) -> &RustNPU<f32> {
+//         match self {
+//             DynamicNPU::F32(npu) => npu,
+//             _ => panic!("NPU is not F32 variant"),
+//         }
+//     }
+//     
+//     /// Get direct mutable access to F32 NPU (panics if not F32)
+//     pub fn as_f32_mut(&mut self) -> &mut RustNPU<f32> {
+//         match self {
+//             DynamicNPU::F32(npu) => npu,
+//             _ => panic!("NPU is not F32 variant"),
+//         }
+//     }
+//     
+//     /// Get direct access to INT8 NPU (panics if not INT8)
+//     pub fn as_int8(&self) -> &RustNPU<INT8Value> {
+//         match self {
+//             DynamicNPU::INT8(npu) => npu,
+//             _ => panic!("NPU is not INT8 variant"),
+//         }
+//     }
+//     
+//     /// Get direct mutable access to INT8 NPU (panics if not INT8)
+//     pub fn as_int8_mut(&mut self) -> &mut RustNPU<INT8Value> {
+//         match self {
+//             DynamicNPU::INT8(npu) => npu,
+//             _ => panic!("NPU is not INT8 variant"),
+//         }
+//     }
+//     
+//     // ========================================
+//     // Core NPU Operations (Dispatched)
+//     // ========================================
+//     
+//     /// Get current neuron count
+//     pub fn neuron_count(&self) -> usize {
+//         match self {
+//             DynamicNPU::F32(npu) => npu.neuron_storage.read().unwrap().count,
+//             DynamicNPU::INT8(npu) => npu.neuron_storage.read().unwrap().count,
+//         }
+//     }
+//     
+//     /// Get neuron capacity (MAXIMUM allocated capacity)
+//     pub fn get_neuron_capacity(&self) -> usize {
+//         match self {
+//             DynamicNPU::F32(npu) => npu.neuron_storage.read().unwrap().capacity,
+//             DynamicNPU::INT8(npu) => npu.neuron_storage.read().unwrap().capacity,
+//         }
+//     }
+//     
+//     /// Get current synapse count
+//     pub fn synapse_count(&self) -> usize {
+//         match self {
+//             DynamicNPU::F32(npu) => npu.synapse_storage.read().unwrap().count,
+//             DynamicNPU::INT8(npu) => npu.synapse_storage.read().unwrap().count,
+//         }
+//     }
+//     
+//     /// Get synapse capacity (MAXIMUM allocated capacity)
+//     pub fn get_synapse_capacity(&self) -> usize {
+//         match self {
+//             DynamicNPU::F32(npu) => npu.synapse_storage.read().unwrap().capacity,
+//             DynamicNPU::INT8(npu) => npu.synapse_storage.read().unwrap().capacity,
+//         }
+//     }
+//     
+//     /// Get burst count
+//     pub fn get_burst_count(&self) -> u64 {
+//         dispatch!(self, get_burst_count())
+//     }
+//     
+//     /// Set power amount
+//     pub fn set_power_amount(&self, amount: f32) {
+//         dispatch!(self, set_power_amount(amount))
+//     }
+//     
+//     /// Get power amount
+//     pub fn get_power_amount(&self) -> f32 {
+//         dispatch!(self, get_power_amount())
+//     }
+//     
+//     /// Process burst
+//     pub fn process_burst(&self) -> Result<BurstResult> {
+//         dispatch!(self, process_burst())
+//     }
+//     
+//     /// Inject sensory batch
+//     pub fn inject_sensory_batch(&mut self, neuron_ids: &[NeuronId], potential: f32) {
+//         dispatch!(self, inject_sensory_batch(neuron_ids, potential))
+//     }
+//     
+//     /// Inject sensory with individual potentials
+//     pub fn inject_sensory_with_potentials(&mut self, neurons: &[(NeuronId, f32)]) {
+//         dispatch!(self, inject_sensory_with_potentials(neurons))
+//     }
+//     
+//     /// Register cortical area
+//     pub fn register_cortical_area(&mut self, area_id: u32, cortical_name: String) {
+//         dispatch!(self, register_cortical_area(area_id, cortical_name))
+//     }
+//     
+//     /// Get cortical area name
+//     pub fn get_cortical_area_name(&self, area_id: u32) -> Option<String> {
+//         dispatch!(self, get_cortical_area_name(area_id))
+//     }
+//     
+//     /// Check if genome is loaded
+//     pub fn is_genome_loaded(&self) -> bool {
+//         dispatch!(self, is_genome_loaded())
+//     }
+//     
+//     /// Get all cortical areas
+//     pub fn get_all_cortical_areas(&self) -> Vec<(u32, String)> {
+//         dispatch!(self, get_all_cortical_areas())
+//     }
+//     
+//     /// Get registered cortical area count
+//     pub fn get_registered_cortical_area_count(&self) -> usize {
+//         dispatch!(self, get_registered_cortical_area_count())
+//     }
+//     
+//     /// Rebuild indexes (synapses, etc.)
+//     pub fn rebuild_indexes(&mut self) {
+//         dispatch!(self, rebuild_indexes())
+//     }
+//     
+//     /// Get FCL clone
+//     pub fn get_fcl_clone(&self) -> FireCandidateList {
+//         dispatch!(self, get_fcl_clone())
+//     }
+//     
+//     /// Get last FCL snapshot
+//     pub fn get_last_fcl_snapshot(&self) -> Vec<(NeuronId, f32)> {
+//         dispatch!(self, get_last_fcl_snapshot())
+//     }
+//     
+//     /// Sample fire queue (for visualization)
+//     pub fn sample_fire_queue(&mut self) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+//         dispatch_mut!(self, sample_fire_queue())
+//     }
+//     
+//     /// Get batch neuron IDs from coordinates (for sensory injection)
+//     pub fn batch_get_neuron_ids_from_coordinates(
+//         &self,
+//         area: u32,
+//         coords: &[(u32, u32, u32)],
+//     ) -> Vec<NeuronId> {
+//         dispatch!(self, batch_get_neuron_ids_from_coordinates(area, coords))
+//     }
+//     
+//     /// Get all fire ledger configs
+//     pub fn get_all_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
+//         dispatch!(self, get_all_fire_ledger_configs())
+//     }
+//     
+//     /// Configure fire ledger window
+//     pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
+//         dispatch_mut!(self, configure_fire_ledger_window(cortical_idx, window_size))
+//     }
+//     
+//     /// Force sample fire queue (bypasses sampling logic)
+//     pub fn force_sample_fire_queue(&mut self) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+//         dispatch_mut!(self, force_sample_fire_queue())
+//     }
+//     
+//     /// Update cortical area threshold (returns count of neurons updated)
+//     pub fn update_cortical_area_threshold(&mut self, cortical_idx: u32, threshold: f32) -> usize {
+//         dispatch_mut!(self, update_cortical_area_threshold(cortical_idx, threshold))
+//     }
+//     
+//     /// Update cortical area refractory period (returns count of neurons updated)
+//     pub fn update_cortical_area_refractory_period(&mut self, cortical_idx: u32, period: u16) -> usize {
+//         dispatch_mut!(self, update_cortical_area_refractory_period(cortical_idx, period))
+//     }
+//     
+//     /// Update cortical area leak coefficient (returns count of neurons updated)
+//     pub fn update_cortical_area_leak(&mut self, cortical_idx: u32, leak: f32) -> usize {
+//         dispatch_mut!(self, update_cortical_area_leak(cortical_idx, leak))
+//     }
+//     
+//     /// Update cortical area consecutive fire limit (returns count of neurons updated)
+//     pub fn update_cortical_area_consecutive_fire_limit(&mut self, cortical_idx: u32, limit: u16) -> usize {
+//         dispatch_mut!(self, update_cortical_area_consecutive_fire_limit(cortical_idx, limit))
+//     }
+//     
+//     /// Update cortical area snooze period (returns count of neurons updated)
+//     pub fn update_cortical_area_snooze_period(&mut self, cortical_idx: u32, snooze: u16) -> usize {
+//         dispatch_mut!(self, update_cortical_area_snooze_period(cortical_idx, snooze))
+//     }
+//     
+//     /// Update cortical area excitability (returns count of neurons updated)
+//     pub fn update_cortical_area_excitability(&mut self, cortical_idx: u32, excitability: f32) -> usize {
+//         dispatch_mut!(self, update_cortical_area_excitability(cortical_idx, excitability))
+//     }
+//     
+//     /// Update cortical area MP charge accumulation (returns count of neurons updated)
+//     pub fn update_cortical_area_mp_charge_accumulation(&mut self, cortical_idx: u32, accumulation: bool) -> usize {
+//         dispatch_mut!(self, update_cortical_area_mp_charge_accumulation(cortical_idx, accumulation))
+//     }
+//     
+//     /// Rebuild synapse index
+//     pub fn rebuild_synapse_index(&mut self) {
+//         dispatch_mut!(self, rebuild_synapse_index())
+//     }
+//     
+//     /// Create cortical area neurons (3D grid with defaults)
+//     pub fn create_cortical_area_neurons(
+//         &mut self,
+//         cortical_idx: u32,
+//         width: u32,
+//         height: u32,
+//         depth: u32,
+//         neurons_per_voxel: u32,
+//         default_threshold: f32,
+//         default_leak_coefficient: f32,
+//         default_resting_potential: f32,
+//         default_neuron_type: i32,
+//         default_refractory_period: u16,
+//         default_excitability: f32,
+//         default_consecutive_fire_limit: u16,
+//         default_snooze_period: u16,
+//         default_mp_charge_accumulation: bool,
+//     ) -> Result<u32> {
+//         dispatch_mut!(self, create_cortical_area_neurons(
+//             cortical_idx, width, height, depth, neurons_per_voxel,
+//             default_threshold, default_leak_coefficient, default_resting_potential,
+//             default_neuron_type, default_refractory_period, default_excitability,
+//             default_consecutive_fire_limit, default_snooze_period, default_mp_charge_accumulation
+//         ))
+//     }
+//     
+//     /// Add single neuron (accepts f32, converts internally)
+//     pub fn add_neuron(
+//         &mut self,
+//         threshold: f32,
+//         leak_coefficient: f32,
+//         resting_potential: f32,
+//         neuron_type: i32,
+//         refractory_period: u16,
+//         excitability: f32,
+//         consecutive_fire_limit: u16,
+//         snooze_period: u16,
+//         mp_charge_accumulation: bool,
+//         cortical_area: u32,
+//         x: u32,
+//         y: u32,
+//         z: u32,
+//     ) -> Result<NeuronId> {
+//         match self {
+//             DynamicNPU::F32(npu) => npu.add_neuron(
+//                 <f32 as feagi_types::NeuralValue>::from_f32(threshold),
+//                 leak_coefficient,
+//                 <f32 as feagi_types::NeuralValue>::from_f32(resting_potential),
+//                 neuron_type,
+//                 refractory_period,
+//                 excitability,
+//                 consecutive_fire_limit,
+//                 snooze_period,
+//                 mp_charge_accumulation,
+//                 cortical_area,
+//                 x, y, z,
+//             ),
+//             DynamicNPU::INT8(npu) => npu.add_neuron(
+//                 <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(threshold),
+//                 leak_coefficient,
+//                 <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(resting_potential),
+//                 neuron_type,
+//                 refractory_period,
+//                 excitability,
+//                 consecutive_fire_limit,
+//                 snooze_period,
+//                 mp_charge_accumulation,
+//                 cortical_area,
+//                 x, y, z,
+//             ),
+//         }
+//     }
+//     
+//     /// Delete neuron
+//     pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {
+//         dispatch_mut!(self, delete_neuron(neuron_id))
+//     }
+//     
+//     /// Check if neuron is valid
+//     pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
+//         dispatch!(self, is_neuron_valid(neuron_id))
+//     }
+//     
+//     /// Get neuron count
+//     pub fn get_neuron_count(&self) -> usize {
+//         self.neuron_count()
+//     }
+//     
+//     /// Get synapse count
+//     pub fn get_synapse_count(&self) -> usize {
+//         self.synapse_count()
+//     }
+//     
+//     /// Get neuron coordinates (returns cortical_area, x, y, z)
+//     pub fn get_neuron_coordinates(&self, neuron_id: u32) -> (u32, u32, u32) {
+//         dispatch!(self, get_neuron_coordinates(neuron_id))
+//     }
+//     
+//     /// Add neurons batch (accepts f32, converts internally based on precision)
+//     pub fn add_neurons_batch(
+//         &mut self,
+//         thresholds: Vec<f32>,
+//         leak_coefficients: Vec<f32>,
+//         resting_potentials: Vec<f32>,
+//         neuron_types: Vec<i32>,
+//         refractory_periods: Vec<u16>,
+//         excitabilities: Vec<f32>,
+//         consecutive_fire_limits: Vec<u16>,
+//         snooze_periods: Vec<u16>,
+//         mp_charge_accumulations: Vec<bool>,
+//         cortical_areas: Vec<u32>,
+//         x_coords: Vec<u32>,
+//         y_coords: Vec<u32>,
+//         z_coords: Vec<u32>,
+//     ) -> (u32, Vec<usize>) {
+//         match self {
+//             DynamicNPU::F32(npu) => {
+//                 let thresholds_t: Vec<f32> = thresholds;
+//                 let resting_t: Vec<f32> = resting_potentials;
+//                 npu.add_neurons_batch(thresholds_t, leak_coefficients, resting_t, neuron_types, 
+//                     refractory_periods, excitabilities, consecutive_fire_limits, snooze_periods,
+//                     mp_charge_accumulations, cortical_areas, x_coords, y_coords, z_coords)
+//             }
+//             DynamicNPU::INT8(npu) => {
+//                 let thresholds_t: Vec<feagi_types::INT8Value> = thresholds.into_iter()
+//                     .map(feagi_types::NeuralValue::from_f32).collect();
+//                 let resting_t: Vec<feagi_types::INT8Value> = resting_potentials.into_iter()
+//                     .map(feagi_types::NeuralValue::from_f32).collect();
+//                 npu.add_neurons_batch(thresholds_t, leak_coefficients, resting_t, neuron_types,
+//                     refractory_periods, excitabilities, consecutive_fire_limits, snooze_periods,
+//                     mp_charge_accumulations, cortical_areas, x_coords, y_coords, z_coords)
+//             }
+//         }
+//     }
+//     
+//     /// Add synapse (returns Result<usize> - synapse count after add)
+//     pub fn add_synapse(
+//         &mut self,
+//         source: NeuronId,
+//         target: NeuronId,
+//         weight: feagi_types::SynapticWeight,
+//         postsynaptic_potential: feagi_types::SynapticConductance,
+//         synapse_type: feagi_types::SynapseType,
+//     ) -> Result<usize> {
+//         dispatch_mut!(self, add_synapse(source, target, weight, postsynaptic_potential, synapse_type))
+//     }
+//     
+//     /// Add synapses batch (returns count, errors)
+//     pub fn add_synapses_batch(
+//         &mut self,
+//         source_neurons: Vec<NeuronId>,
+//         target_neurons: Vec<NeuronId>,
+//         weights: Vec<feagi_types::SynapticWeight>,
+//         postsynaptic_potentials: Vec<feagi_types::SynapticConductance>,
+//         synapse_types: Vec<feagi_types::SynapseType>,
+//     ) -> (usize, Vec<usize>) {
+//         dispatch_mut!(self, add_synapses_batch(source_neurons, target_neurons, weights, postsynaptic_potentials, synapse_types))
+//     }
+//     
+//     /// Set neuron mapping
+//     pub fn set_neuron_mapping(&mut self, mapping: ahash::AHashMap<NeuronId, feagi_types::CorticalID>) {
+//         dispatch_mut!(self, set_neuron_mapping(mapping))
+//     }
+//     
+//     /// Get neuron ID at coordinate
+//     pub fn get_neuron_id_at_coordinate(&self, cortical_area: u32, x: u32, y: u32, z: u32) -> Option<u32> {
+//         dispatch!(self, get_neuron_id_at_coordinate(cortical_area, x, y, z))
+//     }
+//     
+//     /// Update neuron threshold (accepts f32, converts internally)
+//     pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: f32) -> bool {
+//         match self {
+//             DynamicNPU::F32(npu) => npu.update_neuron_threshold(neuron_id, threshold),
+//             DynamicNPU::INT8(npu) => {
+//                 let threshold_int8 = <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(threshold);
+//                 npu.update_neuron_threshold(neuron_id, threshold_int8)
+//             },
+//         }
+//     }
+//     
+//     /// Update neuron resting potential (accepts f32, converts internally)
+//     pub fn update_neuron_resting_potential(&mut self, neuron_id: u32, resting_potential: f32) -> bool {
+//         match self {
+//             DynamicNPU::F32(npu) => npu.update_neuron_resting_potential(neuron_id, resting_potential),
+//             DynamicNPU::INT8(npu) => {
+//                 let resting_int8 = <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(resting_potential);
+//                 npu.update_neuron_resting_potential(neuron_id, resting_int8)
+//             },
+//         }
+//     }
+//     
+//     /// Update neuron leak
+//     pub fn update_neuron_leak(&mut self, neuron_id: u32, leak: f32) -> bool {
+//         dispatch_mut!(self, update_neuron_leak(neuron_id, leak))
+//     }
+//     
+//     /// Update neuron excitability
+//     pub fn update_neuron_excitability(&mut self, neuron_id: u32, excitability: f32) -> bool {
+//         dispatch_mut!(self, update_neuron_excitability(neuron_id, excitability))
+//     }
+//     
+//     /// Remove synapse
+//     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
+//         dispatch_mut!(self, remove_synapse(source, target))
+//     }
+//     
+//     /// Update synapse weight
+//     pub fn update_synapse_weight(&mut self, source: NeuronId, target: NeuronId, weight: feagi_types::SynapticWeight) -> bool {
+//         dispatch_mut!(self, update_synapse_weight(source, target, weight))
+//     }
+//     
+//     /// Get incoming synapses
+//     pub fn get_incoming_synapses(&self, target_neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
+//         dispatch!(self, get_incoming_synapses(target_neuron_id))
+//     }
+//     
+//     /// Get outgoing synapses
+//     pub fn get_outgoing_synapses(&self, source_neuron_id: u32) -> Vec<(u32, u8, u8, u8)> {
+//         dispatch!(self, get_outgoing_synapses(source_neuron_id))
+//     }
+//     
+//     /// Get neurons in cortical area
+//     pub fn get_neurons_in_cortical_area(&self, cortical_area_id: u32) -> Vec<u32> {
+//         dispatch!(self, get_neurons_in_cortical_area(cortical_area_id))
+//     }
+//     
+//     /// Get neuron cortical area
+//     pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> u32 {
+//         dispatch!(self, get_neuron_cortical_area(neuron_id))
+//     }
+//     
+//     /// Get neuron property by index
+//     pub fn get_neuron_property_by_index(&self, idx: usize, property: &str) -> Option<f32> {
+//         dispatch!(self, get_neuron_property_by_index(idx, property))
+//     }
+//     
+//     /// Get neuron property u16 by index
+//     pub fn get_neuron_property_u16_by_index(&self, idx: usize, property: &str) -> Option<u16> {
+//         dispatch!(self, get_neuron_property_u16_by_index(idx, property))
+//     }
+//     
+//     /// Get neuron state (for diagnostics)
+//     pub fn get_neuron_state(&self, neuron_id: NeuronId) -> Option<(u16, u16, u16, f32, f32, u16)> {
+//         dispatch!(self, get_neuron_state(neuron_id))
+//     }
+//     
+//     /// Inject sensory XYZP data by CorticalID (for PNS - hot path optimized)
+//     pub fn inject_sensory_xyzp_by_id(
+//         &mut self,
+//         cortical_id: &CorticalID,
+//         xyzp_data: &[(u32, u32, u32, f32)],
+//     ) -> usize {
+//         dispatch_mut!(self, inject_sensory_xyzp_by_id(cortical_id, xyzp_data))
+//     }
+//     
+//     /// Inject sensory XYZP data by name (for backward compatibility)
+//     pub fn inject_sensory_xyzp(
+//         &mut self,
+//         cortical_area: &str,
+//         xyzp_data: &[(u32, u32, u32, f32)],
+//     ) -> usize {
+//         dispatch_mut!(self, inject_sensory_xyzp(cortical_area, xyzp_data))
+//     }
+// }
+*/

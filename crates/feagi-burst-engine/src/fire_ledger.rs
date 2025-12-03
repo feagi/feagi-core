@@ -184,7 +184,7 @@ mod tests {
     use super::*;
     use crate::fire_structures::{FireQueue, FiringNeuron};
     use feagi_neural::types::NeuronId;
-// Note: CorticalAreaId removed - use feagi_data_structures::CorticalID
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
     #[test]
     fn test_fire_ledger_basic() {
@@ -195,7 +195,7 @@ mod tests {
         let neuron1 = FiringNeuron {
             neuron_id: NeuronId(100),
             membrane_potential: 1.5,
-            cortical_area: CorticalAreaId(1),
+            cortical_area: CorticalID(1),
             x: 0,
             y: 0,
             z: 0,
@@ -203,7 +203,7 @@ mod tests {
         let neuron2 = FiringNeuron {
             neuron_id: NeuronId(200),
             membrane_potential: 1.2,
-            cortical_area: CorticalAreaId(1),
+            cortical_area: CorticalID(1),
             x: 1,
             y: 0,
             z: 0,
@@ -234,7 +234,7 @@ mod tests {
             let neuron = FiringNeuron {
                 neuron_id: NeuronId(t as u32 * 100),
                 membrane_potential: 1.0,
-                cortical_area: CorticalAreaId(1),
+                cortical_area: CorticalID(1),
                 x: 0,
                 y: 0,
                 z: 0,

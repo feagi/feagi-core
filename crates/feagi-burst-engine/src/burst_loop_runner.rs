@@ -21,7 +21,8 @@
 
 use crate::sensory::AgentManager;
 use crate::parameter_update_queue::ParameterUpdateQueue;
-use crate::DynamicNPU;
+// DynamicNPU removed - use concrete types
+// use crate::DynamicNPU;
 use feagi_neural::types::NeuronId;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};

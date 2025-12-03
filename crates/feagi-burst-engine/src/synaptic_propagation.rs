@@ -40,6 +40,8 @@
 
 use ahash::AHashMap;
 use feagi_neural::types::*;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_runtime::SynapseStorage;
 use rayon::prelude::*;
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)
@@ -49,14 +51,14 @@ use feagi_neural::synapse::{compute_synaptic_contribution, SynapseType as FeagiS
 pub type SynapseIndex = AHashMap<NeuronId, Vec<usize>>;
 
 /// Propagation result: cortical area → list of (target_neuron, contribution)
-pub type PropagationResult = AHashMap<CorticalAreaId, Vec<(NeuronId, SynapticContribution)>>;
+pub type PropagationResult = AHashMap<CorticalID, Vec<(NeuronId, SynapticContribution)>>;
 
 /// High-performance synaptic propagation engine
 pub struct SynapticPropagationEngine {
     /// Pre-built index: source neuron → synapse indices
     pub synapse_index: SynapseIndex,
     /// Neuron → Cortical Area mapping
-    pub neuron_to_area: AHashMap<NeuronId, CorticalAreaId>,
+    pub neuron_to_area: AHashMap<NeuronId, CorticalID>,
     /// Performance stats
     total_propagations: u64,
     total_synapses_processed: u64,
@@ -77,12 +79,12 @@ impl SynapticPropagationEngine {
     /// This should be called once during initialization or when connectome changes
     ///
     /// ZERO-COPY: Works directly with SynapseArray without allocating intermediate structures
-    pub fn build_synapse_index(&mut self, synapse_array: &SynapseArray) {
+    pub fn build_synapse_index<S: SynapseStorage>(&mut self, synapse_storage: &S) {
         self.synapse_index.clear();
 
-        for i in 0..synapse_array.count {
-            if synapse_array.valid_mask[i] {
-                let source = NeuronId(synapse_array.source_neurons[i]);
+        for i in 0..synapse_storage.count() {
+            if synapse_storage.valid_mask()[i] {
+                let source = NeuronId(synapse_storage.source_neurons()[i]);
                 self.synapse_index
                     .entry(source)
                     .or_insert_with(Vec::new)
@@ -92,7 +94,7 @@ impl SynapticPropagationEngine {
     }
 
     /// Set the neuron-to-cortical-area mapping
-    pub fn set_neuron_mapping(&mut self, mapping: AHashMap<NeuronId, CorticalAreaId>) {
+    pub fn set_neuron_mapping(&mut self, mapping: AHashMap<NeuronId, CorticalID>) {
         self.neuron_to_area = mapping;
     }
 
@@ -108,7 +110,7 @@ impl SynapticPropagationEngine {
     pub fn propagate(
         &mut self,
         fired_neurons: &[NeuronId],
-        synapse_array: &SynapseArray,
+        synapse_storage: &impl SynapseStorage,
     ) -> Result<PropagationResult> {
         self.total_propagations += 1;
 
@@ -134,24 +136,24 @@ impl SynapticPropagationEngine {
         // PHASE 2: COMPUTE - Calculate contributions in parallel (TRUE SIMD!)
         // This is where Python spent 165ms doing inefficient numpy ops
         // ZERO-COPY: Access SynapseArray fields directly (Structure-of-Arrays)
-        let contributions: Vec<(NeuronId, CorticalAreaId, SynapticContribution)> = synapse_indices
+        let contributions: Vec<(NeuronId, CorticalID, SynapticContribution)> = synapse_indices
             .par_iter()
             .filter_map(|&syn_idx| {
                 // Skip invalid synapses (already filtered by build_synapse_index, but double-check)
-                if !synapse_array.valid_mask[syn_idx] {
+                if !synapse_storage.valid_mask()[syn_idx] {
                     return None;
                 }
 
                 // Get target neuron from SoA
-                let target_neuron = NeuronId(synapse_array.target_neurons[syn_idx]);
+                let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
 
                 // Get target cortical area
                 let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
 
                 // Calculate contribution using platform-agnostic function from feagi-synapse
-                let weight = synapse_array.weights[syn_idx];
-                let psp = synapse_array.postsynaptic_potentials[syn_idx];
-                let synapse_type = match synapse_array.types[syn_idx] {
+                let weight = synapse_storage.weights()[syn_idx];
+                let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
+                let synapse_type = match synapse_storage.types()[syn_idx] {
                     0 => FeagiSynapseType::Excitatory,
                     _ => FeagiSynapseType::Inhibitory,
                 };
@@ -200,7 +202,7 @@ mod tests {
     use super::*;
 
     fn create_test_synapses() -> SynapseArray {
-        let mut synapse_array = SynapseArray {
+        let mut synapse_storage = SynapseArray {
             capacity: 10,
             count: 3,
             source_neurons: vec![1, 1, 2],     // Raw u32 values
@@ -213,16 +215,16 @@ mod tests {
         };
 
         // Build source index
-        for i in 0..synapse_array.count {
-            let source = synapse_array.source_neurons[i];
-            synapse_array
+        for i in 0..synapse_storage.count {
+            let source = synapse_storage.source_neurons()[i];
+            synapse_storage
                 .source_index
                 .entry(source)
                 .or_insert_with(Vec::new)
                 .push(i);
         }
 
-        synapse_array
+        synapse_storage
     }
 
     #[test]
@@ -235,8 +237,8 @@ mod tests {
 
         // Set neuron mapping
         let mut mapping = AHashMap::new();
-        mapping.insert(NeuronId(10), CorticalAreaId(1));
-        mapping.insert(NeuronId(11), CorticalAreaId(1));
+        mapping.insert(NeuronId(10), CorticalID(1));
+        mapping.insert(NeuronId(11), CorticalID(1));
         engine.set_neuron_mapping(mapping);
 
         // Propagate from neuron 1
@@ -245,7 +247,7 @@ mod tests {
 
         // Should have 2 contributions in area 1
         assert_eq!(result.len(), 1);
-        let area1_contributions = result.get(&CorticalAreaId(1)).unwrap();
+        let area1_contributions = result.get(&CorticalID(1)).unwrap();
         assert_eq!(area1_contributions.len(), 2);
 
         // Check that both targets are present
@@ -261,15 +263,15 @@ mod tests {
         engine.build_synapse_index(&synapses);
 
         let mut mapping = AHashMap::new();
-        mapping.insert(NeuronId(10), CorticalAreaId(1));
-        mapping.insert(NeuronId(11), CorticalAreaId(1));
+        mapping.insert(NeuronId(10), CorticalID(1));
+        mapping.insert(NeuronId(11), CorticalID(1));
         engine.set_neuron_mapping(mapping);
 
         // Propagate from multiple neurons in parallel
         let fired = vec![NeuronId(1), NeuronId(2)];
         let result = engine.propagate(&fired, &synapses).unwrap();
 
-        let area1_contributions = result.get(&CorticalAreaId(1)).unwrap();
+        let area1_contributions = result.get(&CorticalID(1)).unwrap();
         assert_eq!(area1_contributions.len(), 3); // 2 from neuron 1, 1 from neuron 2
     }
 }

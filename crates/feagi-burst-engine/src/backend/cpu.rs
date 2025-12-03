@@ -63,17 +63,19 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
         // FCL-aware: Accumulate synaptic contributions into FCL
         let mut synapse_count = 0;
 
-        for &source_id in fired_neurons {
-            if let Some(synapse_indices) = synapse_array.source_index.get(&source_id) {
-                for &syn_idx in synapse_indices {
-                    if !synapse_array.valid_mask[syn_idx] {
+        // Iterate through all synapses (source_index not in trait)
+        // TODO: Add source_index to SynapseStorage trait or build on-the-fly
+        for syn_idx in 0..synapse_storage.count() {
+            let source_id = synapse_storage.source_neurons()[syn_idx];
+            if fired_neurons.contains(&source_id) {
+                    if !synapse_storage.valid_mask()[syn_idx] {
                         continue;
                     }
 
-                    let target_id = synapse_array.target_neurons[syn_idx];
-                    let weight = synapse_array.weights[syn_idx] as f32 / 255.0; // Normalize to [0,1]
-                    let psp = synapse_array.postsynaptic_potentials[syn_idx] as f32 / 255.0;
-                    let synapse_type = if synapse_array.types[syn_idx] == 0 {
+                    let target_id = synapse_storage.target_neurons()[syn_idx];
+                    let weight = synapse_storage.weights()[syn_idx] as f32 / 255.0; // Normalize to [0,1]
+                    let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32 / 255.0;
+                    let synapse_type = if synapse_storage.types()[syn_idx] == 0 {
                         SynapseType::Excitatory
                     } else {
                         SynapseType::Inhibitory
@@ -88,9 +90,8 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
                     );
 
                     // Accumulate into FCL
-                    fcl.add_candidate(NeuronId(target_id), contribution);
-                    synapse_count += 1;
-                }
+                fcl.add_candidate(NeuronId(target_id), contribution);
+                synapse_count += 1;
             }
         }
 
@@ -104,7 +105,7 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // FCL-aware: Process only FCL neurons (existing neural_dynamics already supports this!)
-        let result = neural_dynamics::process_neural_dynamics(fcl, neuron_array, burst_count)?;
+        let result = neural_dynamics::process_neural_dynamics(fcl, neuron_storage, burst_count)?;
 
         // Extract neuron IDs from fire queue
         let fired_neurons: Vec<u32> = result
@@ -138,12 +139,12 @@ mod tests {
 
         // Create minimal test data
         let fired_neurons = vec![0, 1];
-        let synapse_array = SynapseArray::new(100);
+        let synapse_storage = SynapseArray::new(100);
         let mut fcl = FireCandidateList::new();
 
         // Should not panic
         let result = <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
-            &mut backend, &fired_neurons, &synapse_array, &mut fcl
+            &mut backend, &fired_neurons, &synapse_storage, &mut fcl
         );
 
         assert!(result.is_ok());

@@ -123,9 +123,9 @@ pub trait ComputeBackend<T: NeuralValue, N: NeuronStorage<Value = T>, S: Synapse
     fn process_burst(
         &mut self,
         fired_neurons: &[u32],
-        synapse_array: &SynapseArray,
+        synapse_storage: &S,
         fcl: &mut FireCandidateList,
-        neuron_array: &mut NeuronArray<T>,
+        neuron_storage: &mut N,
         burst_count: u64,
     ) -> Result<BackendBurstResult> {
         let start = std::time::Instant::now();
@@ -166,8 +166,8 @@ pub trait ComputeBackend<T: NeuralValue, N: NeuronStorage<Value = T>, S: Synapse
     /// For CPU backends, this is a no-op.
     fn initialize_persistent_data(
         &mut self,
-        _neuron_array: &NeuronArray<T>,
-        _synapse_array: &SynapseArray,
+        _neuron_storage: &N,
+        _synapse_storage: &S,
     ) -> Result<()> {
         Ok(())
     }
@@ -598,13 +598,18 @@ fn estimate_cuda_speedup(neuron_count: usize, synapse_count: usize) -> f32 {
     speedup.min(100.0).max(0.1)
 }
 
-/// Create backend based on type
+// TODO: create_backend removed - incompatible with new generic backend design
+// RustNPU now takes backend directly in constructor
+// Users should create backend explicitly:
+//   let backend = CPUBackend::new();
+//   let npu = RustNPU::new(runtime, backend, ...)?;
+/*
 pub fn create_backend<T: NeuralValue>(
     backend_type: BackendType,
     neuron_capacity: usize,
     synapse_capacity: usize,
     config: &BackendConfig,
-) -> Result<Box<dyn ComputeBackend<T>>> {
+) -> Result<Box<dyn ComputeBackend<T, N, S>>> {
     let actual_type = if backend_type == BackendType::Auto {
         // Count will be updated later, use capacity as estimate
         let decision = select_backend(neuron_capacity, synapse_capacity, config);
@@ -668,3 +673,4 @@ pub fn create_backend<T: NeuralValue>(
         }
     }
 }
+*/

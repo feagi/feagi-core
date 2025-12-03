@@ -34,7 +34,8 @@
 //! - Minimal allocations in hot paths
 
 pub mod backend;
-pub mod burst_loop_runner; // Pure Rust burst loop
+// Disabled - uses DynamicNPU
+// pub mod burst_loop_runner; // Pure Rust burst loop
 pub mod fire_ledger;
 pub mod fire_structures;
 pub mod fq_sampler;
@@ -44,12 +45,13 @@ pub mod neural_dynamics;
 pub mod npu;
 pub mod parameter_update_queue;
 pub mod sensory; // Rust sensory injection system
-pub mod sleep; // Sleep manager for energy efficiency and memory optimization
+// Disabled - uses DynamicNPU
+// pub mod sleep; // Sleep manager for energy efficiency and memory optimization
 pub mod synaptic_propagation;
 pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
 
 pub use backend::*;
-pub use burst_loop_runner::*;
+// pub use burst_loop_runner::*;
 pub use fire_ledger::*;
 pub use fire_structures::*;
 pub use fq_sampler::*;
@@ -58,7 +60,7 @@ pub use neural_dynamics::*;
 pub use npu::*;
 pub use parameter_update_queue::{ParameterUpdate, ParameterUpdateQueue};
 pub use sensory::*;
-pub use sleep::*;
+// pub use sleep::*;
 pub use synaptic_propagation::*;
 pub use viz_shm_writer::*;
 

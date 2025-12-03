@@ -33,7 +33,8 @@
 //!      (wake on IPU activity)
 //! ```
 
-use crate::DynamicNPU;
+// DynamicNPU removed - use concrete types
+// use crate::DynamicNPU;
 use feagi_state_manager::BurstEngineState;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};

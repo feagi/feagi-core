@@ -22,6 +22,8 @@
 
 use crate::fire_structures::{FireQueue, FiringNeuron};
 use feagi_neural::types::*;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_runtime::NeuronStorage;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
 use feagi_neural::{
@@ -53,10 +55,10 @@ pub struct DynamicsResult {
 /// 5. Create Fire Queue from firing neurons
 pub fn process_neural_dynamics<T: NeuralValue>(
     fcl: &FireCandidateList,
-    neuron_array: &mut NeuronArray<T>,
+    neuron_array: &mut impl NeuronStorage<Value = T>,
     burst_count: u64,
 ) -> Result<DynamicsResult> {
-    let candidates = fcl.get_all_candidates();
+    let candidates: Vec<_> = fcl.iter().collect();
 
     if candidates.is_empty() {
         let mut fire_queue = FireQueue::new();
@@ -118,7 +120,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
 fn process_single_neuron<T: NeuralValue>(
     neuron_id: NeuronId,
     candidate_potential: T,
-    neuron_array: &mut NeuronArray<T>,
+    neuron_array: &mut impl NeuronStorage<Value = T>,
     burst_count: u64,
 ) -> Option<FiringNeuron> {
     // neuron_id == array index (direct access, no HashMap needed!)
@@ -272,7 +274,7 @@ fn process_single_neuron<T: NeuralValue>(
             return Some(FiringNeuron {
                 neuron_id,
                 membrane_potential: current_potential.to_f32(),
-                cortical_area: CorticalAreaId(neuron_array.cortical_areas[idx]),
+                cortical_area: CorticalID::from_value(neuron_array.cortical_areas()[idx] as u64),
                 x,
                 y,
                 z,
