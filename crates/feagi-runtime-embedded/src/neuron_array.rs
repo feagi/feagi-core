@@ -19,6 +19,9 @@ use feagi_runtime::{NeuronStorage, Result, RuntimeError};
 #[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;
 
+#[cfg(any(feature = "std", feature = "alloc"))]
+use alloc::vec::Vec;
+
 /// Fixed-size neuron array for embedded systems
 ///
 /// All data is stack-allocated with compile-time size limits.
@@ -266,14 +269,59 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         &mut self.membrane_potentials[..count]
     }
     
+    fn thresholds_mut(&mut self) -> &mut [Self::Value] {
+        let count = self.count;
+        &mut self.thresholds[..count]
+    }
+    
+    fn leak_coefficients_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.leak_coefficients[..count]
+    }
+    
+    fn resting_potentials_mut(&mut self) -> &mut [Self::Value] {
+        let count = self.count;
+        &mut self.resting_potentials[..count]
+    }
+    
+    fn neuron_types_mut(&mut self) -> &mut [i32] {
+        let count = self.count;
+        &mut self.neuron_types[..count]
+    }
+    
+    fn refractory_periods_mut(&mut self) -> &mut [u16] {
+        let count = self.count;
+        &mut self.refractory_periods[..count]
+    }
+    
     fn refractory_countdowns_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.refractory_countdowns[..count]
     }
     
+    fn excitabilities_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.excitabilities[..count]
+    }
+    
     fn consecutive_fire_counts_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.consecutive_fire_counts[..count]
+    }
+    
+    fn consecutive_fire_limits_mut(&mut self) -> &mut [u16] {
+        let count = self.count;
+        &mut self.consecutive_fire_limits[..count]
+    }
+    
+    fn snooze_periods_mut(&mut self) -> &mut [u16] {
+        let count = self.count;
+        &mut self.snooze_periods[..count]
+    }
+    
+    fn mp_charge_accumulation_mut(&mut self) -> &mut [bool] {
+        let count = self.count;
+        &mut self.mp_charge_accumulation[..count]
     }
     
     fn valid_mask_mut(&mut self) -> &mut [bool] {
@@ -375,6 +423,77 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         }
         
         Ok(())
+    }
+    
+    fn get_neuron_at_coordinate(
+        &self,
+        cortical_area: u32,
+        x: u32,
+        _y: u32,
+        _z: u32,
+    ) -> Option<usize> {
+        // Linear search through neurons (embedded systems typically have small neuron counts)
+        for idx in 0..self.count {
+            if self.valid_mask[idx]
+                && self.cortical_areas[idx] == cortical_area
+                && self.coordinates[idx] == x  // Simplified: only checking x coordinate
+            {
+                return Some(idx);
+            }
+        }
+        None
+    }
+    
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn get_neurons_in_cortical_area(&self, cortical_area: u32) -> Vec<usize> {
+        let mut result = Vec::new();
+        for idx in 0..self.count {
+            if self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area {
+                result.push(idx);
+            }
+        }
+        result
+    }
+    
+    fn get_neuron_count(&self, cortical_area: u32) -> usize {
+        let mut count = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area {
+                count += 1;
+            }
+        }
+        count
+    }
+    
+    fn get_cortical_area(&self, neuron_idx: usize) -> Option<u32> {
+        if neuron_idx < self.count && self.valid_mask[neuron_idx] {
+            Some(self.cortical_areas[neuron_idx])
+        } else {
+            None
+        }
+    }
+    
+    fn get_coordinates(&self, neuron_idx: usize) -> Option<(u32, u32, u32)> {
+        if neuron_idx < self.count && self.valid_mask[neuron_idx] {
+            // Simplified: only x coordinate stored, return (x, 0, 0)
+            Some((self.coordinates[neuron_idx], 0, 0))
+        } else {
+            None
+        }
+    }
+    
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn batch_coordinate_lookup(
+        &self,
+        cortical_area: u32,
+        coords: &[(u32, u32, u32)],
+    ) -> Vec<Option<usize>> {
+        coords
+            .iter()
+            .map(|(x, _y, _z)| {
+                self.get_neuron_at_coordinate(cortical_area, *x, 0, 0)
+            })
+            .collect()
     }
 }
 
