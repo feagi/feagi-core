@@ -7,11 +7,12 @@
 ## Repository Structure
 
 This repository is a dedicated workspace for core FEAGI components, maintained separately from:
-- **feagi-data-processing** (foundation library, separate repo)
 - **feagi-io** (I/O layer with feagi-pns, separate repo)
 - **feagi-py** (Python bindings and orchestration, separate repo)
 - **feagi-connector** (agent SDK, separate repo)
 - **brain-visualizer** (3D visualization, separate repo)
+
+**Note**: The `feagi-data-processing` crates (`feagi_data_structures`, `feagi_data_serialization`, `feagi_connector_core`) have been merged into this repository as workspace members under `crates/`.
 
 ## Crate Hierarchy
 
@@ -25,7 +26,7 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
   - **NEW**: Multi-platform state management (std, no_std, wasm)
   - Lock-free atomic operations for high-frequency access
   - Agent registry, cortical locking, FCL window cache
-  - Depends on: `feagi-types`, `feagi-data-processing`
+  - Depends on: `feagi-types`, `feagi_data_structures`
 
 ### Algorithm Layer (Core Neural Computation)
 - **`feagi-burst-engine`**: NPU execution & inference
@@ -77,7 +78,7 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
 ## Dependency Graph
 
 ```
-feagi-data-processing (external, foundation)
+feagi_data_structures (merged workspace crate)
         ↓
     feagi-types
         ↓
@@ -93,6 +94,8 @@ feagi-burst-engine  feagi-bdu        feagi-plasticity  feagi-connectome-serializ
                     feagi-agent-sdk (I/O layer)
                             ↓
                     feagi-inference-engine (application)
+
+Note: feagi_data_serialization and feagi_connector_core are also workspace members.
 ```
 
 ## Platform Support

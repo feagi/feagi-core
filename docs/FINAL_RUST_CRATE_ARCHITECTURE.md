@@ -3,6 +3,13 @@
 **Date:** 2025-10-28  
 **Status:** Post-migration architecture (after comprehensive Rust migration)
 
+> **⚠️ IMPORTANT UPDATE (December 2025):** The `feagi-data-processing` repository has been merged into `feagi-core` as workspace members:
+> - `feagi_data_structures` → `crates/feagi_data_structures`
+> - `feagi_data_serialization` → `crates/feagi_data_serialization`
+> - `feagi_connector_core` → `crates/feagi_connector_core`
+> 
+> This document retains historical references to `feagi-data-processing` as a separate entity for architectural context.
+
 ---
 
 ## Crate Hierarchy Overview

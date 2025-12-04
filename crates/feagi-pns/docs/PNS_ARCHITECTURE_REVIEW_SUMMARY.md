@@ -913,7 +913,7 @@ async-infra = ["async", "std"]  # Enabled by any async transport
 
 [dependencies]
 # Core (always)
-feagi-data-serialization = { path = "../../feagi-data-processing/feagi_data_serialization" }
+feagi-data-serialization = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
