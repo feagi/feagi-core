@@ -347,7 +347,7 @@ impl Neuroembryogenesis {
                     "CORE"
                 } else if let Some(ref cortical_type_new) = area.cortical_type_new {
                     // NEW: Use strongly-typed cortical type if available (Phase 2+)
-                    feagi_types::CorticalTypeAdapter::to_cortical_group(cortical_type_new)
+                    cortical_type_new.to_cortical_group()
                 } else {
                     // Fallback to cortical_group property or area_type
                     let cortical_group = area.properties.get("cortical_group")
@@ -416,7 +416,7 @@ impl Neuroembryogenesis {
                   ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
             
             // Build brain region structure following Python's normalize_brain_region_membership()
-            use feagi_types::{BrainRegion, RegionType};
+            use feagi_data_structures::genomic::{BrainRegion, RegionType};
             let mut regions_map = std::collections::HashMap::new();
             
             // Step 1: Create root region with only IPU/OPU/CORE areas

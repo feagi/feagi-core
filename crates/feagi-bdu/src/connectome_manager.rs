@@ -36,9 +36,9 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{info, warn, debug};
 
-use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalID, CorticalAreaDimensions, AreaType};
+use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions, AreaType};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
-use crate::types::{BduError, BduResult, NeuronId};
+use crate::types::{BduError, BduResult};
 
 // NPU integration (optional dependency)
 // use feagi_burst_engine::RustNPU; // Now using DynamicNPU
@@ -1619,7 +1619,7 @@ impl ConnectomeManager {
         // CRITICAL: Reserve indices 0 (_death) and 1 (_power)
         self.next_cortical_idx = 2;
         info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 2 (reserves 0=_death, 1=_power)");
-        self.brain_regions = feagi_types::BrainRegionHierarchy::new();
+        self.brain_regions = crate::models::BrainRegionHierarchy::new();
         
         // Add cortical areas
         for area in parsed.cortical_areas {
@@ -1904,16 +1904,16 @@ impl ConnectomeManager {
         
         // Create synapse via NPU
         let syn_type = if synapse_type == 0 {
-            feagi_types::SynapseType::Excitatory
+            feagi_neural::synapse::SynapseType::Excitatory
         } else {
-            feagi_types::SynapseType::Inhibitory
+            feagi_neural::synapse::SynapseType::Inhibitory
         };
         
         let synapse_idx = npu_lock.add_synapse(
-            feagi_types::NeuronId(source_neuron_id as u32),
-            feagi_types::NeuronId(target_neuron_id as u32),
-            feagi_types::SynapticWeight(weight),
-            feagi_types::SynapticConductance(conductance),
+            feagi_neural::types::NeuronId(source_neuron_id as u32),
+            feagi_neural::types::NeuronId(target_neuron_id as u32),
+            feagi_neural::types::SynapticWeight(weight),
+            feagi_neural::types::SynapticConductance(conductance),
             syn_type,
         ).map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
         
@@ -1984,9 +1984,9 @@ impl ConnectomeManager {
         
         // Update synapse weight via NPU
         let updated = npu_lock.update_synapse_weight(
-            feagi_types::NeuronId(source_neuron_id as u32),
-            feagi_types::NeuronId(target_neuron_id as u32),
-            feagi_types::SynapticWeight(new_weight),
+            feagi_neural::types::NeuronId(source_neuron_id as u32),
+            feagi_neural::types::NeuronId(target_neuron_id as u32),
+            feagi_neural::types::SynapticWeight(new_weight),
         );
         
         if updated {
@@ -2026,8 +2026,8 @@ impl ConnectomeManager {
         
         // Remove synapse via NPU
         let removed = npu_lock.remove_synapse(
-            feagi_types::NeuronId(source_neuron_id as u32),
-            feagi_types::NeuronId(target_neuron_id as u32),
+            feagi_neural::types::NeuronId(source_neuron_id as u32),
+            feagi_neural::types::NeuronId(target_neuron_id as u32),
         );
         
         if removed {
@@ -2306,7 +2306,7 @@ impl ConnectomeManager {
     ///
     /// `Some(CorticalArea)` if found, `None` otherwise
     ///
-    pub fn get_cortical_area_by_name(&self, name: &str) -> Option<feagi_types::CorticalArea> {
+    pub fn get_cortical_area_by_name(&self, name: &str) -> Option<CorticalArea> {
         self.cortical_areas.values()
             .find(|area| area.name == name)
             .cloned()
@@ -2331,7 +2331,7 @@ impl ConnectomeManager {
     pub fn resize_cortical_area(
         &mut self,
         cortical_id: &CorticalID,
-        new_dimensions: feagi_types::Dimensions,
+        new_dimensions: CorticalAreaDimensions,
     ) -> BduResult<()> {
         // Validate dimensions
         if new_dimensions.width == 0 || new_dimensions.height == 0 || new_dimensions.depth == 0 {
@@ -2459,10 +2459,10 @@ impl ConnectomeManager {
                     if let Some(type_str) = value.as_str() {
                         // Parse and update region type
                         let new_type = match type_str.to_lowercase().as_str() {
-                            "sensory" => feagi_types::RegionType::Sensory,
-                            "motor" => feagi_types::RegionType::Motor,
-                            "memory" => feagi_types::RegionType::Memory,
-                            "custom" => feagi_types::RegionType::Custom,
+                            "sensory" => feagi_data_structures::genomic::RegionType::Sensory,
+                            "motor" => feagi_data_structures::genomic::RegionType::Motor,
+                            "memory" => feagi_data_structures::genomic::RegionType::Memory,
+                            "custom" => feagi_data_structures::genomic::RegionType::Custom,
                             _ => return Err(BduError::InvalidArea(format!("Invalid region_type: {}", type_str))),
                         };
                         region.region_type = new_type;
@@ -2609,7 +2609,7 @@ impl ConnectomeManager {
         
         // Get neuron state (returns: consecutive_fire_count, consecutive_fire_limit, snooze_period, membrane_potential, threshold, refractory_countdown)
         if let Some((consec_count, consec_limit, snooze, mp, threshold, refract_countdown)) = 
-            npu_lock.get_neuron_state(feagi_types::NeuronId(neuron_id_u32)) {
+            npu_lock.get_neuron_state(feagi_neural::types::NeuronId(neuron_id_u32)) {
             properties.insert("consecutive_fire_count".to_string(), serde_json::json!(consec_count));
             properties.insert("consecutive_fire_limit".to_string(), serde_json::json!(consec_limit));
             properties.insert("snooze_period".to_string(), serde_json::json!(snooze));
@@ -3063,7 +3063,7 @@ mod tests {
         let root = BrainRegion::new(
             "root".to_string(),
             "Root".to_string(),
-            feagi_types::RegionType::Custom,
+            feagi_data_structures::genomic::RegionType::Custom,
         )
         .unwrap();
         

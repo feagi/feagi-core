@@ -46,16 +46,10 @@ pub use connectivity::{
     apply_projector_morphology, apply_vectors_morphology,
 };
 
-// Re-export legacy types for backward compatibility (will be removed)
-pub use connectivity::{
-    find_candidate_neurons, CandidateNeuron, MorphologyParams, SynaptogenesisRequest,
-    SynaptogenesisResult,
-};
-
 pub use spatial::{morton_decode_3d, morton_encode_3d, MortonSpatialHash, SpatialHashStats};
 
 // Re-export local BDU types
-pub use types::{AreaId, BduError, BduResult, NeuronId, Weight};
+pub use types::{AreaId, BduError, BduResult, Weight};
 
 // Re-export core types from feagi_data_structures (single source of truth)
 pub use feagi_data_structures::genomic::{
@@ -64,6 +58,7 @@ pub use feagi_data_structures::genomic::{
 pub use feagi_data_structures::genomic::cortical_area::{
     CorticalArea, AreaType, CorticalID, CorticalAreaDimensions as Dimensions
 };
+pub mod models;
 pub use models::{BrainRegionHierarchy, CorticalAreaExt};
 
 // Re-export Position from local types

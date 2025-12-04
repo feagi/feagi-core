@@ -176,7 +176,7 @@ pub fn validate_connectivity(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_types::{Dimensions};
+    use feagi_data_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions;
     use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
 
     #[test]
@@ -186,7 +186,7 @@ mod tests {
             CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Test IPU".to_string(),
-            Dimensions::new(10, 10, 1),
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0),
         ).unwrap();
         
@@ -208,7 +208,7 @@ mod tests {
             CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Test IPU".to_string(),
-            Dimensions::new(10, 10, 1),
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0),
         ).unwrap();
         
@@ -245,7 +245,7 @@ mod tests {
             CorticalID::try_from_base_64("b21vdDAwX18=").unwrap(),
             0,
             "Test Motor".to_string(),
-            Dimensions::new(5, 5, 1).unwrap(),
+            CorticalAreaDimensions::new(5, 5, 1).unwrap(),
             (0, 0, 0),
             AreaType::Motor,
         ).unwrap();
@@ -267,7 +267,7 @@ mod tests {
             CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Test IPU".to_string(),
-            Dimensions::new(10, 10, 1),
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0),
         ).unwrap();
         

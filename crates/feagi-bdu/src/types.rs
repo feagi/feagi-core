@@ -11,9 +11,6 @@ These types match the Python API for seamless integration.
 /// Cortical area identifier (6-character string in Python)
 pub type AreaId = String;
 
-/// Unique neuron identifier
-pub type NeuronId = u64;
-
 /// 3D position (x, y, z)
 pub type Position = (u32, u32, u32);
 
@@ -60,12 +57,12 @@ pub enum BduError {
     Internal(String),
 }
 
-// Convert from feagi_types::FeagiError
-impl From<feagi_types::FeagiError> for BduError {
-    fn from(err: feagi_types::FeagiError) -> Self {
+// Convert from feagi_neural::types::FeagiError
+impl From<feagi_neural::types::FeagiError> for BduError {
+    fn from(err: feagi_neural::types::FeagiError) -> Self {
         match &err {
-            feagi_types::FeagiError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
-            feagi_types::FeagiError::InvalidRegion(msg) => BduError::InvalidArea(msg.clone()),
+            feagi_neural::types::FeagiError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
+            feagi_neural::types::FeagiError::InvalidRegion(msg) => BduError::InvalidArea(msg.clone()),
             _ => BduError::Internal(err.to_string()),
         }
     }
