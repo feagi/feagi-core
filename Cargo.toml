@@ -50,6 +50,7 @@ agent-sdk = ["feagi-agent-sdk"]
 [dependencies]
 # Foundation (vendored into feagi-core when published)
 feagi-evo = { version = "2.0.0", path = "crates/feagi-evo" }
+feagi-neural = { version = "2.0.0", path = "crates/feagi-neural" }
 serde_json = "1.0"
 
 # Infrastructure (vendored)

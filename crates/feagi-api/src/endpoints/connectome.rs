@@ -375,7 +375,7 @@ pub async fn post_upload_cortical_area(State(_state): State<ApiState>, Json(_dat
     )
 )]
 pub async fn get_cortical_area_list_types(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use feagi_types::decode_cortical_id;
+    // Note: decode_cortical_id removed - use CorticalID methods
     use std::collections::{HashMap, HashSet};
     
     let connectome_service = state.connectome_service.as_ref();
@@ -410,25 +410,24 @@ pub async fn get_cortical_area_list_types(State(state): State<ApiState>) -> ApiR
     let mut type_map: HashMap<String, (String, Vec<String>, HashSet<u8>)> = HashMap::new();
     
     for area in areas {
-        // Decode cortical ID to get subtype and group_id (only for IPU/OPU)
-        if let Some(decoded) = decode_cortical_id(&area.cortical_id) {
-            // Extract subtype without the 'i' or 'o' prefix (e.g., "isvi" -> "svi")
-            let subtype = if decoded.cortical_subtype.len() >= 2 {
-                decoded.cortical_subtype[1..].to_lowercase()
-            } else {
-                decoded.cortical_subtype.to_lowercase()
-            };
-            
-            let entry = type_map.entry(subtype.clone()).or_insert_with(|| {
-                let title = get_cortical_type_title(&subtype);
-                (title, Vec::new(), HashSet::new())
-            });
-            
-            // Add cortical ID in base64 format
-            entry.1.push(area.cortical_id);
-            
-            // Add group_id
-            entry.2.insert(decoded.group_id);
+        // Parse cortical ID from base64
+        use feagi_data_structures::genomic::cortical_area::CorticalID;
+        if let Ok(cortical_id_typed) = CorticalID::try_from_base_64(&area.cortical_id) {
+            // Extract subtype and group_id using CorticalID methods
+            if let Some(subtype) = cortical_id_typed.extract_subtype() {
+                let entry = type_map.entry(subtype.clone()).or_insert_with(|| {
+                    let title = get_cortical_type_title(&subtype);
+                    (title, Vec::new(), HashSet::new())
+                });
+                
+                // Add cortical ID in base64 format
+                entry.1.push(area.cortical_id.clone());
+                
+                // Add group_id if available
+                if let Some(group_id) = cortical_id_typed.extract_group_id() {
+                    entry.2.insert(group_id);
+                }
+            }
         }
     }
     

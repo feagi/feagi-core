@@ -13,7 +13,9 @@ use crate::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
-use feagi_neural::types::{BrainRegion, CorticalArea, Dimensions, RegionType};
+use feagi_data_structures::genomic::{BrainRegion, RegionType};
+use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, AreaType};
+use feagi_bdu::models::CorticalAreaExt;
 // Note: decode_cortical_id removed - use feagi_data_structures::CorticalID directly
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -67,10 +69,15 @@ impl ConnectomeService for ConnectomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services","Creating cortical area: {}", params.cortical_id);
         
-        // Parse cortical type from params.area_type
-        use feagi_types::CorticalTypeAdapter;
-        let cortical_type_new = CorticalTypeAdapter::parse_from_cortical_group(&params.area_type)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical type: {}", e)))?;
+        // Parse area type from params.area_type
+        // Note: CorticalTypeAdapter removed - type is encoded in CorticalID
+        let area_type = match params.area_type.as_str() {
+            "Sensory" => AreaType::Sensory,
+            "Motor" => AreaType::Motor,
+            "Memory" => AreaType::Memory,
+            "Custom" => AreaType::Custom,
+            _ => return Err(ServiceError::InvalidInput(format!("Invalid area type: {}", params.area_type))),
+        };
         
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(&params.cortical_id)
@@ -81,58 +88,59 @@ impl ConnectomeService for ConnectomeServiceImpl {
             cortical_id_typed,
             0,  // Auto-assigned by ConnectomeManager
             params.name.clone(),
-            Dimensions::new(params.dimensions.0, params.dimensions.1, params.dimensions.2),
+            CorticalAreaDimensions::new(params.dimensions.0 as u32, params.dimensions.1 as u32, params.dimensions.2 as u32)?,
             params.position,
-        ).map_err(ServiceError::from)?;
+            area_type,
+        )?;
         
         // Set the cortical type
-        area.cortical_type_new = Some(cortical_type_new);
+        // Note: cortical_type_new field removed - type is encoded in CorticalID
         
-        // Apply all neural parameters from params (direct field assignment)
+        // Apply all neural parameters from params
         if let Some(visible) = params.visible {
-            area.visible = visible;
+            area.add_property_mut("visible".to_string(), serde_json::json!(visible));
         }
         if let Some(sub_group) = params.sub_group {
-            area.sub_group = Some(sub_group);
+            area.add_property_mut("sub_group".to_string(), serde_json::json!(sub_group));
         }
         if let Some(neurons_per_voxel) = params.neurons_per_voxel {
-            area.neurons_per_voxel = neurons_per_voxel;
+            area.add_property_mut("neurons_per_voxel".to_string(), serde_json::json!(neurons_per_voxel));
         }
         if let Some(postsynaptic_current) = params.postsynaptic_current {
-            area.postsynaptic_current = postsynaptic_current;
+            area.add_property_mut("postsynaptic_current".to_string(), serde_json::json!(postsynaptic_current));
         }
         if let Some(plasticity_constant) = params.plasticity_constant {
-            area.plasticity_constant = plasticity_constant;
+            area.add_property_mut("plasticity_constant".to_string(), serde_json::json!(plasticity_constant));
         }
         if let Some(degeneration) = params.degeneration {
-            area.degeneration = degeneration;
+            area.add_property_mut("degeneration".to_string(), serde_json::json!(degeneration));
         }
         if let Some(psp_uniform_distribution) = params.psp_uniform_distribution {
-            area.psp_uniform_distribution = psp_uniform_distribution;
+            area.add_property_mut("psp_uniform_distribution".to_string(), serde_json::json!(psp_uniform_distribution));
         }
         if let Some(firing_threshold_increment) = params.firing_threshold_increment {
-            area.firing_threshold_increment = firing_threshold_increment;
+            area.add_property_mut("firing_threshold_increment".to_string(), serde_json::json!(firing_threshold_increment));
         }
         if let Some(firing_threshold_limit) = params.firing_threshold_limit {
-            area.firing_threshold_limit = firing_threshold_limit;
+            area.add_property_mut("firing_threshold_limit".to_string(), serde_json::json!(firing_threshold_limit));
         }
         if let Some(consecutive_fire_count) = params.consecutive_fire_count {
-            area.consecutive_fire_count = consecutive_fire_count;
+            area.add_property_mut("consecutive_fire_limit".to_string(), serde_json::json!(consecutive_fire_count));
         }
         if let Some(snooze_period) = params.snooze_period {
-            area.snooze_period = snooze_period;
+            area.add_property_mut("snooze_period".to_string(), serde_json::json!(snooze_period));
         }
         if let Some(refractory_period) = params.refractory_period {
-            area.refractory_period = refractory_period;
+            area.add_property_mut("refractory_period".to_string(), serde_json::json!(refractory_period));
         }
         if let Some(leak_coefficient) = params.leak_coefficient {
-            area.leak_coefficient = leak_coefficient;
+            area.add_property_mut("leak_coefficient".to_string(), serde_json::json!(leak_coefficient));
         }
         if let Some(leak_variability) = params.leak_variability {
-            area.leak_variability = leak_variability;
+            area.add_property_mut("leak_variability".to_string(), serde_json::json!(leak_variability));
         }
         if let Some(burst_engine_active) = params.burst_engine_active {
-            area.burst_engine_active = burst_engine_active;
+            area.add_property_mut("burst_engine_active".to_string(), serde_json::json!(burst_engine_active));
         }
         if let Some(properties) = params.properties {
             area.properties = properties;
@@ -208,47 +216,42 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Get cortical_group from the area (uses cortical_type_new if available)
         let cortical_group = area.get_cortical_group();
         
-        // Decode cortical ID for IPU/OPU areas to extract additional metadata
-        let decoded_id = if cortical_group == "IPU" || cortical_group == "OPU" {
-            decode_cortical_id(cortical_id)
-        } else {
-            None
-        };
+        // Note: decode_cortical_id removed - IPU/OPU metadata now in CorticalID
         
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
             cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
             name: area.name.clone(),
-            dimensions: area.dimensions.to_tuple(),
+            dimensions: (area.dimensions.width as usize, area.dimensions.height as usize, area.dimensions.depth as usize),
             position: area.position,
-            area_type: cortical_group.clone(),
-            cortical_group,
+            area_type: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+            cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
             neuron_count,
             synapse_count,
             // All neural parameters come from the actual CorticalArea struct
-            visible: area.visible,
-            sub_group: area.sub_group.clone(),
-            neurons_per_voxel: area.neurons_per_voxel,
-            postsynaptic_current: area.postsynaptic_current,
-            plasticity_constant: area.plasticity_constant,
-            degeneration: area.degeneration,
-            psp_uniform_distribution: area.psp_uniform_distribution,
-            firing_threshold_increment: area.firing_threshold_increment,
-            firing_threshold_limit: area.firing_threshold_limit,
-            consecutive_fire_count: area.consecutive_fire_count,
-            snooze_period: area.snooze_period,
-            refractory_period: area.refractory_period,
-            leak_coefficient: area.leak_coefficient,
-            leak_variability: area.leak_variability,
-            burst_engine_active: area.burst_engine_active,
+            visible: area.visible(),
+            sub_group: area.sub_group(),
+            neurons_per_voxel: area.neurons_per_voxel(),
+            postsynaptic_current: area.postsynaptic_current() as f64,
+            plasticity_constant: area.plasticity_constant() as f64,
+            degeneration: area.degeneration() as f64,
+            psp_uniform_distribution: area.psp_uniform_distribution() != 0.0,
+            firing_threshold_increment: area.firing_threshold_increment() as f64,
+            firing_threshold_limit: area.firing_threshold_limit() as f64,
+            consecutive_fire_count: area.consecutive_fire_count(),
+            snooze_period: area.snooze_period() as u32,
+            refractory_period: area.refractory_period() as u32,
+            leak_coefficient: area.leak_coefficient() as f64,
+            leak_variability: area.leak_variability() as f64,
+            burst_engine_active: area.burst_engine_active(),
             properties: area.properties.clone(),
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
-            cortical_subtype: decoded_id.as_ref().map(|d| d.cortical_subtype.clone()),
-            encoding_type: decoded_id.as_ref().map(|d| d.encoding_type.clone()),
-            encoding_format: decoded_id.as_ref().map(|d| d.encoding_format.clone()),
-            unit_id: decoded_id.as_ref().map(|d| d.unit_id),
-            group_id: decoded_id.as_ref().map(|d| d.group_id),
+            cortical_subtype: None, // Note: decode_cortical_id removed
+            encoding_type: None,
+            encoding_format: None,
+            unit_id: None,
+            group_id: None,
         })
     }
 

@@ -15,21 +15,25 @@ use feagi_data_structures::genomic::cortical_area::{
     CorticalAreaType, IOCorticalAreaDataFlag,
 };
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-use feagi_neural::types::CorticalArea;
+use feagi_data_structures::genomic::cortical_area::CorticalArea;
+use feagi_bdu::models::CorticalAreaExt;
 // Note: CorticalTypeAdapter removed - use feagi_data_structures::CorticalID directly
 
 /// Convert internal CorticalArea to API CorticalTypeInfo
 ///
 /// Returns None if cortical_type_new is not populated (legacy areas)
 pub fn to_cortical_type_info(area: &CorticalArea) -> Option<CorticalTypeInfo> {
-    let cortical_type = area.cortical_type_new.as_ref()?;
+    let cortical_type = area.cortical_id.as_cortical_type().ok()?;
     
-    let category = CorticalTypeAdapter::to_cortical_group(cortical_type).to_string();
+    let category = area.get_cortical_group().unwrap_or_else(|| "CUSTOM".to_string());
     
     // Extract data_type and frame_handling for IPU/OPU
     let (data_type, frame_handling, encoding_details) = match cortical_type {
-        CorticalAreaType::BrainInput(io_type) | CorticalAreaType::BrainOutput(io_type) => {
-            extract_io_type_details(io_type)
+        CorticalAreaType::BrainInput(brain_input) => {
+            extract_io_type_details(&brain_input)
+        }
+        CorticalAreaType::BrainOutput(brain_output) => {
+            extract_io_type_details(&brain_output)
         }
         _ => (None, None, None),
     };

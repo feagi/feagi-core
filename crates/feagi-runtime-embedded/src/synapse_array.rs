@@ -298,23 +298,23 @@ mod tests {
     #[test]
     fn test_add_synapse() {
         let mut array = SynapseArray::<10>::new();
-        assert!(array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory));
+        assert!(array.add_synapse_simple(0, 1, 255, 255, 0));
         assert_eq!(array.count, 1);
     }
     
     #[test]
     fn test_array_full() {
         let mut array = SynapseArray::<2>::new();
-        assert!(array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory));
-        assert!(array.add_synapse(1, 2, 255, 255, SynapseType::Excitatory));
-        assert!(!array.add_synapse(2, 3, 255, 255, SynapseType::Excitatory)); // Full
+        assert!(array.add_synapse_simple(0, 1, 255, 255, 0));
+        assert!(array.add_synapse(1, 2, 255, 255, 0).is_ok());
+        assert!(array.add_synapse(2, 3, 255, 255, 0).is_err()); // Full
     }
     
     #[test]
     fn test_propagate() {
         let mut array = SynapseArray::<10>::new();
-        array.add_synapse(0, 1, 255, 255, SynapseType::Excitatory);
-        array.add_synapse(0, 2, 128, 255, SynapseType::Excitatory);
+        let _ = array.add_synapse(0, 1, 255, 255, 0);
+        let _ = array.add_synapse(0, 2, 128, 255, 0);
         
         let mut fired = [false; 10];
         fired[0] = true; // Neuron 0 fired

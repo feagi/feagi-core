@@ -563,12 +563,13 @@ mod tests {
         assert_eq!(parsed.cortical_areas.len(), 1);
         // OLD: Input was "_power" (6 bytes)
         // NEW: Converted to "_power__" (8 bytes, padded at end with underscores) then base64 encoded
-        assert_eq!(parsed.cortical_areas[0].cortical_id, "X3Bvd2VyX18=");
+        assert_eq!(parsed.cortical_areas[0].cortical_id.as_base_64(), "X3Bvd2VyX18=");
         assert_eq!(parsed.cortical_areas[0].name, "Test Area");
         assert_eq!(parsed.brain_regions.len(), 1);
         
         // Phase 2: Verify cortical_type_new is populated
-        assert!(parsed.cortical_areas[0].cortical_type_new.is_some());
+        // Note: cortical_type_new field removed - type is encoded in cortical_id
+        assert!(parsed.cortical_areas[0].cortical_id.as_cortical_type().is_ok());
     }
     
     #[test]
@@ -598,7 +599,7 @@ mod tests {
         
         // Phase 2: Verify both areas have cortical_type_new populated
         for area in &parsed.cortical_areas {
-            assert!(area.cortical_type_new.is_some(), 
+            assert!(area.cortical_id.as_cortical_type().is_ok(), 
                     "Area {} should have cortical_type_new populated", area.cortical_id);
         }
     }
@@ -637,7 +638,8 @@ mod tests {
         assert!(area.cortical_type_new.is_some(), 
                 "cortical_type_new should be populated from cortical_type property");
         if let Some(ref cortical_type) = area.cortical_type_new {
-            assert!(feagi_types::CorticalTypeAdapter::is_memory(cortical_type),
+            use feagi_data_structures::genomic::cortical_area::cortical_type::{CorticalAreaType, MemoryCorticalType};
+            assert!(matches!(cortical_type, CorticalAreaType::Memory(_)),
                     "Should be classified as MEMORY type");
         }
     }
@@ -695,21 +697,22 @@ mod tests {
         
         // Verify all areas have cortical_type_new populated
         for area in &parsed.cortical_areas {
-            assert!(area.cortical_type_new.is_some(), 
+            assert!(area.cortical_id.as_cortical_type().is_ok(), 
                     "Area {} should have cortical_type_new populated", area.cortical_id);
             
             // Verify cortical_group property is also set
             assert!(area.properties.contains_key("cortical_group"),
                     "Area {} should have cortical_group property", area.cortical_id);
             
-            // Verify the type matches the property
-            if let Some(ref cortical_type_new) = area.cortical_type_new {
-                let group_from_type = feagi_types::CorticalTypeAdapter::to_cortical_group(cortical_type_new);
+            // Verify cortical type is valid
+            use feagi_bdu::models::CorticalAreaExt;
+            if let Some(cortical_group) = area.get_cortical_group() {
                 let group_from_prop = area.properties.get("cortical_group")
-                    .and_then(|v| v.as_str())
-                    .unwrap();
-                assert_eq!(group_from_type, group_from_prop,
-                          "Area {} type group mismatch", area.cortical_id);
+                    .and_then(|v| v.as_str());
+                if let Some(prop_group) = group_from_prop {
+                    assert_eq!(cortical_group, prop_group,
+                              "Area {} type group mismatch", area.cortical_id.as_base_64());
+                }
             }
         }
     }

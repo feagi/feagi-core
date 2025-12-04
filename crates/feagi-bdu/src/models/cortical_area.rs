@@ -23,8 +23,11 @@ pub trait CorticalAreaExt {
     /// Create a cortical area with custom properties
     fn with_properties(self, properties: HashMap<String, serde_json::Value>) -> Self;
     
-    /// Add a single property
+    /// Add a single property (builder pattern)
     fn add_property(self, key: String, value: serde_json::Value) -> Self;
+    
+    /// Add a single property in-place
+    fn add_property_mut(&mut self, key: String, value: serde_json::Value);
     
     /// Check if a 3D position is within this area's bounds
     fn contains_position(&self, pos: (i32, i32, i32)) -> bool;
@@ -70,6 +73,39 @@ pub trait CorticalAreaExt {
     
     /// Get cortical group classification
     fn get_cortical_group(&self) -> Option<String>;
+    
+    /// Get visible flag from properties (defaults to true)
+    fn visible(&self) -> bool;
+    
+    /// Get sub_group from properties
+    fn sub_group(&self) -> Option<String>;
+    
+    /// Get plasticity_constant from properties
+    fn plasticity_constant(&self) -> f32;
+    
+    /// Get postsynaptic_current from properties
+    fn postsynaptic_current(&self) -> f32;
+    
+    /// Get psp_uniform_distribution from properties
+    fn psp_uniform_distribution(&self) -> f32;
+    
+    /// Get degeneration from properties
+    fn degeneration(&self) -> f32;
+    
+    /// Get burst_engine_active from properties
+    fn burst_engine_active(&self) -> bool;
+    
+    /// Get firing_threshold_increment from properties
+    fn firing_threshold_increment(&self) -> f32;
+    
+    /// Get firing_threshold_limit from properties
+    fn firing_threshold_limit(&self) -> f32;
+    
+    /// Get consecutive_fire_count from properties
+    fn consecutive_fire_count(&self) -> u32;
+    
+    /// Get leak_variability from properties
+    fn leak_variability(&self) -> f32;
 }
 
 impl CorticalAreaExt for CorticalArea {
@@ -82,6 +118,10 @@ impl CorticalAreaExt for CorticalArea {
     fn add_property(mut self, key: String, value: serde_json::Value) -> Self {
         self.properties.insert(key, value);
         self
+    }
+    
+    fn add_property_mut(&mut self, key: String, value: serde_json::Value) {
+        self.properties.insert(key, value);
     }
 
     fn contains_position(&self, pos: (i32, i32, i32)) -> bool {
@@ -206,6 +246,50 @@ impl CorticalAreaExt for CorticalArea {
                     AreaType::Custom => Some("CUSTOM".to_string()),
                 }
             })
+    }
+    
+    fn visible(&self) -> bool {
+        self.get_bool_property("visible", true)
+    }
+    
+    fn sub_group(&self) -> Option<String> {
+        self.properties.get("sub_group").and_then(|v| v.as_str()).map(|s| s.to_string())
+    }
+    
+    fn plasticity_constant(&self) -> f32 {
+        self.get_f32_property("plasticity_constant", 0.0)
+    }
+    
+    fn postsynaptic_current(&self) -> f32 {
+        self.get_f32_property("postsynaptic_current", 0.0)
+    }
+    
+    fn psp_uniform_distribution(&self) -> f32 {
+        self.get_f32_property("psp_uniform_distribution", 0.0)
+    }
+    
+    fn degeneration(&self) -> f32 {
+        self.get_f32_property("degeneration", 0.0)
+    }
+    
+    fn burst_engine_active(&self) -> bool {
+        self.get_bool_property("burst_engine_active", false)
+    }
+    
+    fn firing_threshold_increment(&self) -> f32 {
+        self.get_f32_property("firing_threshold_increment", 0.0)
+    }
+    
+    fn firing_threshold_limit(&self) -> f32 {
+        self.get_f32_property("firing_threshold_limit", 1.0)
+    }
+    
+    fn consecutive_fire_count(&self) -> u32 {
+        self.get_u32_property("consecutive_fire_limit", 0)
+    }
+    
+    fn leak_variability(&self) -> f32 {
+        self.get_f32_property("leak_variability", 0.0)
     }
 }
 

@@ -13,6 +13,7 @@ use crate::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
+use feagi_bdu::models::CorticalAreaExt;
 use feagi_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -246,7 +247,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
         for cortical_id in manager.get_cortical_area_ids() {
             if let Some(area) = manager.get_cortical_area(&cortical_id) {
                 let cortical_group = area.get_cortical_group();
-                if cortical_group != "MEMORY" {
+                if cortical_group.as_deref() != Some("MEMORY") {
                     regular_count += manager.get_neuron_count_in_area(&cortical_id);
                 }
             }
@@ -265,7 +266,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
         for cortical_id in manager.get_cortical_area_ids() {
             if let Some(area) = manager.get_cortical_area(&cortical_id) {
                 let cortical_group = area.get_cortical_group();
-                if cortical_group == "MEMORY" {
+                if cortical_group.as_deref() == Some("MEMORY") {
                     memory_count += manager.get_neuron_count_in_area(&cortical_id);
                 }
             }

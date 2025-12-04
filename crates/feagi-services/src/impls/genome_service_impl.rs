@@ -19,7 +19,8 @@ use std::collections::HashMap;
 use tracing::{info, warn, debug};
 use feagi_bdu::neuroembryogenesis::Neuroembryogenesis;
 use serde_json::Value;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea, CorticalAreaDimensions, AreaType};
+use feagi_bdu::models::CorticalAreaExt;
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
 
@@ -315,72 +316,74 @@ impl GenomeService for GenomeServiceImpl {
         // Step 1: Build CorticalArea structures
         let mut areas_to_add = Vec::new();
         for param in &params {
-            // Parse cortical type
-            use feagi_types::CorticalTypeAdapter;
-            let cortical_type_new = CorticalTypeAdapter::parse_from_cortical_group(&param.area_type)
-                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical type: {}", e)))?;
+            // Parse area type
+            let area_type = match param.area_type.as_str() {
+                "Sensory" => AreaType::Sensory,
+                "Motor" => AreaType::Motor,
+                "Memory" => AreaType::Memory,
+                "Custom" => AreaType::Custom,
+                _ => return Err(ServiceError::InvalidInput(format!("Invalid area type: {}", param.area_type))),
+            };
             
             // Convert String to CorticalID
             let cortical_id_typed = CorticalID::try_from_base_64(&param.cortical_id)
                 .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
             
             // Create CorticalArea
-            let mut area = feagi_types::CorticalArea::new(
+            let mut area = CorticalArea::new(
                 cortical_id_typed,
                 0,  // Auto-assigned by ConnectomeManager
                 param.name.clone(),
-                feagi_types::Dimensions::new(param.dimensions.0, param.dimensions.1, param.dimensions.2),
+                CorticalAreaDimensions::new(param.dimensions.0 as u32, param.dimensions.1 as u32, param.dimensions.2 as u32)?,
                 param.position,
-            ).map_err(ServiceError::from)?;
-            
-            // Set cortical type
-            area.cortical_type_new = Some(cortical_type_new);
+                area_type,
+            )?;
             
             // Apply all neural parameters
             if let Some(visible) = param.visible {
-                area.visible = visible;
+                area.add_property_mut("visible".to_string(), serde_json::json!(visible));
             }
             if let Some(sub_group) = &param.sub_group {
-                area.sub_group = Some(sub_group.clone());
+                area.add_property_mut("sub_group".to_string(), serde_json::json!(sub_group));
             }
             if let Some(neurons_per_voxel) = param.neurons_per_voxel {
-                area.neurons_per_voxel = neurons_per_voxel;
+                area.add_property_mut("neurons_per_voxel".to_string(), serde_json::json!(neurons_per_voxel));
             }
             if let Some(postsynaptic_current) = param.postsynaptic_current {
-                area.postsynaptic_current = postsynaptic_current;
+                area.add_property_mut("postsynaptic_current".to_string(), serde_json::json!(postsynaptic_current));
             }
             if let Some(plasticity_constant) = param.plasticity_constant {
-                area.plasticity_constant = plasticity_constant;
+                area.add_property_mut("plasticity_constant".to_string(), serde_json::json!(plasticity_constant));
             }
             if let Some(degeneration) = param.degeneration {
-                area.degeneration = degeneration;
+                area.add_property_mut("degeneration".to_string(), serde_json::json!(degeneration));
             }
             if let Some(psp_uniform_distribution) = param.psp_uniform_distribution {
-                area.psp_uniform_distribution = psp_uniform_distribution;
+                area.add_property_mut("psp_uniform_distribution".to_string(), serde_json::json!(psp_uniform_distribution));
             }
             if let Some(firing_threshold_increment) = param.firing_threshold_increment {
-                area.firing_threshold_increment = firing_threshold_increment;
+                area.add_property_mut("firing_threshold_increment".to_string(), serde_json::json!(firing_threshold_increment));
             }
             if let Some(firing_threshold_limit) = param.firing_threshold_limit {
-                area.firing_threshold_limit = firing_threshold_limit;
+                area.add_property_mut("firing_threshold_limit".to_string(), serde_json::json!(firing_threshold_limit));
             }
             if let Some(consecutive_fire_count) = param.consecutive_fire_count {
-                area.consecutive_fire_count = consecutive_fire_count;
+                area.add_property_mut("consecutive_fire_limit".to_string(), serde_json::json!(consecutive_fire_count));
             }
             if let Some(snooze_period) = param.snooze_period {
-                area.snooze_period = snooze_period;
+                area.add_property_mut("snooze_period".to_string(), serde_json::json!(snooze_period));
             }
             if let Some(refractory_period) = param.refractory_period {
-                area.refractory_period = refractory_period;
+                area.add_property_mut("refractory_period".to_string(), serde_json::json!(refractory_period));
             }
             if let Some(leak_coefficient) = param.leak_coefficient {
-                area.leak_coefficient = leak_coefficient;
+                area.add_property_mut("leak_coefficient".to_string(), serde_json::json!(leak_coefficient));
             }
             if let Some(leak_variability) = param.leak_variability {
-                area.leak_variability = leak_variability;
+                area.add_property_mut("leak_variability".to_string(), serde_json::json!(leak_variability));
             }
             if let Some(burst_engine_active) = param.burst_engine_active {
-                area.burst_engine_active = burst_engine_active;
+                area.add_property_mut("burst_engine_active".to_string(), serde_json::json!(burst_engine_active));
             }
             if let Some(properties) = &param.properties {
                 area.properties = properties.clone();
@@ -573,47 +576,47 @@ info!(target: "feagi-services", "[FAST-UPDATE] Parameter-only update for {}", co
                 match key.as_str() {
                     "firing_threshold_limit" | "neuron_fire_threshold" => {
                         if let Some(v) = value.as_f64() {
-                            area.firing_threshold_limit = v;
+                            area.add_property_mut("firing_threshold_limit".to_string(), serde_json::json!(v));
                         }
                     }
                     "leak_coefficient" | "neuron_leak_coefficient" => {
                         if let Some(v) = value.as_f64() {
-                            area.leak_coefficient = v;
+                            area.add_property_mut("leak_coefficient".to_string(), serde_json::json!(v));
                         }
                     }
                     "refractory_period" | "neuron_refractory_period" => {
                         if let Some(v) = value.as_u64() {
-                            area.refractory_period = v as u32;
+                            area.add_property_mut("refractory_period".to_string(), serde_json::json!(v as u32));
                         }
                     }
                     "snooze_period" | "neuron_snooze_period" => {
                         if let Some(v) = value.as_u64() {
-                            area.snooze_period = v as u32;
+                            area.add_property_mut("snooze_period".to_string(), serde_json::json!(v as u32));
                         }
                     }
                     "consecutive_fire_count" | "neuron_consecutive_fire_count" => {
                         if let Some(v) = value.as_u64() {
-                            area.consecutive_fire_count = v as u32;
+                            area.add_property_mut("consecutive_fire_limit".to_string(), serde_json::json!(v as u32));
                         }
                     }
                     "plasticity_constant" => {
                         if let Some(v) = value.as_f64() {
-                            area.plasticity_constant = v;
+                            area.add_property_mut("plasticity_constant".to_string(), serde_json::json!(v));
                         }
                     }
                     "degeneration" => {
                         if let Some(v) = value.as_f64() {
-                            area.degeneration = v;
+                            area.add_property_mut("degeneration".to_string(), serde_json::json!(v));
                         }
                     }
                     "postsynaptic_current" => {
                         if let Some(v) = value.as_f64() {
-                            area.postsynaptic_current = v;
+                            area.add_property_mut("postsynaptic_current".to_string(), serde_json::json!(v));
                         }
                     }
                     "burst_engine_active" => {
                         if let Some(v) = value.as_bool() {
-                            area.burst_engine_active = v;
+                            area.add_property_mut("burst_engine_active".to_string(), serde_json::json!(v));
                         }
                     }
                     _ => {}
@@ -697,7 +700,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                     }
                     "visible" => {
                         if let Some(v) = value.as_bool() {
-                            area.visible = v;
+                            area.add_property_mut("visible".to_string(), serde_json::json!(v));
                         }
                     }
                     "coordinates_3d" | "coordinate_3d" | "coordinates" | "position" => {
@@ -789,7 +792,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                 })?;
             
             let old_dims = area.dimensions;
-            let old_dens = area.neurons_per_voxel;
+            let old_dens = area.neurons_per_voxel();
             
             // Apply dimensional changes
             // CRITICAL: For IPU/OPU areas, cortical_dimensions_per_device must be multiplied by dev_count
@@ -839,14 +842,14 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                     depth
                 };
                 
-                area.dimensions = feagi_types::Dimensions::new(width, height, final_depth);
+                area.dimensions = CorticalAreaDimensions::new(width as u32, height as u32, final_depth as u32)?;
             }
             
             // Apply density changes
             // Update neurons_per_voxel from any of the legacy parameter names
             for density_param in ["neurons_per_voxel", "per_voxel_neuron_cnt", "neuron_density"] {
                 if let Some(density) = changes.get(density_param).and_then(|v| v.as_u64()) {
-                    area.neurons_per_voxel = density as u32;
+                    area.add_property_mut("neurons_per_voxel".to_string(), serde_json::json!(density as u32));
                     break;
                 }
             }
@@ -859,7 +862,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                 area.properties.insert("cortical_dimensions_per_device".to_string(), per_device_dims.clone());
             }
             
-            (old_dims, old_dens, area.dimensions, area.neurons_per_voxel)
+            (old_dims, old_dens, area.dimensions, area.neurons_per_voxel())
         };
         
         info!("[STRUCTURAL-REBUILD] Dimension: {:?} -> {:?}", old_dimensions, new_dimensions);
@@ -890,7 +893,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             
             // Update neurons_per_voxel and properties
             if let Some(area) = manager.get_cortical_area_mut(&cortical_id_typed) {
-                area.neurons_per_voxel = new_density;
+                area.add_property_mut("neurons_per_voxel".to_string(), serde_json::json!(new_density));
                 
                 // Store IPU/OPU properties
                 if let Some(dev_count) = changes.get("dev_count") {
@@ -990,27 +993,27 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
             name: area.name.clone(),
-            dimensions: (area.dimensions.width, area.dimensions.height, area.dimensions.depth),
+            dimensions: (area.dimensions.width as usize, area.dimensions.height as usize, area.dimensions.depth as usize),
             position: area.position,
-            area_type: cortical_group.clone(),
-            cortical_group,
+            area_type: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+            cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
             neuron_count,
             synapse_count,
-            visible: area.visible,
-            sub_group: area.sub_group.clone(),
-            neurons_per_voxel: area.neurons_per_voxel,
-            postsynaptic_current: area.postsynaptic_current,
-            plasticity_constant: area.plasticity_constant,
-            degeneration: area.degeneration,
-            psp_uniform_distribution: area.psp_uniform_distribution,
-            firing_threshold_increment: area.firing_threshold_increment,
-            firing_threshold_limit: area.firing_threshold_limit,
-            consecutive_fire_count: area.consecutive_fire_count,
-            snooze_period: area.snooze_period,
-            refractory_period: area.refractory_period,
-            leak_coefficient: area.leak_coefficient,
-            leak_variability: area.leak_variability,
-            burst_engine_active: area.burst_engine_active,
+            visible: area.visible(),
+            sub_group: area.sub_group(),
+            neurons_per_voxel: area.neurons_per_voxel(),
+            postsynaptic_current: area.postsynaptic_current() as f64,
+            plasticity_constant: area.plasticity_constant() as f64,
+            degeneration: area.degeneration() as f64,
+            psp_uniform_distribution: area.psp_uniform_distribution() != 0.0,
+            firing_threshold_increment: area.firing_threshold_increment() as f64,
+            firing_threshold_limit: area.firing_threshold_limit() as f64,
+            consecutive_fire_count: area.consecutive_fire_count(),
+            snooze_period: area.snooze_period() as u32,
+            refractory_period: area.refractory_period() as u32,
+            leak_coefficient: area.leak_coefficient() as f64,
+            leak_variability: area.leak_variability() as f64,
+            burst_engine_active: area.burst_engine_active(),
             properties: HashMap::new(),
             // IPU/OPU-specific fields (None for genome service - not decoded here)
             cortical_subtype: None,
@@ -1052,27 +1055,27 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
             name: area.name.clone(),
-            dimensions: (area.dimensions.width, area.dimensions.height, area.dimensions.depth),
+            dimensions: (area.dimensions.width as usize, area.dimensions.height as usize, area.dimensions.depth as usize),
             position: area.position,
-            area_type: cortical_group.clone(),
-            cortical_group,
+            area_type: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+            cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
             neuron_count,
             synapse_count,
-            visible: area.visible,
-            sub_group: area.sub_group.clone(),
-            neurons_per_voxel: area.neurons_per_voxel,
-            postsynaptic_current: area.postsynaptic_current,
-            plasticity_constant: area.plasticity_constant,
-            degeneration: area.degeneration,
-            psp_uniform_distribution: area.psp_uniform_distribution,
-            firing_threshold_increment: area.firing_threshold_increment,
-            firing_threshold_limit: area.firing_threshold_limit,
-            consecutive_fire_count: area.consecutive_fire_count,
-            snooze_period: area.snooze_period,
-            refractory_period: area.refractory_period,
-            leak_coefficient: area.leak_coefficient,
-            leak_variability: area.leak_variability,
-            burst_engine_active: area.burst_engine_active,
+            visible: area.visible(),
+            sub_group: area.sub_group(),
+            neurons_per_voxel: area.neurons_per_voxel(),
+            postsynaptic_current: area.postsynaptic_current() as f64,
+            plasticity_constant: area.plasticity_constant() as f64,
+            degeneration: area.degeneration() as f64,
+            psp_uniform_distribution: area.psp_uniform_distribution() != 0.0,
+            firing_threshold_increment: area.firing_threshold_increment() as f64,
+            firing_threshold_limit: area.firing_threshold_limit() as f64,
+            consecutive_fire_count: area.consecutive_fire_count(),
+            snooze_period: area.snooze_period() as u32,
+            refractory_period: area.refractory_period() as u32,
+            leak_coefficient: area.leak_coefficient() as f64,
+            leak_variability: area.leak_variability() as f64,
+            burst_engine_active: area.burst_engine_active(),
             properties: HashMap::new(),
             // IPU/OPU-specific fields (None for genome service - not decoded here)
             cortical_subtype: None,
