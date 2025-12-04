@@ -324,7 +324,7 @@ macro_rules! define_xyz_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
 
         #[doc = $doc_string]
-        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
+        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, serde::Serialize, serde::Deserialize)]
         pub struct $name {
             pub width: $var_type,
             pub height: $var_type,
@@ -339,8 +339,34 @@ macro_rules! define_xyz_dimensions {
                 Ok(Self { width: x, height: y, depth: z })
             }
 
+            /// Convenience method for creating from tuple (validates)
+            pub fn from_tuple(tuple: ($var_type, $var_type, $var_type)) -> Result<Self, FeagiDataError> {
+                Self::new(tuple.0, tuple.1, tuple.2)
+            }
+
+            /// Convert to tuple
+            pub fn to_tuple(&self) -> ($var_type, $var_type, $var_type) {
+                (self.width, self.height, self.depth)
+            }
+
+            /// Total number of elements (width * height * depth)
             pub fn number_elements(&self) -> $var_type {
                 self.width * self.height * self.depth
+            }
+
+            /// Alias for number_elements (for compatibility)
+            pub fn volume(&self) -> $var_type {
+                self.number_elements()
+            }
+
+            /// Alias for number_elements (for compatibility)
+            pub fn total_voxels(&self) -> $var_type {
+                self.number_elements()
+            }
+
+            /// Check if a position is within these dimensions
+            pub fn contains(&self, pos: ($var_type, $var_type, $var_type)) -> bool {
+                pos.0 < self.width && pos.1 < self.height && pos.2 < self.depth
             }
         }
 
