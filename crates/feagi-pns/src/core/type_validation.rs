@@ -19,7 +19,7 @@ Licensed under the Apache License, Version 2.0
 use feagi_data_structures::genomic::cortical_area::{
     CorticalAreaType, IOCorticalAreaDataFlag,
 };
-use feagi_neural::types::CorticalArea;
+use feagi_data_structures::genomic::cortical_area::CorticalArea;
 // Note: CorticalTypeAdapter removed - use feagi_data_structures::CorticalID directly
 
 /// Validation result for agent-area compatibility
@@ -68,8 +68,8 @@ pub fn validate_sensory_compatibility(
     area: &CorticalArea,
 ) -> ValidationResult {
     // Check if area is an input area
-    if let Some(ref cortical_type) = area.cortical_type_new {
-        if !CorticalTypeAdapter::is_input(cortical_type) {
+    use crate::models::CorticalAreaExt;
+    if !area.is_input_area() {
             return ValidationResult::incompatible(format!(
                 "Agent {} (modality: {}) trying to connect to non-IPU area {}",
                 agent_id, agent_modality, area.cortical_id
@@ -119,8 +119,8 @@ pub fn validate_motor_compatibility(
     area: &CorticalArea,
 ) -> ValidationResult {
     // Check if area is an output area
-    if let Some(ref cortical_type) = area.cortical_type_new {
-        if !CorticalTypeAdapter::is_output(cortical_type) {
+    use crate::models::CorticalAreaExt;
+    if !area.is_output_area() {
             return ValidationResult::incompatible(format!(
                 "Agent {} (modality: {}) trying to connect to non-OPU area {}",
                 agent_id, agent_modality, area.cortical_id
