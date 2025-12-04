@@ -15,6 +15,7 @@
 
 use super::ComputeBackend;
 use feagi_neural::types::*;
+use feagi_runtime_std::{NeuronArray, SynapseArray};
 use tracing::info;
 
 /// WGPU backend for GPU acceleration
@@ -1312,7 +1313,7 @@ impl WGPUBackend {
 
 // GPU backend currently only supports f32 (shaders are f32-based)
 // Future: Add f16 support for GPU optimization
-impl ComputeBackend<f32> for WGPUBackend {
+impl<N: feagi_runtime::NeuronStorage<Value = f32>, S: feagi_runtime::SynapseStorage> ComputeBackend<f32, N, S> for WGPUBackend {
     fn backend_name(&self) -> &str {
         &self.name
     }
@@ -1320,7 +1321,7 @@ impl ComputeBackend<f32> for WGPUBackend {
     fn process_synaptic_propagation(
         &mut self,
         fired_neurons: &[u32],
-        synapse_array: &SynapseArray,
+        synapse_array: &S,
         fcl: &mut FireCandidateList,
     ) -> Result<usize> {
         if fired_neurons.is_empty() {
@@ -1372,7 +1373,7 @@ impl ComputeBackend<f32> for WGPUBackend {
     fn process_neural_dynamics(
         &mut self,
         fcl: &FireCandidateList,
-        neuron_array: &mut NeuronArray<f32>,
+        neuron_array: &mut N,
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // **FCL-AWARE**: Upload only FCL candidates to GPU (sparse array)
@@ -1417,8 +1418,8 @@ impl ComputeBackend<f32> for WGPUBackend {
 
     fn initialize_persistent_data(
         &mut self,
-        neuron_array: &NeuronArray<f32>,
-        synapse_array: &SynapseArray,
+        neuron_array: &N,
+        synapse_array: &S,
     ) -> Result<()> {
         // Upload all data to GPU
         self.upload_neuron_arrays(neuron_array)?;

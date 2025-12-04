@@ -154,7 +154,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export foundation
-pub use feagi_types as types;
+// Note: feagi_types removed - use feagi_neural::types or feagi_data_structures instead
+pub use feagi_neural::types;
 
 // Re-export infrastructure
 #[cfg(feature = "state-manager")]
