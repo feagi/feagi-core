@@ -119,6 +119,8 @@ edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
 repository = "https://github.com/Neuraville/FEAGI-2.0"
+homepage = "https://feagi.org"
+documentation = "https://docs.rs/feagi"
 
 [workspace.dependencies]
 # Core dependencies (shared across crates)
