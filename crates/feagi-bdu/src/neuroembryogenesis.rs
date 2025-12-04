@@ -433,6 +433,7 @@ impl Neuroembryogenesis {
         // Convert CorticalID to base64 for with_areas()
         // Create a root region with a generated RegionID
         let root_region_id = RegionID::new();
+        let root_region_id_str = root_region_id.to_string();
         
         let mut root_region = BrainRegion::new(
             root_region_id,
@@ -471,9 +472,7 @@ impl Neuroembryogenesis {
                 combined.hash(&mut hasher);
                 let hash = hasher.finish();
                 let hash_hex = format!("{:08x}", hash as u32);
-                
                 let region_id = format!("region_autogen_{}", hash_hex);
-                subregion_id = Some(region_id.clone());
                 
                 // Analyze connections to determine inputs/outputs for subregion
                 let (subregion_inputs, subregion_outputs) = Self::analyze_region_io(
@@ -498,13 +497,16 @@ impl Neuroembryogenesis {
                     subregion.add_property("outputs".to_string(), serde_json::json!(subregion_outputs.clone()));
                 }
                 
+                let subregion_id_str = subregion.region_id.to_string();
+                
                 info!(target: "feagi-bdu","  ✅ Created subregion '{}' with {} CUSTOM/MEMORY areas ({} inputs, {} outputs)",
                       region_id, custom_memory_areas.len(), subregion_inputs.len(), subregion_outputs.len());
                 
-                regions_map.insert(region_id, subregion);
+                regions_map.insert(subregion_id_str.clone(), subregion);
+                subregion_id = Some(subregion_id_str);
             }
             
-            regions_map.insert("root".to_string(), root_region);
+            regions_map.insert(root_region_id_str.clone(), root_region);
             
             // Count total inputs/outputs across all regions
             let total_inputs = root_inputs.len() + if let Some(ref sid) = subregion_id {
@@ -529,8 +531,8 @@ impl Neuroembryogenesis {
             // Return (regions_map, parent_map) so we can properly link hierarchy
             let mut parent_map = std::collections::HashMap::new();
             if let Some(ref sub_id) = subregion_id {
-                parent_map.insert(sub_id.clone(), "root".to_string());
-                info!(target: "feagi-bdu","  🔗 Parent relationship: {} -> root", sub_id);
+                parent_map.insert(sub_id.clone(), root_region_id_str.clone());
+                info!(target: "feagi-bdu","  🔗 Parent relationship: {} -> {}", sub_id, root_region_id_str);
             }
             
             (regions_map, parent_map)
@@ -547,15 +549,16 @@ impl Neuroembryogenesis {
             let brain_region_count = brain_regions_to_add.len();
             info!(target: "feagi-bdu","  Adding {} brain regions from genome", brain_region_count);
             
-            // First add root (no parent)
-            if let Some(root_region) = brain_regions_to_add.get("root") {
+            // First add root (no parent) - need to find it by iterating since key is UUID
+            let root_entry = brain_regions_to_add.iter().find(|(_, region)| region.name == "Root Brain Region");
+            if let Some((root_id, root_region)) = root_entry {
                 manager.add_brain_region(root_region.clone(), None)?;
-                debug!(target: "feagi-bdu","    ✓ Added brain region: root (Root Brain Region) [parent=None]");
+                debug!(target: "feagi-bdu","    ✓ Added brain region: {} (Root Brain Region) [parent=None]", root_id);
             }
             
             // Then add other regions with their parent relationships
             for (region_id, region) in brain_regions_to_add.iter() {
-                if region_id == "root" {
+                if region.name == "Root Brain Region" {
                     continue; // Already added
                 }
                 

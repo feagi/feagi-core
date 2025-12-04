@@ -47,7 +47,7 @@ use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
 use feagi_data_structures::genomic::{BrainRegion, RegionType};
-use feagi_data_structures::genomic::descriptors::{GenomeCoordinate2D, GenomeCoordinate3D};
+use feagi_data_structures::genomic::descriptors::GenomeCoordinate3D;
 use feagi_data_structures::genomic::brain_regions::RegionID;
 use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
