@@ -60,14 +60,38 @@ pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Jso
                 
                 debug!(target: "feagi-api", "    - Inputs: {} areas, Outputs: {} areas", inputs.len(), outputs.len());
                 
+                // Extract coordinate_3d from properties (set by smart positioning in neuroembryogenesis)
+                let coordinate_3d = region.properties.get("coordinate_3d")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| {
+                        if arr.len() >= 3 {
+                            Some(serde_json::json!([arr[0], arr[1], arr[2]]))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| serde_json::json!([0, 0, 0]));
+                
+                // Extract coordinate_2d from properties
+                let coordinate_2d = region.properties.get("coordinate_2d")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| {
+                        if arr.len() >= 2 {
+                            Some(serde_json::json!([arr[0], arr[1]]))
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or_else(|| serde_json::json!([0, 0]));
+                
                 result.insert(
                     region.region_id.clone(),
                     serde_json::json!({
                         "title": region.name,
                         "description": "",  // TODO: Add description field to BrainRegionInfo
                         "parent_region_id": region.parent_id,
-                        "coordinate_2d": [0, 0],  // TODO: Get from region properties
-                        "coordinate_3d": [0, 0, 0],  // TODO: Get from region properties
+                        "coordinate_2d": coordinate_2d,
+                        "coordinate_3d": coordinate_3d,
                         "areas": region.cortical_areas,
                         "regions": region.child_regions,
                         "inputs": inputs,
@@ -207,12 +231,36 @@ pub async fn get_region_detail(
     let region = connectome_service.get_brain_region(&region_id).await
         .map_err(|e| ApiError::not_found("region", &e.to_string()))?;
     
+    // Extract coordinate_3d from properties (set by smart positioning in neuroembryogenesis)
+    let coordinate_3d = region.properties.get("coordinate_3d")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            if arr.len() >= 3 {
+                Some(serde_json::json!([arr[0], arr[1], arr[2]]))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| serde_json::json!([0, 0, 0]));
+    
+    // Extract coordinate_2d from properties
+    let coordinate_2d = region.properties.get("coordinate_2d")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| {
+            if arr.len() >= 2 {
+                Some(serde_json::json!([arr[0], arr[1]]))
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| serde_json::json!([0, 0]));
+    
     let mut response = HashMap::new();
     response.insert("region_id".to_string(), serde_json::json!(region.region_id));
     response.insert("title".to_string(), serde_json::json!(region.name));
     response.insert("description".to_string(), serde_json::json!(""));
-    response.insert("coordinate_2d".to_string(), serde_json::json!([0, 0]));
-    response.insert("coordinate_3d".to_string(), serde_json::json!([0, 0, 0]));
+    response.insert("coordinate_2d".to_string(), coordinate_2d);
+    response.insert("coordinate_3d".to_string(), coordinate_3d);
     response.insert("areas".to_string(), serde_json::json!(region.cortical_areas));
     response.insert("regions".to_string(), serde_json::json!(region.child_regions));
     response.insert("parent_region_id".to_string(), serde_json::json!(region.parent_id));
