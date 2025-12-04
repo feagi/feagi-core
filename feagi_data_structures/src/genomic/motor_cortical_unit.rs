@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::collections::HashMap;
-use crate::{motor_cortical_units, FeagiDataError};
+use crate::motor_cortical_units;
 use crate::genomic::cortical_area::{CorticalID, CorticalAreaType, IOCorticalAreaDataFlag};
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
 use crate::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};

@@ -149,7 +149,7 @@ macro_rules! define_xy_coordinates {
     ($name:ident, $var_type:ty, $friendly_name:expr, $doc_string:expr) => {
 
         #[doc = $doc_string]
-        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
+        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, serde::Serialize, serde::Deserialize)]
         pub struct $name {
             pub x: $var_type,
             pub y: $var_type,
@@ -268,7 +268,7 @@ macro_rules! define_xyz_coordinates {
     ($name:ident, $var_type:ty, $friendly_name:expr, $doc_string:expr) => {
 
         #[doc = $doc_string]
-        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
+        #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, serde::Serialize, serde::Deserialize)]
         pub struct $name {
             pub x: $var_type,
             pub y: $var_type,

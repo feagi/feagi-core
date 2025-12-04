@@ -909,3 +909,171 @@ mod test_error_handling {
         assert!(CorticalAreaDimensions::new(10, 10, 0).is_err());
     }
 }
+
+#[cfg(test)]
+mod test_cortical_area {
+    use super::*;
+    use feagi_data_structures::genomic::cortical_area::CorticalArea;
+    use feagi_data_structures::genomic::descriptors::GenomeCoordinate3D;
+
+    #[test]
+    fn test_cortical_area_creation() {
+        let dims = CorticalAreaDimensions::new(128, 128, 20).unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let position = GenomeCoordinate3D::new(0, 0, 0);
+        
+        let cortical_type = CorticalAreaType::Core(CoreCorticalType::Power);
+        
+        let area = CorticalArea::new(
+            cortical_id,
+            0,
+            "Power Area".to_string(),
+            dims,
+            position,
+            cortical_type,
+        )
+        .unwrap();
+
+        assert_eq!(area.cortical_id, cortical_id);
+        assert_eq!(area.name, "Power Area");
+        assert_eq!(area.total_voxels(), 128 * 128 * 20);
+        assert_eq!(area.position, position);
+    }
+
+    #[test]
+    fn test_invalid_cortical_id() {
+        // CorticalID validation happens in constructor, so this will fail at CorticalID creation
+        let cortical_id_result = CorticalID::try_from_base_64("short");
+        assert!(cortical_id_result.is_err());
+    }
+
+    #[test]
+    fn test_properties() {
+        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
+        let cortical_id = CoreCorticalType::Death.to_cortical_id();
+        let position = GenomeCoordinate3D::new(0, 0, 0);
+        
+        let cortical_type = CorticalAreaType::Core(CoreCorticalType::Death);
+        
+        let mut area = CorticalArea::new(
+            cortical_id,
+            0,
+            "Test".to_string(),
+            dims,
+            position,
+            cortical_type,
+        )
+        .unwrap();
+
+        // Use HashMap for properties (flexible approach - see PROPERTIES_STRUCT_MIGRATION_PROPOSAL.md)
+        area.properties.insert("neurons_per_voxel".to_string(), serde_json::json!(1));
+        area.properties.insert("description".to_string(), serde_json::json!("Test area for death signal"));
+
+        assert_eq!(area.get_property("neurons_per_voxel"), Some(&serde_json::json!(1)));
+        assert_eq!(area.get_property("description"), Some(&serde_json::json!("Test area for death signal")));
+    }
+
+    #[test]
+    fn test_empty_name_rejected() {
+        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let position = GenomeCoordinate3D::new(0, 0, 0);
+        
+        let cortical_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
+        
+        let result = CorticalArea::new(
+            cortical_id,
+            0,
+            "".to_string(),
+            dims,
+            position,
+            cortical_type,
+        );
+        
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_cortical_area_type_variants() {
+        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
+        let position = GenomeCoordinate3D::new(0, 0, 0);
+        
+        // Test Core type
+        let core_id = CoreCorticalType::Power.to_cortical_id();
+        let core_type = CorticalAreaType::Core(CoreCorticalType::Power);
+        let core_area = CorticalArea::new(
+            core_id,
+            0,
+            "Core Area".to_string(),
+            dims,
+            position,
+            core_type,
+        )
+        .unwrap();
+        assert_eq!(core_area.cortical_type, core_type);
+        
+        // Test Custom type
+        let custom_id = CoreCorticalType::Death.to_cortical_id(); // Using core ID for simplicity
+        let custom_type = CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire);
+        let custom_area = CorticalArea::new(
+            custom_id,
+            1,
+            "Custom Area".to_string(),
+            dims,
+            position,
+            custom_type,
+        )
+        .unwrap();
+        assert_eq!(custom_area.cortical_type, custom_type);
+        
+        // Test Memory type
+        let memory_id = CoreCorticalType::Power.to_cortical_id();
+        let memory_type = CorticalAreaType::Memory(MemoryCorticalType::Memory);
+        let memory_area = CorticalArea::new(
+            memory_id,
+            2,
+            "Memory Area".to_string(),
+            dims,
+            position,
+            memory_type,
+        )
+        .unwrap();
+        assert_eq!(memory_area.cortical_type, memory_type);
+    }
+
+    #[test]
+    fn test_cortical_area_serialization() {
+        let dims = CorticalAreaDimensions::new(64, 64, 10).unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let position = GenomeCoordinate3D::new(10, 20, 30);
+        
+        let cortical_type = CorticalAreaType::Memory(MemoryCorticalType::Memory);
+        
+        let mut area = CorticalArea::new(
+            cortical_id,
+            5,
+            "Test Area".to_string(),
+            dims,
+            position,
+            cortical_type,
+        )
+        .unwrap();
+        
+        area.properties.insert("neurons_per_voxel".to_string(), serde_json::json!(4));
+        area.properties.insert("description".to_string(), serde_json::json!("Memory storage area"));
+
+        // Serialize to JSON
+        let json = serde_json::to_string(&area).unwrap();
+
+        // Deserialize back
+        let deserialized: CorticalArea = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(deserialized.cortical_id, area.cortical_id);
+        assert_eq!(deserialized.name, "Test Area");
+        assert_eq!(deserialized.cortical_idx, 5);
+        assert_eq!(deserialized.cortical_type, cortical_type);
+        assert_eq!(deserialized.position, position);
+        assert_eq!(deserialized.get_property("neurons_per_voxel"), Some(&serde_json::json!(4)));
+        assert_eq!(deserialized.get_property("description"), Some(&serde_json::json!("Memory storage area")));
+    }
+}

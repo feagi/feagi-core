@@ -3,6 +3,7 @@ use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use crate::FeagiDataError;
 use crate::genomic::cortical_area::cortical_type::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
+use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataFlag;
 
 macro_rules! match_bytes_by_cortical_type {
     ($cortical_id_bytes: expr,
@@ -93,6 +94,18 @@ impl CorticalID {
         bytes.copy_from_slice(&self.bytes)
     }
 
+    /// Extract IO data type configuration from cortical ID bytes
+    ///
+    /// Extracts the data type configuration flag from bytes 4-5 (u16, little-endian)
+    /// and converts it to an IOCorticalAreaDataFlag.
+    ///
+    /// This is used internally for both BrainInput and BrainOutput cortical areas.
+    #[inline]
+    fn extract_io_data_flag(&self) -> Result<IOCorticalAreaDataFlag, FeagiDataError> {
+        let data_type_config = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
+        IOCorticalAreaDataFlag::try_from_data_type_configuration_flag(data_type_config)
+    }
+
     pub fn as_cortical_type(&self) -> Result<CorticalAreaType, FeagiDataError> {
         match_bytes_by_cortical_type!(self.bytes,
             custom => {
@@ -107,10 +120,10 @@ impl CorticalID {
                 Ok(CorticalAreaType::Core(CoreCorticalType::try_from_cortical_id_bytes_type_unchecked(&self.bytes)?))
             },
             brain_input => {
-                todo!()
+                Ok(CorticalAreaType::BrainInput(self.extract_io_data_flag()?))
             },
             brain_output => {
-                todo!()
+                Ok(CorticalAreaType::BrainOutput(self.extract_io_data_flag()?))
             },
             invalid => {
                 Err(FeagiDataError::InternalError("Attempted to convert an invalid cortical ID instantiated object to cortical type!".into()))
@@ -128,6 +141,46 @@ impl CorticalID {
 
     pub fn as_base_64(&self) -> String {
         general_purpose::STANDARD.encode(&self.bytes)
+    }
+    
+    /// Extract subtype from cortical ID (e.g., "isvi0___" → "svi")
+    /// Returns None for CORE areas or if bytes are invalid UTF-8
+    pub fn extract_subtype(&self) -> Option<String> {
+        // For IPU/OPU areas, bytes 1-3 contain the subtype
+        if self.bytes[0] == b'i' || self.bytes[0] == b'o' {
+            // Extract bytes 1-3, trim trailing underscores/nulls
+            let subtype_bytes = &self.bytes[1..4];
+            String::from_utf8(subtype_bytes.to_vec())
+                .ok()
+                .map(|s| s.trim_end_matches('_').trim_end_matches('\0').to_lowercase())
+                .filter(|s| !s.is_empty())
+        } else {
+            None
+        }
+    }
+    
+    /// Extract unit ID from cortical ID (typically byte 4)
+    /// Returns None for CORE/CUSTOM/MEMORY areas
+    pub fn extract_unit_id(&self) -> Option<u8> {
+        if self.bytes[0] == b'i' || self.bytes[0] == b'o' {
+            // Byte 4 typically contains unit ID (0-9 as ASCII)
+            let byte = self.bytes[4];
+            if byte >= b'0' && byte <= b'9' {
+                Some(byte - b'0')
+            } else if byte == b'_' || byte == 0 {
+                Some(0)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+    
+    /// Extract group ID from cortical ID (similar to unit ID, but may be in different byte)
+    /// For now, returns the same as unit_id
+    pub fn extract_group_id(&self) -> Option<u8> {
+        self.extract_unit_id()
     }
 
     //endregion

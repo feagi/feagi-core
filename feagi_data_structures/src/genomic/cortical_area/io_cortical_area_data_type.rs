@@ -1,5 +1,5 @@
 use std::fmt;
-use std::fmt::write;
+use serde::{Deserialize, Serialize};
 use crate::FeagiDataError;
 use crate::genomic::cortical_area::CorticalID;
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
@@ -12,7 +12,7 @@ pub type DataTypeConfigurationFlag = u16; // 16 Total bits
 // Bit 9 -> PercentageNeuronPositioning
 // Bit 10-15 -> RESERVED
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum IOCorticalAreaDataFlag {
     Boolean,
     Percentage(FrameChangeHandling, PercentageNeuronPositioning),
@@ -166,7 +166,7 @@ impl fmt::Display for IOCorticalAreaDataFlag {
 }
 
 //region SubEnums
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum PercentageNeuronPositioning {
     Linear,
     #[default]
@@ -182,7 +182,7 @@ impl fmt::Display for PercentageNeuronPositioning {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum FrameChangeHandling {
     #[default]
     Absolute,

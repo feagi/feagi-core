@@ -1,11 +1,12 @@
 use std::fmt;
+use serde::{Deserialize, Serialize};
 use crate::FeagiDataError;
 use crate::genomic::cortical_area::cortical_id::CorticalID;
 use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataFlag;
 
 // Describes the method data is encoded within a cortical area
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum CorticalAreaType {
     Core(CoreCorticalType),
     Custom(CustomCorticalType),
@@ -31,7 +32,7 @@ impl fmt::Display for CorticalAreaType {
 ///
 /// Represents essential processing regions that manage the agent's power
 /// and termination states.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CoreCorticalType {
     /// Termination/death signal processing
     Death,
@@ -71,7 +72,7 @@ impl fmt::Display for CoreCorticalType {
 //endregion
 
 //region Custom
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum CustomCorticalType {
     #[default]
     LeakyIntegrateFire
@@ -90,7 +91,7 @@ impl fmt::Display for CustomCorticalType {
 
 //region Memory
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum MemoryCorticalType {
     #[default]
     Memory
