@@ -118,7 +118,7 @@ version = "2.0.0"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/Neuraville/FEAGI-2.0"
+repository = "https://github.com/feagi/feagi-core"
 homepage = "https://feagi.org"
 documentation = "https://docs.rs/feagi"
 
