@@ -34,6 +34,33 @@ pub trait CorticalAreaExt {
     
     /// Convert relative position within area to absolute brain position
     fn to_absolute_position(&self, rel_pos: Position) -> BduResult<(i32, i32, i32)>;
+    
+    /// Get neurons_per_voxel from properties (defaults to 1)
+    fn neurons_per_voxel(&self) -> u32;
+    
+    /// Get refractory_period from properties (defaults to 0)
+    fn refractory_period(&self) -> u16;
+    
+    /// Get snooze_period from properties (defaults to 0)
+    fn snooze_period(&self) -> u16;
+    
+    /// Get leak_coefficient from properties (defaults to 0.0)
+    fn leak_coefficient(&self) -> f32;
+    
+    /// Get firing_threshold from properties (defaults to 1.0)
+    fn firing_threshold(&self) -> f32;
+    
+    /// Get property as u32 with default
+    fn get_u32_property(&self, key: &str, default: u32) -> u32;
+    
+    /// Get property as u16 with default
+    fn get_u16_property(&self, key: &str, default: u16) -> u16;
+    
+    /// Get property as f32 with default
+    fn get_f32_property(&self, key: &str, default: f32) -> f32;
+    
+    /// Get property as bool with default
+    fn get_bool_property(&self, key: &str, default: bool) -> bool;
 }
 
 impl CorticalAreaExt for CorticalArea {
@@ -90,6 +117,57 @@ impl CorticalAreaExt for CorticalArea {
             oy + rel_pos.1 as i32,
             oz + rel_pos.2 as i32,
         ))
+    }
+    
+    fn neurons_per_voxel(&self) -> u32 {
+        self.get_u32_property("neurons_per_voxel", 1)
+    }
+    
+    fn refractory_period(&self) -> u16 {
+        self.get_u16_property("refractory_period", 0)
+    }
+    
+    fn snooze_period(&self) -> u16 {
+        self.get_u16_property("snooze_period", 0)
+    }
+    
+    fn leak_coefficient(&self) -> f32 {
+        self.get_f32_property("leak_coefficient", 0.0)
+    }
+    
+    fn firing_threshold(&self) -> f32 {
+        self.get_f32_property("firing_threshold", 1.0)
+    }
+    
+    fn get_u32_property(&self, key: &str, default: u32) -> u32 {
+        self.properties
+            .get(key)
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u32)
+            .unwrap_or(default)
+    }
+    
+    fn get_u16_property(&self, key: &str, default: u16) -> u16 {
+        self.properties
+            .get(key)
+            .and_then(|v| v.as_u64())
+            .map(|v| v as u16)
+            .unwrap_or(default)
+    }
+    
+    fn get_f32_property(&self, key: &str, default: f32) -> f32 {
+        self.properties
+            .get(key)
+            .and_then(|v| v.as_f64())
+            .map(|v| v as f32)
+            .unwrap_or(default)
+    }
+    
+    fn get_bool_property(&self, key: &str, default: bool) -> bool {
+        self.properties
+            .get(key)
+            .and_then(|v| v.as_bool())
+            .unwrap_or(default)
     }
 }
 

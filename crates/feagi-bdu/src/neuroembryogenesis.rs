@@ -345,9 +345,16 @@ impl Neuroembryogenesis {
                 // Note: Core IDs are 8-byte padded and start with "___" (three underscores)
                 let category = if area_id_str.starts_with("___") {
                     "CORE"
-                } else if let Some(ref cortical_type_new) = area.cortical_type_new {
-                    // NEW: Use strongly-typed cortical type if available (Phase 2+)
-                    cortical_type_new.to_cortical_group()
+                } else if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
+                    // Use cortical type from CorticalID
+                    use feagi_data_structures::genomic::cortical_area::cortical_type::CorticalAreaType;
+                    match cortical_type {
+                        CorticalAreaType::Core(_) => "CORE",
+                        CorticalAreaType::BrainInput(_) => "IPU",
+                        CorticalAreaType::BrainOutput(_) => "OPU",
+                        CorticalAreaType::Memory(_) => "MEMORY",
+                        CorticalAreaType::Custom(_) => "CUSTOM",
+                    }
                 } else {
                     // Fallback to cortical_group property or area_type
                     let cortical_group = area.properties.get("cortical_group")
@@ -366,8 +373,8 @@ impl Neuroembryogenesis {
                 
                 // Phase 3: Enhanced logging with detailed type information
                 if ipu_areas.len() + opu_areas.len() + core_areas.len() + custom_memory_areas.len() < 5 {
-                    let source = if area.cortical_type_new.is_some() {
-                        "cortical_type_new"
+                    let source = if area.cortical_id.as_cortical_type().is_ok() {
+                        "cortical_id_type"
                     } else if area.properties.contains_key("cortical_group") {
                         "cortical_group"
                     } else {
@@ -375,7 +382,7 @@ impl Neuroembryogenesis {
                     };
                     
                     // Phase 3: Show detailed type information if available
-                    if area.cortical_type_new.is_some() {
+                    if area.cortical_id.as_cortical_type().is_ok() {
                         let type_desc = crate::cortical_type_utils::describe_cortical_type(area);
                         let frame_handling = if crate::cortical_type_utils::uses_absolute_frames(area) {
                             "absolute"
@@ -643,7 +650,7 @@ impl Neuroembryogenesis {
                     // If NPU not connected, calculate expected count
                     warn!(target: "feagi-bdu","  Failed to create neurons for {}: {} (NPU may not be connected)", 
                         cortical_id_str, e);
-                    let total_voxels = area.dimensions.width * area.dimensions.height * area.dimensions.depth;
+                    let total_voxels = area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize;
                     let expected = total_voxels * per_voxel_count as usize;
                     total_neurons_created += expected;
                 }
@@ -808,8 +815,8 @@ fn estimate_synapses_for_area(
             let src_voxels = src_area.dimensions.width * src_area.dimensions.height * src_area.dimensions.depth;
             let dst_voxels = dst_area.dimensions.width * dst_area.dimensions.height * dst_area.dimensions.depth;
             
-            let src_neurons = src_voxels * src_per_voxel;
-            let dst_neurons = dst_voxels * dst_per_voxel;
+            let src_neurons = src_voxels as usize * src_per_voxel as usize;
+            let dst_neurons = dst_voxels as usize * dst_per_voxel as usize;
             
             // Basic estimation by morphology type
             let count = match morphology_id {

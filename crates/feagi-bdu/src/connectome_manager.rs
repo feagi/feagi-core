@@ -39,6 +39,7 @@ use tracing::{info, warn, debug};
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions, AreaType};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::types::{BduError, BduResult};
+use feagi_neural::types::NeuronId;
 
 // NPU integration (optional dependency)
 // use feagi_burst_engine::RustNPU; // Now using DynamicNPU
@@ -807,8 +808,9 @@ impl ConnectomeManager {
         let npu = self.npu.as_ref()
             .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
         
-        // Extract neural parameters from area (use typed field - single source of truth)
-        let per_voxel_cnt = area.neurons_per_voxel;
+        // Extract neural parameters from area properties
+        use crate::models::CorticalAreaExt;
+        let per_voxel_cnt = area.neurons_per_voxel();
         
         let firing_threshold = area.properties
             .get("firing_threshold")
@@ -846,7 +848,7 @@ impl ConnectomeManager {
             .unwrap_or(false);
         
         // Calculate expected neuron count for logging
-        let voxels = area.dimensions.width * area.dimensions.height * area.dimensions.depth;
+        let voxels = area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize;
         let expected_neurons = voxels * per_voxel_cnt as usize;
         
         tracing::debug!(target: "feagi-bdu", 
@@ -1137,7 +1139,7 @@ impl ConnectomeManager {
     ///
     /// Returns `false` if NPU is not connected
     ///
-    pub fn has_neuron(&self, neuron_id: NeuronId) -> bool {
+    pub fn has_neuron(&self, neuron_id: u64) -> bool {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 // Check if neuron exists AND is valid (not deleted)
@@ -1248,10 +1250,10 @@ impl ConnectomeManager {
     ///
     /// Coordinates as (x, y, z), or (0, 0, 0) if neuron doesn't exist or NPU not connected
     ///
-    pub fn get_neuron_coordinates(&self, neuron_id: NeuronId) -> (u32, u32, u32) {
+    pub fn get_neuron_coordinates(&self, neuron_id: u64) -> (u32, u32, u32) {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
-                npu_lock.get_neuron_coordinates(neuron_id as u32)
+                npu_lock.get_neuron_coordinates(neuron_id.0)
             } else {
                 (0, 0, 0)
             }
@@ -1270,7 +1272,7 @@ impl ConnectomeManager {
     ///
     /// Cortical area index, or 0 if neuron doesn't exist or NPU not connected
     ///
-    pub fn get_neuron_cortical_idx(&self, neuron_id: NeuronId) -> u32 {
+    pub fn get_neuron_cortical_idx(&self, neuron_id: u64) -> u32 {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_neuron_cortical_area(neuron_id as u32)
@@ -1292,7 +1294,7 @@ impl ConnectomeManager {
     ///
     /// Vec of neuron IDs in the area, or empty vec if area doesn't exist or NPU not connected
     ///
-    pub fn get_neurons_in_area(&self, cortical_id: &CorticalID) -> Vec<NeuronId> {
+    pub fn get_neurons_in_area(&self, cortical_id: &CorticalID) -> Vec<u64> {
         // Get cortical_idx from cortical_id
         let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
             Some(idx) => *idx,
@@ -1324,7 +1326,7 @@ impl ConnectomeManager {
     ///
     /// Vec of (target_neuron_id, weight, conductance, synapse_type), or empty if NPU not connected
     ///
-    pub fn get_outgoing_synapses(&self, source_neuron_id: NeuronId) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_outgoing_synapses(&self, source_neuron_id: u64) -> Vec<(u32, u8, u8, u8)> {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_outgoing_synapses(source_neuron_id as u32)
@@ -1346,7 +1348,7 @@ impl ConnectomeManager {
     ///
     /// Vec of (source_neuron_id, weight, conductance, synapse_type), or empty if NPU not connected
     ///
-    pub fn get_incoming_synapses(&self, target_neuron_id: NeuronId) -> Vec<(u32, u8, u8, u8)> {
+    pub fn get_incoming_synapses(&self, target_neuron_id: u64) -> Vec<(u32, u8, u8, u8)> {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
                 npu_lock.get_incoming_synapses(target_neuron_id as u32)
@@ -1437,7 +1439,7 @@ impl ConnectomeManager {
     ///
     /// `true` if there is a synapse from source to target, `false` otherwise
     ///
-    pub fn are_neurons_connected(&self, source_neuron_id: NeuronId, target_neuron_id: NeuronId) -> bool {
+    pub fn are_neurons_connected(&self, source_neuron_id: u64, target_neuron_id: u64) -> bool {
         let synapses = self.get_outgoing_synapses(source_neuron_id);
         synapses.iter().any(|(target, _, _, _)| *target == target_neuron_id as u32)
     }
@@ -1453,7 +1455,7 @@ impl ConnectomeManager {
     ///
     /// Synapse weight (0-255), or None if no connection exists
     ///
-    pub fn get_connection_weight(&self, source_neuron_id: NeuronId, target_neuron_id: NeuronId) -> Option<u8> {
+    pub fn get_connection_weight(&self, source_neuron_id: u64, target_neuron_id: u64) -> Option<u8> {
         let synapses = self.get_outgoing_synapses(source_neuron_id);
         synapses.iter()
             .find(|(target, _, _, _)| *target == target_neuron_id as u32)
@@ -1498,7 +1500,7 @@ impl ConnectomeManager {
     ///
     /// The cortical area ID, or None if neuron doesn't exist
     ///
-    pub fn get_neuron_cortical_id(&self, neuron_id: NeuronId) -> Option<CorticalID> {
+    pub fn get_neuron_cortical_id(&self, neuron_id: u64) -> Option<CorticalID> {
         let cortical_idx = self.get_neuron_cortical_idx(neuron_id);
         self.cortical_idx_to_id.get(&cortical_idx).copied()
     }
@@ -1910,8 +1912,8 @@ impl ConnectomeManager {
         };
         
         let synapse_idx = npu_lock.add_synapse(
-            feagi_neural::types::NeuronId(source_neuron_id as u32),
-            feagi_neural::types::NeuronId(target_neuron_id as u32),
+            source_neuron_id,
+            target_neuron_id,
             feagi_neural::types::SynapticWeight(weight),
             feagi_neural::types::SynapticConductance(conductance),
             syn_type,
@@ -1984,8 +1986,8 @@ impl ConnectomeManager {
         
         // Update synapse weight via NPU
         let updated = npu_lock.update_synapse_weight(
-            feagi_neural::types::NeuronId(source_neuron_id as u32),
-            feagi_neural::types::NeuronId(target_neuron_id as u32),
+            source_neuron_id,
+            target_neuron_id,
             feagi_neural::types::SynapticWeight(new_weight),
         );
         
@@ -2026,8 +2028,8 @@ impl ConnectomeManager {
         
         // Remove synapse via NPU
         let removed = npu_lock.remove_synapse(
-            feagi_neural::types::NeuronId(source_neuron_id as u32),
-            feagi_neural::types::NeuronId(target_neuron_id as u32),
+            source_neuron_id,
+            target_neuron_id,
         );
         
         if removed {
@@ -2538,7 +2540,7 @@ impl ConnectomeManager {
             return None;
         }
         
-        Some(npu_lock.get_neuron_coordinates(neuron_id as u32))
+        Some(npu_lock.get_neuron_coordinates(neuron_id.0).unwrap_or((0, 0, 0)))
     }
     
     /// Get which cortical area contains a specific neuron
@@ -2561,7 +2563,7 @@ impl ConnectomeManager {
             return None;
         }
         
-        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id.0);
         
         // Look up cortical_id from index
         self.cortical_areas.values()
@@ -2609,7 +2611,7 @@ impl ConnectomeManager {
         
         // Get neuron state (returns: consecutive_fire_count, consecutive_fire_limit, snooze_period, membrane_potential, threshold, refractory_countdown)
         if let Some((consec_count, consec_limit, snooze, mp, threshold, refract_countdown)) = 
-            npu_lock.get_neuron_state(feagi_neural::types::NeuronId(neuron_id_u32)) {
+            npu_lock.get_neuron_state(NeuronId(neuron_id_u32)) {
             properties.insert("consecutive_fire_count".to_string(), serde_json::json!(consec_count));
             properties.insert("consecutive_fire_limit".to_string(), serde_json::json!(consec_limit));
             properties.insert("snooze_period".to_string(), serde_json::json!(snooze));
@@ -2760,21 +2762,11 @@ impl ConnectomeManager {
             "depth": area.dimensions.depth,
         }));
         properties.insert("position".to_string(), serde_json::json!(area.position));
-        properties.insert("visible".to_string(), serde_json::json!(area.visible));
-        properties.insert("sub_group".to_string(), serde_json::json!(area.sub_group));
-        properties.insert("neurons_per_voxel".to_string(), serde_json::json!(area.neurons_per_voxel));
-        properties.insert("postsynaptic_current".to_string(), serde_json::json!(area.postsynaptic_current));
-        properties.insert("plasticity_constant".to_string(), serde_json::json!(area.plasticity_constant));
-        properties.insert("degeneration".to_string(), serde_json::json!(area.degeneration));
-        properties.insert("psp_uniform_distribution".to_string(), serde_json::json!(area.psp_uniform_distribution));
-        properties.insert("firing_threshold_increment".to_string(), serde_json::json!(area.firing_threshold_increment));
-        properties.insert("firing_threshold_limit".to_string(), serde_json::json!(area.firing_threshold_limit));
-        properties.insert("consecutive_fire_count".to_string(), serde_json::json!(area.consecutive_fire_count));
-        properties.insert("snooze_period".to_string(), serde_json::json!(area.snooze_period));
-        properties.insert("refractory_period".to_string(), serde_json::json!(area.refractory_period));
-        properties.insert("leak_coefficient".to_string(), serde_json::json!(area.leak_coefficient));
-        properties.insert("leak_variability".to_string(), serde_json::json!(area.leak_variability));
-        properties.insert("burst_engine_active".to_string(), serde_json::json!(area.burst_engine_active));
+        
+        // Copy all properties from area.properties to the response
+        for (key, value) in &area.properties {
+            properties.insert(key.clone(), value.clone());
+        }
         
         // Add custom properties
         properties.extend(area.properties.clone());
