@@ -61,6 +61,15 @@ pub trait CorticalAreaExt {
     
     /// Get property as bool with default
     fn get_bool_property(&self, key: &str, default: bool) -> bool;
+    
+    /// Check if this is an input area
+    fn is_input_area(&self) -> bool;
+    
+    /// Check if this is an output area
+    fn is_output_area(&self) -> bool;
+    
+    /// Get cortical group classification
+    fn get_cortical_group(&self) -> Option<String>;
 }
 
 impl CorticalAreaExt for CorticalArea {
@@ -169,7 +178,37 @@ impl CorticalAreaExt for CorticalArea {
             .and_then(|v| v.as_bool())
             .unwrap_or(default)
     }
+    
+    fn is_input_area(&self) -> bool {
+        matches!(self.area_type, AreaType::Sensory) ||
+        self.cortical_id.as_cortical_type()
+            .map(|t| matches!(t, feagi_data_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)))
+            .unwrap_or(false)
+    }
+    
+    fn is_output_area(&self) -> bool {
+        matches!(self.area_type, AreaType::Motor) ||
+        self.cortical_id.as_cortical_type()
+            .map(|t| matches!(t, feagi_data_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_)))
+            .unwrap_or(false)
+    }
+    
+    fn get_cortical_group(&self) -> Option<String> {
+        self.properties.get("cortical_group")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .or_else(|| {
+                // Derive from area_type if not in properties
+                match self.area_type {
+                    AreaType::Sensory => Some("IPU".to_string()),
+                    AreaType::Motor => Some("OPU".to_string()),
+                    AreaType::Memory => Some("MEMORY".to_string()),
+                    AreaType::Custom => Some("CUSTOM".to_string()),
+                }
+            })
+    }
 }
+
 
 #[cfg(test)]
 mod tests {

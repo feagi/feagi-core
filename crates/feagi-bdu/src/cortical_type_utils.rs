@@ -31,7 +31,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalArea;
 /// - cortical_type_new is not populated
 /// - Area is not an IPU or OPU
 pub fn get_io_data_type(area: &CorticalArea) -> Option<&IOCorticalAreaDataFlag> {
-    match area.cortical_type_new.as_ref()? {
+    match area.cortical_id.as_cortical_type().ok()? {
         CorticalAreaType::BrainInput(io_type) => Some(io_type),
         CorticalAreaType::BrainOutput(io_type) => Some(io_type),
         _ => None,
@@ -115,7 +115,7 @@ pub fn uses_cartesian_encoding(area: &CorticalArea) -> bool {
 ///
 /// Provides detailed information for logging and diagnostics.
 pub fn describe_cortical_type(area: &CorticalArea) -> String {
-    if let Some(ref cortical_type) = area.cortical_type_new {
+    if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
         match cortical_type {
             CorticalAreaType::BrainInput(io_type) => {
                 format!("{} (IPU) - {:?}", area.cortical_id, io_type)
@@ -135,7 +135,8 @@ pub fn describe_cortical_type(area: &CorticalArea) -> String {
         }
     } else {
         // Fallback to cortical_group
-        format!("{} ({})", area.cortical_id, area.get_cortical_group())
+        use crate::models::CorticalAreaExt;
+        format!("{} ({})", area.cortical_id, area.get_cortical_group().unwrap_or_else(|| "UNKNOWN".to_string()))
     }
 }
 
@@ -151,16 +152,16 @@ pub fn validate_connectivity(
     dst_area: &CorticalArea,
 ) -> Result<(), String> {
     // Phase 3: Basic validation - ensure both areas have types
-    if src_area.cortical_type_new.is_none() {
+    if src_area.cortical_id.as_cortical_type().is_err() {
         return Err(format!(
-            "Source area {} missing cortical_type_new",
+            "Source area {} has invalid cortical type",
             src_area.cortical_id
         ));
     }
     
-    if dst_area.cortical_type_new.is_none() {
+    if dst_area.cortical_id.as_cortical_type().is_err() {
         return Err(format!(
-            "Destination area {} missing cortical_type_new",
+            "Destination area {} has invalid cortical type",
             dst_area.cortical_id
         ));
     }
