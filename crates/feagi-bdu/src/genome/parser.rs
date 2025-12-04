@@ -45,10 +45,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::models::{BrainRegion, CorticalArea};
-use crate::models::cortical_area::AreaType;
+use crate::models::{BrainRegion, CorticalArea, CorticalAreaDimensions, AreaType};
 use feagi_data_structures::genomic::RegionType;
-use crate::types::{BduError, BduResult, Dimensions};
+use crate::types::{BduError, BduResult};
 
 /// Parsed genome data ready for ConnectomeManager
 #[derive(Debug, Clone)]
@@ -221,15 +220,15 @@ impl GenomeParser {
                         cortical_id, boundaries.len()
                     )));
                 }
-                Dimensions::new(
-                    boundaries[0] as usize, 
-                    boundaries[1] as usize, 
-                    boundaries[2] as usize
-                )
+                CorticalAreaDimensions::new(
+                    boundaries[0], 
+                    boundaries[1], 
+                    boundaries[2]
+                ).map_err(|e| BduError::InvalidArea(format!("Invalid dimensions for {}: {}", cortical_id, e)))?
             } else {
                 // Default to 1x1x1 if not specified (should not happen in valid genomes)
                 warn!(target: "feagi-bdu","Cortical area {} missing block_boundaries, defaulting to 1x1x1", cortical_id);
-                Dimensions::new(1, 1, 1)
+                CorticalAreaDimensions::new(1, 1, 1).map_err(|e| BduError::InvalidArea(format!("Invalid default dimensions: {}", e)))?
             };
             
             let position = if let Some(coords) = &raw_area.relative_coordinate {

@@ -5,10 +5,8 @@
 ///
 /// Tests basic functionality without complex genome loading
 
-use feagi_bdu::ConnectomeManager;
+use feagi_bdu::{ConnectomeManager, CorticalArea, CorticalAreaDimensions as Dimensions, AreaType, CorticalID};
 use feagi_burst_engine::RustNPU;
-use feagi_neural::types::{CorticalArea, Dimensions};
-// Note: AreaType may not exist - check if needed
 use std::sync::{Arc, Mutex};
 
 /// Helper to create an isolated test manager with NPU
@@ -26,11 +24,12 @@ fn test_create_cortical_area() {
     let mut manager = create_test_manager();
     
     // Create a cortical area
+    let cortical_id = CorticalID::try_from_base_64("test01").unwrap();
     let area = CorticalArea::new(
-        "test01".to_string(),
+        cortical_id,
         0, // cortical_idx
         "Test Area".to_string(),
-        Dimensions { width: 10, height: 10, depth: 1 },
+        Dimensions::new(10, 10, 1).unwrap(),
         (0, 0, 0), // position
         AreaType::Memory,
     ).expect("Failed to create cortical area");
@@ -54,11 +53,12 @@ fn test_create_and_query_neurons() {
     let mut manager = create_test_manager();
     
     // Create area
+    let cortical_id = CorticalID::try_from_base_64("neuro1").unwrap();
     let area = CorticalArea::new(
-        "neuro1".to_string(),
+        cortical_id,
         0,
         "Neuron Test".to_string(),
-        Dimensions { width: 10, height: 10, depth: 1 },
+        Dimensions::new(10, 10, 1).unwrap(),
         (0, 0, 0),
         AreaType::Memory,
     ).expect("Failed to create area");

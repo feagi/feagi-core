@@ -138,11 +138,12 @@ mod tests {
         let mut brain_regions = HashMap::new();
         
         // Create a test cortical area
+        let cortical_id = CorticalID::try_from_base_64("test01").unwrap();
         let area = CorticalArea::new(
-            "test01".to_string(),
+            cortical_id.clone(),
             0,
             "Test Area".to_string(),
-            Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
             AreaType::Sensory,
         ).unwrap();
@@ -182,15 +183,16 @@ mod tests {
         
         // Create test data
         let mut cortical_areas = HashMap::new();
+        let cortical_id = CorticalID::try_from_base_64("test01").unwrap();
         let area = CorticalArea::new(
-            "test01".to_string(),
+            cortical_id.clone(),
             0,
             "Test Area".to_string(),
-            Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (5, 5, 5),
             AreaType::Motor,
         ).unwrap();
-        cortical_areas.insert("test01".to_string(), area);
+        cortical_areas.insert(cortical_id, area);
         
         let mut brain_regions = HashMap::new();
         let region = BrainRegion::new(
