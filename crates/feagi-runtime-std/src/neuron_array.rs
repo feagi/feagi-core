@@ -286,14 +286,59 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         &mut self.membrane_potentials[..count]
     }
     
+    fn thresholds_mut(&mut self) -> &mut [Self::Value] {
+        let count = self.count;
+        &mut self.thresholds[..count]
+    }
+    
+    fn leak_coefficients_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.leak_coefficients[..count]
+    }
+    
+    fn resting_potentials_mut(&mut self) -> &mut [Self::Value] {
+        let count = self.count;
+        &mut self.resting_potentials[..count]
+    }
+    
+    fn neuron_types_mut(&mut self) -> &mut [i32] {
+        let count = self.count;
+        &mut self.neuron_types[..count]
+    }
+    
+    fn refractory_periods_mut(&mut self) -> &mut [u16] {
+        let count = self.count;
+        &mut self.refractory_periods[..count]
+    }
+    
     fn refractory_countdowns_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.refractory_countdowns[..count]
     }
     
+    fn excitabilities_mut(&mut self) -> &mut [f32] {
+        let count = self.count;
+        &mut self.excitabilities[..count]
+    }
+    
     fn consecutive_fire_counts_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.consecutive_fire_counts[..count]
+    }
+    
+    fn consecutive_fire_limits_mut(&mut self) -> &mut [u16] {
+        let count = self.count;
+        &mut self.consecutive_fire_limits[..count]
+    }
+    
+    fn snooze_periods_mut(&mut self) -> &mut [u16] {
+        let count = self.count;
+        &mut self.snooze_periods[..count]
+    }
+    
+    fn mp_charge_accumulation_mut(&mut self) -> &mut [bool] {
+        let count = self.count;
+        &mut self.mp_charge_accumulation[..count]
     }
     
     fn valid_mask_mut(&mut self) -> &mut [bool] {

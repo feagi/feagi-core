@@ -239,7 +239,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         y: u32,
         z: u32,
     ) -> Result<NeuronId> {
-        let neuron_id = self.neuron_storage.write().unwrap().add_neuron(
+        let neuron_idx = self.neuron_storage.write().unwrap().add_neuron(
             threshold,
             leak_coefficient,
             resting_potential,
@@ -254,6 +254,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             y,
             z,
         ).map_err(|e| FeagiError::RuntimeError(format!("Failed to add neuron: {:?}", e)))?;
+
+        let neuron_id = NeuronId(neuron_idx as u32);
 
         // CRITICAL: Add to propagation engine's neuron-to-area mapping
         self.propagation_engine
@@ -495,7 +497,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     ) -> Result<usize> {
         self.synapse_storage
             .write().unwrap()
-            .add_synapse(source, target, weight, conductance, synapse_type)
+            .add_synapse(source.0, target.0, weight.0, conductance.0, synapse_type as u8)
+            .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))
     }
 
     /// Batch add synapses (SIMD-optimized)
@@ -516,7 +519,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         weights: Vec<SynapticWeight>,
         postsynaptic_potentials: Vec<SynapticConductance>,  // TODO: Rename type to SynapticPSP
         synapse_types: Vec<SynapseType>,
-    ) -> (usize, Vec<usize>) {
+    ) -> Result<()> {
         // Convert NeuronId/Weight types to raw u32/u8 for SynapseArray
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
         let target_ids: Vec<u32> = targets.iter().map(|n| n.0).collect();
@@ -537,11 +540,31 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             &psp_vals,
             &type_vals,
         )
+        .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapses batch: {:?}", e)))
     }
 
-    /// Remove a synapse
+    /// Remove a synapse by source and target
+    /// 
+    /// Note: This searches for the synapse index first, which is O(n).
+    /// For better performance, use remove_synapses_between() for batch operations.
     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
-        self.synapse_storage.write().unwrap().remove_synapse(source, target)
+        let synapse_storage = self.synapse_storage.read().unwrap();
+        // Find synapse index by searching for matching source and target
+        let idx = synapse_storage.source_neurons()
+            .iter()
+            .zip(synapse_storage.target_neurons().iter())
+            .enumerate()
+            .find(|(_, (&s, &t))| s == source.0 && t == target.0)
+            .map(|(idx, _)| idx);
+        drop(synapse_storage);
+        
+        if let Some(idx) = idx {
+            self.synapse_storage.write().unwrap().remove_synapse(idx)
+                .map(|_| true)
+                .unwrap_or(false)
+        } else {
+            false
+        }
     }
 
     /// Batch remove all synapses from specified source neurons (SIMD-optimized)
@@ -551,35 +574,58 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     pub fn remove_synapses_from_sources(&mut self, sources: Vec<NeuronId>) -> usize {
         let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
         self.synapse_storage.write().unwrap().remove_synapses_from_sources(&source_ids)
+            .unwrap_or(0)
     }
 
-    /// Batch remove synapses between source and target neuron sets (SIMD-optimized)
+    /// Batch remove synapses between source and target neuron sets
     ///
-    /// Uses bit-vector filtering for O(1) target membership testing.
-    /// Optimal for both few→many and many→many deletion patterns.
+    /// Note: The trait method only supports single source-target pairs.
+    /// This method calls remove_synapses_between() for each source-target combination.
     ///
-    /// Performance: 20-100x faster than nested loops
     /// Returns: number of synapses deleted
     pub fn remove_synapses_between(
         &mut self,
         sources: Vec<NeuronId>,
         targets: Vec<NeuronId>,
     ) -> usize {
-        let source_ids: Vec<u32> = sources.iter().map(|n| n.0).collect();
-        let target_ids: Vec<u32> = targets.iter().map(|n| n.0).collect();
-        self.synapse_storage
-            .write().unwrap()
-            .remove_synapses_between(&source_ids, &target_ids)
+        let mut total_removed = 0;
+        let mut synapse_storage = self.synapse_storage.write().unwrap();
+        for &source in &sources {
+            for &target in &targets {
+                if let Ok(removed) = synapse_storage.remove_synapses_between(source.0, target.0) {
+                    total_removed += removed;
+                }
+            }
+        }
+        total_removed
     }
 
     /// Update synapse weight
+    /// 
+    /// Note: This searches for the synapse index first, which is O(n).
     pub fn update_synapse_weight(
         &mut self,
         source: NeuronId,
         target: NeuronId,
         new_weight: SynapticWeight,
     ) -> bool {
-        self.synapse_storage.write().unwrap().update_weight(source, target, new_weight)
+        let synapse_storage = self.synapse_storage.read().unwrap();
+        // Find synapse index by searching for matching source and target
+        let idx = synapse_storage.source_neurons()
+            .iter()
+            .zip(synapse_storage.target_neurons().iter())
+            .enumerate()
+            .find(|(_, (&s, &t))| s == source.0 && t == target.0)
+            .map(|(idx, _)| idx);
+        drop(synapse_storage);
+        
+        if let Some(idx) = idx {
+            self.synapse_storage.write().unwrap().update_weight(idx, new_weight.0)
+                .map(|_| true)
+                .unwrap_or(false)
+        } else {
+            false
+        }
     }
 
     /// Rebuild indexes after modifications (call after bulk modifications)
@@ -676,7 +722,11 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         cortical_area: u32,
         coordinates: &[(u32, u32, u32)],
     ) -> Vec<NeuronId> {
-        self.neuron_storage.read().unwrap().batch_coordinate_lookup(cortical_area, coordinates)
+        self.neuron_storage.read().unwrap()
+            .batch_coordinate_lookup(cortical_area, coordinates)
+            .into_iter()
+            .filter_map(|opt_idx| opt_idx.map(|idx| NeuronId(idx as u32)))
+            .collect()
     }
 
     /// Get last FCL snapshot (captured before clear in previous burst)
@@ -837,8 +887,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let neuron_storage = self.neuron_storage.read().unwrap();
         (
             neuron_storage.count(),
-            neuron_storage.cortical_areas().clone(),
-            neuron_storage.valid_mask().clone(),
+            neuron_storage.cortical_areas().to_vec(),
+            neuron_storage.valid_mask().to_vec(),
         )
     }
 
@@ -999,16 +1049,24 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
 
         // Convert synapse array (lock once and clone all fields)
         let synapse_storage = self.synapse_storage.read().unwrap();
+        let source_neurons = synapse_storage.source_neurons().to_vec();
+        
+        // Build source_index from source_neurons (for fast lookup)
+        let mut source_index = ahash::AHashMap::new();
+        for (idx, &source) in source_neurons.iter().enumerate() {
+            source_index.entry(source).or_insert_with(Vec::new).push(idx);
+        }
+        
         let synapses = SerializableSynapseArray {
             count: synapse_storage.count(),
             capacity: synapse_storage.capacity(),
-            source_neurons: synapse_storage.source_neurons().clone(),
-            target_neurons: synapse_storage.target_neurons().clone(),
-            weights: synapse_storage.weights().clone(),
-            conductances: synapse_storage.postsynaptic_potentials().clone(),
-            types: synapse_storage.types().clone(),
-            valid_mask: synapse_storage.valid_mask().clone(),
-            source_index: synapse_storage.source_index.clone(),
+            source_neurons,
+            target_neurons: synapse_storage.target_neurons().to_vec(),
+            weights: synapse_storage.weights().to_vec(),
+            conductances: synapse_storage.postsynaptic_potentials().to_vec(),
+            types: synapse_storage.types().to_vec(),
+            valid_mask: synapse_storage.valid_mask().to_vec(),
+            source_index,
         };
         drop(synapse_storage);  // Release lock
 
@@ -1232,7 +1290,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
         for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
-                neuron_storage_write.excitabilities()[idx] = clamped_excitability;
+                neuron_storage_write.excitabilities_mut()[idx] = clamped_excitability;
                 updated_count += 1;
             }
         }
@@ -1258,10 +1316,10 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
                 // Get the actual neuron_id for this array index
-                let neuron_id = neuron_storage_write.index_to_neuron_id[idx];
+                let neuron_id = idx as u32;
 
                 // Update base refractory period (used when neuron fires)
-                neuron_storage_write.refractory_periods()[idx] = refractory_period;
+                neuron_storage_write.refractory_periods_mut()[idx] = refractory_period;
 
                 // CRITICAL FIX: Do NOT set countdown here!
                 // The countdown should only be set AFTER a neuron fires.
@@ -1269,12 +1327,12 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
 
                 // Only clear countdown if setting refractory to 0 (allow immediate firing)
                 if refractory_period == 0 {
-                    neuron_storage_write.refractory_countdowns()[idx] = 0;
+                    neuron_storage_write.refractory_countdowns_mut()[idx] = 0;
                 }
 
                 // Reset consecutive fire count when applying a new period to avoid
                 // stale state causing unexpected immediate extended refractory.
-                neuron_storage_write.consecutive_fire_counts()[idx] = 0;
+                neuron_storage_write.consecutive_fire_counts_mut()[idx] = 0;
 
                 updated_count += 1;
 
@@ -1319,7 +1377,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
         for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
-                neuron_storage_write.leak_coefficients()[idx] = leak;
+                neuron_storage_write.leak_coefficients_mut()[idx] = leak;
                 updated_count += 1;
             }
         }
@@ -1341,7 +1399,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
         for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
-                neuron_storage_write.consecutive_fire_limits()[idx] = limit;
+                neuron_storage_write.consecutive_fire_limits_mut()[idx] = limit;
                 updated_count += 1;
             }
         }
@@ -1363,7 +1421,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
         for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
-                neuron_storage_write.snooze_periods()[idx] = snooze_period;
+                neuron_storage_write.snooze_periods_mut()[idx] = snooze_period;
                 updated_count += 1;
             }
         }
@@ -1393,7 +1451,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
                 if *value > 0 {
                     self.neuron_storage.write().unwrap().refractory_countdowns_mut()[idx] = *value;
                 } else {
-                    self.neuron_storage.write().unwrap().refractory_countdowns()[idx] = 0;
+                    self.neuron_storage.write().unwrap().refractory_countdowns_mut()[idx] = 0;
                 }
                 // Reset consecutive fire count to avoid stale extended refractory state
                 self.neuron_storage.write().unwrap().consecutive_fire_counts_mut()[idx] = 0;
@@ -1606,7 +1664,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
         for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
-                neuron_storage_write.mp_charge_accumulation()[idx] = mp_charge_accumulation;
+                neuron_storage_write.mp_charge_accumulation_mut()[idx] = mp_charge_accumulation;
                 updated_count += 1;
             }
         }
@@ -1640,7 +1698,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
 
     /// Get cortical area for a neuron
     pub fn get_neuron_cortical_area(&self, neuron_id: u32) -> u32 {
-        self.neuron_storage.read().unwrap().get_cortical_area(NeuronId(neuron_id)).0
+        self.neuron_storage.read().unwrap().get_cortical_area(neuron_id as usize).unwrap_or(0)
     }
 
     /// Get all neuron IDs in a specific cortical area
