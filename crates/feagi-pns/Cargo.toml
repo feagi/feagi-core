@@ -15,11 +15,12 @@ all-transports = ["zmq-transport", "udp-transport", "shm-transport", "websocket-
 
 [dependencies]
 feagi-burst-engine = { path = "../feagi-burst-engine" }
+feagi-bdu = { path = "../feagi-bdu" }  # For CorticalAreaExt
 feagi-transports = { path = "../feagi-transports", features = ["zmq-server", "websocket-server"] }
 feagi-neural = { path = "../feagi-neural" }  # For types
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi_data_structures.workspace = true
-feagi_data_serialization.workspace = true
+feagi_data_serialization = { path = "../../../feagi-data-processing/feagi_data_serialization" }
 
 # Core dependencies (always required)
 serde = { version = "1.0", features = ["derive"] }

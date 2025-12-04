@@ -68,15 +68,17 @@ pub fn validate_sensory_compatibility(
     area: &CorticalArea,
 ) -> ValidationResult {
     // Check if area is an input area
-    use crate::models::CorticalAreaExt;
+    use feagi_bdu::models::CorticalAreaExt;
     if !area.is_input_area() {
-            return ValidationResult::incompatible(format!(
-                "Agent {} (modality: {}) trying to connect to non-IPU area {}",
-                agent_id, agent_modality, area.cortical_id
-            ));
-        }
+        return ValidationResult::incompatible(format!(
+            "Agent {} (modality: {}) trying to connect to non-IPU area {}",
+            agent_id, agent_modality, area.cortical_id
+        ));
+    }
 
-        // Phase 4: Provide recommendations based on IOCorticalAreaDataFlag
+    // Phase 4: Provide recommendations based on cortical type
+    if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
+        use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
         if let CorticalAreaType::BrainInput(io_type) = cortical_type {
             let mut result = ValidationResult::compatible();
 
@@ -119,31 +121,12 @@ pub fn validate_motor_compatibility(
     area: &CorticalArea,
 ) -> ValidationResult {
     // Check if area is an output area
-    use crate::models::CorticalAreaExt;
+    use feagi_bdu::models::CorticalAreaExt;
     if !area.is_output_area() {
-            return ValidationResult::incompatible(format!(
-                "Agent {} (modality: {}) trying to connect to non-OPU area {}",
-                agent_id, agent_modality, area.cortical_id
-            ));
-        }
-
-        // Phase 4: Provide recommendations based on IOCorticalAreaDataFlag
-        if let CorticalAreaType::BrainOutput(io_type) = cortical_type {
-            let mut result = ValidationResult::compatible();
-
-            match io_type {
-                IOCorticalAreaDataFlag::Percentage(_, _)
-                | IOCorticalAreaDataFlag::SignedPercentage(_, _) => {
-                    result = result.with_recommendation(format!(
-                        "Area {} outputs percentage values (0-100%) - ensure actuators are calibrated accordingly",
-                        area.cortical_id
-                    ));
-                }
-                _ => {}
-            }
-
-            return result;
-        }
+        return ValidationResult::incompatible(format!(
+            "Agent {} (modality: {}) trying to connect to non-OPU area {}",
+            agent_id, agent_modality, area.cortical_id
+        ));
     }
 
     // Fallback: No detailed type info available, assume compatible
@@ -155,7 +138,8 @@ pub fn validate_motor_compatibility(
 /// Phase 4: Returns sensible defaults based on data type
 /// Future: More sophisticated sizing based on dimensions and encoding
 pub fn get_recommended_buffer_size(area: &CorticalArea) -> usize {
-    if let Some(ref cortical_type) = area.cortical_type_new {
+    if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
+        use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
         if let Some(io_type) = match cortical_type {
             CorticalAreaType::BrainInput(t) => Some(t),
             CorticalAreaType::BrainOutput(t) => Some(t),
@@ -164,23 +148,23 @@ pub fn get_recommended_buffer_size(area: &CorticalArea) -> usize {
             return match io_type {
                 IOCorticalAreaDataFlag::CartesianPlane(_) => {
                     // Vision typically needs larger buffers
-                    area.dimensions.volume() * 4 // 4 bytes per voxel
+                    (area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize) * 4 // 4 bytes per voxel
                 }
                 IOCorticalAreaDataFlag::Percentage(_, _)
                 | IOCorticalAreaDataFlag::SignedPercentage(_, _) => {
                     // Percentage encoding is compact
-                    area.dimensions.volume() * 2 // 2 bytes per voxel
+                    (area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize) * 2 // 2 bytes per voxel
                 }
                 _ => {
                     // Default sizing
-                    area.dimensions.volume() * 2
+                    (area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize) * 2
                 }
             };
         }
     }
 
     // Fallback: Default buffer size
-    area.dimensions.volume() * 2
+    (area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize) * 2
 }
 
 /// Check if compression is recommended for this area type
@@ -188,7 +172,8 @@ pub fn get_recommended_buffer_size(area: &CorticalArea) -> usize {
 /// Phase 4: Basic heuristics
 /// Future: More sophisticated compression strategies
 pub fn should_use_compression(area: &CorticalArea) -> bool {
-    if let Some(ref cortical_type) = area.cortical_type_new {
+    if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
+        use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
         if let Some(io_type) = match cortical_type {
             CorticalAreaType::BrainInput(t) => Some(t),
             CorticalAreaType::BrainOutput(t) => Some(t),
@@ -214,26 +199,22 @@ pub fn should_use_compression(area: &CorticalArea) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_types::{AreaType, Dimensions};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+    use feagi_data_structures::genomic::cortical_area::{CorticalID, AreaType, CorticalAreaDimensions};
+    use feagi_data_structures::genomic::cortical_area::cortical_type::{CorticalAreaType, BrainInputCorticalType, BrainOutputCorticalType};
+    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{IOCorticalAreaDataFlag, FrameChangeHandling, PercentageNeuronPositioning};
 
     #[test]
     fn test_validate_sensory_compatibility() {
-        // Create IPU area with CartesianPlane
-        let mut area = CorticalArea::new(
+        // Create IPU area (type encoded in CorticalID)
+        let area = CorticalArea::new(
             CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Vision Input".to_string(),
-            Dimensions::new(128, 128, 3),
+            CorticalAreaDimensions::new(128, 128, 3).unwrap(),
             (0, 0, 0),
+            AreaType::Sensory,
         )
         .unwrap();
-
-        area = area.with_cortical_type_new(CorticalAreaType::BrainInput(
-            IOCorticalAreaDataFlag::CartesianPlane(
-                feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute,
-            ),
-        ));
 
         // Compatible: vision modality with CartesianPlane area
         let result = validate_sensory_compatibility("agent1", "vision", &area);
@@ -247,22 +228,16 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
 
     #[test]
     fn test_validate_motor_compatibility() {
-        // Create OPU area
-        let mut area = CorticalArea::new(
+        // Create OPU area (type encoded in CorticalID)
+        let area = CorticalArea::new(
             CorticalID::try_from_base_64("b21vdDAwX18=").unwrap(),
             0,
             "Motor Output".to_string(),
-            Dimensions::new(10, 10, 1),
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0),
+            AreaType::Motor,
         )
         .unwrap();
-
-        area = area.with_cortical_type_new(CorticalAreaType::BrainOutput(
-            IOCorticalAreaDataFlag::Percentage(
-                feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute,
-                feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning::Linear,
-            ),
-        ));
 
         // Compatible: motor modality with OPU area
         let result = validate_motor_compatibility("agent1", "servo", &area);
@@ -271,20 +246,15 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
 
     #[test]
     fn test_get_recommended_buffer_size() {
-        let mut area = CorticalArea::new(
+        let area = CorticalArea::new(
             CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Vision Input".to_string(),
-            Dimensions::new(128, 128, 3),
+            CorticalAreaDimensions::new(128, 128, 3).unwrap(),
             (0, 0, 0),
+            AreaType::Sensory,
         )
         .unwrap();
-
-        area = area.with_cortical_type_new(CorticalAreaType::BrainInput(
-            IOCorticalAreaDataFlag::CartesianPlane(
-                feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute,
-            ),
-        ));
 
         // CartesianPlane should get 4 bytes per voxel
         let buffer_size = get_recommended_buffer_size(&area);
@@ -293,20 +263,15 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
 
     #[test]
     fn test_should_use_compression() {
-        let mut large_area = CorticalArea::new(
+        let large_area = CorticalArea::new(
             CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Large Vision".to_string(),
-            Dimensions::new(128, 128, 3),
+            CorticalAreaDimensions::new(128, 128, 3).unwrap(),
             (0, 0, 0),
+            AreaType::Sensory,
         )
         .unwrap();
-
-        large_area = large_area.with_cortical_type_new(CorticalAreaType::BrainInput(
-            IOCorticalAreaDataFlag::CartesianPlane(
-                feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute,
-            ),
-        ));
 
         // Large vision area should use compression
         assert!(should_use_compression(&large_area));

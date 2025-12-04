@@ -1597,7 +1597,7 @@ dependencies = [
  "env_logger",
  "feagi-observability",
  "feagi-pns",
- "feagi_data_serialization",
+ "feagi_data_serialization 0.0.50-beta.59",
  "feagi_data_structures 0.0.50-beta.61",
  "serde",
  "serde_json",
@@ -1691,7 +1691,7 @@ dependencies = [
  "feagi-runtime",
  "feagi-runtime-std",
  "feagi-state-manager",
- "feagi_data_serialization",
+ "feagi_data_serialization 0.0.50-beta.61",
  "feagi_data_structures 0.0.50-beta.61",
  "half",
  "memmap2",
@@ -1816,10 +1816,11 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "crossbeam",
+ "feagi-bdu",
  "feagi-burst-engine",
  "feagi-neural",
  "feagi-transports",
- "feagi_data_serialization",
+ "feagi_data_serialization 0.0.50-beta.61",
  "feagi_data_structures 0.0.50-beta.61",
  "lz4",
  "num_cpus",
@@ -1929,6 +1930,15 @@ checksum = "f597bf21f6f5ed390a91d795352b20c0b396f2e4f3b4a8482c7f4b89dcad8ea5"
 dependencies = [
  "byteorder",
  "feagi_data_structures 0.0.50-beta.59",
+ "serde_json",
+]
+
+[[package]]
+name = "feagi_data_serialization"
+version = "0.0.50-beta.61"
+dependencies = [
+ "byteorder",
+ "feagi_data_structures 0.0.50-beta.61",
  "serde_json",
 ]
 

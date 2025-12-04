@@ -34,8 +34,7 @@
 //! - Minimal allocations in hot paths
 
 pub mod backend;
-// Disabled - uses DynamicNPU
-// pub mod burst_loop_runner; // Pure Rust burst loop
+pub mod burst_loop_runner; // Pure Rust burst loop
 pub mod fire_ledger;
 pub mod fire_structures;
 pub mod fq_sampler;
@@ -52,7 +51,7 @@ pub mod synaptic_propagation;
 pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
 
 pub use backend::*;
-// pub use burst_loop_runner::*;
+pub use burst_loop_runner::*;
 pub use dynamic_npu::DynamicNPU;
 pub use fire_ledger::*;
 pub use fire_structures::*;

@@ -435,8 +435,8 @@ impl SensoryStream {
             let mut npu = npu_arc.lock().unwrap();
             debug!("🔍 [ZMQ-SENSORY] NPU lock acquired in {:?}", area_start.elapsed());
             
-            // NPU handles: CorticalID → cortical_idx, coordinates → neuron IDs, injection
-            let injected = npu.inject_sensory_xyzp_by_id(cortical_id, &xyzp_data);
+            // NPU handles: CorticalID → cortical_idx lookup, coordinates → neuron IDs, injection
+            let injected = npu.inject_sensory_xyzp_by_id(&cortical_id, &xyzp_data);
             total_injected += injected;
             
             drop(npu);
