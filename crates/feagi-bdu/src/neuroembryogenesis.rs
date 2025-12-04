@@ -480,6 +480,9 @@ impl Neuroembryogenesis {
                     &genome.cortical_areas,
                 );
                 
+                // Calculate smart position: Place autogen region outside root's bounding box
+                let autogen_position = Self::calculate_autogen_region_position(&root_area_ids, genome);
+                
                 // Create subregion
                 let mut subregion = BrainRegion::new(
                     RegionID::new(),  // Generate new UUID instead of using string
@@ -488,6 +491,10 @@ impl Neuroembryogenesis {
                 )
                 .expect("Failed to create subregion")
                 .with_areas(custom_memory_areas.iter().cloned());
+                
+                // Set 3D coordinates (place outside root's bounding box)
+                subregion.add_property("coordinate_3d".to_string(), serde_json::json!(autogen_position));
+                subregion.add_property("coordinate_2d".to_string(), serde_json::json!([0, 0]));
                 
                 // Store inputs/outputs for subregion
                 if !subregion_inputs.is_empty() {
@@ -830,6 +837,53 @@ fn estimate_synapses_for_area(
 }
 
 impl Neuroembryogenesis {
+    /// Calculate position for autogen region based on root region's bounding box
+    fn calculate_autogen_region_position(
+        root_area_ids: &[CorticalID],
+        genome: &feagi_evo::RuntimeGenome,
+    ) -> [i32; 3] {
+        if root_area_ids.is_empty() {
+            return [100, 0, 0];
+        }
+        
+        let mut min_x = i32::MAX;
+        let mut max_x = i32::MIN;
+        let mut min_y = i32::MAX;
+        let mut max_y = i32::MIN;
+        let mut min_z = i32::MAX;
+        let mut max_z = i32::MIN;
+        
+        for cortical_id in root_area_ids {
+            if let Some(area) = genome.cortical_areas.get(cortical_id) {
+                let pos: (i32, i32, i32) = area.position.into();
+                let dims = (
+                    area.dimensions.width as i32,
+                    area.dimensions.height as i32,
+                    area.dimensions.depth as i32,
+                );
+                
+                min_x = min_x.min(pos.0);
+                max_x = max_x.max(pos.0 + dims.0);
+                min_y = min_y.min(pos.1);
+                max_y = max_y.max(pos.1 + dims.1);
+                min_z = min_z.min(pos.2);
+                max_z = max_z.max(pos.2 + dims.2);
+            }
+        }
+        
+        let bbox_width = (max_x - min_x).max(1);
+        let padding = (bbox_width / 5).max(50);
+        let autogen_x = max_x + padding;
+        let autogen_y = (min_y + max_y) / 2;
+        let autogen_z = (min_z + max_z) / 2;
+        
+        info!(target: "feagi-bdu",
+              "  📐 Autogen position: ({}, {}, {}) [padding: {}]",
+              autogen_x, autogen_y, autogen_z, padding);
+        
+        [autogen_x, autogen_y, autogen_z]
+    }
+    
     /// Analyze region inputs/outputs based on cortical connections
     /// 
     /// Following Python's _auto_assign_region_io() logic:
