@@ -20,7 +20,7 @@ feagi-transports = { path = "../feagi-transports", features = ["zmq-server", "we
 feagi-neural = { path = "../feagi-neural" }  # For types
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi_data_structures.workspace = true
-feagi_data_serialization = { path = "../../../feagi-data-processing/feagi_data_serialization" }
+feagi_data_serialization = { workspace = true }
 
 # Core dependencies (always required)
 serde = { version = "1.0", features = ["derive"] }
