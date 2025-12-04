@@ -202,16 +202,8 @@ impl Neuroembryogenesis {
         
         // Phase 5: Parse quantization precision and dispatch to type-specific builder
         let quantization_precision = &genome.physiology.quantization_precision;
-        let quant_spec = match QuantizationSpec::from_genome_string(quantization_precision) {
-            Ok(spec) => spec,
-            Err(e) => {
-                warn!(target: "feagi-bdu",
-                    "   Failed to parse quantization_precision '{}': {}. Defaulting to INT8",
-                    quantization_precision, e
-                );
-                QuantizationSpec::default() // INT8 (new default)
-            }
-        };
+        let precision = Precision::from(quantization_precision.as_str());
+        let quant_spec = QuantizationSpec::default();
         
         info!(target: "feagi-bdu",
             "   Quantization precision: {:?} (range: [{}, {}] for membrane potential)",
@@ -347,7 +339,7 @@ impl Neuroembryogenesis {
                     "CORE"
                 } else if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
                     // Use cortical type from CorticalID
-                    use feagi_data_structures::genomic::cortical_area::cortical_type::CorticalAreaType;
+                    use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
                     match cortical_type {
                         CorticalAreaType::Core(_) => "CORE",
                         CorticalAreaType::BrainInput(_) => "IPU",

@@ -68,6 +68,13 @@ impl From<feagi_neural::types::FeagiError> for BduError {
     }
 }
 
+// Convert from feagi_data_structures::FeagiDataError
+impl From<feagi_data_structures::FeagiDataError> for BduError {
+    fn from(err: feagi_data_structures::FeagiDataError) -> Self {
+        BduError::Internal(err.to_string())
+    }
+}
+
 // Convert from feagi_evo::EvoError
 impl From<feagi_evo::EvoError> for BduError {
     fn from(err: feagi_evo::EvoError) -> Self {

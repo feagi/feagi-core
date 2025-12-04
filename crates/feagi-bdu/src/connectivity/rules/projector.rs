@@ -122,9 +122,9 @@ pub fn syn_projector(
                 if x >= 0
                     && y >= 0
                     && z >= 0
-                    && (x as u32) < dst_dims.width
-                    && (y as u32) < dst_dims.height
-                    && (z as u32) < dst_dims.depth
+                    && x < dst_dims.width as i32
+                    && y < dst_dims.height as i32
+                    && z < dst_dims.depth as i32
                 {
                     candidate_positions.push((x, y, z));
                 }
