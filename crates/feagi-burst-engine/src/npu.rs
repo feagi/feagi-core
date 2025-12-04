@@ -308,10 +308,21 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let neuron_id = NeuronId(neuron_idx as u32);
 
         // CRITICAL: Add to propagation engine's neuron-to-area mapping
+        // Get the cortical ID from the area_id_to_name mapping
+        let area_name = self.area_id_to_name.read().unwrap()
+            .get(&cortical_area)
+            .ok_or_else(|| FeagiError::ComputationError(
+                format!("No cortical area registered for index {}", cortical_area)
+            ))?
+            .clone();
+        let cortical_id = CorticalID::try_from_base_64(&area_name)
+            .map_err(|e| FeagiError::ComputationError(
+                format!("Failed to convert area name '{}' to CorticalID: {}", area_name, e)
+            ))?;
         self.propagation_engine
             .write().unwrap()
             .neuron_to_area
-            .insert(neuron_id, CorticalID::try_from_u64(cortical_area as u64).unwrap());
+            .insert(neuron_id, cortical_id);
 
         Ok(neuron_id)
     }
@@ -379,10 +390,21 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
                 let reserve_time = prop_start.elapsed();
 
                 let insert_start = Instant::now();
+                // Get the cortical ID from the area_id_to_name mapping
+                // cortical_areas[i] is a numeric index, we need to look up the actual CorticalID string
+                let area_name_map = self.area_id_to_name.read().unwrap();
                 for (i, neuron_id) in neuron_ids.iter().enumerate() {
-                    self.propagation_engine
-                        .write().unwrap().neuron_to_area
-                        .insert(*neuron_id, CorticalID::try_from_u64(cortical_areas[i] as u64).unwrap());
+                    if let Some(area_name) = area_name_map.get(&cortical_areas[i]) {
+                        if let Ok(cortical_id) = CorticalID::try_from_base_64(area_name) {
+                            self.propagation_engine
+                                .write().unwrap().neuron_to_area
+                                .insert(*neuron_id, cortical_id);
+                        } else {
+                            tracing::error!("Failed to convert area name '{}' to CorticalID", area_name);
+                        }
+                    } else {
+                        tracing::error!("No cortical area registered for index {}", cortical_areas[i]);
+                    }
                 }
                 let insert_time = insert_start.elapsed();
 

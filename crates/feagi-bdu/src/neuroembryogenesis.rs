@@ -431,15 +431,17 @@ impl Neuroembryogenesis {
         );
         
         // Convert CorticalID to base64 for with_areas()
-        let root_area_strs: Vec<String> = root_area_ids.iter().map(|id| id.as_base_64()).collect();
+        // Create a root region with a generated RegionID
+        use feagi_data_structures::genomic::brain_regions::RegionID;
+        let root_region_id = RegionID::new();
         
         let mut root_region = BrainRegion::new(
-            "root".to_string(),
+            root_region_id,
             "Root Brain Region".to_string(),
-            RegionType::Custom,
+            RegionType::Undefined,
         )
         .expect("Failed to create root region")
-        .with_areas(root_area_strs);
+        .with_areas(root_area_ids.iter().cloned());
             
             // Store inputs/outputs based on connection analysis
             if !root_inputs.is_empty() {

@@ -56,7 +56,7 @@ pub use feagi_data_structures::genomic::{
     BrainRegion, RegionType
 };
 pub use feagi_data_structures::genomic::cortical_area::{
-    CorticalArea, AreaType, CorticalID, CorticalAreaDimensions as Dimensions
+    CorticalArea, CorticalID, CorticalAreaDimensions as Dimensions
 };
 pub mod models;
 pub use models::{BrainRegionHierarchy, CorticalAreaExt};

@@ -15,7 +15,7 @@ use crate::types::{BduError, BduResult, Position};
 
 // Import core types from feagi_data_structures
 pub use feagi_data_structures::genomic::cortical_area::{
-    CorticalArea, AreaType, CorticalID, CorticalAreaDimensions
+    CorticalArea, CorticalID, CorticalAreaDimensions
 };
 
 /// Extension trait providing business logic methods for CorticalArea

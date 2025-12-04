@@ -47,7 +47,9 @@ use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
 use feagi_data_structures::genomic::{BrainRegion, RegionType};
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea, AreaType};
+use feagi_data_structures::genomic::descriptors::{GenomeCoordinate2D, GenomeCoordinate3D};
+use feagi_data_structures::genomic::brain_regions::RegionID;
+use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Parsed genome data ready for ConnectomeManager
@@ -318,12 +320,16 @@ impl GenomeParser {
                         cortical_id_str, coords.len()
                     )));
                 }
-                (coords[0], coords[1], coords[2])
+                GenomeCoordinate3D::new(coords[0], coords[1], coords[2])
             } else {
                 // Default to origin if not specified
                 warn!(target: "feagi-evo","Cortical area {} missing relative_coordinate, defaulting to (0,0,0)", cortical_id_str);
-                (0, 0, 0)
+                GenomeCoordinate3D::new(0, 0, 0)
             };
+            
+            // Determine cortical type from cortical_id
+            let cortical_type = cortical_id.as_cortical_type()
+                .map_err(|e| EvoError::InvalidArea(format!("Failed to determine cortical type from ID {}: {}", cortical_id_str, e)))?;
             
             // Create cortical area with CorticalID object (zero-copy, type-safe)
             let mut area = CorticalArea::new(
@@ -332,7 +338,7 @@ impl GenomeParser {
                 name,
                 dimensions,
                 position,
-                AreaType::Custom, // Default to Custom, will be set from properties
+                cortical_type,
             )?;
             
             // Store cortical_type as cortical_group for new type system
@@ -444,25 +450,36 @@ impl GenomeParser {
     ) -> EvoResult<Vec<(BrainRegion, Option<String>)>> {
         let mut regions = Vec::with_capacity(raw_regions.len());
         
-        for (region_id, raw_region) in raw_regions.iter() {
+        for (region_id_str, raw_region) in raw_regions.iter() {
             let title = raw_region.title.clone()
-                .unwrap_or_else(|| region_id.clone());
+                .unwrap_or_else(|| region_id_str.clone());
             
-            let region_type = RegionType::Custom; // Default to Custom
+            // Convert string region_id to RegionID (UUID)
+            // For now, try to parse as UUID if it's already a UUID, otherwise generate new one
+            let region_id = match RegionID::from_string(region_id_str) {
+                Ok(id) => id,
+                Err(_) => {
+                    // If not a valid UUID, generate a new one
+                    // This handles legacy string-based region IDs
+                    RegionID::new()
+                }
+            };
+            
+            let region_type = RegionType::Undefined; // Default to Undefined
             
             let mut region = BrainRegion::new(
-                region_id.clone(),
+                region_id,
                 title,
                 region_type,
             )?;
             
-            // Add cortical areas to region (convert to base64 format)
+            // Add cortical areas to region (using CorticalID directly)
             if let Some(areas) = &raw_region.areas {
                 for area_id in areas {
-                    // Convert area_id to CorticalID, then to base64
+                    // Convert area_id to CorticalID
                     match string_to_cortical_id(area_id) {
                         Ok(cortical_id) => {
-                            region.add_area(cortical_id.as_base_64());
+                            region.add_area(cortical_id);
                         }
                         Err(e) => {
                             warn!(target: "feagi-evo", 
@@ -473,19 +490,19 @@ impl GenomeParser {
                 }
             }
             
-            // Store properties
+            // Store properties in HashMap
             if let Some(desc) = &raw_region.description {
-                region.properties.insert("description".to_string(), serde_json::json!(desc));
+                region.add_property("description".to_string(), serde_json::json!(desc));
             }
             if let Some(coord_2d) = &raw_region.coordinate_2d {
-                region.properties.insert("coordinate_2d".to_string(), serde_json::json!(coord_2d));
+                region.add_property("coordinate_2d".to_string(), serde_json::json!(coord_2d));
             }
             if let Some(coord_3d) = &raw_region.coordinate_3d {
-                region.properties.insert("coordinate_3d".to_string(), serde_json::json!(coord_3d));
+                region.add_property("coordinate_3d".to_string(), serde_json::json!(coord_3d));
             }
-            // Convert inputs/outputs to base64 format
+            // Store inputs/outputs as base64 strings
             if let Some(inputs) = &raw_region.inputs {
-                let converted_inputs: Vec<String> = inputs.iter()
+                let input_ids: Vec<String> = inputs.iter()
                     .filter_map(|id| {
                         match string_to_cortical_id(id) {
                             Ok(cortical_id) => Some(cortical_id.as_base_64()),
@@ -498,10 +515,12 @@ impl GenomeParser {
                         }
                     })
                     .collect();
-                region.properties.insert("inputs".to_string(), serde_json::json!(converted_inputs));
+                if !input_ids.is_empty() {
+                    region.add_property("inputs".to_string(), serde_json::json!(input_ids));
+                }
             }
             if let Some(outputs) = &raw_region.outputs {
-                let converted_outputs: Vec<String> = outputs.iter()
+                let output_ids: Vec<String> = outputs.iter()
                     .filter_map(|id| {
                         match string_to_cortical_id(id) {
                             Ok(cortical_id) => Some(cortical_id.as_base_64()),
@@ -514,14 +533,20 @@ impl GenomeParser {
                         }
                     })
                     .collect();
-                region.properties.insert("outputs".to_string(), serde_json::json!(converted_outputs));
+                if !output_ids.is_empty() {
+                    region.add_property("outputs".to_string(), serde_json::json!(output_ids));
+                }
             }
             if let Some(signature) = &raw_region.signature {
-                region.properties.insert("signature".to_string(), serde_json::json!(signature));
+                region.add_property("signature".to_string(), serde_json::json!(signature));
             }
             
             // Store parent_id for hierarchy construction
             let parent_id = raw_region.parent_region_id.clone();
+            if let Some(ref parent_id_str) = parent_id {
+                // Store as property for serialization
+                region.add_property("parent_region_id".to_string(), serde_json::json!(parent_id_str));
+            }
             
             regions.push((region, parent_id));
         }

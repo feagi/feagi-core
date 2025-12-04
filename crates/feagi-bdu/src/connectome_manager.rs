@@ -326,7 +326,17 @@ impl ConnectomeManager {
         self.cortical_idx_to_id.insert(cortical_idx, cortical_id.clone());
         
         // Store area
-        self.cortical_areas.insert(cortical_id, area);
+        self.cortical_areas.insert(cortical_id.clone(), area);
+        
+        // CRITICAL: Register cortical area in NPU during corticogenesis
+        // This must happen BEFORE neurogenesis so neurons can look up their cortical IDs
+        // Use base64 format for proper CorticalID conversion
+        if let Some(ref npu) = self.npu {
+            if let Ok(mut npu_lock) = npu.lock() {
+                npu_lock.register_cortical_area(cortical_idx, cortical_id.as_base_64());
+                debug!(target: "feagi-bdu", "  ✓ Registered cortical area idx={} → '{}' in NPU", cortical_idx, cortical_id.as_base_64());
+            }
+        }
         
         self.initialized = true;
         
@@ -862,6 +872,7 @@ impl ConnectomeManager {
         );
         
         // Call NPU to create neurons
+        // NOTE: Cortical area should already be registered in NPU during corticogenesis
         let mut npu_lock = npu.lock()
             .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
         
@@ -882,11 +893,6 @@ impl ConnectomeManager {
             mp_charge_accumulation,
         )
         .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
-        
-        // CRITICAL: Register cortical area name in NPU for visualization/burst loop lookups
-        // Use raw 8-byte ASCII format (NOT base64) for visualization serialization
-        // Note: API responses use base64, but visualization data stream uses raw ASCII
-        npu_lock.register_cortical_area(*cortical_idx, cortical_id.to_string());
         
         info!(target: "feagi-bdu","Created {} neurons for area {} via NPU", neuron_count, cortical_id.as_base_64());
         
@@ -2374,7 +2380,8 @@ impl ConnectomeManager {
         let region = self.brain_regions.get_region(region_id)
             .ok_or_else(|| BduError::InvalidArea(format!("Brain region {} not found", region_id)))?;
         
-        Ok(region.cortical_areas.iter().cloned().collect())
+        // Convert CorticalID to base64 strings
+        Ok(region.cortical_areas.iter().map(|id| id.as_base_64()).collect())
     }
     
     /// Update brain region properties
@@ -2459,15 +2466,9 @@ impl ConnectomeManager {
                 }
                 "region_type" => {
                     if let Some(type_str) = value.as_str() {
-                        // Parse and update region type
-                        let new_type = match type_str.to_lowercase().as_str() {
-                            "sensory" => feagi_data_structures::genomic::RegionType::Sensory,
-                            "motor" => feagi_data_structures::genomic::RegionType::Motor,
-                            "memory" => feagi_data_structures::genomic::RegionType::Memory,
-                            "custom" => feagi_data_structures::genomic::RegionType::Custom,
-                            _ => return Err(BduError::InvalidArea(format!("Invalid region_type: {}", type_str))),
-                        };
-                        region.region_type = new_type;
+                        // Note: RegionType is currently a placeholder (Undefined only)
+                        // Specific region types will be added in the future
+                        region.region_type = feagi_data_structures::genomic::RegionType::Undefined;
                         debug!(target: "feagi-bdu", "Updated brain region {} type = {}", region_id, type_str);
                     }
                 }

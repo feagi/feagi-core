@@ -49,10 +49,10 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
         cortical_areas.insert(area.cortical_id, area);
     }
     
-    // Convert brain regions to HashMap
+    // Convert brain regions to HashMap (convert RegionID to String for key)
     let mut brain_regions = HashMap::new();
     for (region, _parent) in parsed.brain_regions {
-        brain_regions.insert(region.region_id.clone(), region);
+        brain_regions.insert(region.region_id.to_string(), region);
     }
     
     // Parse morphologies

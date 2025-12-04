@@ -583,19 +583,11 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
     // Validate brain region references
     for (region_id, region) in &genome.brain_regions {
         // Check if cortical areas in region exist
-        for cortical_id_str in &region.cortical_areas {
-            // Convert string to CorticalID for lookup
-            if let Ok(cortical_id) = crate::genome::parser::string_to_cortical_id(cortical_id_str) {
-                if !genome.cortical_areas.contains_key(&cortical_id) {
-                    result.add_error(format!(
-                        "Brain region '{}' references non-existent cortical area '{}'",
-                        region_id, cortical_id_str
-                    ));
-                }
-            } else {
+        for cortical_id in &region.cortical_areas {
+            if !genome.cortical_areas.contains_key(cortical_id) {
                 result.add_error(format!(
-                    "Brain region '{}' has invalid cortical area ID '{}'",
-                    region_id, cortical_id_str
+                    "Brain region '{}' references non-existent cortical area '{}'",
+                    region_id, cortical_id
                 ));
             }
         }

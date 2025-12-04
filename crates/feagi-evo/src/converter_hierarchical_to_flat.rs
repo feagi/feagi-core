@@ -167,9 +167,9 @@ fn convert_area_to_flat(
     
     // Position (relative_coordinate) - only if not already in properties
     if !area.properties.contains_key("relative_coordinate") {
-        flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.0));
-        flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), json!(area.position.1));
-        flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), json!(area.position.2));
+        flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.x));
+        flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), json!(area.position.y));
+        flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), json!(area.position.z));
     }
     
     // Convert all properties from area.properties using reverse mapping

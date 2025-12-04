@@ -15,8 +15,9 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{RuntimeGenome, GenomeMetadata, MorphologyRegistry, PhysiologyConfig, GenomeSignatures, GenomeStats};
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalArea, AreaType};
+use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalArea};
 use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_data_structures::genomic::descriptors::GenomeCoordinate3D;
 use std::collections::HashMap;
 use serde_json::Value;
 
@@ -57,13 +58,17 @@ pub fn get_default_neural_properties() -> HashMap<String, Value> {
 
 /// Create _death cortical area (cortical_idx = 0) from template
 pub fn create_death_area() -> CorticalArea {
+    let cortical_id = CoreCorticalType::Death.to_cortical_id();
+    let cortical_type = cortical_id.as_cortical_type()
+        .expect("Death cortical ID should map to Core type");
+    
     let mut area = CorticalArea::new(
-        CoreCorticalType::Death.to_cortical_id(),
+        cortical_id,
         0, // cortical_idx = 0 (reserved)
         "Death".to_string(),
         CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        (0, 0, -10), // coordinate_3d
-        AreaType::Custom, // Core areas use Custom type
+        GenomeCoordinate3D::new(0, 0, -10),
+        cortical_type,
     ).expect("Failed to create _death area");
     
     let mut props = get_default_neural_properties();
@@ -75,13 +80,17 @@ pub fn create_death_area() -> CorticalArea {
 
 /// Create _power cortical area (cortical_idx = 1) from template
 pub fn create_power_area() -> CorticalArea {
+    let cortical_id = CoreCorticalType::Power.to_cortical_id();
+    let cortical_type = cortical_id.as_cortical_type()
+        .expect("Power cortical ID should map to Core type");
+    
     let mut area = CorticalArea::new(
-        CoreCorticalType::Power.to_cortical_id(),
+        cortical_id,
         1, // cortical_idx = 1 (reserved)
         "Brain_Power".to_string(),
         CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
-        (0, 0, -20), // coordinate_3d
-        AreaType::Custom, // Core areas use Custom type
+        GenomeCoordinate3D::new(0, 0, -20),
+        cortical_type,
     ).expect("Failed to create _power area");
     
     let mut props = get_default_neural_properties();

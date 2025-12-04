@@ -61,9 +61,9 @@ impl GenomeSaver {
                 area.dimensions.depth
             ]));
             area_data.insert("relative_coordinate".to_string(), json!([
-                area.position.0,
-                area.position.1,
-                area.position.2
+                area.position.x,
+                area.position.y,
+                area.position.z
             ]));
             
             // Area type (from properties)
@@ -95,19 +95,21 @@ impl GenomeSaver {
                 }
             );
             
-            // Cortical areas in this region
-            let areas: Vec<String> = region.cortical_areas.iter().cloned().collect();
+            // Cortical areas in this region (convert CorticalID to base64 strings)
+            let areas: Vec<String> = region.cortical_areas.iter()
+                .map(|id| id.as_base_64())
+                .collect();
             region_data.insert("areas".to_string(), json!(areas));
             
-            // Child regions (empty for now - can be computed from hierarchy)
-            region_data.insert("regions".to_string(), json!(Vec::<String>::new()));
-            
-            // Add all properties from the region's properties HashMap
+            // Add all properties from HashMap
             for (key, value) in &region.properties {
                 region_data.insert(key.clone(), value.clone());
             }
             
-            regions_map.insert(region_id.clone(), Value::Object(region_data));
+            // Note: regions (child_regions) are not stored in properties - will be empty for now
+            region_data.insert("regions".to_string(), json!(Vec::<String>::new()));
+            
+            regions_map.insert(region_id.to_string(), Value::Object(region_data));
         }
         
         // Build final genome structure
