@@ -194,6 +194,75 @@ impl SynapseStorage for SynapseArray {
         self.count += 1;
         Ok(idx)
     }
+    
+    fn add_synapses_batch(
+        &mut self,
+        sources: &[u32],
+        targets: &[u32],
+        weights: &[u8],
+        psps: &[u8],
+        types: &[u8],
+    ) -> feagi_runtime::error::Result<()> {
+        let batch_size = sources.len();
+        for i in 0..batch_size {
+            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i])?;
+        }
+        Ok(())
+    }
+    
+    fn remove_synapse(&mut self, idx: usize) -> feagi_runtime::error::Result<()> {
+        if idx >= self.count {
+            return Err(feagi_runtime::error::RuntimeError::InvalidParameters(
+                format!("Synapse index {} out of bounds (count: {})", idx, self.count)
+            ));
+        }
+        self.valid_mask[idx] = false;
+        Ok(())
+    }
+    
+    fn remove_synapses_from_sources(&mut self, source_neurons: &[u32]) -> feagi_runtime::error::Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx] && source_neurons.contains(&self.source_neurons[idx]) {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+    
+    fn remove_synapses_between(&mut self, source: u32, target: u32) -> feagi_runtime::error::Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx] 
+                && self.source_neurons[idx] == source 
+                && self.target_neurons[idx] == target
+            {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+    
+    fn update_weight(&mut self, idx: usize, new_weight: u8) -> feagi_runtime::error::Result<()> {
+        if idx >= self.count {
+            return Err(feagi_runtime::error::RuntimeError::InvalidParameters(
+                format!("Synapse index {} out of bounds (count: {})", idx, self.count)
+            ));
+        }
+        if !self.valid_mask[idx] {
+            return Err(feagi_runtime::error::RuntimeError::InvalidParameters(
+                format!("Synapse {} is not valid", idx)
+            ));
+        }
+        self.weights[idx] = new_weight;
+        Ok(())
+    }
+    
+    fn valid_count(&self) -> usize {
+        self.valid_mask[..self.count].iter().filter(|&&v| v).count()
+    }
 }
 
 #[cfg(test)]

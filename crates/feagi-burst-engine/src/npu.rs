@@ -185,10 +185,6 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         })
     }
 
-    /// Create a new NPU with CPU-only backend (for tests)
-    /// 
-    /// This is a convenience wrapper for tests that don't need GPU configuration.
-    /// Production code should use `new()` with explicit GPU config.
 }
 
 // Backward compatibility: StdRuntime with f32 and CPUBackend
@@ -473,8 +469,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         );
 
         if !failed.is_empty() {
-            let current_count = self.neuron_storage.read().unwrap().count;
-            let capacity = self.neuron_storage.read().unwrap().capacity;
+            let current_count = self.neuron_storage.read().unwrap().count();
+            let capacity = self.neuron_storage.read().unwrap().capacity();
             return Err(FeagiError::ComputationError(format!(
                 "Failed to create {} neurons (requested: {}, succeeded: {}, current: {}/{} capacity) - NPU CAPACITY EXCEEDED",
                 failed.len(),
@@ -810,15 +806,15 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// Get neuron property by index (for Python bindings)
     pub fn get_neuron_property_by_index(&self, idx: usize, property: &str) -> Option<f32> {
         let neuron_storage = self.neuron_storage.read().unwrap();
-        if idx >= neuron_storage.count {
+        if idx >= neuron_storage.count() {
             return None;
         }
         match property {
-            "threshold" => neuron_storage.thresholds.get(idx).map(|&v| v.to_f32()),
-            "leak_coefficient" => neuron_storage.leak_coefficients.get(idx).copied(),
-            "membrane_potential" => neuron_storage.membrane_potentials.get(idx).map(|&v| v.to_f32()),
-            "resting_potential" => neuron_storage.resting_potentials.get(idx).map(|&v| v.to_f32()),
-            "excitability" => neuron_storage.excitabilities.get(idx).copied(),
+            "threshold" => neuron_storage.thresholds().get(idx).map(|&v| v.to_f32()),
+            "leak_coefficient" => neuron_storage.leak_coefficients().get(idx).copied(),
+            "membrane_potential" => neuron_storage.membrane_potentials().get(idx).map(|&v| v.to_f32()),
+            "resting_potential" => neuron_storage.resting_potentials().get(idx).map(|&v| v.to_f32()),
+            "excitability" => neuron_storage.excitabilities().get(idx).copied(),
             _ => None,
         }
     }
@@ -826,11 +822,11 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// Get neuron property u16 by index (for Python bindings)
     pub fn get_neuron_property_u16_by_index(&self, idx: usize, property: &str) -> Option<u16> {
         let neuron_storage = self.neuron_storage.read().unwrap();
-        if idx >= neuron_storage.count {
+        if idx >= neuron_storage.count() {
             return None;
         }
         match property {
-            "refractory_period" => neuron_storage.refractory_periods.get(idx).copied(),
+            "refractory_period" => neuron_storage.refractory_periods().get(idx).copied(),
             "consecutive_fire_limit" => neuron_storage.consecutive_fire_limits.get(idx).copied(),
             _ => None,
         }
@@ -840,9 +836,9 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     pub fn get_neuron_storage_snapshot(&self) -> (usize, Vec<u32>, Vec<bool>) {
         let neuron_storage = self.neuron_storage.read().unwrap();
         (
-            neuron_storage.count,
-            neuron_storage.cortical_areas.clone(),
-            neuron_storage.valid_mask.clone(),
+            neuron_storage.count(),
+            neuron_storage.cortical_areas().clone(),
+            neuron_storage.valid_mask().clone(),
         )
     }
 
@@ -864,7 +860,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// Returns true if NPU has any valid neurons, false otherwise
     pub fn is_genome_loaded(&self) -> bool {
         let neuron_storage = self.neuron_storage.read().unwrap();
-        neuron_storage.count > 0 && neuron_storage.valid_mask.iter().any(|&valid| valid)
+        neuron_storage.count() > 0 && neuron_storage.valid_mask().iter().any(|&valid| valid)
     }
 
     /// Find neuron ID at specific X,Y,Z coordinates within a cortical area
@@ -984,34 +980,34 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // Convert neuron array (lock once and clone all fields)
         let neuron_storage = self.neuron_storage.read().unwrap();
         let neurons = SerializableNeuronArray {
-            count: neuron_storage.count,
-            capacity: neuron_storage.capacity,
+            count: neuron_storage.count(),
+            capacity: neuron_storage.capacity(),
             // Convert T to f32 for serialization
-            membrane_potentials: neuron_storage.membrane_potentials.iter().map(|&v| v.to_f32()).collect(),
-            thresholds: neuron_storage.thresholds.iter().map(|&v| v.to_f32()).collect(),
-            leak_coefficients: neuron_storage.leak_coefficients.clone(),
-            resting_potentials: neuron_storage.resting_potentials.iter().map(|&v| v.to_f32()).collect(),
-            neuron_types: neuron_storage.neuron_types.clone(),
-            refractory_periods: neuron_storage.refractory_periods.clone(),
-            refractory_countdowns: neuron_storage.refractory_countdowns.clone(),
-            excitabilities: neuron_storage.excitabilities.clone(),
-            cortical_areas: neuron_storage.cortical_areas.clone(),
-            coordinates: neuron_storage.coordinates.clone(),
-            valid_mask: neuron_storage.valid_mask.clone(),
+            membrane_potentials: neuron_storage.membrane_potentials().iter().map(|&v| v.to_f32()).collect(),
+            thresholds: neuron_storage.thresholds().iter().map(|&v| v.to_f32()).collect(),
+            leak_coefficients: neuron_storage.leak_coefficients().clone(),
+            resting_potentials: neuron_storage.resting_potentials().iter().map(|&v| v.to_f32()).collect(),
+            neuron_types: neuron_storage.neuron_types().clone(),
+            refractory_periods: neuron_storage.refractory_periods().clone(),
+            refractory_countdowns: neuron_storage.refractory_countdowns().clone(),
+            excitabilities: neuron_storage.excitabilities().clone(),
+            cortical_areas: neuron_storage.cortical_areas().clone(),
+            coordinates: neuron_storage.coordinates().clone(),
+            valid_mask: neuron_storage.valid_mask().clone(),
         };
         drop(neuron_storage);  // Release lock
 
         // Convert synapse array (lock once and clone all fields)
         let synapse_storage = self.synapse_storage.read().unwrap();
         let synapses = SerializableSynapseArray {
-            count: synapse_storage.count,
-            capacity: synapse_storage.capacity,
-            source_neurons: synapse_storage.source_neurons.clone(),
-            target_neurons: synapse_storage.target_neurons.clone(),
-            weights: synapse_storage.weights.clone(),
-            conductances: synapse_storage.postsynaptic_potentials.clone(),
-            types: synapse_storage.types.clone(),
-            valid_mask: synapse_storage.valid_mask.clone(),
+            count: synapse_storage.count(),
+            capacity: synapse_storage.capacity(),
+            source_neurons: synapse_storage.source_neurons().clone(),
+            target_neurons: synapse_storage.target_neurons().clone(),
+            weights: synapse_storage.weights().clone(),
+            conductances: synapse_storage.postsynaptic_potentials().clone(),
+            types: synapse_storage.types().clone(),
+            valid_mask: synapse_storage.valid_mask().clone(),
             source_index: synapse_storage.source_index.clone(),
         };
         drop(synapse_storage);  // Release lock
@@ -1072,38 +1068,38 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut neuron_storage = runtime.create_neuron_storage(snapshot.neurons.capacity())
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to create neuron storage: {:?}", e)))?;
         // Convert f32 from serialized data to T
-        neuron_storage.membrane_potentials = snapshot.neurons.membrane_potentials.iter().map(|&v| T::from_f32(v)).collect();
-        neuron_storage.thresholds = snapshot.neurons.thresholds.iter().map(|&v| T::from_f32(v)).collect();
-        neuron_storage.leak_coefficients = snapshot.neurons.leak_coefficients;
-        neuron_storage.resting_potentials = snapshot.neurons.resting_potentials.iter().map(|&v| T::from_f32(v)).collect();
-        neuron_storage.neuron_types = snapshot.neurons.neuron_types;
-        neuron_storage.refractory_periods = snapshot.neurons.refractory_periods;
-        neuron_storage.refractory_countdowns = snapshot.neurons.refractory_countdowns;
-        neuron_storage.excitabilities = snapshot.neurons.excitabilities;
-        neuron_storage.cortical_areas = snapshot.neurons.cortical_areas;
-        neuron_storage.coordinates = snapshot.neurons.coordinates;
-        neuron_storage.valid_mask = snapshot.neurons.valid_mask;
+        neuron_storage.membrane_potentials() = snapshot.neurons.membrane_potentials.iter().map(|&v| T::from_f32(v)).collect();
+        neuron_storage.thresholds() = snapshot.neurons.thresholds.iter().map(|&v| T::from_f32(v)).collect();
+        neuron_storage.leak_coefficients() = snapshot.neurons.leak_coefficients;
+        neuron_storage.resting_potentials() = snapshot.neurons.resting_potentials.iter().map(|&v| T::from_f32(v)).collect();
+        neuron_storage.neuron_types() = snapshot.neurons.neuron_types;
+        neuron_storage.refractory_periods() = snapshot.neurons.refractory_periods;
+        neuron_storage.refractory_countdowns() = snapshot.neurons.refractory_countdowns;
+        neuron_storage.excitabilities() = snapshot.neurons.excitabilities;
+        neuron_storage.cortical_areas() = snapshot.neurons.cortical_areas;
+        neuron_storage.coordinates() = snapshot.neurons.coordinates;
+        neuron_storage.valid_mask() = snapshot.neurons.valid_mask;
 
         // Convert synapse array using runtime
         let mut synapse_storage = runtime.create_synapse_storage(snapshot.synapses.capacity())
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to create synapse storage: {:?}", e)))?;
-        synapse_storage.source_neurons = snapshot.synapses.source_neurons;
-        synapse_storage.target_neurons = snapshot.synapses.target_neurons;
-        synapse_storage.weights = snapshot.synapses.weights;
-        synapse_storage.postsynaptic_potentials = snapshot.synapses.conductances;  // TODO: Rename field in snapshot
-        synapse_storage.types = snapshot.synapses.types;
-        synapse_storage.valid_mask = snapshot.synapses.valid_mask;
+        synapse_storage.source_neurons() = snapshot.synapses.source_neurons;
+        synapse_storage.target_neurons() = snapshot.synapses.target_neurons;
+        synapse_storage.weights() = snapshot.synapses.weights;
+        synapse_storage.postsynaptic_potentials() = snapshot.synapses.conductances;  // TODO: Rename field in snapshot
+        synapse_storage.types() = snapshot.synapses.types;
+        synapse_storage.valid_mask() = snapshot.synapses.valid_mask;
         synapse_storage.source_index = snapshot.synapses.source_index;
         
         // Create backend based on GPU config and actual genome size
         let (backend_type, backend_config) = if let Some(config) = gpu_config {
             info!("🎮 Imported Connectome GPU Configuration:");
-            info!("   Neurons: {}, Synapses: {}", neuron_storage.count, synapse_storage.count);
+            info!("   Neurons: {}, Synapses: {}", neuron_storage.count(), synapse_storage.count());
             info!("   GPU enabled: {}", config.use_gpu);
             info!("   Hybrid mode: {}", config.hybrid_enabled);
             if config.hybrid_enabled {
                 info!("   GPU threshold: {} synapses", config.gpu_threshold);
-                if synapse_storage.count >= config.gpu_threshold {
+                if synapse_storage.count() >= config.gpu_threshold {
                     info!("   → Genome ABOVE threshold, GPU will be considered");
                 } else {
                     info!("   → Genome BELOW threshold, CPU will be used");
@@ -1634,7 +1630,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
         let idx = neuron_id as usize;
         let neuron_storage = self.neuron_storage.read().unwrap();
-        idx < neuron_storage.count && neuron_storage.valid_mask()[idx]
+        idx < neuron_storage.count() && neuron_storage.valid_mask()()[idx]
     }
 
     /// Get neuron coordinates (x, y, z)
@@ -1781,10 +1777,10 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>, S
     // - mp_acc=false: Neuron resets to 0.0 at start of each burst (coincidence detector)
     //
     // This ensures neurons only fire from CURRENT BURST stimulation, not accumulated history
-    for idx in 0..neuron_storage.count {
-        if neuron_storage.valid_mask()[idx] && !neuron_storage.mp_charge_accumulation()[idx] {
+    for idx in 0..neuron_storage.count() {
+        if neuron_storage.valid_mask()()[idx] && !neuron_storage.mp_charge_accumulation()[idx] {
             // Reset membrane potential for non-accumulating neurons
-            neuron_storage.membrane_potentials()[idx] = T::zero();
+            neuron_storage.membrane_potentials()()[idx] = T::zero();
         }
     }
 
@@ -1825,15 +1821,15 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>, S
 
     // 🔍 DIAGNOSTIC: Log neuron array state on first scan with neurons
     static DIAGNOSTIC_LOGGED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    if !DIAGNOSTIC_LOGGED.load(Ordering::Relaxed) && neuron_storage.count > 0 {
-        info!("[POWER-DIAGNOSTIC] Neuron array has {} neurons", neuron_storage.count);
+    if !DIAGNOSTIC_LOGGED.load(Ordering::Relaxed) && neuron_storage.count() > 0 {
+        info!("[POWER-DIAGNOSTIC] Neuron array has {} neurons", neuron_storage.count());
         
         // Sample first 20 neurons to see their cortical_areas
-        let sample_count = neuron_storage.count.min(20);
+        let sample_count = neuron_storage.count().min(20);
         let mut cortical_area_counts: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
         for i in 0..sample_count {
-            if neuron_storage.valid_mask()[i] {
-                let cortical_area = neuron_storage.cortical_areas()[i];
+            if neuron_storage.valid_mask()()[i] {
+                let cortical_area = neuron_storage.cortical_areas()()[i];
                 *cortical_area_counts.entry(cortical_area).or_insert(0) += 1;
             }
         }
@@ -1842,10 +1838,10 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>, S
     }
 
     // Scan all neurons for _power cortical area (cortical_idx = 1)
-    for array_idx in 0..neuron_storage.count {
+    for array_idx in 0..neuron_storage.count() {
         let neuron_id = neuron_storage.index_to_neuron_id[array_idx];
-        if array_idx < neuron_storage.count && neuron_storage.valid_mask()[array_idx] {
-            let cortical_area = neuron_storage.cortical_areas()[array_idx];
+        if array_idx < neuron_storage.count() && neuron_storage.valid_mask()()[array_idx] {
+            let cortical_area = neuron_storage.cortical_areas()()[array_idx];
 
             // Check if this is a power neuron (cortical_area = 1)
             if cortical_area == 1 {
@@ -2680,13 +2676,15 @@ mod tests {
 // ═══════════════════════════════════════════════════════════
 // Type Aliases for Convenience
 // ═══════════════════════════════════════════════════════════
-
-/// RustNPU with 32-bit floating point precision (default, highest accuracy)
-pub type RustNPUF32 = RustNPU<f32>;
-
-/// RustNPU with 8-bit integer precision (memory efficient, 42% reduction)
-pub type RustNPUINT8 = RustNPU<INT8Value>;
-
+//
+// Type aliases removed - use RustNPU::new_std_cpu() constructor instead
+// The full generic signature is complex:
+// RustNPU<R: Runtime, T: NeuralValue, B: ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>>
+//
+// Example usage:
+//   let npu = RustNPU::new_std_cpu(capacity, syn_capacity, burst_size);  // Returns RustNPU with all generics
+//
+// INT8 NPU - use RustNPU::new_std_cpu_int8() if we add that constructor
 // Future: pub type RustNPUF16 = RustNPU<f16>;
 
 // ═══════════════════════════════════════════════════════════

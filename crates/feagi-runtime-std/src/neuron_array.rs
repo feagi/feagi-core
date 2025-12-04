@@ -417,6 +417,69 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         
         Ok(())
     }
+    
+    fn get_neuron_at_coordinate(
+        &self,
+        cortical_area: u32,
+        x: u32,
+        y: u32,
+        z: u32,
+    ) -> Option<usize> {
+        // Linear search through coordinates
+        for idx in 0..self.count {
+            if self.valid_mask[idx] 
+                && self.cortical_areas[idx] == cortical_area
+                && self.coordinates[idx * 3] == x
+                && self.coordinates[idx * 3 + 1] == y
+                && self.coordinates[idx * 3 + 2] == z
+            {
+                return Some(idx);
+            }
+        }
+        None
+    }
+    
+    fn get_neurons_in_cortical_area(&self, cortical_area: u32) -> Vec<usize> {
+        (0..self.count)
+            .filter(|&idx| self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area)
+            .collect()
+    }
+    
+    fn get_neuron_count(&self, cortical_area: u32) -> usize {
+        (0..self.count)
+            .filter(|&idx| self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area)
+            .count()
+    }
+    
+    fn get_cortical_area(&self, neuron_idx: usize) -> Option<u32> {
+        if neuron_idx < self.count && self.valid_mask[neuron_idx] {
+            Some(self.cortical_areas[neuron_idx])
+        } else {
+            None
+        }
+    }
+    
+    fn get_coordinates(&self, neuron_idx: usize) -> Option<(u32, u32, u32)> {
+        if neuron_idx < self.count && self.valid_mask[neuron_idx] {
+            Some((
+                self.coordinates[neuron_idx * 3],
+                self.coordinates[neuron_idx * 3 + 1],
+                self.coordinates[neuron_idx * 3 + 2],
+            ))
+        } else {
+            None
+        }
+    }
+    
+    fn batch_coordinate_lookup(
+        &self,
+        cortical_area: u32,
+        coords: &[(u32, u32, u32)],
+    ) -> Vec<Option<usize>> {
+        coords.iter()
+            .map(|&(x, y, z)| self.get_neuron_at_coordinate(cortical_area, x, y, z))
+            .collect()
+    }
 }
 
 #[cfg(test)]

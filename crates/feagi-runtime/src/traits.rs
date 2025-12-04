@@ -205,6 +205,38 @@ pub trait NeuronStorage: Send + Sync {
         y_coords: &[u32],
         z_coords: &[u32],
     ) -> Result<()>;  // Changed to Result<()> to avoid Vec requirement
+    
+    // === Query Methods ===
+    
+    /// Get neuron at specific 3D coordinate in a cortical area
+    fn get_neuron_at_coordinate(
+        &self,
+        cortical_area: u32,
+        x: u32,
+        y: u32,
+        z: u32,
+    ) -> Option<usize>;
+    
+    /// Get all neuron indices in a cortical area
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn get_neurons_in_cortical_area(&self, cortical_area: u32) -> Vec<usize>;
+    
+    /// Get count of neurons in a cortical area
+    fn get_neuron_count(&self, cortical_area: u32) -> usize;
+    
+    /// Get cortical area ID for a neuron
+    fn get_cortical_area(&self, neuron_idx: usize) -> Option<u32>;
+    
+    /// Get 3D coordinates for a neuron
+    fn get_coordinates(&self, neuron_idx: usize) -> Option<(u32, u32, u32)>;
+    
+    /// Batch lookup neurons by coordinates
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn batch_coordinate_lookup(
+        &self,
+        cortical_area: u32,
+        coords: &[(u32, u32, u32)],
+    ) -> Vec<Option<usize>>;
 }
 
 /// Synapse storage trait: Abstracts System-of-Arrays (SoA) for synapses
@@ -261,6 +293,40 @@ pub trait SynapseStorage: Send + Sync {
         psp: u8,
         synapse_type: u8,
     ) -> Result<usize>;
+    
+    // === Batch Operations ===
+    
+    /// Batch add synapses
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn add_synapses_batch(
+        &mut self,
+        sources: &[u32],
+        targets: &[u32],
+        weights: &[u8],
+        psps: &[u8],
+        types: &[u8],
+    ) -> Result<()>;
+    
+    // === Synapse Removal ===
+    
+    /// Remove a single synapse by index
+    fn remove_synapse(&mut self, idx: usize) -> Result<()>;
+    
+    /// Remove all synapses from specific source neurons
+    fn remove_synapses_from_sources(&mut self, source_neurons: &[u32]) -> Result<usize>;
+    
+    /// Remove synapses between specific source and target
+    fn remove_synapses_between(&mut self, source: u32, target: u32) -> Result<usize>;
+    
+    // === Synapse Updates ===
+    
+    /// Update weight of a synapse
+    fn update_weight(&mut self, idx: usize, new_weight: u8) -> Result<()>;
+    
+    // === Query Methods ===
+    
+    /// Get count of valid (non-deleted) synapses
+    fn valid_count(&self) -> usize;
 }
 
 // Note: NeuralValue trait is now in feagi-neural::types

@@ -215,7 +215,7 @@ mod tests {
         };
 
         // Build source index
-        for i in 0..synapse_storage.count {
+        for i in 0..synapse_storage.count() {
             let source = synapse_storage.source_neurons()[i];
             synapse_storage
                 .source_index

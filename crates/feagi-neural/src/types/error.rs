@@ -65,6 +65,9 @@ pub enum FeagiError {
     #[cfg(feature = "std")]
     CircularDependency(String),
     
+    #[cfg(feature = "std")]
+    RuntimeError(String),
+    
     #[cfg(not(feature = "std"))]
     GenericError,
 }
@@ -95,6 +98,7 @@ impl fmt::Display for FeagiError {
             FeagiError::InvalidRegion(msg) => write!(f, "Invalid brain region: {}", msg),
             FeagiError::RegionNotFound(msg) => write!(f, "Region not found: {}", msg),
             FeagiError::CircularDependency(msg) => write!(f, "Circular dependency detected: {}", msg),
+            FeagiError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
         }
         
         #[cfg(not(feature = "std"))]
