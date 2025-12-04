@@ -1176,7 +1176,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             return false;
         }
 
-        self.neuron_storage.write().unwrap().excitabilities()[idx] = excitability.clamp(0.0, 1.0);
+        self.neuron_storage.write().unwrap().excitabilities_mut()[idx] = excitability.clamp(0.0, 1.0);
         true
     }
     
@@ -1188,7 +1188,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             return false;
         }
 
-        self.neuron_storage.write().unwrap().thresholds()[idx] = threshold;
+        self.neuron_storage.write().unwrap().thresholds_mut()[idx] = threshold;
         true
     }
     
@@ -1200,7 +1200,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             return false;
         }
 
-        self.neuron_storage.write().unwrap().leak_coefficients()[idx] = leak_coefficient.clamp(0.0, 1.0);
+        self.neuron_storage.write().unwrap().leak_coefficients_mut()[idx] = leak_coefficient.clamp(0.0, 1.0);
         true
     }
     
@@ -1212,7 +1212,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             return false;
         }
 
-        self.neuron_storage.write().unwrap().resting_potentials()[idx] = resting_potential;
+        self.neuron_storage.write().unwrap().resting_potentials_mut()[idx] = resting_potential;
         true
     }
 
@@ -1230,7 +1230,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
         
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..neuron_storage_write.count {
+        for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
                 neuron_storage_write.excitabilities()[idx] = clamped_excitability;
                 updated_count += 1;
@@ -1255,7 +1255,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
 
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..neuron_storage_write.count {
+        for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
                 // Get the actual neuron_id for this array index
                 let neuron_id = neuron_storage_write.index_to_neuron_id[idx];
@@ -1299,9 +1299,9 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
         
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..neuron_storage_write.count {
+        for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
-                neuron_storage_write.thresholds()[idx] = T::from_f32(threshold);
+                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(threshold);
                 updated_count += 1;
             }
         }
@@ -1317,7 +1317,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
         
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..neuron_storage_write.count {
+        for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
                 neuron_storage_write.leak_coefficients()[idx] = leak;
                 updated_count += 1;
@@ -1339,7 +1339,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
         
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..neuron_storage_write.count {
+        for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
                 neuron_storage_write.consecutive_fire_limits()[idx] = limit;
                 updated_count += 1;
@@ -1361,7 +1361,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
         
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..neuron_storage_write.count {
+        for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
                 neuron_storage_write.snooze_periods()[idx] = snooze_period;
                 updated_count += 1;
@@ -1386,17 +1386,17 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
                 // Update base period
-                self.neuron_storage.write().unwrap().refractory_periods()[idx] = *value;
+                self.neuron_storage.write().unwrap().refractory_periods_mut()[idx] = *value;
                 // Enforce immediately: set countdown to new period (or 0)
                 if *value > 0 {
-                    self.neuron_storage.write().unwrap().refractory_countdowns()[idx] = *value;
+                    self.neuron_storage.write().unwrap().refractory_countdowns_mut()[idx] = *value;
                 } else {
                     self.neuron_storage.write().unwrap().refractory_countdowns()[idx] = 0;
                 }
                 // Reset consecutive fire count to avoid stale extended refractory state
-                self.neuron_storage.write().unwrap().consecutive_fire_counts()[idx] = 0;
+                self.neuron_storage.write().unwrap().consecutive_fire_counts_mut()[idx] = 0;
                 updated_count += 1;
 
                 // Log first few neurons and any that match our monitored neuron 16438
@@ -1422,8 +1422,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().thresholds()[idx] = T::from_f32(*value);
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().thresholds_mut()[idx] = T::from_f32(*value);
                 updated_count += 1;
             }
         }
@@ -1441,8 +1441,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().leak_coefficients()[idx] = value.clamp(0.0, 1.0);
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().leak_coefficients_mut()[idx] = value.clamp(0.0, 1.0);
                 updated_count += 1;
             }
         }
@@ -1464,8 +1464,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().consecutive_fire_limits()[idx] = *value;
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().consecutive_fire_limits_mut()[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1483,8 +1483,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().snooze_periods()[idx] = *value;
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().snooze_periods_mut()[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1502,8 +1502,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().membrane_potentials()[idx] = T::from_f32(*value);
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().membrane_potentials_mut()[idx] = T::from_f32(*value);
                 updated_count += 1;
             }
         }
@@ -1521,8 +1521,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().resting_potentials()[idx] = T::from_f32(*value);
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().resting_potentials_mut()[idx] = T::from_f32(*value);
                 updated_count += 1;
             }
         }
@@ -1540,8 +1540,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().excitabilities()[idx] = value.clamp(0.0, 1.0);
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().excitabilities_mut()[idx] = value.clamp(0.0, 1.0);
                 updated_count += 1;
             }
         }
@@ -1559,8 +1559,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().neuron_types()[idx] = *value;
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().neuron_types_mut()[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1582,8 +1582,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut updated_count = 0;
         for (neuron_id, value) in neuron_ids.iter().zip(values.iter()) {
             let idx = *neuron_id as usize;
-            if idx < self.neuron_storage.read().unwrap().count && self.neuron_storage.read().unwrap().valid_mask()[idx] {
-                self.neuron_storage.write().unwrap().mp_charge_accumulation()[idx] = *value;
+            if idx < self.neuron_storage.read().unwrap().count() && self.neuron_storage.read().unwrap().valid_mask()[idx] {
+                self.neuron_storage.write().unwrap().mp_charge_accumulation_mut()[idx] = *value;
                 updated_count += 1;
             }
         }
@@ -1604,7 +1604,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
         
         // CRITICAL: Iterate by ARRAY INDEX (not neuron_id!)
-        for idx in 0..neuron_storage_write.count {
+        for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx] && neuron_storage_write.cortical_areas()[idx] == cortical_area {
                 neuron_storage_write.mp_charge_accumulation()[idx] = mp_charge_accumulation;
                 updated_count += 1;
@@ -1618,11 +1618,11 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// Returns true if successful, false if neuron out of bounds
     pub fn delete_neuron(&mut self, neuron_id: u32) -> bool {
         let idx = neuron_id as usize;
-        if idx >= self.neuron_storage.read().unwrap().count {
+        if idx >= self.neuron_storage.read().unwrap().count() {
             return false;
         }
 
-        self.neuron_storage.write().unwrap().valid_mask()[idx] = false;
+        self.neuron_storage.write().unwrap().valid_mask_mut()[idx] = false;
         true
     }
 
@@ -1673,7 +1673,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // Collect all valid synapses with full properties
         let mut outgoing = Vec::new();
         for &syn_idx in synapse_indices {
-            if syn_idx < self.synapse_storage.read().unwrap().count && self.synapse_storage.read().unwrap().valid_mask()[syn_idx] {
+            if syn_idx < self.synapse_storage.read().unwrap().count() && self.synapse_storage.read().unwrap().valid_mask()[syn_idx] {
                 let target = self.synapse_storage.read().unwrap().target_neurons()[syn_idx];
                 let weight = self.synapse_storage.read().unwrap().weights()[syn_idx];
                 let psp = self.synapse_storage.read().unwrap().postsynaptic_potentials()[syn_idx];
@@ -1692,7 +1692,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
 
         // Iterate through all synapses to find ones targeting this neuron
         // Note: This is O(n) - we could optimize with a target_index HashMap if needed
-        for i in 0..self.synapse_storage.read().unwrap().count {
+        for i in 0..self.synapse_storage.read().unwrap().count() {
             if self.synapse_storage.read().unwrap().valid_mask()[i]
                 && self.synapse_storage.read().unwrap().target_neurons()[i] == target_neuron_id
             {
@@ -1725,7 +1725,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     pub fn get_neuron_state(&self, neuron_id: NeuronId) -> Option<(u16, u16, u16, f32, f32, u16)> {
         // neuron_id == array index (direct access)
         let idx = neuron_id.0 as usize;
-        if idx >= self.neuron_storage.read().unwrap().count || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
+        if idx >= self.neuron_storage.read().unwrap().count() || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
             return None;
         }
 
