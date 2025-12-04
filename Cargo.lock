@@ -1598,7 +1598,7 @@ dependencies = [
  "feagi-observability",
  "feagi-pns",
  "feagi_data_serialization",
- "feagi_data_structures 0.0.50-beta.60",
+ "feagi_data_structures 0.0.50-beta.61",
  "serde",
  "serde_json",
  "thiserror 1.0.69",
@@ -1625,7 +1625,7 @@ dependencies = [
  "feagi-pns",
  "feagi-services",
  "feagi-transports",
- "feagi_data_structures 0.0.50-beta.60",
+ "feagi_data_structures 0.0.50-beta.61",
  "http-body-util",
  "hyper 1.8.1",
  "insta",
@@ -1662,7 +1662,7 @@ dependencies = [
  "feagi-evo",
  "feagi-neural",
  "feagi-observability",
- "feagi_data_structures 0.0.50-beta.60",
+ "feagi_data_structures 0.0.50-beta.61",
  "ndarray 0.16.1",
  "once_cell",
  "parking_lot",
@@ -1692,7 +1692,7 @@ dependencies = [
  "feagi-runtime-std",
  "feagi-state-manager",
  "feagi_data_serialization",
- "feagi_data_structures 0.0.50-beta.60",
+ "feagi_data_structures 0.0.50-beta.61",
  "half",
  "memmap2",
  "ndarray 0.16.1",
@@ -1757,7 +1757,7 @@ dependencies = [
  "env_logger",
  "feagi-neural",
  "feagi-observability",
- "feagi_data_structures 0.0.50-beta.60",
+ "feagi_data_structures 0.0.50-beta.61",
  "rand 0.8.5",
  "serde",
  "serde_json",
@@ -1820,7 +1820,7 @@ dependencies = [
  "feagi-neural",
  "feagi-transports",
  "feagi_data_serialization",
- "feagi_data_structures 0.0.50-beta.60",
+ "feagi_data_structures 0.0.50-beta.61",
  "lz4",
  "num_cpus",
  "parking_lot",
@@ -1872,7 +1872,7 @@ dependencies = [
  "feagi-neural",
  "feagi-observability",
  "feagi-pns",
- "feagi_data_structures 0.0.50-beta.60",
+ "feagi_data_structures 0.0.50-beta.61",
  "parking_lot",
  "serde",
  "serde_json",
@@ -1948,7 +1948,7 @@ dependencies = [
 
 [[package]]
 name = "feagi_data_structures"
-version = "0.0.50-beta.60"
+version = "0.0.50-beta.61"
 dependencies = [
  "base64 0.22.1",
  "ndarray 0.17.1",
