@@ -827,7 +827,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         }
         match property {
             "refractory_period" => neuron_storage.refractory_periods().get(idx).copied(),
-            "consecutive_fire_limit" => neuron_storage.consecutive_fire_limits.get(idx).copied(),
+            "consecutive_fire_limit" => neuron_storage.consecutive_fire_limits().get(idx).copied(),
             _ => None,
         }
     }
@@ -872,7 +872,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         y: u32,
         z: u32,
     ) -> Option<NeuronId> {
-        for neuron_idx in 0..self.neuron_storage.read().unwrap().count {
+        for neuron_idx in 0..self.neuron_storage.read().unwrap().count() {
             if self.neuron_storage.read().unwrap().valid_mask()[neuron_idx]
                 && self.neuron_storage.read().unwrap().cortical_areas()[neuron_idx] == cortical_area
             {
@@ -1150,7 +1150,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     ) -> Vec<(u32, u32, u32, u32)> {
         let mut positions = Vec::new();
 
-        for neuron_id in 0..self.neuron_storage.read().unwrap().count {
+        for neuron_id in 0..self.neuron_storage.read().unwrap().count() {
             if self.neuron_storage.read().unwrap().valid_mask()[neuron_id]
                 && self.neuron_storage.read().unwrap().cortical_areas()[neuron_id] == cortical_area
             {
@@ -1172,7 +1172,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// Returns true if successful, false if neuron doesn't exist
     pub fn update_neuron_excitability(&mut self, neuron_id: u32, excitability: f32) -> bool {
         let idx = neuron_id as usize;
-        if idx >= self.neuron_storage.read().unwrap().count || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
+        if idx >= self.neuron_storage.read().unwrap().count() || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
             return false;
         }
 
@@ -1184,7 +1184,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// Returns true if successful, false if neuron doesn't exist
     pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: T) -> bool {
         let idx = neuron_id as usize;
-        if idx >= self.neuron_storage.read().unwrap().count || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
+        if idx >= self.neuron_storage.read().unwrap().count() || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
             return false;
         }
 
@@ -1196,7 +1196,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// Returns true if successful, false if neuron doesn't exist
     pub fn update_neuron_leak(&mut self, neuron_id: u32, leak_coefficient: f32) -> bool {
         let idx = neuron_id as usize;
-        if idx >= self.neuron_storage.read().unwrap().count || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
+        if idx >= self.neuron_storage.read().unwrap().count() || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
             return false;
         }
 
@@ -1208,7 +1208,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// Returns true if successful, false if neuron doesn't exist
     pub fn update_neuron_resting_potential(&mut self, neuron_id: u32, resting_potential: T) -> bool {
         let idx = neuron_id as usize;
-        if idx >= self.neuron_storage.read().unwrap().count || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
+        if idx >= self.neuron_storage.read().unwrap().count() || !self.neuron_storage.read().unwrap().valid_mask()[idx] {
             return false;
         }
 
