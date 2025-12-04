@@ -302,15 +302,16 @@ mod tests {
 
     #[test]
     fn test_contains_position() {
-        let cortical_id = CorticalID::try_from_base_64("test01").unwrap();
+        let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,
             "Test Area".to_string(),
             dims,
-            (5, 5, 5),
-            AreaType::Custom,
+            (5, 5, 5).into(),
+            cortical_type,
         )
         .unwrap();
 
@@ -322,15 +323,16 @@ mod tests {
 
     #[test]
     fn test_position_conversion() {
-        let cortical_id = CorticalID::try_from_base_64("test02").unwrap();
+        let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,
             "Test Area".to_string(),
             dims,
-            (100, 200, 300),
-            AreaType::Custom,
+            (100, 200, 300).into(),
+            cortical_type,
         )
         .unwrap();
 
@@ -350,15 +352,16 @@ mod tests {
 
     #[test]
     fn test_properties() {
-        let cortical_id = CorticalID::try_from_base_64("test03").unwrap();
+        let cortical_id = CorticalID::try_from_base_64("iav000").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
             cortical_id,
             0,
             "Test".to_string(),
             dims,
-            (0, 0, 0),
-            AreaType::Sensory,
+            (0, 0, 0).into(),
+            cortical_type,
         )
         .unwrap()
         .add_property("resolution".to_string(), serde_json::json!(128))

@@ -21,10 +21,8 @@ use feagi_data_structures::genomic::cortical_area::{
     CorticalAreaType, IOCorticalAreaDataFlag, CorticalArea,
 };
 #[cfg(test)]
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalAreaDimensions};
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-#[cfg(test)]
-use crate::Dimensions;
 
 /// Extract detailed IOCorticalAreaDataFlag from a cortical area
 ///
@@ -182,13 +180,15 @@ mod tests {
     #[test]
     fn test_get_io_data_type() {
         // Create area with segmented vision type (encoded in CorticalID)
+        let cortical_id = CorticalID::try_from_base_64("isvi00").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            CorticalID::try_from_base_64("isvi00").unwrap(),
+            cortical_id,
             0,
             "Segmented Vision".to_string(),
-            Dimensions::new(10, 10, 1).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
+            (0, 0, 0).into(),
+            cortical_type,
         ).unwrap();
         
         // get_io_data_type now derives from cortical_id
@@ -199,13 +199,15 @@ mod tests {
 
     #[test]
     fn test_uses_absolute_frames() {
+        let cortical_id = CorticalID::try_from_base_64("isvi00").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            CorticalID::try_from_base_64("isvi00").unwrap(),
+            cortical_id,
             0,
             "Test IPU".to_string(),
-            Dimensions::new(10, 10, 1).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
+            (0, 0, 0).into(),
+            cortical_type,
         ).unwrap();
         
         // Test that frame handling can be detected from cortical_id
@@ -215,13 +217,15 @@ mod tests {
 
     #[test]
     fn test_uses_cartesian_encoding() {
+        let cortical_id = CorticalID::try_from_base_64("isvi00").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            CorticalID::try_from_base_64("isvi00").unwrap(),
+            cortical_id,
             0,
             "Test Vision".to_string(),
-            Dimensions::new(10, 10, 1).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
+            (0, 0, 0).into(),
+            cortical_type,
         ).unwrap();
         
         // Test that encoding type can be detected from cortical_id
@@ -231,13 +235,15 @@ mod tests {
 
     #[test]
     fn test_uses_percentage_encoding() {
+        let cortical_id = CorticalID::try_from_base_64("omot00").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            CorticalID::try_from_base_64("omot00").unwrap(),
+            cortical_id,
             0,
             "Test Motor".to_string(),
-            Dimensions::new(5, 5, 1).unwrap(),
-            (0, 0, 0),
-            AreaType::Motor,
+            CorticalAreaDimensions::new(5, 5, 1).unwrap(),
+            (0, 0, 0).into(),
+            cortical_type,
         ).unwrap();
         
         // Test that encoding type can be detected from cortical_id  
@@ -247,13 +253,15 @@ mod tests {
 
     #[test]
     fn test_describe_cortical_type() {
+        let cortical_id = CorticalID::try_from_base_64("isvi00").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            CorticalID::try_from_base_64("isvi00").unwrap(),
+            cortical_id,
             0,
             "Test IPU".to_string(),
-            Dimensions::new(10, 10, 1).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
+            (0, 0, 0).into(),
+            cortical_type,
         ).unwrap();
         
         let description = describe_cortical_type(&area);

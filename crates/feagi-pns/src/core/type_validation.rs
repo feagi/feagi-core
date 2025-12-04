@@ -197,20 +197,22 @@ pub fn should_use_compression(area: &CorticalArea) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::{CorticalID, AreaType, CorticalAreaDimensions};
+    use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalAreaDimensions};
     use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
     use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{IOCorticalAreaDataFlag, FrameChangeHandling, PercentageNeuronPositioning};
 
     #[test]
     fn test_validate_sensory_compatibility() {
         // Create IPU area (type encoded in CorticalID)
+        let cortical_id = CorticalID::try_from_base_64("aWljMDAwX18=").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
+            cortical_id,
             0,
             "Vision Input".to_string(),
             CorticalAreaDimensions::new(128, 128, 3).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            (0, 0, 0).into(),
+            cortical_type,
         )
         .unwrap();
 
@@ -227,13 +229,15 @@ mod tests {
     #[test]
     fn test_validate_motor_compatibility() {
         // Create OPU area (type encoded in CorticalID)
+        let cortical_id = CorticalID::try_from_base_64("b21vdDAwX18=").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            CorticalID::try_from_base_64("b21vdDAwX18=").unwrap(),
+            cortical_id,
             0,
             "Motor Output".to_string(),
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
-            (0, 0, 0),
-            AreaType::Motor,
+            (0, 0, 0).into(),
+            cortical_type,
         )
         .unwrap();
 
@@ -244,13 +248,15 @@ mod tests {
 
     #[test]
     fn test_get_recommended_buffer_size() {
+        let cortical_id = CorticalID::try_from_base_64("aWljMDAwX18=").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
+            cortical_id,
             0,
             "Vision Input".to_string(),
             CorticalAreaDimensions::new(128, 128, 3).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            (0, 0, 0).into(),
+            cortical_type,
         )
         .unwrap();
 
@@ -261,13 +267,15 @@ mod tests {
 
     #[test]
     fn test_should_use_compression() {
+        let cortical_id = CorticalID::try_from_base_64("aWljMDAwX18=").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let large_area = CorticalArea::new(
-            CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
+            cortical_id,
             0,
             "Large Vision".to_string(),
             CorticalAreaDimensions::new(128, 128, 3).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            (0, 0, 0).into(),
+            cortical_type,
         )
         .unwrap();
 

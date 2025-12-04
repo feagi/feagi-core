@@ -910,6 +910,7 @@ impl Neuroembryogenesis {
 mod tests {
     use super::*;
     use feagi_evo::{create_genome_with_core_morphologies};
+    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
     
     #[test]
     fn test_neuroembryogenesis_creation() {
@@ -932,14 +933,15 @@ mod tests {
             "Test Genome".to_string(),
         );
         
-        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
+        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("cust000").unwrap();
+        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id.clone(),
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
-            (0, 0, 0),
-            crate::models::AreaType::Custom,
+            (0, 0, 0).into(),
+            cortical_type,
         ).expect("Failed to create cortical area");
         genome.cortical_areas.insert(cortical_id, area);
         
