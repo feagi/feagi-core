@@ -157,7 +157,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         neuron_capacity: usize,
         synapse_capacity: usize,
         fire_ledger_window: usize,
-    ) -> Result<Self, FeagiError> {
+    ) -> Result<Self> {
         // Create storage using runtime
         let neuron_storage = runtime.create_neuron_storage(neuron_capacity)
             .map_err(|e| FeagiError::RuntimeError(format!("Failed to create neuron storage: {:?}", e)))?;
@@ -194,7 +194,7 @@ impl RustNPU<StdRuntime, f32, crate::backend::CPUBackend> {
         neuron_capacity: usize,
         synapse_capacity: usize,
         fire_ledger_window: usize,
-    ) -> Result<Self, FeagiError> {
+    ) -> Result<Self> {
         let backend = crate::backend::CPUBackend::new();
         Self::new(StdRuntime::new(), backend, neuron_capacity, synapse_capacity, fire_ledger_window)
     }
@@ -253,13 +253,13 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             x,
             y,
             z,
-        )?;
+        ).map_err(|e| FeagiError::RuntimeError(format!("Failed to add neuron: {:?}", e)))?;
 
         // CRITICAL: Add to propagation engine's neuron-to-area mapping
         self.propagation_engine
             .write().unwrap()
             .neuron_to_area
-            .insert(neuron_id, CorticalID(cortical_area));
+            .insert(neuron_id, CorticalID::try_from_u64(cortical_area as u64).unwrap());
 
         Ok(neuron_id)
     }
@@ -322,7 +322,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
                 for (i, neuron_id) in neuron_ids.iter().enumerate() {
                     self.propagation_engine
                         .write().unwrap().neuron_to_area
-                        .insert(*neuron_id, CorticalID(cortical_areas[i]));
+                        .insert(*neuron_id, CorticalID::try_from_u64(cortical_areas[i] as u64).unwrap());
                 }
                 let insert_time = insert_start.elapsed();
 
@@ -1630,7 +1630,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
         let idx = neuron_id as usize;
         let neuron_storage = self.neuron_storage.read().unwrap();
-        idx < neuron_storage.count() && neuron_storage.valid_mask()()[idx]
+        idx < neuron_storage.count() && neuron_storage.valid_mask()[idx]
     }
 
     /// Get neuron coordinates (x, y, z)
@@ -1778,9 +1778,9 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>, S
     //
     // This ensures neurons only fire from CURRENT BURST stimulation, not accumulated history
     for idx in 0..neuron_storage.count() {
-        if neuron_storage.valid_mask()()[idx] && !neuron_storage.mp_charge_accumulation()[idx] {
+        if neuron_storage.valid_mask()[idx] && !neuron_storage.mp_charge_accumulation()[idx] {
             // Reset membrane potential for non-accumulating neurons
-            neuron_storage.membrane_potentials()()[idx] = T::zero();
+            neuron_storage.membrane_potentials_mut()[idx] = T::zero();
         }
     }
 
@@ -1828,8 +1828,8 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>, S
         let sample_count = neuron_storage.count().min(20);
         let mut cortical_area_counts: std::collections::HashMap<u32, usize> = std::collections::HashMap::new();
         for i in 0..sample_count {
-            if neuron_storage.valid_mask()()[i] {
-                let cortical_area = neuron_storage.cortical_areas()()[i];
+            if neuron_storage.valid_mask()[i] {
+                let cortical_area = neuron_storage.cortical_areas()[i];
                 *cortical_area_counts.entry(cortical_area).or_insert(0) += 1;
             }
         }
@@ -1839,9 +1839,9 @@ fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>, S
 
     // Scan all neurons for _power cortical area (cortical_idx = 1)
     for array_idx in 0..neuron_storage.count() {
-        let neuron_id = neuron_storage.index_to_neuron_id[array_idx];
-        if array_idx < neuron_storage.count() && neuron_storage.valid_mask()()[array_idx] {
-            let cortical_area = neuron_storage.cortical_areas()()[array_idx];
+        let neuron_id = array_idx as u32; // Using array index as neuron ID
+        if array_idx < neuron_storage.count() && neuron_storage.valid_mask()[array_idx] {
+            let cortical_area = neuron_storage.cortical_areas()[array_idx];
 
             // Check if this is a power neuron (cortical_area = 1)
             if cortical_area == 1 {
