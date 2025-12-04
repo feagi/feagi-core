@@ -23,7 +23,7 @@ use feagi_data_structures::genomic::cortical_area::{
 #[cfg(test)]
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-use feagi_neural::types::CorticalArea;
+use feagi_data_structures::genomic::cortical_area::CorticalArea;
 
 /// Extract detailed IOCorticalAreaDataFlag from a cortical area
 ///

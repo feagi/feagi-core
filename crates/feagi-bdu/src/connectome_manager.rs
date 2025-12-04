@@ -1253,7 +1253,7 @@ impl ConnectomeManager {
     pub fn get_neuron_coordinates(&self, neuron_id: u64) -> (u32, u32, u32) {
         if let Some(ref npu) = self.npu {
             if let Ok(npu_lock) = npu.lock() {
-                npu_lock.get_neuron_coordinates(neuron_id.0)
+                npu_lock.get_neuron_coordinates(neuron_id as u32).unwrap_or((0, 0, 0))
             } else {
                 (0, 0, 0)
             }
@@ -2540,7 +2540,7 @@ impl ConnectomeManager {
             return None;
         }
         
-        Some(npu_lock.get_neuron_coordinates(neuron_id.0).unwrap_or((0, 0, 0)))
+        Some(npu_lock.get_neuron_coordinates(neuron_id as u32).unwrap_or((0, 0, 0)))
     }
     
     /// Get which cortical area contains a specific neuron
@@ -2563,7 +2563,7 @@ impl ConnectomeManager {
             return None;
         }
         
-        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id.0);
+        let cortical_idx = npu_lock.get_neuron_cortical_area(neuron_id as u32);
         
         // Look up cortical_id from index
         self.cortical_areas.values()

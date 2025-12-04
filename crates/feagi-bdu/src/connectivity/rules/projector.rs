@@ -11,7 +11,7 @@ PERFORMANCE TARGET: <100ms for 128×128×3 → 128×128×1 projection (400x fast
 */
 
 use crate::types::{BduError, BduResult, Position};
-use feagi_neural::types::Dimensions;
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions as Dimensions;
 use rayon::prelude::*;
 
 /// Parameters for projection mapping
@@ -69,8 +69,8 @@ pub fn syn_projector(
     project_last_layer_of: Option<usize>,
 ) -> BduResult<Vec<Position>> {
     // Convert to Dimensions for convenience
-    let src_dims = Dimensions::from_tuple(src_dimensions);
-    let dst_dims = Dimensions::from_tuple(dst_dimensions);
+    let src_dims = Dimensions::from_tuple((src_dimensions.0 as u32, src_dimensions.1 as u32, src_dimensions.2 as u32))?;
+    let dst_dims = Dimensions::from_tuple((dst_dimensions.0 as u32, dst_dimensions.1 as u32, dst_dimensions.2 as u32))?;
 
     // Validate neuron location is within source bounds
     if !src_dims.contains(neuron_location) {
@@ -122,9 +122,9 @@ pub fn syn_projector(
                 if x >= 0
                     && y >= 0
                     && z >= 0
-                    && (x as usize) < dst_dims.width
-                    && (y as usize) < dst_dims.height
-                    && (z as usize) < dst_dims.depth
+                    && (x as u32) < dst_dims.width
+                    && (y as u32) < dst_dims.height
+                    && (z as u32) < dst_dims.depth
                 {
                     candidate_positions.push((x, y, z));
                 }
