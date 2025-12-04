@@ -13,9 +13,10 @@ use std::str::FromStr;
 use uuid::Uuid;
 use crate::FeagiDataError;
 
-/// Unique identifier for a brain region, based on UUID v4.
+/// Unique identifier for a brain region, based on UUID v7.
 ///
 /// This struct provides type safety and ensures global uniqueness for brain region IDs.
+/// UUID v7 is time-ordered, which provides better database indexing and sortability.
 /// It handles serialization to and deserialization from string representations of UUIDs.
 ///
 /// # Examples
@@ -23,14 +24,14 @@ use crate::FeagiDataError;
 /// ```
 /// use feagi_data_structures::genomic::brain_regions::RegionID;
 ///
-/// // Generate a new random RegionID
+/// // Generate a new time-ordered RegionID
 /// let region_id = RegionID::new();
 ///
 /// // Convert to string for storage/display
 /// let id_string = region_id.to_string();
 ///
 /// // Parse from string
-/// let parsed_id = RegionID::from_string(id_string).unwrap();
+/// let parsed_id = RegionID::from_string(&id_string).unwrap();
 /// assert_eq!(region_id, parsed_id);
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -39,7 +40,10 @@ pub struct RegionID {
 }
 
 impl RegionID {
-    /// Generates a new, random RegionID (UUID v4).
+    /// Generates a new, time-ordered RegionID (UUID v7).
+    ///
+    /// UUID v7 uses a timestamp-based approach, providing natural sorting
+    /// and better database performance compared to random UUIDs.
     ///
     /// # Examples
     ///
@@ -50,7 +54,7 @@ impl RegionID {
     /// assert_ne!(region_id.to_string(), "");
     /// ```
     pub fn new() -> Self {
-        Self { uuid: Uuid::new_v4() }
+        Self { uuid: Uuid::now_v7() }
     }
 
     /// Creates a RegionID from a UUID.
@@ -61,7 +65,7 @@ impl RegionID {
     /// use feagi_data_structures::genomic::brain_regions::RegionID;
     /// use uuid::Uuid;
     ///
-    /// let uuid = Uuid::new_v4();
+    /// let uuid = Uuid::now_v7();
     /// let region_id = RegionID::from_uuid(uuid);
     /// assert_eq!(region_id.as_uuid(), uuid);
     /// ```
@@ -139,6 +143,20 @@ impl FromStr for RegionID {
     }
 }
 
+// Implement From<Uuid> for RegionID
+impl From<Uuid> for RegionID {
+    fn from(uuid: Uuid) -> Self {
+        RegionID::from_uuid(uuid)
+    }
+}
+
+// Implement From<RegionID> for Uuid
+impl From<RegionID> for Uuid {
+    fn from(region_id: RegionID) -> Self {
+        region_id.uuid
+    }
+}
+
 // Implement Serialize for RegionID
 impl Serialize for RegionID {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -176,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_region_id_from_uuid() {
-        let uuid = Uuid::new_v4();
+        let uuid = Uuid::now_v7();
         let region_id = RegionID::from_uuid(uuid);
         
         assert_eq!(region_id.as_uuid(), uuid);
@@ -269,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_region_id_equality() {
-        let uuid = Uuid::new_v4();
+        let uuid = Uuid::now_v7();
         let id1 = RegionID::from_uuid(uuid);
         let id2 = RegionID::from_uuid(uuid);
         

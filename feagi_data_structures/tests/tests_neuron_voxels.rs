@@ -3,7 +3,6 @@
 use feagi_data_structures::neuron_voxels::xyzp::{
     NeuronVoxelXYZP, NeuronVoxelXYZPArrays, CorticalMappedXYZPNeuronVoxels
 };
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
 use feagi_data_structures::genomic::SensoryCorticalUnit;

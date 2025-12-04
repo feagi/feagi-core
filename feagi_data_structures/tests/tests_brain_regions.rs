@@ -5,7 +5,6 @@
 
 use feagi_data_structures::genomic::brain_regions::*;
 use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
-use feagi_data_structures::genomic::descriptors::{GenomeCoordinate2D, GenomeCoordinate3D};
 
 #[cfg(test)]
 mod test_region_id {
@@ -22,7 +21,7 @@ mod test_region_id {
 
     #[test]
     fn test_from_uuid() {
-        let uuid = uuid::Uuid::new_v4();
+        let uuid = uuid::Uuid::now_v7();
         let region_id = RegionID::from_uuid(uuid);
         assert_eq!(region_id.as_uuid(), uuid);
     }

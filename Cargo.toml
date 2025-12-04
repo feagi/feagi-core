@@ -1,5 +1,4 @@
 [workspace]
-name = "feagi_core_data_structures_and_processing"
 resolver = "3"
 members = [
     "feagi_connector_core",
@@ -22,7 +21,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
 ndarray = { version = "0.17.1", features = ["rayon"] }
 image = "0.25.9"
-uuid = { version = "1.11", features = ["v4", "serde"] }
+uuid = { version = "1.11", features = ["v7", "serde"] }
 
 rayon = "1.11.0"
 paste = "1.0.15"

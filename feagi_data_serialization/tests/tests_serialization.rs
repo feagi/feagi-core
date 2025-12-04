@@ -221,7 +221,7 @@ fn test_byte_container_multiple_core_types() {
     let power_id = CoreCorticalType::Power.to_cortical_id();
     let death_id = CoreCorticalType::Death.to_cortical_id();
     
-    let dimensions = CorticalAreaDimensions::new(2, 2, 2).unwrap();
+    let _dimensions = CorticalAreaDimensions::new(2, 2, 2).unwrap();
     
     let mut neurons = CorticalMappedXYZPNeuronVoxels::new();
     

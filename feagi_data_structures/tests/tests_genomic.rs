@@ -231,7 +231,6 @@ mod test_cortical_area_descriptors {
 #[cfg(test)]
 mod test_genomic_descriptors {
     use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
-    use super::*;
 
     #[test]
     fn test_agent_device_index_creation() {
