@@ -1,0 +1,18 @@
+[package]
+name = "feagi_data_structures"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+description = "The most core library, defines the basic data types used by FEAGI, as well as some processors to modify them"
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true}
+ndarray = { workspace = true}
+rayon = { workspace = true}
+uuid = { workspace = true }
+paste = "1.0.15"
+base64 = "0.22.1"
+

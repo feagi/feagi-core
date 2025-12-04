@@ -1,0 +1,22 @@
+# Generated test images - don't commit these
+pipeline_*.png
+test_output_*.jpg
+test_output_*.bmp
+test_output_*.tiff
+generated_*.png
+generated_*.jpg
+generated_*.bmp
+generated_*.tiff
+# Visual test outputs
+images/visual_test_*.png
+images/visual_test_*.jpg
+images/brightness_test_*.png
+images/contrast_test_*.png
+# Processor test outputs
+images/processor_*.png
+images/processor_*.jpg
+images/segmentator_*.png
+# Integration test patterns and outputs
+pipeline_integration_*.png
+pipeline_threshold_*.png
+birb_segmentation_*.png

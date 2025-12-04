@@ -105,7 +105,12 @@ members = [
     "crates/feagi-agent-sdk",          # Agent SDK (Rust client library)
     
     # === Applications ===
-    "crates/feagi-transports",   # Transport layer abstractions
+    "crates/feagi-transports",         # Transport layer abstractions
+    
+    # === Data Processing (merged from feagi-data-processing) ===
+    "crates/feagi_connector_core",     # Connector agent core functionality
+    "crates/feagi_data_serialization", # Data serialization formats
+    "crates/feagi_data_structures",    # Core data structures
 ]
 
 [workspace.package]
@@ -125,14 +130,19 @@ ndarray = "0.16"
 ahash = { version = "0.8", features = ["serde"] }  # Fast non-cryptographic hashing
 tracing = "0.1"  # Structured logging and diagnostics
 
+# Additional dependencies from feagi-data-processing
+image = "0.25.9"
+uuid = { version = "1.11", features = ["v7", "serde"] }
+paste = "1.0.15"
+
 # GPU acceleration (WGPU - cross-platform native GPU library)
 wgpu = "0.19"
 pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
-# Published FEAGI data crates (using local paths for unpublished updates)
-feagi_data_structures = { path = "../feagi-data-processing/feagi_data_structures" }
-feagi_data_serialization = { path = "../feagi-data-processing/feagi_data_serialization" }
+# FEAGI data crates (now internal to workspace)
+feagi_data_structures = { path = "crates/feagi_data_structures" }
+feagi_data_serialization = { path = "crates/feagi_data_serialization" }
 
 # Workspace-internal crates
 feagi-connectome-serialization = { path = "crates/feagi-connectome-serialization" }
@@ -150,6 +160,10 @@ panic = "abort"      # Smaller binary, no unwinding
 
 [profile.dev]
 opt-level = 1        # Some optimization in dev for reasonable performance
+
+[profile.test]
+opt-level = 0
+debug = true
 
 # ============================================================================
 # BINARY TOOLS

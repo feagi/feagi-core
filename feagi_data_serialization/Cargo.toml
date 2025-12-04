@@ -1,0 +1,14 @@
+[package]
+name = "feagi_data_serialization"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+description = "Adds serialization and deserialization to select Feagi Data Structures."
+repository.workspace = true
+homepage.workspace = true
+
+
+[dependencies]
+serde_json = { workspace = true }
+byteorder = "1.5.0"
+feagi_data_structures = { workspace = true }
