@@ -148,11 +148,38 @@ pub trait NeuronStorage: Send + Sync {
     /// Mutable membrane potentials slice
     fn membrane_potentials_mut(&mut self) -> &mut [Self::Value];
     
+    /// Mutable firing thresholds slice
+    fn thresholds_mut(&mut self) -> &mut [Self::Value];
+    
+    /// Mutable leak coefficients slice
+    fn leak_coefficients_mut(&mut self) -> &mut [f32];
+    
+    /// Mutable resting potentials slice
+    fn resting_potentials_mut(&mut self) -> &mut [Self::Value];
+    
+    /// Mutable neuron types slice
+    fn neuron_types_mut(&mut self) -> &mut [i32];
+    
+    /// Mutable refractory periods slice
+    fn refractory_periods_mut(&mut self) -> &mut [u16];
+    
     /// Mutable refractory countdowns slice
     fn refractory_countdowns_mut(&mut self) -> &mut [u16];
     
+    /// Mutable excitability factors slice
+    fn excitabilities_mut(&mut self) -> &mut [f32];
+    
     /// Mutable consecutive fire counts slice
     fn consecutive_fire_counts_mut(&mut self) -> &mut [u16];
+    
+    /// Mutable consecutive fire limits slice
+    fn consecutive_fire_limits_mut(&mut self) -> &mut [u16];
+    
+    /// Mutable snooze periods slice
+    fn snooze_periods_mut(&mut self) -> &mut [u16];
+    
+    /// Mutable membrane potential charge accumulation flags
+    fn mp_charge_accumulation_mut(&mut self) -> &mut [bool];
     
     /// Mutable valid mask
     fn valid_mask_mut(&mut self) -> &mut [bool];
