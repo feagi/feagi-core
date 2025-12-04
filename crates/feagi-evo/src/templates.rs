@@ -115,6 +115,7 @@ pub fn create_minimal_genome(genome_id: String, genome_title: String) -> Runtime
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
                 .as_secs_f64(),
+            brain_regions_root: None,  // Will be set after neuroembryogenesis
         },
         cortical_areas: HashMap::new(),
         brain_regions: HashMap::new(),

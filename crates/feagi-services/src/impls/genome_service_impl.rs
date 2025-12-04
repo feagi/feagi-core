@@ -105,7 +105,7 @@ impl GenomeService for GenomeServiceImpl {
         let connectome_clone = self.connectome.clone();
         let blocking_handle = tokio::task::spawn_blocking(move || -> Result<feagi_bdu::neuroembryogenesis::DevelopmentProgress, ServiceError> {
             // Acquire write lock only for prepare/resize operations
-            let genome_clone = genome;
+            let mut genome_clone = genome;
             let (prepare_result, resize_result) = {
                 let mut manager = connectome_clone.write();
                 let prepare_result = manager.prepare_for_new_genome();
@@ -121,9 +121,18 @@ impl GenomeService for GenomeServiceImpl {
             // Now call develop_from_genome without holding the lock
             // It will acquire its own locks internally
             let manager_arc = feagi_bdu::ConnectomeManager::instance();
-            let mut neuro = Neuroembryogenesis::new(manager_arc);
+            let mut neuro = Neuroembryogenesis::new(manager_arc.clone());
             neuro.develop_from_genome(&genome_clone)
                 .map_err(|e| ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e)))?;
+            
+            // After neuroembryogenesis, update genome metadata with root_region_id
+            let root_region_id = manager_arc.read().get_root_region_id();
+            if let Some(root_id) = root_region_id {
+                genome_clone.metadata.brain_regions_root = Some(root_id);
+                info!(target: "feagi-services", "✅ Set genome brain_regions_root: {}", genome_clone.metadata.brain_regions_root.as_ref().unwrap());
+            } else {
+                warn!(target: "feagi-services", "⚠️ No root region found after neuroembryogenesis");
+            }
             
             Ok(neuro.get_progress())
         });

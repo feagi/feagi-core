@@ -45,6 +45,7 @@ mod tests {
                 genome_description: "A test genome".to_string(),
                 version: "2.0".to_string(),
                 timestamp: 1234567890.0,
+                brain_regions_root: None,
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),

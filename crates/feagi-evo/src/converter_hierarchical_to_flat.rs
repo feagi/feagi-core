@@ -48,6 +48,11 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
     flat_genome.insert("version".to_string(), json!("3.0"));
     flat_genome.insert("timestamp".to_string(), json!(genome.metadata.timestamp));
     
+    // Root region ID (if available)
+    if let Some(root_id) = &genome.metadata.brain_regions_root {
+        flat_genome.insert("brain_regions_root".to_string(), json!(root_id));
+    }
+    
     // Blueprint (flat format)
     flat_genome.insert("blueprint".to_string(), Value::Object(flat_blueprint));
     
@@ -332,6 +337,7 @@ mod tests {
                 genome_description: "A test genome".to_string(),
                 version: "2.0".to_string(),
                 timestamp: 1234567890.0,
+                brain_regions_root: None,
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),

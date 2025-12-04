@@ -44,6 +44,9 @@ pub struct HealthCheckResponse {
     pub simulation_timestep: Option<f64>,
     pub memory_area_stats: Option<HashMap<String, HashMap<String, serde_json::Value>>>,
     pub amalgamation_pending: Option<HashMap<String, serde_json::Value>>,
+    /// Root brain region ID (UUID string) for O(1) root lookup
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brain_regions_root: Option<String>,
 }
 
 // ============================================================================
@@ -155,6 +158,11 @@ pub async fn get_health_check(
     let memory_area_stats = None; // TODO: Requires memory area analysis
     let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
 
+    // Get root region ID from ConnectomeManager
+    let brain_regions_root = feagi_bdu::ConnectomeManager::instance()
+        .read()
+        .get_root_region_id();
+    
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,
         connected_agents,
@@ -178,6 +186,7 @@ pub async fn get_health_check(
         simulation_timestep,
         memory_area_stats,
         amalgamation_pending,
+        brain_regions_root,  // NEW: Root region ID for O(1) lookup
     }))
 }
 

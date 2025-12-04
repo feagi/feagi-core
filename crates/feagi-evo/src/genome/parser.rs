@@ -87,6 +87,9 @@ pub struct RawGenome {
     pub neuron_morphologies: HashMap<String, Value>,
     #[serde(default)]
     pub physiology: Option<Value>,
+    /// Root brain region ID (UUID string) - for O(1) root lookup
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub brain_regions_root: Option<String>,
 }
 
 /// Raw cortical area from blueprint

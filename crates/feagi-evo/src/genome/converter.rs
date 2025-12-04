@@ -40,6 +40,9 @@ pub fn to_runtime_genome(parsed: ParsedGenome, raw_json: &str) -> EvoResult<Runt
             .to_string(),
         version: parsed.version.clone(),
         timestamp: raw_value["timestamp"].as_f64().unwrap_or(0.0),
+        brain_regions_root: raw_value["brain_regions_root"]
+            .as_str()
+            .map(|s| s.to_string()),
     };
     
     // Convert cortical areas to HashMap with CorticalID keys

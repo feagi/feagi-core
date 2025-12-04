@@ -50,6 +50,11 @@ pub struct GenomeMetadata {
     pub genome_description: String,
     pub version: String,
     pub timestamp: f64, // Unix timestamp
+    
+    /// Root brain region ID (UUID string) - explicit identification for O(1) lookup
+    /// This eliminates the need to search through all regions to find which has no parent
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub brain_regions_root: Option<String>,
 }
 
 /// Neuron morphology registry

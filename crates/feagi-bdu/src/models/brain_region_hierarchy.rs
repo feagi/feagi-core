@@ -274,6 +274,23 @@ impl BrainRegionHierarchy {
         }
         None
     }
+    
+    /// Get the root brain region ID (region with no parent)
+    ///
+    /// Searches for the region that has no parent in the parent_map.
+    /// This provides O(n) lookup but is cached by ConnectomeManager for O(1) access.
+    ///
+    /// # Returns
+    /// * `Option<String>` - Root region ID (UUID string) if found
+    ///
+    pub fn get_root_region_id(&self) -> Option<String> {
+        for region_id in self.regions.keys() {
+            if !self.parent_map.contains_key(region_id) {
+                return Some(region_id.clone());
+            }
+        }
+        None
+    }
 
     /// Get all children of a region
     pub fn get_children(&self, region_id: &str) -> Vec<&String> {

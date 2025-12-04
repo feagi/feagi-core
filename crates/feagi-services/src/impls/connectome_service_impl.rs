@@ -406,7 +406,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             name: region.name.clone(),
             region_type: Self::region_type_to_string(&region.region_type),
             parent_id,
-            cortical_areas: region.cortical_areas.iter().map(|id| id.to_string()).collect(),
+            cortical_areas: region.cortical_areas.iter().map(|id| id.as_base_64()).collect(),  // Use base64 to match cortical area API
             child_regions,
             properties: region.properties.clone(),
         })
