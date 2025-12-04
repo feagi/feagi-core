@@ -95,6 +95,11 @@ pub struct CorticalAreaInfo {
     /// Group ID (0, 1, 2, ...) - only for IPU/OPU
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<u8>,
+    
+    /// Parent brain region ID (UUID string) - which brain region this cortical area belongs to
+    /// This is required by Brain Visualizer to correctly place cortical areas in the 3D scene
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent_region_id: Option<String>,
 }
 
 /// Parameters for creating a cortical area

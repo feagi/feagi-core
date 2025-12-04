@@ -1016,6 +1016,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             encoding_format: None,
             unit_id: None,
             group_id: None,
+            parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
         })
     }
     
@@ -1078,6 +1079,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             encoding_format: None,
             unit_id: None,
             group_id: None,
+            parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
         })
     }
 }

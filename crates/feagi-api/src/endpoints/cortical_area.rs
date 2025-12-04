@@ -255,6 +255,8 @@ pub async fn get_cortical_area_geometry(State(state): State<ApiState>) -> ApiRes
                         "leak_coefficient": area.leak_coefficient,
                         "refractory_period": area.refractory_period,
                         "snooze_period": area.snooze_period,
+                        // Parent region ID (required by Brain Visualizer)
+                        "parent_region_id": area.parent_region_id,
                     });
                     (area.cortical_id.clone(), data)
                 })

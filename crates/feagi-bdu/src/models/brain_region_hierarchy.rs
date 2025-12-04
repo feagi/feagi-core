@@ -13,6 +13,7 @@ use std::collections::{HashMap, HashSet};
 
 use crate::types::{BduError, BduResult};
 use feagi_data_structures::genomic::BrainRegion;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Hierarchical tree structure for brain regions
 ///
@@ -252,6 +253,26 @@ impl BrainRegionHierarchy {
     /// Get the parent of a region
     pub fn get_parent(&self, region_id: &str) -> Option<&String> {
         self.parent_map.get(region_id)
+    }
+    
+    /// Find which brain region contains a given cortical area
+    ///
+    /// Searches all brain regions to find which one contains the specified cortical area.
+    /// This is used to populate `parent_region_id` in API responses for Brain Visualizer.
+    ///
+    /// # Arguments
+    /// * `cortical_id` - Cortical area to search for
+    ///
+    /// # Returns
+    /// * `Option<String>` - Region ID (UUID string) if found, None if area not in any region
+    ///
+    pub fn find_region_containing_area(&self, cortical_id: &CorticalID) -> Option<String> {
+        for (region_id, region) in &self.regions {
+            if region.cortical_areas.contains(cortical_id) {
+                return Some(region_id.clone());
+            }
+        }
+        None
     }
 
     /// Get all children of a region

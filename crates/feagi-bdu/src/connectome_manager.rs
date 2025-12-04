@@ -384,6 +384,21 @@ impl ConnectomeManager {
         self.cortical_id_to_idx.get(cortical_id).copied()
     }
     
+    /// Find which brain region contains a cortical area
+    ///
+    /// This is used to populate `parent_region_id` in API responses for Brain Visualizer.
+    /// Delegates to BrainRegionHierarchy for the actual search.
+    ///
+    /// # Arguments
+    /// * `cortical_id` - Cortical area to search for
+    ///
+    /// # Returns
+    /// * `Option<String>` - Parent region ID (UUID string) if found
+    ///
+    pub fn get_parent_region_id_for_area(&self, cortical_id: &CorticalID) -> Option<String> {
+        self.brain_regions.find_region_containing_area(cortical_id)
+    }
+    
     /// Get cortical ID by index
     pub fn get_cortical_id(&self, cortical_idx: u32) -> Option<&CorticalID> {
         self.cortical_idx_to_id.get(&cortical_idx)

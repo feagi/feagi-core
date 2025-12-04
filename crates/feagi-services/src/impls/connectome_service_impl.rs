@@ -240,6 +240,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             encoding_format: None,
             unit_id: None,
             group_id: None,
+            parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
         })
     }
 
