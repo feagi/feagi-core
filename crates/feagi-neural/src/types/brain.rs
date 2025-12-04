@@ -7,13 +7,6 @@
 
 // Dimensions removed - use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
-#[cfg(feature = "std")]
-use std::{collections::HashMap, string::String, vec::Vec};
-
-
 // CorticalArea stub removed - use feagi_data_structures or feagi-bdu versions
 // This was a minimal runtime placeholder that's no longer needed
 

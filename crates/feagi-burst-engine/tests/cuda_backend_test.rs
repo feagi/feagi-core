@@ -23,7 +23,9 @@ mod cuda_tests {
     use feagi_burst_engine::backend::{
         CUDABackend, ComputeBackend, enumerate_cuda_devices, is_cuda_available,
     };
-    use feagi_neural::types::{FireCandidateList, NeuronArray, NeuronId, SynapseArray};
+    use feagi_burst_engine::FireCandidateList;
+    use feagi_neural::types::NeuronId;
+    use feagi_runtime_std::{NeuronArray, SynapseArray};
 
     #[test]
     fn test_cuda_feature_enabled() {
@@ -216,7 +218,8 @@ fn test_backend_trait_object_safety() {
     use feagi_burst_engine::backend::CPUBackend;
     use feagi_neural::types::NeuralValue;
     
-    fn _uses_trait_object(_backend: &dyn feagi_burst_engine::backend::ComputeBackend<f32>) {
+    use feagi_runtime_std::{NeuronArray, SynapseArray};
+    fn _uses_trait_object(_backend: &dyn feagi_burst_engine::backend::ComputeBackend<f32, NeuronArray<f32>, SynapseArray>) {
         // This function signature proves trait object safety
     }
     

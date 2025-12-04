@@ -10,7 +10,7 @@
 
 //! Standard runtime implementation for desktop/server platforms
 
-use feagi_runtime::{Runtime, NeuronStorage, SynapseStorage, Result};
+use feagi_runtime::{Runtime, Result};
 use crate::{NeuronArray, SynapseArray};
 use feagi_neural::types::NeuralValue;
 

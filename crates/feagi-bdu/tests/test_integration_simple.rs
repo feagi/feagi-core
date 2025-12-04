@@ -49,7 +49,7 @@ fn test_create_cortical_area() {
     manager.add_cortical_area(area).expect("Failed to add cortical area");
     
     // Verify it exists
-    assert!(manager.cortical_area_exists("test01"));
+    assert!(manager.cortical_area_exists(&CorticalID::try_from_base_64("test01").unwrap()));
     assert_eq!(manager.get_cortical_area_count(), 1);
     
     println!("✅ Test 1: Create cortical area - PASSED");
@@ -77,8 +77,9 @@ fn test_create_and_query_neurons() {
     manager.add_cortical_area(area).expect("Failed to add area");
     
     // Create a neuron
+    let neuron_cortical_id = CorticalID::try_from_base_64("neuro1").unwrap();
     let neuron_id = manager.add_neuron(
-        "neuro1",
+        &neuron_cortical_id,
         5, 5, 0, // x, y, z
         1.0,     // firing_threshold
         0.1,     // leak_coefficient
@@ -102,7 +103,7 @@ fn test_create_and_query_neurons() {
     assert_eq!(position, (5, 5, 0));
     
     // Find neuron by coordinates
-    let found_id = manager.get_neuron_by_coordinates("neuro1", 5, 5, 0)
+    let found_id = manager.get_neuron_by_coordinates(&neuron_cortical_id, 5, 5, 0)
         .expect("Should find neuron by coordinates");
     assert_eq!(found_id, neuron_id);
     
@@ -140,13 +141,14 @@ fn test_create_and_query_synapses() {
     manager.add_cortical_area(area).expect("Failed to add area");
     
     // Create two neurons
+    let synap_cortical_id = CorticalID::try_from_base_64("synap1").unwrap();
     let neuron1 = manager.add_neuron(
-        "synap1", 0, 0, 0,
+        &synap_cortical_id, 0, 0, 0,
         1.0, 0.1, 0.0, 0, 2, 1.0, 3, 5, false,
     ).expect("Failed to create neuron1");
     
     let neuron2 = manager.add_neuron(
-        "synap1", 1, 1, 0,
+        &synap_cortical_id, 1, 1, 0,
         1.0, 0.1, 0.0, 0, 2, 1.0, 3, 5, false,
     ).expect("Failed to create neuron2");
     
@@ -224,7 +226,8 @@ fn test_batch_neuron_operations() {
         ));
     }
     
-    let neuron_ids = manager.batch_create_neurons("batch1", neurons_to_create)
+    let batch_cortical_id = CorticalID::try_from_base_64("batch1").unwrap();
+    let neuron_ids = manager.batch_create_neurons(&batch_cortical_id, neurons_to_create)
         .expect("Failed to batch create neurons");
     
     assert_eq!(neuron_ids.len(), 50);
@@ -291,8 +294,10 @@ fn test_area_queries() {
     let opu_areas = manager.list_opu_areas();
     assert_eq!(opu_areas.len(), 0);
     
-    assert!(manager.cortical_area_exists("area00"));
-    assert!(!manager.cortical_area_exists("nothere"));
+    let area00_id = CorticalID::try_from_base_64("area00").unwrap();
+    let nothere_id = CorticalID::try_from_base_64("nothere").unwrap();
+    assert!(manager.cortical_area_exists(&area00_id));
+    assert!(!manager.cortical_area_exists(&nothere_id));
     
     println!("✅ Test 5: Area queries - PASSED");
 }
@@ -319,8 +324,9 @@ fn test_update_operations() {
     manager.add_cortical_area(area).expect("Failed to add area");
     
     // Create neuron
+    let upd_cortical_id = CorticalID::try_from_base_64("upd001").unwrap();
     let neuron_id = manager.add_neuron(
-        "upd001", 0, 0, 0,
+        &upd_cortical_id, 0, 0, 0,
         1.0, 0.1, 0.0, 0, 2, 1.0, 3, 5, false,
     ).expect("Failed to create neuron");
     
@@ -386,13 +392,14 @@ fn test_delete_operations() {
     manager.add_cortical_area(area).expect("Failed to add area");
     
     // Create neurons
+    let del_cortical_id = CorticalID::try_from_base_64("del001").unwrap();
     let neuron1 = manager.add_neuron(
-        "del001", 0, 0, 0,
+        &del_cortical_id, 0, 0, 0,
         1.0, 0.1, 0.0, 0, 2, 1.0, 3, 5, false,
     ).expect("Failed to create neuron1");
     
     let neuron2 = manager.add_neuron(
-        "del001", 1, 1, 0,
+        &del_cortical_id, 1, 1, 0,
         1.0, 0.1, 0.0, 0, 2, 1.0, 3, 5, false,
     ).expect("Failed to create neuron2");
     

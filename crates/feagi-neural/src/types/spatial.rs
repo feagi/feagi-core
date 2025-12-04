@@ -3,9 +3,6 @@
 
 //! Spatial types for 3D brain coordinates
 
-#[cfg(feature = "std")]
-use serde::{Deserialize, Serialize};
-
 // Dimensions moved to feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
 // Use: feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
 

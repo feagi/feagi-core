@@ -26,8 +26,8 @@ use feagi_neural::SynapseType;
 // ═══════════════════════════════════════════════════════════
 
 /// Create a simple 3-layer network: Input → Hidden → Output
-fn create_simple_network() -> RustNPU<f32> {
-    let mut npu = RustNPU::new_cpu_only(1000, 10000, 20);
+fn create_simple_network() -> RustNPU<feagi_runtime_std::StdRuntime, f32, feagi_burst_engine::backend::CPUBackend> {
+    let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 20);
 
     // Power area (cortical_area=1) - 3 neurons
     for i in 0..3 {
@@ -183,7 +183,7 @@ fn test_fire_ledger_across_bursts() {
 
 #[test]
 fn test_multi_burst_chain_propagation() {
-    let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+    let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
     // Create a chain: N1 -> N2 -> N3 -> N4
     let n1 = npu
@@ -245,7 +245,7 @@ fn test_multi_burst_chain_propagation() {
 
 #[test]
 fn test_refractory_period_across_bursts() {
-    let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+    let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
     // Neuron with 3-burst refractory period
     let neuron = npu
@@ -268,7 +268,7 @@ fn test_refractory_period_across_bursts() {
 
 #[test]
 fn test_mixed_excitatory_inhibitory_network() {
-    let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+    let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
     // Excitatory neuron
     let excitatory = npu
@@ -349,7 +349,7 @@ fn test_burst_stats_accumulation() {
 
 #[test]
 fn test_dynamic_network_modification() {
-    let mut npu = RustNPU::new_cpu_only(1000, 10000, 10);
+    let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 10);
 
     // Start with 5 neurons
     for i in 0..5 {
@@ -398,7 +398,7 @@ fn test_fq_sampler_integration() {
 
 #[test]
 fn test_zero_leak_neuron_persistence() {
-    let mut npu = RustNPU::new_cpu_only(100, 1000, 10);
+    let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
 
     // Neuron with zero leak (potential persists)
     let neuron = npu

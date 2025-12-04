@@ -24,7 +24,7 @@ use feagi_evo::RuntimeGenome;
 use feagi_neural::types::{Precision, QuantizationSpec};
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
-use crate::models::{CorticalArea, CorticalID, CorticalAreaDimensions};
+use crate::models::{CorticalArea, CorticalID};
 use tracing::{info, warn, debug, error};
 
 /// Development stage tracking
@@ -201,7 +201,7 @@ impl Neuroembryogenesis {
         info!(target: "feagi-bdu","🧬 Starting neuroembryogenesis for genome: {}", genome.metadata.genome_id);
         
         // Phase 5: Parse quantization precision and dispatch to type-specific builder
-        let quantization_precision = &genome.physiology.quantization_precision;
+        let _quantization_precision = &genome.physiology.quantization_precision;
         // Precision parsing handled in genome loader
         let quant_spec = QuantizationSpec::default();
         

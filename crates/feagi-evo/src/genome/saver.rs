@@ -13,8 +13,8 @@ Licensed under the Apache License, Version 2.0
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use feagi_data_structures::genomic::{BrainRegion, RegionType};
-use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea, CorticalAreaDimensions, AreaType};
+use feagi_data_structures::genomic::BrainRegion;
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea};
 use crate::types::{EvoError, EvoResult};
 
 /// Genome saver

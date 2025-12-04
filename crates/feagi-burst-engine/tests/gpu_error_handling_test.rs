@@ -20,7 +20,7 @@
 //!   cargo test --test gpu_error_handling_test --features gpu
 
 use feagi_burst_engine::backend::{create_backend, BackendConfig, BackendType};
-use feagi_neural::types::{NeuronArray, SynapseArray};
+use feagi_runtime_std::{NeuronArray, SynapseArray};
 
 /// Helper: Create test genome
 fn create_test_genome(

@@ -9,8 +9,8 @@ mod cuda_small_realistic_tests {
 use feagi_neural::SynapseType;
 
     /// Create a small realistic network for fast testing
-    fn create_small_network_cpu() -> RustNPU<f32> {
-        let mut npu = RustNPU::new_cpu_only(1000, 10000, 100);
+    fn create_small_network_cpu() -> RustNPU<feagi_runtime_std::StdRuntime, f32, feagi_burst_engine::backend::CPUBackend> {
+        let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 100);
         
         // Power neuron (cortical_area=1) - 1 neuron
         npu.add_neuron(0.5, 0.0, 0.0, 0, 1, 1.0, 0, 0, true, 1, 0, 0, 0).unwrap();

@@ -100,6 +100,7 @@ pub struct BurstResult {
 /// - **After**: Concurrent sensory injection + burst processing + API queries
 pub struct RustNPU<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>> {
     // Runtime (provides platform-specific storage)
+    #[allow(dead_code)]
     runtime: std::sync::Arc<R>,
     
     // Core data structures (RwLock: many readers, one writer)
@@ -117,6 +118,7 @@ pub struct RustNPU<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend
 
     // Compute backend (Mutex: exclusive access during burst processing)
     // No longer Box<dyn> - monomorphized for better performance
+    #[allow(dead_code)]
     pub(crate) backend: std::sync::Mutex<B>,
 
     // Atomic stats (lock-free reads)
@@ -184,7 +186,55 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
         })
     }
+}
 
+// Test helper methods (only in test builds)
+#[cfg(test)]
+impl RustNPU<feagi_runtime_std::StdRuntime, f32, crate::backend::CPUBackend> {
+    /// Create a CPU-only NPU for testing with f32 precision (convenience method)
+    pub fn new_cpu_only(
+        neuron_capacity: usize,
+        synapse_capacity: usize,
+        fire_ledger_window: usize,
+    ) -> Self {
+        use feagi_runtime_std::StdRuntime;
+        use crate::backend::CPUBackend;
+        
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        
+        Self::new(
+            runtime,
+            backend,
+            neuron_capacity,
+            synapse_capacity,
+            fire_ledger_window,
+        ).expect("Failed to create test NPU")
+    }
+}
+
+#[cfg(test)]
+impl RustNPU<feagi_runtime_std::StdRuntime, INT8Value, crate::backend::CPUBackend> {
+    /// Create a CPU-only NPU for testing with INT8 precision (convenience method)
+    pub fn new_cpu_only(
+        neuron_capacity: usize,
+        synapse_capacity: usize,
+        fire_ledger_window: usize,
+    ) -> Self {
+        use feagi_runtime_std::StdRuntime;
+        use crate::backend::CPUBackend;
+        
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        
+        Self::new(
+            runtime,
+            backend,
+            neuron_capacity,
+            synapse_capacity,
+            fire_ledger_window,
+        ).expect("Failed to create test NPU")
+    }
 }
 
 // Backward compatibility: StdRuntime with f32 and CPUBackend
@@ -2735,7 +2785,7 @@ mod tests {
 
     #[test]
     fn test_large_sensory_batch() {
-        let mut npu = RustNPU::new_cpu_only(1000, 10000, 10);
+        let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 10);
 
         // Add 100 neurons
         let mut neurons = Vec::new();

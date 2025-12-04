@@ -511,7 +511,6 @@ fn encode_fire_data_to_xyzp(
     use feagi_data_structures::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
     };
-    use feagi_data_serialization::FeagiSerializable;
 
     let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
 
@@ -602,8 +601,6 @@ fn encode_fire_data_to_xyzp(
     // - Only resizes if current capacity is insufficient
     // - Reuses existing allocation when possible
     use feagi_data_serialization::FeagiByteContainer;
-    // Ensure trait implementation is visible
-    use feagi_data_serialization::implementations::cortical_mapped_xyzp_neuron_data;
     
     let mut byte_container = FeagiByteContainer::new_empty();
     byte_container

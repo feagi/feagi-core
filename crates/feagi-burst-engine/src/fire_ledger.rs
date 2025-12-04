@@ -195,7 +195,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
         let neuron1 = FiringNeuron {
             neuron_id: NeuronId(100),
             membrane_potential: 1.5,
-            cortical_area: CorticalID(1),
+            cortical_area: CorticalID::try_from_u64(1).unwrap(),
             x: 0,
             y: 0,
             z: 0,
@@ -203,7 +203,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
         let neuron2 = FiringNeuron {
             neuron_id: NeuronId(200),
             membrane_potential: 1.2,
-            cortical_area: CorticalID(1),
+            cortical_area: CorticalID::try_from_u64(1).unwrap(),
             x: 1,
             y: 0,
             z: 0,
@@ -234,7 +234,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
             let neuron = FiringNeuron {
                 neuron_id: NeuronId(t as u32 * 100),
                 membrane_potential: 1.0,
-                cortical_area: CorticalID(1),
+                cortical_area: CorticalID::try_from_u64(1).unwrap(),
                 x: 0,
                 y: 0,
                 z: 0,

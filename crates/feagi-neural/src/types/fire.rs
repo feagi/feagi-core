@@ -11,7 +11,7 @@ use super::ids::NeuronId;
 extern crate std;
 
 #[cfg(feature = "std")]
-use std::{collections::{HashMap, VecDeque}, vec::Vec};
+use std::{collections::VecDeque, vec::Vec};
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;

@@ -237,8 +237,8 @@ mod tests {
 
         // Set neuron mapping
         let mut mapping = AHashMap::new();
-        mapping.insert(NeuronId(10), CorticalID(1));
-        mapping.insert(NeuronId(11), CorticalID(1));
+        mapping.insert(NeuronId(10), CorticalID::try_from_u64(1).unwrap());
+        mapping.insert(NeuronId(11), CorticalID::try_from_u64(1).unwrap());
         engine.set_neuron_mapping(mapping);
 
         // Propagate from neuron 1
@@ -247,7 +247,8 @@ mod tests {
 
         // Should have 2 contributions in area 1
         assert_eq!(result.len(), 1);
-        let area1_contributions = result.get(&CorticalID(1)).unwrap();
+        let area1_id = CorticalID::try_from_u64(1).unwrap();
+        let area1_contributions = result.get(&area1_id).unwrap();
         assert_eq!(area1_contributions.len(), 2);
 
         // Check that both targets are present
@@ -263,15 +264,16 @@ mod tests {
         engine.build_synapse_index(&synapses);
 
         let mut mapping = AHashMap::new();
-        mapping.insert(NeuronId(10), CorticalID(1));
-        mapping.insert(NeuronId(11), CorticalID(1));
+        mapping.insert(NeuronId(10), CorticalID::try_from_u64(1).unwrap());
+        mapping.insert(NeuronId(11), CorticalID::try_from_u64(1).unwrap());
         engine.set_neuron_mapping(mapping);
 
         // Propagate from multiple neurons in parallel
         let fired = vec![NeuronId(1), NeuronId(2)];
         let result = engine.propagate(&fired, &synapses).unwrap();
 
-        let area1_contributions = result.get(&CorticalID(1)).unwrap();
+        let area1_id = CorticalID::try_from_u64(1).unwrap();
+        let area1_contributions = result.get(&area1_id).unwrap();
         assert_eq!(area1_contributions.len(), 3); // 2 from neuron 1, 1 from neuron 2
     }
 }

@@ -14,7 +14,7 @@
 
 use ahash::AHashMap;
 use feagi_neural::synapse::{compute_synaptic_contribution, SynapseType};
-use feagi_runtime::{SynapseStorage, Result, RuntimeError};
+use feagi_runtime::{SynapseStorage, Result};
 use rayon::prelude::*;
 
 /// Dynamic synapse array for desktop/server environments

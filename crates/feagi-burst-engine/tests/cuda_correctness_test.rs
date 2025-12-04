@@ -11,7 +11,9 @@
 #[cfg(all(test, feature = "cuda"))]
 mod cuda_correctness_tests {
     use feagi_burst_engine::backend::{CPUBackend, CUDABackend, ComputeBackend, is_cuda_available};
-    use feagi_neural::types::{FireCandidateList, NeuronArray, SynapseArray, NeuronId};
+    use feagi_burst_engine::FireCandidateList;
+    use feagi_neural::types::NeuronId;
+    use feagi_runtime_std::{NeuronArray, SynapseArray};
     
     /// Helper to create a small deterministic test genome
     fn create_test_genome(neuron_count: usize, synapse_count: usize) -> (NeuronArray<f32>, SynapseArray) {
@@ -89,7 +91,7 @@ mod cuda_correctness_tests {
         
         // Setup CPU backend
         let mut cpu_backend = CPUBackend::new();
-        <CPUBackend as ComputeBackend<f32>>::initialize_persistent_data(&mut cpu_backend, &neuron_array, &synapse_array)
+        <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::initialize_persistent_data(&mut cpu_backend, &neuron_array, &synapse_array)
             .expect("Failed to initialize CPU backend");
         
         // Setup CUDA backend
@@ -156,7 +158,7 @@ mod cuda_correctness_tests {
         
         // Setup CPU backend
         let mut cpu_backend = CPUBackend::new();
-        <CPUBackend as ComputeBackend<f32>>::initialize_persistent_data(&mut cpu_backend, &neuron_array, &synapse_array)
+        <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::initialize_persistent_data(&mut cpu_backend, &neuron_array, &synapse_array)
             .expect("Failed to initialize CPU backend");
         
         // Setup CUDA backend
@@ -232,7 +234,7 @@ mod cuda_correctness_tests {
         
         // Setup CPU backend
         let mut cpu_backend = CPUBackend::new();
-        <CPUBackend as ComputeBackend<f32>>::initialize_persistent_data(&mut cpu_backend, &neuron_array, &synapse_array)
+        <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::initialize_persistent_data(&mut cpu_backend, &neuron_array, &synapse_array)
             .expect("Failed to initialize CPU backend");
         
         // Setup CUDA backend
@@ -250,7 +252,7 @@ mod cuda_correctness_tests {
             
             // CPU burst cycle
             let mut cpu_fcl = FireCandidateList::new();
-            <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
+            <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_synaptic_propagation(
                 &mut cpu_backend,
                 &initial_fired,
                 &synapse_array,
@@ -312,7 +314,7 @@ mod cuda_correctness_tests {
         
         // Setup CPU backend
         let mut cpu_backend = CPUBackend::new();
-        <CPUBackend as ComputeBackend<f32>>::initialize_persistent_data(&mut cpu_backend, &neuron_array, &synapse_array)
+        <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::initialize_persistent_data(&mut cpu_backend, &neuron_array, &synapse_array)
             .expect("Failed to initialize CPU backend");
         
         // Setup CUDA backend
@@ -327,7 +329,7 @@ mod cuda_correctness_tests {
         // CPU execution
         let mut cpu_fcl = FireCandidateList::new();
         let cpu_start = std::time::Instant::now();
-        <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
+        <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_synaptic_propagation(
             &mut cpu_backend,
             &fired_neurons,
             &synapse_array,

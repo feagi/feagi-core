@@ -79,6 +79,7 @@ insta = "1.34"
 wiremock = "0.6"
 assert-json-diff = "2.0"
 tokio-test = "0.4"
+feagi-runtime-std = { path = "../feagi-runtime-std" }
 
 [features]
 default = []

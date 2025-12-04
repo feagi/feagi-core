@@ -16,9 +16,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_data_structures::genomic::cortical_area::{
-    CorticalAreaType, IOCorticalAreaDataFlag,
-};
+use feagi_data_structures::genomic::cortical_area::IOCorticalAreaDataFlag;
 use feagi_data_structures::genomic::cortical_area::CorticalArea;
 // Note: CorticalTypeAdapter removed - use feagi_data_structures::CorticalID directly
 
@@ -200,7 +198,7 @@ pub fn should_use_compression(area: &CorticalArea) -> bool {
 mod tests {
     use super::*;
     use feagi_data_structures::genomic::cortical_area::{CorticalID, AreaType, CorticalAreaDimensions};
-    use feagi_data_structures::genomic::cortical_area::cortical_type::{CorticalAreaType, BrainInputCorticalType, BrainOutputCorticalType};
+    use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
     use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{IOCorticalAreaDataFlag, FrameChangeHandling, PercentageNeuronPositioning};
 
     #[test]

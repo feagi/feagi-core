@@ -21,7 +21,9 @@
 //!   cargo test --test gpu_fcl_correctness_test --features gpu
 
 use feagi_burst_engine::backend::{create_backend, BackendConfig, BackendType, ComputeBackend};
-use feagi_neural::types::{FireCandidateList, NeuronArray, NeuronId, SynapseArray};
+use feagi_burst_engine::FireCandidateList;
+    use feagi_neural::types::NeuronId;
+    use feagi_runtime_std::{NeuronArray, SynapseArray};
 
 /// Helper: Create test genome
 fn create_test_genome(

@@ -28,7 +28,6 @@ pub use cuda_backend::{CUDABackend, is_cuda_available, enumerate_cuda_devices};
 
 use feagi_neural::types::*;
 use feagi_runtime::{NeuronStorage, SynapseStorage};
-use tracing::info;
 
 /// Result of processing a burst on any backend
 #[derive(Debug, Clone)]

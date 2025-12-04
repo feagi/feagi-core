@@ -703,7 +703,7 @@ mod tests {
     #[test]
     fn test_registration_handler() {
         let registry = Arc::new(RwLock::new(AgentRegistry::with_defaults()));
-        let handler = RegistrationHandler::new(registry.clone());
+        let handler = RegistrationHandler::new(registry.clone(), 8000, 8001, 8002);
 
         let request = RegistrationRequest {
             agent_id: "test-agent".to_string(),
@@ -712,6 +712,7 @@ mod tests {
                 "sensory": {"rate_hz": 30.0},
                 "motor": {"enabled": true, "rate_hz": 20.0, "modality": "servo", "output_count": 2}
             }),
+            chosen_transport: None,
         };
 
         let response = handler.process_registration(request).unwrap();

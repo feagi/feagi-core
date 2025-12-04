@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{info, warn, debug};
 
-use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions, AreaType};
+use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::types::{BduError, BduResult};
 use feagi_neural::types::NeuronId;
@@ -2982,10 +2982,11 @@ mod tests {
         assert_eq!(manager.get_cortical_idx(&feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap()), Some(0));
         
         // idx -> ID lookup
-        assert_eq!(manager.get_cortical_id(0), Some(feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap()));
+        let expected_id = CorticalID::try_from_base_64("test01").unwrap();
+        assert_eq!(manager.get_cortical_id(0), Some(&expected_id));
         
         // Get area
-        let retrieved_area = manager.get_cortical_area(&feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap()).unwrap();
+        let retrieved_area = manager.get_cortical_area(&CorticalID::try_from_base_64("test01").unwrap()).unwrap();
         assert_eq!(retrieved_area.name, "Test Area");
     }
     
@@ -3151,7 +3152,15 @@ mod tests {
         let manager_arc = ConnectomeManager::instance();
         
         // Create and attach NPU
-        let npu = Arc::new(Mutex::new(RustNPU::new(100, 1000, 10, None)));
+        use feagi_runtime_std::StdRuntime;
+        use feagi_burst_engine::backend::CPUBackend;
+        use feagi_burst_engine::DynamicNPU;
+        
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu_result = RustNPU::new(runtime, backend, 100, 1000, 10)
+            .expect("Failed to create NPU");
+        let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
         {
             let mut manager = manager_arc.write();
             manager.set_npu(npu.clone());

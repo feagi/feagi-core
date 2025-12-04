@@ -124,7 +124,7 @@ fn main() {
 }
 
 /// Create test NPU with FP32 precision
-fn create_test_npu_f32(neurons: usize, synapses: usize) -> RustNPU<f32> {
+fn create_test_npu_f32(neurons: usize, synapses: usize) -> RustNPU<feagi_runtime_std::StdRuntime, f32, feagi_burst_engine::backend::CPUBackend> {
     let mut npu = RustNPU::<f32>::new_cpu_only(neurons, synapses, 10);
     
     let _ = npu.create_cortical_area_neurons(
@@ -136,7 +136,7 @@ fn create_test_npu_f32(neurons: usize, synapses: usize) -> RustNPU<f32> {
 }
 
 /// Create test NPU with INT8 precision
-fn create_test_npu_int8(neurons: usize, synapses: usize) -> RustNPU<INT8Value> {
+fn create_test_npu_int8(neurons: usize, synapses: usize) -> RustNPU<feagi_runtime_std::StdRuntime, INT8Value, feagi_burst_engine::backend::CPUBackend> {
     let mut npu = RustNPU::<INT8Value>::new_cpu_only(neurons, synapses, 10);
     
     let _ = npu.create_cortical_area_neurons(

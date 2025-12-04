@@ -1624,6 +1624,7 @@ dependencies = [
  "feagi-neural",
  "feagi-observability",
  "feagi-pns",
+ "feagi-runtime-std",
  "feagi-services",
  "feagi-transports",
  "feagi_data_structures",
