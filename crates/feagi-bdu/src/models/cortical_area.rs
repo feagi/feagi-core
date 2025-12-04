@@ -126,7 +126,9 @@ impl CorticalAreaExt for CorticalArea {
 
     fn contains_position(&self, pos: (i32, i32, i32)) -> bool {
         let (x, y, z) = pos;
-        let (ox, oy, oz) = self.position;
+        let ox = self.position.x;
+        let oy = self.position.y;
+        let oz = self.position.z;
 
         x >= ox
             && y >= oy
@@ -144,7 +146,9 @@ impl CorticalAreaExt for CorticalArea {
             });
         }
 
-        let (ox, oy, oz) = self.position;
+        let ox = self.position.x;
+        let oy = self.position.y;
+        let oz = self.position.z;
         Ok((
             (pos.0 - ox) as u32,
             (pos.1 - oy) as u32,
@@ -160,7 +164,9 @@ impl CorticalAreaExt for CorticalArea {
             });
         }
 
-        let (ox, oy, oz) = self.position;
+        let ox = self.position.x;
+        let oy = self.position.y;
+        let oz = self.position.z;
         Ok((
             ox + rel_pos.0 as i32,
             oy + rel_pos.1 as i32,
@@ -220,17 +226,11 @@ impl CorticalAreaExt for CorticalArea {
     }
     
     fn is_input_area(&self) -> bool {
-        matches!(self.area_type, AreaType::Sensory) ||
-        self.cortical_id.as_cortical_type()
-            .map(|t| matches!(t, feagi_data_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)))
-            .unwrap_or(false)
+        matches!(self.cortical_type, feagi_data_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_))
     }
     
     fn is_output_area(&self) -> bool {
-        matches!(self.area_type, AreaType::Motor) ||
-        self.cortical_id.as_cortical_type()
-            .map(|t| matches!(t, feagi_data_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_)))
-            .unwrap_or(false)
+        matches!(self.cortical_type, feagi_data_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_))
     }
     
     fn get_cortical_group(&self) -> Option<String> {
@@ -238,12 +238,14 @@ impl CorticalAreaExt for CorticalArea {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
             .or_else(|| {
-                // Derive from area_type if not in properties
-                match self.area_type {
-                    AreaType::Sensory => Some("IPU".to_string()),
-                    AreaType::Motor => Some("OPU".to_string()),
-                    AreaType::Memory => Some("MEMORY".to_string()),
-                    AreaType::Custom => Some("CUSTOM".to_string()),
+                // Derive from cortical_type if not in properties
+                use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
+                match self.cortical_type {
+                    CorticalAreaType::BrainInput(_) => Some("IPU".to_string()),
+                    CorticalAreaType::BrainOutput(_) => Some("OPU".to_string()),
+                    CorticalAreaType::Memory(_) => Some("MEMORY".to_string()),
+                    CorticalAreaType::Custom(_) => Some("CUSTOM".to_string()),
+                    CorticalAreaType::Core(_) => Some("CORE".to_string()),
                 }
             })
     }

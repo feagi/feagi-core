@@ -19,7 +19,7 @@ use std::collections::HashMap;
 use tracing::{info, warn, debug};
 use feagi_bdu::neuroembryogenesis::Neuroembryogenesis;
 use serde_json::Value;
-use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea, CorticalAreaDimensions, AreaType};
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea, CorticalAreaDimensions};
 use feagi_bdu::models::CorticalAreaExt;
 
 use crate::genome::{ChangeType, CorticalChangeClassifier};
@@ -316,18 +316,13 @@ impl GenomeService for GenomeServiceImpl {
         // Step 1: Build CorticalArea structures
         let mut areas_to_add = Vec::new();
         for param in &params {
-            // Parse area type
-            let area_type = match param.area_type.as_str() {
-                "Sensory" => AreaType::Sensory,
-                "Motor" => AreaType::Motor,
-                "Memory" => AreaType::Memory,
-                "Custom" => AreaType::Custom,
-                _ => return Err(ServiceError::InvalidInput(format!("Invalid area type: {}", param.area_type))),
-            };
-            
             // Convert String to CorticalID
             let cortical_id_typed = CorticalID::try_from_base_64(&param.cortical_id)
                 .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+            
+            // Get cortical area type from the cortical ID
+            let area_type = cortical_id_typed.as_cortical_type()
+                .map_err(|e| ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e)))?;
             
             // Create CorticalArea
             let mut area = CorticalArea::new(
@@ -335,7 +330,7 @@ impl GenomeService for GenomeServiceImpl {
                 0,  // Auto-assigned by ConnectomeManager
                 param.name.clone(),
                 CorticalAreaDimensions::new(param.dimensions.0 as u32, param.dimensions.1 as u32, param.dimensions.2 as u32)?,
-                param.position,
+                param.position.into(),  // Convert (i32, i32, i32) to GenomeCoordinate3D
                 area_type,
             )?;
             
@@ -663,7 +658,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                                     let x = arr[0].as_i64().unwrap_or(0) as i32;
                                     let y = arr[1].as_i64().unwrap_or(0) as i32;
                                     let z = arr[2].as_i64().unwrap_or(0) as i32;
-                                    area.position = (x, y, z);
+                                    area.position = (x, y, z).into();
                                     info!(target: "feagi-services", "[GENOME-UPDATE] Updated position (array format): ({}, {}, {})", x, y, z);
                                 }
                             } else if let Some(obj) = value.as_object() {
@@ -671,7 +666,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                                 let x = obj.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                                 let y = obj.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                                 let z = obj.get("z").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                                area.position = (x, y, z);
+                                area.position = (x, y, z).into();
                                 info!(target: "feagi-services", "[GENOME-UPDATE] Updated position (object format): ({}, {}, {})", x, y, z);
                             }
                         }
@@ -711,7 +706,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                                 let x = arr[0].as_i64().unwrap_or(0) as i32;
                                 let y = arr[1].as_i64().unwrap_or(0) as i32;
                                 let z = arr[2].as_i64().unwrap_or(0) as i32;
-                                area.position = (x, y, z);
+                                area.position = (x, y, z).into();
                                 info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated position (array format): ({}, {}, {})", x, y, z);
                             }
                         } else if let Some(obj) = value.as_object() {
@@ -719,7 +714,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
                             let x = obj.get("x").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                             let y = obj.get("y").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                             let z = obj.get("z").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
-                            area.position = (x, y, z);
+                            area.position = (x, y, z).into();
                             info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated position (object format): ({}, {}, {})", x, y, z);
                         }
                     }
@@ -994,7 +989,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             cortical_idx,
             name: area.name.clone(),
             dimensions: (area.dimensions.width as usize, area.dimensions.height as usize, area.dimensions.depth as usize),
-            position: area.position,
+            position: area.position.into(),
             area_type: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
             cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
             neuron_count,
@@ -1056,7 +1051,7 @@ info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}",
             cortical_idx,
             name: area.name.clone(),
             dimensions: (area.dimensions.width as usize, area.dimensions.height as usize, area.dimensions.depth as usize),
-            position: area.position,
+            position: area.position.into(),
             area_type: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
             cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
             neuron_count,

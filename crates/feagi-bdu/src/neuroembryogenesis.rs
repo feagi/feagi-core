@@ -415,7 +415,7 @@ impl Neuroembryogenesis {
                   ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
             
             // Build brain region structure following Python's normalize_brain_region_membership()
-            use feagi_data_structures::genomic::{BrainRegion, RegionType};
+            use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionType, RegionID};
             let mut regions_map = std::collections::HashMap::new();
             
             // Step 1: Create root region with only IPU/OPU/CORE areas
@@ -432,7 +432,6 @@ impl Neuroembryogenesis {
         
         // Convert CorticalID to base64 for with_areas()
         // Create a root region with a generated RegionID
-        use feagi_data_structures::genomic::brain_regions::RegionID;
         let root_region_id = RegionID::new();
         
         let mut root_region = BrainRegion::new(
@@ -482,14 +481,14 @@ impl Neuroembryogenesis {
                     &genome.cortical_areas,
                 );
                 
-                // Create subregion (with_areas expects Vec<String>)
+                // Create subregion
                 let mut subregion = BrainRegion::new(
-                    region_id.clone(),
+                    RegionID::new(),  // Generate new UUID instead of using string
                     "Autogen Region".to_string(),
-                    RegionType::Custom,
+                    RegionType::Undefined,  // RegionType no longer has Custom variant
                 )
                 .expect("Failed to create subregion")
-                .with_areas(custom_memory_strs.clone());
+                .with_areas(custom_memory_areas.iter().cloned());
                 
                 // Store inputs/outputs for subregion
                 if !subregion_inputs.is_empty() {

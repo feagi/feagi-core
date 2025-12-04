@@ -58,8 +58,8 @@ impl BrainRegionHierarchy {
     pub fn with_root(root: BrainRegion) -> Self {
         let mut hierarchy = Self::new();
         let root_id = root.region_id.clone();
-        hierarchy.regions.insert(root_id.clone(), root);
-        hierarchy.root_id = Some(root_id);
+        hierarchy.regions.insert(root_id.to_string(), root);
+        hierarchy.root_id = Some(root_id.to_string());
         hierarchy
     }
 
@@ -81,7 +81,7 @@ impl BrainRegionHierarchy {
         let region_id = region.region_id.clone();
 
         // Check if region already exists
-        if self.regions.contains_key(&region_id) {
+        if self.regions.contains_key(&region_id.to_string()) {
             return Err(BduError::InvalidArea(format!(
                 "Region {} already exists",
                 region_id
@@ -99,18 +99,19 @@ impl BrainRegionHierarchy {
         }
 
         // Add region
-        self.regions.insert(region_id.clone(), region);
+        let region_id_str = region_id.to_string();
+        self.regions.insert(region_id_str.clone(), region);
 
         // Update parent/child maps
         if let Some(parent) = parent_id {
-            self.parent_map.insert(region_id.clone(), parent.clone());
+            self.parent_map.insert(region_id_str.clone(), parent.clone());
             self.children_map
                 .entry(parent)
                 .or_insert_with(HashSet::new)
-                .insert(region_id.clone());
+                .insert(region_id_str.clone());
         } else if self.root_id.is_none() {
             // First region without parent becomes root
-            self.root_id = Some(region_id);
+            self.root_id = Some(region_id_str);
         }
 
         Ok(())
@@ -284,13 +285,15 @@ impl BrainRegionHierarchy {
 
         // Add areas from this region
         if let Some(region) = self.regions.get(region_id) {
-            areas.extend(region.cortical_areas.iter().cloned());
+            // Convert CorticalID to String
+            areas.extend(region.cortical_areas.iter().map(|id| id.to_string()));
         }
 
         // Add areas from descendants
         for descendant_id in self.get_all_descendants(region_id) {
             if let Some(region) = self.regions.get(descendant_id) {
-                areas.extend(region.cortical_areas.iter().cloned());
+                // Convert CorticalID to String
+                areas.extend(region.cortical_areas.iter().map(|id| id.to_string()));
             }
         }
 

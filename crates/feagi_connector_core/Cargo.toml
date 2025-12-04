@@ -9,7 +9,7 @@ homepage.workspace = true
 
 
 [dependencies]
-ndarray = { workspace = true }
+ndarray = { workspace = true, features = ["rayon"] }
 feagi_data_structures = { workspace = true }
 feagi_data_serialization = { workspace = true }
 image = {workspace = true}

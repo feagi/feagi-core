@@ -13,8 +13,8 @@ use crate::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
-use feagi_data_structures::genomic::{BrainRegion, RegionType};
-use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, AreaType};
+use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionType, RegionID};
+use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
 use feagi_bdu::models::CorticalAreaExt;
 // Note: decode_cortical_id removed - use feagi_data_structures::CorticalID directly
 use parking_lot::RwLock;
@@ -35,20 +35,14 @@ impl ConnectomeServiceImpl {
     /// Convert RegionType enum to string
     fn region_type_to_string(region_type: &RegionType) -> String {
         match region_type {
-            RegionType::Sensory => "Sensory".to_string(),
-            RegionType::Motor => "Motor".to_string(),
-            RegionType::Memory => "Memory".to_string(),
-            RegionType::Custom => "Custom".to_string(),
+            RegionType::Undefined => "Undefined".to_string(),
         }
     }
     
     /// Convert string to RegionType enum
     fn string_to_region_type(s: &str) -> Result<RegionType, ServiceError> {
         match s {
-            "Sensory" => Ok(RegionType::Sensory),
-            "Motor" => Ok(RegionType::Motor),
-            "Memory" => Ok(RegionType::Memory),
-            "Custom" => Ok(RegionType::Custom),
+            "Undefined" | "Sensory" | "Motor" | "Memory" | "Custom" => Ok(RegionType::Undefined),
             _ => Err(ServiceError::InvalidInput(format!(
                 "Invalid region type: {}",
                 s
@@ -69,19 +63,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services","Creating cortical area: {}", params.cortical_id);
         
-        // Parse area type from params.area_type
-        // Note: CorticalTypeAdapter removed - type is encoded in CorticalID
-        let area_type = match params.area_type.as_str() {
-            "Sensory" => AreaType::Sensory,
-            "Motor" => AreaType::Motor,
-            "Memory" => AreaType::Memory,
-            "Custom" => AreaType::Custom,
-            _ => return Err(ServiceError::InvalidInput(format!("Invalid area type: {}", params.area_type))),
-        };
-        
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(&params.cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
+        
+        // Get cortical area type from the cortical ID
+        let area_type = cortical_id_typed.as_cortical_type()
+            .map_err(|e| ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e)))?;
         
         // Create CorticalArea
         let mut area = CorticalArea::new(
@@ -89,7 +77,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             0,  // Auto-assigned by ConnectomeManager
             params.name.clone(),
             CorticalAreaDimensions::new(params.dimensions.0 as u32, params.dimensions.1 as u32, params.dimensions.2 as u32)?,
-            params.position,
+            params.position.into(),  // Convert (i32, i32, i32) to GenomeCoordinate3D
             area_type,
         )?;
         
@@ -224,7 +212,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             cortical_idx,
             name: area.name.clone(),
             dimensions: (area.dimensions.width as usize, area.dimensions.height as usize, area.dimensions.depth as usize),
-            position: area.position,
+            position: area.position.into(),  // Convert GenomeCoordinate3D to (i32, i32, i32)
             area_type: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
             cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
             neuron_count,
@@ -350,7 +338,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         
         // Create BrainRegion
         let region = BrainRegion::new(
-            params.region_id.clone(),
+            RegionID::from_string(&params.region_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid region ID: {}", e)))?,
             params.name.clone(),
             region_type,
         ).map_err(ServiceError::from)?;
@@ -417,7 +405,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             name: region.name.clone(),
             region_type: Self::region_type_to_string(&region.region_type),
             parent_id,
-            cortical_areas: region.cortical_areas.iter().cloned().collect(),
+            cortical_areas: region.cortical_areas.iter().map(|id| id.to_string()).collect(),
             child_regions,
             properties: region.properties.clone(),
         })
