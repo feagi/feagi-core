@@ -66,8 +66,10 @@ impl GenomeSaver {
                 area.position.2
             ]));
             
-            // Area type (use cortical_type_new if available)
-            let cortical_type = area.get_cortical_group();
+            // Area type (from properties)
+            let cortical_type = area.properties.get("cortical_group")
+                .and_then(|v| v.as_str())
+                .unwrap_or("CUSTOM");
             area_data.insert("cortical_type".to_string(), json!(cortical_type));
             
             // Add all properties from the area's properties HashMap

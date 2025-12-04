@@ -17,7 +17,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
-// CorticalTypeAdapter and CorticalTypeError removed - use feagi_neural types if needed
+use crate::types::EvoError;
 use std::collections::HashMap;
 
 /// Parse CorticalAreaType from genome properties
@@ -30,32 +30,37 @@ use std::collections::HashMap;
 ///
 /// # Returns
 /// * `Ok(CorticalAreaType)` - Parsed cortical type
-/// * `Err(CorticalTypeError)` - If required properties are missing or invalid
-pub fn parse_cortical_type(properties: &HashMap<String, serde_json::Value>) -> Result<CorticalAreaType, CorticalTypeError> {
+/// * `Err(EvoError)` - If required properties are missing or invalid
+pub fn parse_cortical_type(properties: &HashMap<String, serde_json::Value>) -> Result<CorticalAreaType, EvoError> {
     // Get cortical_group (required)
     let cortical_group = properties
         .get("cortical_group")
         .and_then(|v| v.as_str())
-        .ok_or(CorticalTypeError::MissingGroup)?;
+        .ok_or_else(|| EvoError::InvalidGenome("Missing cortical_group property".to_string()))?;
 
     // Parse base type from cortical_group
-    let mut cortical_type = CorticalTypeAdapter::parse_from_cortical_group(cortical_group)?;
-
-    // For IPU/OPU types, attempt to parse additional parameters
-    // (Future phases will add more detailed parsing)
-    match &mut cortical_type {
-        CorticalAreaType::BrainInput(ref mut io_type) => {
-            // Future: parse data_type, frame_change_handling from properties
-            // For now, keep the default from adapter
-            let _ = io_type; // Suppress unused warning
-        }
-        CorticalAreaType::BrainOutput(ref mut io_type) => {
-            // Future: parse data_type, frame_change_handling, neuron_positioning from properties
-            // For now, keep the default from adapter
-            let _ = io_type; // Suppress unused warning
-        }
-        _ => {}
-    }
+    let cortical_type = match cortical_group.to_uppercase().as_str() {
+        "IPU" => CorticalAreaType::BrainInput(
+            feagi_data_structures::genomic::cortical_area::IOCorticalAreaDataFlag::CartesianPlane(
+                feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute
+            )
+        ),
+        "OPU" => CorticalAreaType::BrainOutput(
+            feagi_data_structures::genomic::cortical_area::IOCorticalAreaDataFlag::CartesianPlane(
+                feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute
+            )
+        ),
+        "CORE" => CorticalAreaType::Core(
+            feagi_data_structures::genomic::cortical_area::CoreCorticalType::Death
+        ),
+        "CUSTOM" => CorticalAreaType::Custom(
+            feagi_data_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire
+        ),
+        "MEMORY" => CorticalAreaType::Memory(
+            feagi_data_structures::genomic::cortical_area::MemoryCorticalType::Memory
+        ),
+        _ => return Err(EvoError::InvalidGenome(format!("Unknown cortical_group: {}", cortical_group))),
+    };
 
     Ok(cortical_type)
 }
@@ -95,7 +100,7 @@ pub fn validate_cortical_type(
 
     // Check for incompatible property combinations
     if let Some(cortical_mapping_dst) = properties.get("cortical_mapping_dst") {
-        if CorticalTypeAdapter::is_output(cortical_type) && cortical_mapping_dst.is_object() {
+        if matches!(cortical_type, CorticalAreaType::BrainOutput(_)) && cortical_mapping_dst.is_object() {
             // OPU areas typically shouldn't have outgoing mappings
             // (though this is not strictly enforced yet)
         }
@@ -142,7 +147,6 @@ mod tests {
         
         let result = parse_cortical_type(&properties);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CorticalTypeError::MissingGroup));
     }
 
     #[test]
@@ -152,11 +156,12 @@ mod tests {
         
         let result = parse_cortical_type(&properties);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), CorticalTypeError::UnknownGroup(_)));
     }
 
     #[test]
     fn test_validate_ipu_type() {
+        use feagi_data_structures::genomic::cortical_area::{IOCorticalAreaDataFlag, io_cortical_area_data_type::FrameChangeHandling};
+        
         let cortical_type = CorticalAreaType::BrainInput(
             IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute)
         );

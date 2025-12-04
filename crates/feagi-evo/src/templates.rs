@@ -15,7 +15,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{RuntimeGenome, GenomeMetadata, MorphologyRegistry, PhysiologyConfig, GenomeSignatures, GenomeStats};
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea, AreaType};
+use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalArea, AreaType};
 use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
 use std::collections::HashMap;
 use serde_json::Value;

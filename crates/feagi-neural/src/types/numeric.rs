@@ -16,6 +16,11 @@ use core::fmt;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "std")]
+use std::{string::String, format};
+#[cfg(all(not(feature = "std"), feature = "alloc"))]
+use alloc::{string::String, format};
+
 /// Quantization precision mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -29,6 +34,27 @@ pub enum Precision {
 impl Default for Precision {
     fn default() -> Self {
         Self::FP32
+    }
+}
+
+impl Precision {
+    /// Parse from string (case-insensitive)
+    pub fn from_str(s: &str) -> Result<Self, String> {
+        match s.to_lowercase().as_str() {
+            "fp32" | "float32" | "f32" => Ok(Self::FP32),
+            "fp16" | "float16" | "f16" => Ok(Self::FP16),
+            "int8" | "i8" => Ok(Self::INT8),
+            _ => Err(format!("Unknown precision: {}", s)),
+        }
+    }
+    
+    /// Convert to canonical string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::FP32 => "fp32",
+            Self::FP16 => "fp16",
+            Self::INT8 => "int8",
+        }
     }
 }
 

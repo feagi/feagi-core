@@ -52,12 +52,11 @@ impl From<std::io::Error> for EvoError {
     }
 }
 
-// Convert from feagi_types::FeagiError
-impl From<feagi_types::FeagiError> for EvoError {
-    fn from(err: feagi_neural::types::FeagiError) -> Self {
+// Convert from FeagiDataError
+impl From<feagi_data_structures::FeagiDataError> for EvoError {
+    fn from(err: feagi_data_structures::FeagiDataError) -> Self {
         match &err {
-            feagi_neural::types::FeagiError::InvalidArea(msg) => EvoError::InvalidArea(msg.clone()),
-            feagi_neural::types::FeagiError::InvalidRegion(msg) => EvoError::InvalidRegion(msg.clone()),
+            feagi_data_structures::FeagiDataError::BadParameters(msg) => EvoError::InvalidArea(msg.clone()),
             _ => EvoError::Internal(err.to_string()),
         }
     }

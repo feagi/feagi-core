@@ -301,14 +301,14 @@ impl GenomeParser {
                     )));
                 }
                 Dimensions::new(
-                    boundaries[0] as usize, 
-                    boundaries[1] as usize, 
-                    boundaries[2] as usize
-                )
+                    boundaries[0], 
+                    boundaries[1], 
+                    boundaries[2]
+                ).map_err(|e| EvoError::InvalidArea(format!("Invalid dimensions: {}", e)))?
             } else {
                 // Default to 1x1x1 if not specified (should not happen in valid genomes)
                 warn!(target: "feagi-evo","Cortical area {} missing block_boundaries, defaulting to 1x1x1", cortical_id_str);
-                Dimensions::new(1, 1, 1)
+                Dimensions::new(1, 1, 1).map_err(|e| EvoError::InvalidArea(format!("Invalid default dimensions: {}", e)))?
             };
             
             let position = if let Some(coords) = &raw_area.relative_coordinate {
@@ -429,14 +429,8 @@ impl GenomeParser {
                 area.properties.insert(key.clone(), value.clone());
             }
             
-            // Parse and populate the new cortical type system (Phase 2)
-            // This allows gradual migration to the strongly-typed system
-            if let Ok(cortical_type_new) = crate::cortical_type_parser::parse_cortical_type(&area.properties) {
-                area = area.with_cortical_type_new(cortical_type_new);
-            } else {
-                // Log warning but continue (not all genomes have cortical_group yet)
-                warn!(target: "feagi-evo", "Could not parse cortical_type_new for area {}", cortical_id_str);
-            }
+            // Note: cortical_type parsing disabled - CorticalArea is now a minimal data structure
+            // CorticalAreaType information is stored in properties["cortical_group"] if needed
             
             areas.push(area);
         }
