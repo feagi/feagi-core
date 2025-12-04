@@ -41,6 +41,6 @@ rand = "0.8"
 [dev-dependencies]
 # Testing
 env_logger = "0.11"
+feagi-bdu = { path = "../feagi-bdu" }
 
 # Profile configuration is inherited from workspace root
-

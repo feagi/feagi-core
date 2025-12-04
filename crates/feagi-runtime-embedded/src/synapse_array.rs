@@ -297,17 +297,19 @@ mod tests {
     
     #[test]
     fn test_add_synapse() {
+        use feagi_neural::SynapseType;
         let mut array = SynapseArray::<10>::new();
-        assert!(array.add_synapse_simple(0, 1, 255, 255, 0));
+        assert!(array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory));
         assert_eq!(array.count, 1);
     }
     
     #[test]
     fn test_array_full() {
+        use feagi_neural::SynapseType;
         let mut array = SynapseArray::<2>::new();
-        assert!(array.add_synapse_simple(0, 1, 255, 255, 0));
-        assert!(array.add_synapse(1, 2, 255, 255, 0).is_ok());
-        assert!(array.add_synapse(2, 3, 255, 255, 0).is_err()); // Full
+        assert!(array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory));
+        assert!(array.add_synapse(1, 2, 255, 255, SynapseType::Excitatory as u8).is_ok());
+        assert!(array.add_synapse(2, 3, 255, 255, SynapseType::Excitatory as u8).is_err()); // Full
     }
     
     #[test]

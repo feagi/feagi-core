@@ -399,10 +399,10 @@ mod tests {
         // IPU migrations - should return base64 IDs with Absolute frame handling
         let group_index: CorticalGroupIndex = 0.into();
         let frame_handling = FrameChangeHandling::Absolute;
-        let expected_svi0 = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index)[0].as_base_64();
-        let expected_svi1 = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index)[1].as_base_64();
-        let expected_svi4 = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index)[4].as_base_64();
-        let expected_svi8 = SensoryCorticalUnit::get_segmented_vision_cortical_ids_array(frame_handling, group_index)[8].as_base_64();
+        let expected_svi0 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(frame_handling, group_index)[0].as_base_64();
+        let expected_svi1 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(frame_handling, group_index)[1].as_base_64();
+        let expected_svi4 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(frame_handling, group_index)[4].as_base_64();
+        let expected_svi8 = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(frame_handling, group_index)[8].as_base_64();
         
         assert_eq!(map_old_id_to_new("iic000"), Some(expected_svi0));
         assert_eq!(map_old_id_to_new("iic100"), Some(expected_svi1));

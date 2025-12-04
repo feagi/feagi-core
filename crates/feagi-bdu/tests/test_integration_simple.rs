@@ -5,13 +5,24 @@
 ///
 /// Tests basic functionality without complex genome loading
 
-use feagi_bdu::{ConnectomeManager, CorticalArea, CorticalAreaDimensions as Dimensions, AreaType, CorticalID};
-use feagi_burst_engine::RustNPU;
+use feagi_bdu::{ConnectomeManager, CorticalArea, AreaType, CorticalID};
+use feagi_bdu::Dimensions; // Alias for CorticalAreaDimensions
+use feagi_burst_engine::{RustNPU, DynamicNPU};
+use feagi_runtime_std::StdRuntime;
+use feagi_burst_engine::backend::CPUBackend;
 use std::sync::{Arc, Mutex};
 
 /// Helper to create an isolated test manager with NPU
 fn create_test_manager() -> ConnectomeManager {
-    let npu = Arc::new(Mutex::new(RustNPU::new(1_000_000, 10_000_000, 10)));
+    use feagi_runtime_std::StdRuntime;
+    use feagi_burst_engine::backend::CPUBackend;
+    use feagi_burst_engine::DynamicNPU;
+    
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu_result = RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10)
+        .expect("Failed to create NPU");
+    let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
     ConnectomeManager::new_for_testing_with_npu(npu)
 }
 

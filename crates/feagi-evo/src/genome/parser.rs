@@ -634,11 +634,11 @@ mod tests {
         assert!(area.properties.contains_key("firing_threshold"));
         assert!(area.properties.contains_key("cortical_group"));
         
-        // NEW: cortical_type_new should be populated (Phase 2)
-        assert!(area.cortical_type_new.is_some(), 
-                "cortical_type_new should be populated from cortical_type property");
-        if let Some(ref cortical_type) = area.cortical_type_new {
-            use feagi_data_structures::genomic::cortical_area::cortical_type::{CorticalAreaType, MemoryCorticalType};
+        // NEW: cortical_type should be derivable from cortical_id (Phase 2)
+        assert!(area.cortical_id.as_cortical_type().is_ok(), 
+                "cortical_id should be parseable to cortical_type");
+        if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
+            use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
             assert!(matches!(cortical_type, CorticalAreaType::Memory(_)),
                     "Should be classified as MEMORY type");
         }
@@ -706,7 +706,8 @@ mod tests {
             
             // Verify cortical type is valid
             use feagi_bdu::models::CorticalAreaExt;
-            if let Some(cortical_group) = area.get_cortical_group() {
+            let cortical_group_opt = area.get_cortical_group();
+            if let Some(cortical_group) = cortical_group_opt {
                 let group_from_prop = area.properties.get("cortical_group")
                     .and_then(|v| v.as_str());
                 if let Some(prop_group) = group_from_prop {

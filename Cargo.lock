@@ -1663,6 +1663,7 @@ dependencies = [
  "feagi-evo",
  "feagi-neural",
  "feagi-observability",
+ "feagi-runtime-std",
  "feagi_data_structures",
  "ndarray 0.16.1",
  "once_cell",
@@ -1756,6 +1757,7 @@ version = "2.0.0"
 dependencies = [
  "chrono",
  "env_logger",
+ "feagi-bdu",
  "feagi-neural",
  "feagi-observability",
  "feagi_data_structures",

@@ -75,7 +75,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> { Ok(()) }
     }
     
-    let npu_for_runtime = Arc::new(StdMutex::new(RustNPU::new(10, 10, 10))); // Minimal NPU
+    use feagi_runtime_std::StdRuntime;
+    use feagi_burst_engine::backend::CPUBackend;
+    use feagi_burst_engine::DynamicNPU;
+    
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu_result = RustNPU::new(runtime, backend, 10, 10, 10)
+        .expect("Failed to create NPU");
+    let npu_for_runtime = Arc::new(StdMutex::new(DynamicNPU::F32(npu_result))); // Minimal NPU
     let burst_loop = BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
     let burst_runner_for_runtime = Arc::new(ParkingLotMutex::new(burst_loop));
 

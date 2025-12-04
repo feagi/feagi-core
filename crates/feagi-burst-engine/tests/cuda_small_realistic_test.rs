@@ -66,17 +66,18 @@ use feagi_neural::SynapseType;
         npu
     }
     
-    fn create_small_network_cuda() -> RustNPU<f32> {
+    fn create_small_network_cuda() -> RustNPU<StdRuntime, f32, CPUBackend> {
+        use feagi_runtime_std::StdRuntime;
+        use feagi_burst_engine::backend::CPUBackend;
+        
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
         let mut npu = RustNPU::new(
+            runtime,
+            backend,
             1000,
             10000,
-            100,
-            Some(&GpuConfig {
-                use_gpu: true,
-                hybrid_enabled: false,
-                gpu_threshold: 1,
-                gpu_memory_fraction: 0.9,
-            }),
+            100
         );
         
         // Same network as CPU

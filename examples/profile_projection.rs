@@ -14,14 +14,14 @@
 ///
 /// Note: Edit the constants below to change test parameters
 
-use parking_lot::Mutex;
+// Note: parking_lot removed, using std::sync::Mutex
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use feagi_bdu::BrainDevelopmentUnit;
+use feagi_bdu::Neuroembryogenesis;
 use feagi_burst_engine::DynamicNPU;
 use feagi_evo::{RuntimeGenome, templates};
-use feagi_types::{Dimensions, AreaType, CorticalArea};
+use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions as Dimensions, AreaType, CorticalID};
 
 // Configuration - edit these to change test parameters
 const WITH_PROJECTION: bool = true;  // Set to true to test with projection

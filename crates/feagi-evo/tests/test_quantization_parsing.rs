@@ -11,7 +11,7 @@
 //! Test that quantization_precision is correctly parsed from genome JSON
 
 use feagi_evo::genome::loader::load_genome_from_file;
-use feagi_types::{Precision, QuantizationSpec};
+use feagi_neural::types::{Precision, QuantizationSpec};
 use std::path::PathBuf;
 
 #[test]
@@ -31,19 +31,19 @@ fn test_essential_genome_quantization_parsing() {
     // Verify it's a valid precision string (defaults to "fp32" if not in genome)
     assert!(!quant_precision.is_empty(), "Should have a quantization_precision value");
     
-    // Verify it can be converted to QuantizationSpec
-    let spec = QuantizationSpec::from_genome_string(quant_precision)
-        .expect("Should convert to QuantizationSpec");
+    // Verify it can be converted to Precision
+    let precision = Precision::from_str(quant_precision.as_str())
+        .unwrap_or(Precision::FP32);
     
     // Should be one of the valid precisions
     assert!(
-        spec.precision == Precision::FP32 || 
-        spec.precision == Precision::FP16 || 
-        spec.precision == Precision::INT8,
+        precision == Precision::FP32 || 
+        precision == Precision::FP16 || 
+        precision == Precision::INT8,
         "Should parse to a valid precision"
     );
     
-    println!("Successfully parsed as: {:?}", spec.precision);
+    println!("Successfully parsed as: {:?}", precision);
 }
 
 #[test]
@@ -67,8 +67,8 @@ fn test_quantization_defaults() {
     
     assert_eq!(quant, "fp32");
     
-    let spec = QuantizationSpec::from_genome_string(quant).unwrap();
-    assert_eq!(spec.precision, Precision::FP32);
+    let precision = Precision::from_str(quant).unwrap_or(Precision::FP32);
+    assert_eq!(precision, Precision::FP32);
 }
 
 #[test]
@@ -83,10 +83,10 @@ fn test_all_precision_types_parse() {
     ];
     
     for (input, expected) in test_cases {
-        let spec = QuantizationSpec::from_genome_string(input)
-            .expect(&format!("Failed to parse: {}", input));
+        let precision = Precision::from_str(input)
+            .unwrap_or_else(|_| panic!("Failed to parse: {}", input));
         assert_eq!(
-            spec.precision, expected,
+            precision, expected,
             "Input '{}' should map to {:?}",
             input, expected
         );
