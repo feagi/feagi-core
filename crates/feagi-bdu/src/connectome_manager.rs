@@ -36,7 +36,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{info, warn, debug};
 
-use feagi_neural::types::{BrainRegion, BrainRegionHierarchy, CorticalArea};
+use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalID, CorticalAreaDimensions, AreaType};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::types::{BduError, BduResult, NeuronId};
 
@@ -2924,7 +2924,7 @@ impl std::fmt::Debug for ConnectomeManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_types::{Dimensions};
+    use super::*;
     
     #[test]
     fn test_singleton_instance() {
@@ -2942,12 +2942,14 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
+        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("iav001").unwrap();
         let area = CorticalArea::new(
-            feagi_evo::genome::parser::string_to_cortical_id("iav001").unwrap(),
+            cortical_id,
             0,
             "Visual Input".to_string(),
-            Dimensions::new(128, 128, 20),
+            CorticalAreaDimensions::new(128, 128, 20).unwrap(),
             (0, 0, 0),
+            AreaType::Sensory,
         )
         .unwrap();
         
@@ -2966,12 +2968,14 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
+        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
         let area = CorticalArea::new(
-            feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap(),
+            cortical_id,
             0,
             "Test Area".to_string(),
-            Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
+            AreaType::Custom,
         )
         .unwrap();
         
@@ -2995,12 +2999,14 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
+        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap();
         let area = CorticalArea::new(
-            feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap(),
+            cortical_id,
             0,
             "Test".to_string(),
-            Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
+            AreaType::Custom,
         )
         .unwrap();
         
@@ -3019,20 +3025,23 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
+        let cortical_id1 = feagi_evo::genome::parser::string_to_cortical_id("dup001").unwrap();
         let area1 = CorticalArea::new(
-            feagi_evo::genome::parser::string_to_cortical_id("dup001").unwrap(),
+            cortical_id1.clone(),
             0,
             "First".to_string(),
-            Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
+            AreaType::Custom,
         )
         .unwrap();
         
+        let cortical_id2 = feagi_evo::genome::parser::string_to_cortical_id("dup001").unwrap();
         let area2 = CorticalArea::new(
-            "dup001".to_string(), // Same ID
+            cortical_id2, // Same ID
             1,
             "Second".to_string(),
-            Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
             AreaType::Custom,
         )
@@ -3155,12 +3164,13 @@ mod tests {
         
         // First create a cortical area to add neurons to
         let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
-        let area = feagi_types::CorticalArea::new(
+        let area = CorticalArea::new(
             cortical_id.clone(),
             0, // cortical_idx
             "Test Area".to_string(),
-            feagi_types::Dimensions { width: 10, height: 10, depth: 1 },
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0), // position
+            AreaType::Custom,
         ).unwrap();
         manager.add_cortical_area(area).unwrap();
         

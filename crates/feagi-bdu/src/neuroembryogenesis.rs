@@ -24,6 +24,7 @@ use feagi_evo::RuntimeGenome;
 use feagi_neural::types::{Precision, QuantizationSpec};
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
+use crate::models::{CorticalArea, CorticalID, CorticalAreaDimensions};
 use tracing::{info, warn, debug, error};
 
 /// Development stage tracking
@@ -121,7 +122,7 @@ impl Neuroembryogenesis {
     /// * Number of neurons created and synapses created
     pub fn add_cortical_areas(
         &mut self,
-        areas: Vec<feagi_types::CorticalArea>,
+        areas: Vec<CorticalArea>,
         genome: &RuntimeGenome,
     ) -> BduResult<(usize, usize)> {
         info!(target: "feagi-bdu", "🧬 Incrementally adding {} cortical areas", areas.len());
@@ -606,7 +607,9 @@ impl Neuroembryogenesis {
         // NOTE: Loop is over AREAS, not neurons. Each area creates all its neurons in ONE batch call.
         for (idx, (_cortical_id, area)) in genome.cortical_areas.iter().enumerate() {
             // Get neurons_per_voxel from typed field (single source of truth)
-            let per_voxel_count = area.neurons_per_voxel as i64;
+            let per_voxel_count = area.properties.get("neurons_per_voxel")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as i64;
             
             // 🔍 DIAGNOSTIC: Use area.cortical_id (the actual ID stored in ConnectomeManager)
             // This MUST match what was registered during corticogenesis!
@@ -760,7 +763,7 @@ impl Neuroembryogenesis {
 ///
 /// This is only used when NPU is not available for actual synapse creation.
 fn estimate_synapses_for_area(
-    src_area: &feagi_types::CorticalArea,
+    src_area: &CorticalArea,
     genome: &feagi_evo::RuntimeGenome,
 ) -> usize {
     let dstmap = match src_area.properties.get("cortical_mapping_dst") {
@@ -795,8 +798,12 @@ fn estimate_synapses_for_area(
                 .unwrap_or(1) as usize;
             
             // Simplified estimation
-            let src_per_voxel = src_area.neurons_per_voxel as usize;
-            let dst_per_voxel = dst_area.neurons_per_voxel as usize;
+            let src_per_voxel = src_area.properties.get("neurons_per_voxel")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as usize;
+            let dst_per_voxel = dst_area.properties.get("neurons_per_voxel")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1) as usize;
             
             let src_voxels = src_area.dimensions.width * src_area.dimensions.height * src_area.dimensions.depth;
             let dst_voxels = dst_area.dimensions.width * dst_area.dimensions.height * dst_area.dimensions.depth;
@@ -827,14 +834,14 @@ impl Neuroembryogenesis {
     /// - INPUT: Any area in the region that receives connection from OUTSIDE the region
     fn analyze_region_io(
         region_area_ids: &[feagi_data_structures::genomic::cortical_area::CorticalID],
-        all_cortical_areas: &std::collections::HashMap<feagi_data_structures::genomic::cortical_area::CorticalID, feagi_types::CorticalArea>,
+        all_cortical_areas: &std::collections::HashMap<CorticalID, CorticalArea>,
     ) -> (Vec<String>, Vec<String>) {
         let area_set: std::collections::HashSet<_> = region_area_ids.iter().cloned().collect();
         let mut inputs = Vec::new();
         let mut outputs = Vec::new();
         
         // Helper to extract destination area IDs from cortical_mapping_dst (as strings)
-        let extract_destinations = |area: &feagi_types::CorticalArea| -> Vec<String> {
+        let extract_destinations = |area: &CorticalArea| -> Vec<String> {
             area.properties.get("cortical_mapping_dst")
                 .and_then(|v| v.as_object())
                 .map(|obj| obj.keys().cloned().collect())
@@ -926,12 +933,13 @@ mod tests {
         );
         
         let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
-        let area = feagi_types::CorticalArea::new(
+        let area = CorticalArea::new(
             cortical_id.clone(),
             0,
             "Test Area".to_string(),
-            feagi_types::Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
+            crate::models::AreaType::Custom,
         ).expect("Failed to create cortical area");
         genome.cortical_areas.insert(cortical_id, area);
         

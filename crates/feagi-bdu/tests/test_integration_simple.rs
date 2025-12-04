@@ -116,11 +116,12 @@ fn test_create_and_query_synapses() {
     let mut manager = create_test_manager();
     
     // Create area
+    let cortical_id = CorticalID::try_from_base_64("synap1").unwrap();
     let area = CorticalArea::new(
-        "synap1".to_string(),
+        cortical_id,
         0,
         "Synapse Test".to_string(),
-        Dimensions { width: 10, height: 10, depth: 1 },
+        Dimensions::new(10, 10, 1).unwrap(),
         (0, 0, 0),
         AreaType::Memory,
     ).expect("Failed to create area");
@@ -181,11 +182,12 @@ fn test_batch_neuron_operations() {
     let mut manager = create_test_manager();
     
     // Create area
+    let cortical_id = CorticalID::try_from_base_64("batch1").unwrap();
     let area = CorticalArea::new(
-        "batch1".to_string(),
+        cortical_id,
         0,
         "Batch Test".to_string(),
-        Dimensions { width: 20, height: 20, depth: 1 },
+        Dimensions::new(20, 20, 1).unwrap(),
         (0, 0, 0),
         AreaType::Memory,
     ).expect("Failed to create area");
@@ -251,11 +253,12 @@ fn test_area_queries() {
     
     // Create multiple areas
     for i in 0..3 {
+        let cortical_id = CorticalID::try_from_base_64(&format!("area{:02}", i)).unwrap();
         let area = CorticalArea::new(
-            format!("area{:02}", i),
+            cortical_id,
             i,
             format!("Area {}", i),
-            Dimensions { width: 5, height: 5, depth: 1 },
+            Dimensions::new(5, 5, 1).unwrap(),
             (0, 0, 0),
             if i == 0 { AreaType::Sensory } else { AreaType::Memory },
         ).expect(&format!("Failed to create area {}", i));
@@ -292,11 +295,12 @@ fn test_update_operations() {
     let mut manager = create_test_manager();
     
     // Create area (cortical_id must be 6 chars)
+    let cortical_id = CorticalID::try_from_base_64("upd001").unwrap();
     let area = CorticalArea::new(
-        "upd001".to_string(),
+        cortical_id,
         0,
         "Update Test".to_string(),
-        Dimensions { width: 10, height: 10, depth: 1 },
+        Dimensions::new(10, 10, 1).unwrap(),
         (0, 0, 0),
         AreaType::Memory,
     ).expect("Failed to create area");
@@ -358,11 +362,12 @@ fn test_delete_operations() {
     let mut manager = create_test_manager();
     
     // Create area (cortical_id must be 6 chars)
+    let cortical_id = CorticalID::try_from_base_64("del001").unwrap();
     let area = CorticalArea::new(
-        "del001".to_string(),
+        cortical_id,
         0,
         "Delete Test".to_string(),
-        Dimensions { width: 10, height: 10, depth: 1 },
+        Dimensions::new(10, 10, 1).unwrap(),
         (0, 0, 0),
         AreaType::Memory,
     ).expect("Failed to create area");

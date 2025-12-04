@@ -226,8 +226,9 @@ mod tests {
             CorticalID::try_from_base_64("aWljMDAwX18=").unwrap(),
             0,
             "Test Vision".to_string(),
-            Dimensions::new(10, 10, 1),
+            Dimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0),
+            AreaType::Sensory,
         ).unwrap();
         
         area = area.with_cortical_type_new(CorticalAreaType::BrainInput(
@@ -244,8 +245,9 @@ mod tests {
             CorticalID::try_from_base_64("b21vdDAwX18=").unwrap(),
             0,
             "Test Motor".to_string(),
-            Dimensions::new(5, 5, 1),
+            Dimensions::new(5, 5, 1).unwrap(),
             (0, 0, 0),
+            AreaType::Motor,
         ).unwrap();
         
         area = area.with_cortical_type_new(CorticalAreaType::BrainOutput(
