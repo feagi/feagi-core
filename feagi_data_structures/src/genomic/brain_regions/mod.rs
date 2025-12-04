@@ -12,10 +12,9 @@ mod region_id;
 pub use region_id::RegionID;
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use crate::FeagiDataError;
 use crate::genomic::cortical_area::CorticalID;
-use crate::genomic::descriptors::{GenomeCoordinate2D, GenomeCoordinate3D};
 
 /// Type of brain region (placeholder for future functional/anatomical classification)
 ///
@@ -26,60 +25,6 @@ use crate::genomic::descriptors::{GenomeCoordinate2D, GenomeCoordinate3D};
 pub enum RegionType {
     /// Generic/undefined region type (placeholder)
     Undefined,
-}
-
-/// Properties and metadata for a brain region
-///
-/// Contains hierarchical relationships, visualization coordinates, and I/O tracking
-/// for a brain region. All fields are optional to allow for partial specification.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct BrainRegionProperties {
-    /// Human-readable description of the region's purpose
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-
-    /// Parent region ID for hierarchical organization
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub parent_region_id: Option<RegionID>,
-
-    /// Child region IDs for hierarchical organization
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub child_regions: Vec<RegionID>,
-
-    /// 2D visualization coordinates in genome space
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub coordinate_2d: Option<GenomeCoordinate2D>,
-
-    /// 3D visualization coordinates in genome space
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub coordinate_3d: Option<GenomeCoordinate3D>,
-
-    /// Input cortical area IDs (areas that provide input to this region)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub inputs: Vec<CorticalID>,
-
-    /// Output cortical area IDs (areas that receive output from this region)
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub outputs: Vec<CorticalID>,
-
-    /// Optional signature for region identification
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub signature: Option<String>,
-}
-
-impl Default for BrainRegionProperties {
-    fn default() -> Self {
-        Self {
-            description: None,
-            parent_region_id: None,
-            child_regions: Vec::new(),
-            coordinate_2d: None,
-            coordinate_3d: None,
-            inputs: Vec::new(),
-            outputs: Vec::new(),
-            signature: None,
-        }
-    }
 }
 
 impl Default for RegionType {
@@ -105,6 +50,7 @@ impl std::fmt::Display for RegionType {
 /// - Regions are organizational constructs (not physical entities)
 /// - Used for genome editing, visualization, and bulk operations
 /// - Serializable for genome persistence
+/// - Properties stored as HashMap for maximum flexibility
 ///
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BrainRegion {
@@ -121,9 +67,10 @@ pub struct BrainRegion {
     #[serde(default)]
     pub cortical_areas: HashSet<CorticalID>,
 
-    /// Region properties and metadata
-    #[serde(default, flatten)]
-    pub properties: BrainRegionProperties,
+    /// Additional user-defined properties
+    /// Commonly used keys: description, coordinate_2d, coordinate_3d, inputs, outputs, signature
+    #[serde(default)]
+    pub properties: HashMap<String, serde_json::Value>,
 }
 
 impl BrainRegion {
@@ -151,7 +98,7 @@ impl BrainRegion {
             name,
             region_type,
             cortical_areas: HashSet::new(),
-            properties: BrainRegionProperties::default(),
+            properties: HashMap::new(),
         })
     }
 
@@ -162,7 +109,7 @@ impl BrainRegion {
     }
 
     /// Create a region with custom properties
-    pub fn with_properties(mut self, properties: BrainRegionProperties) -> Self {
+    pub fn with_properties(mut self, properties: HashMap<String, serde_json::Value>) -> Self {
         self.properties = properties;
         self
     }
@@ -203,59 +150,20 @@ impl BrainRegion {
         self.cortical_areas.clear();
     }
 
-    /// Set the description for this region
-    pub fn set_description(&mut self, description: String) {
-        self.properties.description = Some(description);
+    /// Get a property value by key
+    pub fn get_property(&self, key: &str) -> Option<&serde_json::Value> {
+        self.properties.get(key)
     }
 
-    /// Set the parent region ID
-    pub fn set_parent_region(&mut self, parent_id: RegionID) {
-        self.properties.parent_region_id = Some(parent_id);
-    }
-
-    /// Add a child region ID
-    pub fn add_child_region(&mut self, child_id: RegionID) {
-        if !self.properties.child_regions.contains(&child_id) {
-            self.properties.child_regions.push(child_id);
-        }
-    }
-
-    /// Set 2D visualization coordinates in genome space
-    pub fn set_coordinate_2d(&mut self, coord: GenomeCoordinate2D) {
-        self.properties.coordinate_2d = Some(coord);
-    }
-
-    /// Set 3D visualization coordinates in genome space
-    pub fn set_coordinate_3d(&mut self, coord: GenomeCoordinate3D) {
-        self.properties.coordinate_3d = Some(coord);
-    }
-
-    /// Add an input area
-    pub fn add_input(&mut self, area_id: CorticalID) {
-        if !self.properties.inputs.contains(&area_id) {
-            self.properties.inputs.push(area_id);
-        }
-    }
-
-    /// Add an output area
-    pub fn add_output(&mut self, area_id: CorticalID) {
-        if !self.properties.outputs.contains(&area_id) {
-            self.properties.outputs.push(area_id);
-        }
+    /// Add a property to the region
+    pub fn add_property(&mut self, key: String, value: serde_json::Value) {
+        self.properties.insert(key, value);
     }
 
     /// Convert to dictionary representation (for serialization)
     pub fn to_dict(&self) -> serde_json::Value {
         // Convert CorticalIDs to their base64 string representation for JSON
         let area_ids: Vec<String> = self.cortical_areas.iter()
-            .map(|id| id.as_base_64())
-            .collect();
-        
-        let inputs: Vec<String> = self.properties.inputs.iter()
-            .map(|id| id.as_base_64())
-            .collect();
-        
-        let outputs: Vec<String> = self.properties.outputs.iter()
             .map(|id| id.as_base_64())
             .collect();
         
@@ -266,33 +174,9 @@ impl BrainRegion {
             "cortical_areas": area_ids,
         });
         
-        // Add optional properties if present
-        if let Some(ref desc) = self.properties.description {
-            dict["description"] = serde_json::json!(desc);
-        }
-        if let Some(ref parent) = self.properties.parent_region_id {
-            dict["parent_region_id"] = serde_json::json!(parent.to_string());
-        }
-        if !self.properties.child_regions.is_empty() {
-            let child_ids: Vec<String> = self.properties.child_regions.iter()
-                .map(|id| id.to_string())
-                .collect();
-            dict["child_regions"] = serde_json::json!(child_ids);
-        }
-        if let Some(ref coord) = self.properties.coordinate_2d {
-            dict["coordinate_2d"] = serde_json::json!([coord.x, coord.y]);
-        }
-        if let Some(ref coord) = self.properties.coordinate_3d {
-            dict["coordinate_3d"] = serde_json::json!([coord.x, coord.y, coord.z]);
-        }
-        if !inputs.is_empty() {
-            dict["inputs"] = serde_json::json!(inputs);
-        }
-        if !outputs.is_empty() {
-            dict["outputs"] = serde_json::json!(outputs);
-        }
-        if let Some(ref sig) = self.properties.signature {
-            dict["signature"] = serde_json::json!(sig);
+        // Add all properties from the HashMap
+        for (key, value) in &self.properties {
+            dict[key] = value.clone();
         }
         
         dict

@@ -156,7 +156,7 @@ impl<'de> Deserialize<'de> for RegionID {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        RegionID::from_string(s)
+        RegionID::from_string(&s)
             .map_err(serde::de::Error::custom)
     }
 }
@@ -185,14 +185,14 @@ mod tests {
     #[test]
     fn test_region_id_from_string() {
         let uuid_str = "550e8400-e29b-41d4-a716-446655440000";
-        let region_id = RegionID::from_string(uuid_str.to_string()).unwrap();
+        let region_id = RegionID::from_string(uuid_str).unwrap();
         
         assert_eq!(region_id.to_string(), uuid_str);
     }
 
     #[test]
     fn test_region_id_from_string_invalid() {
-        let result = RegionID::from_string("not-a-uuid".to_string());
+        let result = RegionID::from_string("not-a-uuid");
         assert!(result.is_err());
     }
 

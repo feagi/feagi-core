@@ -185,33 +185,14 @@ mod test_brain_region {
         )
         .unwrap();
 
-        // Test setting various properties
-        region.set_description("Visual processing region".to_string());
-        
-        let parent_id = RegionID::new();
-        region.set_parent_region(parent_id);
-        
-        let coord_2d = GenomeCoordinate2D::new(10, 20);
-        let coord_3d = GenomeCoordinate3D::new(10, 20, 30);
-        region.set_coordinate_2d(coord_2d);
-        region.set_coordinate_3d(coord_3d);
-        
-        let input_area = CoreCorticalType::Power.to_cortical_id();
-        let output_area = CoreCorticalType::Death.to_cortical_id();
-        region.add_input(input_area);
-        region.add_output(output_area);
-        
-        let child_id = RegionID::new();
-        region.add_child_region(child_id);
+        // Test setting various properties using HashMap
+        region.add_property("description".to_string(), serde_json::json!("Visual processing region"));
+        region.add_property("coordinate_2d".to_string(), serde_json::json!([10, 20]));
+        region.add_property("coordinate_3d".to_string(), serde_json::json!([10, 20, 30]));
 
-        assert_eq!(region.properties.description, Some("Visual processing region".to_string()));
-        assert_eq!(region.properties.parent_region_id, Some(parent_id));
-        assert_eq!(region.properties.coordinate_2d, Some(coord_2d));
-        assert_eq!(region.properties.coordinate_3d, Some(coord_3d));
-        assert_eq!(region.properties.inputs.len(), 1);
-        assert_eq!(region.properties.outputs.len(), 1);
-        assert_eq!(region.properties.child_regions.len(), 1);
-        assert!(region.properties.child_regions.contains(&child_id));
+        assert_eq!(region.get_property("description"), Some(&serde_json::json!("Visual processing region")));
+        assert!(region.get_property("coordinate_2d").is_some());
+        assert!(region.get_property("coordinate_3d").is_some());
     }
 
     #[test]
@@ -273,19 +254,11 @@ mod test_brain_region {
         .unwrap()
         .with_areas(vec![area1, area2]);
 
-        // Set properties similar to genome format
-        region.set_description("Default root region for brain organization".to_string());
-        
-        let coord_2d = GenomeCoordinate2D::new(0, 0);
-        let coord_3d = GenomeCoordinate3D::new(0, 0, 0);
-        region.set_coordinate_2d(coord_2d);
-        region.set_coordinate_3d(coord_3d);
-        region.add_input(area1);
-        region.add_output(area2);
-        
-        let child_id = RegionID::new();
-        region.add_child_region(child_id);
-        region.properties.signature = Some("".to_string());
+        // Set properties similar to genome format using HashMap
+        region.add_property("description".to_string(), serde_json::json!("Default root region for brain organization"));
+        region.add_property("coordinate_2d".to_string(), serde_json::json!([0, 0]));
+        region.add_property("coordinate_3d".to_string(), serde_json::json!([0, 0, 0]));
+        region.add_property("signature".to_string(), serde_json::json!(""));
 
         // Serialize to JSON (pretty print for inspection)
         let json = serde_json::to_string_pretty(&region).unwrap();
@@ -296,13 +269,10 @@ mod test_brain_region {
         // Verify all fields
         assert_eq!(deserialized.region_id, region_id);
         assert_eq!(deserialized.name, "Root Brain Region");
-        assert_eq!(deserialized.properties.description, Some("Default root region for brain organization".to_string()));
-        assert_eq!(deserialized.properties.coordinate_2d, Some(coord_2d));
-        assert_eq!(deserialized.properties.coordinate_3d, Some(coord_3d));
-        assert_eq!(deserialized.properties.inputs.len(), 1);
-        assert_eq!(deserialized.properties.outputs.len(), 1);
-        assert_eq!(deserialized.properties.child_regions.len(), 1);
-        assert!(deserialized.properties.child_regions.contains(&child_id));
+        assert_eq!(deserialized.get_property("description"), Some(&serde_json::json!("Default root region for brain organization")));
+        assert!(deserialized.get_property("coordinate_2d").is_some());
+        assert!(deserialized.get_property("coordinate_3d").is_some());
+        assert_eq!(deserialized.get_property("signature"), Some(&serde_json::json!("")));
     }
 }
 
