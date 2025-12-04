@@ -15,7 +15,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{RuntimeGenome, GenomeMetadata, MorphologyRegistry, PhysiologyConfig, GenomeSignatures, GenomeStats};
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea};
+use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea, AreaType};
 use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
 use std::collections::HashMap;
 use serde_json::Value;
@@ -61,8 +61,9 @@ pub fn create_death_area() -> CorticalArea {
         CoreCorticalType::Death.to_cortical_id(),
         0, // cortical_idx = 0 (reserved)
         "Death".to_string(),
-        Dimensions::new(1, 1, 1),
+        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
         (0, 0, -10), // coordinate_3d
+        AreaType::Custom, // Core areas use Custom type
     ).expect("Failed to create _death area");
     
     let mut props = get_default_neural_properties();
@@ -78,8 +79,9 @@ pub fn create_power_area() -> CorticalArea {
         CoreCorticalType::Power.to_cortical_id(),
         1, // cortical_idx = 1 (reserved)
         "Brain_Power".to_string(),
-        Dimensions::new(1, 1, 1),
+        CorticalAreaDimensions::new(1, 1, 1).expect("Failed to create dimensions"),
         (0, 0, -20), // coordinate_3d
+        AreaType::Custom, // Core areas use Custom type
     ).expect("Failed to create _power area");
     
     let mut props = get_default_neural_properties();

@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 use feagi_data_structures::genomic::{BrainRegion, RegionType};
-use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea};
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea, CorticalAreaDimensions, AreaType};
 use crate::types::{EvoError, EvoResult};
 
 /// Genome saver
@@ -139,16 +139,17 @@ mod tests {
         let mut brain_regions = HashMap::new();
         
         // Create a test cortical area (use valid core ID)
+        let cortical_id = CorticalID::try_from_base_64("_power").unwrap();
         let area = CorticalArea::new(
-            "_power".to_string(),
+            cortical_id.clone(),
             0,
             "Test Area".to_string(),
-            Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
             AreaType::Sensory,
         ).unwrap();
         
-        cortical_areas.insert("_power".to_string(), area);
+        cortical_areas.insert(cortical_id, area);
         
         // Create a test brain region
         let region = BrainRegion::new(
@@ -183,15 +184,16 @@ mod tests {
         
         // Create test data (use valid core ID)
         let mut cortical_areas = HashMap::new();
+        let cortical_id = CorticalID::try_from_base_64("_power").unwrap();
         let area = CorticalArea::new(
-            "_power".to_string(),
+            cortical_id.clone(),
             0,
             "Test Area".to_string(),
-            Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (5, 5, 5),
             AreaType::Motor,
         ).unwrap();
-        cortical_areas.insert("_power".to_string(), area);
+        cortical_areas.insert(cortical_id, area);
         
         let mut brain_regions = HashMap::new();
         let region = BrainRegion::new(

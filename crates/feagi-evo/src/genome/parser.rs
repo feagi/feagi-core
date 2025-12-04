@@ -47,7 +47,7 @@ use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
 use feagi_data_structures::genomic::{BrainRegion, RegionType};
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea};
+use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea, AreaType};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Parsed genome data ready for ConnectomeManager
@@ -332,6 +332,7 @@ impl GenomeParser {
                 name,
                 dimensions,
                 position,
+                AreaType::Custom, // Default to Custom, will be set from properties
             )?;
             
             // Store cortical_type as cortical_group for new type system
@@ -410,9 +411,9 @@ impl GenomeParser {
             if let Some(v) = &raw_area.sub_group_id {
                 area.properties.insert("sub_group_id".to_string(), serde_json::json!(v));
             }
-            // Set neurons_per_voxel typed field (single source of truth - NOT in properties)
+            // Store neurons_per_voxel in properties HashMap
             if let Some(v) = raw_area.per_voxel_neuron_cnt {
-                area.neurons_per_voxel = v;
+                area.properties.insert("neurons_per_voxel".to_string(), serde_json::json!(v));
             }
             if let Some(v) = &raw_area.cortical_mapping_dst {
                 // Convert dstmap keys from old format to base64

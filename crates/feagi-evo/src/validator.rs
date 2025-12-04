@@ -166,10 +166,13 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
             fixes_applied += 1;
         }
         
-        // Fix zero neurons_per_voxel (use typed field - single source of truth)
-        if area.neurons_per_voxel == 0 {
+        // Fix zero neurons_per_voxel (stored in properties)
+        let neurons_per_voxel = area.properties.get("neurons_per_voxel")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        if neurons_per_voxel == 0 {
             info!("🔧 AUTO-FIX: Cortical area '{}' neurons_per_voxel 0 → 1", cortical_id_display);
-            area.neurons_per_voxel = 1;
+            area.properties.insert("neurons_per_voxel".to_string(), serde_json::json!(1));
             fixes_applied += 1;
         }
     }
@@ -221,8 +224,11 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
             // Note: Auto-fix happens in auto_fix_genome() - this just detects the issue
         }
         
-        // Validate neurons_per_voxel (use typed field - single source of truth)
-        if area.neurons_per_voxel == 0 {
+        // Validate neurons_per_voxel (stored in properties)
+        let neurons_per_voxel = area.properties.get("neurons_per_voxel")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0) as u32;
+        if neurons_per_voxel == 0 {
             result.add_warning(format!(
                 "AUTO-FIX: Cortical area '{}' has neurons_per_voxel=0 - will be corrected to 1",
                 cortical_id_display
@@ -669,12 +675,14 @@ mod tests {
         
         // Add a valid cortical area (use _power which is a valid core ID)
         let test_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
-        let area = feagi_types::CorticalArea::new(
+        use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, AreaType};
+        let area = CorticalArea::new(
             test_id.clone(),
             0,
             "Test Area".to_string(),
-            feagi_types::Dimensions::new(10, 10, 10),
+            CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
+            AreaType::Custom,
         ).expect("Failed to create cortical area");
         
         genome.cortical_areas.insert(test_id, area);

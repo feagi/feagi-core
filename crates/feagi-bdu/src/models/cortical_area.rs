@@ -2,171 +2,53 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /*!
-CorticalArea data model.
+CorticalArea business logic and extension methods.
 
-Represents a 3D cortical area containing neurons with specific functional roles.
+The core CorticalArea data structure is defined in feagi_data_structures.
+This module provides business logic methods for coordinate transformations
+and builder patterns.
 */
 
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::types::{BduError, BduResult, Dimensions, Position};
+use crate::types::{BduError, BduResult, Position};
 
-/// Type of cortical area (functional classification)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum AreaType {
-    /// Sensory input areas
-    Sensory,
-    /// Motor output areas
-    Motor,
-    /// Memory/association areas
-    Memory,
-    /// Custom/user-defined areas
-    Custom,
-}
+// Import core types from feagi_data_structures
+pub use feagi_data_structures::genomic::cortical_area::{
+    CorticalArea, AreaType, CorticalID, CorticalAreaDimensions
+};
 
-impl Default for AreaType {
-    fn default() -> Self {
-        Self::Custom
-    }
-}
-
-impl std::fmt::Display for AreaType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Sensory => write!(f, "sensory"),
-            Self::Motor => write!(f, "motor"),
-            Self::Memory => write!(f, "memory"),
-            Self::Custom => write!(f, "custom"),
-        }
-    }
-}
-
-/// Cortical area metadata (genome representation)
-///
-/// This struct contains only the static metadata that defines a cortical area.
-/// Runtime state (neuron counts, positions) is maintained separately in the
-/// NPU and state manager for performance.
-///
-/// # Design Notes
-///
-/// - Immutable after creation (use builder pattern for updates)
-/// - Lightweight: safe to clone for queries
-/// - Serializable: can be saved/loaded from genome files
-///
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CorticalArea {
-    /// Unique 6-character identifier
-    pub cortical_id: String,
-
-    /// Integer index assigned by ConnectomeManager
-    /// Used for fast array indexing in NPU
-    pub cortical_idx: u32,
-
-    /// Human-readable name
-    pub name: String,
-
-    /// 3D dimensions (width, height, depth in voxels)
-    pub dimensions: Dimensions,
-
-    /// 3D position in brain space (can be negative)
-    /// This is the origin point (min corner) of the area
-    pub position: (i32, i32, i32),
-
-    /// Functional type of this area
-    pub area_type: AreaType,
-
-    /// Additional user-defined properties
-    /// Stored as JSON for flexibility
-    #[serde(default)]
-    pub properties: HashMap<String, serde_json::Value>,
-}
-
-impl CorticalArea {
-    /// Create a new cortical area with validation
-    ///
-    /// # Arguments
-    ///
-    /// * `cortical_id` - Unique 6-character identifier
-    /// * `cortical_idx` - Integer index for fast lookups
-    /// * `name` - Human-readable name
-    /// * `dimensions` - 3D dimensions (width, height, depth)
-    /// * `position` - 3D position in brain space
-    /// * `area_type` - Functional type
-    ///
-    /// # Errors
-    ///
-    /// Returns error if:
-    /// - cortical_id is not exactly 6 characters
-    /// - dimensions are zero
-    /// - name is empty
-    ///
-    pub fn new(
-        cortical_id: String,
-        cortical_idx: u32,
-        name: String,
-        dimensions: Dimensions,
-        position: (i32, i32, i32),
-        area_type: AreaType,
-    ) -> BduResult<Self> {
-        // Validate cortical_id (must be 6 characters)
-        if cortical_id.len() != 6 {
-            return Err(BduError::InvalidArea(format!(
-                "cortical_id must be exactly 6 characters, got '{}'",
-                cortical_id
-            )));
-        }
-
-        // Validate dimensions (must be > 0)
-        if dimensions.width == 0 || dimensions.height == 0 || dimensions.depth == 0 {
-            return Err(BduError::InvalidArea(format!(
-                "dimensions must be > 0, got {:?}",
-                dimensions
-            )));
-        }
-
-        // Validate name
-        if name.is_empty() {
-            return Err(BduError::InvalidArea(
-                "name cannot be empty".to_string(),
-            ));
-        }
-
-        Ok(Self {
-            cortical_id,
-            cortical_idx,
-            name,
-            dimensions,
-            position,
-            area_type,
-            properties: HashMap::new(),
-        })
-    }
-
+/// Extension trait providing business logic methods for CorticalArea
+pub trait CorticalAreaExt {
     /// Create a cortical area with custom properties
-    pub fn with_properties(mut self, properties: HashMap<String, serde_json::Value>) -> Self {
+    fn with_properties(self, properties: HashMap<String, serde_json::Value>) -> Self;
+    
+    /// Add a single property
+    fn add_property(self, key: String, value: serde_json::Value) -> Self;
+    
+    /// Check if a 3D position is within this area's bounds
+    fn contains_position(&self, pos: (i32, i32, i32)) -> bool;
+    
+    /// Convert absolute brain position to relative position within this area
+    fn to_relative_position(&self, pos: (i32, i32, i32)) -> BduResult<Position>;
+    
+    /// Convert relative position within area to absolute brain position
+    fn to_absolute_position(&self, rel_pos: Position) -> BduResult<(i32, i32, i32)>;
+}
+
+impl CorticalAreaExt for CorticalArea {
+
+    fn with_properties(mut self, properties: HashMap<String, serde_json::Value>) -> Self {
         self.properties = properties;
         self
     }
 
-    /// Add a single property
-    pub fn add_property(mut self, key: String, value: serde_json::Value) -> Self {
+    fn add_property(mut self, key: String, value: serde_json::Value) -> Self {
         self.properties.insert(key, value);
         self
     }
 
-    /// Check if a 3D position is within this area's bounds
-    ///
-    /// # Arguments
-    ///
-    /// * `pos` - Absolute position in brain space
-    ///
-    /// # Returns
-    ///
-    /// `true` if the position is inside this area, `false` otherwise
-    ///
-    pub fn contains_position(&self, pos: (i32, i32, i32)) -> bool {
+    fn contains_position(&self, pos: (i32, i32, i32)) -> bool {
         let (x, y, z) = pos;
         let (ox, oy, oz) = self.position;
 
@@ -178,25 +60,11 @@ impl CorticalArea {
             && z < oz + self.dimensions.depth as i32
     }
 
-    /// Convert absolute brain position to relative position within this area
-    ///
-    /// # Arguments
-    ///
-    /// * `pos` - Absolute position in brain space
-    ///
-    /// # Returns
-    ///
-    /// Relative position (0,0,0) to (width-1, height-1, depth-1) if inside area
-    ///
-    /// # Errors
-    ///
-    /// Returns error if position is outside this area's bounds
-    ///
-    pub fn to_relative_position(&self, pos: (i32, i32, i32)) -> BduResult<Position> {
+    fn to_relative_position(&self, pos: (i32, i32, i32)) -> BduResult<Position> {
         if !self.contains_position(pos) {
             return Err(BduError::OutOfBounds {
                 pos: (pos.0 as u32, pos.1 as u32, pos.2 as u32),
-                dims: self.dimensions.to_tuple(),
+                dims: (self.dimensions.width as usize, self.dimensions.height as usize, self.dimensions.depth as usize),
             });
         }
 
@@ -208,12 +76,11 @@ impl CorticalArea {
         ))
     }
 
-    /// Convert relative position within area to absolute brain position
-    pub fn to_absolute_position(&self, rel_pos: Position) -> BduResult<(i32, i32, i32)> {
+    fn to_absolute_position(&self, rel_pos: Position) -> BduResult<(i32, i32, i32)> {
         if !self.dimensions.contains(rel_pos) {
             return Err(BduError::OutOfBounds {
                 pos: rel_pos,
-                dims: self.dimensions.to_tuple(),
+                dims: (self.dimensions.width as usize, self.dimensions.height as usize, self.dimensions.depth as usize),
             });
         }
 
@@ -224,16 +91,6 @@ impl CorticalArea {
             oz + rel_pos.2 as i32,
         ))
     }
-
-    /// Get the total number of voxels in this area
-    pub fn total_voxels(&self) -> usize {
-        self.dimensions.total_voxels()
-    }
-
-    /// Get a property value by key
-    pub fn get_property(&self, key: &str) -> Option<&serde_json::Value> {
-        self.properties.get(key)
-    }
 }
 
 #[cfg(test)]
@@ -241,43 +98,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_cortical_area_creation() {
-        let area = CorticalArea::new(
-            "iav001".to_string(),
-            0,
-            "Visual Input".to_string(),
-            Dimensions::new(128, 128, 20),
-            (0, 0, 0),
-            AreaType::Sensory,
-        )
-        .unwrap();
-
-        assert_eq!(area.cortical_id, "iav001");
-        assert_eq!(area.name, "Visual Input");
-        assert_eq!(area.total_voxels(), 128 * 128 * 20);
-    }
-
-    #[test]
-    fn test_invalid_cortical_id() {
-        let result = CorticalArea::new(
-            "short".to_string(), // Too short
-            0,
-            "Test".to_string(),
-            Dimensions::new(10, 10, 10),
-            (0, 0, 0),
-            AreaType::Custom,
-        );
-
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn test_contains_position() {
+        let cortical_id = CorticalID::try_from_base_64("test01").unwrap();
+        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
-            "test01".to_string(),
+            cortical_id,
             0,
             "Test Area".to_string(),
-            Dimensions::new(10, 10, 10),
+            dims,
             (5, 5, 5),
             AreaType::Custom,
         )
@@ -291,11 +119,13 @@ mod tests {
 
     #[test]
     fn test_position_conversion() {
+        let cortical_id = CorticalID::try_from_base_64("test02").unwrap();
+        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
-            "test02".to_string(),
+            cortical_id,
             0,
             "Test Area".to_string(),
-            Dimensions::new(10, 10, 10),
+            dims,
             (100, 200, 300),
             AreaType::Custom,
         )
@@ -317,11 +147,13 @@ mod tests {
 
     #[test]
     fn test_properties() {
+        let cortical_id = CorticalID::try_from_base_64("test03").unwrap();
+        let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
-            "test03".to_string(),
+            cortical_id,
             0,
             "Test".to_string(),
-            Dimensions::new(10, 10, 10),
+            dims,
             (0, 0, 0),
             AreaType::Sensory,
         )
@@ -337,4 +169,3 @@ mod tests {
         assert_eq!(area.get_property("nonexistent"), None);
     }
 }
-
