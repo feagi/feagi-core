@@ -22,7 +22,6 @@
 
 use crate::fire_structures::{FireQueue, FiringNeuron};
 use feagi_neural::types::*;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_runtime::NeuronStorage;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
@@ -274,7 +273,7 @@ fn process_single_neuron<T: NeuralValue>(
             return Some(FiringNeuron {
                 neuron_id,
                 membrane_potential: current_potential.to_f32(),
-                cortical_area: CorticalID::try_from_u64(neuron_array.cortical_areas()[idx] as u64).unwrap(),
+                cortical_idx: neuron_array.cortical_areas()[idx],  // Use cortical_idx directly - no conversion needed
                 x,
                 y,
                 z,

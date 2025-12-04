@@ -15,14 +15,13 @@
 
 use ahash::AHashMap;
 use feagi_neural::types::NeuronId;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// A single neuron that fired in the current burst
 #[derive(Debug, Clone)]
 pub struct FiringNeuron {
     pub neuron_id: NeuronId,
     pub membrane_potential: f32,
-    pub cortical_area: CorticalID,
+    pub cortical_idx: u32,  // Changed from CorticalID - NPU works with indices only
     pub x: u32,
     pub y: u32,
     pub z: u32,
@@ -54,9 +53,8 @@ impl FireQueue {
 
     /// Add a firing neuron to the queue
     pub fn add_neuron(&mut self, neuron: FiringNeuron) {
-        let cortical_idx = neuron.cortical_area.as_u64() as u32;
         self.neurons_by_area
-            .entry(cortical_idx)
+            .entry(neuron.cortical_idx)
             .or_insert_with(Vec::new)
             .push(neuron);
         self.total_count += 1;
