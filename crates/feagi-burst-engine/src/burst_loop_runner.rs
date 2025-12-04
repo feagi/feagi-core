@@ -547,19 +547,13 @@ fn encode_fire_data_to_xyzp(
             debug!("[ENCODE-XYZP] ✅ Area '{}' IS in filter - including", area_data.cortical_area_name.escape_debug());
         }
         
-        // Create CorticalID from area name (already in RawFireQueueData)
-        let cortical_id = {
-            let mut bytes = [b' '; 8];
-            let name_bytes = area_data.cortical_area_name.as_bytes();
-            let copy_len = name_bytes.len().min(8);
-            bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-
-            match CorticalID::try_from_bytes(&bytes) {
-                Ok(id) => id,
-                Err(e) => {
-                    error!("[ENCODE-XYZP] ❌ Failed to create CorticalID for '{}': {:?}", area_data.cortical_area_name, e);
-                    continue;
-                }
+        // Create CorticalID from base64-encoded area name
+        let cortical_id = match CorticalID::try_from_base_64(&area_data.cortical_area_name) {
+            Ok(id) => id,
+            Err(e) => {
+                error!("[ENCODE-XYZP] ❌ Failed to decode CorticalID from base64 '{}': {:?}", 
+                       area_data.cortical_area_name, e);
+                continue;
             }
         };
 

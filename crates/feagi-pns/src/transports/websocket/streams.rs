@@ -247,12 +247,8 @@ impl WebSocketStreams {
             
             // Create CorticalID from area name
             let mut bytes = [b' '; 8];
-            let name_bytes = area_data.cortical_area_name.as_bytes();
-            let copy_len = name_bytes.len().min(8);
-            bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-            
-            let cortical_id = CorticalID::try_from_bytes(&bytes)
-                .map_err(|e| format!("Failed to create CorticalID for '{}': {:?}", area_data.cortical_area_name, e))?;
+            let cortical_id = CorticalID::try_from_base_64(&area_data.cortical_area_name)
+                .map_err(|e| format!("Failed to decode CorticalID from base64 '{}': {:?}", area_data.cortical_area_name, e))?;
             
             // Create neuron voxel arrays
             let neuron_arrays = NeuronVoxelXYZPArrays::new_from_vectors(
