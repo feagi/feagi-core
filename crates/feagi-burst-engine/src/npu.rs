@@ -296,6 +296,9 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     ) -> (u32, Vec<usize>) {
         let n = x_coords.len();
 
+        // Get the starting neuron index before adding neurons
+        let start_idx = self.neuron_storage.read().unwrap().count();
+        
         // Call the TRUE batch method on neuron_storage (100-1000x faster!)
         match self.neuron_storage.write().unwrap().add_neurons_batch(
             &thresholds,
@@ -312,7 +315,12 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             &y_coords,
             &z_coords,
         ) {
-            Ok(neuron_ids) => {
+            Ok(()) => {
+                // Generate neuron IDs based on the starting index
+                let neuron_ids: Vec<NeuronId> = (start_idx..start_idx + n)
+                    .map(|idx| NeuronId(idx as u32))
+                    .collect();
+                
                 // BULK update propagation engine's neuron-to-area mapping
                 // Reserve capacity upfront to minimize rehashing
                 use std::time::Instant;
@@ -771,11 +779,11 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let pending_mutex = std::sync::Mutex::new(fire_structures.pending_sensory_injections.clone());
         let injection_result = phase1_injection_with_synapses(
             &mut fire_structures.fire_candidate_list,
-            &mut neuron_storage,
+            &mut *neuron_storage,
             &mut propagation_engine,
             &previous_fq,
             power_amount,
-            &synapse_storage,
+            &*synapse_storage,
             &pending_mutex,
         )?;
         fire_structures.pending_sensory_injections = pending_mutex.into_inner().unwrap();
@@ -783,7 +791,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // Phase 2: Neural Dynamics (membrane potential updates, threshold checks, firing)
         let dynamics_result = process_neural_dynamics(
             &fire_structures.fire_candidate_list,
-            &mut neuron_storage,
+            &mut *neuron_storage,
             burst_count,
         )?;
 
@@ -800,7 +808,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         fire_structures.fq_sampler.sample(&current_fq_clone);
 
         // Phase 6: Cleanup (snapshot FCL before clearing for API access)
-        fire_structures.last_fcl_snapshot = fire_structures.fire_candidate_list.get_all_candidates();
+        fire_structures.last_fcl_snapshot = fire_structures.fire_candidate_list.iter().collect();
         fire_structures.fire_candidate_list.clear();
 
         // Build result
@@ -850,7 +858,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     pub fn get_neuron_id_at_coordinate(&self, cortical_area: u32, x: u32, y: u32, z: u32) -> Option<u32> {
         self.neuron_storage.read().unwrap()
             .get_neuron_at_coordinate(cortical_area, x, y, z)
-            .map(|id| id.0)
+            .map(|idx| idx as u32)
     }
 
     /// Get neuron property by index (for Python bindings)
@@ -967,10 +975,12 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         // Batch lookup
         let neuron_ids = self.neuron_storage.read().unwrap().batch_coordinate_lookup(cortical_area, &coords);
         
-        // Build (NeuronId, potential) pairs
+        // Build (NeuronId, potential) pairs (filter out None)
         let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
-        for (neuron_id, (_x, _y, _z, potential)) in neuron_ids.iter().zip(xyzp_data.iter()) {
-            neuron_potential_pairs.push((*neuron_id, *potential));
+        for (opt_idx, (_x, _y, _z, potential)) in neuron_ids.iter().zip(xyzp_data.iter()) {
+            if let Some(idx) = opt_idx {
+                neuron_potential_pairs.push((NeuronId(*idx as u32), *potential));
+            }
         }
         let found_count = neuron_potential_pairs.len();
 
@@ -1007,8 +1017,10 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         let coords: Vec<(u32, u32, u32)> = xyzp_data.iter().map(|(x, y, z, _p)| (*x, *y, *z)).collect();
         let neuron_ids = self.neuron_storage.read().unwrap().batch_coordinate_lookup(cortical_area, &coords);
         let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
-        for (neuron_id, (_x, _y, _z, potential)) in neuron_ids.iter().zip(xyzp_data.iter()) {
-            neuron_potential_pairs.push((*neuron_id, *potential));
+        for (opt_idx, (_x, _y, _z, potential)) in neuron_ids.iter().zip(xyzp_data.iter()) {
+            if let Some(idx) = opt_idx {
+                neuron_potential_pairs.push((NeuronId(*idx as u32), *potential));
+            }
         }
         let found_count = neuron_potential_pairs.len();
         if !neuron_potential_pairs.is_empty() {
@@ -1035,15 +1047,15 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             // Convert T to f32 for serialization
             membrane_potentials: neuron_storage.membrane_potentials().iter().map(|&v| v.to_f32()).collect(),
             thresholds: neuron_storage.thresholds().iter().map(|&v| v.to_f32()).collect(),
-            leak_coefficients: neuron_storage.leak_coefficients().clone(),
+            leak_coefficients: neuron_storage.leak_coefficients().to_vec(),
             resting_potentials: neuron_storage.resting_potentials().iter().map(|&v| v.to_f32()).collect(),
-            neuron_types: neuron_storage.neuron_types().clone(),
-            refractory_periods: neuron_storage.refractory_periods().clone(),
-            refractory_countdowns: neuron_storage.refractory_countdowns().clone(),
-            excitabilities: neuron_storage.excitabilities().clone(),
-            cortical_areas: neuron_storage.cortical_areas().clone(),
-            coordinates: neuron_storage.coordinates().clone(),
-            valid_mask: neuron_storage.valid_mask().clone(),
+            neuron_types: neuron_storage.neuron_types().to_vec(),
+            refractory_periods: neuron_storage.refractory_periods().to_vec(),
+            refractory_countdowns: neuron_storage.refractory_countdowns().to_vec(),
+            excitabilities: neuron_storage.excitabilities().to_vec(),
+            cortical_areas: neuron_storage.cortical_areas().to_vec(),
+            coordinates: neuron_storage.coordinates().to_vec(),
+            valid_mask: neuron_storage.valid_mask().to_vec(),
         };
         drop(neuron_storage);  // Release lock
 
@@ -1692,8 +1704,8 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     }
 
     /// Get neuron coordinates (x, y, z)
-    pub fn get_neuron_coordinates(&self, neuron_id: u32) -> (u32, u32, u32) {
-        self.neuron_storage.read().unwrap().get_coordinates(NeuronId(neuron_id))
+    pub fn get_neuron_coordinates(&self, neuron_id: u32) -> Option<(u32, u32, u32)> {
+        self.neuron_storage.read().unwrap().get_coordinates(neuron_id as usize)
     }
 
     /// Get cortical area for a neuron
@@ -1703,12 +1715,21 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
 
     /// Get all neuron IDs in a specific cortical area
     pub fn get_neurons_in_cortical_area(&self, cortical_idx: u32) -> Vec<u32> {
-        self.neuron_storage.read().unwrap().get_neurons_in_cortical_area(cortical_idx)
+        self.neuron_storage.read().unwrap()
+            .get_neurons_in_cortical_area(cortical_idx)
+            .into_iter()
+            .map(|idx| idx as u32)
+            .collect()
+    }
+
+    /// Get number of neurons in a specific cortical area
+    pub fn get_cortical_area_neuron_count(&self, cortical_area: u32) -> usize {
+        self.neuron_storage.read().unwrap().get_neuron_count(cortical_area)
     }
 
     /// Get total number of active neurons
     pub fn get_neuron_count(&self) -> usize {
-        self.neuron_storage.read().unwrap().get_neuron_count()
+        self.neuron_storage.read().unwrap().count()
     }
 
     /// Get synapse count (valid only)
@@ -1775,7 +1796,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     pub fn rebuild_synapse_index(&mut self) {
         let synapse_storage = self.synapse_storage.read().unwrap();
         let mut prop_engine = self.propagation_engine.write().unwrap();
-        prop_engine.build_synapse_index(&synapse_storage);
+        prop_engine.build_synapse_index(&*synapse_storage);
     }
 
     /// Get neuron state for diagnostics (CFC, extended refractory, potential, etc.)
