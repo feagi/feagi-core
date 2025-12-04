@@ -333,7 +333,6 @@ impl VisualizationStream {
             }
             
             // Create CorticalID from area name
-            let mut bytes = [b' '; 8];
             let cortical_id = CorticalID::try_from_base_64(&area_data.cortical_area_name)
                 .map_err(|e| format!("Failed to decode CorticalID from base64 '{}': {:?}", area_data.cortical_area_name, e))?;
             
