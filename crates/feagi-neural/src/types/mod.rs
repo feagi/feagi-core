@@ -25,10 +25,11 @@ pub mod id_manager;
 pub use ids::{NeuronId, SynapseId};
 pub use numeric::{NeuralValue, INT8Value, INT8LeakCoefficient, Precision, QuantizationSpec};
 pub use synapse_types::{Synapse, SynapticWeight, SynapticConductance, SynapticContribution};
-pub use spatial::{Dimensions, Position};
+pub use spatial::Position;
+// Dimensions moved to feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
 pub use error::{FeagiError, Result, Error};
 pub use fire::{FireCandidateList, FireQueue, FireLedger};
-pub use brain::{CorticalArea, BrainRegion, BrainRegionHierarchy, RegionType};
+// CorticalArea, BrainRegion, RegionType, BrainRegionHierarchy moved to feagi_data_structures
 pub use id_manager::NeuronArrayType;
 
 // Note: SynapseType is in crate::synapse module (shared with algorithms)

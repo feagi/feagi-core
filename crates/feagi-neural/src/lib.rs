@@ -57,10 +57,11 @@ pub use types::{
     NeuronId, SynapseId,
     NeuralValue, INT8Value, INT8LeakCoefficient, Precision, QuantizationSpec,
     Synapse, SynapticWeight, SynapticConductance, SynapticContribution,
-    Dimensions, Position,
+    Position,
+    // Dimensions moved to feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
     FeagiError, Result, Error,
     FireCandidateList, FireQueue, FireLedger,
-    CorticalArea, BrainRegion, BrainRegionHierarchy, RegionType,
+    // CorticalArea, BrainRegion, RegionType, BrainRegionHierarchy moved to feagi_data_structures
 };
 
 // Re-export synapse module

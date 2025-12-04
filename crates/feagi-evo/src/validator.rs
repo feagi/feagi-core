@@ -508,7 +508,7 @@ fn validate_physiology(genome: &RuntimeGenome, result: &mut ValidationResult) {
 
 /// Validate quantization precision value
 fn validate_quantization_precision(precision: &str, result: &mut ValidationResult) {
-    use feagi_neural::types::Precision;
+        use feagi_neural::types::Precision;
     
     // Try to parse the precision string
     match Precision::from_str(precision) {
@@ -669,11 +669,11 @@ mod tests {
         
         // Add a valid cortical area (use _power which is a valid core ID)
         let test_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
-        let area = feagi_neural::types::CorticalArea::new(
+        let area = feagi_types::CorticalArea::new(
             test_id.clone(),
             0,
             "Test Area".to_string(),
-            feagi_neural::types::Dimensions::new(10, 10, 10),
+            feagi_types::Dimensions::new(10, 10, 10),
             (0, 0, 0),
         ).expect("Failed to create cortical area");
         

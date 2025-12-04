@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 use crate::types::{BduError, BduResult};
-use super::brain_region::BrainRegion;
+use feagi_data_structures::genomic::BrainRegion;
 
 /// Hierarchical tree structure for brain regions
 ///
@@ -329,7 +329,7 @@ impl Default for BrainRegionHierarchy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::brain_region::RegionType;
+    use feagi_data_structures::genomic::RegionType;
 
     #[test]
     fn test_hierarchy_creation() {

@@ -1761,13 +1761,13 @@ struct InjectionResult {
 ///
 /// 🔋 Power neurons are identified by cortical_idx = 1 (_power area)
 /// No separate list - scans neuron array directly!
-fn phase1_injection_with_synapses<T: NeuralValue>(
+fn phase1_injection_with_synapses<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage>(
     fcl: &mut FireCandidateList,
-    neuron_storage: &mut NeuronArray<T>,
+    neuron_storage: &mut N,
     propagation_engine: &mut SynapticPropagationEngine,
     previous_fire_queue: &FireQueue,
     power_amount: f32,
-    synapse_storage: &SynapseArray,
+    synapse_storage: &S,
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
 ) -> Result<InjectionResult> {
     // Clear FCL from previous burst
@@ -1924,7 +1924,7 @@ fn phase1_injection_with_synapses<T: NeuralValue>(
 // ═══════════════════════════════════════════════════════════
 // Fire Ledger API (Extension of RustNPU impl)
 // ═══════════════════════════════════════════════════════════
-impl<R: Runtime, T: NeuralValue> RustNPU<R, T> {
+impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>> RustNPU<R, T, B> {
     /// Get firing history for a cortical area from Fire Ledger
     /// Returns Vec of (timestep, Vec<neuron_id>) tuples, newest first
     pub fn get_fire_ledger_history(
@@ -1955,7 +1955,7 @@ impl<R: Runtime, T: NeuralValue> RustNPU<R, T> {
 // ═══════════════════════════════════════════════════════════
 // FQ Sampler API (Entry Point #2: Motor/Visualization Output)
 // ═══════════════════════════════════════════════════════════
-impl<R: Runtime, T: NeuralValue> RustNPU<R, T> {
+impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>> RustNPU<R, T, B> {
     /// Sample the current Fire Queue for visualization/motor output
     ///
     /// Returns None if:
@@ -2693,27 +2693,27 @@ pub type RustNPUINT8 = RustNPU<INT8Value>;
 // Runtime Type Dispatch
 // ═══════════════════════════════════════════════════════════
 
-/// Dynamic NPU that can hold either F32 or INT8 precision at runtime
-///
-/// This enum enables runtime dispatch based on genome's quantization_precision.
-/// The system parses the genome, determines the precision, and creates the
-/// appropriate variant. All operations are then dispatched via pattern matching.
-///
-/// # Architecture
-/// - **Compile-time generics**: Both RustNPU<f32> and RustNPU<INT8Value> are
-///   monomorphized at compile time for maximum performance
-/// - **Zero-cost abstraction**: No vtables or dynamic dispatch overhead
-/// - **Type safety**: Impossible to mix precisions accidentally
-///
-/// # Example
-/// ```rust,ignore
-/// let precision = parse_genome_precision(&genome)?;
-/// let npu = match precision {
-///     Precision::FP32 => DynamicNPU::F32(RustNPU::<f32>::new(...)?),
-///     Precision::INT8 => DynamicNPU::INT8(RustNPU::<INT8Value>::new(...)?),
-///     _ => return Err("Unsupported precision"),
-/// };
-/// ```
+// Dynamic NPU that can hold either F32 or INT8 precision at runtime
+//
+// This enum enables runtime dispatch based on genome's quantization_precision.
+// The system parses the genome, determines the precision, and creates the
+// appropriate variant. All operations are then dispatched via pattern matching.
+//
+// # Architecture
+// - **Compile-time generics**: Both RustNPU<f32> and RustNPU<INT8Value> are
+//   monomorphized at compile time for maximum performance
+// - **Zero-cost abstraction**: No vtables or dynamic dispatch overhead
+// - **Type safety**: Impossible to mix precisions accidentally
+//
+// # Example
+// ```rust,ignore
+// let precision = parse_genome_precision(&genome)?;
+// let npu = match precision {
+//     Precision::FP32 => DynamicNPU::F32(RustNPU::<f32>::new(...)?),
+//     Precision::INT8 => DynamicNPU::INT8(RustNPU::<INT8Value>::new(...)?),
+//     _ => return Err("Unsupported precision"),
+// };
+// ```
 // TODO: DynamicNPU and dispatch macros removed
 // With new generic signature, use concrete type aliases instead:
 //   type F32NPU = RustNPU<StdRuntime, f32, CPUBackend>;

@@ -47,7 +47,7 @@ use tracing::warn;
 
 use crate::models::{BrainRegion, CorticalArea};
 use crate::models::cortical_area::AreaType;
-use crate::models::brain_region::RegionType;
+use feagi_data_structures::genomic::RegionType;
 use crate::types::{BduError, BduResult, Dimensions};
 
 /// Parsed genome data ready for ConnectomeManager

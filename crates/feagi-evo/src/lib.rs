@@ -49,8 +49,7 @@ pub mod converter_flat;
 pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
 pub mod templates;
-// TODO: cortical_type_parser needs migration from CorticalTypeAdapter
-// pub mod cortical_type_parser;
+pub mod cortical_type_parser;
 
 // Re-export commonly used types
 pub use types::{EvoError, EvoResult};

@@ -14,7 +14,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 use crate::models::CorticalArea;
-use crate::models::brain_region::BrainRegion;
+use feagi_data_structures::genomic::BrainRegion;
 use crate::types::{BduError, BduResult};
 
 /// Genome saver
@@ -129,7 +129,7 @@ impl GenomeSaver {
 mod tests {
     use super::*;
     use crate::models::cortical_area::AreaType;
-    use crate::models::brain_region::RegionType;
+    use feagi_data_structures::genomic::RegionType;
     use crate::types::Dimensions;
     
     #[test]

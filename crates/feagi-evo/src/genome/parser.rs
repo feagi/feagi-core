@@ -46,7 +46,8 @@ use std::collections::HashMap;
 use tracing::warn;
 
 use crate::types::{EvoError, EvoResult};
-use feagi_neural::types::{BrainRegion, CorticalArea, RegionType, Dimensions};
+use feagi_data_structures::genomic::{BrainRegion, RegionType};
+use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Parsed genome data ready for ConnectomeManager
@@ -641,7 +642,7 @@ mod tests {
         assert!(area.cortical_type_new.is_some(), 
                 "cortical_type_new should be populated from cortical_type property");
         if let Some(ref cortical_type) = area.cortical_type_new {
-            assert!(feagi_neural::types::CorticalArea::is_memory(cortical_type),
+            assert!(feagi_types::CorticalTypeAdapter::is_memory(cortical_type),
                     "Should be classified as MEMORY type");
         }
     }
@@ -708,7 +709,7 @@ mod tests {
             
             // Verify the type matches the property
             if let Some(ref cortical_type_new) = area.cortical_type_new {
-                let group_from_type = feagi_neural::types::CorticalArea::to_cortical_group(cortical_type_new);
+                let group_from_type = feagi_types::CorticalTypeAdapter::to_cortical_group(cortical_type_new);
                 let group_from_prop = area.properties.get("cortical_group")
                     .and_then(|v| v.as_str())
                     .unwrap();

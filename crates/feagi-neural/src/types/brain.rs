@@ -5,7 +5,7 @@
 //!
 //! Moved from feagi-types/src/models/ (Phase 2c)
 
-use super::spatial::Dimensions;
+// Dimensions removed - use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -14,51 +14,14 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, string::String, vec::Vec};
 
 
-/// Cortical area (runtime representation)
-#[cfg(feature = "std")]
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct CorticalArea {
-    pub name: String,
-    pub dimensions: Dimensions,
-    pub neuron_count: usize,
-    pub properties: HashMap<String, String>,
-}
+// CorticalArea stub removed - use feagi_data_structures or feagi-bdu versions
+// This was a minimal runtime placeholder that's no longer needed
 
-/// Brain region type
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub enum RegionType {
-    Cortical,
-    Subcortical,
-    Custom,
-}
-
-/// Brain region (runtime representation)
-#[cfg(feature = "std")]
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct BrainRegion {
-    pub name: String,
-    pub region_type: RegionType,
-    pub areas: Vec<String>,
-}
-
-/// Brain region hierarchy
-#[cfg(feature = "std")]
-#[derive(Debug, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct BrainRegionHierarchy {
-    pub regions: HashMap<String, BrainRegion>,
-}
+// BrainRegion, RegionType, and BrainRegionHierarchy moved to feagi_data_structures
+// Use: feagi_data_structures::genomic::brain_regions::BrainRegion
+// Use: feagi_data_structures::genomic::brain_regions::RegionType
 
 // Placeholder types for no_std
 #[cfg(not(feature = "std"))]
 pub struct CorticalArea;
-
-#[cfg(not(feature = "std"))]
-pub struct BrainRegion;
-
-#[cfg(not(feature = "std"))]
-pub struct BrainRegionHierarchy;
 

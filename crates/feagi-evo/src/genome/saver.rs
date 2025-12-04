@@ -13,8 +13,8 @@ Licensed under the Apache License, Version 2.0
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
-use feagi_neural::types::{CorticalArea, BrainRegion};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::{BrainRegion, RegionType};
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea};
 use crate::types::{EvoError, EvoResult};
 
 /// Genome saver
@@ -130,7 +130,8 @@ impl GenomeSaver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_neural::types::{AreaType, RegionType, Dimensions};
+    use feagi_data_structures::genomic::RegionType;
+    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions as Dimensions;
     
     #[test]
     fn test_save_minimal_genome() {

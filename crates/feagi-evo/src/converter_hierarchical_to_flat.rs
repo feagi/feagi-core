@@ -148,7 +148,7 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
 /// Convert a single cortical area to flat format keys
 fn convert_area_to_flat(
     cortical_id_base64: &str,
-    area: &feagi_neural::types::CorticalArea,
+    area: &feagi_types::CorticalArea,
     flat_blueprint: &mut serde_json::Map<String, Value>,
 ) -> EvoResult<()> {
     let prefix = format!("_____10c-{}", cortical_id_base64);

@@ -13,7 +13,8 @@ Licensed under the Apache License, Version 2.0
 
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use feagi_neural::types::{CorticalArea, BrainRegion};
+use feagi_data_structures::genomic::BrainRegion;
+use feagi_data_structures::genomic::cortical_area::CorticalArea;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Complete runtime genome representation

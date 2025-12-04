@@ -4,18 +4,20 @@
 /*!
 Cortical Type Parser - Parse CorticalAreaType from genome properties
 
-TODO: This module needs refactoring after CorticalTypeAdapter removal.
-The functionality should use feagi_data_structures APIs directly.
+This module provides utilities to parse the rich CorticalAreaType
+from genome JSON properties during genome loading.
 
-TEMPORARILY COMMENTED OUT until proper migration from old APIs.
+Forward-looking design:
+- Parse ALL type information from genome during load
+- Store CorticalAreaType in RuntimeGenome
+- No re-parsing at runtime
 
 Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-/* COMMENTED OUT - needs migration from CorticalTypeAdapter
-
 use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
+// CorticalTypeAdapter and CorticalTypeError removed - use feagi_neural types if needed
 use std::collections::HashMap;
 
 /// Parse CorticalAreaType from genome properties
@@ -164,4 +166,3 @@ mod tests {
     }
 }
 
-*/
