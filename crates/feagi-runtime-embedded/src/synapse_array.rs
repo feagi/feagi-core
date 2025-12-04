@@ -199,6 +199,90 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         self.count += 1;
         Ok(idx)
     }
+    
+    fn add_synapses_batch(
+        &mut self,
+        sources: &[u32],
+        targets: &[u32],
+        weights: &[u8],
+        psps: &[u8],
+        types: &[u8],
+    ) -> Result<()> {
+        let n = sources.len();
+        
+        if self.count + n > N {
+            return Err(RuntimeError::CapacityExceeded {
+                requested: self.count + n,
+                available: N,
+            });
+        }
+        
+        for i in 0..n {
+            self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i])?;
+        }
+        
+        Ok(())
+    }
+    
+    fn remove_synapse(&mut self, idx: usize) -> Result<()> {
+        if idx >= self.count {
+            return Err(RuntimeError::CapacityExceeded {
+                requested: idx,
+                available: self.count,
+            });
+        }
+        
+        // Mark as invalid (don't shift array for performance)
+        self.valid_mask[idx] = false;
+        Ok(())
+    }
+    
+    fn remove_synapses_from_sources(&mut self, source_neurons: &[u32]) -> Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx] && source_neurons.contains(&self.source_neurons[idx]) {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+    
+    fn remove_synapses_between(&mut self, source: u32, target: u32) -> Result<usize> {
+        let mut removed = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx]
+                && self.source_neurons[idx] == source
+                && self.target_neurons[idx] == target
+            {
+                self.valid_mask[idx] = false;
+                removed += 1;
+            }
+        }
+        Ok(removed)
+    }
+    
+    fn update_weight(&mut self, idx: usize, new_weight: u8) -> Result<()> {
+        if idx >= self.count || !self.valid_mask[idx] {
+            return Err(RuntimeError::CapacityExceeded {
+                requested: idx,
+                available: self.count,
+            });
+        }
+        
+        self.weights[idx] = new_weight;
+        Ok(())
+    }
+    
+    fn valid_count(&self) -> usize {
+        let mut count = 0;
+        for idx in 0..self.count {
+            if self.valid_mask[idx] {
+                count += 1;
+            }
+        }
+        count
+    }
 }
 
 #[cfg(test)]
