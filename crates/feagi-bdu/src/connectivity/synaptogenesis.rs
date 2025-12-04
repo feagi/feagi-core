@@ -393,10 +393,11 @@ fn calculate_area_dimensions(
     let mut max_z = 0;
 
     for nid in npu.get_neurons_in_cortical_area(area_id) {
-        let (x, y, z) = npu.get_neuron_coordinates(nid);
-        max_x = max_x.max(x as usize);
-        max_y = max_y.max(y as usize);
-        max_z = max_z.max(z as usize);
+        if let Some((x, y, z)) = npu.get_neuron_coordinates(nid) {
+            max_x = max_x.max(x as usize);
+            max_y = max_y.max(y as usize);
+            max_z = max_z.max(z as usize);
+        }
     }
 
     // Dimensions are max+1 (0-indexed coordinates)

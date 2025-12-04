@@ -85,9 +85,9 @@ pub fn syn_projector(
         apply_transpose(src_dims, dst_dims, neuron_location, (tx, ty, tz))
     } else {
         (
-            [src_dims.width, src_dims.height, src_dims.depth],
-            [dst_dims.width, dst_dims.height, dst_dims.depth],
-            [neuron_location.0, neuron_location.1, neuron_location.2],
+            [src_dims.width as usize, src_dims.height as usize, src_dims.depth as usize],
+            [dst_dims.width as usize, dst_dims.height as usize, dst_dims.depth as usize],
+            [neuron_location.0 as usize, neuron_location.1 as usize, neuron_location.2 as usize],
         )
     };
 
@@ -96,7 +96,7 @@ pub fn syn_projector(
 
     for axis in 0..3 {
         dst_voxels[axis] = calculate_axis_projection(
-            location[axis],
+            location[axis] as u32,
             src_shape[axis],
             dst_shape[axis],
             project_last_layer_of == Some(axis),
@@ -122,9 +122,9 @@ pub fn syn_projector(
                 if x >= 0
                     && y >= 0
                     && z >= 0
-                    && x < dst_dims.width as i32
-                    && y < dst_dims.height as i32
-                    && z < dst_dims.depth as i32
+                    && (x as u32) < dst_dims.width
+                    && (y as u32) < dst_dims.height
+                    && (z as u32) < dst_dims.depth
                 {
                     candidate_positions.push((x, y, z));
                 }
@@ -189,9 +189,9 @@ fn apply_transpose(
     dst_dims: Dimensions,
     location: Position,
     transpose: (usize, usize, usize),
-) -> ([usize; 3], [usize; 3], [u32; 3]) {
-    let src_arr = [src_dims.width, src_dims.height, src_dims.depth];
-    let dst_arr = [dst_dims.width, dst_dims.height, dst_dims.depth];
+) -> ([usize; 3], [usize; 3], [usize; 3]) {
+    let src_arr = [src_dims.width as usize, src_dims.height as usize, src_dims.depth as usize];
+    let dst_arr = [dst_dims.width as usize, dst_dims.height as usize, dst_dims.depth as usize];
     let loc_arr = [location.0, location.1, location.2];
 
     let src_transposed = [
@@ -205,9 +205,9 @@ fn apply_transpose(
         dst_arr[transpose.2],
     ];
     let loc_transposed = [
-        loc_arr[transpose.0],
-        loc_arr[transpose.1],
-        loc_arr[transpose.2],
+        loc_arr[transpose.0] as usize,
+        loc_arr[transpose.1] as usize,
+        loc_arr[transpose.2] as usize,
     ];
 
     (src_transposed, dst_transposed, loc_transposed)

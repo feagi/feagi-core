@@ -202,7 +202,7 @@ impl Neuroembryogenesis {
         
         // Phase 5: Parse quantization precision and dispatch to type-specific builder
         let quantization_precision = &genome.physiology.quantization_precision;
-        let precision = Precision::from(quantization_precision.as_str());
+        // Precision parsing handled in genome loader
         let quant_spec = QuantizationSpec::default();
         
         info!(target: "feagi-bdu",

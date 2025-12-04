@@ -1912,8 +1912,8 @@ impl ConnectomeManager {
         };
         
         let synapse_idx = npu_lock.add_synapse(
-            source_neuron_id,
-            target_neuron_id,
+            NeuronId(source_neuron_id as u32),
+            NeuronId(target_neuron_id as u32),
             feagi_neural::types::SynapticWeight(weight),
             feagi_neural::types::SynapticConductance(conductance),
             syn_type,
@@ -1986,8 +1986,8 @@ impl ConnectomeManager {
         
         // Update synapse weight via NPU
         let updated = npu_lock.update_synapse_weight(
-            source_neuron_id,
-            target_neuron_id,
+            NeuronId(source_neuron_id as u32),
+            NeuronId(target_neuron_id as u32),
             feagi_neural::types::SynapticWeight(new_weight),
         );
         
@@ -2028,8 +2028,8 @@ impl ConnectomeManager {
         
         // Remove synapse via NPU
         let removed = npu_lock.remove_synapse(
-            source_neuron_id,
-            target_neuron_id,
+            NeuronId(source_neuron_id as u32),
+            NeuronId(target_neuron_id as u32),
         );
         
         if removed {
@@ -2600,7 +2600,9 @@ impl ConnectomeManager {
         properties.insert("neuron_id".to_string(), serde_json::json!(neuron_id));
         
         // Get coordinates
-        let (x, y, z) = npu_lock.get_neuron_coordinates(neuron_id_u32);
+        let Some((x, y, z)) = npu_lock.get_neuron_coordinates(neuron_id_u32) else {
+            return None;
+        };
         properties.insert("x".to_string(), serde_json::json!(x));
         properties.insert("y".to_string(), serde_json::json!(y));
         properties.insert("z".to_string(), serde_json::json!(z));
@@ -2701,6 +2703,7 @@ impl ConnectomeManager {
     /// Vector of IPU/sensory area IDs
     ///
     pub fn list_ipu_areas(&self) -> Vec<CorticalID> {
+        use crate::models::CorticalAreaExt;
         self.cortical_areas.values()
             .filter(|area| area.is_input_area())
             .map(|area| area.cortical_id)
@@ -2714,6 +2717,7 @@ impl ConnectomeManager {
     /// Vector of OPU/motor area IDs
     ///
     pub fn list_opu_areas(&self) -> Vec<CorticalID> {
+        use crate::models::CorticalAreaExt;
         self.cortical_areas.values()
             .filter(|area| area.is_output_area())
             .map(|area| area.cortical_id)
@@ -2730,9 +2734,9 @@ impl ConnectomeManager {
         self.cortical_areas.values()
             .fold((0, 0, 0), |(max_w, max_h, max_d), area| {
                 (
-                    max_w.max(area.dimensions.width),
-                    max_h.max(area.dimensions.height),
-                    max_d.max(area.dimensions.depth),
+                    max_w.max(area.dimensions.width as usize),
+                    max_h.max(area.dimensions.height as usize),
+                    max_d.max(area.dimensions.depth as usize),
                 )
             })
     }
@@ -2755,6 +2759,7 @@ impl ConnectomeManager {
         properties.insert("cortical_id_s".to_string(), serde_json::json!(area.cortical_id.to_string()));
         properties.insert("cortical_idx".to_string(), serde_json::json!(area.cortical_idx));
         properties.insert("name".to_string(), serde_json::json!(area.name));
+        use crate::models::CorticalAreaExt;
         properties.insert("area_type".to_string(), serde_json::json!(area.get_cortical_group()));
         properties.insert("dimensions".to_string(), serde_json::json!({
             "width": area.dimensions.width,

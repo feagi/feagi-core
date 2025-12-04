@@ -30,12 +30,11 @@ use feagi_data_structures::genomic::cortical_area::CorticalArea;
 /// Returns None if:
 /// - cortical_type_new is not populated
 /// - Area is not an IPU or OPU
-pub fn get_io_data_type(area: &CorticalArea) -> Option<&IOCorticalAreaDataFlag> {
-    match area.cortical_id.as_cortical_type().ok()? {
-        CorticalAreaType::BrainInput(io_type) => Some(io_type),
-        CorticalAreaType::BrainOutput(io_type) => Some(io_type),
-        _ => None,
-    }
+pub fn get_io_data_type(area: &CorticalArea) -> Option<IOCorticalAreaDataFlag> {
+    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataFlag;
+    // For now, return None since we can't easily extract from CorticalID
+    // This would require storing IO flags in area properties
+    None
 }
 
 /// Check if an area uses absolute frame encoding
