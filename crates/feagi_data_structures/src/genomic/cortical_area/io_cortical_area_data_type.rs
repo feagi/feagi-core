@@ -12,7 +12,7 @@ pub type DataTypeConfigurationFlag = u16; // 16 Total bits
 // Bit 9 -> PercentageNeuronPositioning
 // Bit 10-15 -> RESERVED
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
 pub enum IOCorticalAreaDataFlag {
     Boolean,
     Percentage(FrameChangeHandling, PercentageNeuronPositioning),
@@ -166,7 +166,7 @@ impl fmt::Display for IOCorticalAreaDataFlag {
 }
 
 //region SubEnums
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
 pub enum PercentageNeuronPositioning {
     Linear,
     #[default]
@@ -182,7 +182,7 @@ impl fmt::Display for PercentageNeuronPositioning {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Hash, Serialize, Deserialize)]
 pub enum FrameChangeHandling {
     #[default]
     Absolute,

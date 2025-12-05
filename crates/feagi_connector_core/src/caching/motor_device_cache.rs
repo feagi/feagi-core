@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::{motor_cortical_units, sensor_cortical_units, FeagiDataError, FeagiSignal, FeagiSignalIndex};
@@ -380,6 +381,7 @@ macro_rules! motor_unit_functions {
 
 }
 
+#[derive(Debug)]
 pub struct MotorDeviceCache {
     stream_caches: HashMap<(MotorCorticalUnit, CorticalGroupIndex), MotorChannelStreamCaches>,
     agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(MotorCorticalUnit, CorticalGroupIndex)>>,
@@ -433,7 +435,7 @@ impl MotorDeviceCache {
         Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
     }
 
-    pub fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
     }
@@ -614,4 +616,10 @@ impl MotorDeviceCache {
     //endregion
 
 
+}
+
+impl Display for MotorDeviceCache {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Ok(write!(f, "Motor Device Cache:\n")?)
+    }
 }
