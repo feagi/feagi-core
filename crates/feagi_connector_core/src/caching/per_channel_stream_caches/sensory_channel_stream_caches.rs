@@ -16,6 +16,8 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 /// - `neuron_encoder`: Encoder that converts processed data into neuron voxel representations
 /// - `pipeline_runners`: Collection of pipeline runners, one per cortical channel
 /// - `last_update_time`: Timestamp of the most recent update across all channels
+
+#[derive(Debug)]
 pub(crate) struct SensoryChannelStreamCaches {
     neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
     pipeline_runners: Vec<PipelineStageRunner>,

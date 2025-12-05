@@ -6,7 +6,7 @@ use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDat
 
 // Describes the method data is encoded within a cortical area
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
 pub enum CorticalAreaType {
     Core(CoreCorticalType),
     Custom(CustomCorticalType),

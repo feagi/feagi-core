@@ -1,7 +1,8 @@
 use std::sync::{Arc, Mutex, MutexGuard};
-use crate::motor_device_cache::MotorDeviceCache;
-use crate::sensor_device_cache::SensorDeviceCache;
+use crate::caching::motor_device_cache::MotorDeviceCache;
+use crate::caching::sensor_device_cache::SensorDeviceCache;
 
+#[derive(Debug)]
 pub struct ConnectorAgent {
     sensor_cache: Arc<Mutex<SensorDeviceCache>>,
     motor_cache: Arc<Mutex<MotorDeviceCache>>,
@@ -32,7 +33,10 @@ impl ConnectorAgent {
         self.motor_cache.clone()
     }
 
+}
 
-
-
+impl std::fmt::Display for ConnectorAgent {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "ConnectorAgentCache")
+    }
 }
