@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt;
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
@@ -422,6 +423,7 @@ macro_rules! sensor_unit_functions {
     };
 }
 
+#[derive(Debug)]
 pub struct SensorDeviceCache {
     stream_caches: HashMap<(SensoryCorticalUnit, CorticalGroupIndex), SensoryChannelStreamCaches>,
     agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(SensoryCorticalUnit, CorticalGroupIndex)>>,
@@ -697,4 +699,10 @@ impl SensorDeviceCache {
 
     //endregion
 
+}
+
+impl fmt::Display for SensorDeviceCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
+        Ok(write!(f, "Motor Device Cache:\n")?)
+    }
 }

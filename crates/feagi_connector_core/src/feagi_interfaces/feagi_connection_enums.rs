@@ -1,5 +1,5 @@
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Hash)]
 pub enum FeagiInterfaceStatus {
     #[default]
     Unconnected,
@@ -8,7 +8,7 @@ pub enum FeagiInterfaceStatus {
     Connected(DeviceRegistrationStatus),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Default, Hash)]
 pub enum DeviceRegistrationStatus {
     #[default]
     Unknown,

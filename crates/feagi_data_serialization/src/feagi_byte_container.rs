@@ -1,3 +1,4 @@
+use std::fmt::write;
 use byteorder::{ByteOrder, LittleEndian};
 use feagi_data_structures::FeagiDataError;
 use crate::feagi_serializable::FeagiSerializable;
@@ -551,6 +552,12 @@ impl FeagiByteContainer{
 
     //endregion
 
+}
+
+impl std::fmt::Display for FeagiByteContainer {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "FeagiByteContainer({} bytes used out of {} allocated)", self.get_number_of_bytes_used(), self.get_number_of_bytes_allocated())
+    }
 }
 
 //endregion

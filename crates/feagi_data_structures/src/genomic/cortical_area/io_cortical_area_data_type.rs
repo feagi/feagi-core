@@ -12,7 +12,7 @@ pub type DataTypeConfigurationFlag = u16; // 16 Total bits
 // Bit 9 -> PercentageNeuronPositioning
 // Bit 10-15 -> RESERVED
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
 pub enum IOCorticalAreaDataFlag {
     Boolean,
     Percentage(FrameChangeHandling, PercentageNeuronPositioning),
