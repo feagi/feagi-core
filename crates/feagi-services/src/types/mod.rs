@@ -9,7 +9,9 @@ Licensed under the Apache License, Version 2.0
 */
 
 pub mod dtos;
+pub mod registration;
 pub mod errors;
+pub mod agent_registry;
 
 // Re-export for convenience
 pub use dtos::*;

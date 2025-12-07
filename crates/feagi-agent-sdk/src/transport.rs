@@ -39,6 +39,8 @@ pub struct RegistrationResponse {
     pub zmq_ports: Option<HashMap<String, u16>>,
     pub transports: Option<Vec<TransportConfig>>,
     pub recommended_transport: Option<String>,
+    /// Cortical area availability status for agent operations
+    pub cortical_areas: serde_json::Value,
 }
 
 impl RegistrationResponse {

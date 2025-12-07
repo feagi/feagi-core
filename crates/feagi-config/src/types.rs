@@ -146,6 +146,8 @@ pub struct AgentConfig {
     pub sensory_port: u16,
     pub motor_port: u16,
     pub host: String,
+    /// Enable auto-creation of missing IPU/OPU cortical areas during agent registration
+    pub auto_create_missing_cortical_areas: bool,
 }
 
 impl Default for AgentConfig {
@@ -155,6 +157,7 @@ impl Default for AgentConfig {
             sensory_port: 5555,  // NOTE: This is agent config (different from ports.zmq_sensory_port)
             motor_port: 30005,
             host: "0.0.0.0".to_string(),
+            auto_create_missing_cortical_areas: true,
         }
     }
 }

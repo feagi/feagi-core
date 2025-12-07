@@ -19,9 +19,9 @@ pub mod registration;
 pub mod types;
 pub mod type_validation;
 
-// Re-export commonly used types
+// Re-export commonly used types (all from feagi-services now)
 pub use agent_registry::{
-    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
+    AgentRegistry, AgentCapabilities, AgentInfo, AgentTransport, AgentType, MotorCapability,
     SensoryCapability, VisionCapability, VisualizationCapability,
 };
 pub use config::{PNSConfig, TransportMode, WebSocketConfig};

@@ -16,18 +16,18 @@ use crate::traits::agent_service::*;
 use crate::traits::RuntimeService as RuntimeServiceTrait;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_bdu::ConnectomeManager;
-use feagi_pns::{
+use crate::types::agent_registry::{
     AgentRegistry, AgentInfo, AgentType, AgentCapabilities, AgentTransport,
     SensoryCapability, VisualizationCapability, MotorCapability,
-    RegistrationHandler, RegistrationRequest,
 };
-use parking_lot::Mutex;
+use crate::traits::registration_handler::RegistrationHandlerTrait;
+use crate::types::registration::RegistrationRequest;
 
 /// Implementation of the Agent service
 pub struct AgentServiceImpl {
     connectome_manager: Arc<RwLock<ConnectomeManager>>,
     agent_registry: Arc<RwLock<AgentRegistry>>,
-    registration_handler: Option<Arc<Mutex<RegistrationHandler>>>,
+    registration_handler: Option<Arc<dyn RegistrationHandlerTrait>>,
     runtime_service: Arc<RwLock<Option<Arc<dyn RuntimeServiceTrait + Send + Sync>>>>,
 }
 
@@ -59,7 +59,8 @@ impl AgentServiceImpl {
     }
     
     /// Set the PNS registration handler for full transport negotiation
-    pub fn set_registration_handler(&mut self, handler: Arc<Mutex<RegistrationHandler>>) {
+    /// Set registration handler (accepts trait object to break circular dependency)
+    pub fn set_registration_handler(&mut self, handler: Arc<dyn RegistrationHandlerTrait>) {
         self.registration_handler = Some(handler);
         info!("🦀 [AGENT-SERVICE] Registration handler connected");
     }
@@ -184,9 +185,15 @@ impl AgentService for AgentServiceImpl {
                 chosen_transport: registration.chosen_transport.clone(), // Pass through the agent's transport choice
             };
             
-            // Call PNS registration handler
-            let pns_response = handler.lock().process_registration(pns_request)
-                .map_err(|e| AgentError::RegistrationFailed(e))?;
+            // Call registration handler - use spawn_blocking to avoid blocking the async runtime
+            // The process_registration method is sync and may block, so we offload it to a blocking thread pool
+            let handler_clone = handler.clone();
+            let pns_response = tokio::task::spawn_blocking(move || {
+                handler_clone.process_registration(pns_request)
+            })
+            .await
+            .map_err(|e| AgentError::RegistrationFailed(format!("Registration task panicked: {:?}", e)))?
+            .map_err(|e| AgentError::RegistrationFailed(e))?;
             
             // Convert PNS transport configs to service transport configs
             let transports = pns_response.transports.map(|ts| {
@@ -200,16 +207,24 @@ impl AgentService for AgentServiceImpl {
                 }).collect()
             });
             
+            // Serialize cortical areas with proper error handling (don't panic!)
+            let cortical_areas_json = serde_json::to_value(&pns_response.cortical_areas)
+                .map_err(|e| {
+                    error!("❌ [AGENT-SERVICE] Failed to serialize cortical areas: {}", e);
+                    AgentError::Internal(format!("Failed to serialize cortical areas: {}", e))
+                })?;
+            
             return Ok(AgentRegistrationResponse {
                 status: pns_response.status,
                 message: pns_response.message.unwrap_or_else(|| "Success".to_string()),
                 success: true,
-                transport: None,  // Legacy
-                rates: None,      // TODO: Calculate rates
-                transports,       // NEW: Full transport info!
+                transport: None,
+                rates: None,
+                transports,
                 recommended_transport: pns_response.recommended_transport,
                 zmq_ports: pns_response.zmq_ports,
                 shm_paths: pns_response.shm_paths,
+                cortical_areas: cortical_areas_json,
             });
         }
         
@@ -227,17 +242,10 @@ impl AgentService for AgentServiceImpl {
         info!("✅ [AGENT-SERVICE] Agent '{}' registered successfully (total agents: {})", 
             registration.agent_id, count);
         
-        Ok(AgentRegistrationResponse {
-            status: "success".to_string(),
-            message: format!("Agent {} registered successfully", registration.agent_id),
-            success: true,
-            transport: None,
-            rates: None,
-            transports: None,      // No transport info in fallback path
-            recommended_transport: None,
-            zmq_ports: None,
-            shm_paths: None,
-        })
+        // Fallback path not supported in FEAGI 2.0 - registration handler is required
+        return Err(AgentError::RegistrationFailed(
+            "Registration handler not available - required for FEAGI 2.0".to_string()
+        ));
     }
     
     async fn heartbeat(&self, request: HeartbeatRequest) -> AgentResult<()> {

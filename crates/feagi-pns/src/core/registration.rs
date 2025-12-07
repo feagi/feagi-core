@@ -5,45 +5,19 @@
 
 use super::agent_registry::{
     AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-    SensoryCapability, VisualizationCapability,
+    SensoryCapability, VisualizationCapability, VisionCapability,
 };
 use parking_lot::RwLock;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{info, warn, error, debug};
 use ahash::AHashSet;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
-
-/// Registration request from agent
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegistrationRequest {
-    pub agent_id: String,
-    pub agent_type: String,
-    pub capabilities: serde_json::Value, // Flexible JSON for different formats
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub chosen_transport: Option<String>, // Agent reports which transport it chose: "zmq", "websocket", "shm", etc.
-}
-
-/// Transport configuration for an agent
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TransportConfig {
-    pub transport_type: String, // "zmq" or "websocket"
-    pub enabled: bool,
-    pub ports: HashMap<String, u16>,
-    pub host: String,
-}
-
-/// Registration response to agent
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RegistrationResponse {
-    pub status: String,
-    pub message: Option<String>,
-    pub shm_paths: Option<HashMap<String, String>>, // capability_type -> shm_path
-    pub zmq_ports: Option<HashMap<String, u16>>,    // Legacy field for backward compatibility
-    pub transports: Option<Vec<TransportConfig>>,    // NEW: Available transports with their configs
-    pub recommended_transport: Option<String>,        // NEW: "zmq" or "websocket"
-}
+pub use feagi_services::types::registration::{
+    AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
+    RegistrationResponse, TransportConfig,
+};
+use feagi_services::traits::registration_handler::RegistrationHandlerTrait;
 
 /// Type alias for registration callbacks
 pub type RegistrationCallback =
@@ -64,6 +38,14 @@ pub struct RegistrationHandler {
     /// Optional reference to burst loop runner for motor subscription tracking
     burst_runner:
         Arc<parking_lot::Mutex<Option<Arc<parking_lot::RwLock<feagi_burst_engine::BurstLoopRunner>>>>>,
+    /// Optional reference to GenomeService for creating cortical areas
+    genome_service:
+        Arc<parking_lot::Mutex<Option<Arc<dyn feagi_services::traits::GenomeService + Send + Sync>>>>,
+    /// Optional reference to ConnectomeService for checking cortical area existence
+    connectome_service:
+        Arc<parking_lot::Mutex<Option<Arc<dyn feagi_services::traits::ConnectomeService + Send + Sync>>>>,
+    /// Configuration for auto-creating missing cortical areas
+    auto_create_missing_areas: bool,
     /// Actual ZMQ port numbers (from config, NOT hardcoded)
     sensory_port: u16,
     motor_port: u16,
@@ -90,6 +72,9 @@ impl RegistrationHandler {
             shm_base_path: "/tmp".to_string(),
             sensory_agent_manager: Arc::new(parking_lot::Mutex::new(None)),
             burst_runner: Arc::new(parking_lot::Mutex::new(None)),
+            genome_service: Arc::new(parking_lot::Mutex::new(None)),
+            connectome_service: Arc::new(parking_lot::Mutex::new(None)),
+            auto_create_missing_areas: true,  // Default enabled
             sensory_port,
             motor_port,
             viz_port,
@@ -104,6 +89,24 @@ impl RegistrationHandler {
             on_agent_registered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
             on_agent_deregistered_dynamic: Arc::new(parking_lot::Mutex::new(None)),
         }
+    }
+    
+    /// Set GenomeService for creating cortical areas
+    pub fn set_genome_service(&self, service: Arc<dyn feagi_services::traits::GenomeService + Send + Sync>) {
+        *self.genome_service.lock() = Some(service);
+        info!("🦀 [REGISTRATION] GenomeService connected for cortical area creation");
+    }
+    
+    /// Set ConnectomeService for checking cortical area existence
+    pub fn set_connectome_service(&self, service: Arc<dyn feagi_services::traits::ConnectomeService + Send + Sync>) {
+        *self.connectome_service.lock() = Some(service);
+        info!("🦀 [REGISTRATION] ConnectomeService connected for cortical area checking");
+    }
+    
+    /// Set auto-create missing cortical areas configuration
+    pub fn set_auto_create_missing_areas(&mut self, enabled: bool) {
+        self.auto_create_missing_areas = enabled;
+        info!("🦀 [REGISTRATION] Auto-create missing cortical areas: {}", enabled);
     }
     
     /// Set WebSocket transport configuration
@@ -180,8 +183,374 @@ impl RegistrationHandler {
         info!("🦀 [REGISTRATION] Dynamic gating deregistration callback set");
     }
 
+    /// Convert area name to CorticalID base64 string
+    /// 
+    /// For IPU/OPU areas, the name might be a short prefix (e.g., "svi").
+    /// We try multiple approaches to create a valid CorticalID:
+    /// 1. Try direct padding with null bytes (standard approach)
+    /// 2. If that fails, try padding with spaces (legacy compatibility)
+    /// 3. If both fail, try using try_from_base_64 if the name looks like base64
+    /// 4. If all fail, return an error with helpful message
+    fn area_name_to_cortical_id(&self, area_name: &str) -> Result<String, String> {
+        // First, check if it's already a base64-encoded CorticalID
+        if let Ok(cortical_id) = CorticalID::try_from_base_64(area_name) {
+            return Ok(cortical_id.as_base_64());
+        }
+        
+        // Try with null byte padding (standard approach)
+        let mut bytes = [b'\0'; 8];
+        let name_bytes = area_name.as_bytes();
+        let copy_len = name_bytes.len().min(8);
+        bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+        
+        if let Ok(cortical_id) = CorticalID::try_from_bytes(&bytes) {
+            return Ok(cortical_id.as_base_64());
+        }
+        
+        // If null padding fails, try space padding (for legacy compatibility)
+        let mut bytes = [b' '; 8];
+        bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+        
+        if let Ok(cortical_id) = CorticalID::try_from_bytes(&bytes) {
+            return Ok(cortical_id.as_base_64());
+        }
+        
+        // Both approaches failed - return detailed error
+        Err(format!(
+            "Failed to create CorticalID from area name '{}' (length: {}). \
+            Tried null-byte and space padding. \
+            The area name may be too short or in an invalid format. \
+            For IPU/OPU areas, use a valid 4-character prefix like 'isvi', 'imot', etc., \
+            or provide a base64-encoded CorticalID.",
+            area_name, area_name.len()
+        ))
+    }
+
+    /// Helper function to safely call async code from sync context
+    /// Always uses a separate thread to avoid blocking the current runtime
+    fn block_on_async_service<F>(&self, future_factory: F) -> Result<bool, String>
+    where
+        F: FnOnce() -> std::pin::Pin<Box<dyn std::future::Future<Output = feagi_services::types::ServiceResult<bool>> + Send>> + Send + 'static,
+    {
+        // Always use a separate thread to avoid blocking the current runtime
+        // This works whether we're in an async context or not
+        debug!("🦀 [REGISTRATION] Starting async service call in separate thread");
+        let future = future_factory();
+        let (tx, rx) = std::sync::mpsc::channel();
+        
+        std::thread::spawn(move || {
+            let result = (|| -> Result<bool, String> {
+                debug!("🦀 [REGISTRATION] Creating new tokio runtime in thread");
+                let rt = tokio::runtime::Runtime::new()
+                    .map_err(|e| format!("Failed to create runtime: {}", e))?;
+                debug!("🦀 [REGISTRATION] Blocking on async future");
+                let result = rt.block_on(future)
+                    .map_err(|e| format!("Service error: {}", e))?;
+                debug!("🦀 [REGISTRATION] Async future completed successfully");
+                Ok(result)
+            })();
+            let _ = tx.send(result);
+        });
+        
+        // Wait for result with a timeout to prevent hanging
+        debug!("🦀 [REGISTRATION] Waiting for result (timeout: 5s)");
+        match rx.recv_timeout(std::time::Duration::from_secs(5)) {
+            Ok(result) => {
+                debug!("🦀 [REGISTRATION] Received result from thread");
+                result
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                error!("🦀 [REGISTRATION] Timeout waiting for cortical area existence check (5s)");
+                Err("Timeout waiting for cortical area existence check (5s)".to_string())
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                error!("🦀 [REGISTRATION] Thread disconnected while checking cortical area existence");
+                Err("Thread disconnected while checking cortical area existence".to_string())
+            }
+        }
+    }
+
+    /// Check and ensure required cortical areas exist, creating missing ones if enabled
+    /// Returns availability status for all required areas
+    fn ensure_cortical_areas_exist(
+        &self,
+        capabilities: &AgentCapabilities,
+    ) -> Result<CorticalAreaAvailability, String> {
+        let mut ipu_statuses = Vec::new();
+        let mut opu_statuses = Vec::new();
+
+        // Get services (required for cortical area management)
+        let genome_service = self.genome_service.lock()
+            .as_ref()
+            .ok_or_else(|| "GenomeService not available - required for cortical area management".to_string())?
+            .clone();
+        let connectome_service = self.connectome_service.lock()
+            .as_ref()
+            .ok_or_else(|| "ConnectomeService not available - required for cortical area checking".to_string())?
+            .clone();
+
+        // Handle IPU areas (from vision capabilities)
+        if let Some(ref vision) = capabilities.vision {
+            // For IPU areas, ensure 'i' prefix is present (e.g., "svi" -> "isvi")
+            let area_name = if vision.target_cortical_area.starts_with('i') {
+                vision.target_cortical_area.clone()
+            } else {
+                format!("i{}", vision.target_cortical_area)
+            };
+            
+            // Convert area name to CorticalID with better error handling
+            let cortical_id_base64 = match self.area_name_to_cortical_id(&area_name) {
+                Ok(id) => id,
+                Err(e) => {
+                    error!("🦀 [REGISTRATION] ❌ Failed to convert area name '{}' to CorticalID: {}", area_name, e);
+                    return Err(format!(
+                        "Invalid cortical area name '{}': {}. \
+                        For IPU areas, use a valid 4-character prefix like 'isvi', 'imot', etc.",
+                        vision.target_cortical_area, e
+                    ));
+                }
+            };
+            
+            // Check if area exists (blocking call)
+            // Use helper function to safely call async code from sync context
+            debug!("🦀 [REGISTRATION] Checking IPU area existence for '{}' (cortical_id: {})", area_name, cortical_id_base64);
+            let cortical_id_clone = cortical_id_base64.clone();
+            let connectome_service_clone = connectome_service.clone();
+            let exists = {
+                let cortical_id = cortical_id_clone.clone();
+                self.block_on_async_service(move || {
+                    let service = connectome_service_clone.clone();
+                    let id = cortical_id.clone();
+                    Box::pin(async move {
+                        debug!("🦀 [REGISTRATION] Calling cortical_area_exists for IPU area '{}'", id);
+                        let result = service.cortical_area_exists(&id).await;
+                        debug!("🦀 [REGISTRATION] cortical_area_exists result for IPU area '{}': {:?}", id, result);
+                        result
+                    })
+                })
+            }
+            .map_err(|e| {
+                error!("🦀 [REGISTRATION] Failed to check IPU area existence for '{}' (cortical_id: {}): {}", area_name, cortical_id_base64, e);
+                format!("Failed to check cortical area existence for IPU area '{}': {}", area_name, e)
+            })?;
+            debug!("🦀 [REGISTRATION] IPU area '{}' exists: {}", area_name, exists);
+
+            let dimensions = (vision.dimensions.0, vision.dimensions.1, vision.channels);
+
+            if exists {
+                info!("🦀 [REGISTRATION] IPU area '{}' already exists", area_name);
+                ipu_statuses.push(CorticalAreaStatus {
+                    area_name: area_name.clone(),
+                    cortical_id: cortical_id_base64,
+                    status: AreaStatus::Existing,
+                    dimensions: Some(dimensions),
+                    message: None,
+                });
+            } else if self.auto_create_missing_areas {
+                // Create missing IPU area
+                info!("🦀 [REGISTRATION] Auto-creating missing IPU area '{}'", area_name);
+                
+                let create_params = feagi_services::types::CreateCorticalAreaParams {
+                    cortical_id: cortical_id_base64.clone(),
+                    name: area_name.clone(),
+                    dimensions,
+                    position: (0, 0, 0),  // Default position in root region
+                    area_type: "Sensory".to_string(),
+                    visible: Some(true),
+                    sub_group: None,
+                    neurons_per_voxel: Some(1),
+                    postsynaptic_current: None,
+                    plasticity_constant: None,
+                    degeneration: None,
+                    psp_uniform_distribution: None,
+                    firing_threshold_increment: None,
+                    firing_threshold_limit: None,
+                    consecutive_fire_count: None,
+                    snooze_period: None,
+                    refractory_period: None,
+                    leak_coefficient: None,
+                    leak_variability: None,
+                    burst_engine_active: None,
+                    properties: None,
+                };
+
+                // Try to use current runtime handle first, fallback to creating new runtime
+                let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                    // We're in an async context - use block_on on the handle
+                    handle.block_on(genome_service.create_cortical_areas(vec![create_params]))
+                } else {
+                    // Not in async context - create a new runtime
+                    let rt = tokio::runtime::Runtime::new()
+                        .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+                    rt.block_on(genome_service.create_cortical_areas(vec![create_params]))
+                };
+                
+                match result {
+                    Ok(_) => {
+                        info!("🦀 [REGISTRATION] ✅ Successfully created IPU area '{}'", area_name);
+                        ipu_statuses.push(CorticalAreaStatus {
+                            area_name: area_name.clone(),
+                            cortical_id: cortical_id_base64,
+                            status: AreaStatus::Created,
+                            dimensions: Some(dimensions),
+                            message: Some("Auto-created during registration".to_string()),
+                        });
+                    }
+                    Err(e) => {
+                        error!("🦀 [REGISTRATION] ❌ Failed to create IPU area '{}': {}", area_name, e);
+                        ipu_statuses.push(CorticalAreaStatus {
+                            area_name: area_name.clone(),
+                            cortical_id: cortical_id_base64,
+                            status: AreaStatus::Error,
+                            dimensions: None,
+                            message: Some(format!("Creation failed: {}", e)),
+                        });
+                        return Err(format!("Failed to create IPU area '{}': {}", area_name, e));
+                    }
+                }
+            } else {
+                warn!("🦀 [REGISTRATION] ⚠️ IPU area '{}' is missing and auto-create is disabled", area_name);
+                ipu_statuses.push(CorticalAreaStatus {
+                    area_name: area_name.clone(),
+                    cortical_id: cortical_id_base64,
+                    status: AreaStatus::Missing,
+                    dimensions: None,
+                    message: Some("Area missing and auto-create disabled".to_string()),
+                });
+                return Err(format!("Required IPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.", area_name));
+            }
+        }
+
+        // Handle OPU areas (from motor capabilities)
+        if let Some(ref motor) = capabilities.motor {
+            for area_name in &motor.source_cortical_areas {
+                let cortical_id_base64 = self.area_name_to_cortical_id(area_name)?;
+                
+                // Check if area exists (blocking call)
+                // Use helper function to safely call async code from sync context
+                debug!("🦀 [REGISTRATION] Checking OPU area existence for '{}' (cortical_id: {})", area_name, cortical_id_base64);
+                let cortical_id_clone = cortical_id_base64.clone();
+                let connectome_service_clone = connectome_service.clone();
+                let exists = {
+                    let cortical_id = cortical_id_clone.clone();
+                    self.block_on_async_service(move || {
+                        let service = connectome_service_clone.clone();
+                        let id = cortical_id.clone();
+                        Box::pin(async move {
+                            debug!("🦀 [REGISTRATION] Calling cortical_area_exists for OPU area '{}'", id);
+                            let result = service.cortical_area_exists(&id).await;
+                            debug!("🦀 [REGISTRATION] cortical_area_exists result for OPU area '{}': {:?}", id, result);
+                            result
+                        })
+                    })
+                }
+                .map_err(|e| {
+                    error!("🦀 [REGISTRATION] Failed to check OPU area existence for '{}' (cortical_id: {}): {}", area_name, cortical_id_base64, e);
+                    format!("Failed to check cortical area existence for OPU area '{}': {}", area_name, e)
+                })?;
+                debug!("🦀 [REGISTRATION] OPU area '{}' exists: {}", area_name, exists);
+
+                if exists {
+                    info!("🦀 [REGISTRATION] OPU area '{}' already exists", area_name);
+                    opu_statuses.push(CorticalAreaStatus {
+                        area_name: area_name.clone(),
+                        cortical_id: cortical_id_base64,
+                        status: AreaStatus::Existing,
+                        dimensions: Some((motor.output_count, 1, 1)),  // Default OPU dimensions
+                        message: None,
+                    });
+                } else if self.auto_create_missing_areas {
+                    // Create missing OPU area
+                    info!("🦀 [REGISTRATION] Auto-creating missing OPU area '{}'", area_name);
+                    
+                    let create_params = feagi_services::types::CreateCorticalAreaParams {
+                        cortical_id: cortical_id_base64.clone(),
+                        name: area_name.clone(),
+                        dimensions: (motor.output_count, 1, 1),  // OPU: output_count x 1 x 1
+                        position: (0, 0, 0),  // Default position in root region
+                        area_type: "Motor".to_string(),
+                        visible: Some(true),
+                        sub_group: None,
+                        neurons_per_voxel: Some(1),
+                        postsynaptic_current: None,
+                        plasticity_constant: None,
+                        degeneration: None,
+                        psp_uniform_distribution: None,
+                        firing_threshold_increment: None,
+                        firing_threshold_limit: None,
+                        consecutive_fire_count: None,
+                        snooze_period: None,
+                        refractory_period: None,
+                        leak_coefficient: None,
+                        leak_variability: None,
+                        burst_engine_active: None,
+                        properties: None,
+                    };
+
+                    // Try to use current runtime handle first, fallback to creating new runtime
+                    let result = if let Ok(handle) = tokio::runtime::Handle::try_current() {
+                        // We're in an async context - use block_on on the handle
+                        handle.block_on(genome_service.create_cortical_areas(vec![create_params]))
+                    } else {
+                        // Not in async context - create a new runtime
+                        let rt = tokio::runtime::Runtime::new()
+                            .map_err(|e| format!("Failed to create tokio runtime: {}", e))?;
+                        rt.block_on(genome_service.create_cortical_areas(vec![create_params]))
+                    };
+                    
+                    match result {
+                        Ok(_) => {
+                            info!("🦀 [REGISTRATION] ✅ Successfully created OPU area '{}'", area_name);
+                            opu_statuses.push(CorticalAreaStatus {
+                                area_name: area_name.clone(),
+                                cortical_id: cortical_id_base64,
+                                status: AreaStatus::Created,
+                                dimensions: Some((motor.output_count, 1, 1)),
+                                message: Some("Auto-created during registration".to_string()),
+                            });
+                        }
+                        Err(e) => {
+                            error!("🦀 [REGISTRATION] ❌ Failed to create OPU area '{}': {}", area_name, e);
+                            opu_statuses.push(CorticalAreaStatus {
+                                area_name: area_name.clone(),
+                                cortical_id: cortical_id_base64,
+                                status: AreaStatus::Error,
+                                dimensions: None,
+                                message: Some(format!("Creation failed: {}", e)),
+                            });
+                            return Err(format!("Failed to create OPU area '{}': {}", area_name, e));
+                        }
+                    }
+                } else {
+                    warn!("🦀 [REGISTRATION] ⚠️ OPU area '{}' is missing and auto-create is disabled", area_name);
+                    opu_statuses.push(CorticalAreaStatus {
+                        area_name: area_name.clone(),
+                        cortical_id: cortical_id_base64,
+                        status: AreaStatus::Missing,
+                        dimensions: None,
+                        message: Some("Area missing and auto-create disabled".to_string()),
+                    });
+                    return Err(format!("Required OPU area '{}' is missing. Enable auto_create_missing_cortical_areas in config to auto-create.", area_name));
+                }
+            }
+        }
+
+        Ok(CorticalAreaAvailability {
+            required_ipu_areas: ipu_statuses,
+            required_opu_areas: opu_statuses,
+        })
+    }
+
     /// Process a registration request
     pub fn process_registration(
+        &self,
+        request: RegistrationRequest,
+    ) -> Result<RegistrationResponse, String> {
+        self.process_registration_impl(request)
+    }
+    
+    /// Internal implementation
+    fn process_registration_impl(
         &self,
         request: RegistrationRequest,
     ) -> Result<RegistrationResponse, String> {
@@ -219,6 +588,9 @@ impl RegistrationHandler {
 
         // Parse capabilities
         let capabilities = self.parse_capabilities(&request.capabilities)?;
+
+        // Check and ensure required cortical areas exist (auto-create if enabled)
+        let cortical_areas_availability = self.ensure_cortical_areas_exist(&capabilities)?;
 
         // Allocate SHM paths ONLY if agent didn't explicitly choose a non-SHM transport
         let mut shm_paths = HashMap::new();
@@ -326,7 +698,7 @@ impl RegistrationHandler {
                         .iter()
                         .filter_map(|(name, &idx)| {
                             match CorticalID::try_from_bytes(&{
-                                let mut bytes = [b' '; 8];
+                                let mut bytes = [b'\0'; 8];  // Use null bytes, not spaces
                                 let name_bytes = name.as_bytes();
                                 let copy_len = name_bytes.len().min(8);
                                 bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
@@ -540,6 +912,7 @@ impl RegistrationHandler {
             ])),
             transports: Some(transports),
             recommended_transport: Some("zmq".to_string()), // ZMQ is default for now
+            cortical_areas: cortical_areas_availability,
         })
     }
 
@@ -555,6 +928,53 @@ impl RegistrationHandler {
 
         // Fall back to manual parsing for legacy format
         let mut capabilities = AgentCapabilities::default();
+
+        // Parse vision capability (FEAGI 2.0)
+        if let Some(vision) = caps_json.get("vision") {
+            let modality = vision
+                .get("modality")
+                .and_then(|v| v.as_str())
+                .unwrap_or("camera")
+                .to_string();
+            
+            // Parse dimensions - can be array [width, height] or tuple
+            let dimensions = if let Some(dims) = vision.get("dimensions") {
+                if let Some(arr) = dims.as_array() {
+                    if arr.len() >= 2 {
+                        (
+                            arr[0].as_u64().unwrap_or(0) as usize,
+                            arr[1].as_u64().unwrap_or(0) as usize,
+                        )
+                    } else {
+                        (0, 0)
+                    }
+                } else {
+                    (0, 0)
+                }
+            } else {
+                (0, 0)
+            };
+            
+            let channels = vision
+                .get("channels")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(3) as usize;
+            
+            let target_cortical_area = vision
+                .get("target_cortical_area")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            
+            if !target_cortical_area.is_empty() {
+                capabilities.vision = Some(VisionCapability {
+                    modality,
+                    dimensions,
+                    channels,
+                    target_cortical_area,
+                });
+            }
+        }
 
         // Parse legacy sensory capability
         if let Some(sensory) = caps_json.get("sensory") {
@@ -720,5 +1140,12 @@ mod tests {
         assert!(response.shm_paths.is_some());
 
         assert_eq!(registry.read().count(), 1);
+    }
+}
+
+// Implement RegistrationHandlerTrait for RegistrationHandler
+impl RegistrationHandlerTrait for RegistrationHandler {
+    fn process_registration(&self, request: RegistrationRequest) -> Result<RegistrationResponse, String> {
+        self.process_registration_impl(request)
     }
 }

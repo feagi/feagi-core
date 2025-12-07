@@ -432,6 +432,18 @@ pub struct SensorDeviceCache {
     bytes_encoded_signal: FeagiSignal<FeagiByteContainer>,
 }
 
+impl std::fmt::Debug for SensorDeviceCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SensorDeviceCache")
+            .field("stream_caches_count", &self.stream_caches.len())
+            .field("agent_device_key_lookup_count", &self.agent_device_key_lookup.len())
+            .field("neuron_data", &self.neuron_data)
+            .field("byte_data", &self.byte_data)
+            .field("previous_burst", &self.previous_burst)
+            .finish()
+    }
+}
+
 impl SensorDeviceCache {
 
     pub fn new() -> Self {
@@ -618,5 +630,71 @@ impl SensorDeviceCache {
 
     //endregion
 
+    //region Encoding Methods
+
+    /// Encode all cached sensor data to neuron voxel format
+    /// 
+    /// Iterates over all registered sensor stream caches and encodes their
+    /// processed data into neuron voxel representations. This populates
+    /// the internal neuron_data field.
+    /// 
+    /// # Arguments
+    /// * `time_of_burst` - Timestamp for this encoding burst
+    /// 
+    /// # Returns
+    /// * `Ok(())` - If encoding succeeded
+    /// * `Err(FeagiDataError)` - If encoding fails
+    pub fn encode_all_sensors_to_neurons(&mut self, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+        // Clear neuron data before encoding
+        self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
+        
+        // Iterate over all registered sensor stream caches and encode them
+        for ((_sensor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
+            stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, time_of_burst)?;
+        }
+        
+        Ok(())
+    }
+
+    /// Encode neuron voxel data to byte container format
+    /// 
+    /// Serializes the internal neuron_data into FeagiByteContainer format.
+    /// This populates the internal byte_data field.
+    /// 
+    /// # Returns
+    /// * `Ok(())` - If encoding succeeded
+    /// * `Err(FeagiDataError)` - If encoding fails
+    pub fn encode_neurons_to_bytes(&mut self) -> Result<(), FeagiDataError> {
+        use feagi_data_serialization::FeagiByteStructureType;
+        
+        // Clear byte data
+        self.byte_data = FeagiByteContainer::new_empty();
+        
+        // Check if we have any neuron data
+        if self.neuron_data.mappings.is_empty() {
+            // Empty data - leave byte_data empty
+            return Ok(());
+        }
+        
+        // Serialize neuron_data to byte_data
+        self.byte_data
+            .overwrite_byte_data_with_single_struct_data(&self.neuron_data, 0)
+            .map_err(|e| FeagiDataError::BadParameters(format!("Failed to encode neuron data to bytes: {:?}", e)))?;
+        
+        Ok(())
+    }
+
+    /// Get a reference to the encoded byte container
+    /// 
+    /// Returns the FeagiByteContainer containing the serialized sensor data.
+    /// Call encode_all_sensors_to_neurons() and encode_neurons_to_bytes() first.
+    /// 
+    /// # Returns
+    /// Reference to the byte container
+    pub fn get_byte_container(&self) -> &FeagiByteContainer {
+        &self.byte_data
+    }
+
+    //endregion
 
 }

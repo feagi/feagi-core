@@ -104,6 +104,10 @@ pub use types::{
     CreateBrainRegionParams, CreateCorticalAreaParams, UpdateCorticalAreaParams,
     CreateNeuronParams, CreateSynapseParams, GenomeInfo, LoadGenomeParams, NeuronInfo,
     SaveGenomeParams, SynapseInfo, SystemHealth, RuntimeStatus,
+    // Registration DTOs
+    registration::{AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest, RegistrationResponse, TransportConfig},
+    // Agent registry types
+    agent_registry::{AgentType, AgentInfo, AgentCapabilities, AgentTransport, VisionCapability, MotorCapability, VisualizationCapability, SensoryCapability, AgentRegistry},
     // Errors
     ServiceError, ServiceResult,
 };

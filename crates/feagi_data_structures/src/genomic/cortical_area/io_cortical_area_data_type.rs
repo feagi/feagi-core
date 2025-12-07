@@ -166,7 +166,7 @@ impl fmt::Display for IOCorticalAreaDataFlag {
 }
 
 //region SubEnums
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum PercentageNeuronPositioning {
     Linear,
     #[default]
@@ -182,7 +182,7 @@ impl fmt::Display for PercentageNeuronPositioning {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum FrameChangeHandling {
     #[default]
     Absolute,

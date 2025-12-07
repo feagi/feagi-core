@@ -16,6 +16,7 @@ all-transports = ["zmq-transport", "udp-transport", "shm-transport", "websocket-
 [dependencies]
 feagi-burst-engine = { path = "../feagi-burst-engine" }
 feagi-bdu = { path = "../feagi-bdu" }  # For CorticalAreaExt
+feagi-services = { path = "../feagi-services" }  # For GenomeService and ConnectomeService
 feagi-transports = { path = "../feagi-transports", features = ["zmq-server", "websocket-server"] }
 feagi-neural = { path = "../feagi-neural" }  # For types
 # FEAGI data structures and serialization (for binary XYZP format)

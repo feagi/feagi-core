@@ -58,7 +58,7 @@ pub struct AgentRegistrationResponse {
     pub success: bool,
     
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub transport: Option<HashMap<String, serde_json::Value>>,  // Legacy field
+    pub transport: Option<HashMap<String, serde_json::Value>>,
     
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rates: Option<HashMap<String, HashMap<String, f64>>>,
@@ -75,6 +75,9 @@ pub struct AgentRegistrationResponse {
     
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shm_paths: Option<HashMap<String, String>>,
+    
+    /// Cortical area availability status for agent operations
+    pub cortical_areas: serde_json::Value,
 }
 
 /// Heartbeat request

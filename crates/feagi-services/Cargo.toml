@@ -17,12 +17,13 @@ feagi-neural = { path = "../feagi-neural" }  # For types
 feagi-evo = { path = "../feagi-evo" }
 feagi-bdu = { path = "../feagi-bdu" }
 feagi-burst-engine = { path = "../feagi-burst-engine" }
-feagi-pns = { path = "../feagi-pns" }
+# feagi-pns dependency removed to break circular dependency
+# AgentRegistry and types moved to feagi-services
 feagi_data_structures = { workspace = true }
 
 # Async runtime (optional for embedded)
 async-trait = "0.1"
-tokio = { version = "1.0", features = ["sync", "rt", "time"], optional = true }
+tokio = { version = "1.0", features = ["sync", "rt", "time", "rt-multi-thread"], optional = true }
 
 # Synchronization
 parking_lot = "0.12"

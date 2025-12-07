@@ -1026,26 +1026,54 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         cortical_id: &CorticalID,
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> usize {
+        let cortical_id_str = cortical_id.to_string();
+        let cortical_id_base64 = cortical_id.as_base_64();
+        info!("[NPU] 🔍 inject_sensory_xyzp_by_id called for cortical_id: {} (base64: {}), {} XYZP points", 
+            cortical_id_str, cortical_id_base64, xyzp_data.len());
+        
         // Convert CorticalID to cortical_area index
-        let cortical_area = match self.get_cortical_area_id(&cortical_id.to_string()) {
-            Some(id) => id,
+        // First, log what's in the area map for debugging
+        {
+            let area_map = self.area_id_to_name.read().unwrap();
+            info!("[NPU] 🔍 Looking up cortical area '{}' (base64: {})", cortical_id_str, cortical_id_base64);
+            info!("[NPU] 🔍 Available cortical areas in NPU ({} total):", area_map.len());
+            for (area_id, name) in area_map.iter() {
+                info!("[NPU]    Area ID {}: '{}'", area_id, name);
+            }
+        }
+        
+        let cortical_area = match self.get_cortical_area_id(&cortical_id_str) {
+            Some(id) => {
+                info!("[NPU] ✅ Found cortical area '{}' (base64: {}) at index {}", cortical_id_str, cortical_id_base64, id);
+                id
+            }
             None => {
-                error!("[NPU] ❌ Unknown cortical area: '{}'", cortical_id);
-                error!(
-                    "[NPU] ❌ Available cortical areas: {:?}",
-                    self.area_id_to_name.read().unwrap().values().collect::<Vec<_>>()
-                );
-                error!("[NPU] ❌ Total registered: {}", self.area_id_to_name.read().unwrap().len());
-                return 0;
+                warn!("[NPU] ⚠️ Not found using string '{}', trying base64 '{}'...", cortical_id_str, cortical_id_base64);
+                // Also try base64 lookup
+                match self.get_cortical_area_id(&cortical_id_base64) {
+                    Some(id) => {
+                        info!("[NPU] ✅ Found cortical area using base64 lookup: '{}' at index {}", cortical_id_base64, id);
+                        id
+                    }
+                    None => {
+                        error!("[NPU] ❌ Unknown cortical area: '{}' (base64: {})", cortical_id_str, cortical_id_base64);
+                        let available_areas: Vec<String> = self.area_id_to_name.read().unwrap().values().cloned().collect();
+                        error!("[NPU] ❌ Available cortical areas ({} total): {:?}", available_areas.len(), available_areas);
+                        return 0;
+                    }
+                }
             }
         };
 
         // 🚀 BATCH coordinate-to-ID conversion (1000x faster than individual lookups!)
         // Extract coordinates
         let coords: Vec<(u32, u32, u32)> = xyzp_data.iter().map(|(x, y, z, _p)| (*x, *y, *z)).collect();
+        info!("[NPU] 🔍 Performing batch coordinate lookup for {} coordinates in area index {}", coords.len(), cortical_area);
         
         // Batch lookup
         let neuron_ids = self.neuron_storage.read().unwrap().batch_coordinate_lookup(cortical_area, &coords);
+        info!("[NPU] 🔍 Batch lookup returned {} results (out of {} coordinates)", 
+            neuron_ids.iter().filter(|x| x.is_some()).count(), coords.len());
         
         // Build (NeuronId, potential) pairs (filter out None)
         let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
@@ -1055,10 +1083,28 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             }
         }
         let found_count = neuron_potential_pairs.len();
+        info!("[NPU] 🔍 Built {} neuron-potential pairs (filtered from {} lookups)", found_count, neuron_ids.len());
+
+        if found_count > 0 {
+            info!("[NPU] 💉 Injecting {} neurons with potentials (first 3: {:?})", 
+                found_count,
+                neuron_potential_pairs.iter().take(3).map(|(id, p)| (id.0, *p)).collect::<Vec<_>>()
+            );
+        } else {
+            warn!("[NPU] ⚠️ WARNING: No neurons found for injection! Possible causes:");
+            warn!("[NPU]   1. Coordinates don't match any neurons in cortical area index {}", cortical_area);
+            warn!("[NPU]   2. Area exists but has no neurons at those coordinates");
+            if !coords.is_empty() {
+                warn!("[NPU]   Sample coordinates: {:?}", &coords[0..coords.len().min(5)]);
+            }
+        }
 
         // Inject found neurons
         if !neuron_potential_pairs.is_empty() {
             self.inject_sensory_with_potentials(&neuron_potential_pairs);
+            info!("[NPU] ✅ Successfully injected {} neurons", found_count);
+        } else {
+            warn!("[NPU] ⚠️ No neurons to inject - skipping injection call");
         }
 
         found_count
