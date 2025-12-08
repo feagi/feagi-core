@@ -510,11 +510,19 @@ impl ImageFrame {
         write_target.ensure_capacity(total_pixels);
 
         let mut neurons_written = 0;
+        let height = resolution.height;
         write_target.update_vectors_from_external(|x_vec, y_vec, c_vec, p_vec| {
-            for ((x, y, c), color_val) in self.pixels.indexed_iter() { // going from row major to cartesian
+            // indexed_iter() on Array3<(H, W, C)> returns (row, col, channel) where:
+            // - row = first dimension = height (y coordinate in image space)
+            // - col = second dimension = width (x coordinate)
+            // - channel = third dimension = color channel
+            // Image coordinates: (0,0) is top-left, y increases downward
+            // FEAGI coordinates: (0,0) is bottom-left, y increases upward
+            // Therefore: y_feagi = height - 1 - row
+            for ((row, col, c), color_val) in self.pixels.indexed_iter() {
                 if color_val > &EPSILON {
-                    x_vec.push(x as u32 + x_offset);
-                    y_vec.push(y as u32);  // flip y //TODO wheres the flip part????
+                    x_vec.push(col as u32 + x_offset);  // col is width (x coordinate)
+                    y_vec.push(height - 1 - (row as u32));  // Flip Y: image top-left (0,0) -> FEAGI bottom-left (0,0)
                     c_vec.push(c as u32);
                     p_vec.push(*color_val as f32 / 255.0);
                     neurons_written += 1;
