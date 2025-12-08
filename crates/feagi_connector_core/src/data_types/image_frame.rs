@@ -523,12 +523,7 @@ impl ImageFrame {
             Ok(())
         })?;
         
-        if neurons_written == 0 {
-            warn!("🦀 [IMAGE-FRAME] ⚠️ overwrite_neuron_data: 0 neurons written (all pixels <= EPSILON={})", EPSILON);
-        } else {
-            info!("🦀 [IMAGE-FRAME] ✅ overwrite_neuron_data: {} neurons written (out of {} total pixels, {}% above threshold)", 
-                neurons_written, total_pixels, (neurons_written as f32 / total_pixels as f32 * 100.0));
-        }
+        // Logging removed for hot path
 
         Ok(())
     }

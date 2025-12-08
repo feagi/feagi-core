@@ -284,26 +284,9 @@ impl SensoryChannelStreamCaches {
     /// # Note
     /// The neuron data is expected to be cleared before calling this method.
     pub(crate) fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronVoxels, time_of_burst: Instant) -> Result<(), FeagiDataError> {
-        use tracing::{info, debug};
-        
         // TODO We need a new trait method to just have all channels cleared if not up to date
         // Note: We expect neuron data to be cleared before this step
-        info!("🦀 [SENSORY-STREAM-CACHE] 🔍 update_neuron_data_with_recently_updated_cached_sensor_data: time_of_burst={:?}, pipeline_runners_count={}", 
-            time_of_burst, self.pipeline_runners.len());
-        
-        // Log each pipeline runner's last processed instant
-        for (idx, runner) in self.pipeline_runners.iter().enumerate() {
-            let last_processed = runner.get_last_processed_instant();
-            let time_since_update = time_of_burst.duration_since(last_processed);
-            debug!("🦀 [SENSORY-STREAM-CACHE] 🔍 Pipeline runner[{}]: last_processed={:?}, time_since_update={:?}ms, will_encode={}", 
-                idx, last_processed, time_since_update.as_millis(), last_processed >= time_of_burst);
-        }
-        
         self.neuron_encoder.write_neuron_data_multi_channel_from_processed_cache(&self.pipeline_runners, time_of_burst, neuron_data)?;
-        
-        let total_neurons: usize = neuron_data.mappings.values().map(|arr| arr.len()).sum();
-        info!("🦀 [SENSORY-STREAM-CACHE] ✅ update_neuron_data complete: {} cortical areas, {} total neurons", 
-            neuron_data.mappings.len(), total_neurons);
         
         Ok(())
     }

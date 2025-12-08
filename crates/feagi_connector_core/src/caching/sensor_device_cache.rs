@@ -672,39 +672,14 @@ impl SensorDeviceCache {
         self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
         
         let previous_burst = self.previous_burst;
-        let time_since_previous = time_of_burst.duration_since(previous_burst);
-        info!("🦀 [SENSOR-CACHE] 🔍 encode_all_sensors_to_neurons: time_of_burst={:?}, previous_burst={:?}, time_since_previous={:?}ms, stream_caches_count={}", 
-            time_of_burst, previous_burst, time_since_previous.as_millis(), self.stream_caches.len());
         
         // Iterate over all registered sensor stream caches and encode them
         // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
-        let mut stream_cache_times = Vec::new();
-        for ((sensor_type, group_index), stream_cache) in self.stream_caches.iter_mut() {
-            let t_stream_start = std::time::Instant::now();
-            debug!("🦀 [SENSOR-CACHE] 🔍 Processing sensor_type={:?}, group_index={:?}", sensor_type, group_index);
+        for ((_sensor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
             stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, previous_burst)?;
-            let t_stream = t_stream_start.elapsed();
-            stream_cache_times.push((format!("{:?}/{:?}", sensor_type, group_index), t_stream));
         }
         
         let total_neurons: usize = self.neuron_data.mappings.values().map(|arr| arr.len()).sum();
-        let t_encode_total = t_encode_start.elapsed();
-        
-        info!(
-            "⏱️ [PERF-ENCODE] encode_all_sensors_to_neurons: total={:.2}ms | areas={} | neurons={}",
-            t_encode_total.as_secs_f64() * 1000.0,
-            self.neuron_data.mappings.len(),
-            total_neurons
-        );
-        for (name, duration) in stream_cache_times {
-            info!(
-                "⏱️ [PERF-ENCODE]   - {}: {:.2}ms",
-                name,
-                duration.as_secs_f64() * 1000.0
-            );
-        }
-        info!("🦀 [SENSOR-CACHE] ✅ encode_all_sensors_to_neurons complete: {} cortical areas, {} total neurons", 
-            self.neuron_data.mappings.len(), total_neurons);
         
         // Update previous_burst for next time
         self.previous_burst = time_of_burst;
@@ -747,15 +722,7 @@ impl SensorDeviceCache {
             .map_err(|e| FeagiDataError::BadParameters(format!("Failed to encode neuron data to bytes: {:?}", e)))?;
         let t_overwrite = t_overwrite_start.elapsed();
         
-        let t_serialize_total = t_serialize_start.elapsed();
-        info!(
-            "⏱️ [PERF-SERIALIZE] encode_neurons_to_bytes: total={:.2}ms | clear={:.2}ms | overwrite={:.2}ms | areas={} | neurons={}",
-            t_serialize_total.as_secs_f64() * 1000.0,
-            t_clear.as_secs_f64() * 1000.0,
-            t_overwrite.as_secs_f64() * 1000.0,
-            self.neuron_data.mappings.len(),
-            total_neurons
-        );
+        // Performance logging removed for hot path
         
         Ok(())
     }
