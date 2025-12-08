@@ -58,7 +58,7 @@ impl PipelineStage for ImageFrameSegmentatorStage {
         ImageFrameSegmentatorStageProperties::new_box(
             self.input_image_properties,
             self.output_image_properties,
-            self.image_segmentator.clone()
+            self.image_segmentator.get_used_gaze()
         )
     }
 
@@ -69,6 +69,7 @@ impl PipelineStage for ImageFrameSegmentatorStage {
             .ok_or_else(|| FeagiDataError::BadParameters(
                 "load_properties called with incompatible properties type for ImageFrameSegmentatorStage".into()
             ))?;
+        self.image_segmentator.update_gaze(&props.segmentation_gaze)?;
         Ok(())
     }
     

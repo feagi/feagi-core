@@ -11,7 +11,7 @@ use feagi_data_structures::genomic::SensoryCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::caching::per_channel_stream_caches::SensoryChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_pipeline::stage_properties::{ImageSegmentorStageProperties, ImageQuickDiffStageProperties};
+use crate::data_pipeline::stage_properties::*;
 use crate::data_types::*;
 use crate::data_types::descriptors::*;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};

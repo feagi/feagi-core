@@ -1,7 +1,7 @@
-
+use feagi_data_structures::FeagiDataError;
 use crate::{define_stage_properties};
 use crate::data_pipeline::stages::ImageFrameSegmentatorStage;
-use crate::data_types::{ImageFrameSegmentator};
+use crate::data_types::{GazeProperties, ImageFrameSegmentator};
 use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::wrapped_io_data::WrappedIOType;
 
@@ -12,7 +12,7 @@ define_stage_properties! {
     fields: {
         input_image_properties: ImageFrameProperties,
         output_image_properties: SegmentedImageFrameProperties,
-        image_segmentator: ImageFrameSegmentator,
+        segmentation_gaze: GazeProperties,
     },
 
     input_type: |s| WrappedIOType::ImageFrame(Some(s.input_image_properties)),
@@ -21,8 +21,8 @@ define_stage_properties! {
     create_stage: |s| {
         ImageFrameSegmentatorStage::new_box(
             s.input_image_properties,
-            s.output_image_properties
-            s.image_segmentator.clone()
+            s.output_image_properties,
+            ImageFrameSegmentator::new(s.input_image_properties,s.output_image_properties, s.segmentation_gaze).unwrap()
         ).unwrap()
     },
 
