@@ -16,6 +16,7 @@ use feagi_neural::{update_neuron_lif, is_refractory};
 use feagi_neural::types::NeuralValue;
 use feagi_runtime::{NeuronStorage, Result, RuntimeError};
 use rayon::prelude::*;
+use ahash::AHashMap;  // Faster hash map (already a dependency)
 
 /// Dynamic neuron array for desktop/server environments
 /// 
@@ -521,8 +522,35 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         cortical_area: u32,
         coords: &[(u32, u32, u32)],
     ) -> Vec<Option<usize>> {
+        // OPTIMIZATION: Sequential hash map building with AHashMap + cache-friendly access
+        // This changes complexity from O(n*m) to O(m + n) where n=coords, m=neurons in area
+        // Sequential iteration has better cache locality than parallel for this workload
+        // AHashMap provides 2-3x faster hashing than default SipHash
+        
+        // Pre-allocate hash map with capacity hint (reduces reallocations)
+        // Estimate: typically 10-50% of coords match, but use coords.len() as safe upper bound
+        let mut coord_map: AHashMap<(u32, u32, u32), usize> = 
+            AHashMap::with_capacity(coords.len().min(self.count));
+        
+        // Sequential iteration: better cache locality, compiler can auto-vectorize
+        // Access patterns: valid_mask[idx], cortical_areas[idx], coordinates[idx*3..idx*3+3]
+        // These are contiguous in memory, allowing SIMD auto-vectorization
+        for idx in 0..self.count {
+            // Fast path: early exit if not valid or wrong area (branch prediction friendly)
+            if !self.valid_mask[idx] || self.cortical_areas[idx] != cortical_area {
+                continue;
+            }
+            // Extract coordinates (cache-friendly: sequential access, SIMD-friendly pattern)
+            let coord_base = idx * 3;
+            let x = self.coordinates[coord_base];
+            let y = self.coordinates[coord_base + 1];
+            let z = self.coordinates[coord_base + 2];
+            coord_map.insert((x, y, z), idx);
+        }
+        
+        // Fast O(1) lookups for each coordinate
         coords.iter()
-            .map(|&(x, y, z)| self.get_neuron_at_coordinate(cortical_area, x, y, z))
+            .map(|&coord| coord_map.get(&coord).copied())
             .collect()
     }
 }

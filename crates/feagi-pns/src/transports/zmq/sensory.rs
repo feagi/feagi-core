@@ -278,12 +278,18 @@ impl SensoryStream {
 
                         // Process the binary data
                         let message_bytes = msg.as_ref();
+                        let t_zmq_receive_start = std::time::Instant::now();
                         debug!("🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes", message_count, message_bytes.len());
 
                         // Try to deserialize as binary XYZP data (using feagi-data-processing)
                         match Self::deserialize_and_inject_xyzp(message_bytes, &npu, &agent_registry, &rejected_no_genome, &rejected_no_agents) {
                             Ok(neuron_count) => {
                                 *total_neurons.lock() += neuron_count as u64;
+                                let t_zmq_total = t_zmq_receive_start.elapsed();
+                                info!(
+                                    "⏱️ [PERF-ZMQ] Message #{} processing: total={:.2}ms | bytes={} | neurons={}",
+                                    message_count, t_zmq_total.as_secs_f64() * 1000.0, message_bytes.len(), neuron_count
+                                );
                                 info!("🦀 [ZMQ-SENSORY] ✅ Successfully injected {} neurons from message #{}", neuron_count, message_count);
 
                                 // Log periodically
@@ -386,17 +392,20 @@ impl SensoryStream {
         }
 
         // Deserialize using FeagiByteContainer (proper container format)
+        let t_deserialize_start = std::time::Instant::now();
         info!("🦀 [ZMQ-SENSORY] 🔍 Deserializing {} bytes of sensory data...", message_bytes.len());
         let mut byte_container = FeagiByteContainer::new_empty();
         let mut data_vec = message_bytes.to_vec();
         
         // Load bytes into container
+        let t_load_start = std::time::Instant::now();
         byte_container
             .try_write_data_to_container_and_verify(&mut |bytes| {
                 std::mem::swap(bytes, &mut data_vec);
                 Ok(())
             })
             .map_err(|e| format!("Failed to load FeagiByteContainer: {:?}", e))?;
+        let t_load = t_load_start.elapsed();
         info!("🦀 [ZMQ-SENSORY] ✅ Loaded data into FeagiByteContainer");
 
         // Verify container structure count
@@ -410,9 +419,16 @@ impl SensoryStream {
         }
 
         // Extract first structure (should be CorticalMappedXYZPNeuronVoxels)
+        let t_extract_start = std::time::Instant::now();
         let boxed_struct = byte_container
             .try_create_new_struct_from_index(0)
             .map_err(|e| format!("Failed to deserialize structure from container: {:?}", e))?;
+        let t_extract = t_extract_start.elapsed();
+        let t_deserialize = t_deserialize_start.elapsed();
+        info!(
+            "⏱️ [PERF-DESERIALIZE] Deserialization: total={:.2}ms | load={:.2}ms | extract={:.2}ms",
+            t_deserialize.as_secs_f64() * 1000.0, t_load.as_secs_f64() * 1000.0, t_extract.as_secs_f64() * 1000.0
+        );
         info!("🦀 [ZMQ-SENSORY] ✅ Extracted structure from container");
 
         // Downcast to CorticalMappedXYZPNeuronVoxels using as_any().downcast_ref()
@@ -440,6 +456,7 @@ impl SensoryStream {
             info!("🦀 [ZMQ-SENSORY] 🔍 Processing cortical area: {} (base64: {})", cortical_id, cortical_id_str);
             
             // Step 1: Extract raw XYZP data (NO LOCKS)
+            let t_extract_xyzp_start = std::time::Instant::now();
             let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
             let num_neurons = neuron_arrays.len();
             
@@ -447,6 +464,7 @@ impl SensoryStream {
             let xyzp_data: Vec<(u32, u32, u32, f32)> = (0..num_neurons)
                 .map(|i| (x_coords[i], y_coords[i], z_coords[i], potentials[i]))
                 .collect();
+            let t_extract_xyzp = t_extract_xyzp_start.elapsed();
             
             info!("🦀 [ZMQ-SENSORY] 📊 Extracted {} XYZP data points for cortical area '{}'", num_neurons, cortical_id_str);
             if !xyzp_data.is_empty() {
@@ -461,18 +479,31 @@ impl SensoryStream {
             }
             
             // Step 2: Quick lock - NPU handles everything (name resolution + coordinate conversion + injection)
-            let area_start = std::time::Instant::now();
+            let t_npu_start = std::time::Instant::now();
+            let t_lock_start = std::time::Instant::now();
             let mut npu = npu_arc.lock().unwrap();
-            info!("🦀 [ZMQ-SENSORY] NPU lock acquired in {:?}", area_start.elapsed());
+            let t_lock = t_lock_start.elapsed();
+            info!("🦀 [ZMQ-SENSORY] NPU lock acquired in {:?}", t_lock);
             
             // NPU handles: CorticalID → cortical_idx lookup, coordinates → neuron IDs, injection
+            let t_inject_start = std::time::Instant::now();
             info!("🦀 [ZMQ-SENSORY] 💉 Calling NPU.inject_sensory_xyzp_by_id for area '{}' with {} XYZP points", cortical_id_str, xyzp_data.len());
             let injected = npu.inject_sensory_xyzp_by_id(&cortical_id, &xyzp_data);
+            let t_inject = t_inject_start.elapsed();
             total_injected += injected;
             
             drop(npu);
-            let area_duration = area_start.elapsed();
-            info!("🦀 [ZMQ-SENSORY] ✅ Injected {} neurons for area '{}' in {:?}", injected, cortical_id_str, area_duration);
+            let t_npu_total = t_npu_start.elapsed();
+            info!(
+                "⏱️ [PERF-NPU] Area '{}' injection: total={:.2}ms | extract_xyzp={:.2}ms | lock={:.2}ms | inject={:.2}ms | neurons={}",
+                cortical_id_str,
+                t_npu_total.as_secs_f64() * 1000.0,
+                t_extract_xyzp.as_secs_f64() * 1000.0,
+                t_lock.as_secs_f64() * 1000.0,
+                t_inject.as_secs_f64() * 1000.0,
+                injected
+            );
+            info!("🦀 [ZMQ-SENSORY] ✅ Injected {} neurons for area '{}' in {:?}", injected, cortical_id_str, t_npu_total);
             
             if injected == 0 {
                 warn!("🦀 [ZMQ-SENSORY] ⚠️ WARNING: No neurons were injected for area '{}'! This could mean:", cortical_id_str);

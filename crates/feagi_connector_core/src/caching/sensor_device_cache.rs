@@ -666,6 +666,8 @@ impl SensorDeviceCache {
     pub fn encode_all_sensors_to_neurons(&mut self, time_of_burst: Instant) -> Result<(), FeagiDataError> {
         use tracing::{info, debug, warn};
         
+        let t_encode_start = std::time::Instant::now();
+        
         // Clear neuron data before encoding
         self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
         
@@ -676,12 +678,31 @@ impl SensorDeviceCache {
         
         // Iterate over all registered sensor stream caches and encode them
         // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
+        let mut stream_cache_times = Vec::new();
         for ((sensor_type, group_index), stream_cache) in self.stream_caches.iter_mut() {
+            let t_stream_start = std::time::Instant::now();
             debug!("🦀 [SENSOR-CACHE] 🔍 Processing sensor_type={:?}, group_index={:?}", sensor_type, group_index);
             stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, previous_burst)?;
+            let t_stream = t_stream_start.elapsed();
+            stream_cache_times.push((format!("{:?}/{:?}", sensor_type, group_index), t_stream));
         }
         
         let total_neurons: usize = self.neuron_data.mappings.values().map(|arr| arr.len()).sum();
+        let t_encode_total = t_encode_start.elapsed();
+        
+        info!(
+            "⏱️ [PERF-ENCODE] encode_all_sensors_to_neurons: total={:.2}ms | areas={} | neurons={}",
+            t_encode_total.as_secs_f64() * 1000.0,
+            self.neuron_data.mappings.len(),
+            total_neurons
+        );
+        for (name, duration) in stream_cache_times {
+            info!(
+                "⏱️ [PERF-ENCODE]   - {}: {:.2}ms",
+                name,
+                duration.as_secs_f64() * 1000.0
+            );
+        }
         info!("🦀 [SENSOR-CACHE] ✅ encode_all_sensors_to_neurons complete: {} cortical areas, {} total neurons", 
             self.neuron_data.mappings.len(), total_neurons);
         
@@ -701,9 +722,14 @@ impl SensorDeviceCache {
     /// * `Err(FeagiDataError)` - If encoding fails
     pub fn encode_neurons_to_bytes(&mut self) -> Result<(), FeagiDataError> {
         use feagi_data_serialization::FeagiByteStructureType;
+        use tracing::info;
+        
+        let t_serialize_start = std::time::Instant::now();
         
         // Clear byte data
+        let t_clear_start = std::time::Instant::now();
         self.byte_data = FeagiByteContainer::new_empty();
+        let t_clear = t_clear_start.elapsed();
         
         // Check if we have any neuron data
         if self.neuron_data.mappings.is_empty() {
@@ -711,10 +737,25 @@ impl SensorDeviceCache {
             return Ok(());
         }
         
+        // Count total neurons for logging
+        let total_neurons: usize = self.neuron_data.mappings.values().map(|arr| arr.len()).sum();
+        
         // Serialize neuron_data to byte_data
+        let t_overwrite_start = std::time::Instant::now();
         self.byte_data
             .overwrite_byte_data_with_single_struct_data(&self.neuron_data, 0)
             .map_err(|e| FeagiDataError::BadParameters(format!("Failed to encode neuron data to bytes: {:?}", e)))?;
+        let t_overwrite = t_overwrite_start.elapsed();
+        
+        let t_serialize_total = t_serialize_start.elapsed();
+        info!(
+            "⏱️ [PERF-SERIALIZE] encode_neurons_to_bytes: total={:.2}ms | clear={:.2}ms | overwrite={:.2}ms | areas={} | neurons={}",
+            t_serialize_total.as_secs_f64() * 1000.0,
+            t_clear.as_secs_f64() * 1000.0,
+            t_overwrite.as_secs_f64() * 1000.0,
+            self.neuron_data.mappings.len(),
+            total_neurons
+        );
         
         Ok(())
     }
