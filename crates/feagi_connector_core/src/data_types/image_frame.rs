@@ -489,8 +489,6 @@ impl ImageFrame {
     // region Outputting Neurons
 
     pub(crate) fn overwrite_neuron_data(&self, write_target: &mut NeuronVoxelXYZPArrays, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-        use tracing::{info, debug, warn};
-        
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
         let x_offset: u32 = *channel_index * self.get_xy_resolution().width;
@@ -499,17 +497,11 @@ impl ImageFrame {
         write_target.clear();
 
         if self.skip_encoding {
-            warn!("🦀 [IMAGE-FRAME] ⚠️ overwrite_neuron_data: skip_encoding=true, returning early (resolution={}x{}, channel={})", 
-                resolution.width, resolution.height, channel_index);
             return Ok(()) // Encoding is to be skipped
         }
-        
-        debug!("🦀 [IMAGE-FRAME] 🔍 overwrite_neuron_data: resolution={}x{}, channels={}, total_pixels={}, channel_index={}, x_offset={}", 
-            resolution.width, resolution.height, self.channel_layout as usize, total_pixels, channel_index, x_offset);
-        
+
         write_target.ensure_capacity(total_pixels);
 
-        let mut neurons_written = 0;
         let height = resolution.height;
         write_target.update_vectors_from_external(|x_vec, y_vec, c_vec, p_vec| {
             // indexed_iter() on Array3<(H, W, C)> returns (row, col, channel) where:
@@ -525,14 +517,10 @@ impl ImageFrame {
                     y_vec.push(height - 1 - (row as u32));  // Flip Y: image top-left (0,0) -> FEAGI bottom-left (0,0)
                     c_vec.push(c as u32);
                     p_vec.push(*color_val as f32 / 255.0);
-                    neurons_written += 1;
                 }
             };
             Ok(())
         })?;
-        
-        // Logging removed for hot path
-
         Ok(())
     }
 

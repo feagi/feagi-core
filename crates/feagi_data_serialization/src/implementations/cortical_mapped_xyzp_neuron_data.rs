@@ -137,9 +137,6 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
 ///
 /// Writes X, Y, Z coordinates and potential values as separate contiguous blocks
 /// for memory efficiency and cache locality during deserialization.
-///
-/// OPTIMIZED: Uses bulk memory operations (copy_from_slice) for little-endian systems
-/// instead of individual writes, providing 10-100x speedup for large arrays.
 #[inline]
 fn write_neuron_array_to_bytes(neuron_array: &NeuronVoxelXYZPArrays, bytes_to_write_to: &mut [u8]) -> Result<(), FeagiDataError> {
     const U32_F32_LENGTH: usize = 4;

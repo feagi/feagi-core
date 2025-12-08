@@ -1,6 +1,5 @@
 use std::time::Instant;
 use rayon::prelude::*;
-use std::collections::HashSet;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
@@ -26,13 +25,12 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
 
 
     fn write_neuron_data_multi_channel_from_processed_cache(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
-        use tracing::{info, debug, warn};
         
         // Parallel iterate over channels
         pipelines.par_iter()
             .zip(self.neuron_scratch_spaces.par_iter_mut())
             .enumerate()
-            .try_for_each(|(_channel_index, (pipeline, scratches))| -> Result<(), FeagiDataError> {
+            .try_for_each(|(channel_index, (pipeline, scratches))| -> Result<(), FeagiDataError> {
                 let channel_updated = pipeline.get_last_processed_instant();
                 
                 if channel_updated < time_of_previous_burst {
@@ -42,7 +40,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
                 let updated_data = pipeline.get_most_recent_postprocessed_output();
                 let updated_segmented_image: &SegmentedImageFrame = updated_data.try_into()?;
 
-                updated_segmented_image.overwrite_neuron_data(scratches, (_channel_index as u32).into())?;
+                updated_segmented_image.overwrite_neuron_data(scratches, (channel_index as u32).into())?;
                 
                 Ok(())
             })?;

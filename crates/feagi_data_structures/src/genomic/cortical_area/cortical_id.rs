@@ -10,6 +10,7 @@ macro_rules! match_bytes_by_cortical_type {
         custom => $custom:block,
         memory => $memory:block,
         core => $core:block,
+    
         brain_input => $brain_input:block,
         brain_output => $brain_output:block,
         invalid => $invalid:block,

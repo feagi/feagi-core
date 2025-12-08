@@ -64,8 +64,7 @@ impl PipelineStage for ImageFrameSegmentatorStage {
 
     fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         use crate::data_pipeline::stage_properties::ImageSegmentorStageProperties;
-        
-        // Extract ImageSegmentorStageProperties from the trait object
+
         let props = properties.as_any()
             .downcast_ref::<ImageSegmentorStageProperties>()
             .ok_or_else(|| FeagiDataError::BadParameters(
@@ -97,7 +96,7 @@ impl ImageFrameSegmentatorStage {
         })
     }
 
-    pub fn new_box(
+    pub(crate) fn new_box(
         input_image_properties: ImageFrameProperties, 
         output_image_properties: SegmentedImageFrameProperties, 
         image_segmentator: ImageFrameSegmentator
