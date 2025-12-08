@@ -381,7 +381,6 @@ macro_rules! motor_unit_functions {
 
 }
 
-#[derive(Debug)]
 pub struct MotorDeviceCache {
     stream_caches: HashMap<(MotorCorticalUnit, CorticalGroupIndex), MotorChannelStreamCaches>,
     agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(MotorCorticalUnit, CorticalGroupIndex)>>,

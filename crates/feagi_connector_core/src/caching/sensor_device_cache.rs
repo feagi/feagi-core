@@ -11,7 +11,7 @@ use feagi_data_structures::genomic::SensoryCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::caching::per_channel_stream_caches::SensoryChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_pipeline::stage_properties::ImageSegmentorStageProperties;
+use crate::data_pipeline::stage_properties::{ImageSegmentorStageProperties, ImageQuickDiffStageProperties};
 use crate::data_types::*;
 use crate::data_types::descriptors::*;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -348,7 +348,25 @@ macro_rules! sensor_unit_functions {
                 let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
                     let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
                     for _i in 0..*number_channels {
-                        output.push( vec![ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?]) // TODO properly implement clone so we dont need to do this
+                        let mut channel_pipeline: Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>> = Vec::new();
+                        
+                        // Add diff stage to reduce neuron count by filtering unchanged pixels
+                        // NOTE: We apply this even in Absolute mode to reduce bandwidth, but cortical IDs
+                        // remain Absolute (matching genome). The diff stage filters pixels before segmentation.
+                        // Threshold: pixels must change by at least 1 to be included (filters completely unchanged pixels)
+                        // Accept any amount of activity (0-100%) - we want to send all changed pixels
+                        let per_pixel_range = 1u8..=255u8; // Minimum 1 pixel difference to be considered changed (filters unchanged pixels only)
+                        let activity_range = Percentage::new_from_0_1_unchecked(0.0)..=Percentage::new_from_0_1_unchecked(1.0);
+                        channel_pipeline.push(ImageQuickDiffStageProperties::new_box(
+                            per_pixel_range,
+                            activity_range,
+                            input_image_properties
+                        ));
+                        
+                        // Always add segmentor stage (converts ImageFrame to SegmentedImageFrame)
+                        channel_pipeline.push(ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?);
+                        
+                        output.push(channel_pipeline);
                     };
                     output
                 };
@@ -423,7 +441,6 @@ macro_rules! sensor_unit_functions {
     };
 }
 
-#[derive(Debug)]
 pub struct SensorDeviceCache {
     stream_caches: HashMap<(SensoryCorticalUnit, CorticalGroupIndex), SensoryChannelStreamCaches>,
     agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(SensoryCorticalUnit, CorticalGroupIndex)>>,
@@ -647,13 +664,29 @@ impl SensorDeviceCache {
     /// * `Ok(())` - If encoding succeeded
     /// * `Err(FeagiDataError)` - If encoding fails
     pub fn encode_all_sensors_to_neurons(&mut self, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+        use tracing::{info, debug, warn};
+        
         // Clear neuron data before encoding
         self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
         
+        let previous_burst = self.previous_burst;
+        let time_since_previous = time_of_burst.duration_since(previous_burst);
+        info!("🦀 [SENSOR-CACHE] 🔍 encode_all_sensors_to_neurons: time_of_burst={:?}, previous_burst={:?}, time_since_previous={:?}ms, stream_caches_count={}", 
+            time_of_burst, previous_burst, time_since_previous.as_millis(), self.stream_caches.len());
+        
         // Iterate over all registered sensor stream caches and encode them
-        for ((_sensor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
-            stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, time_of_burst)?;
+        // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
+        for ((sensor_type, group_index), stream_cache) in self.stream_caches.iter_mut() {
+            debug!("🦀 [SENSOR-CACHE] 🔍 Processing sensor_type={:?}, group_index={:?}", sensor_type, group_index);
+            stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, previous_burst)?;
         }
+        
+        let total_neurons: usize = self.neuron_data.mappings.values().map(|arr| arr.len()).sum();
+        info!("🦀 [SENSOR-CACHE] ✅ encode_all_sensors_to_neurons complete: {} cortical areas, {} total neurons", 
+            self.neuron_data.mappings.len(), total_neurons);
+        
+        // Update previous_burst for next time
+        self.previous_burst = time_of_burst;
         
         Ok(())
     }

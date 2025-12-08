@@ -1,4 +1,3 @@
-use std::fmt::write;
 use byteorder::{ByteOrder, LittleEndian};
 use feagi_data_structures::FeagiDataError;
 use crate::feagi_serializable::FeagiSerializable;

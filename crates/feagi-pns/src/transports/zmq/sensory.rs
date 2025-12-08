@@ -259,6 +259,10 @@ impl SensoryStream {
                 }
 
                 if !poll_items[0].is_readable() {
+                    // Log periodically that we're polling but no messages
+                    if message_count == 0 || message_count % 1000 == 0 {
+                        debug!("🦀 [ZMQ-SENSORY] 🔍 Polling for messages (no data yet, message_count: {})", message_count);
+                    }
                     drop(sock_guard);
                     continue;
                 }
@@ -280,7 +284,7 @@ impl SensoryStream {
                         match Self::deserialize_and_inject_xyzp(message_bytes, &npu, &agent_registry, &rejected_no_genome, &rejected_no_agents) {
                             Ok(neuron_count) => {
                                 *total_neurons.lock() += neuron_count as u64;
-                                debug!("🦀 [ZMQ-SENSORY] ✅ Successfully injected {} neurons from message #{}", neuron_count, message_count);
+                                info!("🦀 [ZMQ-SENSORY] ✅ Successfully injected {} neurons from message #{}", neuron_count, message_count);
 
                                 // Log periodically
                                 if message_count % 100 == 0 {
@@ -382,7 +386,7 @@ impl SensoryStream {
         }
 
         // Deserialize using FeagiByteContainer (proper container format)
-        debug!("🦀 [ZMQ-SENSORY] 🔍 Deserializing {} bytes of sensory data...", message_bytes.len());
+        info!("🦀 [ZMQ-SENSORY] 🔍 Deserializing {} bytes of sensory data...", message_bytes.len());
         let mut byte_container = FeagiByteContainer::new_empty();
         let mut data_vec = message_bytes.to_vec();
         
@@ -393,13 +397,13 @@ impl SensoryStream {
                 Ok(())
             })
             .map_err(|e| format!("Failed to load FeagiByteContainer: {:?}", e))?;
-        debug!("🦀 [ZMQ-SENSORY] ✅ Loaded data into FeagiByteContainer");
+        info!("🦀 [ZMQ-SENSORY] ✅ Loaded data into FeagiByteContainer");
 
         // Verify container structure count
         let num_structures = byte_container
             .try_get_number_contained_structures()
             .map_err(|e| format!("Failed to get structure count: {:?}", e))?;
-        debug!("🦀 [ZMQ-SENSORY] Container has {} structure(s)", num_structures);
+        info!("🦀 [ZMQ-SENSORY] Container has {} structure(s)", num_structures);
 
         if num_structures == 0 {
             return Err("FeagiByteContainer has no structures".to_string());
@@ -409,7 +413,7 @@ impl SensoryStream {
         let boxed_struct = byte_container
             .try_create_new_struct_from_index(0)
             .map_err(|e| format!("Failed to deserialize structure from container: {:?}", e))?;
-        debug!("🦀 [ZMQ-SENSORY] ✅ Extracted structure from container");
+        info!("🦀 [ZMQ-SENSORY] ✅ Extracted structure from container");
 
         // Downcast to CorticalMappedXYZPNeuronVoxels using as_any().downcast_ref()
         let cortical_mapped = boxed_struct
@@ -459,7 +463,7 @@ impl SensoryStream {
             // Step 2: Quick lock - NPU handles everything (name resolution + coordinate conversion + injection)
             let area_start = std::time::Instant::now();
             let mut npu = npu_arc.lock().unwrap();
-            debug!("🦀 [ZMQ-SENSORY] NPU lock acquired in {:?}", area_start.elapsed());
+            info!("🦀 [ZMQ-SENSORY] NPU lock acquired in {:?}", area_start.elapsed());
             
             // NPU handles: CorticalID → cortical_idx lookup, coordinates → neuron IDs, injection
             info!("🦀 [ZMQ-SENSORY] 💉 Calling NPU.inject_sensory_xyzp_by_id for area '{}' with {} XYZP points", cortical_id_str, xyzp_data.len());

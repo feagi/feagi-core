@@ -78,14 +78,15 @@ impl ImageFrameQuickDiffStage {
     pub fn new(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Self, FeagiDataError> {
 
         let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;
-        let number_of_samples = image_properties.get_number_of_channels();
+        // Calculate total number of pixels (width * height * channels) for activity percentage calculation
+        let total_pixels = image_properties.get_number_of_samples();
         Ok(ImageFrameQuickDiffStage {
             diff_cache: WrappedIOData::ImageFrame(cache_image.clone()),
             previous_frame_cache: WrappedIOData::ImageFrame(cache_image.clone()), // Image Frame
             input_definition: image_properties,
             inclusive_pixel_range: per_pixel_allowed_range,
-            samples_count_lower_bound: (acceptable_amount_of_activity_in_image.start().get_as_0_1() * number_of_samples as f32) as usize,
-            samples_count_upper_bound: (acceptable_amount_of_activity_in_image.end().get_as_0_1() * number_of_samples as f32) as usize,
+            samples_count_lower_bound: (acceptable_amount_of_activity_in_image.start().get_as_0_1() * total_pixels as f32) as usize,
+            samples_count_upper_bound: (acceptable_amount_of_activity_in_image.end().get_as_0_1() * total_pixels as f32) as usize,
             acceptable_amount_of_activity_in_image,
         })
     }
@@ -117,13 +118,30 @@ fn quick_diff_and_check_if_pass(minuend: &WrappedIOData, subtrahend: &WrappedIOD
                 subtrahend - minuend
             };
             let passed = absolute_diff >= pixel_val_lower_bound && absolute_diff <= pixel_val_upper_bound;
-            *diff = if passed { subtrahend } else { 0 };
+            // If pixel changed by acceptable amount, output NEW value (minuend), otherwise filter out (0)
+            *diff = if passed { minuend } else { 0 };
             passed as usize
         })
         .into_par_iter()
         .sum();
 
     let should_pass = total_pass_count >= samples_count_lower_bound && total_pass_count<= samples_count_upper_bound;
-    diff_result.skip_encoding = !should_pass ||  diff_result.skip_encoding;
+    // Set skip_encoding based on should_pass: if should_pass is false, skip encoding; otherwise allow encoding
+    // Note: We don't preserve previous skip_encoding value - the diff stage controls this flag
+    diff_result.skip_encoding = !should_pass;
+    
+    // Debug logging to understand why skip_encoding is being set
+    if diff_result.skip_encoding {
+        tracing::warn!(
+            "🦀 [IMAGE-QUICK-DIFF] ⚠️ skip_encoding=true: total_pass_count={}, lower_bound={}, upper_bound={}, should_pass={}",
+            total_pass_count, samples_count_lower_bound, samples_count_upper_bound, should_pass
+        );
+    } else {
+        tracing::debug!(
+            "🦀 [IMAGE-QUICK-DIFF] ✅ skip_encoding=false: total_pass_count={}, lower_bound={}, upper_bound={}, should_pass={}",
+            total_pass_count, samples_count_lower_bound, samples_count_upper_bound, should_pass
+        );
+    }
+    
     Ok(())
 }

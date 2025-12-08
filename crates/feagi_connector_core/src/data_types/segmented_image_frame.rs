@@ -219,15 +219,31 @@ impl SegmentedImageFrame {
     //region neuron export
 
     pub(crate) fn overwrite_neuron_data(&self, write_targets: &mut[NeuronVoxelXYZPArrays; 9], channel_index: CorticalChannelIndex ) -> Result<(), FeagiDataError> {
+        use tracing::{info, debug, warn};
+        
         // NOTE: write_targets should be in the same order as Cortical ID for segmented is!
+        debug!("🦀 [SEGMENTED-IMAGE-FRAME] 🔍 overwrite_neuron_data: channel_index={}, 9 segments", channel_index);
 
         let ordered_images = self.get_ordered_image_frame_references();
+        let mut total_neurons = 0;
         write_targets.par_iter_mut()
             .enumerate()
             .try_for_each(|(image_ordered_index, write_target) | -> Result<(), FeagiDataError> {
+                let neurons_before = write_target.len();
                 ordered_images[image_ordered_index].overwrite_neuron_data(write_target, channel_index)?; // Handles clearing the array if needed
+                let neurons_after = write_target.len();
+                if neurons_after > 0 {
+                    debug!("🦀 [SEGMENTED-IMAGE-FRAME] 🔍 Segment[{}]: {} neurons written", image_ordered_index, neurons_after);
+                }
                 Ok(())
             })?;
+        
+        total_neurons = write_targets.iter().map(|wt| wt.len()).sum();
+        if total_neurons == 0 {
+            warn!("🦀 [SEGMENTED-IMAGE-FRAME] ⚠️ overwrite_neuron_data: 0 total neurons written across all 9 segments!");
+        } else {
+            info!("🦀 [SEGMENTED-IMAGE-FRAME] ✅ overwrite_neuron_data: {} total neurons written across 9 segments", total_neurons);
+        }
 
         Ok(())
     }

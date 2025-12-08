@@ -16,6 +16,7 @@ image = {workspace = true}
 rayon = { workspace = true}
 paste = { workspace = true}
 serde = { workspace = true }
+tracing = "0.1"
 
 [dev-dependencies]
 clap = { version =  "4.5.53", features = ["derive"] }

@@ -489,17 +489,27 @@ impl ImageFrame {
     // region Outputting Neurons
 
     pub(crate) fn overwrite_neuron_data(&self, write_target: &mut NeuronVoxelXYZPArrays, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+        use tracing::{info, debug, warn};
+        
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
         let x_offset: u32 = *channel_index * self.get_xy_resolution().width;
+        let resolution = self.get_xy_resolution();
+        let total_pixels = self.get_number_elements();
         write_target.clear();
 
         if self.skip_encoding {
+            warn!("🦀 [IMAGE-FRAME] ⚠️ overwrite_neuron_data: skip_encoding=true, returning early (resolution={}x{}, channel={})", 
+                resolution.width, resolution.height, channel_index);
             return Ok(()) // Encoding is to be skipped
         }
         
-        write_target.ensure_capacity(self.get_number_elements());
+        debug!("🦀 [IMAGE-FRAME] 🔍 overwrite_neuron_data: resolution={}x{}, channels={}, total_pixels={}, channel_index={}, x_offset={}", 
+            resolution.width, resolution.height, self.channel_layout as usize, total_pixels, channel_index, x_offset);
+        
+        write_target.ensure_capacity(total_pixels);
 
+        let mut neurons_written = 0;
         write_target.update_vectors_from_external(|x_vec, y_vec, c_vec, p_vec| {
             for ((x, y, c), color_val) in self.pixels.indexed_iter() { // going from row major to cartesian
                 if color_val > &EPSILON {
@@ -507,12 +517,20 @@ impl ImageFrame {
                     y_vec.push(y as u32);  // flip y //TODO wheres the flip part????
                     c_vec.push(c as u32);
                     p_vec.push(*color_val as f32 / 255.0);
+                    neurons_written += 1;
                 }
             };
             Ok(())
-        })
+        })?;
+        
+        if neurons_written == 0 {
+            warn!("🦀 [IMAGE-FRAME] ⚠️ overwrite_neuron_data: 0 neurons written (all pixels <= EPSILON={})", EPSILON);
+        } else {
+            info!("🦀 [IMAGE-FRAME] ✅ overwrite_neuron_data: {} neurons written (out of {} total pixels, {}% above threshold)", 
+                neurons_written, total_pixels, (neurons_written as f32 / total_pixels as f32 * 100.0));
+        }
 
-
+        Ok(())
     }
 
     // endregion
