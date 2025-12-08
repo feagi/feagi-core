@@ -79,6 +79,10 @@ impl ImageSegmentorStageProperties {
         self.image_segmentator.update_gaze(&new_gaze)?;
         Ok(())
     }
+    
+    pub fn get_used_gaze(&self) -> GazeProperties {
+        self.image_segmentator.get_used_gaze()
+    }
 }
 
 pipeline_stage_property_implementations!(

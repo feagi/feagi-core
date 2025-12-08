@@ -63,7 +63,21 @@ impl PipelineStage for ImageFrameSegmentatorStage {
     }
 
     fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        todo!()
+        use crate::data_pipeline::stage_properties::ImageSegmentorStageProperties;
+        
+        // Extract ImageSegmentorStageProperties from the trait object
+        let props = properties.as_any()
+            .downcast_ref::<ImageSegmentorStageProperties>()
+            .ok_or_else(|| FeagiDataError::BadParameters(
+                "load_properties called with incompatible properties type for ImageFrameSegmentatorStage".into()
+            ))?;
+        
+        // Use the update_from_gaze method to update gaze properties
+        // This verifies compatibility and updates the image_segmentator
+        let new_gaze = props.get_used_gaze();
+        self.image_segmentator.update_gaze(&new_gaze)?;
+        
+        Ok(())
     }
 }
 
