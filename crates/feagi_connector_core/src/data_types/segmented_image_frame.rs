@@ -115,10 +115,10 @@ impl SegmentedImageFrame {
 
     pub fn get_segmented_image_frame_properties(&self) -> SegmentedImageFrameProperties {
         SegmentedImageFrameProperties::new(
-            &self.get_segmented_frame_target_resolutions(),
-            self.center.get_channel_layout(),
-            self.lower_right.get_channel_layout(), // all peripherals should be the same
-            self.get_color_space()
+            self.get_segmented_frame_target_resolutions(),
+            self.center.get_channel_layout().clone(),
+            self.lower_right.get_channel_layout().clone(), // all peripherals should be the same
+            self.get_color_space().clone()
         )
     }
 

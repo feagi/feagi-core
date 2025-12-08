@@ -110,4 +110,8 @@ impl ImageFrameProcessorStage {
             transformer_definition,
         })
     }
+
+    pub fn new_box(transformer_definition: ImageFrameProcessor) -> Result<Box<dyn PipelineStage + Send + Sync + 'static>, FeagiDataError> {
+        Ok(Box::new(ImageFrameProcessorStage::new(transformer_definition)?))
+    }
 }

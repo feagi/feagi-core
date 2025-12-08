@@ -7,10 +7,10 @@
 use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
-use feagi_data_structures::data::{Percentage, SignedPercentage};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::data_pipeline::PipelineStageProperties;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 /// A stream processor that linearly scales input float values to the range [0, 1].
 ///
@@ -18,7 +18,7 @@ use crate::data_pipeline::pipeline_stage::PipelineStage;
 /// and maps them linearly to the normalized range [0, 1]. Values outside the given bounds
 /// are clamped to the bounds before scaling.
 #[derive(Debug, Clone)]
-pub struct LinearScaleToPercentageStage {
+pub struct  {
     previous_value: WrappedIOData,
     lower: f32,
     upper: f32,
@@ -56,6 +56,14 @@ impl PipelineStage for LinearScaleToPercentageStage {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        todo!()
     }
 }
 

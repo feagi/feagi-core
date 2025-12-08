@@ -8,8 +8,8 @@ use std::any::Any;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 /// A stream processor that maintains a rolling window of float values and outputs their average.
 ///

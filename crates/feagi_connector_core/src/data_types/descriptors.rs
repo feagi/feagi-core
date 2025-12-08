@@ -360,17 +360,17 @@ pub struct SegmentedImageFrameProperties {
 }
 impl SegmentedImageFrameProperties {
 
-    pub fn new( // TODO why take references if we are going to clone anyways?
-        segment_xy_resolutions: &SegmentedXYImageResolutions,
-        center_color_channels: &ColorChannelLayout,
-        peripheral_color_channels: &ColorChannelLayout,
-        color_space: &ColorSpace,
+    pub fn new(
+        segment_xy_resolutions: SegmentedXYImageResolutions,
+        center_color_channel: ColorChannelLayout,
+        peripheral_color_channels: ColorChannelLayout,
+        color_space: ColorSpace,
     ) -> SegmentedImageFrameProperties {
         SegmentedImageFrameProperties {
-            segment_xy_resolutions: segment_xy_resolutions.clone(),
-            center_color_channel: center_color_channels.clone(),
-            peripheral_color_channels: peripheral_color_channels.clone(),
-            color_space: *color_space,
+            segment_xy_resolutions,
+            center_color_channel,
+            peripheral_color_channels,
+            color_space,
         }
     }
 

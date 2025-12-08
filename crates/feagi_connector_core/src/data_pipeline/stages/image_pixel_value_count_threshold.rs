@@ -4,11 +4,12 @@ use std::ops::RangeInclusive;
 use std::time::Instant;
 use ndarray::{Array3, Zip};
 use rayon::prelude::*;
-use feagi_data_structures::data::descriptors::{ImageFrameProperties};
-use feagi_data_structures::data::{ImageFrame, Percentage};
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::data_pipeline::PipelineStageProperties;
+use crate::data_types::descriptors::ImageFrameProperties;
+use crate::data_types::{ImageFrame, Percentage};
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug, Clone)]
 pub struct ImagePixelValueCountThresholdStage {
@@ -51,6 +52,14 @@ impl PipelineStage for ImagePixelValueCountThresholdStage {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        todo!()
+    }
 }
 
 impl ImagePixelValueCountThresholdStage {
@@ -65,6 +74,10 @@ impl ImagePixelValueCountThresholdStage {
             samples_count_lower_bound: (acceptable_amount_of_activity_in_image.start().get_as_0_1() * number_of_samples as f32) as usize,
             samples_count_upper_bound: (acceptable_amount_of_activity_in_image.end().get_as_0_1() * number_of_samples as f32) as usize
         })
+    }
+    
+    pub fn new_box(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Box<dyn PipelineStage + Send + Sync + 'static>, FeagiDataError> {
+        Ok(Box::new(ImagePixelValueCountThresholdStage::new(image_properties, per_pixel_allowed_range, acceptable_amount_of_activity_in_image)?))
     }
 }
 

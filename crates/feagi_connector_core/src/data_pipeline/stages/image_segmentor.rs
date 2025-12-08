@@ -4,7 +4,7 @@ use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
-use crate::data_pipeline::stage_properties::ImageSegmentorStageProperties;
+use crate::data_pipeline::stage_properties::ImageFrameSegmentatorStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::data_types::{ImageFrame, SegmentedImageFrame};
 use crate::data_types::ImageFrameSegmentator;
@@ -55,29 +55,23 @@ impl PipelineStage for ImageFrameSegmentatorStage {
     }
 
     fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
-        ImageSegmentorStageProperties::new_box(
+        ImageFrameSegmentatorStageProperties::new_box(
             self.input_image_properties,
             self.output_image_properties,
-            self.image_segmentator.get_used_gaze()
-        ).unwrap()
+            self.image_segmentator.clone()
+        )
     }
 
     fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        use crate::data_pipeline::stage_properties::ImageSegmentorStageProperties;
-
+        use crate::data_pipeline::stage_properties::ImageFrameSegmentatorStageProperties;
         let props = properties.as_any()
-            .downcast_ref::<ImageSegmentorStageProperties>()
+            .downcast_ref::<ImageFrameSegmentatorStageProperties>()
             .ok_or_else(|| FeagiDataError::BadParameters(
                 "load_properties called with incompatible properties type for ImageFrameSegmentatorStage".into()
             ))?;
-        
-        // Use the update_from_gaze method to update gaze properties
-        // This verifies compatibility and updates the image_segmentator
-        let new_gaze = props.get_used_gaze();
-        self.image_segmentator.update_gaze(&new_gaze)?;
-        
         Ok(())
     }
+    
 }
 
 impl ImageFrameSegmentatorStage {

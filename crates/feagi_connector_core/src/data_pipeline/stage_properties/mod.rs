@@ -7,6 +7,8 @@
 
 mod image_segmentor;
 mod image_quick_diff;
+mod image_pixel_value_count_threshold;
+mod image_transformer;
 
-pub use image_segmentor::ImageSegmentorStageProperties;
+pub use image_segmentor::ImageFrameSegmentatorStageProperties;
 pub use image_quick_diff::ImageQuickDiffStageProperties;

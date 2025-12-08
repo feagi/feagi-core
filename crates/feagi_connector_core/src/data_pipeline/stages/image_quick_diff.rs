@@ -47,59 +47,8 @@ impl PipelineStage for ImageFrameQuickDiffStage {
     }
 
     fn process_new_input(&mut self, value: &WrappedIOData, time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-        let t_total_start = std::time::Instant::now();
-        
-        // Check if dimensions match before diffing (prevents panic on first frame or resolution changes)
-        let t_convert_start = std::time::Instant::now();
-        let current_frame: &ImageFrame = value.try_into()?;
-        let previous_frame: &ImageFrame = (&self.previous_frame_cache).try_into()?;
-        let t_convert = t_convert_start.elapsed();
-
-        // If dimensions don't match, reset cache and skip diff (first frame or resolution change)
-        if current_frame.get_xy_resolution() != previous_frame.get_xy_resolution()
-            || current_frame.get_channel_layout() != previous_frame.get_channel_layout() {
-            tracing::debug!(
-                "🦀 [IMAGE-QUICK-DIFF] Dimension/resolution change detected, resetting cache. Current: {:?}, Previous: {:?}",
-                current_frame.get_xy_resolution(), previous_frame.get_xy_resolution()
-            );
-            let t_clone_start = std::time::Instant::now();
-            // Reset diff_cache to match current frame
-            self.diff_cache = value.clone();
-            // Reset previous_frame_cache for next iteration
-            self.previous_frame_cache = value.clone();
-            let t_clone = t_clone_start.elapsed();
-            // Allow encoding on first frame or after resolution change
-            // Set skip_encoding to false by converting and setting directly
-            let diff_frame: &mut ImageFrame = (&mut self.diff_cache).try_into()?;
-            diff_frame.skip_encoding = false;
-            let t_total = t_total_start.elapsed();
-            tracing::debug!(
-                "⏱️ [PERF-DIFF] process_new_input (reset): total={:.2}ms | convert={:.2}ms | clone={:.2}ms",
-                t_total.as_secs_f64() * 1000.0,
-                t_convert.as_secs_f64() * 1000.0,
-                t_clone.as_secs_f64() * 1000.0
-            );
-            return Ok(&self.diff_cache);
-        }
-        
-        // Dimensions match - proceed with diff
-        let t_diff_start = std::time::Instant::now();
         quick_diff_and_check_if_pass(value, &self.previous_frame_cache, &mut self.diff_cache, &self.inclusive_pixel_range, self.samples_count_lower_bound, self.samples_count_upper_bound)?;
-        let t_diff = t_diff_start.elapsed();
-        
-        let t_clone_start = std::time::Instant::now();
         self.previous_frame_cache = value.clone();
-        let t_clone = t_clone_start.elapsed();
-        
-        let t_total = t_total_start.elapsed();
-        tracing::debug!(
-            "⏱️ [PERF-DIFF] process_new_input: total={:.2}ms | convert={:.2}ms | diff={:.2}ms | clone={:.2}ms",
-            t_total.as_secs_f64() * 1000.0,
-            t_convert.as_secs_f64() * 1000.0,
-            t_diff.as_secs_f64() * 1000.0,
-            t_clone.as_secs_f64() * 1000.0
-        );
-        
         Ok(&self.diff_cache)
     }
 
