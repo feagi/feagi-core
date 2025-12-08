@@ -47,7 +47,6 @@ impl PipelineStage for ImageFrameQuickDiffStage {
     }
 
     fn process_new_input(&mut self, value: &WrappedIOData, time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-        use tracing::info;
         let t_total_start = std::time::Instant::now();
         
         // Check if dimensions match before diffing (prevents panic on first frame or resolution changes)
@@ -74,7 +73,7 @@ impl PipelineStage for ImageFrameQuickDiffStage {
             let diff_frame: &mut ImageFrame = (&mut self.diff_cache).try_into()?;
             diff_frame.skip_encoding = false;
             let t_total = t_total_start.elapsed();
-            info!(
+            tracing::debug!(
                 "⏱️ [PERF-DIFF] process_new_input (reset): total={:.2}ms | convert={:.2}ms | clone={:.2}ms",
                 t_total.as_secs_f64() * 1000.0,
                 t_convert.as_secs_f64() * 1000.0,
@@ -93,7 +92,7 @@ impl PipelineStage for ImageFrameQuickDiffStage {
         let t_clone = t_clone_start.elapsed();
         
         let t_total = t_total_start.elapsed();
-        info!(
+        tracing::debug!(
             "⏱️ [PERF-DIFF] process_new_input: total={:.2}ms | convert={:.2}ms | diff={:.2}ms | clone={:.2}ms",
             t_total.as_secs_f64() * 1000.0,
             t_convert.as_secs_f64() * 1000.0,
@@ -149,7 +148,6 @@ impl ImageFrameQuickDiffStage {
 }
 
 fn quick_diff_and_check_if_pass(minuend: &WrappedIOData, subtrahend: &WrappedIOData, diff_result: &mut WrappedIOData, pixel_bounds: &RangeInclusive<u8>, samples_count_lower_bound: usize, samples_count_upper_bound: usize) -> Result<(), FeagiDataError> {
-    use tracing::info;
     let t_total_start = std::time::Instant::now();
     
     let t_convert_start = std::time::Instant::now();
@@ -210,7 +208,7 @@ fn quick_diff_and_check_if_pass(minuend: &WrappedIOData, subtrahend: &WrappedIOD
     
     let t_total = t_total_start.elapsed();
     let total_pixels = minuend_arr.len();
-    info!(
+    tracing::debug!(
         "⏱️ [PERF-DIFF] quick_diff_and_check_if_pass: total={:.2}ms | convert={:.2}ms | get_data={:.2}ms | zip_parallel={:.2}ms | check={:.2}ms | pixels={} | passed={}",
         t_total.as_secs_f64() * 1000.0,
         t_convert.as_secs_f64() * 1000.0,

@@ -242,7 +242,7 @@ impl SegmentedImageFrame {
         if total_neurons == 0 {
             warn!("🦀 [SEGMENTED-IMAGE-FRAME] ⚠️ overwrite_neuron_data: 0 total neurons written across all 9 segments!");
         } else {
-            info!("🦀 [SEGMENTED-IMAGE-FRAME] ✅ overwrite_neuron_data: {} total neurons written across 9 segments", total_neurons);
+            tracing::debug!("🦀 [SEGMENTED-IMAGE-FRAME] ✅ overwrite_neuron_data: {} total neurons written across 9 segments", total_neurons);
         }
 
         Ok(())
