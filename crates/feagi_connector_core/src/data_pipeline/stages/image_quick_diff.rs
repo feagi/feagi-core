@@ -120,7 +120,33 @@ impl PipelineStage for ImageFrameQuickDiffStage {
     }
 
     fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        todo!()
+        use crate::data_pipeline::stage_properties::ImageQuickDiffStageProperties;
+        
+        // Extract ImageQuickDiffStageProperties from the trait object
+        let props = properties.as_any()
+            .downcast_ref::<ImageQuickDiffStageProperties>()
+            .ok_or_else(|| FeagiDataError::BadParameters(
+                "load_properties called with incompatible properties type for ImageFrameQuickDiffStage".into()
+            ))?;
+        
+        // Verify image properties match (resolution, color space, channels must be the same)
+        if props.image_properties != self.input_definition {
+            return Err(FeagiDataError::BadParameters(
+                format!("Cannot update ImageFrameQuickDiffStage: image properties mismatch. Expected {:?}, got {:?}", 
+                    self.input_definition, props.image_properties).into()
+            ));
+        }
+        
+        // Update the threshold and activity range
+        self.inclusive_pixel_range = props.per_pixel_allowed_range.clone();
+        self.acceptable_amount_of_activity_in_image = props.acceptable_amount_of_activity_in_image.clone();
+        
+        // Recalculate sample count bounds based on new activity range
+        let total_pixels = self.input_definition.get_number_of_samples();
+        self.samples_count_lower_bound = (self.acceptable_amount_of_activity_in_image.start().get_as_0_1() * total_pixels as f32) as usize;
+        self.samples_count_upper_bound = (self.acceptable_amount_of_activity_in_image.end().get_as_0_1() * total_pixels as f32) as usize;
+        
+        Ok(())
     }
 }
 
