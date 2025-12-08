@@ -90,7 +90,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `WrappedIOType` - The input type expected
     pub fn get_input_type(&self) -> WrappedIOType {
-        self.pipeline_runners.first().unwrap().get_input_data_type()
+        self.pipeline_runners.first().unwrap().get_expected_input_data_type()
     }
 
     //endregion

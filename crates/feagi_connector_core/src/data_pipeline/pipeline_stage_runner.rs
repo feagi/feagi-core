@@ -30,28 +30,21 @@ pub(crate) struct PipelineStageRunner {
 impl PipelineStageRunner {
     /// Creates a new pipeline stage runner with the specified configuration.
     ///
-    /// Validates that the pipeline stages are compatible with each other and with
-    /// the expected input and output types. The pipeline stages are initialized
-    /// from the provided properties.
-    ///
     /// # Arguments
-    /// * `pipeline_stage_properties` - Configuration for each stage in the pipeline
     /// * `cached_input_value` - Initial input value to cache (determines input type)
     /// * `expected_output_type` - The data type that the final stage should produce
     ///
     /// # Returns
     /// * `Ok(PipelineStageRunner)` - Successfully created pipeline runner
     /// * `Err(FeagiDataError)` - If stages are incompatible or validation fails
-    pub fn new(pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>, cached_input_value: WrappedIOData, expected_output_type: WrappedIOType) -> Result<Self, FeagiDataError> {
+    pub fn new(cached_input_value: WrappedIOData, expected_output_type: WrappedIOType) -> Result<Self, FeagiDataError> {
         let expected_input_type: WrappedIOType = (&cached_input_value).into();
-        verify_pipeline_stage_properties(&pipeline_stage_properties, expected_input_type, expected_output_type)?;
-        let pipeline_stages = stage_properties_to_stages(&pipeline_stage_properties)?;
-        
+
         Ok(PipelineStageRunner {
             input_type: expected_input_type,
             last_instant_data_processed: Instant::now(),
             output_type: expected_output_type,
-            pipeline_stages,
+            pipeline_stages: Vec::new(),
             cached_input: cached_input_value
         })
     }
@@ -62,7 +55,7 @@ impl PipelineStageRunner {
     ///
     /// This is determined by the input type of the first processor in the chain.
     /// Used for validation before processing new input data.
-    pub fn get_input_data_type(&self) -> WrappedIOType {
+    pub fn get_expected_input_data_type(&self) -> WrappedIOType {
         self.input_type
     }
 
@@ -368,6 +361,7 @@ fn verify_pipeline_stage_properties(pipeline_stage_properties: &Vec<Box<dyn Pipe
 ///
 /// # Note
 /// Assumes `new_stage_index` has already been validated as within bounds.
+#[inline]
 fn verify_replacing_stage_properties(current_stages: &Vec<Box<dyn PipelineStage>>,
                                      new_stage_properties: &Box<dyn PipelineStageProperties + Sync + Send>,
                                      pipeline_input_type: &WrappedIOType, pipeline_output_type: &WrappedIOType,

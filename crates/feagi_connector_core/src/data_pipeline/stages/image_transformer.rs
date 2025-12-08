@@ -8,11 +8,11 @@
 use std::any::Any;
 use std::fmt::Display;
 use std::time::Instant;
-use feagi_data_structures::data::ImageFrame;
 use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::processing::ImageFrameProcessor;
-use feagi_data_structures::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::data_pipeline::PipelineStageProperties;
+use crate::data_types::{ImageFrame, ImageFrameProcessor};
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 /// A stream processor that applies image transformations to incoming frames.
 ///
@@ -78,6 +78,14 @@ impl PipelineStage for ImageFrameProcessorStage {
 
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
+        todo!()
+    }
+
+    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+        todo!()
     }
 }
 

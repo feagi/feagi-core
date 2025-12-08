@@ -154,9 +154,6 @@ fn write_neuron_array_to_bytes(neuron_array: &NeuronVoxelXYZPArrays, bytes_to_wr
     let (x, y, z, p) = neuron_array.borrow_xyzp_vectors();
 
     // OPTIMIZATION: Use bulk memory operations for little-endian systems (x86_64, ARM64)
-    // This is 10-100x faster than individual writes for large arrays (~200k neurons)
-    // On little-endian systems, Rust Vec<u32> and Vec<f32> are already in little-endian format
-    // Using std::ptr::copy_nonoverlapping for maximum performance (avoids redundant bounds checks)
     #[cfg(target_endian = "little")]
     {
         let x_len = x.len() * U32_F32_LENGTH;
