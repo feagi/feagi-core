@@ -76,6 +76,10 @@ macro_rules! define_stage_properties {
             fn as_any(&self) -> &dyn std::any::Any {
                 self
             }
+
+            fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
             
             fn create_stage(&self) -> Box<dyn $crate::data_pipeline::PipelineStage> {
                 let $self_stage = self;

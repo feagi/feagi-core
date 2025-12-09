@@ -25,5 +25,8 @@ pub trait PipelineStageProperties: fmt::Display + Debug + Sync + Send + Any {
     /// Provide access to `Any` trait for downcasting
     fn as_any(&self) -> &dyn Any;
 
+    /// Provide mutable access to `Any` trait for downcasting
+    fn as_any_mut(&mut self) -> &mut dyn Any;
+
     fn create_stage(&self) -> Box<dyn PipelineStage>;
 }
