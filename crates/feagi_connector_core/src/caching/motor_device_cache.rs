@@ -380,6 +380,34 @@ impl MotorDeviceCache {
 
     motor_cortical_units!(motor_unit_functions);
 
+    //region Data IO
+
+    pub fn get_feagi_byte_container(&self) -> &FeagiByteContainer {
+        &self.byte_data
+    }
+
+    pub fn get_feagi_byte_container_mut(&mut self) -> &FeagiByteContainer {
+        &mut self.byte_data
+    }
+
+    pub fn get_neurons(&self) -> &CorticalMappedXYZPNeuronVoxels {
+        &self.neuron_data
+    }
+
+    // Returns true if data was retrieved
+    pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
+        self.byte_data.try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)
+    }
+
+    pub fn try_decode_neural_data_into_cache(&mut self, time_of_decode: Instant) -> Result<(), FeagiDataError> {
+        for motor_channel_stream_cache in self.stream_caches.values_mut() {
+            motor_channel_stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(&mut self.neuron_data, time_of_decode)?;
+        };
+        Ok(())
+    }
+
+    //endregion
+
 
     //region Internal
 
@@ -551,88 +579,7 @@ impl MotorDeviceCache {
 
     //endregion
 
-    //region Neuron Processing
 
-    /// Process incoming neuron burst data from FEAGI
-    /// 
-    /// This method:
-    /// 1. Deserializes the byte array into CorticalMappedXYZPNeuronVoxels
-    /// 2. Iterates through all registered motor stream caches
-    /// 3. Updates each motor's state based on decoded neuron data
-    /// 4. Triggers callbacks for channels that were updated
-    pub fn process_burst_data(&mut self, motor_burst_bytes: &[u8]) -> Result<(), FeagiDataError> {
-        use std::time::Instant;
-        use feagi_data_serialization::FeagiByteStructureType;
-        
-        // Load bytes into the byte container
-        self.byte_data.try_write_data_by_copy_and_verify(motor_burst_bytes)?;
-        
-        // Deserialize neuron voxels from the byte container
-        let neuron_struct = match self.byte_data.try_create_struct_from_first_found_struct_of_type(FeagiByteStructureType::NeuronCategoricalXYZP)? {
-            Some(s) => s,
-            None => {
-                // No neuron data found in this burst, skip processing
-                return Ok(());
-            }
-        };
-        
-        // Convert to CorticalMappedXYZPNeuronVoxels
-        self.neuron_data = neuron_struct.try_into()?;
-        
-        let time_of_decode = Instant::now();
-        
-        // Process each registered motor stream cache
-        for ((_motor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
-            stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(&self.neuron_data, time_of_decode)?;
-        }
-        
-        Ok(())
-    }
-
-    //endregion
-
-    //region Encoding Methods (for sending motor commands TO FEAGI if needed)
-
-    /// Encode all cached motor data to neuron voxel format
-    /// 
-    /// NOTE: Motors typically decode data FROM FEAGI. This method may not be needed
-    /// unless motors need to send commands back to FEAGI.
-    pub fn encode_all_motors_to_neurons(&mut self, _time_of_burst: Instant) -> Result<(), FeagiDataError> {
-        // Clear neuron data before encoding
-        self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
-        
-        // TODO: Implement motor encoding if motors need to send data TO FEAGI
-        // For now, motors primarily decode data FROM FEAGI
-        
-        Ok(())
-    }
-
-    /// Encode neuron voxel data to byte container format
-    pub fn encode_neurons_to_bytes(&mut self) -> Result<(), FeagiDataError> {
-        use feagi_data_serialization::FeagiByteStructureType;
-        
-        // Clear byte data
-        self.byte_data = FeagiByteContainer::new_empty();
-        
-        // Check if we have any neuron data
-        if self.neuron_data.mappings.is_empty() {
-            return Ok(());
-        }
-        
-        // Serialize neuron_data to byte_data
-        self.byte_data
-            .overwrite_byte_data_with_single_struct_data(&self.neuron_data, 0)
-            .map_err(|e| FeagiDataError::BadParameters(format!("Failed to encode motor neuron data to bytes: {:?}", e)))?;
-        
-        Ok(())
-    }
-
-    /// Get a reference to the encoded byte container
-    pub fn get_byte_container(&self) -> &FeagiByteContainer {
-        &self.byte_data
-    }
-
-    //endregion
 
 }
 

@@ -425,6 +425,67 @@ impl SensorDeviceCache {
 
     sensor_cortical_units!(sensor_unit_functions);
 
+    //region Data IO
+
+    pub fn get_feagi_byte_container(&self) -> &FeagiByteContainer {
+        &self.byte_data
+    }
+
+    pub fn get_feagi_byte_container_mut(&mut self) -> &FeagiByteContainer {
+        &mut self.byte_data
+    }
+
+    pub fn get_neurons(&self) -> &CorticalMappedXYZPNeuronVoxels {
+        &self.neuron_data
+    }
+
+    /// Encode all cached sensor data to neuron voxel format
+    ///
+    /// Iterates over all registered sensor stream caches and encodes their
+    /// processed data into neuron voxel representations. This populates
+    /// the internal neuron_data field.
+    ///
+    /// # Arguments
+    /// * `time_of_burst` - Timestamp for this encoding burst
+    ///
+    /// # Returns
+    /// * `Ok(())` - If encoding succeeded
+    /// * `Err(FeagiDataError)` - If encoding fails
+    pub fn encode_all_sensors_to_neurons(&mut self, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+        // Clear neuron data before encoding
+        self.neuron_data.clear_neurons_only();
+
+        let previous_burst = self.previous_burst;
+
+        // TODO see if we can parallelize this to work on multiple cortical areas at once
+        // Iterate over all registered sensor stream caches and encode them
+        // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
+        for ((_sensor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
+            stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, previous_burst)?;
+        }
+
+        // Update previous_burst for next time
+        self.previous_burst = time_of_burst;
+
+        Ok(())
+    }
+
+    /// Encode neuron voxel data to byte container format
+    ///
+    /// Serializes the internal neuron_data into FeagiByteContainer format.
+    /// This populates the internal byte_data field.
+    ///
+    /// # Returns
+    /// * `Ok(())` - If encoding succeeded
+    /// * `Err(FeagiDataError)` - If encoding fails
+    pub fn encode_neurons_to_bytes(&mut self) -> Result<(), FeagiDataError> {
+        self.byte_data
+            .overwrite_byte_data_with_single_struct_data(&self.neuron_data, 0)
+            .map_err(|e| FeagiDataError::BadParameters(format!("Failed to encode neuron data to bytes: {:?}", e)))?;
+        Ok(())
+    }
+
+    //endregion
 
     //region Internal
 
@@ -590,91 +651,6 @@ impl SensorDeviceCache {
 
     //endregion
 
-
-    //endregion
-
-    //region Encoding Methods
-
-    /// Encode all cached sensor data to neuron voxel format
-    /// 
-    /// Iterates over all registered sensor stream caches and encodes their
-    /// processed data into neuron voxel representations. This populates
-    /// the internal neuron_data field.
-    /// 
-    /// # Arguments
-    /// * `time_of_burst` - Timestamp for this encoding burst
-    /// 
-    /// # Returns
-    /// * `Ok(())` - If encoding succeeded
-    /// * `Err(FeagiDataError)` - If encoding fails
-    pub fn encode_all_sensors_to_neurons(&mut self, time_of_burst: Instant) -> Result<(), FeagiDataError> {
-        // Clear neuron data before encoding
-        self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
-        
-        let previous_burst = self.previous_burst;
-
-        // Iterate over all registered sensor stream caches and encode them
-        // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
-        for ((_sensor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
-            stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, previous_burst)?;
-        }
-        
-        // Update previous_burst for next time
-        self.previous_burst = time_of_burst;
-        
-        Ok(())
-    }
-
-    /// Encode neuron voxel data to byte container format
-    /// 
-    /// Serializes the internal neuron_data into FeagiByteContainer format.
-    /// This populates the internal byte_data field.
-    /// 
-    /// # Returns
-    /// * `Ok(())` - If encoding succeeded
-    /// * `Err(FeagiDataError)` - If encoding fails
-    pub fn encode_neurons_to_bytes(&mut self) -> Result<(), FeagiDataError> {
-        use feagi_data_serialization::FeagiByteStructureType;
-        use tracing::info;
-        
-        let t_serialize_start = std::time::Instant::now();
-        
-        // Clear byte data
-        let t_clear_start = std::time::Instant::now();
-        self.byte_data = FeagiByteContainer::new_empty();
-        let t_clear = t_clear_start.elapsed();
-        
-        // Check if we have any neuron data
-        if self.neuron_data.mappings.is_empty() {
-            // Empty data - leave byte_data empty
-            return Ok(());
-        }
-        
-        // Count total neurons for logging
-        let total_neurons: usize = self.neuron_data.mappings.values().map(|arr| arr.len()).sum();
-        
-        // Serialize neuron_data to byte_data
-        let t_overwrite_start = std::time::Instant::now();
-        self.byte_data
-            .overwrite_byte_data_with_single_struct_data(&self.neuron_data, 0)
-            .map_err(|e| FeagiDataError::BadParameters(format!("Failed to encode neuron data to bytes: {:?}", e)))?;
-        let t_overwrite = t_overwrite_start.elapsed();
-        
-        // Performance logging removed for hot path
-        
-        Ok(())
-    }
-
-    /// Get a reference to the encoded byte container
-    /// 
-    /// Returns the FeagiByteContainer containing the serialized sensor data.
-    /// Call encode_all_sensors_to_neurons() and encode_neurons_to_bytes() first.
-    /// 
-    /// # Returns
-    /// Reference to the byte container
-    pub fn get_byte_container(&self) -> &FeagiByteContainer {
-        &self.byte_data
-    }
 
     //endregion
 

@@ -116,7 +116,7 @@ impl FeagiByteContainer{
     }
 
     /// Writes data to the container by taking ownership of a byte vector then validates it. Resets
-    /// allocation.
+    /// allocation. Only use this if you have no option
     ///
     /// # Example
     /// ```
