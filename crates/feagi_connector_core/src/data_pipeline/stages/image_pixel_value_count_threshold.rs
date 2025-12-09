@@ -71,6 +71,14 @@ impl PipelineStage for ImagePixelValueCountThresholdStage {
                 "load_properties called with incompatible properties type for ImagePixelValueCountThresholdStage".into()
             ))?;
 
+        if props.inclusive_pixel_range.is_empty() {
+            return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+        }
+
+        if props.acceptable_amount_of_activity_in_image.is_empty() {
+            return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
+        }
+
         self.inclusive_pixel_range = props.inclusive_pixel_range.clone();
         self.acceptable_amount_of_activity_in_image = props.acceptable_amount_of_activity_in_image.clone();
 
@@ -84,6 +92,15 @@ impl PipelineStage for ImagePixelValueCountThresholdStage {
 impl ImagePixelValueCountThresholdStage {
 
     pub fn new(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Self, FeagiDataError> {
+
+        if per_pixel_allowed_range.is_empty() {
+            return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+        }
+
+        if acceptable_amount_of_activity_in_image.is_empty() {
+            return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
+        }
+
 
         let sample_count_bounds = get_sample_count_lower_upper_bounds(&acceptable_amount_of_activity_in_image, image_properties.get_number_of_channels());
 

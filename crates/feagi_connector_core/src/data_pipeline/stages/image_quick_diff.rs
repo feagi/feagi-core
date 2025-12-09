@@ -77,7 +77,15 @@ impl PipelineStage for ImageFrameQuickDiffStage {
             .ok_or_else(|| FeagiDataError::BadParameters(
                 "load_properties called with incompatible properties type for ImageFrameQuickDiffStage".into()
             ))?;
-        
+
+        if props.per_pixel_allowed_range.is_empty() {
+            return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+        }
+
+        if props.acceptable_amount_of_activity_in_image.is_empty() {
+            return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
+        }
+
         // Update the threshold and activity range
         self.inclusive_pixel_range = props.per_pixel_allowed_range.clone();
         self.acceptable_amount_of_activity_in_image = props.acceptable_amount_of_activity_in_image.clone();
@@ -95,6 +103,14 @@ impl PipelineStage for ImageFrameQuickDiffStage {
 impl ImageFrameQuickDiffStage {
 
     pub fn new(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Self, FeagiDataError> {
+
+        if per_pixel_allowed_range.is_empty() {
+            return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+        }
+
+        if acceptable_amount_of_activity_in_image.is_empty() {
+            return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
+        }
 
         let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;
         // Calculate total number of pixels (width * height * channels) for activity percentage calculation
