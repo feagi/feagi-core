@@ -40,10 +40,10 @@ mod test_connector_cache_sensor_load_image {
         let bird_image = load_bird_image();
         let bird_image_properties = bird_image.get_image_frame_properties();
         let segmented_bird_properties = SegmentedImageFrameProperties::new(
-            &segmented_image_resolutions,
-            &bird_image_properties.get_color_channel_layout(),
-            &bird_image_properties.get_color_channel_layout(),
-            &bird_image_properties.get_color_space());
+            segmented_image_resolutions,
+            bird_image_properties.get_color_channel_layout(),
+            bird_image_properties.get_color_channel_layout(),
+            bird_image_properties.get_color_space());
         let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
 
@@ -71,10 +71,10 @@ mod test_connector_cache_sensor_load_image {
         let bird_image = load_bird_image();
         let bird_image_properties = bird_image.get_image_frame_properties();
         let segmented_bird_properties = SegmentedImageFrameProperties::new(
-            &segmented_image_resolutions,
-            &bird_image_properties.get_color_channel_layout(),
-            &bird_image_properties.get_color_channel_layout(),
-            &bird_image_properties.get_color_space());
+            segmented_image_resolutions,
+            bird_image_properties.get_color_channel_layout(),
+            bird_image_properties.get_color_channel_layout(),
+            bird_image_properties.get_color_space());
         let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
         let connector_agent = feagi_connector_core::ConnectorAgent::new();
