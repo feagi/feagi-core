@@ -386,7 +386,7 @@ impl MotorDeviceCache {
         &self.byte_data
     }
 
-    pub fn get_feagi_byte_container_mut(&mut self) -> &FeagiByteContainer {
+    pub fn get_feagi_byte_container_mut(&mut self) -> &mut FeagiByteContainer {
         &mut self.byte_data
     }
 
