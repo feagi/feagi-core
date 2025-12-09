@@ -25,34 +25,14 @@ pub(crate) struct SensoryChannelStreamCaches {
 }
 
 impl SensoryChannelStreamCaches {
-
-    /// Creates a new multichannel sensory stream cache system.
-    ///
-    /// Initializes a pipeline runner for each channel with the provided stage properties.
-    /// Each channel processes data independently through its own pipeline before encoding.
-    /// All channels start with the same initial cached value.
-    ///
-    /// # Arguments
-    /// * `neuron_encoder` - Encoder for converting processed data to neuron voxels
-    /// * `initial_cached_value` - Starting value for all channel caches
-    /// * `stage_properties_per_channels` - Vector of pipeline stage properties for each channel
-    ///
-    /// # Returns
-    /// * `Ok(SensoryChannelStreamCaches)` - Successfully created cache system
-    /// * `Err(FeagiDataError)` - If pipeline initialization fails for any channel, or zero channels are submitted
-    pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, initial_cached_value: WrappedIOData, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
-
-        if stage_properties_per_channels.is_empty() {
-            return Err(FeagiDataError::BadParameters("Cannot create a sensor stream cache with 0 channels!".into()))
-        }
+    pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, number_channels: CorticalChannelCount, initial_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
 
         let expected_data_encoded_type: WrappedIOType = neuron_encoder.get_encodable_data_type();
 
-        let mut pipeline_runners: Vec<PipelineStageRunner> = Vec::with_capacity(stage_properties_per_channels.len());
-        
-        for stage_properties_per_channel in stage_properties_per_channels {
-            pipeline_runners.push(PipelineStageRunner::new(stage_properties_per_channel, initial_cached_value.clone(), expected_data_encoded_type)?); // No need to optimize away the clone() here, this isn't being called often
-        }
+        let pipeline_runners: Vec<PipelineStageRunner> =
+            std::iter::repeat_with(|| PipelineStageRunner::new(initial_cached_value.clone(), expected_data_encoded_type).unwrap())
+                .take(*number_channels as usize)
+                .collect();
 
         Ok(Self {
             neuron_encoder,

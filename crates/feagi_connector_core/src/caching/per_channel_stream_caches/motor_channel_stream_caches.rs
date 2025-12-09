@@ -16,30 +16,22 @@ pub(crate) struct MotorChannelStreamCaches {
 }
 
 impl MotorChannelStreamCaches {
-    pub fn new(neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>, initial_cached_value: WrappedIOData, stage_properties_per_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>) -> Result<Self, FeagiDataError> {
-
-        if stage_properties_per_channels.is_empty() {
-            return Err(FeagiDataError::BadParameters("Cannot create a motor stream cache with 0 channels!".into()))
-        }
+    pub fn new(neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>, number_channels: CorticalChannelCount, initial_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
 
         let expected_data_decoded_type: WrappedIOType = neuron_decoder.get_decoded_data_type();
 
+        let pipeline_runners: Vec<PipelineStageRunner> =
+            std::iter::repeat_with(|| PipelineStageRunner::new(initial_cached_value.clone(), expected_data_decoded_type).unwrap())
+            .take(*number_channels as usize)
+            .collect();
 
-        let num_channels = stage_properties_per_channels.len();
-        let mut pipeline_runners: Vec<PipelineStageRunner> = Vec::with_capacity(num_channels);
-        let mut callbacks: Vec<FeagiSignal<WrappedIOData>> = Vec::with_capacity(num_channels);
+        let callbacks: Vec<FeagiSignal<WrappedIOData>> = Vec::with_capacity(*number_channels as usize);
 
-        for stage_properties_per_channel in stage_properties_per_channels {
-            let pipeline_runner = PipelineStageRunner::new(stage_properties_per_channel, initial_cached_value.clone(), expected_data_decoded_type)?;
-            callbacks.push(FeagiSignal::new());
-            
-            pipeline_runners.push(pipeline_runner);
-        }
 
         Ok(Self {
             neuron_decoder,
             pipeline_runners,
-            has_channel_been_updated: vec![false; num_channels],
+            has_channel_been_updated: vec![false; *number_channels as usize],
             value_updated_callbacks: callbacks,
         })
     }

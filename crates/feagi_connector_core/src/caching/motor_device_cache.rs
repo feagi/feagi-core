@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
 use feagi_data_serialization::FeagiByteContainer;
-use feagi_data_structures::{motor_cortical_units, sensor_cortical_units, FeagiDataError, FeagiSignal, FeagiSignalIndex};
+use feagi_data_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
 use feagi_data_structures::genomic::cortical_area::{CorticalID};
@@ -210,19 +210,12 @@ macro_rules! motor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::GazeProperties(GazeProperties::create_default_centered());
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, default_pipeline, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, GazeProperties);
     };
 
     // Arm for WrappedIOType::Percentage
@@ -250,14 +243,7 @@ macro_rules! motor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, default_pipeline, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -290,14 +276,7 @@ macro_rules! motor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage_3D(Percentage3D::new_zero());
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, default_pipeline, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -330,14 +309,7 @@ macro_rules! motor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0));
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, default_pipeline, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -364,14 +336,7 @@ macro_rules! motor_unit_functions {
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
                 let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, default_pipeline, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -422,7 +387,7 @@ impl MotorDeviceCache {
 
     fn register(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex,
                 neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
-                pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>,
+                number_channels: CorticalChannelCount,
                 initial_cached_value: WrappedIOData)
                 -> Result<(), FeagiDataError> {
 
@@ -434,7 +399,7 @@ impl MotorDeviceCache {
 
         self.stream_caches.insert(
             (motor_type, group_index),
-            MotorChannelStreamCaches::new(neuron_decoder, initial_cached_value, pipeline_stages_across_channels)?);
+            MotorChannelStreamCaches::new(neuron_decoder, number_channels, initial_cached_value)?);
 
         Ok(())
     }

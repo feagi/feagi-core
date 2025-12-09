@@ -189,14 +189,7 @@ macro_rules! sensor_unit_functions {
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = BooleanNeuronVoxelXYZPEncoder::new_box(cortical_id, number_channels)?;
 
                 let initial_val: WrappedIOData = false.into();
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -229,14 +222,7 @@ macro_rules! sensor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -269,14 +255,7 @@ macro_rules! sensor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -309,14 +288,7 @@ macro_rules! sensor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -341,36 +313,17 @@ macro_rules! sensor_unit_functions {
                  initial_gaze: GazeProperties
                 ) -> Result<(), FeagiDataError>
             {
+                // Bit more unique, we define a custom stage for all channels for segmentation by default
                 let cortical_ids: [CorticalID; 9] = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, group);
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(cortical_ids, segmented_image_properties, number_channels)?;
 
                 let initial_val: WrappedIOData = WrappedIOType::SegmentedImageFrame(Some(segmented_image_properties)).create_blank_data_of_type()?;
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        let mut channel_pipeline: Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>> = Vec::new();
-                        
-                        // Add diff stage to reduce neuron count by filtering unchanged pixels
-                        // NOTE: We apply this even in Absolute mode to reduce bandwidth, but cortical IDs
-                        // remain Absolute (matching genome). The diff stage filters pixels before segmentation.
-                        // Threshold: pixels must change by at least 1 to be included (filters completely unchanged pixels)
-                        // Accept any amount of activity (0-100%) - we want to send all changed pixels
-                        let per_pixel_range = 1u8..=255u8; // Minimum 1 pixel difference to be considered changed (filters unchanged pixels only)
-                        let activity_range = Percentage::new_from_0_1_unchecked(0.0)..=Percentage::new_from_0_1_unchecked(1.0);
-                        channel_pipeline.push(ImageQuickDiffStageProperties::new_box(
-                            per_pixel_range,
-                            activity_range,
-                            input_image_properties
-                        ));
-                        
-                        // Always add segmentor stage (converts ImageFrame to SegmentedImageFrame)
-                        channel_pipeline.push(ImageSegmentorStageProperties::new_box(input_image_properties, segmented_image_properties, initial_gaze)?);
-                        
-                        output.push(channel_pipeline);
-                    };
-                    output
-                };
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, number_channels, initial_val)?;
+
+                for channel_index in 0..*number_channels {
+                    let segmentator_pipeline = vec![ImageFrameSegmentatorStageProperties::new_box(input_image_properties.clone(), segmented_image_properties.clone(), initial_gaze.clone())];
+                    self.[<$snake_case_name _replace_all_stages>](group, channel_index.into(), segmentator_pipeline);
+                }
                 Ok(())
             }
         }
@@ -397,14 +350,7 @@ macro_rules! sensor_unit_functions {
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = MiscDataNeuronVoxelXYZPEncoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
                 let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;
-                let default_pipeline: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = {
-                    let mut output: Vec<Vec<Box<(dyn PipelineStageProperties + Send + Sync + 'static)>>> = Vec::new();
-                    for _i in 0..*number_channels {
-                        output.push( Vec::new()) // TODO properly implement clone so we dont need to do this
-                    };
-                    output
-                };
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, default_pipeline, initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -432,7 +378,7 @@ macro_rules! sensor_unit_functions {
                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = CartesianPlaneNeuronVoxelXYZPEncoder::new_box(cortical_id, &image_properties, number_channels)?;
 
                 let initial_val: WrappedIOData = WrappedIOType::ImageFrame(Some(image_properties)).create_blank_data_of_type()?;
-                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, Vec::new(), initial_val)?;
+                self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -486,11 +432,9 @@ impl SensorDeviceCache {
 
     fn register(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex,
                 neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
-                pipeline_stages_across_channels: Vec<Vec<Box<dyn PipelineStageProperties + Sync + Send>>>,
+                number_channels: CorticalChannelCount,
                 initial_cached_value: WrappedIOData)
                 -> Result<(), FeagiDataError> {
-
-        // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
 
         if self.stream_caches.contains_key(&(sensor_type, group_index)) {
             return Err(FeagiDataError::BadParameters(format!("Already registered sensor {} of group index {}!", sensor_type, group_index)))
@@ -498,7 +442,7 @@ impl SensorDeviceCache {
 
         self.stream_caches.insert(
             (sensor_type, group_index),
-            SensoryChannelStreamCaches::new(neuron_encoder, initial_cached_value, pipeline_stages_across_channels)?);
+            SensoryChannelStreamCaches::new(neuron_encoder,number_channels, initial_cached_value)?);
 
         Ok(())
     }
@@ -664,22 +608,16 @@ impl SensorDeviceCache {
     /// * `Ok(())` - If encoding succeeded
     /// * `Err(FeagiDataError)` - If encoding fails
     pub fn encode_all_sensors_to_neurons(&mut self, time_of_burst: Instant) -> Result<(), FeagiDataError> {
-        use tracing::{info, debug, warn};
-        
-        let t_encode_start = std::time::Instant::now();
-        
         // Clear neuron data before encoding
         self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
         
         let previous_burst = self.previous_burst;
-        
+
         // Iterate over all registered sensor stream caches and encode them
         // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
         for ((_sensor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
             stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, previous_burst)?;
         }
-        
-        let total_neurons: usize = self.neuron_data.mappings.values().map(|arr| arr.len()).sum();
         
         // Update previous_burst for next time
         self.previous_burst = time_of_burst;
