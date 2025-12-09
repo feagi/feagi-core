@@ -393,7 +393,7 @@ impl MotorDeviceCache {
     pub fn get_neurons(&self) -> &CorticalMappedXYZPNeuronVoxels {
         &self.neuron_data
     }
-
+    
     // Returns true if data was retrieved
     pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
         self.byte_data.try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)

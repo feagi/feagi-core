@@ -8,7 +8,7 @@ define_stage_properties! {
     name: ImageFrameProcessorStageProperties,
 
     fields: {
-        transformer_definition: ImageFrameProcessor
+        pub transformer_definition: ImageFrameProcessor
     },
 
     input_type: |s| WrappedIOType::ImageFrame(Some(*s.transformer_definition.get_input_image_properties())),

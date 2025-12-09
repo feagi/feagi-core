@@ -12,3 +12,5 @@ mod image_transformer;
 
 pub use image_segmentor::ImageFrameSegmentatorStageProperties;
 pub use image_quick_diff::ImageQuickDiffStageProperties;
+pub use image_pixel_value_count_threshold::ImagePixelValueCountThresholdStageProperties;
+pub use image_transformer::ImageFrameProcessorStageProperties;

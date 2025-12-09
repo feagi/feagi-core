@@ -11,8 +11,8 @@ define_stage_properties! {
     name: ImageQuickDiffStageProperties,
     
     fields: {
-        per_pixel_allowed_range: RangeInclusive<u8>,
-        acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
+        pub per_pixel_allowed_range: RangeInclusive<u8>,
+        pub acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
         image_properties: ImageFrameProperties,
     },
     

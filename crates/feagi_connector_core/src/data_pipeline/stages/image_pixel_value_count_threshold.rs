@@ -7,6 +7,7 @@ use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
+use crate::data_pipeline::stage_properties::ImagePixelValueCountThresholdStageProperties;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::{ImageFrame, Percentage};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -17,6 +18,7 @@ pub struct ImagePixelValueCountThresholdStage {
     input_definition: ImageFrameProperties,
     /// Minimum difference threshold for pixel changes to be considered significant
     inclusive_pixel_range: RangeInclusive<u8>,
+    acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
     samples_count_lower_bound: usize,
     samples_count_upper_bound: usize,
 }
@@ -54,11 +56,28 @@ impl PipelineStage for ImagePixelValueCountThresholdStage {
     }
 
     fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
-        todo!()
+        ImagePixelValueCountThresholdStageProperties::new_box(
+            self.input_definition.clone(),
+            self.inclusive_pixel_range.clone(),
+            self.acceptable_amount_of_activity_in_image.clone(),
+        )
     }
 
     fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        todo!()
+        // Extract ImageQuickDiffStageProperties from the trait object
+        let props = properties.as_any()
+            .downcast_ref::<ImagePixelValueCountThresholdStage>()
+            .ok_or_else(|| FeagiDataError::BadParameters(
+                "load_properties called with incompatible properties type for ImagePixelValueCountThresholdStage".into()
+            ))?;
+
+        self.inclusive_pixel_range = props.inclusive_pixel_range.clone();
+        self.acceptable_amount_of_activity_in_image = props.acceptable_amount_of_activity_in_image.clone();
+
+        let sample_count_bounds = get_sample_count_lower_upper_bounds(&self.acceptable_amount_of_activity_in_image, self.input_definition.get_number_of_channels());
+        self.samples_count_lower_bound = sample_count_bounds.0;
+        self.samples_count_upper_bound = sample_count_bounds.1;
+        Ok(())
     }
 }
 
@@ -66,16 +85,18 @@ impl ImagePixelValueCountThresholdStage {
 
     pub fn new(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Self, FeagiDataError> {
 
-        let number_of_samples = image_properties.get_number_of_channels();
+        let sample_count_bounds = get_sample_count_lower_upper_bounds(&acceptable_amount_of_activity_in_image, image_properties.get_number_of_channels());
+
         Ok(ImagePixelValueCountThresholdStage {
             cache: WrappedIOData::ImageFrame(ImageFrame::new_from_image_frame_properties(&image_properties)?),
             input_definition: image_properties,
             inclusive_pixel_range: per_pixel_allowed_range,
-            samples_count_lower_bound: (acceptable_amount_of_activity_in_image.start().get_as_0_1() * number_of_samples as f32) as usize,
-            samples_count_upper_bound: (acceptable_amount_of_activity_in_image.end().get_as_0_1() * number_of_samples as f32) as usize
+            acceptable_amount_of_activity_in_image: acceptable_amount_of_activity_in_image.clone(),
+            samples_count_lower_bound: sample_count_bounds.0,
+            samples_count_upper_bound: sample_count_bounds.1
         })
     }
-    
+
     pub fn new_box(image_properties: ImageFrameProperties, per_pixel_allowed_range: RangeInclusive<u8>, acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>) -> Result<Box<dyn PipelineStage + Send + Sync + 'static>, FeagiDataError> {
         Ok(Box::new(ImagePixelValueCountThresholdStage::new(image_properties, per_pixel_allowed_range, acceptable_amount_of_activity_in_image)?))
     }
@@ -105,4 +126,7 @@ fn filter_and_set_if_pass(source: &WrappedIOData, filter_result: &mut WrappedIOD
     Ok(())
 }
 
-
+fn get_sample_count_lower_upper_bounds(acceptable_amount_of_activity_in_image: &RangeInclusive<Percentage>, number_channels: usize) -> (usize, usize) {
+    ((acceptable_amount_of_activity_in_image.start().get_as_0_1() * number_channels as f32) as usize,
+     (acceptable_amount_of_activity_in_image.end().get_as_0_1() * number_channels as f32) as usize)
+}

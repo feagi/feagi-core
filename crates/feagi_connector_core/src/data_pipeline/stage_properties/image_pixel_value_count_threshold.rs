@@ -11,8 +11,8 @@ define_stage_properties! {
 
     fields: {
         input_definition: ImageFrameProperties,
-        inclusive_pixel_range: RangeInclusive<u8>,
-        acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
+        pub inclusive_pixel_range: RangeInclusive<u8>,
+        pub acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
     },
 
     input_type: |s| WrappedIOType::ImageFrame(Some(s.input_definition)),

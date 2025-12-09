@@ -11,6 +11,7 @@ use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
+use crate::data_pipeline::stage_properties::ImageFrameProcessorStageProperties;
 use crate::data_types::{ImageFrame, ImageFrameProcessor};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
@@ -81,11 +82,19 @@ impl PipelineStage for ImageFrameProcessorStage {
     }
 
     fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
-        todo!()
+        ImageFrameProcessorStageProperties::new_box(
+            self.transformer_definition.clone()
+        )
     }
 
     fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        todo!()
+        let props = properties.as_any()
+            .downcast_ref::<ImageFrameProcessorStageProperties>()
+            .ok_or_else(|| FeagiDataError::BadParameters(
+                "load_properties called with incompatible properties type for ImageFrameProcessorStage".into()
+            ))?;
+        self.transformer_definition = props.transformer_definition.clone();
+        Ok(())
     }
 }
 

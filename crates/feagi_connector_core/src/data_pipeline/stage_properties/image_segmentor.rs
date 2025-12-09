@@ -12,7 +12,7 @@ define_stage_properties! {
     fields: {
         input_image_properties: ImageFrameProperties,
         output_image_properties: SegmentedImageFrameProperties,
-        segmentation_gaze: GazeProperties,
+        pub segmentation_gaze: GazeProperties,
     },
 
     input_type: |s| WrappedIOType::ImageFrame(Some(s.input_image_properties)),

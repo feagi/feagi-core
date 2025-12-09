@@ -61,11 +61,11 @@ impl PipelineStage for ImageFrameQuickDiffStage {
     }
 
     fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
-        Box::new(ImageQuickDiffStageProperties {
-            image_properties: self.input_definition.clone(),
-            per_pixel_allowed_range: self.inclusive_pixel_range.clone(),
-            acceptable_amount_of_activity_in_image: self.acceptable_amount_of_activity_in_image.clone(),
-        })
+        ImageQuickDiffStageProperties::new_box(
+            self.inclusive_pixel_range.clone(),
+            self.acceptable_amount_of_activity_in_image.clone(),
+            self.input_definition.clone()
+        )
     }
 
     fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
@@ -78,22 +78,15 @@ impl PipelineStage for ImageFrameQuickDiffStage {
                 "load_properties called with incompatible properties type for ImageFrameQuickDiffStage".into()
             ))?;
         
-        // Verify image properties match (resolution, color space, channels must be the same)
-        if props.image_properties != self.input_definition {
-            return Err(FeagiDataError::BadParameters(
-                format!("Cannot update ImageFrameQuickDiffStage: image properties mismatch. Expected {:?}, got {:?}", 
-                    self.input_definition, props.image_properties).into()
-            ));
-        }
-        
         // Update the threshold and activity range
         self.inclusive_pixel_range = props.per_pixel_allowed_range.clone();
         self.acceptable_amount_of_activity_in_image = props.acceptable_amount_of_activity_in_image.clone();
         
         // Recalculate sample count bounds based on new activity range
         let total_pixels = self.input_definition.get_number_of_samples();
-        self.samples_count_lower_bound = (self.acceptable_amount_of_activity_in_image.start().get_as_0_1() * total_pixels as f32) as usize;
-        self.samples_count_upper_bound = (self.acceptable_amount_of_activity_in_image.end().get_as_0_1() * total_pixels as f32) as usize;
+        let sample_count_bounds = get_sample_count_lower_upper_bounds(&self.acceptable_amount_of_activity_in_image, total_pixels);
+        self.samples_count_lower_bound = sample_count_bounds.0;
+        self.samples_count_upper_bound = sample_count_bounds.1;
         
         Ok(())
     }
@@ -106,13 +99,14 @@ impl ImageFrameQuickDiffStage {
         let cache_image = ImageFrame::new_from_image_frame_properties(&image_properties)?;
         // Calculate total number of pixels (width * height * channels) for activity percentage calculation
         let total_pixels = image_properties.get_number_of_samples();
+        let sample_count_bounds = get_sample_count_lower_upper_bounds(&acceptable_amount_of_activity_in_image, total_pixels);
         Ok(ImageFrameQuickDiffStage {
             diff_cache: WrappedIOData::ImageFrame(cache_image.clone()),
             previous_frame_cache: WrappedIOData::ImageFrame(cache_image.clone()), // Image Frame
             input_definition: image_properties,
             inclusive_pixel_range: per_pixel_allowed_range,
-            samples_count_lower_bound: (acceptable_amount_of_activity_in_image.start().get_as_0_1() * total_pixels as f32) as usize,
-            samples_count_upper_bound: (acceptable_amount_of_activity_in_image.end().get_as_0_1() * total_pixels as f32) as usize,
+            samples_count_lower_bound: sample_count_bounds.0,
+            samples_count_upper_bound: sample_count_bounds.1,
             acceptable_amount_of_activity_in_image,
         })
     }
@@ -156,4 +150,9 @@ fn quick_diff_and_check_if_pass(minuend: &WrappedIOData, subtrahend: &WrappedIOD
     // Note: We don't preserve previous skip_encoding value - the diff stage controls this flag
     diff_result.skip_encoding = !should_pass;
     Ok(())
+}
+
+fn get_sample_count_lower_upper_bounds(acceptable_amount_of_activity_in_image: &RangeInclusive<Percentage>, total_pixels: usize) -> (usize, usize) {
+    ((acceptable_amount_of_activity_in_image.start().get_as_0_1() * total_pixels as f32) as usize,
+     (acceptable_amount_of_activity_in_image.end().get_as_0_1() * total_pixels as f32) as usize)
 }

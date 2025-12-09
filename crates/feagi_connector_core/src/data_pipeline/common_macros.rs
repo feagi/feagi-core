@@ -38,7 +38,7 @@ macro_rules! define_stage_properties {
         fields: {
             $(
                 $(#[$field_meta:meta])*
-                $field_name:ident : $field_type:ty
+                $vis:vis $field_name:ident : $field_type:ty
             ),* $(,)?
         },
         
@@ -54,7 +54,7 @@ macro_rules! define_stage_properties {
         pub struct $name {
             $(
                 $(#[$field_meta])*
-                pub $field_name: $field_type,
+                $vis $field_name: $field_type,
             )*
         }
         
