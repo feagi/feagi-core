@@ -7,10 +7,10 @@
 //! operations without blocking the entire brain.
 
 #[cfg(feature = "std")]
-use std::collections::HashSet;
+use ahash::AHashSet;
 
 #[cfg(feature = "no_std")]
-use heapless::FnvIndexSet as HashSet;
+use heapless::FnvIndexSet as AHashSet;
 
 // Platform-specific imports
 #[cfg(all(feature = "std", not(target_family = "wasm")))]
@@ -30,7 +30,7 @@ use wasm_sync::Mutex;
 /// Cortical lock manager for std platforms
 #[cfg(all(feature = "std", not(target_family = "wasm")))]
 pub struct CorticalLockManager {
-    locked_areas: Mutex<HashSet<u32>>,
+    locked_areas: Mutex<AHashSet<u32>>,
 }
 
 #[cfg(all(feature = "std", not(target_family = "wasm")))]
@@ -69,7 +69,7 @@ impl CorticalLockManager {
 /// Cortical lock manager for no_std platforms
 #[cfg(all(feature = "no_std", not(target_family = "wasm")))]
 pub struct CorticalLockManager {
-    locked_areas: Mutex<HashSet<u32>>,
+    locked_areas: Mutex<AHashSet<u32>>,
 }
 
 #[cfg(all(feature = "no_std", not(target_family = "wasm")))]
@@ -104,7 +104,7 @@ impl CorticalLockManager {
 /// Cortical lock manager for single-threaded WASM
 #[cfg(all(target_family = "wasm", not(feature = "wasm-threaded")))]
 pub struct CorticalLockManager {
-    locked_areas: RefCell<HashSet<u32>>,
+    locked_areas: RefCell<AHashSet<u32>>,
 }
 
 #[cfg(all(target_family = "wasm", not(feature = "wasm-threaded")))]
@@ -139,7 +139,7 @@ impl CorticalLockManager {
 /// Cortical lock manager for multi-threaded WASM
 #[cfg(all(target_family = "wasm", feature = "wasm-threaded"))]
 pub struct CorticalLockManager {
-    locked_areas: Mutex<HashSet<u32>>,
+    locked_areas: Mutex<AHashSet<u32>>,
 }
 
 #[cfg(all(target_family = "wasm", feature = "wasm-threaded"))]

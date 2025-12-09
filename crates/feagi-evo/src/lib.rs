@@ -50,6 +50,7 @@ pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
 pub mod templates;
 pub mod cortical_type_parser;
+pub mod random;
 
 // Re-export commonly used types
 pub use types::{EvoError, EvoResult};

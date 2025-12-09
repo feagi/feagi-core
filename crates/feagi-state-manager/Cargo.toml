@@ -19,7 +19,7 @@ wasm-threaded = ["wasm", "wasm_sync"]
 [dependencies]
 # Core (always available)
 atomic-polyfill = "1.0"
-ahash = { version = "0.8", default-features = false }
+ahash = { version = "0.8", default-features = false, features = ["std", "compile-time-rng"] }
 
 # feagi-data-processing for efficient data structures (TODO: Add when published to crates.io)
 # feagi_data_structures = "0.0.50-beta.50"
