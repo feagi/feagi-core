@@ -1119,6 +1119,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     ///
     /// This captures the complete NPU state including all neurons, synapses,
     /// and runtime state for serialization.
+    #[cfg(feature = "connectome-io")]
     pub fn export_connectome(&self) -> feagi_connectome_serialization::ConnectomeSnapshot {
         use feagi_connectome_serialization::{
             ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
@@ -1196,6 +1197,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// # Note
     /// This method uses CPU backend by default for backward compatibility.
     /// Use `import_connectome_with_config()` to specify GPU configuration.
+    #[cfg(feature = "connectome-io")]
     pub fn import_connectome(
         runtime: R,
         snapshot: feagi_connectome_serialization::ConnectomeSnapshot
@@ -1213,6 +1215,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
     /// * `runtime` - Runtime implementation providing storage
     /// * `snapshot` - The connectome snapshot to import
     /// * `gpu_config` - Optional GPU configuration (None = default to CPU)
+    #[cfg(feature = "connectome-io")]
     pub fn import_connectome_with_config(
         runtime: R,
         snapshot: feagi_connectome_serialization::ConnectomeSnapshot,

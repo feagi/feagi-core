@@ -19,7 +19,7 @@ feagi-state-manager = { path = "../feagi-state-manager" }  # For BurstEngineStat
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
 feagi_data_serialization = { workspace = true }  # For decoding sensory data
 feagi_data_structures.workspace = true  # For CorticalMappedXYZPNeuronVoxels
-feagi-connectome-serialization.workspace = true
+feagi-connectome-serialization = { workspace = true, optional = true }  # Optional for WASM builds
 thiserror.workspace = true
 rayon.workspace = true
 ndarray.workspace = true
@@ -43,7 +43,9 @@ cudarc = { version = "0.11", features = ["cuda-11080", "f16"], optional = true }
 half = { version = "2.4", optional = true }
 
 [features]
-default = []
+default = ["connectome-io"]
+# Enable connectome serialization/deserialization (requires native dependencies)
+connectome-io = ["feagi-connectome-serialization"]
 # Enable GPU acceleration via WGPU (cross-platform)
 gpu = ["wgpu", "pollster", "bytemuck"]
 # Enable CUDA acceleration (NVIDIA only, highest performance)

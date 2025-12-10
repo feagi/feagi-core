@@ -6,10 +6,10 @@
 //! Stores per-cortical-area FCL window sizes for the burst engine
 
 #[cfg(feature = "std")]
-use std::collections::HashMap;
+use ahash::AHashMap;
 
 #[cfg(feature = "no_std")]
-use heapless::FnvIndexMap as HashMap;
+use heapless::FnvIndexMap as AHashMap;
 
 // Platform-specific imports
 #[cfg(all(feature = "std", not(target_family = "wasm")))]
@@ -29,7 +29,7 @@ use wasm_sync::Mutex;
 /// FCL window cache for std platforms
 #[cfg(all(feature = "std", not(target_family = "wasm")))]
 pub struct FCLWindowCache {
-    cache: RwLock<HashMap<u32, usize>>,
+    cache: RwLock<AHashMap<u32, usize>>,
     default_window_size: usize,
 }
 
@@ -57,7 +57,7 @@ impl FCLWindowCache {
         cache.remove(&cortical_area);
     }
     
-    pub fn get_all(&self) -> HashMap<u32, usize> {
+    pub fn get_all(&self) -> AHashMap<u32, usize> {
         let cache = self.cache.read();
         cache.clone()
     }
@@ -66,7 +66,7 @@ impl FCLWindowCache {
 /// FCL window cache for no_std platforms
 #[cfg(all(feature = "no_std", not(target_family = "wasm")))]
 pub struct FCLWindowCache {
-    cache: RwLock<HashMap<u32, usize>>,
+    cache: RwLock<AHashMap<u32, usize>>,
     default_window_size: usize,
 }
 
@@ -94,7 +94,7 @@ impl FCLWindowCache {
         cache.remove(&cortical_area);
     }
     
-    pub fn get_all(&self) -> HashMap<u32, usize> {
+    pub fn get_all(&self) -> AHashMap<u32, usize> {
         let cache = self.cache.read();
         cache.clone()
     }
@@ -103,7 +103,7 @@ impl FCLWindowCache {
 /// FCL window cache for single-threaded WASM
 #[cfg(all(target_family = "wasm", not(feature = "wasm-threaded")))]
 pub struct FCLWindowCache {
-    cache: RefCell<HashMap<u32, usize>>,
+    cache: RefCell<AHashMap<u32, usize>>,
     default_window_size: usize,
 }
 
@@ -111,7 +111,7 @@ pub struct FCLWindowCache {
 impl FCLWindowCache {
     pub fn new(default_window_size: usize) -> Self {
         Self {
-            cache: RefCell::new(HashMap::new()),
+            cache: RefCell::new(AHashMap::new()),
             default_window_size,
         }
     }
@@ -140,7 +140,7 @@ impl FCLWindowCache {
 /// FCL window cache for multi-threaded WASM
 #[cfg(all(target_family = "wasm", feature = "wasm-threaded"))]
 pub struct FCLWindowCache {
-    cache: Mutex<HashMap<u32, usize>>,
+    cache: Mutex<AHashMap<u32, usize>>,
     default_window_size: usize,
 }
 
