@@ -1,8 +1,26 @@
 //! Tests for the various async implementations
 //!
 //! The test BODY is identical across platforms - only the test attribute differs.
+//!
+//! ## Running Tests
+//!
+//! **Tokio:**
+//! ```bash
+//! cargo test --features standard-tokio
+//! ```
+//!
+//! **WASM (requires wasm-pack CLI):**
+//! ```bash
+//! cargo install wasm-pack  # one-time setup
+//! cd to the directory of this feagi-async crate
+//! wasm-pack test --node --no-default-features --features wasm
+//! ``` 
 
 use feagi_async::FeagiAsyncRuntime;
+
+// Configure wasm_bindgen_test to run in browser (when using --headless --chrome/firefox)
+#[cfg(feature = "wasm")]
+wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
 
 //region Shared Tests
 async fn async_number_test(x: i32, y: i32) -> i32 {
