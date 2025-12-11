@@ -12,13 +12,13 @@ crate-type = ["rlib"]
 name = "feagi_services"
 
 [dependencies]
-# Core FEAGI crates (backend)
+# Core FEAGI crates (backend) - minimal set for service layer
 feagi-neural = { path = "../feagi-neural" }  # For types
-feagi-evo = { path = "../feagi-evo" }
-feagi-bdu = { path = "../feagi-bdu" }
-feagi-burst-engine = { path = "../feagi-burst-engine" }
-# feagi-pns dependency removed to break circular dependency
-# AgentRegistry and types moved to feagi-services
+feagi-evo = { path = "../feagi-evo" }  # For genome operations
+feagi-bdu = { path = "../feagi-bdu" }  # For connectome manager
+feagi-burst-engine = { path = "../feagi-burst-engine" }  # For burst runner
+# NOTE: Version reporting no longer depends on these crates being linked here
+# The application (feagi-rust) will provide version info at startup
 feagi_data_structures = { workspace = true }
 
 # Async runtime (optional for embedded)

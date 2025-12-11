@@ -31,6 +31,9 @@
 //! let npu = load_connectome("brain.connectome")?;
 //! ```
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 use ahash::AHashMap;
 use serde::{Deserialize, Serialize};
 use std::fs::File;

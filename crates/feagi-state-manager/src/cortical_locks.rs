@@ -37,7 +37,7 @@ pub struct CorticalLockManager {
 impl CorticalLockManager {
     pub fn new() -> Self {
         Self {
-            locked_areas: Mutex::new(HashSet::new()),
+            locked_areas: Mutex::new(AHashSet::new()),
         }
     }
     
@@ -76,7 +76,7 @@ pub struct CorticalLockManager {
 impl CorticalLockManager {
     pub fn new() -> Self {
         Self {
-            locked_areas: Mutex::new(HashSet::default()),
+            locked_areas: Mutex::new(AHashSet::default()),
         }
     }
     
@@ -146,7 +146,7 @@ pub struct CorticalLockManager {
 impl CorticalLockManager {
     pub fn new() -> Self {
         Self {
-            locked_areas: Mutex::new(HashSet::new()),
+            locked_areas: Mutex::new(AHashSet::new()),
         }
     }
     

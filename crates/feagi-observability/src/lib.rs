@@ -8,6 +8,9 @@
 //! Provides consistent observability patterns across all FEAGI crates with
 //! per-crate debug flag support.
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod cli;
 pub mod config;
 pub mod init;

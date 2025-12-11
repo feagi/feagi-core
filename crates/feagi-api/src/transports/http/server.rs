@@ -25,7 +25,7 @@ use http_body_util::BodyExt;
 
 use crate::openapi::ApiDoc;
 use feagi_services::{AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService};
-use feagi_services::traits::AgentService;
+use feagi_services::traits::{AgentService, SystemService};
 
 /// Application state shared across all HTTP handlers
 #[derive(Clone)]
@@ -36,6 +36,7 @@ pub struct ApiState {
     pub genome_service: Arc<dyn GenomeService + Send + Sync>,
     pub neuron_service: Arc<dyn NeuronService + Send + Sync>,
     pub runtime_service: Arc<dyn RuntimeService + Send + Sync>,
+    pub system_service: Arc<dyn SystemService + Send + Sync>,
     pub snapshot_service: Option<Arc<dyn feagi_services::SnapshotService + Send + Sync>>,
     /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
     /// This is a unique identifier for each FEAGI instance/session

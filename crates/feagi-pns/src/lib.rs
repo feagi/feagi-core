@@ -28,6 +28,9 @@
 //! pns.stop().unwrap();
 //! ```
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 use feagi_data_structures::FeagiSignal;
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;

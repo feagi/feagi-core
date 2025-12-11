@@ -23,17 +23,24 @@ pub struct SystemServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
     burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
     start_time: SystemTime,
+    version_info: VersionInfo,
 }
 
 impl SystemServiceImpl {
+    /// Create new SystemServiceImpl
+    /// 
+    /// The version_info should be populated by the application (e.g., feagi-rust)
+    /// with the versions of all crates it was compiled with
     pub fn new(
         connectome: Arc<RwLock<ConnectomeManager>>,
         burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
+        version_info: VersionInfo,
     ) -> Self {
         Self {
             connectome,
             burst_runner,
             start_time: SystemTime::now(),
+            version_info,
         }
     }
 
@@ -174,20 +181,11 @@ impl SystemService for SystemServiceImpl {
 
     async fn get_version(&self) -> ServiceResult<VersionInfo> {
         debug!(target: "feagi-services","Getting version information");
-
-        Ok(VersionInfo {
-            feagi_core_version: env!("CARGO_PKG_VERSION").to_string(),
-            feagi_bdu_version: "2.0.0".to_string(), // From feagi-bdu Cargo.toml
-            feagi_burst_engine_version: "2.0.0".to_string(),
-            feagi_evo_version: "2.0.0".to_string(),
-            feagi_types_version: "2.0.0".to_string(),
-            build_timestamp: option_env!("VERGEN_BUILD_TIMESTAMP")
-                .unwrap_or("unknown")
-                .to_string(),
-            rust_version: option_env!("VERGEN_RUSTC_SEMVER")
-                .unwrap_or(env!("CARGO_PKG_RUST_VERSION"))
-                .to_string(),
-        })
+        
+        // Return the version info that was provided by the application at startup
+        // The application (e.g., feagi-rust) knows which crates it compiled with
+        // and provides that information when creating SystemServiceImpl
+        Ok(self.version_info.clone())
     }
 
     async fn is_initialized(&self) -> ServiceResult<bool> {

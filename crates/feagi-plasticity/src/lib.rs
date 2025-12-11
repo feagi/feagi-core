@@ -22,6 +22,9 @@
 //! - Thread-safe operations
 //! - RTOS-compatible design
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod memory_neuron_array;
 pub mod neuron_id_manager;
 pub mod pattern_detector;

@@ -295,7 +295,7 @@ pub async fn get_version(State(_state): State<ApiState>) -> ApiResult<Json<Strin
 }
 
 /// GET /v1/system/versions
-/// Get detailed version information
+/// Get detailed version information for all FEAGI crates
 #[utoipa::path(
     get,
     path = "/v1/system/versions",
@@ -304,13 +304,27 @@ pub async fn get_version(State(_state): State<ApiState>) -> ApiResult<Json<Strin
         (status = 200, description = "Version information", body = HashMap<String, String>)
     )
 )]
-pub async fn get_versions(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
-    let mut versions = HashMap::new();
-    versions.insert("feagi_core".to_string(), env!("CARGO_PKG_VERSION").to_string());
-    versions.insert("rust".to_string(), "1.75+".to_string());
-    versions.insert("build".to_string(), "release".to_string());
-    
-    Ok(Json(versions))
+pub async fn get_versions(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+    // Use system service to get version information
+    // The application (feagi-rust) provides this at startup with all crates it was compiled with
+    match state.system_service.get_version().await {
+        Ok(version_info) => {
+            let mut versions = version_info.crates.clone();
+            
+            // Add build metadata
+            versions.insert("rust".to_string(), version_info.rust_version);
+            versions.insert("build_timestamp".to_string(), version_info.build_timestamp);
+            
+            Ok(Json(versions))
+        }
+        Err(e) => {
+            // Fallback to minimal version info
+            tracing::warn!("Failed to get version from system service: {}, using fallback", e);
+            let mut versions = HashMap::new();
+            versions.insert("error".to_string(), "system service unavailable".to_string());
+            Ok(Json(versions))
+        }
+    }
 }
 
 /// GET /v1/system/configuration

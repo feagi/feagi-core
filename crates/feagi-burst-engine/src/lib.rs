@@ -33,6 +33,9 @@
 //! - Zero-copy data access where possible
 //! - Minimal allocations in hot paths
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod backend;
 pub mod burst_loop_runner; // Pure Rust burst loop
 pub mod fire_ledger;
