@@ -1867,9 +1867,10 @@ dependencies = [
 name = "feagi-async"
 version = "0.0.1"
 dependencies = [
- "js-sys",
+ "futures-channel",
  "tokio",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-rs-async-executor",
 ]
 
