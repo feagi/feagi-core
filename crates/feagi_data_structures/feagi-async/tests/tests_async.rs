@@ -1,24 +1,8 @@
 //! Tests for the various async implementations
 
-async fn async_number_test(x: i32, y: i32) -> i32 {
-    x + y
-}
-
-async fn async_string_formatting(name: String) -> String {
-    format!("Hello, {}!", name)
-}
-
-
-#[cfg(test)]
-#[cfg(feature = "standard-tokio")]
-mod tests_tokio {
-    use feagi_async::{runtime_picker, FeagiAsyncRuntime};
-    use crate::{async_number_test, async_string_formatting};
-
-    #[test]
-    fn simple_tokio_test() {
-        let runtime = runtime_picker!();
-
+macro_rules! simple_async_test {
+    ($runtime:expr) => {
+        let runtime = $runtime;
         runtime.block_on(async {
             // Spawn an async task that returns a value
             let handle1 = runtime.spawn(async_number_test(21, 21));
@@ -43,14 +27,42 @@ mod tests_tokio {
             assert_eq!(greeting, String::from("Hello, FEAGI!"));
             assert_eq!(sum, 15);
         });
+    };
+}
+
+async fn async_number_test(x: i32, y: i32) -> i32 {
+    x + y
+}
+
+async fn async_string_formatting(name: String) -> String {
+    format!("Hello, {}!", name)
+}
 
 
+
+#[cfg(test)]
+#[cfg(feature = "standard-tokio")]
+mod tests_tokio {
+    use feagi_async::{runtime_picker, FeagiAsyncRuntime};
+    use crate::{async_number_test, async_string_formatting};
+
+    #[test]
+    fn simple_tokio_test() {
+        let runtime = runtime_picker!();
+        simple_async_test!(runtime);
     }
 
+}
 
+#[cfg(test)]
+#[cfg(feature = "wasm")]
+mod tests_wasm {
+    use feagi_async::{runtime_picker, FeagiAsyncRuntime};
+    use crate::{async_number_test, async_string_formatting};
 
-
-
-
-
+    #[test]
+    fn simple_wasm_test() {
+        let runtime = runtime_picker!();
+        simple_async_test!(runtime);
+    }
 }
