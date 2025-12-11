@@ -9,18 +9,27 @@
 //! cargo test --features standard-tokio
 //! ```
 //!
-//! **WASM (requires wasm-pack CLI):**
+//! **WASM in Node.js:**
 //! ```bash
 //! cargo install wasm-pack  # one-time setup
-//! cd to the directory of this feagi-async crate
 //! wasm-pack test --node --no-default-features --features wasm
+//! ```
+//!
+//! **WASM in Browser (headless):**
+//! ```bash
+//! wasm-pack test --headless --chrome --no-default-features --features wasm
+//! wasm-pack test --headless --firefox --no-default-features --features wasm
 //! ``` 
 
 use feagi_async::FeagiAsyncRuntime;
 
-// Configure wasm_bindgen_test to run in browser (when using --headless --chrome/firefox)
+/*
 #[cfg(feature = "wasm")]
 wasm_bindgen_test::wasm_bindgen_test_configure!(run_in_browser);
+ */
+
+// Note: Remove `run_in_browser` to allow tests to run in both Node.js and browser
+// Use `wasm-pack test --node` for Node.js or `wasm-pack test --headless --chrome` for browser
 
 //region Shared Tests
 async fn async_number_test(x: i32, y: i32) -> i32 {
@@ -72,4 +81,5 @@ async fn test_spawn_and_await() {
 async fn test_spawn_and_await() {
     feagi_async::run_async!(run_test_logic);
 }
+
 //endregion

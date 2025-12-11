@@ -40,11 +40,14 @@ macro_rules! feagi_main {
             $crate::run_async!($app_func);
         }
 
-        // WASM entry point
+        // WASM entry point - must be sync, spawns async work
         #[cfg(feature = "wasm")]
         #[wasm_bindgen::prelude::wasm_bindgen(start)]
-        pub async fn main() {
-            $crate::run_async!($app_func);
+        pub fn main() {
+            // Spawn the async application on the WASM event loop
+            wasm_bindgen_futures::spawn_local(async {
+                $crate::run_async!($app_func);
+            });
         }
 
         // WASI entry point (if/when implemented)
