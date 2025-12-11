@@ -8,6 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+feagi-async = {path = "feagi-async"}
 serde = { workspace = true }
 serde_json = { workspace = true}
 ndarray = { workspace = true}
