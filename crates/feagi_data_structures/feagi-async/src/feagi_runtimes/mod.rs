@@ -4,7 +4,7 @@ mod wasi;
 mod embedded_esp_32;
 
 #[cfg(feature = "standard-tokio")]
-pub use standard_tokio::TokioRuntime;
+pub use standard_tokio::{TokioRuntime, TokioHandle};
 
 #[cfg(feature = "wasm")]
 pub use wasm::WasmRuntime;

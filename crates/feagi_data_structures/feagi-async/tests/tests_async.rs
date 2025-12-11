@@ -1,9 +1,8 @@
 //! Tests for the various async implementations
 //!
-//! The test BODY is identical across platforms - only the entry point differs.
-//! This demonstrates how downstream libraries can write platform-agnostic async code.
+//! The test BODY is identical across platforms - only the test attribute differs.
 
-use feagi_async::{runtime_picker, FeagiAsyncRuntime};
+use feagi_async::FeagiAsyncRuntime;
 
 //region Shared Tests
 async fn async_number_test(x: i32, y: i32) -> i32 {
@@ -14,6 +13,8 @@ async fn async_string_formatting(name: String) -> String {
     format!("Hello, {}!", name)
 }
 
+/// The actual test logic - takes a runtime via the trait.
+/// This is what downstream library code looks like: pure async, no platform specifics.
 async fn run_test_logic<R: FeagiAsyncRuntime>(runtime: &R) {
     // Spawn an async task that returns a value
     let handle1 = runtime.spawn(async_number_test(21, 21));
@@ -35,29 +36,22 @@ async fn run_test_logic<R: FeagiAsyncRuntime>(runtime: &R) {
     assert_eq!(answer, 42);
     assert_eq!(greeting, String::from("Hello, FEAGI!"));
     assert_eq!(sum, 15);
+    println!("Simple Async Tests Done!");
 }
+
 //endregion
 
+//region Call tests per platform
 
-/// Macro that generates a test with the correct async entry point per platform.
-/// The test BODY is the same - only the wrapper differs.
-macro_rules! feagi_async_test {
-    ($name:ident, $test_body:expr) => {
-        #[cfg(feature = "standard-tokio")]
-        #[tokio::test]
-        async fn $name() {
-            let runtime = runtime_picker!();
-            $test_body(&runtime).await;
-        }
-
-        #[cfg(feature = "wasm")]
-        #[wasm_bindgen_test::wasm_bindgen_test]
-        async fn $name() {
-            let runtime = runtime_picker!();
-            $test_body(&runtime).await;
-        }
-    };
+#[cfg(feature = "standard-tokio")]
+#[tokio::test]
+async fn test_spawn_and_await() {
+    feagi_async::run_async!(run_test_logic);
 }
 
-
-feagi_async_test!(test_spawn_and_await, run_test_logic);
+#[cfg(feature = "wasm")]
+#[wasm_bindgen_test::wasm_bindgen_test]
+async fn test_spawn_and_await() {
+    feagi_async::run_async!(run_test_logic);
+}
+//endregion
