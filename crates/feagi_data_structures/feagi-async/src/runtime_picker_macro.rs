@@ -1,36 +1,36 @@
-
 /// Outputs the correct async runtime implementation as defined by build settings.
-/// Also causes a compile error if multiple runtimes are enabled at once
+/// Also causes a compile error if multiple runtimes are enabled at once.
 #[macro_export]
-macro_rules! runtime_picker  {
-    () => {
+macro_rules! runtime_picker {
+    () => {{
+        // Check for conflicting feature combinations
         #[cfg(all(feature = "standard-tokio", feature = "wasm"))]
-        {
-            compile_error!("Do not enable both standard-tokio and wasm features!");
-        }
+        compile_error!("Do not enable both standard-tokio and wasm features!");
 
         #[cfg(all(feature = "standard-tokio", feature = "wasi"))]
-        {
-            compile_error!("Do not enable both standard-tokio and wasi features!");
-        }
+        compile_error!("Do not enable both standard-tokio and wasi features!");
 
         #[cfg(all(feature = "wasm", feature = "wasi"))]
-        {
-            compile_error!("Do not enable both wasm and wasi features!");
-        }
+        compile_error!("Do not enable both wasm and wasi features!");
 
+        // Return the appropriate runtime
         #[cfg(feature = "standard-tokio")]
         {
-            use feagi_async::{FeagiAsyncRuntime, TokioRuntime};
-            feagi_async::TokioRuntime::new();
+            $crate::TokioRuntime::new()
         }
 
         #[cfg(feature = "wasm")]
         {
-            use feagi_async::{FeagiAsyncRuntime, WasmRuntime};
-            feagi_async::WasmRuntime::new();
+            $crate::WasmRuntime::new()
         }
 
-        compile_error!("No Async runtime defined!");
-    };
+        #[cfg(feature = "wasi")]
+        {
+            $crate::WasiRuntime::new()
+        }
+
+        // Error if no runtime is enabled
+        #[cfg(not(any(feature = "standard-tokio", feature = "wasm", feature = "wasi")))]
+        compile_error!("No async runtime feature enabled! Enable one of: standard-tokio, wasm, wasi");
+    }};
 }
