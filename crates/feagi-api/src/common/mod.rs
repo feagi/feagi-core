@@ -7,6 +7,7 @@ pub mod error;
 pub mod request;
 pub mod response;
 pub mod types;
+pub use types::{ApiState, State, Json, Query, Path};
 
 pub use error::{ApiError, ApiErrorCode};
 pub use request::ApiRequest;

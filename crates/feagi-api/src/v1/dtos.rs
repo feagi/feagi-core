@@ -9,20 +9,8 @@ use serde::{Deserialize, Serialize};
 
 /// Health check response (must match Python FastAPI format exactly)
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "openapi", schema(example = json!({
-    "status": "healthy",
-    "brain_readiness": true,
-    "burst_engine": true,
-    "neuron_count": 1000,
-    "synapse_count": 5000,
-    "cortical_area_count": 10,
-    "genome_validity": true,
-    "influxdb_availability": false,
-    "connectome_path": "/path/to/connectome",
-    "genome_timestamp": "2025-10-29T12:34:56Z",
-    "change_state": "saved",
-    "changes_saved_externally": false
-}))]
+// Schema example removed for WASM compatibility
+    // #[cfg_attr(feature = "openapi", schema(example = json!({
 pub struct HealthCheckResponseV1 {
     /// Overall system status
     pub status: String,
@@ -70,7 +58,8 @@ pub struct HealthCheckResponseV1 {
 
 /// Readiness check response
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-#[cfg_attr(feature = "openapi", schema(example = json!({
+// Schema example removed for WASM compatibility
+    // #[cfg_attr(feature = "openapi", schema(example = json!({
     "ready": true,
     "components": {
         "api": true,
@@ -78,7 +67,6 @@ pub struct HealthCheckResponseV1 {
         "state_manager": true,
         "connectome": true
     }
-}))]
 pub struct ReadinessCheckResponseV1 {
     /// Is the system ready?
     pub ready: bool,

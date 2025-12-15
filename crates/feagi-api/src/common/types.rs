@@ -7,32 +7,13 @@
 //! without modification.
 
 #[cfg(feature = "http")]
-pub use axum::extract::{State, Query};
+pub use axum::extract::{State, Query, Path};
 #[cfg(feature = "http")]
 pub use axum::response::Json;
+#[cfg(feature = "http")]
+pub use crate::transports::http::server::ApiState;
 
 #[cfg(not(feature = "http"))]
-pub use crate::transports::wasm::types::{State, Json};
-
-// Query extractor for WASM (simple wrapper around HashMap)
-#[cfg(not(feature = "http"))]
-pub struct Query<T>(pub T);
-
-#[cfg(not(feature = "http"))]
-impl<T> std::ops::Deref for Query<T> {
-    type Target = T;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-#[cfg(not(feature = "http"))]
-impl<T> Query<T> {
-    pub fn new(value: T) -> Self {
-        Self(value)
-    }
-    
-    pub fn into_inner(self) -> T {
-        self.0
-    }
-}
+pub use crate::transports::wasm::types::{State, Json, Query, Path};
+// ApiState is always available (defined in http/server.rs but doesn't require http feature)
+pub use crate::transports::http::server::ApiState;

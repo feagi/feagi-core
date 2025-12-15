@@ -154,10 +154,13 @@ pub async fn get_health_check(
     let memory_area_stats = None; // TODO: Requires memory area analysis
     let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
 
-    // Get root region ID from ConnectomeManager
+    // Get root region ID from ConnectomeManager (only available when services feature is enabled)
+    #[cfg(feature = "services")]
     let brain_regions_root = feagi_bdu::ConnectomeManager::instance()
         .read()
         .get_root_region_id();
+    #[cfg(not(feature = "services"))]
+    let brain_regions_root = None; // WASM: Use connectome service instead
     
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,

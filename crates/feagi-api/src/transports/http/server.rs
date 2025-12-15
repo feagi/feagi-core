@@ -480,6 +480,7 @@ fn create_v1_router() -> Router<ApiState> {
 
 /// OpenAPI spec handler
 #[allow(dead_code)]  // In development - will be wired to OpenAPI route
+#[cfg(feature = "http")]
 async fn openapi_spec() -> Json<utoipa::openapi::OpenApi> {
     Json(ApiDoc::openapi())
 }
