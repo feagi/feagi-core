@@ -13,11 +13,11 @@ name = "feagi_bdu"
 # Core types from existing FEAGI crates
 feagi-neural = { path = "../feagi-neural" }  # For types (CorticalArea, Dimensions, etc.)
 feagi-evo = { path = "../feagi-evo" }
-feagi-burst-engine = { path = "../feagi-burst-engine" }
+feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false }  # Disable connectome-io (lz4 incompatible with WASM)
 feagi_data_structures = { workspace = true }
 
 # Performance (using workspace versions)
-rayon = { workspace = true }
+rayon = { workspace = true, optional = true }  # Optional - not available in WASM
 ndarray = { workspace = true }
 ahash = { workspace = true }
 roaring = "0.10"  # Roaring bitmaps for spatial indexing
@@ -45,6 +45,13 @@ parking_lot = "0.12"
 
 # Random number generation
 rand = "0.8"
+
+[features]
+default = ["parallel"]
+# Parallel processing via rayon (not available in WASM)
+parallel = ["rayon"]
+# WASM-compatible build (disables connectome-io and parallel processing)
+wasm = []
 
 [dev-dependencies]
 criterion = "0.5"       # Benchmarking

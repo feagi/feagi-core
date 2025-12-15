@@ -8,6 +8,8 @@ Vector-based connectivity - offset-based connection patterns.
 use crate::types::{BduResult, Position};
 
 type Dimensions = (usize, usize, usize);
+
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// Apply vector offset to source position
@@ -46,9 +48,18 @@ pub fn match_vectors_batch(
     morphology_scalar: f32,
     dst_dimensions: Dimensions,
 ) -> BduResult<Vec<Position>> {
-    // Parallel processing for large batches
+    // Parallel processing for large batches (sequential fallback for WASM)
+    #[cfg(feature = "parallel")]
     let results: Vec<_> = src_positions
         .par_iter()
+        .filter_map(|&src_pos| {
+            apply_vector_offset(src_pos, vector, morphology_scalar, dst_dimensions).ok()
+        })
+        .collect();
+
+    #[cfg(not(feature = "parallel"))]
+    let results: Vec<_> = src_positions
+        .iter()
         .filter_map(|&src_pos| {
             apply_vector_offset(src_pos, vector, morphology_scalar, dst_dimensions).ok()
         })

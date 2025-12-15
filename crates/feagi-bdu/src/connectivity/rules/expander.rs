@@ -32,7 +32,7 @@ pub fn syn_expander(
     Ok((scaled_x, scaled_y, scaled_z))
 }
 
-/// Batch expander for parallel processing
+/// Batch expander for parallel processing (sequential fallback for WASM)
 pub fn syn_expander_batch(
     src_area_id: &str,
     dst_area_id: &str,
@@ -40,20 +40,38 @@ pub fn syn_expander_batch(
     src_dimensions: (usize, usize, usize),
     dst_dimensions: (usize, usize, usize),
 ) -> BduResult<Vec<Position>> {
-    use rayon::prelude::*;
+    #[cfg(feature = "parallel")]
+    {
+        use rayon::prelude::*;
+        Ok(neuron_locations
+            .par_iter()
+            .map(|&loc| {
+                syn_expander(
+                    src_area_id,
+                    dst_area_id,
+                    loc,
+                    src_dimensions,
+                    dst_dimensions,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?)
+    }
 
-    neuron_locations
-        .par_iter()
-        .map(|&loc| {
-            syn_expander(
-                src_area_id,
-                dst_area_id,
-                loc,
-                src_dimensions,
-                dst_dimensions,
-            )
-        })
-        .collect()
+    #[cfg(not(feature = "parallel"))]
+    {
+        Ok(neuron_locations
+            .iter()
+            .map(|&loc| {
+                syn_expander(
+                    src_area_id,
+                    dst_area_id,
+                    loc,
+                    src_dimensions,
+                    dst_dimensions,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?)
+    }
 }
 
 #[cfg(test)]

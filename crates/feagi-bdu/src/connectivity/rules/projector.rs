@@ -12,6 +12,8 @@ PERFORMANCE TARGET: <100ms for 128×128×3 → 128×128×1 projection (400x fast
 
 use crate::types::{BduError, BduResult, Position};
 use feagi_data_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions as Dimensions;
+
+#[cfg(feature = "parallel")]
 use rayon::prelude::*;
 
 /// Parameters for projection mapping
@@ -235,10 +237,29 @@ pub fn syn_projector_batch(
         )));
     }
 
-    // Parallel processing for large batches
+    // Parallel processing for large batches (sequential fallback for WASM)
+    #[cfg(feature = "parallel")]
     let results: Vec<BduResult<Vec<Position>>> = neuron_ids
         .par_iter()
         .zip(neuron_locations.par_iter())
+        .map(|(id, loc)| {
+            syn_projector(
+                src_area_id,
+                dst_area_id,
+                *id,
+                src_dimensions,
+                dst_dimensions,
+                *loc,
+                transpose,
+                project_last_layer_of,
+            )
+        })
+        .collect();
+
+    #[cfg(not(feature = "parallel"))]
+    let results: Vec<BduResult<Vec<Position>>> = neuron_ids
+        .iter()
+        .zip(neuron_locations.iter())
         .map(|(id, loc)| {
             syn_projector(
                 src_area_id,
