@@ -7,9 +7,21 @@ use core::pin::Pin;
 #[cfg(feature = "wasm")]
 use core::task::{Context, Poll};
 #[cfg(feature = "wasm")]
+use core::time::Duration;
+#[cfg(feature = "wasm")]
 use futures_channel::oneshot;
 #[cfg(feature = "wasm")]
-use wasm_bindgen_futures::spawn_local;
+use futures_util::future::select;
+#[cfg(feature = "wasm")]
+use futures_util::FutureExt;
+#[cfg(feature = "wasm")]
+use wasm_bindgen_futures::{spawn_local, JsFuture};
+#[cfg(feature = "wasm")]
+use wasm_bindgen::prelude::*;
+#[cfg(feature = "wasm")]
+use js_sys::Promise;
+#[cfg(feature = "wasm")]
+use web_sys::Window;
 
 /// The WASM async runtime using wasm-bindgen-futures.
 /// 
@@ -59,6 +71,32 @@ impl<T> Future for WasmTaskHandle<T> {
 #[cfg(feature = "wasm")]
 unsafe impl<T: Send> Send for WasmTaskHandle<T> {}
 
+/// A Send-safe wrapper for WASM delay future
+/// 
+/// In WASM, everything runs on a single thread, so Send is trivially satisfied.
+/// This wrapper makes JsFuture Send-safe for use in the trait.
+#[cfg(feature = "wasm")]
+struct WasmDelayFuture {
+    inner: JsFuture,
+}
+
+#[cfg(feature = "wasm")]
+impl Future for WasmDelayFuture {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        match Pin::new(&mut self.inner).poll(cx) {
+            Poll::Ready(Ok(_)) => Poll::Ready(()),
+            Poll::Ready(Err(_)) => Poll::Ready(()), // Ignore errors
+            Poll::Pending => Poll::Pending,
+        }
+    }
+}
+
+// SAFETY: In WASM single-threaded environment, Send is satisfied trivially.
+#[cfg(feature = "wasm")]
+unsafe impl Send for WasmDelayFuture {}
+
 #[cfg(feature = "wasm")]
 impl FeagiAsyncRuntime for WasmRuntime {
     type TaskHandle<T: Send + 'static> = WasmTaskHandle<T>;
@@ -79,5 +117,59 @@ impl FeagiAsyncRuntime for WasmRuntime {
         });
         
         WasmTaskHandle(rx)
+    }
+
+    fn delay(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
+        // Use setTimeout via Promise for WASM
+        let millis = duration.as_millis() as u32;
+        let promise = Promise::new(&mut |resolve, _reject| {
+            let window = web_sys::window().expect("window should be available");
+            let closure = Closure::once_into_js(move || {
+                resolve.call0(&JsValue::NULL).unwrap();
+            });
+            window
+                .set_timeout_with_callback_and_timeout_and_arguments_0(
+                    closure.as_ref().unchecked_ref(),
+                    millis as i32,
+                )
+                .expect("setTimeout should work");
+            // closure is kept alive by the Promise
+        });
+        
+        // Wrap JsFuture in a Send-safe wrapper
+        let delay_future = WasmDelayFuture {
+            inner: JsFuture::from(promise),
+        };
+        
+        Box::pin(delay_future)
+    }
+
+    fn try_block_on<F, T>(&self, _future: F) -> Result<T, crate::BlockOnError>
+    where
+        F: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        Err(crate::BlockOnError::not_supported(
+            "WASM does not support blocking operations. All operations must be async."
+        ))
+    }
+
+    fn with_timeout<F, T>(
+        &self,
+        future: F,
+        timeout: Duration,
+    ) -> Pin<Box<dyn Future<Output = Result<T, crate::TimeoutError>> + Send + 'static>>
+    where
+        F: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        // Create delay future before moving into async block
+        let delay = self.delay(timeout);
+        Box::pin(async move {
+            match select(future.boxed(), delay).await {
+                futures_util::future::Either::Left((result, _)) => Ok(result),
+                futures_util::future::Either::Right((_, _)) => Err(crate::TimeoutError),
+            }
+        })
     }
 }

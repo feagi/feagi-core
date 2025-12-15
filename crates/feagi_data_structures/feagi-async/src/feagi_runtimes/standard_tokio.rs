@@ -7,6 +7,8 @@ use core::pin::Pin;
 #[cfg(feature = "standard-tokio")]
 use core::task::{Context, Poll};
 #[cfg(feature = "standard-tokio")]
+use core::time::Duration;
+#[cfg(feature = "standard-tokio")]
 use tokio::runtime::{Handle, Runtime};
 
 /// The Tokio async runtime wrapper that OWNS a runtime.
@@ -56,6 +58,35 @@ impl FeagiAsyncRuntime for TokioRuntime {
     {
         TokioTaskHandle(self.runtime.spawn(fut))
     }
+
+    fn delay(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
+        Box::pin(tokio::time::sleep(duration))
+    }
+
+    fn try_block_on<F, T>(&self, future: F) -> Result<T, crate::BlockOnError>
+    where
+        F: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        Ok(self.runtime.block_on(future))
+    }
+
+    fn with_timeout<F, T>(
+        &self,
+        future: F,
+        timeout: Duration,
+    ) -> Pin<Box<dyn Future<Output = Result<T, crate::TimeoutError>> + Send + 'static>>
+    where
+        F: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        Box::pin(async move {
+            tokio::select! {
+                result = future => Ok(result),
+                _ = tokio::time::sleep(timeout) => Err(crate::TimeoutError),
+            }
+        })
+    }
 }
 
 #[cfg(feature = "standard-tokio")]
@@ -68,6 +99,41 @@ impl FeagiAsyncRuntime for TokioHandle {
         T: Send + 'static,
     {
         TokioTaskHandle(self.handle.spawn(fut))
+    }
+
+    fn delay(&self, duration: Duration) -> Pin<Box<dyn Future<Output = ()> + Send + 'static>> {
+        Box::pin(tokio::time::sleep(duration))
+    }
+
+    fn try_block_on<F, T>(&self, future: F) -> Result<T, crate::BlockOnError>
+    where
+        F: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        // TokioHandle doesn't own a runtime, so we can't block_on directly
+        // We need to spawn the future and wait for it
+        // However, this is tricky without blocking - for now, return an error
+        // indicating that blocking requires TokioRuntime (not TokioHandle)
+        Err(crate::BlockOnError::not_supported(
+            "TokioHandle does not support blocking. Use TokioRuntime::try_block_on() instead."
+        ))
+    }
+
+    fn with_timeout<F, T>(
+        &self,
+        future: F,
+        timeout: Duration,
+    ) -> Pin<Box<dyn Future<Output = Result<T, crate::TimeoutError>> + Send + 'static>>
+    where
+        F: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+    {
+        Box::pin(async move {
+            tokio::select! {
+                result = future => Ok(result),
+                _ = tokio::time::sleep(timeout) => Err(crate::TimeoutError),
+            }
+        })
     }
 }
 
