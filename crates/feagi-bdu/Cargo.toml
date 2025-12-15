@@ -13,7 +13,7 @@ name = "feagi_bdu"
 # Core types from existing FEAGI crates
 feagi-neural = { path = "../feagi-neural" }  # For types (CorticalArea, Dimensions, etc.)
 feagi-evo = { path = "../feagi-evo" }
-feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false }  # Disable connectome-io (lz4 incompatible with WASM)
+# feagi-burst-engine configured per-platform below
 feagi_data_structures = { workspace = true }
 
 # Performance (using workspace versions)
@@ -43,8 +43,17 @@ parking_lot = "0.12"
 # Logging (replaced by feagi-observability)
 # log = "0.4"  # Removed - use feagi-observability instead
 
-# Random number generation
+# Random number generation - platform-specific
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 rand = "0.8"
+# Use async-tokio feature for desktop builds
+feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false, features = ["async-tokio"] }
+
+[target.'cfg(target_family = "wasm")'.dependencies]
+getrandom = { version = "0.2", features = ["js"] }
+rand = { version = "0.8", default-features = false, features = ["getrandom"] }
+# Use wasm feature for WASM builds (no tokio)
+feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false, features = ["wasm"] }
 
 [features]
 default = ["parallel"]

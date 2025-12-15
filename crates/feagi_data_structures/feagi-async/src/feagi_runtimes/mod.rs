@@ -1,3 +1,4 @@
+#[cfg(feature = "standard-tokio")]
 mod standard_tokio;
 mod wasm;
 mod wasi;

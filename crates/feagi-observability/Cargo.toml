@@ -9,15 +9,16 @@ description = "Unified observability infrastructure for FEAGI (logging, telemetr
 [dependencies]
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-tracing-appender = "0.2"  # File rotation and appending
+# tracing-subscriber: json feature may pull in tokio - use fmt instead for WASM
+tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "fmt", "std"] }
+tracing-appender = { version = "0.2", optional = true }  # File rotation and appending (desktop only)
 
 # Errors
 anyhow = "1.0"
 thiserror.workspace = true
 
-# Metrics
-prometheus = "0.13"
+# Metrics (desktop only - prometheus depends on tokio)
+prometheus = { version = "0.13", optional = true }
 
 # Utilities
 chrono = "0.4"
@@ -35,6 +36,9 @@ pprof = { version = "0.12", optional = true }
 
 [features]
 default = []
+# Desktop-only features (require tokio)
+file-logging = ["dep:tracing-appender"]
+metrics = ["dep:prometheus"]
 opentelemetry = [
     "dep:opentelemetry",
     "dep:opentelemetry_sdk",

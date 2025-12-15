@@ -16,6 +16,7 @@ feagi-runtime-std = { path = "../feagi-runtime-std" }
 feagi-runtime = { path = "../feagi-runtime" }
 feagi-state-manager = { path = "../feagi-state-manager" }  # For BurstEngineState enum
 # Async runtime abstraction for WASM compatibility
+# Note: default-features = false prevents pulling in standard-tokio by default
 feagi-async = { path = "../feagi_data_structures/feagi-async", default-features = false }
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
@@ -50,7 +51,7 @@ default = ["connectome-io", "async-tokio"]
 connectome-io = ["feagi-connectome-serialization"]
 # Async runtime features
 async-tokio = ["feagi-async/standard-tokio"]
-wasm = ["feagi-async/wasm"]
+wasm = ["feagi-async/wasm"]  # Explicitly enable wasm feature on feagi-async (no tokio)
 # Enable GPU acceleration via WGPU (cross-platform)
 gpu = ["wgpu", "pollster", "bytemuck"]
 # Enable CUDA acceleration (NVIDIA only, highest performance)

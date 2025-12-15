@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 use chrono::{DateTime, Utc};
+#[cfg(feature = "file-logging")]
 use tracing_appender::rolling;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -17,14 +18,23 @@ use crate::cli::CrateDebugFlags;
 
 /// Logging initialization result
 pub struct LoggingGuard {
+    #[cfg(feature = "file-logging")]
     _file_guards: Vec<tracing_appender::non_blocking::WorkerGuard>,
+    #[cfg(feature = "file-logging")]
     log_dir: PathBuf,
 }
 
 impl LoggingGuard {
-    /// Get the log directory path
+    /// Get the log directory path (desktop only)
+    #[cfg(feature = "file-logging")]
     pub fn log_dir(&self) -> &Path {
         &self.log_dir
+    }
+    
+    #[cfg(not(feature = "file-logging"))]
+    pub fn log_dir(&self) -> &Path {
+        // WASM builds don't have file logging
+        Path::new(".")
     }
 }
 
@@ -45,6 +55,7 @@ impl LoggingGuard {
 /// * `log_dir` - Base directory for logs (default: `./logs`)
 /// * `retention_days` - Keep logs for N days (default: 30)
 /// * `retention_runs` - Keep N most recent runs (default: 10)
+#[cfg(feature = "file-logging")]
 pub fn init_logging(
     debug_flags: &CrateDebugFlags,
     log_dir: Option<PathBuf>,
@@ -129,7 +140,38 @@ pub fn init_logging(
     })
 }
 
-/// Clean up old log directories based on retention policy
+/// Initialize logging with console output only (WASM-compatible)
+///
+/// For WASM builds, file logging is not available. This function provides
+/// console-only logging that works in browsers.
+#[cfg(not(feature = "file-logging"))]
+pub fn init_logging(
+    debug_flags: &CrateDebugFlags,
+    _log_dir: Option<PathBuf>,
+    _retention_days: Option<u64>,
+    _retention_runs: Option<usize>,
+) -> Result<LoggingGuard> {
+    // Build filter string from debug flags
+    let filter = debug_flags.to_filter_string();
+    let env_filter = EnvFilter::new(&filter);
+    
+    // Console layer only (human-readable)
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_file(false)
+        .with_line_number(false)
+        .with_filter(env_filter);
+    
+    // Initialize subscriber with console layer only
+    Registry::default()
+        .with(console_layer.boxed())
+        .init();
+    
+    Ok(LoggingGuard {})
+}
+
+/// Clean up old log directories based on retention policy (desktop only)
+#[cfg(feature = "file-logging")]
 fn cleanup_old_logs(
     base_log_dir: &Path,
     retention_days: Option<u64>,
