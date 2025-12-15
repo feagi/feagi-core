@@ -45,7 +45,7 @@ parking_lot = "0.12"
 
 # Random number generation - platform-specific
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-rand = "0.8"
+rand = { version = "0.8", features = ["std", "std_rng"] }
 # Use async-tokio feature for desktop builds
 feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false, features = ["async-tokio"] }
 

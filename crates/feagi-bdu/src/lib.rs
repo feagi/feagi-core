@@ -37,6 +37,7 @@ pub mod spatial;
 pub mod types;
 pub mod neuroembryogenesis;
 pub mod cortical_type_utils;
+mod rng;
 
 // Note: models/ and genome/ have been moved to feagi-types and feagi-evo respectively
 

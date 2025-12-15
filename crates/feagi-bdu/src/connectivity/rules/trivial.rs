@@ -6,13 +6,14 @@ Trivial connectivity rules - simple, non-compute-intensive morphologies.
 */
 
 use crate::types::Position;
+use crate::rng::get_rng;
 use rand::Rng;
 
 type Dimensions = (usize, usize, usize);
 
 /// Randomizer - select random position in destination area
 pub fn syn_randomizer(dst_dimensions: Dimensions) -> Position {
-    let mut rng = rand::thread_rng();
+    let mut rng = get_rng();
     (
         rng.gen_range(0..dst_dimensions.0 as u32),
         rng.gen_range(0..dst_dimensions.1 as u32),

@@ -64,8 +64,9 @@ pub fn apply_projector_morphology(
     conductance: u8,
     synapse_attractivity: u8,
 ) -> BduResult<u32> {
+    use crate::rng::get_rng;
     use rand::Rng;
-    let mut rng = rand::thread_rng();
+    let mut rng = get_rng();
 
     // Query source neurons from NPU (zero copy - just iteration)
     let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
@@ -140,8 +141,9 @@ pub fn apply_expander_morphology(
     conductance: u8,
     synapse_attractivity: u8,
 ) -> BduResult<u32> {
+    use crate::rng::get_rng;
     use rand::Rng;
-    let mut rng = rand::thread_rng();
+    let mut rng = get_rng();
 
     let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
     if src_neurons.is_empty() {
@@ -198,8 +200,9 @@ pub fn apply_block_connection_morphology(
     conductance: u8,
     synapse_attractivity: u8,
 ) -> BduResult<u32> {
+    use crate::rng::get_rng;
     use rand::Rng;
-    let mut rng = rand::thread_rng();
+    let mut rng = get_rng();
 
     let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
     if src_neurons.is_empty() {
@@ -263,8 +266,9 @@ pub fn apply_patterns_morphology(
     conductance: u8,
     synapse_attractivity: u8,
 ) -> BduResult<u32> {
+    use crate::rng::get_rng;
     use rand::Rng;
-    let mut rng = rand::thread_rng();
+    let mut rng = get_rng();
 
     if patterns.is_empty() {
         return Ok(0);
@@ -329,8 +333,9 @@ pub fn apply_vectors_morphology(
     conductance: u8,
     synapse_attractivity: u8,
 ) -> BduResult<u32> {
+    use crate::rng::get_rng;
     use rand::Rng;
-    let mut rng = rand::thread_rng();
+    let mut rng = get_rng();
 
     if vectors.is_empty() {
         return Ok(0);
