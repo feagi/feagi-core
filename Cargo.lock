@@ -1913,6 +1913,7 @@ dependencies = [
  "chrono",
  "criterion",
  "cudarc",
+ "feagi-async",
  "feagi-connectome-serialization",
  "feagi-neural",
  "feagi-observability",

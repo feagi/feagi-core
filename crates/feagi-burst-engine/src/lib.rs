@@ -34,7 +34,9 @@
 //! - Minimal allocations in hot paths
 
 pub mod backend;
-pub mod burst_loop_runner; // Pure Rust burst loop
+pub mod burst_loop_runner;
+#[cfg(any(feature = "async-tokio", feature = "wasm"))]
+pub mod async_burst_loop; // Pure Rust burst loop
 pub mod fire_ledger;
 pub mod fire_structures;
 pub mod fq_sampler;
