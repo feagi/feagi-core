@@ -3,10 +3,10 @@
 
 //! Genome API Endpoints - Exact port from Python `/v1/genome/*`
 
-use axum::{extract::State, response::Json};
+// Removed - using crate::common::State instead
 use std::collections::HashMap;
 use tracing::info;
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json, Query};
 use crate::transports::http::server::ApiState;
 use feagi_services::types::LoadGenomeParams;
 

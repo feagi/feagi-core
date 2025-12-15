@@ -5,6 +5,7 @@
 
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "http")]
 use utoipa::ToSchema;
 
 /// Standard API response wrapper

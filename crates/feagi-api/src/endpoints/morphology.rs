@@ -3,10 +3,10 @@
 
 //! Morphology API Endpoints - Exact port from Python `/v1/morphology/*`
 
-use axum::{extract::State, response::Json};
+// Removed - using crate::common::State instead
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, BTreeMap};
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json};
 use crate::transports::http::server::ApiState;
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]

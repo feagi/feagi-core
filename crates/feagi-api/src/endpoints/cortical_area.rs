@@ -5,15 +5,11 @@
 //!
 //! Reference: feagi-py/feagi/api/v1/cortical_area.py
 
-use axum::{
-    extract::State,
-    response::Json,
-};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use base64::{Engine as _, engine::general_purpose};
 
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json, Query};
 use crate::transports::http::server::ApiState;
 use feagi_data_structures::genomic::{SensoryCorticalUnit, MotorCorticalUnit};
 

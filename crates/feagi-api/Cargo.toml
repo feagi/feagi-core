@@ -8,26 +8,27 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 
 [dependencies]
 # Core FEAGI
-feagi-services = { path = "../feagi-services" }
-feagi-neural = { path = "../feagi-neural" }  # For types
+# feagi-services is always needed (for trait definitions), but can work without tokio
+feagi-services = { path = "../feagi-services", default-features = false }
+feagi-neural = { path = "../feagi-neural", default-features = false }  # For types
 feagi-evo = { path = "../feagi-evo" }  # For embedded default genomes
-feagi-transports = { path = "../feagi-transports", features = ["zmq-server"] }
-feagi-pns = { path = "../feagi-pns" }  # For registration and domain logic
-feagi-bdu = { path = "../feagi-bdu" }  # For examples
-feagi-burst-engine = { path = "../feagi-burst-engine" }  # For examples
+feagi-transports = { path = "../feagi-transports", features = ["zmq-server"], optional = true }
+feagi-pns = { path = "../feagi-pns", optional = true }  # For registration and domain logic
+feagi-bdu = { path = "../feagi-bdu", optional = true }  # For examples
+feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false, optional = true }  # For examples
 feagi_data_structures = { workspace = true }
 
-# HTTP/REST
-axum = "0.7"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
-hyper = "1.0"
-http-body-util = "0.1"
+# HTTP/REST (optional - not needed for WASM)
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["cors", "trace", "fs"], optional = true }
+hyper = { version = "1.0", optional = true }
+http-body-util = { version = "0.1", optional = true }
 
 # Note: ZMQ provided by feagi-transports
 
-# Async runtime
-tokio = { version = "1.0", features = ["full"] }
+# Async runtime (optional - not needed for WASM)
+tokio = { version = "1.0", features = ["full"], optional = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -38,8 +39,9 @@ base64 = "0.21"
 validator = { version = "0.18", features = ["derive"] }
 
 # OpenAPI (utoipa - compile-time, full OpenAPI 3.0 support)
-utoipa = { version = "4.0", features = ["axum_extras"] }
-utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
+# Available even without http feature (for endpoint documentation)
+utoipa = { version = "4.0", features = ["axum_extras"], default-features = false }
+utoipa-swagger-ui = { version = "6.0", features = ["axum"], optional = true }
 
 # Observability
 feagi-observability = { workspace = true }
@@ -85,7 +87,10 @@ tokio-test = "0.4"
 feagi-runtime-std = { path = "../feagi-runtime-std" }
 
 [features]
-default = []
+default = ["http", "services"]
+http = ["axum", "tower", "tower-http", "hyper", "http-body-util", "tokio", "utoipa-swagger-ui", "services"]
+services = ["feagi-services/std", "feagi-pns", "feagi-bdu", "feagi-burst-engine"]
+zmq = ["feagi-transports", "services"]
 security = ["chacha20poly1305", "x25519-dalek", "jsonwebtoken", "argon2"]
 tls = ["rustls", "tokio-rustls"]
 

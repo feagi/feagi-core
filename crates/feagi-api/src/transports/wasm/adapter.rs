@@ -4,14 +4,23 @@
 //! WASM API Adapter
 //!
 //! Routes REST API calls to transport-agnostic endpoint functions.
-//! No duplication - uses the same endpoint logic as HTTP and ZMQ adapters.
+//! NO DUPLICATION - reuses the same endpoint logic as HTTP and ZMQ adapters.
+//!
+//! NOTE: Currently endpoints use axum types directly, so this adapter can only
+//! work when http feature is enabled. To make it work without http feature,
+//! endpoints need to use type aliases instead of axum types directly.
 
 use crate::common::{ApiError, ApiResult};
-use crate::endpoints;
 use crate::transports::http::server::ApiState;
-use axum::extract::State;
 use serde_json::Value;
-use std::collections::HashMap;
+
+// Use axum types when http feature is enabled
+#[cfg(feature = "http")]
+use axum::{extract::State, response::Json};
+
+// Use WASM-compatible types when http feature is disabled
+#[cfg(not(feature = "http"))]
+use crate::transports::wasm::types::{State, Json};
 
 /// WASM Transport Adapter
 ///
@@ -46,10 +55,13 @@ impl WasmApiAdapter {
         path: &str,
         body: Option<&str>,
     ) -> Result<String, String> {
-        // Route to appropriate endpoint function
+        // Import endpoints module - now works with or without http feature!
+        use crate::endpoints;
+        
+        // Route to appropriate endpoint function (reuses endpoint logic!)
         let result: ApiResult<serde_json::Value> = match (method, path) {
             // ========================================================================
-            // SYSTEM ENDPOINTS
+            // SYSTEM ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/system/health_check") => {
                 endpoints::system::get_health_check(State(self.state.clone())).await
@@ -57,7 +69,7 @@ impl WasmApiAdapter {
             }
 
             // ========================================================================
-            // CORTICAL AREA ENDPOINTS
+            // CORTICAL AREA ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/cortical_area/cortical_area/geometry") => {
                 endpoints::cortical_area::get_cortical_area_geometry(
@@ -100,7 +112,7 @@ impl WasmApiAdapter {
             }
 
             // ========================================================================
-            // MORPHOLOGY ENDPOINTS
+            // MORPHOLOGY ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/morphology/morphologies") => {
                 endpoints::morphology::get_morphologies(
@@ -111,7 +123,7 @@ impl WasmApiAdapter {
             }
 
             // ========================================================================
-            // MAPPING ENDPOINTS
+            // MAPPING ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/cortical_area/cortical_map_detailed") => {
                 endpoints::cortical_area::get_cortical_map_detailed(
@@ -122,7 +134,7 @@ impl WasmApiAdapter {
             }
 
             // ========================================================================
-            // REGION ENDPOINTS
+            // REGION ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/region/regions_members") => {
                 endpoints::region::get_regions_members(
@@ -133,7 +145,7 @@ impl WasmApiAdapter {
             }
 
             // ========================================================================
-            // GENOME ENDPOINTS
+            // GENOME ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("POST", "/v1/genome/save") => {
                 let payload: std::collections::HashMap<String, String> = match serde_json::from_str(body.unwrap_or("{}")) {
@@ -142,7 +154,7 @@ impl WasmApiAdapter {
                 };
                 endpoints::genome::post_save(
                     State(self.state.clone()),
-                    axum::extract::Json(payload),
+                    Json(payload),
                 )
                 .await
                 .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
@@ -157,11 +169,8 @@ impl WasmApiAdapter {
             }
 
             // ========================================================================
-            // BURST ENGINE ENDPOINTS
+            // BURST ENGINE ENDPOINTS - REUSING endpoint logic
             // ========================================================================
-            // Note: Burst processing is handled directly by FeagiEngine in feagi-wasm
-            // This endpoint is for compatibility but may not be fully implemented
-
             ("GET", "/v1/burst_engine/simulation_timestep") => {
                 endpoints::burst_engine::get_simulation_timestep(
                     State(self.state.clone()),
@@ -171,7 +180,7 @@ impl WasmApiAdapter {
             }
 
             // ========================================================================
-            // AGENT ENDPOINTS
+            // AGENT ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/agent/list") => {
                 endpoints::agent::list_agents(
@@ -182,13 +191,14 @@ impl WasmApiAdapter {
             }
 
             ("POST", "/v1/agent/manual_stimulation") => {
-                let payload: crate::v1::agent_dtos::ManualStimulationRequest = match serde_json::from_str(body.unwrap_or("{}")) {
+                use crate::v1::agent_dtos::ManualStimulationRequest;
+                let payload: ManualStimulationRequest = match serde_json::from_str(body.unwrap_or("{}")) {
                     Ok(p) => p,
                     Err(e) => return Err(format!("Invalid JSON: {}", e)),
                 };
                 endpoints::agent::manual_stimulation(
                     State(self.state.clone()),
-                    axum::extract::Json(payload),
+                    Json(payload),
                 )
                 .await
                 .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
@@ -223,5 +233,5 @@ impl WasmApiAdapter {
             }
         }
     }
+    
 }
-

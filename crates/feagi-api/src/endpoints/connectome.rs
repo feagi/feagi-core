@@ -3,9 +3,9 @@
 
 //! Connectome API Endpoints - Exact port from Python `/v1/connectome/*`
 
-use axum::{extract::State, response::Json};
+// Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json, Query};
 use crate::transports::http::server::ApiState;
 
 /// GET /v1/connectome/cortical_areas/list/detailed

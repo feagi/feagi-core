@@ -3,9 +3,9 @@
 
 //! Region API Endpoints - Exact port from Python `/v1/region/*`
 
-use axum::{extract::State, response::Json};
+// Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json};
 use crate::transports::http::server::ApiState;
 
 /// GET /v1/region/regions_members

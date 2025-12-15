@@ -3,9 +3,9 @@
 
 //! Burst Engine API Endpoints - Exact port from Python `/v1/burst_engine/*`
 
-use axum::{extract::State, response::Json};
+// Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json, Query};
 use crate::transports::http::server::ApiState;
 
 /// GET /v1/burst_engine/simulation_timestep

@@ -3,9 +3,9 @@
 
 //! Insight API Endpoints - Exact port from Python `/v1/insight/*`
 
-use axum::{extract::State, response::Json};
+// Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json};
 use crate::transports::http::server::ApiState;
 
 /// POST /v1/insight/neurons/membrane_potential_status

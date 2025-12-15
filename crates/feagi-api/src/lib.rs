@@ -8,7 +8,9 @@
 
 pub mod common;
 pub mod endpoints;
+#[cfg(feature = "http")]
 pub mod middleware;
+#[cfg(feature = "http")]
 pub mod openapi;
 pub mod security;
 pub mod transports;

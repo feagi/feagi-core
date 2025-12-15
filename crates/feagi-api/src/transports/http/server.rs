@@ -23,8 +23,11 @@ use tower_http::{
 use utoipa::OpenApi;
 use http_body_util::BodyExt;
 
+#[cfg(feature = "http")]
 use crate::openapi::ApiDoc;
+#[cfg(feature = "services")]
 use feagi_services::{AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService};
+#[cfg(feature = "services")]
 use feagi_services::traits::AgentService;
 
 /// Application state shared across all HTTP handlers

@@ -8,9 +8,9 @@
  * Maps to Python: feagi/api/v1/training.py
  */
 
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json};
 use crate::transports::http::server::ApiState;
-use axum::{extract::State, Json};
+// Removed - using crate::common::State instead
 use serde_json::{json, Value};
 use std::collections::HashMap;
 

@@ -3,6 +3,7 @@
 
 // API error types and conversions
 
+#[cfg(feature = "http")]
 use axum::{
     http::StatusCode,
     response::{IntoResponse, Response, Json},

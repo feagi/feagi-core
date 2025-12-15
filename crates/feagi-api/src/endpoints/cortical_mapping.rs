@@ -3,9 +3,9 @@
 
 //! Cortical Mapping API Endpoints - Exact port from Python `/v1/cortical_mapping/*`
 
-use axum::{extract::State, response::Json};
+// Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult};
+use crate::common::{ApiError, ApiResult, State, Json, Query};
 use crate::transports::http::server::ApiState;
 
 /// POST /v1/cortical_mapping/afferents

@@ -35,6 +35,8 @@
 pub mod adapter;
 pub mod services;
 pub mod state;
+#[cfg(not(feature = "http"))]
+pub mod types;
 
 pub use adapter::WasmApiAdapter;
 pub use state::create_api_state_from_genome;

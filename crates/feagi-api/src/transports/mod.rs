@@ -3,9 +3,10 @@
 
 // Transport adapters for HTTP, ZMQ, and WASM
 
+#[cfg(feature = "http")]
 pub mod http;
-// TODO: Fix ZMQ adapter compilation issues (incomplete implementation)
-// pub mod zmq;
+#[cfg(feature = "zmq")]
+pub mod zmq;
 pub mod wasm;
 
 
