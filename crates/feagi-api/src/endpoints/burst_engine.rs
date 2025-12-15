@@ -5,8 +5,8 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json, Query};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Query, Path, Query};
+use crate::common::ApiState;
 
 /// GET /v1/burst_engine/simulation_timestep
 #[utoipa::path(get, path = "/v1/burst_engine/simulation_timestep", tag = "burst_engine")]
@@ -501,7 +501,7 @@ pub async fn post_fcl_sampler_config(
 )]
 pub async fn get_area_fcl_sample_rate(
     State(state): State<ApiState>,
-    axum::extract::Path(area_id): axum::extract::Path<u32>,
+    Path(area_id): Path<u32>,
 ) -> ApiResult<Json<HashMap<String, f64>>> {
     let runtime_service = state.runtime_service.as_ref();
     
@@ -531,7 +531,7 @@ pub async fn get_area_fcl_sample_rate(
 )]
 pub async fn post_area_fcl_sample_rate(
     State(state): State<ApiState>,
-    axum::extract::Path(area_id): axum::extract::Path<u32>,
+    Path(area_id): Path<u32>,
     Json(request): Json<HashMap<String, f64>>,
 ) -> ApiResult<Json<HashMap<String, f64>>> {
     let runtime_service = state.runtime_service.as_ref();
@@ -746,7 +746,7 @@ pub async fn put_config(
 )]
 pub async fn get_fire_ledger_area_window_size(
     State(state): State<ApiState>,
-    axum::extract::Path(area_id): axum::extract::Path<u32>,
+    Path(area_id): Path<u32>,
 ) -> ApiResult<Json<i32>> {
     let runtime_service = state.runtime_service.as_ref();
     
@@ -781,7 +781,7 @@ pub async fn get_fire_ledger_area_window_size(
 )]
 pub async fn put_fire_ledger_area_window_size(
     State(state): State<ApiState>,
-    axum::extract::Path(area_id): axum::extract::Path<u32>,
+    Path(area_id): Path<u32>,
     Json(request): Json<HashMap<String, i32>>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let runtime_service = state.runtime_service.as_ref();
@@ -822,8 +822,8 @@ pub async fn put_fire_ledger_area_window_size(
 )]
 pub async fn get_fire_ledger_history(
     State(_state): State<ApiState>,
-    axum::extract::Path(area_id): axum::extract::Path<String>,
-    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+    Path(area_id): Path<String>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // Parse area_id as cortical_idx
     let cortical_idx = area_id.parse::<u32>()
@@ -865,7 +865,7 @@ pub async fn get_fire_ledger_history(
 )]
 pub async fn get_membrane_potentials(
     State(_state): State<ApiState>,
-    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, f32>>> {
     // Parse neuron_ids from query params
     let neuron_ids_str = params.get("neuron_ids")
@@ -977,7 +977,7 @@ pub async fn post_measure_frequency(
 )]
 pub async fn get_frequency_history(
     State(_state): State<ApiState>,
-    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let limit = params.get("limit").and_then(|s| s.parse::<i32>().ok()).unwrap_or(10);
     

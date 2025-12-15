@@ -5,8 +5,8 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::ApiState;
 
 /// POST /v1/insight/neurons/membrane_potential_status
 #[utoipa::path(post, path = "/v1/insight/neurons/membrane_potential_status", tag = "insight")]

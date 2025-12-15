@@ -8,8 +8,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::common::{ApiError, ApiResult, State, Json};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::ApiState;
 
 // ============================================================================
 // REQUEST/RESPONSE MODELS (matching Python schemas exactly)

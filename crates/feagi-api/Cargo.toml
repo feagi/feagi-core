@@ -9,7 +9,7 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 [dependencies]
 # Core FEAGI
 # feagi-services is always needed (for trait definitions), but can work without tokio
-feagi-services = { path = "../feagi-services", default-features = false }
+feagi-services = { path = "../feagi-services", default-features = false, features = ["wasm"] }
 feagi-neural = { path = "../feagi-neural", default-features = false }  # For types
 feagi-evo = { path = "../feagi-evo" }  # For embedded default genomes
 feagi-transports = { path = "../feagi-transports", features = ["zmq-server"], optional = true }

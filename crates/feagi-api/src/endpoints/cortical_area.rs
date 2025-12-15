@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use base64::{Engine as _, engine::general_purpose};
 
-use crate::common::{ApiError, ApiResult, State, Json, Query};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Query, Path, Query};
+use crate::common::ApiState;
 use feagi_data_structures::genomic::{SensoryCorticalUnit, MotorCorticalUnit};
 
 // ============================================================================
@@ -994,13 +994,13 @@ pub async fn get_cortical_idx_mapping(State(state): State<ApiState>) -> ApiResul
 
 /// GET /v1/cortical_area/mapping_restrictions
 #[utoipa::path(get, path = "/v1/cortical_area/mapping_restrictions", tag = "cortical_area")]
-pub async fn get_mapping_restrictions_query(State(_state): State<ApiState>, axum::extract::Query(_params): axum::extract::Query<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
+pub async fn get_mapping_restrictions_query(State(_state): State<ApiState>, Query(_params): Query<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
     Ok(Json(HashMap::new()))
 }
 
 /// GET /v1/cortical_area/{cortical_id}/memory_usage
 #[utoipa::path(get, path = "/v1/cortical_area/{cortical_id}/memory_usage", tag = "cortical_area")]
-pub async fn get_memory_usage(State(state): State<ApiState>, axum::extract::Path(cortical_id): axum::extract::Path<String>) -> ApiResult<Json<HashMap<String, i64>>> {
+pub async fn get_memory_usage(State(state): State<ApiState>, Path(cortical_id): Path<String>) -> ApiResult<Json<HashMap<String, i64>>> {
     let connectome_service = state.connectome_service.as_ref();
     
     // CRITICAL FIX: Calculate actual memory usage based on neuron count instead of hardcoded 0
@@ -1019,7 +1019,7 @@ pub async fn get_memory_usage(State(state): State<ApiState>, axum::extract::Path
 
 /// GET /v1/cortical_area/{cortical_id}/neuron_count
 #[utoipa::path(get, path = "/v1/cortical_area/{cortical_id}/neuron_count", tag = "cortical_area")]
-pub async fn get_area_neuron_count(State(state): State<ApiState>, axum::extract::Path(cortical_id): axum::extract::Path<String>) -> ApiResult<Json<i64>> {
+pub async fn get_area_neuron_count(State(state): State<ApiState>, Path(cortical_id): Path<String>) -> ApiResult<Json<i64>> {
     let connectome_service = state.connectome_service.as_ref();
     
     // CRITICAL FIX: Get actual neuron count from ConnectomeService instead of hardcoded 0

@@ -6,8 +6,8 @@
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
 use tracing::info;
-use crate::common::{ApiError, ApiResult, State, Json, Query};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Query, Path, Query};
+use crate::common::ApiState;
 use feagi_services::types::LoadGenomeParams;
 
 /// GET /v1/genome/file_name
@@ -485,7 +485,7 @@ pub async fn post_merge(
 )]
 pub async fn get_diff(
     State(_state): State<ApiState>,
-    axum::extract::Query(_params): axum::extract::Query<HashMap<String, String>>,
+    Query(_params): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     // TODO: Implement genome diffing
     let mut response = HashMap::new();
@@ -666,7 +666,7 @@ pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Jso
 
 /// GET /v1/genome/download_region
 #[utoipa::path(get, path = "/v1/genome/download_region", tag = "genome")]
-pub async fn get_download_region(State(_state): State<ApiState>, axum::extract::Query(_params): axum::extract::Query<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_download_region(State(_state): State<ApiState>, Query(_params): Query<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     Ok(Json(HashMap::new()))
 }
 

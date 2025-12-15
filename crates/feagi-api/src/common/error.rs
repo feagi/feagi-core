@@ -131,7 +131,8 @@ impl From<ServiceError> for ApiError {
     }
 }
 
-/// Implement Axum's IntoResponse for ApiError
+/// Implement Axum's IntoResponse for ApiError (only when http feature is enabled)
+#[cfg(feature = "http")]
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let status_code = StatusCode::from_u16(self.code)

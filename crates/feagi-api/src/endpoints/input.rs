@@ -5,8 +5,8 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::ApiState;
 
 /// GET /v1/input/vision
 #[utoipa::path(

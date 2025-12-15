@@ -87,9 +87,11 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+#[cfg(feature = "std")]
 pub mod impls;
 pub mod traits;
 pub mod types;
+#[cfg(feature = "std")]
 pub mod genome;
 
 // Re-export main API
@@ -113,6 +115,7 @@ pub use types::{
 };
 
 // Re-export implementations (optional - adapters can use their own)
+#[cfg(feature = "std")]
 pub use impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     RuntimeServiceImpl, SnapshotServiceImpl,

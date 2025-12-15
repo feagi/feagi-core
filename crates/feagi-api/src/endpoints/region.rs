@@ -5,8 +5,8 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::ApiState;
 
 /// GET /v1/region/regions_members
 /// 
@@ -224,7 +224,7 @@ pub async fn get_region_titles(State(state): State<ApiState>) -> ApiResult<Json<
 )]
 pub async fn get_region_detail(
     State(state): State<ApiState>,
-    axum::extract::Path(region_id): axum::extract::Path<String>,
+    Path(region_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let connectome_service = state.connectome_service.as_ref();
     

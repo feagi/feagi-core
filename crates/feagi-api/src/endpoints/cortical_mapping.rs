@@ -5,8 +5,8 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json, Query};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Query, Path, Query};
+use crate::common::ApiState;
 
 /// POST /v1/cortical_mapping/afferents
 #[utoipa::path(post, path = "/v1/cortical_mapping/afferents", tag = "cortical_mapping")]
@@ -176,7 +176,7 @@ pub async fn put_mapping_properties(
 )]
 pub async fn get_mapping(
     State(state): State<ApiState>,
-    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+    Query(params): Query<HashMap<String, String>>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let src_area = params.get("src_cortical_area")
         .ok_or_else(|| ApiError::invalid_input("src_cortical_area required"))?;

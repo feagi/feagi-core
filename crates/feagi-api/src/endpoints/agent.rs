@@ -8,8 +8,8 @@
 
 use std::collections::HashMap;
 
-use crate::common::{ApiError, ApiResult, State, Json, Query};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Query, Path, Query};
+use crate::common::ApiState;
 use crate::v1::agent_dtos::*;
 use feagi_services::traits::agent_service::{
     AgentRegistration, HeartbeatRequest as ServiceHeartbeatRequest,
@@ -462,7 +462,7 @@ pub async fn get_capabilities(
 )]
 pub async fn get_agent_info(
     State(state): State<ApiState>,
-    axum::extract::Path(agent_id): axum::extract::Path<String>,
+    Path(agent_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let agent_service = state
         .agent_service
@@ -506,7 +506,7 @@ pub async fn get_agent_info(
 )]
 pub async fn get_agent_properties_path(
     State(state): State<ApiState>,
-    axum::extract::Path(agent_id): axum::extract::Path<String>,
+    Path(agent_id): Path<String>,
 ) -> ApiResult<Json<AgentPropertiesResponse>> {
     let agent_service = state
         .agent_service

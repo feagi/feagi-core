@@ -6,8 +6,8 @@
 // Removed - using crate::common::State instead
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, BTreeMap};
-use crate::common::{ApiError, ApiResult, State, Json};
-use crate::transports::http::server::ApiState;
+use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::ApiState;
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct MorphologyListResponse {
@@ -233,7 +233,7 @@ pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<Strin
 )]
 pub async fn get_info(
     State(state): State<ApiState>,
-    axum::extract::Path(morphology_id): axum::extract::Path<String>,
+    Path(morphology_id): Path<String>,
 ) -> ApiResult<Json<BTreeMap<String, serde_json::Value>>> {
     // Delegate to post_morphology_properties (same logic)
     post_morphology_properties(State(state), Json(HashMap::from([
@@ -296,7 +296,7 @@ pub async fn put_update(
 )]
 pub async fn delete_morphology(
     State(_state): State<ApiState>,
-    axum::extract::Path(morphology_id): axum::extract::Path<String>,
+    Path(morphology_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Implement morphology deletion
     tracing::info!(target: "feagi-api", "Delete morphology requested: {}", morphology_id);

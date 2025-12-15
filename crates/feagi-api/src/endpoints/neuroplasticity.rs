@@ -6,8 +6,8 @@
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
 use crate::common::ApiResult;
-use crate::common::{State, Json};
-use crate::transports::http::server::ApiState;
+use crate::common::{State, Json, Path, Query};
+use crate::common::ApiState;
 
 /// GET /v1/neuroplasticity/plasticity_queue_depth
 #[utoipa::path(get, path = "/v1/neuroplasticity/plasticity_queue_depth", tag = "neuroplasticity")]
@@ -98,7 +98,7 @@ pub async fn post_configure(
 )]
 pub async fn post_enable_area(
     State(_state): State<ApiState>,
-    axum::extract::Path(area_id): axum::extract::Path<String>,
+    Path(area_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Enabling plasticity for area: {}", area_id);
     
@@ -122,7 +122,7 @@ pub async fn post_enable_area(
 )]
 pub async fn post_disable_area(
     State(_state): State<ApiState>,
-    axum::extract::Path(area_id): axum::extract::Path<String>,
+    Path(area_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Disabling plasticity for area: {}", area_id);
     
