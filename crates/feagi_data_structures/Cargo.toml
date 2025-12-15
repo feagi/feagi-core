@@ -8,7 +8,9 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-feagi-async = {path = "feagi-async"}
+# Disable default features to avoid pulling in tokio
+# Features should be enabled by dependents based on their needs
+feagi-async = {path = "feagi-async", default-features = false}
 serde = { workspace = true }
 serde_json = { workspace = true}
 ndarray = { workspace = true}
