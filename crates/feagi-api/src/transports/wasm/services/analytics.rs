@@ -25,30 +25,65 @@ impl AnalyticsService for WasmAnalyticsService {
     async fn get_system_health(&self) -> ServiceResult<SystemHealth> {
         // Return minimal health check for WASM
         Ok(SystemHealth {
-            burst_engine: true,
-            connected_agents: Some(0), // No agents in WASM standalone mode
-            influxdb_availability: false,
-            neuron_count_max: 0,
-            synapse_count_max: 0,
-            latest_changes_saved_externally: false,
-            genome_availability: true,
-            genome_validity: Some(true),
-            brain_readiness: true,
-            feagi_session: None,
-            fitness: None,
-            cortical_area_count: Some(self.genome.cortical_areas.len() as i32),
-            neuron_count: None,
-            memory_neuron_count: None,
-            regular_neuron_count: None,
-            synapse_count: None,
-            estimated_brain_size_in_MB: None,
-            genome_num: None,
-            genome_timestamp: Some(self.genome.metadata.timestamp as i64),
-            simulation_timestep: None,
-            memory_area_stats: None,
-            amalgamation_pending: None,
-            brain_regions_root: self.genome.metadata.brain_regions_root.clone(),
+            burst_engine_active: true,
+            brain_readiness: !self.genome.cortical_areas.is_empty(),
+            neuron_count: 0, // TODO: Get from NPU if available
+            neuron_capacity: 0, // TODO: Get from runtime if available
+            synapse_capacity: 0, // TODO: Get from runtime if available
+            cortical_area_count: self.genome.cortical_areas.len(),
+            burst_count: 0, // TODO: Get from NPU if available
         })
+    }
+
+    async fn get_cortical_area_stats(
+        &self,
+        _cortical_id: &str,
+    ) -> ServiceResult<CorticalAreaStats> {
+        Err(ServiceError::NotImplemented("Cortical area stats not yet implemented in WASM".to_string()))
+    }
+
+    async fn get_all_cortical_area_stats(&self) -> ServiceResult<Vec<CorticalAreaStats>> {
+        Err(ServiceError::NotImplemented("Cortical area stats not yet implemented in WASM".to_string()))
+    }
+
+    async fn get_connectivity_stats(
+        &self,
+        _source_area: &str,
+        _target_area: &str,
+    ) -> ServiceResult<ConnectivityStats> {
+        Err(ServiceError::NotImplemented("Connectivity stats not yet implemented in WASM".to_string()))
+    }
+
+    async fn get_total_neuron_count(&self) -> ServiceResult<usize> {
+        Ok(0) // TODO: Get from NPU if available
+    }
+
+    async fn get_total_synapse_count(&self) -> ServiceResult<usize> {
+        Ok(0) // TODO: Get from NPU if available
+    }
+
+    async fn get_populated_areas(&self) -> ServiceResult<Vec<(String, usize)>> {
+        Ok(vec![]) // TODO: Get from NPU if available
+    }
+
+    async fn get_neuron_density(&self, _cortical_id: &str) -> ServiceResult<f32> {
+        Err(ServiceError::NotImplemented("Neuron density not yet implemented in WASM".to_string()))
+    }
+
+    async fn is_brain_initialized(&self) -> ServiceResult<bool> {
+        Ok(!self.genome.cortical_areas.is_empty())
+    }
+
+    async fn is_burst_engine_ready(&self) -> ServiceResult<bool> {
+        Ok(true) // Always ready in WASM
+    }
+
+    async fn get_regular_neuron_count(&self) -> ServiceResult<usize> {
+        Ok(0) // TODO: Get from NPU if available
+    }
+
+    async fn get_memory_neuron_count(&self) -> ServiceResult<usize> {
+        Ok(0) // TODO: Get from NPU if available
     }
 }
 

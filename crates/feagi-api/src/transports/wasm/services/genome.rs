@@ -35,9 +35,12 @@ impl GenomeService for WasmGenomeService {
         Ok(GenomeInfo {
             genome_id: self.genome.metadata.genome_id.clone(),
             genome_title: self.genome.metadata.genome_title.clone(),
-            genome_description: self.genome.metadata.genome_description.clone(),
             version: self.genome.metadata.version.clone(),
-            timestamp: self.genome.metadata.timestamp as i64,
+            cortical_area_count: self.genome.cortical_areas.len(),
+            brain_region_count: self.genome.brain_regions.len(),
+            simulation_timestep: 0.0, // TODO: Extract from physiology config
+            genome_num: None,
+            genome_timestamp: Some(self.genome.metadata.timestamp as i64),
         })
     }
 

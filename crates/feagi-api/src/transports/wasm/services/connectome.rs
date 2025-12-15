@@ -34,14 +34,8 @@ impl WasmConnectomeService {
         use feagi_data_structures::genomic::cortical_area::CorticalArea;
         
         // Extract physiology parameters from properties
-        let firing_threshold = area.properties.get("firing_threshold")
-            .and_then(|v| v.as_f64())
-            .map(|f| f as f32)
-            .unwrap_or(0.5);
-        
         let leak_coefficient = area.properties.get("leak_coefficient")
             .and_then(|v| v.as_f64())
-            .map(|f| f as f32)
             .unwrap_or(0.1);
         
         // Extract other properties
@@ -54,8 +48,14 @@ impl WasmConnectomeService {
             .and_then(|v| v.as_f64())
             .unwrap_or(0.1);
         
-        // Determine cortical group from area type
-        let cortical_group = match area.area_type.as_str() {
+        // Determine cortical group and area type from cortical_type
+        // Extract area type string from properties or use default
+        let area_type_str = area.properties.get("area_type")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_else(|| "Custom".to_string());
+        
+        let cortical_group = match area_type_str.as_str() {
             "Sensory" | "IPU" => "IPU".to_string(),
             "Motor" | "OPU" => "OPU".to_string(),
             "Memory" => "MEMORY".to_string(),
@@ -66,11 +66,11 @@ impl WasmConnectomeService {
         CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
             cortical_id_s: cortical_id.to_string(), // TODO: Decode base64 if needed
-            cortical_idx: 0, // TODO: Extract from genome if available
+            cortical_idx: area.cortical_idx,
             name: area.name.clone(),
-            dimensions: area.dimensions,
-            position: area.position,
-            area_type: area.area_type.clone(),
+            dimensions: (area.dimensions.width as usize, area.dimensions.height as usize, area.dimensions.depth as usize),
+            position: (area.position.x, area.position.y, area.position.z),
+            area_type: area_type_str,
             cortical_group,
             neuron_count: 0, // TODO: Extract from NPU if available
             synapse_count: 0, // TODO: Extract from NPU if available
@@ -147,9 +147,13 @@ impl ConnectomeService for WasmConnectomeService {
     }
 
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
-        let cortical_id_parsed = CorticalID::from(cortical_id);
+        let cortical_id_parsed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|_| ServiceError::InvalidInput(format!("Invalid cortical ID format: {}", cortical_id)))?;
         let area = self.genome.cortical_areas.get(&cortical_id_parsed)
-            .ok_or_else(|| ServiceError::NotFound("cortical_area", cortical_id))?;
+            .ok_or_else(|| ServiceError::NotFound { 
+                resource: "cortical_area".to_string(), 
+                id: cortical_id.to_string() 
+            })?;
         
         Ok(self.area_to_info(&cortical_id_parsed, area))
     }
@@ -165,11 +169,12 @@ impl ConnectomeService for WasmConnectomeService {
     async fn get_cortical_area_ids(&self) -> ServiceResult<Vec<String>> {
         Ok(self.genome.cortical_areas.keys()
             .map(|id| id.to_string())
-            .collect())
+            .collect::<Vec<_>>())
     }
 
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {
-        let cortical_id_parsed = CorticalID::from(cortical_id);
+        let cortical_id_parsed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|_| ServiceError::InvalidInput(format!("Invalid cortical ID format: {}", cortical_id)))?;
         Ok(self.genome.cortical_areas.contains_key(&cortical_id_parsed))
     }
 
@@ -177,9 +182,13 @@ impl ConnectomeService for WasmConnectomeService {
         &self,
         cortical_id: &str,
     ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>> {
-        let cortical_id_parsed = CorticalID::from(cortical_id);
+        let cortical_id_parsed = CorticalID::try_from_base_64(cortical_id)
+            .map_err(|_| ServiceError::InvalidInput(format!("Invalid cortical ID format: {}", cortical_id)))?;
         let area = self.genome.cortical_areas.get(&cortical_id_parsed)
-            .ok_or_else(|| ServiceError::NotFound("cortical_area", cortical_id))?;
+            .ok_or_else(|| ServiceError::NotFound { 
+                resource: "cortical_area".to_string(), 
+                id: cortical_id.to_string() 
+            })?;
         
         Ok(area.properties.clone())
     }
@@ -212,8 +221,11 @@ impl ConnectomeService for WasmConnectomeService {
     }
 
     async fn get_brain_region(&self, region_id: &str) -> ServiceResult<BrainRegionInfo> {
-        let region = self.genome.brain_regions.get(region_id)
-            .ok_or_else(|| ServiceError::NotFound("brain_region", region_id))?;
+        let _region = self.genome.brain_regions.get(region_id)
+            .ok_or_else(|| ServiceError::NotFound { 
+                resource: "brain_region".to_string(), 
+                id: region_id.to_string() 
+            })?;
         
         // Convert BrainRegion to BrainRegionInfo
         // TODO: Implement full conversion
