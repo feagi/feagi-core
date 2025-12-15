@@ -111,7 +111,7 @@ pub struct CorticalLockManager {
 impl CorticalLockManager {
     pub fn new() -> Self {
         Self {
-            locked_areas: RefCell::new(AAHashSet::new()),
+            locked_areas: RefCell::new(AHashSet::new()),
         }
     }
     
