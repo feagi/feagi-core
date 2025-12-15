@@ -15,8 +15,8 @@ name = "feagi_services"
 # Core FEAGI crates (backend)
 feagi-neural = { path = "../feagi-neural" }  # For types
 feagi-evo = { path = "../feagi-evo" }
-feagi-bdu = { path = "../feagi-bdu" }
-feagi-burst-engine = { path = "../feagi-burst-engine" }
+feagi-bdu = { path = "../feagi-bdu", default-features = false }
+feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false }
 # feagi-pns dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
 feagi_data_structures = { workspace = true }
@@ -48,8 +48,9 @@ uuid = { version = "1.0", features = ["v4", "serde"] }
 
 [features]
 default = ["std"]
-std = ["tokio"]  # Enable async for server deployments
+std = ["tokio", "feagi-bdu/async-tokio", "feagi-burst-engine/async-tokio"]  # Enable async for server deployments
 no_std = []      # Disable async for embedded/RTOS
+wasm = ["feagi-bdu/wasm", "feagi-burst-engine/wasm"]  # WASM builds without tokio
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

@@ -4,9 +4,9 @@
 //! WASM Genome Service (stub - read-only)
 
 use async_trait::async_trait;
-use feagi_services::traits::genome_service::GenomeService;
-use feagi_services::types::errors::{ServiceError, ServiceResult};
-use feagi_services::types::*;
+#[cfg(feature = "services")]::::traits::genome_service::GenomeService;
+#[cfg(feature = "services")]::::types::errors::{ServiceError, ServiceResult};
+#[cfg(feature = "services")]::::types::*;
 use feagi_evo::RuntimeGenome;
 use std::sync::Arc;
 

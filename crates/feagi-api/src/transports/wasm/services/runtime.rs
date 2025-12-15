@@ -4,9 +4,9 @@
 //! WASM Runtime Service (stub)
 
 use async_trait::async_trait;
-use feagi_services::traits::runtime_service::RuntimeService;
-use feagi_services::types::errors::{ServiceError, ServiceResult};
-use feagi_services::types::*;
+#[cfg(feature = "services")]::::traits::runtime_service::RuntimeService;
+#[cfg(feature = "services")]::::types::errors::{ServiceError, ServiceResult};
+#[cfg(feature = "services")]::::types::*;
 use std::sync::Arc;
 
 pub struct WasmRuntimeService {
