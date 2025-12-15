@@ -51,6 +51,7 @@ pub mod converter_hierarchical_to_flat;
 pub mod templates;
 pub mod cortical_type_parser;
 pub mod random;
+pub mod storage;
 
 // Re-export commonly used types
 pub use types::{EvoError, EvoResult};
@@ -90,5 +91,8 @@ pub use templates::{
     TEST_GENOME_JSON,
     VISION_GENOME_JSON,
 };
+pub use storage::{GenomeStorage, StorageError};
+#[cfg(feature = "async-tokio")]
+pub use storage::fs_storage::FileSystemStorage;
 
 
