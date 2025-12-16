@@ -3,8 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_pipeline::per_channel_stream_caches::pipeline_stage_runner_common::PipelineStageRunner;
-use crate::data_pipeline::per_channel_stream_caches::SensoryPipelineStageRunner;
+use crate::data_pipeline::per_channel_stream_caches::{PipelineStageRunner, SensoryPipelineStageRunner};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
@@ -116,7 +115,7 @@ impl SensoryChannelStreamCaches {
         let processed_data = runner.process_cached_sensor_value(update_instant)?;
         Ok(processed_data)
     }
-    
+
     /// Retrieves the timestamp of the last data update for a specific channel.
     ///
     /// # Arguments

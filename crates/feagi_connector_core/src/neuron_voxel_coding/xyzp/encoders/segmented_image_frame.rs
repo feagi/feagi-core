@@ -4,7 +4,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
-use crate::data_pipeline::PipelineStageRunner;
+use crate::data_pipeline::per_channel_stream_caches::{PipelineStageRunner, SensoryPipelineStageRunner};
 use crate::data_types::descriptors::{SegmentedImageFrameProperties};
 use crate::data_types::{SegmentedImageFrame};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
@@ -24,7 +24,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
     }
 
 
-    fn write_neuron_data_multi_channel_from_processed_cache(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
+    fn write_neuron_data_multi_channel_from_processed_cache(&mut self, pipelines: &Vec<SensoryPipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
         
         // Parallel iterate over channels
         pipelines.par_iter()
@@ -37,7 +37,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
                     return Ok(()); // We haven't updated, do nothing
                 }
 
-                let updated_data = pipeline.get_most_recent_postprocessed_output();
+                let updated_data = pipeline.get_postprocessed_sensor_value();
                 let updated_segmented_image: &SegmentedImageFrame = updated_data.try_into()?;
 
                 updated_segmented_image.overwrite_neuron_data(scratches, (channel_index as u32).into())?;

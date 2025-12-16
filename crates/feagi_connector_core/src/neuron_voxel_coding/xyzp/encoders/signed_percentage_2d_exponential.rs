@@ -4,7 +4,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use crate::data_pipeline::PipelineStageRunner;
+use crate::data_pipeline::per_channel_stream_caches::{PipelineStageRunner, SensoryPipelineStageRunner};
 use crate::data_types::SignedPercentage2D;
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::encode_signed_percentage_to_fractional_exponential_neuron_z_indexes;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
@@ -27,7 +27,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage2DExponentialNeuronVoxelXYZPEnco
         WrappedIOType::SignedPercentage_2D
     }
 
-    fn write_neuron_data_multi_channel_from_processed_cache(&mut self, pipelines: &Vec<PipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
+    fn write_neuron_data_multi_channel_from_processed_cache(&mut self, pipelines: &Vec<SensoryPipelineStageRunner>, time_of_previous_burst: Instant, write_target: &mut CorticalMappedXYZPNeuronVoxels) -> Result<(), FeagiDataError> {
         // If this is called, then at least one channel has had something updated
 
         let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&self.cortical_write_target);
@@ -40,7 +40,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage2DExponentialNeuronVoxelXYZPEnco
                 if channel_updated < time_of_previous_burst {
                     return Ok(()); // We haven't updated, do nothing
                 }
-                let updated_data = pipeline.get_most_recent_postprocessed_output();
+                let updated_data = pipeline.get_postprocessed_sensor_value();
                 let updated_signed_percentage_2d: SignedPercentage2D = updated_data.try_into()?;
 
                 // scratch arrays get cleared

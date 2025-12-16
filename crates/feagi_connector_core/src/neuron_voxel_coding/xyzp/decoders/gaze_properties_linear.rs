@@ -3,7 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use crate::data_pipeline::PipelineStageRunner;
+use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::{GazeProperties, Percentage, Percentage2D};
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{decode_unsigned_percentage_from_fractional_exponential_neurons, decode_unsigned_percentage_from_linear_neurons};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
@@ -28,7 +28,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesLinearNeuronVoxelXYZPDecoder {
         WrappedIOType::GazeProperties
     }
 
-    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<PipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
+    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
 
         const ONLY_ALLOWED_Y: u32 = 0; // This structure never has height
 
@@ -95,7 +95,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesLinearNeuronVoxelXYZPDecoder {
                 continue; // No data collected for this channel. Do not emit
             }
             channel_changed[channel_index] = true;
-            let prev_gaze: &mut GazeProperties = pipelines_with_data_to_update.get_mut(channel_index).unwrap().get_cached_input_mut().try_into()?;
+            let prev_gaze: &mut GazeProperties = pipelines_with_data_to_update.get_mut(channel_index).unwrap().get_preprocessed_cached_value_mut().try_into()?;
 
             if !eccentricity_z_a_vector.is_empty() {
                 decode_unsigned_percentage_from_linear_neurons(&eccentricity_z_a_vector, self.channel_eccentricity_dimensions.depth, &mut prev_gaze.eccentricity_location_xy.a);

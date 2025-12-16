@@ -3,7 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use crate::data_pipeline::PipelineStageRunner;
+use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::descriptors::MiscDataDimensions;
 use crate::data_types::MiscData;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
@@ -20,7 +20,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
         WrappedIOType::MiscData(Some(self.misc_dimensions))
     }
 
-    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<PipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
+    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
         let neuron_array = neurons_to_read.get_neurons_of(&self.cortical_read_target);
 
         if neuron_array.is_none() {
@@ -44,7 +44,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
 
             let channel_index: u32  = neuron.neuron_voxel_coordinate.x / self.misc_dimensions.width;
             let in_channel_x_index: u32  = neuron.neuron_voxel_coordinate.x % self.misc_dimensions.width;
-            let misc_data: &mut MiscData = pipelines_with_data_to_update.get_mut(channel_index as usize).unwrap().get_cached_input_mut().try_into()?;
+            let misc_data: &mut MiscData = pipelines_with_data_to_update.get_mut(channel_index as usize).unwrap().get_preprocessed_cached_value_mut().try_into()?;
             if !channel_changed[channel_index as usize] {
                 misc_data.blank_data();
                 channel_changed[channel_index as usize] = true;
