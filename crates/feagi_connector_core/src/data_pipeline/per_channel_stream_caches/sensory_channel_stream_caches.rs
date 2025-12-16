@@ -26,11 +26,8 @@ pub(crate) struct SensoryChannelStreamCaches {
 
 impl SensoryChannelStreamCaches {
     pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, number_channels: CorticalChannelCount, initial_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
-
-        let expected_data_encoded_type: WrappedIOType = neuron_encoder.get_encodable_data_type();
-
         let pipeline_runners: Vec<PipelineStageRunner> =
-            std::iter::repeat_with(|| PipelineStageRunner::new(initial_cached_value.clone(), expected_data_encoded_type).unwrap())
+            std::iter::repeat_with(|| PipelineStageRunner::new(initial_cached_value.clone()).unwrap())
                 .take(*number_channels as usize)
                 .collect();
 
@@ -64,13 +61,10 @@ impl SensoryChannelStreamCaches {
         Ok(())
     }
 
-    /// Retrieves the expected input data type for any of the channels
-    ///
-    ///
-    /// # Returns
-    /// * `WrappedIOType` - The input type expected
-    pub fn get_input_type(&self) -> WrappedIOType {
-        self.pipeline_runners.first().unwrap().get_expected_input_data_type()
+    /// Retrieves the expected input data type for a channel
+    pub fn get_input_type_for_channel(&self, cortical_channel_index: CorticalChannelIndex) -> Result<WrappedIOType, FeagiDataError> {
+        let runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(runner.get_expected_input_type_for_sensors())
     }
 
     //endregion
@@ -114,15 +108,16 @@ impl SensoryChannelStreamCaches {
         // We assume value is of correct type
         self.last_update_time = update_instant;// TODO cant this cause weird issues?
         let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
+        runner.verify_input_sensor_data(&value)?;
         let mut_val = runner.get_cached_input_mut();
         *mut_val = value;
-        let processed_data = runner.process_cached_input_value(update_instant)?;
+        let processed_data = runner.process_cached_value(update_instant)?;
         Ok(processed_data)
     }
 
     pub fn try_running_pipeline_runner_from_input_cache(&mut self, cortical_channel_index: CorticalChannelIndex, update_instant: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
-        let processed_data = runner.process_cached_input_value(update_instant)?;
+        let processed_data = runner.process_cached_value(update_instant)?;
         Ok(processed_data)
     }
 

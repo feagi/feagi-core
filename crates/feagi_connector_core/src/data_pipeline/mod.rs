@@ -14,10 +14,11 @@ mod descriptors;
 pub mod stage_properties;
 mod pipeline_stage_properties;
 mod common_macros;
+pub(crate) mod per_channel_stream_caches;
 
 pub use descriptors::PipelineStagePropertyIndex;
 pub use pipeline_stage_properties::PipelineStageProperties;
 pub(crate) use pipeline_stage::PipelineStage;
 pub(crate) use pipeline_stage_runner::PipelineStageRunner;
-pub(crate) use pipeline_stage_conversions::{stage_properties_to_stages};
+pub(crate) use pipeline_stage_conversions::stage_properties_to_stages;
 

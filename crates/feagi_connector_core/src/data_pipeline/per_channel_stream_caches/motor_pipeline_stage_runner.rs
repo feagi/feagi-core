@@ -4,71 +4,42 @@ use crate::data_pipeline::{stage_properties_to_stages, PipelineStageProperties, 
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-/// Manages and executes a pipeline of processing stages for data transformation.
-///
-/// A `PipelineStageRunner` orchestrates a series of data processing stages, ensuring
-/// type compatibility between stages and managing the flow of data from input to output.
-/// Each stage in the pipeline transforms data from one type to another, with the output
-/// of one stage feeding into the input of the next.
-///
-/// # Fields
-/// - `input_type`: The expected data type for the pipeline's initial input
-/// - `output_type`: The expected data type for the pipeline's final output
-/// - `last_instant_data_processed`: Timestamp of the most recent data processing
-/// - `pipeline_stages`: Ordered sequence of processing stages
-/// - `cached_input`: The most recently provided input data
+
 #[derive(Debug)]
-pub(crate) struct PipelineStageRunner {
-    expected_final_type: WrappedIOType, // For sensors, this would be the output value, for motors, this would be the input. Used when verifying stages
+pub(crate) struct MotorPipelineStageRunner {
+    expected_decoded_motor_type: WrappedIOType,
     last_instant_data_processed: Instant,
     pipeline_stages: Vec<Box<dyn PipelineStage>>,
     preprocessed_cached_value: WrappedIOData
 }
 
 
-impl PipelineStageRunner {
+impl MotorPipelineStageRunner {
 
     /// Creates a new pipeline stage runner with the specified configuration.
-    pub fn new(cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
-        let expected_final_type: WrappedIOType = (&cached_value).into();
+    pub fn new(initial_motor_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
+        let expected_decoded_motor_type: WrappedIOType = (&initial_motor_cached_value).into();
 
-        Ok(PipelineStageRunner {
-            expected_final_type,
+        Ok(MotorPipelineStageRunner {
+            expected_decoded_motor_type,
             last_instant_data_processed: Instant::now(),
             pipeline_stages: Vec::new(),
-            preprocessed_cached_value: cached_value
+            preprocessed_cached_value: initial_motor_cached_value
         })
     }
 
     //region Data
 
-    /// Returns the type of data expected for use as a sensor
-    ///
-    /// This is determined by the input type of the first processor in the chain.
-    /// Used for validation before processing new input data.
-    pub fn get_expected_input_type_for_sensors(&self) -> WrappedIOType {
-        if self.does_contain_stages() {
-            return self.pipeline_stages.first().unwrap().get_input_data_type()
-        }
-        self.expected_final_type
-    }
-
-    /// Returns OK if the given data is compatible with the current processing stages.
-    /// Otherwise returns an error
-    pub fn verify_input_sensor_data(&self, incoming_data: &WrappedIOData) -> Result<(), FeagiDataError> {
-        let incoming_type: WrappedIOType = incoming_data.into();
-        if incoming_type != self.get_expected_input_type_for_sensors() {
-            return Err(FeagiDataError::BadParameters(format!("Expected input data type to be {} but got {incoming_type}!", self.get_expected_input_type_for_sensors())))
-        }
-        Ok(())
-    }
-
-    /// Returns the type of data to be returned for use in motors
-    pub fn get_expected_output_type_for_motors(&self) -> WrappedIOType{
+    /// Returns the type of data expected to be outputted
+    pub fn get_expected_type_to_output_after_processing(&self) -> WrappedIOType {
         if self.does_contain_stages() {
             return self.pipeline_stages.last().unwrap().get_output_data_type()
         }
-        self.expected_final_type
+        self.expected_decoded_motor_type
+    }
+
+    pub fn get_initial_decoded_type(&self) -> WrappedIOType {
+        self.expected_decoded_motor_type
     }
 
     /// Returns the last cached input of this struct that had no processing applied.
@@ -76,8 +47,13 @@ impl PipelineStageRunner {
     ///
     /// # Returns
     /// Reference to the cached value (before any processing)
-    pub fn get_most_recent_preprocessed_output(&self) -> &WrappedIOData {
+    pub fn get_preprocessed_value(&self) -> &WrappedIOData {
         &self.preprocessed_cached_value
+    }
+
+    pub(crate) fn get_preprocessed_cached_value_mut(&mut self) -> &mut WrappedIOData {
+        // WARNING: DOES NOT CHECK TYPE!
+        &mut self.preprocessed_cached_value
     }
 
     /// Returns the most recent output from the last element in the processor chain (if one exists).
@@ -86,7 +62,7 @@ impl PipelineStageRunner {
     ///
     /// # Returns
     /// Reference to the output data from the last processor in the chain or from the internal cache.
-    pub fn get_most_recent_postprocessed_output(&self) -> &WrappedIOData {
+    pub fn get_most_recent_postprocessed_motor_value(&self) -> &WrappedIOData {
         if self.pipeline_stages.is_empty() {
             return &self.preprocessed_cached_value;
         }
@@ -102,32 +78,6 @@ impl PipelineStageRunner {
     /// The `Instant` when data was last processed through the pipeline.
     pub fn get_last_processed_instant(&self) -> Instant {
         self.last_instant_data_processed
-    }
-
-    pub(crate) fn get_cached_input_mut(&mut self) -> &mut WrappedIOData {
-        // WARNING: DOES NOT CHECK TYPE!
-        &mut self.preprocessed_cached_value
-    }
-
-   /// Processes the currently cached value through the pipeline stages (if available), then returns a reference to the result
-    pub fn process_cached_value(&mut self, time_of_update: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-        if self.pipeline_stages.is_empty() {
-            return Ok(&self.preprocessed_cached_value);
-        }
-        //TODO There has to be a better way to do this, but I keep running into limitations with mutating self.cache_processors
-
-        // Process the first processor with the input value
-        self.pipeline_stages[0].process_new_input(&self.preprocessed_cached_value, time_of_update)?;
-
-        // Process subsequent processing using split_at_mut to avoid borrowing conflicts
-        for i in 1..self.pipeline_stages.len() {
-            let (left, right) = self.pipeline_stages.split_at_mut(i);
-            let previous_output = left[i - 1].get_most_recent_output();
-            right[0].process_new_input(previous_output, time_of_update)?;
-        }
-
-        self.last_instant_data_processed = time_of_update;
-        Ok(self.get_most_recent_postprocessed_output()) // Return the output from the last processor
     }
 
     //endregion
@@ -224,7 +174,7 @@ impl PipelineStageRunner {
     /// * `Err(FeagiDataError)` - If index is invalid or types are incompatible
     pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(replacing_at_index)?;
-        verify_replacing_stage_properties(&self.pipeline_stages, &new_pipeline_stage_properties, &self.input_type, &self.output_type, replacing_at_index)?;
+        verify_replacing_stage_properties(&self.pipeline_stages, &new_pipeline_stage_properties, &self.expected_decoded_motor_type, replacing_at_index)?;
         self.pipeline_stages[*replacing_at_index as usize] = new_pipeline_stage_properties.create_stage();
         Ok(())
     }
@@ -242,7 +192,7 @@ impl PipelineStageRunner {
     /// * `Ok(())` - If all stages were successfully replaced
     /// * `Err(FeagiDataError)` - If stages are incompatible or creation fails
     pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
-        verify_pipeline_stage_properties(&new_pipeline_stage_properties, self.input_type, self.output_type)?;
+        verify_pipeline_stage_properties(&new_pipeline_stage_properties, self.expected_decoded_motor_type)?;
         self.pipeline_stages = stage_properties_to_stages(&new_pipeline_stage_properties)?;
         Ok(())
     }
@@ -289,17 +239,15 @@ impl PipelineStageRunner {
 
 }
 
-fn verify_pipeline_stage_properties(pipeline_stage_properties: &Vec<Box<dyn PipelineStageProperties + Sync + Send>>, expected_input: WrappedIOType, expected_output: WrappedIOType) -> Result<(), FeagiDataError> {
+fn verify_pipeline_stage_properties(pipeline_stage_properties: &Vec<Box<dyn PipelineStageProperties + Sync + Send>>, expected_input: WrappedIOType) -> Result<(), FeagiDataError> {
     let number_of_stages = pipeline_stage_properties.len();
 
     if number_of_stages == 0 {
-        if expected_input != expected_output {
-            return Err(FeagiDataError::BadParameters(format!(
-                "If no pipeline stages are given, the expected input data properties must match the expected output data properties! Input: {:?}, Output: {:?}",
-                expected_input, expected_output
-            )));
-        }
         return Ok(())
+    }
+
+    if pipeline_stage_properties.first().unwrap().get_input_data_type() != expected_input {
+        return Err(FeagiDataError::BadParameters("Given stages not compatible!".into()))
     }
 
     // Ensure data can pass between processing
@@ -314,55 +262,31 @@ fn verify_pipeline_stage_properties(pipeline_stage_properties: &Vec<Box<dyn Pipe
     Ok(())
 }
 
-/// Validates that a new stage can replace an existing stage without breaking the pipeline.
-///
-/// Checks that the new stage's input type matches what the previous stage outputs,
-/// and that its output type matches what the next stage expects. For the first stage,
-/// validates against the pipeline input type. For the last stage, validates against
-/// the pipeline output type.
-///
-/// # Arguments
-/// * `current_stages` - The existing pipeline stages
-/// * `new_stage_properties` - Properties for the stage to be inserted
-/// * `pipeline_input_type` - The pipeline's overall input type
-/// * `pipeline_output_type` - The pipeline's overall output type
-/// * `new_stage_index` - Index where the new stage will be placed
-///
-/// # Returns
-/// * `Ok(())` - If the replacement is valid
-/// * `Err(FeagiDataError)` - If input/output types are incompatible
-///
-/// # Note
-/// Assumes `new_stage_index` has already been validated as within bounds.
 #[inline]
 fn verify_replacing_stage_properties(current_stages: &Vec<Box<dyn PipelineStage>>,
                                      new_stage_properties: &Box<dyn PipelineStageProperties + Sync + Send>,
-                                     pipeline_input_type: Option<&WrappedIOType>, pipeline_output_type: Option<&WrappedIOType>,
-                                     new_stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
+                                     pipeline_input_type: &WrappedIOType, new_stage_index: PipelineStagePropertyIndex)
+    -> Result<(), FeagiDataError> {
 
     // WARNING: assumes new_stage_index is valid!
 
     let comparing_input = if *new_stage_index == 0 {
         pipeline_input_type
     } else {
-        Some(&current_stages[*new_stage_index as usize - 1].get_output_data_type())
+        &current_stages[*new_stage_index as usize - 1].get_output_data_type()
     };
 
     let comparing_output = if *new_stage_index == (current_stages.len()- 1) as u32 {
-        pipeline_output_type
+        None
     } else {
         Some(&current_stages[*new_stage_index as usize + 1].get_output_data_type())
     };
 
-    if comparing_input.is_none() && comparing_output.is_none() {
-        panic!("Inputs and Outputs set to none!")
+
+    if comparing_input != &new_stage_properties.get_input_data_type() {
+        return Err(FeagiDataError::BadParameters(format!("Precursor to stage at index {} outputs data type {} but given stage accepts {}!", *new_stage_index, comparing_input, new_stage_properties.get_input_data_type()).into()).into());
     }
 
-    if comparing_input.is_some() {
-        if comparing_input.unwrap() != &new_stage_properties.get_input_data_type() {
-            return Err(FeagiDataError::BadParameters(format!("Precursor to stage at index {} outputs data type {} but given stage accepts {}!", *new_stage_index, comparing_input.unwrap(), new_stage_properties.get_input_data_type()).into()).into());
-        }
-    }
 
     if comparing_output.is_some() {
         if comparing_output.unwrap() != &new_stage_properties.get_output_data_type() {

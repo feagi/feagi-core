@@ -9,7 +9,7 @@ use feagi_data_structures::genomic::cortical_area::{CorticalID};
 use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex};
 use feagi_data_structures::genomic::MotorCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use crate::caching::per_channel_stream_caches::{MotorChannelStreamCaches};
+use crate::data_pipeline::per_channel_stream_caches::{MotorChannelStreamCaches};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_types::*;
 use crate::data_types::descriptors::*;

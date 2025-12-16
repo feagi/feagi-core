@@ -18,10 +18,8 @@ pub(crate) struct MotorChannelStreamCaches {
 impl MotorChannelStreamCaches {
     pub fn new(neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>, number_channels: CorticalChannelCount, initial_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
 
-        let expected_data_decoded_type: WrappedIOType = neuron_decoder.get_decoded_data_type();
-
         let pipeline_runners: Vec<PipelineStageRunner> =
-            std::iter::repeat_with(|| PipelineStageRunner::new(initial_cached_value.clone(), expected_data_decoded_type).unwrap())
+            std::iter::repeat_with(|| PipelineStageRunner::new(initial_cached_value.clone()).unwrap())
             .take(*number_channels as usize)
             .collect();
 
@@ -47,8 +45,9 @@ impl MotorChannelStreamCaches {
         Ok(())
     }
 
-    pub fn get_output_type(&self) -> WrappedIOType {
-        self.pipeline_runners.first().unwrap().get_output_data_type()
+    pub fn get_output_type_for_channel(&self, cortical_channel_index: CorticalChannelIndex) -> Result<WrappedIOType, FeagiDataError> {
+        let runner = self.try_get_pipeline_runner(cortical_channel_index)?;
+        Ok(runner.get_expected_output_type_for_motors())
     }
 
     //endregion
@@ -173,7 +172,7 @@ impl MotorChannelStreamCaches {
             .zip(&self.has_channel_been_updated)
             .try_for_each(|(pipeline_runner, has_channel_been_updated)| {
                 if *has_channel_been_updated {
-                    _ = pipeline_runner.process_cached_input_value(time_of_decode)?;
+                    _ = pipeline_runner.process_cached_value(time_of_decode)?;
                     // Don't do call backs here, we want everything to be done first
                 }
                 Ok(())
