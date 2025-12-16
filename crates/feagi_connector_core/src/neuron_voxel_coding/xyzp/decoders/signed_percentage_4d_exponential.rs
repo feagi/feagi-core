@@ -3,7 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, NeuronDepth};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
-use crate::data_pipeline::PipelineStageRunner;
+use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::{SignedPercentage4D};
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{decode_signed_percentage_from_fractional_exponential_neurons};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
@@ -29,7 +29,7 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage4DExponentialNeuronVoxelXYZPDeco
         WrappedIOType::SignedPercentage_4D
     }
 
-    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<PipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
+    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
 
         // NOTE: Expecting channel_changed to be all false. Do not reset write_target, we will write to it if we got a value for the channel!
         const ONLY_ALLOWED_Y: u32 = 0; // This structure never has height
@@ -101,7 +101,7 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage4DExponentialNeuronVoxelXYZPDeco
                 continue; // No data collected for this channel. Do not emit
             }
             channel_changed[channel_index] = true;
-            let signed_percentage_4d: &mut SignedPercentage4D = pipelines_with_data_to_update.get_mut(channel_index).unwrap().get_cached_input_mut().try_into()?;
+            let signed_percentage_4d: &mut SignedPercentage4D = pipelines_with_data_to_update.get_mut(channel_index).unwrap().get_preprocessed_cached_value_mut().try_into()?;
 
             if !(z_a_row_vector_positive.is_empty() && z_a_row_vector_negative.is_empty()) {
                 decode_signed_percentage_from_fractional_exponential_neurons(&z_a_row_vector_positive, &z_a_row_vector_negative, &mut signed_percentage_4d.a);
