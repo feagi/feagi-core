@@ -518,7 +518,7 @@ impl SensorDeviceCache {
 
     fn try_read_preprocessed_cached_value(&self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
-        let value = sensor_stream_caches.try_get_channel_recent_preprocessed_value(channel_index)?;
+        let value = sensor_stream_caches.try_get_channel_preprocessed_value(channel_index)?;
         Ok(value)
     }
 

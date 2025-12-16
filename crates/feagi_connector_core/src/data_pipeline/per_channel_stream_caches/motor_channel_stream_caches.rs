@@ -3,14 +3,16 @@ use rayon::prelude::*;
 use feagi_data_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
+use crate::data_pipeline::per_channel_stream_caches::pipeline_stage_runner_common::PipelineStageRunner;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 #[derive(Debug)]
 pub(crate) struct MotorChannelStreamCaches {
     neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
-    pipeline_runners: Vec<PipelineStageRunner>,
+    pipeline_runners: Vec<MotorPipelineStageRunner>,
     has_channel_been_updated: Vec<bool>,
     value_updated_callbacks: Vec<FeagiSignal<WrappedIOData>>,
 }
@@ -18,8 +20,8 @@ pub(crate) struct MotorChannelStreamCaches {
 impl MotorChannelStreamCaches {
     pub fn new(neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>, number_channels: CorticalChannelCount, initial_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
 
-        let pipeline_runners: Vec<PipelineStageRunner> =
-            std::iter::repeat_with(|| PipelineStageRunner::new(initial_cached_value.clone()).unwrap())
+        let pipeline_runners: Vec<MotorPipelineStageRunner> =
+            std::iter::repeat_with(|| MotorPipelineStageRunner::new(initial_cached_value.clone()).unwrap())
             .take(*number_channels as usize)
             .collect();
 
@@ -47,21 +49,21 @@ impl MotorChannelStreamCaches {
 
     pub fn get_output_type_for_channel(&self, cortical_channel_index: CorticalChannelIndex) -> Result<WrappedIOType, FeagiDataError> {
         let runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(runner.get_expected_output_type_for_motors())
+        Ok(runner.get_expected_type_to_output_after_processing())
     }
 
     //endregion
 
     //region Pipeline Runner Data
 
-    pub fn try_get_most_recent_preprocessed_motor_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn get_preprocessed_motor_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner= self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(pipeline_runner.get_most_recent_preprocessed_output())
+        Ok(pipeline_runner.get_preprocessed_cached_value())
     }
 
-    pub fn try_get_most_recent_postprocessed_motor_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn get_postprocessed_motor_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(pipeline_runner.get_most_recent_postprocessed_output())
+        Ok(pipeline_runner.get_postprocessed_cached_value())
     }
 
     pub fn try_get_channel_last_processed_instant(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Instant, FeagiDataError> {
@@ -150,7 +152,7 @@ impl MotorChannelStreamCaches {
                 continue;
             }
             let data_ref = self.pipeline_runners.get(channel_index).unwrap();
-            self.value_updated_callbacks[channel_index].emit(data_ref.get_most_recent_postprocessed_output()); // no value
+            self.value_updated_callbacks[channel_index].emit(data_ref.get_postprocessed_motor_value()); // no value
         }
         Ok(())
     }
@@ -172,7 +174,7 @@ impl MotorChannelStreamCaches {
             .zip(&self.has_channel_been_updated)
             .try_for_each(|(pipeline_runner, has_channel_been_updated)| {
                 if *has_channel_been_updated {
-                    _ = pipeline_runner.process_cached_value(time_of_decode)?;
+                    _ = pipeline_runner.process_cached_decoded_motor_value(time_of_decode)?;
                     // Don't do call backs here, we want everything to be done first
                 }
                 Ok(())
@@ -183,7 +185,7 @@ impl MotorChannelStreamCaches {
     //region Internal
 
     #[inline]
-    fn try_get_pipeline_runner(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
+    fn try_get_pipeline_runner(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&MotorPipelineStageRunner, FeagiDataError> {
         match self.pipeline_runners.get(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for MotorChannelStreamCaches with {} channels!",
@@ -193,7 +195,7 @@ impl MotorChannelStreamCaches {
     }
 
     #[inline]
-    fn try_get_pipeline_runner_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut PipelineStageRunner, FeagiDataError> {
+    fn try_get_pipeline_runner_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut MotorPipelineStageRunner, FeagiDataError> {
         let num_runners = self.pipeline_runners.len();
         match self.pipeline_runners.get_mut(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),

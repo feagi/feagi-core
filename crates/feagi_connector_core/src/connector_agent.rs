@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::fmt;
-use crate::caching::motor_device_cache::MotorDeviceCache;
-use crate::caching::sensor_device_cache::SensorDeviceCache;
+use crate::caching::MotorDeviceCache;
+use crate::caching::SensorDeviceCache;
 
 #[derive(Debug)]
 pub struct ConnectorAgent {

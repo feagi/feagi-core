@@ -2,7 +2,9 @@ use std::time::Instant;
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
 use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
-use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex, PipelineStageRunner};
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_pipeline::per_channel_stream_caches::pipeline_stage_runner_common::PipelineStageRunner;
+use crate::data_pipeline::per_channel_stream_caches::SensoryPipelineStageRunner;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
@@ -20,14 +22,14 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 #[derive(Debug)]
 pub(crate) struct SensoryChannelStreamCaches {
     neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
-    pipeline_runners: Vec<PipelineStageRunner>,
+    pipeline_runners: Vec<SensoryPipelineStageRunner>,
     last_update_time: Instant,
 }
 
 impl SensoryChannelStreamCaches {
     pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, number_channels: CorticalChannelCount, initial_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
-        let pipeline_runners: Vec<PipelineStageRunner> =
-            std::iter::repeat_with(|| PipelineStageRunner::new(initial_cached_value.clone()).unwrap())
+        let pipeline_runners: Vec<SensoryPipelineStageRunner> =
+            std::iter::repeat_with(|| SensoryPipelineStageRunner::new(initial_cached_value.clone()).unwrap())
                 .take(*number_channels as usize)
                 .collect();
 
@@ -64,7 +66,7 @@ impl SensoryChannelStreamCaches {
     /// Retrieves the expected input data type for a channel
     pub fn get_input_type_for_channel(&self, cortical_channel_index: CorticalChannelIndex) -> Result<WrappedIOType, FeagiDataError> {
         let runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(runner.get_expected_input_type_for_sensors())
+        Ok(runner.get_expected_type_to_input_and_process())
     }
 
     //endregion
@@ -82,9 +84,9 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(&WrappedIOData)` - Reference to the unprocessed input data
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    pub fn try_get_channel_recent_preprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_get_channel_preprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(pipeline_runner.get_most_recent_preprocessed_output())
+        Ok(pipeline_runner.get_preprocessed_cached_value())
     }
 
     /// Retrieves the most recent processed output value for a channel after pipeline processing.
@@ -100,7 +102,7 @@ impl SensoryChannelStreamCaches {
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
     pub fn try_get_channel_recent_postprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
-        Ok(pipeline_runner.get_most_recent_postprocessed_output())
+        Ok(pipeline_runner.get_postprocessed_sensor_value())
     }
 
 
@@ -109,18 +111,12 @@ impl SensoryChannelStreamCaches {
         self.last_update_time = update_instant;// TODO cant this cause weird issues?
         let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         runner.verify_input_sensor_data(&value)?;
-        let mut_val = runner.get_cached_input_mut();
+        let mut_val = runner.get_preprocessed_cached_value_mut();
         *mut_val = value;
-        let processed_data = runner.process_cached_value(update_instant)?;
+        let processed_data = runner.process_cached_sensor_value(update_instant)?;
         Ok(processed_data)
     }
-
-    pub fn try_running_pipeline_runner_from_input_cache(&mut self, cortical_channel_index: CorticalChannelIndex, update_instant: Instant) -> Result<&WrappedIOData, FeagiDataError> {
-        let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
-        let processed_data = runner.process_cached_value(update_instant)?;
-        Ok(processed_data)
-    }
-
+    
     /// Retrieves the timestamp of the last data update for a specific channel.
     ///
     /// # Arguments
@@ -279,7 +275,7 @@ impl SensoryChannelStreamCaches {
     /// * `Ok(&PipelineStageRunner)` - Reference to the pipeline runner
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
     #[inline]
-    fn try_get_pipeline_runner(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&PipelineStageRunner, FeagiDataError> {
+    fn try_get_pipeline_runner(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&SensoryPipelineStageRunner, FeagiDataError> {
         match self.pipeline_runners.get(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
@@ -300,7 +296,7 @@ impl SensoryChannelStreamCaches {
     /// * `Ok(&mut PipelineStageRunner)` - Mutable reference to the pipeline runner
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
     #[inline]
-    fn try_get_pipeline_runner_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut PipelineStageRunner, FeagiDataError> {
+    fn try_get_pipeline_runner_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut SensoryPipelineStageRunner, FeagiDataError> {
         let runner_count = self.pipeline_runners.len();
         match self.pipeline_runners.get_mut(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),

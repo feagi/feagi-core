@@ -436,12 +436,12 @@ impl MotorDeviceCache {
 
     fn try_read_preprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        Ok(motor_stream_caches.try_get_most_recent_preprocessed_motor_value(channel_index)?)
+        Ok(motor_stream_caches.get_preprocessed_motor_value(channel_index)?)
     }
 
     fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        Ok(motor_stream_caches.try_get_most_recent_postprocessed_motor_value(channel_index)?)
+        Ok(motor_stream_caches.get_postprocessed_motor_value(channel_index)?)
     }
 
     fn try_register_motor_callback<F>(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
