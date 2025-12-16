@@ -36,9 +36,12 @@ async fn create_test_server() -> axum::Router {
     // Create services
     let genome_service = Arc::new(GenomeServiceImpl::new(Arc::clone(&manager)));
     let connectome_service = Arc::new(ConnectomeServiceImpl::new(Arc::clone(&manager)));
+    // For tests, use empty version info
+    let version_info = feagi_services::types::VersionInfo::default();
     let system_service = Arc::new(SystemServiceImpl::new(
         Arc::clone(&manager),
         None, // No BurstLoopRunner for basic tests
+        version_info,
     ));
     let analytics_service = Arc::new(AnalyticsServiceImpl::new(
         Arc::clone(&manager),
@@ -101,6 +104,7 @@ async fn create_test_server() -> axum::Router {
         genome_service,
         neuron_service,
         runtime_service,
+        system_service,
         snapshot_service: None,
         feagi_session_timestamp,
     };

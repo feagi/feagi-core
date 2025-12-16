@@ -6,6 +6,9 @@
 // This crate provides a unified, transport-agnostic API layer for FEAGI.
 // It supports both HTTP (Axum) and ZMQ transports using a shared endpoint layer.
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod common;
 pub mod endpoints;
 #[cfg(feature = "http")]

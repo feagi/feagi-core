@@ -50,6 +50,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 // Platform-specific imports
 #[cfg(feature = "std")]
 extern crate std;

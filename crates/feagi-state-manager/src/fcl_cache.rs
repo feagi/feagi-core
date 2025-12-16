@@ -74,7 +74,7 @@ pub struct FCLWindowCache {
 impl FCLWindowCache {
     pub fn new(default_window_size: usize) -> Self {
         Self {
-            cache: RwLock::new(HashMap::default()),
+            cache: RwLock::new(AHashMap::default()),
             default_window_size,
         }
     }
@@ -148,7 +148,7 @@ pub struct FCLWindowCache {
 impl FCLWindowCache {
     pub fn new(default_window_size: usize) -> Self {
         Self {
-            cache: Mutex::new(HashMap::new()),
+            cache: Mutex::new(AHashMap::new()),
             default_window_size,
         }
     }

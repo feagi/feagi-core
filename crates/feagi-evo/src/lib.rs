@@ -40,6 +40,9 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 // Core modules
 pub mod genome;
 pub mod types;

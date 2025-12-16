@@ -12,6 +12,7 @@ use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_bdu::ConnectomeManager;
 use feagi_burst_engine::{BurstLoopRunner, RustNPU};
 use feagi_services::*;
+use feagi_services::SystemServiceImpl;
 use parking_lot::{Mutex as ParkingLotMutex, RwLock};
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -90,12 +91,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime))
         as Arc<dyn RuntimeService + Send + Sync>;
 
+    // For examples, create basic version info
+    let mut version_info = feagi_services::types::VersionInfo::default();
+    version_info.crates.insert("example".to_string(), "1.0.0".to_string());
+    version_info.rust_version = "1.75".to_string();
+    version_info.build_timestamp = "example build".to_string();
+    
+    let system_service = Arc::new(SystemServiceImpl::new(
+        connectome.clone(),
+        Some(burst_runner_for_runtime.clone()),
+        version_info,
+    )) as Arc<dyn SystemService + Send + Sync>;
+
     println!("✅ Service layer created:");
     println!("   - GenomeService");
     println!("   - ConnectomeService");
     println!("   - NeuronService");
     println!("   - AnalyticsService");
-    println!("   - RuntimeService\n");
+    println!("   - RuntimeService");
+    println!("   - SystemService\n");
 
     // ========================================================================
     // STEP 3: Create API State
@@ -116,6 +130,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         genome_service,
         neuron_service,
         runtime_service,
+        system_service,
         snapshot_service: None,
         feagi_session_timestamp,
     };

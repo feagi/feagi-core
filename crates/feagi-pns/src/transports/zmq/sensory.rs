@@ -277,7 +277,7 @@ impl SensoryStream {
                         message_count += 1;
 
                         // Process the binary data
-                        let message_bytes = msg.as_ref();
+                        let message_bytes: &[u8] = msg.as_ref();
                         let t_zmq_receive_start = std::time::Instant::now();
                         debug!("🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes", message_count, message_bytes.len());
 

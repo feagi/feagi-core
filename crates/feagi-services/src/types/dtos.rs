@@ -343,15 +343,19 @@ pub struct SystemStatus {
     pub avg_burst_time_ms: f64,
 }
 
-/// Version information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// Version information for FEAGI runtime
+/// Contains versions of all crates compiled into the current binary
+/// This is populated by the application (e.g., feagi-rust) at startup
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct VersionInfo {
-    pub feagi_core_version: String,
-    pub feagi_bdu_version: String,
-    pub feagi_burst_engine_version: String,
-    pub feagi_evo_version: String,
-    pub feagi_types_version: String,
+    /// Map of crate name to version (e.g., "feagi_bdu" -> "2.0.0")
+    /// Only includes crates actually linked into this binary
+    pub crates: std::collections::HashMap<String, String>,
+    
+    /// Build timestamp (if available)
     pub build_timestamp: String,
+    
+    /// Rust compiler version used
     pub rust_version: String,
 }
 

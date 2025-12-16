@@ -73,6 +73,9 @@
 #![no_std]
 #![warn(missing_docs)]
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[cfg(feature = "std")]
 extern crate std;
 

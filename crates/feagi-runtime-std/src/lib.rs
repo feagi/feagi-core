@@ -22,6 +22,9 @@
 //! Uses platform-agnostic core (`feagi-neural`, `feagi-synapse`) internally,
 //! providing a convenient API with standard library collections.
 
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod neuron_array;
 pub mod synapse_array;
 pub mod runtime;
