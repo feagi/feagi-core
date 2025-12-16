@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::fmt;
 use std::fmt::Debug;
+use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::PipelineStage;
 use crate::wrapped_io_data::WrappedIOType;
 
