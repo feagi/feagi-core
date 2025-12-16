@@ -64,9 +64,3 @@ pub async fn post_config(
     ])))
 }
 
-/// Configure evolutionary algorithm settings (alternative endpoint).
-#[utoipa::path(post, path = "/v1/evolution/configure", tag = "evolution")]
-pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Evolution configured".to_string())])))
-}
-

@@ -340,9 +340,3 @@ pub async fn delete_reset_fitness_stats(State(_state): State<ApiState>) -> ApiRe
     Ok(Json(HashMap::from([("message".to_string(), "Fitness stats reset".to_string())])))
 }
 
-/// Configure training settings (alternative endpoint).
-#[utoipa::path(post, path = "/v1/training/configure", tag = "training")]
-pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Training configured".to_string())])))
-}
-

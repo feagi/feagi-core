@@ -202,7 +202,7 @@ fn create_v1_router() -> Router<ApiState> {
             .put(cortical_area::put_cortical_area)
             .delete(cortical_area::delete_cortical_area))
         .route("/cortical_area/custom_cortical_area", axum::routing::post(cortical_area::post_custom_cortical_area))
-        .route("/cortical_area/clone", axum::routing::post(cortical_area::post_clone_area))
+        .route("/cortical_area/clone", axum::routing::post(cortical_area::post_clone))
         .route("/cortical_area/multi/cortical_area",
             put(cortical_area::put_multi_cortical_area).delete(cortical_area::delete_multi_cortical_area))
         .route("/cortical_area/coord_2d", put(cortical_area::put_coord_2d))
@@ -417,7 +417,6 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/simulation/status", get(simulation::get_status))
         .route("/simulation/stats", get(simulation::get_stats))
         .route("/simulation/config", axum::routing::post(simulation::post_config))
-        .route("/simulation/configure", axum::routing::post(simulation::post_configure))
         
         // ===== TRAINING MODULE (25 endpoints) =====
         .route("/training/shock", axum::routing::post(training::post_shock))
@@ -439,7 +438,6 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/training/status", get(training::get_status))
         .route("/training/stats", get(training::get_stats))
         .route("/training/config", axum::routing::post(training::post_config))
-        .route("/training/configure", axum::routing::post(training::post_configure))
         
         // ===== VISUALIZATION MODULE (4 endpoints) =====
         .route("/visualization/register_client", axum::routing::post(visualization::post_register_client))
@@ -456,7 +454,6 @@ fn create_v1_router() -> Router<ApiState> {
         // ===== EVOLUTION MODULE (3 endpoints) =====
         .route("/evolution/status", get(evolution::get_status))
         .route("/evolution/config", axum::routing::post(evolution::post_config))
-        .route("/evolution/configure", axum::routing::post(evolution::post_configure))
         
         // ===== SNAPSHOT MODULE (12 endpoints) =====
         // TODO: Implement snapshot endpoints
@@ -477,7 +474,6 @@ fn create_v1_router() -> Router<ApiState> {
         // ===== NETWORK MODULE (3 endpoints) =====
         .route("/network/status", get(network::get_status))
         .route("/network/config", axum::routing::post(network::post_config))
-        .route("/network/configure", axum::routing::post(network::post_configure))
 }
 
 /// OpenAPI spec handler

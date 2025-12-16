@@ -1008,16 +1008,6 @@ pub async fn delete_bulk(State(_state): State<ApiState>, Json(_ids): Json<Vec<St
     Ok(Json(response))
 }
 
-/// Clone a cortical area (duplicate endpoint). (Not yet implemented)
-#[utoipa::path(
-    post, 
-    path = "/v1/cortical_area/clone", 
-    tag = "cortical_area"
-)]
-pub async fn post_clone_area(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
-}
-
 /// Resize a cortical area by changing its dimensions. (Not yet implemented)
 #[utoipa::path(
     post, 

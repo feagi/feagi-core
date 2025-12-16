@@ -138,7 +138,7 @@ use crate::{
         crate::endpoints::cortical_area::get_opu_list,
         crate::endpoints::cortical_area::put_coordinates_3d,
         crate::endpoints::cortical_area::delete_bulk,
-        crate::endpoints::cortical_area::post_clone_area,
+        crate::endpoints::cortical_area::post_clone,
         crate::endpoints::cortical_area::post_resize,
         crate::endpoints::cortical_area::post_reposition,
         crate::endpoints::cortical_area::post_voxel_neurons,
