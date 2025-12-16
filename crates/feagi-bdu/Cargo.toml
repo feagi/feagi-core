@@ -61,6 +61,8 @@ default = ["parallel"]
 parallel = ["rayon"]
 # WASM-compatible build (disables connectome-io and parallel processing)
 wasm = []
+# Async runtime support (passed through from feagi-services)
+async-tokio = []
 
 [dev-dependencies]
 criterion = "0.5"       # Benchmarking
