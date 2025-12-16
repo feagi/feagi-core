@@ -121,3 +121,6 @@ pub use impls::{
     RuntimeServiceImpl, SnapshotServiceImpl,
 };
 
+/// Version of this crate (for feagi-rust version reporting)
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+

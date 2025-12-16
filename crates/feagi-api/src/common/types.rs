@@ -15,5 +15,5 @@ pub use crate::transports::http::server::ApiState;
 
 #[cfg(not(feature = "http"))]
 pub use crate::transports::wasm::types::{State, Json, Query, Path};
-// ApiState is always available (defined in http/server.rs but doesn't require http feature)
+#[cfg(not(feature = "http"))]
 pub use crate::transports::http::server::ApiState;

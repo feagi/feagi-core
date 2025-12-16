@@ -4,9 +4,9 @@
 //! WASM Analytics Service (stub)
 
 use async_trait::async_trait;
-#[cfg(feature = "services")]::::traits::analytics_service::AnalyticsService;
-#[cfg(feature = "services")]::::types::errors::{ServiceError, ServiceResult};
-#[cfg(feature = "services")]::::types::*;
+use feagi_services::traits::analytics_service::AnalyticsService;
+use feagi_services::types::errors::{ServiceError, ServiceResult};
+use feagi_services::types::*;
 use feagi_evo::RuntimeGenome;
 use std::sync::Arc;
 

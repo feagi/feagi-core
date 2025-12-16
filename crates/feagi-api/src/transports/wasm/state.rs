@@ -20,6 +20,7 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
     let analytics_service = Arc::new(WasmAnalyticsService::new(Arc::clone(&genome)));
     let runtime_service = Arc::new(WasmRuntimeService::new());
     let neuron_service = Arc::new(WasmNeuronService::new());
+    let system_service = Arc::new(WasmSystemService::new());
 
     ApiState {
         agent_service: None, // No agents in WASM standalone mode
@@ -28,6 +29,7 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
         analytics_service: analytics_service as Arc<dyn feagi_services::traits::AnalyticsService + Send + Sync>,
         runtime_service: runtime_service as Arc<dyn feagi_services::traits::RuntimeService + Send + Sync>,
         neuron_service: neuron_service as Arc<dyn feagi_services::traits::NeuronService + Send + Sync>,
+        system_service: system_service as Arc<dyn feagi_services::traits::SystemService + Send + Sync>,
         snapshot_service: None, // TODO: Implement if needed
         feagi_session_timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

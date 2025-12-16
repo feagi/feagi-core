@@ -12,7 +12,6 @@ pub use types::{ApiState, State, Json, Query, Path};
 pub use error::{ApiError, ApiErrorCode};
 pub use request::ApiRequest;
 pub use response::{ApiResponse, EmptyResponse};
-pub use types::{State, Json, Query};
 
 /// Result type for API operations
 pub type ApiResult<T> = Result<T, ApiError>;

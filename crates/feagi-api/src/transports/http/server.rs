@@ -39,6 +39,7 @@ pub struct ApiState {
     pub genome_service: Arc<dyn GenomeService + Send + Sync>,
     pub neuron_service: Arc<dyn NeuronService + Send + Sync>,
     pub runtime_service: Arc<dyn RuntimeService + Send + Sync>,
+    pub system_service: Arc<dyn SystemService + Send + Sync>,
     pub snapshot_service: Option<Arc<dyn feagi_services::SnapshotService + Send + Sync>>,
     /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
     /// This is a unique identifier for each FEAGI instance/session
@@ -458,19 +459,20 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/evolution/configure", axum::routing::post(evolution::post_configure))
         
         // ===== SNAPSHOT MODULE (12 endpoints) =====
-        .route("/snapshot/create", axum::routing::post(snapshot::post_create))
-        .route("/snapshot/restore", axum::routing::post(snapshot::post_restore))
-        .route("/snapshot/", get(snapshot::get_list))
-        .route("/snapshot/:snapshot_id", axum::routing::delete(snapshot::delete_snapshot))
-        .route("/snapshot/:snapshot_id/artifact/:fmt", get(snapshot::get_artifact))
-        .route("/snapshot/compare", axum::routing::post(snapshot::post_compare))
-        .route("/snapshot/upload", axum::routing::post(snapshot::post_upload))
-        // Python uses /v1/snapshots/* (note the S)
-        .route("/snapshots/connectome", axum::routing::post(snapshot::post_snapshots_connectome))
-        .route("/snapshots/connectome/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_connectome_restore))
-        .route("/snapshots/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_restore))
-        .route("/snapshots/:snapshot_id", axum::routing::delete(snapshot::delete_snapshots_by_id))
-        .route("/snapshots/:snapshot_id/artifact/:fmt", get(snapshot::get_snapshots_artifact))
+        // TODO: Implement snapshot endpoints
+        // .route("/snapshot/create", axum::routing::post(snapshot::post_create))
+        // .route("/snapshot/restore", axum::routing::post(snapshot::post_restore))
+        // .route("/snapshot/", get(snapshot::get_list))
+        // .route("/snapshot/:snapshot_id", axum::routing::delete(snapshot::delete_snapshot))
+        // .route("/snapshot/:snapshot_id/artifact/:fmt", get(snapshot::get_artifact))
+        // .route("/snapshot/compare", axum::routing::post(snapshot::post_compare))
+        // .route("/snapshot/upload", axum::routing::post(snapshot::post_upload))
+        // // Python uses /v1/snapshots/* (note the S)
+        // .route("/snapshots/connectome", axum::routing::post(snapshot::post_snapshots_connectome))
+        // .route("/snapshots/connectome/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_connectome_restore))
+        // .route("/snapshots/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_restore))
+        // .route("/snapshots/:snapshot_id", axum::routing::delete(snapshot::delete_snapshots_by_id))
+        // .route("/snapshots/:snapshot_id/artifact/:fmt", get(snapshot::get_snapshots_artifact))
         
         // ===== NETWORK MODULE (3 endpoints) =====
         .route("/network/status", get(network::get_status))
