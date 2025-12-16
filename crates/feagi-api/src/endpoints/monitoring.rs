@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // MONITORING & METRICS
 // ============================================================================
 
-/// GET /v1/monitoring/status
-/// Get monitoring system status
+/// Get monitoring system status including metrics collection and brain readiness.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/status",
@@ -46,8 +45,7 @@ pub async fn get_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap
     Ok(Json(response))
 }
 
-/// GET /v1/monitoring/metrics
-/// Get system metrics
+/// Get system metrics including burst frequency, neuron count, and brain readiness.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/metrics",
@@ -79,8 +77,7 @@ pub async fn get_metrics(State(state): State<ApiState>) -> ApiResult<Json<HashMa
     Ok(Json(response))
 }
 
-/// GET /v1/monitoring/data
-/// Get detailed monitoring data
+/// Get detailed monitoring data with timestamps for analysis and debugging.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/data",
@@ -112,8 +109,7 @@ pub async fn get_data(State(state): State<ApiState>) -> ApiResult<Json<HashMap<S
     Ok(Json(response))
 }
 
-/// GET /v1/monitoring/performance
-/// Get performance metrics
+/// Get performance metrics including CPU and memory usage.
 #[utoipa::path(
     get,
     path = "/v1/monitoring/performance",

@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // NETWORK CONFIGURATION
 // ============================================================================
 
-/// GET /v1/network/status
-/// Get network configuration status
+/// Get network configuration status including ZMQ, HTTP, and WebSocket states.
 #[utoipa::path(
     get,
     path = "/v1/network/status",
@@ -39,8 +38,7 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     Ok(Json(response))
 }
 
-/// POST /v1/network/config
-/// Configure network parameters
+/// Configure network parameters including transport protocols and ports.
 #[utoipa::path(
     post,
     path = "/v1/network/config",
@@ -66,7 +64,7 @@ pub async fn post_config(
     ])))
 }
 
-/// POST /v1/network/configure
+/// Configure network settings (alternative endpoint).
 #[utoipa::path(post, path = "/v1/network/configure", tag = "network")]
 pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Network configured".to_string())])))

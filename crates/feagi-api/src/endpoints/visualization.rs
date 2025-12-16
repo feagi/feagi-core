@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // VISUALIZATION CLIENT MANAGEMENT
 // ============================================================================
 
-/// POST /v1/visualization/register_client
-/// Register a visualization client
+/// Register a new visualization client for receiving neural activity streams.
 #[utoipa::path(
     post,
     path = "/v1/visualization/register_client",
@@ -50,8 +49,7 @@ pub async fn post_register_client(
     Ok(Json(response))
 }
 
-/// POST /v1/visualization/unregister_client
-/// Unregister a visualization client
+/// Unregister a visualization client to stop receiving neural activity streams.
 #[utoipa::path(
     post,
     path = "/v1/visualization/unregister_client",
@@ -78,8 +76,7 @@ pub async fn post_unregister_client(
     ])))
 }
 
-/// POST /v1/visualization/heartbeat
-/// Send heartbeat from visualization client
+/// Send heartbeat from visualization client to maintain active connection.
 #[utoipa::path(
     post,
     path = "/v1/visualization/heartbeat",
@@ -100,8 +97,7 @@ pub async fn post_heartbeat(
     ])))
 }
 
-/// GET /v1/visualization/status
-/// Get visualization system status
+/// Get visualization system status including active clients and FQ sampler state.
 #[utoipa::path(
     get,
     path = "/v1/visualization/status",

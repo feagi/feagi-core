@@ -10,41 +10,39 @@ use crate::common::{ApiError, ApiResult, State, Json, Query, Path};
 use crate::common::ApiState;
 use feagi_services::types::LoadGenomeParams;
 
-/// GET /v1/genome/file_name
+/// Get the current genome file name.
 #[utoipa::path(get, path = "/v1/genome/file_name", tag = "genome")]
 pub async fn get_file_name(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Get current genome filename
     Ok(Json(HashMap::from([("genome_file_name".to_string(), "".to_string())])))
 }
 
-/// GET /v1/genome/circuits
+/// Get list of available circuit templates from the circuit library.
 #[utoipa::path(get, path = "/v1/genome/circuits", tag = "genome")]
 pub async fn get_circuits(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     // TODO: Get available circuit library
     Ok(Json(vec![]))
 }
 
-/// POST /v1/genome/amalgamation_destination
+/// Set the destination for genome amalgamation (merging genomes).
 #[utoipa::path(post, path = "/v1/genome/amalgamation_destination", tag = "genome")]
 pub async fn post_amalgamation_destination(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// DELETE /v1/genome/amalgamation_cancellation
+/// Cancel a pending genome amalgamation operation.
 #[utoipa::path(delete, path = "/v1/genome/amalgamation_cancellation", tag = "genome")]
 pub async fn delete_amalgamation_cancellation(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// POST /v1/feagi/genome/append
+/// Append additional structures to the current genome.
 #[utoipa::path(post, path = "/v1/feagi/genome/append", tag = "genome")]
 pub async fn post_genome_append(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// POST /v1/genome/upload/barebones
-/// 
-/// Load the barebones genome from default templates
+/// Load the minimal barebones genome with only essential neural structures.
 #[utoipa::path(
     post,
     path = "/v1/genome/upload/barebones",
@@ -66,9 +64,7 @@ pub async fn post_upload_barebones_genome(
     result
 }
 
-/// POST /v1/genome/upload/essential
-/// 
-/// Load the essential genome from default templates
+/// Load the essential genome with core sensory and motor areas.
 #[utoipa::path(
     post,
     path = "/v1/genome/upload/essential",
@@ -147,8 +143,7 @@ async fn load_default_genome(
     Ok(Json(response))
 }
 
-/// GET /v1/genome/name
-/// Get the current genome name
+/// Get the current genome name.
 #[utoipa::path(
     get,
     path = "/v1/genome/name",
@@ -163,8 +158,7 @@ pub async fn get_name(State(_state): State<ApiState>) -> ApiResult<Json<String>>
     Ok(Json("default_genome".to_string()))
 }
 
-/// GET /v1/genome/timestamp
-/// Get the current genome timestamp
+/// Get the genome creation or modification timestamp.
 #[utoipa::path(
     get,
     path = "/v1/genome/timestamp",
@@ -178,8 +172,7 @@ pub async fn get_timestamp(State(_state): State<ApiState>) -> ApiResult<Json<i64
     Ok(Json(0))
 }
 
-/// POST /v1/genome/save
-/// Save current genome to file
+/// Save the current genome to a file with optional ID and title parameters.
 #[utoipa::path(
     post,
     path = "/v1/genome/save",
@@ -243,8 +236,7 @@ pub async fn post_save(
     ])))
 }
 
-/// POST /v1/genome/load
-/// Load genome from file
+/// Load a genome from a file by name.
 #[utoipa::path(
     post,
     path = "/v1/genome/load",
@@ -276,8 +268,7 @@ pub async fn post_load(
     Ok(Json(response))
 }
 
-/// POST /v1/genome/upload
-/// Upload and load genome from JSON
+/// Upload and load a genome from JSON payload.
 #[utoipa::path(
     post,
     path = "/v1/genome/upload",
@@ -309,8 +300,7 @@ pub async fn post_upload(
     Ok(Json(response))
 }
 
-/// GET /v1/genome/download
-/// Download current genome as JSON
+/// Download the current genome as a JSON document.
 #[utoipa::path(
     get,
     path = "/v1/genome/download",
@@ -338,8 +328,7 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
     Ok(Json(genome_value))
 }
 
-/// GET /v1/genome/properties
-/// Get genome properties and metadata
+/// Get genome properties including metadata, size, and configuration details.
 #[utoipa::path(
     get,
     path = "/v1/genome/properties",
@@ -353,8 +342,7 @@ pub async fn get_properties(State(_state): State<ApiState>) -> ApiResult<Json<Ha
     Ok(Json(HashMap::new()))
 }
 
-/// POST /v1/genome/validate
-/// Validate a genome structure
+/// Validate a genome structure for correctness and completeness.
 #[utoipa::path(
     post,
     path = "/v1/genome/validate",
@@ -376,8 +364,7 @@ pub async fn post_validate(
     Ok(Json(response))
 }
 
-/// POST /v1/genome/transform
-/// Transform genome between formats (flat <-> hierarchical)
+/// Transform genome between different formats (flat to hierarchical or vice versa).
 #[utoipa::path(
     post,
     path = "/v1/genome/transform",
@@ -397,8 +384,7 @@ pub async fn post_transform(
     Ok(Json(response))
 }
 
-/// POST /v1/genome/clone
-/// Clone the current genome with a new name
+/// Clone the current genome with a new name, creating an independent copy.
 #[utoipa::path(
     post,
     path = "/v1/genome/clone",
@@ -417,8 +403,7 @@ pub async fn post_clone(
     ])))
 }
 
-/// POST /v1/genome/reset
-/// Reset genome to default state
+/// Reset genome to its default state, clearing all customizations.
 #[utoipa::path(
     post,
     path = "/v1/genome/reset",
@@ -434,8 +419,7 @@ pub async fn post_reset(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     ])))
 }
 
-/// GET /v1/genome/metadata
-/// Get genome metadata (alternative to properties)
+/// Get genome metadata (alternative endpoint to properties).
 #[utoipa::path(
     get,
     path = "/v1/genome/metadata",
@@ -448,8 +432,7 @@ pub async fn get_metadata(State(state): State<ApiState>) -> ApiResult<Json<HashM
     get_properties(State(state)).await
 }
 
-/// POST /v1/genome/merge
-/// Merge another genome into current genome
+/// Merge another genome into the current genome, combining their structures.
 #[utoipa::path(
     post,
     path = "/v1/genome/merge",
@@ -469,8 +452,7 @@ pub async fn post_merge(
     Ok(Json(response))
 }
 
-/// GET /v1/genome/diff
-/// Get diff between two genomes
+/// Get a diff comparison between two genomes showing their differences.
 #[utoipa::path(
     get,
     path = "/v1/genome/diff",
@@ -494,8 +476,7 @@ pub async fn get_diff(
     Ok(Json(response))
 }
 
-/// POST /v1/genome/export_format
-/// Export genome in specific format
+/// Export genome in a specific format (JSON, YAML, binary, etc.).
 #[utoipa::path(
     post,
     path = "/v1/genome/export_format",
@@ -516,22 +497,19 @@ pub async fn post_export_format(
 }
 
 // EXACT Python paths:
-/// GET /v1/genome/amalgamation
+/// Get current amalgamation status and configuration.
 #[utoipa::path(get, path = "/v1/genome/amalgamation", tag = "genome")]
 pub async fn get_amalgamation(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     Ok(Json(HashMap::new()))
 }
 
-/// GET /v1/genome/amalgamation_history
+/// Get history of all genome amalgamation operations performed.
 #[utoipa::path(get, path = "/v1/genome/amalgamation_history", tag = "genome")]
 pub async fn get_amalgamation_history_exact(State(_state): State<ApiState>) -> ApiResult<Json<Vec<HashMap<String, serde_json::Value>>>> {
     Ok(Json(Vec::new()))
 }
 
-/// GET /v1/genome/cortical_template
-/// 
-/// Returns metadata about all available cortical types (motor, sensory, memory, etc.)
-/// including their supported encodings, formats, and data type configurations.
+/// Get metadata about all available cortical types including supported encodings and configurations.
 #[utoipa::path(get, path = "/v1/genome/cortical_template", tag = "genome")]
 pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
@@ -651,9 +629,7 @@ pub async fn get_cortical_template(State(_state): State<ApiState>) -> ApiResult<
     Ok(Json(templates))
 }
 
-/// GET /v1/genome/defaults/files
-/// 
-/// Returns list of available embedded default genomes
+/// Get list of available embedded default genome templates (barebones, essential, test, vision).
 #[utoipa::path(get, path = "/v1/genome/defaults/files", tag = "genome")]
 pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     Ok(Json(vec![
@@ -664,55 +640,55 @@ pub async fn get_defaults_files(State(_state): State<ApiState>) -> ApiResult<Jso
     ]))
 }
 
-/// GET /v1/genome/download_region
+/// Download a specific brain region from the genome.
 #[utoipa::path(get, path = "/v1/genome/download_region", tag = "genome")]
 pub async fn get_download_region(State(_state): State<ApiState>, Query(_params): Query<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     Ok(Json(HashMap::new()))
 }
 
-/// GET /v1/genome/genome_number
+/// Get the current genome number or generation identifier.
 #[utoipa::path(get, path = "/v1/genome/genome_number", tag = "genome")]
 pub async fn get_genome_number(State(_state): State<ApiState>) -> ApiResult<Json<i32>> {
     Ok(Json(0))
 }
 
-/// POST /v1/genome/amalgamation_by_filename
+/// Perform genome amalgamation by specifying a filename.
 #[utoipa::path(post, path = "/v1/genome/amalgamation_by_filename", tag = "genome")]
 pub async fn post_amalgamation_by_filename(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
-/// POST /v1/genome/amalgamation_by_payload
+/// Perform genome amalgamation using a direct JSON payload.
 #[utoipa::path(post, path = "/v1/genome/amalgamation_by_payload", tag = "genome")]
 pub async fn post_amalgamation_by_payload(State(_state): State<ApiState>, Json(_req): Json<serde_json::Value>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
-/// POST /v1/genome/amalgamation_by_upload
+/// Perform genome amalgamation by uploading a genome file.
 #[utoipa::path(post, path = "/v1/genome/amalgamation_by_upload", tag = "genome")]
 pub async fn post_amalgamation_by_upload(State(_state): State<ApiState>, Json(_req): Json<serde_json::Value>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
-/// POST /v1/genome/append-file
+/// Append structures to the genome from a file.
 #[utoipa::path(post, path = "/v1/genome/append-file", tag = "genome")]
 pub async fn post_append_file(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
-/// POST /v1/genome/upload/file
+/// Upload and load a genome from a file.
 #[utoipa::path(post, path = "/v1/genome/upload/file", tag = "genome")]
 pub async fn post_upload_file(State(_state): State<ApiState>, Json(_req): Json<serde_json::Value>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
-/// POST /v1/genome/upload/file/edit
+/// Upload a genome file with edit mode enabled.
 #[utoipa::path(post, path = "/v1/genome/upload/file/edit", tag = "genome")]
 pub async fn post_upload_file_edit(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))
 }
 
-/// POST /v1/genome/upload/string
+/// Upload and load a genome from a JSON string.
 #[utoipa::path(post, path = "/v1/genome/upload/string", tag = "genome")]
 pub async fn post_upload_string(State(_state): State<ApiState>, Json(_req): Json<String>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Not yet implemented".to_string())])))

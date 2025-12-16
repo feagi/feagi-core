@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // OUTPUT TARGETS
 // ============================================================================
 
-/// GET /v1/output/targets (Python uses singular /v1/output)
-/// Get available output targets
+/// Get available output targets from connected motor/output agents.
 #[utoipa::path(
     get,
     path = "/v1/output/targets",
@@ -57,8 +56,7 @@ pub async fn get_targets(State(state): State<ApiState>) -> ApiResult<Json<HashMa
     Ok(Json(response))
 }
 
-/// POST /v1/output/configure (Python uses singular /v1/output)
-/// Configure output targets
+/// Configure output targets and motor agent connections.
 #[utoipa::path(
     post,
     path = "/v1/output/configure",

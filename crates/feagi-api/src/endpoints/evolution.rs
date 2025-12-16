@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // EVOLUTIONARY ALGORITHMS
 // ============================================================================
 
-/// GET /v1/evolution/status
-/// Get evolution system status
+/// Get evolution system status including generation, population size, and activity state.
 #[utoipa::path(
     get,
     path = "/v1/evolution/status",
@@ -39,8 +38,7 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     Ok(Json(response))
 }
 
-/// POST /v1/evolution/config
-/// Configure evolution parameters
+/// Configure evolution parameters including mutation rates and selection criteria.
 #[utoipa::path(
     post,
     path = "/v1/evolution/config",
@@ -66,7 +64,7 @@ pub async fn post_config(
     ])))
 }
 
-/// POST /v1/evolution/configure
+/// Configure evolutionary algorithm settings (alternative endpoint).
 #[utoipa::path(post, path = "/v1/evolution/configure", tag = "evolution")]
 pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     Ok(Json(HashMap::from([("message".to_string(), "Evolution configured".to_string())])))

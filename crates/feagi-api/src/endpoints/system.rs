@@ -49,9 +49,7 @@ pub struct HealthCheckResponse {
 // ENDPOINTS
 // ============================================================================
 
-/// GET /v1/system/health_check
-/// 
-/// Get comprehensive system health information
+/// Get comprehensive system health including burst engine status, neuron/synapse counts, and genome availability.
 #[utoipa::path(
     get,
     path = "/v1/system/health_check",
@@ -189,9 +187,7 @@ pub async fn get_health_check(
     }))
 }
 
-/// GET /v1/system/cortical_area_visualization_skip_rate
-/// 
-/// Get cortical area visualization skip rate
+/// Get the visualization skip rate (how many frames to skip during visualization).
 #[utoipa::path(
     get,
     path = "/v1/system/cortical_area_visualization_skip_rate",
@@ -209,9 +205,7 @@ pub async fn get_cortical_area_visualization_skip_rate(
     Ok(Json(1))
 }
 
-/// PUT /v1/system/cortical_area_visualization_skip_rate
-/// 
-/// Set cortical area visualization skip rate
+/// Set the visualization skip rate to reduce visualization frequency and improve performance.
 #[utoipa::path(
     put,
     path = "/v1/system/cortical_area_visualization_skip_rate",
@@ -232,9 +226,7 @@ pub async fn set_cortical_area_visualization_skip_rate(
     })))
 }
 
-/// GET /v1/system/cortical_area_visualization_suppression_threshold
-/// 
-/// Get cortical area visualization suppression threshold
+/// Get the threshold below which cortical areas are suppressed from visualization.
 #[utoipa::path(
     get,
     path = "/v1/system/cortical_area_visualization_suppression_threshold",
@@ -252,9 +244,7 @@ pub async fn get_cortical_area_visualization_suppression_threshold(
     Ok(Json(0))
 }
 
-/// PUT /v1/system/cortical_area_visualization_suppression_threshold
-/// 
-/// Set cortical area visualization suppression threshold
+/// Set the threshold for suppressing low-activity cortical areas from visualization.
 #[utoipa::path(
     put,
     path = "/v1/system/cortical_area_visualization_suppression_threshold",
@@ -279,8 +269,7 @@ pub async fn set_cortical_area_visualization_suppression_threshold(
 // SYSTEM VERSION & INFO ENDPOINTS
 // ============================================================================
 
-/// GET /v1/system/version
-/// Get FEAGI version string
+/// Get the current FEAGI version string.
 #[utoipa::path(
     get,
     path = "/v1/system/version",
@@ -293,8 +282,7 @@ pub async fn get_version(State(_state): State<ApiState>) -> ApiResult<Json<Strin
     Ok(Json(env!("CARGO_PKG_VERSION").to_string()))
 }
 
-/// GET /v1/system/versions
-/// Get detailed version information for all FEAGI crates
+/// Get detailed version information for all FEAGI crates and components.
 #[utoipa::path(
     get,
     path = "/v1/system/versions",
@@ -326,8 +314,7 @@ pub async fn get_versions(State(state): State<ApiState>) -> ApiResult<Json<HashM
     }
 }
 
-/// GET /v1/system/configuration
-/// Get system configuration
+/// Get system configuration including API settings, neuron capacity, and synapse limits.
 #[utoipa::path(
     get,
     path = "/v1/system/configuration",
@@ -351,8 +338,7 @@ pub async fn get_configuration(State(state): State<ApiState>) -> ApiResult<Json<
     Ok(Json(config))
 }
 
-/// GET /v1/system/user_preferences
-/// Get user preferences
+/// Get user preferences including advanced mode, UI magnification, and auto-creation settings.
 #[utoipa::path(
     get,
     path = "/v1/system/user_preferences",
@@ -370,8 +356,7 @@ pub async fn get_user_preferences(State(_state): State<ApiState>) -> ApiResult<J
     Ok(Json(prefs))
 }
 
-/// PUT /v1/system/user_preferences
-/// Update user preferences
+/// Update user preferences for UI customization and behavior settings.
 #[utoipa::path(
     put,
     path = "/v1/system/user_preferences",
@@ -389,8 +374,7 @@ pub async fn put_user_preferences(
     ])))
 }
 
-/// GET /v1/system/cortical_area_types
-/// Get list of cortical area types
+/// Get list of available cortical area types (Sensory, Motor, Custom, Memory, Core).
 #[utoipa::path(
     get,
     path = "/v1/system/cortical_area_types",
@@ -409,8 +393,7 @@ pub async fn get_cortical_area_types_list(State(_state): State<ApiState>) -> Api
     ]))
 }
 
-/// POST /v1/system/enable_visualization_fq_sampler
-/// Enable visualization FQ sampler
+/// Enable the Fire Queue (FQ) sampler for visualization data streaming.
 #[utoipa::path(
     post,
     path = "/v1/system/enable_visualization_fq_sampler",
@@ -432,8 +415,7 @@ pub async fn post_enable_visualization_fq_sampler(
     ])))
 }
 
-/// POST /v1/system/disable_visualization_fq_sampler
-/// Disable visualization FQ sampler
+/// Disable the Fire Queue (FQ) sampler to stop visualization data streaming.
 #[utoipa::path(
     post,
     path = "/v1/system/disable_visualization_fq_sampler",
@@ -455,8 +437,7 @@ pub async fn post_disable_visualization_fq_sampler(
     ])))
 }
 
-/// GET /v1/system/fcl_status
-/// Get FCL manager status
+/// Get Fire Candidate List (FCL) sampler status including frequency and consumer state.
 #[utoipa::path(
     get,
     path = "/v1/system/fcl_status",
@@ -480,8 +461,7 @@ pub async fn get_fcl_status_system(State(state): State<ApiState>) -> ApiResult<J
     Ok(Json(response))
 }
 
-/// POST /v1/system/fcl_reset
-/// Reset the Fire Candidate List
+/// Reset the Fire Candidate List (FCL) to clear all pending fire candidates.
 #[utoipa::path(
     post,
     path = "/v1/system/fcl_reset",
@@ -498,8 +478,7 @@ pub async fn post_fcl_reset_system(State(_state): State<ApiState>) -> ApiResult<
     ])))
 }
 
-/// GET /v1/system/processes
-/// Get list of active processes
+/// Get status of active system processes including burst engine and API server.
 #[utoipa::path(
     get,
     path = "/v1/system/processes",
@@ -524,8 +503,7 @@ pub async fn get_processes(State(state): State<ApiState>) -> ApiResult<Json<Hash
     Ok(Json(processes))
 }
 
-/// GET /v1/system/unique_logs
-/// Get unique log messages
+/// Get collection of unique log messages for debugging and monitoring.
 #[utoipa::path(
     get,
     path = "/v1/system/unique_logs",
@@ -541,8 +519,7 @@ pub async fn get_unique_logs(State(_state): State<ApiState>) -> ApiResult<Json<H
     Ok(Json(response))
 }
 
-/// POST /v1/system/logs
-/// Manage log configuration
+/// Configure logging settings including log level and output destinations.
 #[utoipa::path(
     post,
     path = "/v1/system/logs",
@@ -560,8 +537,7 @@ pub async fn post_logs(
     ])))
 }
 
-/// GET /v1/system/beacon/subscribers
-/// Get beacon subscribers
+/// Get list of all beacon subscribers currently monitoring system events.
 #[utoipa::path(
     get,
     path = "/v1/system/beacon/subscribers",
@@ -574,8 +550,7 @@ pub async fn get_beacon_subscribers(State(_state): State<ApiState>) -> ApiResult
     Ok(Json(Vec::new()))
 }
 
-/// POST /v1/system/beacon/subscribe
-/// Subscribe to beacon
+/// Subscribe to system beacon for event notifications and status updates.
 #[utoipa::path(
     post,
     path = "/v1/system/beacon/subscribe",
@@ -593,8 +568,7 @@ pub async fn post_beacon_subscribe(
     ])))
 }
 
-/// DELETE /v1/system/beacon/unsubscribe
-/// Unsubscribe from beacon
+/// Unsubscribe from system beacon to stop receiving event notifications.
 #[utoipa::path(
     delete,
     path = "/v1/system/beacon/unsubscribe",
@@ -612,8 +586,7 @@ pub async fn delete_beacon_unsubscribe(
     ])))
 }
 
-/// GET /v1/system/global_activity_visualization
-/// Get global activity visualization status
+/// Get global activity visualization configuration including enabled state and frequency.
 #[utoipa::path(
     get,
     path = "/v1/system/global_activity_visualization",
@@ -630,8 +603,7 @@ pub async fn get_global_activity_visualization(State(_state): State<ApiState>) -
     Ok(Json(response))
 }
 
-/// PUT /v1/system/global_activity_visualization
-/// Set global activity visualization
+/// Configure global activity visualization settings and frequency.
 #[utoipa::path(
     put,
     path = "/v1/system/global_activity_visualization",
@@ -649,8 +621,7 @@ pub async fn put_global_activity_visualization(
     ])))
 }
 
-/// POST /v1/system/circuit_library_path
-/// Set circuit library path
+/// Set the file system path for the circuit library storage location.
 #[utoipa::path(
     post,
     path = "/v1/system/circuit_library_path",
@@ -668,8 +639,7 @@ pub async fn post_circuit_library_path(
     ])))
 }
 
-/// GET /v1/system/db/influxdb/test
-/// Test InfluxDB connection
+/// Test connectivity to InfluxDB database for time-series data storage.
 #[utoipa::path(
     get,
     path = "/v1/system/db/influxdb/test",
@@ -686,8 +656,7 @@ pub async fn get_influxdb_test(State(_state): State<ApiState>) -> ApiResult<Json
     Ok(Json(response))
 }
 
-/// POST /v1/system/register
-/// Register system component
+/// Register a new system component or module with FEAGI.
 #[utoipa::path(
     post,
     path = "/v1/system/register",
