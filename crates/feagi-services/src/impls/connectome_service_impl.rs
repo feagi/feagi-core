@@ -247,18 +247,55 @@ impl ConnectomeService for ConnectomeServiceImpl {
     async fn list_cortical_areas(&self) -> ServiceResult<Vec<CorticalAreaInfo>> {
         debug!(target: "feagi-services","Listing all cortical areas");
         
-        let cortical_ids: Vec<String> = {
+        // Optimized: Get all area info in a single lock acquisition instead of N+1 calls
+        let areas = {
             let manager = self.connectome.read();
-            manager.get_cortical_area_ids().into_iter().map(|id| id.as_base_64()).collect()
+            let cortical_ids = manager.get_cortical_area_ids();
+            
+            let mut area_infos = Vec::with_capacity(cortical_ids.len());
+            for cortical_id_typed in cortical_ids {
+                let cortical_id_base64 = cortical_id_typed.as_base_64();
+                
+                if let Some(cortical_idx) = manager.get_cortical_area_index(&cortical_id_typed) {
+                    if let Some(area) = manager.get_cortical_area(cortical_idx) {
+                        let neuron_count = manager.get_neuron_count_in_area(&cortical_id_typed);
+                        let synapse_count = manager.get_synapse_count_in_area(&cortical_id_typed);
+                        let cortical_group = area.get_cortical_group();
+                        
+                        area_infos.push(CorticalAreaInfo {
+                            cortical_id: cortical_id_base64,
+                            cortical_id_s: area.cortical_id.to_string(),
+                            cortical_idx,
+                            name: area.name.clone(),
+                            dimensions: (area.dimensions.width as usize, area.dimensions.height as usize, area.dimensions.depth as usize),
+                            position: area.position.into(),
+                            area_type: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+                            cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
+                            neuron_count,
+                            synapse_count,
+                            firing_threshold: area.firing_threshold.value,
+                            refractory_period: area.refractory_period,
+                            leak_coefficient: area.leak_coefficient,
+                            leak_variability: area.leak_variability,
+                            postsynaptic_current: area.postsynaptic_current,
+                            postsynaptic_current_max: area.postsynaptic_current_max,
+                            depolarization_threshold: area.depolarization_threshold,
+                            burst_engine_active: area.burst_engine_active.load(std::sync::atomic::Ordering::Relaxed),
+                            properties: serde_json::Map::new(), // Skip properties for list (performance)
+                            cortical_subtype: None,
+                            encoding_type: None,
+                            encoding_format: None,
+                            unit_id: None,
+                            group_id: None,
+                            parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
+                        });
+                    }
+                }
+            }
+            area_infos
         };
         
-        let mut areas = Vec::new();
-        for cortical_id in cortical_ids {
-            if let Ok(area_info) = self.get_cortical_area(&cortical_id).await {
-                areas.push(area_info);
-            }
-        }
-        
+        debug!(target: "feagi-services","Listed {} cortical areas", areas.len());
         Ok(areas)
     }
 
