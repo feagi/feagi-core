@@ -1,5 +1,6 @@
 use std::cmp::PartialEq;
 use std::time::Instant;
+use serde::Serialize;
 use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::{stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_pipeline::pipeline_stage::PipelineStage;
@@ -154,6 +155,7 @@ pub(crate) trait PipelineStageRunner {
     /// * `Ok(())` - If all stages were successfully replaced
     /// * `Err(FeagiDataError)` - If stages are incompatible or creation fails
     fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
+        let size = new_pipeline_stage_properties.len();
         verify_pipeline_stage_properties(
             &new_pipeline_stage_properties,
             self.get_fixed_type(),
@@ -196,6 +198,22 @@ pub(crate) trait PipelineStageRunner {
             )));
         }
         Ok(())
+    }
+
+    fn export_as_json(&self, device_group_friendly_name: String, channel_index_override: Option<usize>) -> Result<serde_json::Value, FeagiDataError> {
+        let mut output = serde_json::Map::new();
+        output.insert("friendly_name".to_string(), serde_json::Value::String(device_group_friendly_name));
+        output.insert("channel_index_override".to_string(), serde_json::to_value(channel_index_override).map_err(|err| FeagiDataError::InternalError(err.to_string()))?);
+
+        let mut json_stages: Vec<serde_json::Value> = Vec::new();
+        let stages = self.get_stages();
+        for stage in stages {
+            let stage_properties = stage.create_properties();
+            json_stages.push(serde_json::to_value(&stage_properties).map_err(|err| FeagiDataError::InternalError(err.to_string()))?);
+        };
+        output.insert("pipeline_stages".to_string(), serde_json::Value::Array(json_stages));
+
+        Ok(serde_json::to_value(output).map_err(|err| FeagiDataError::InternalError(err.to_string()))?)
     }
 
     //endregion

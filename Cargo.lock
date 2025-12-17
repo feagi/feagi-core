@@ -2171,6 +2171,7 @@ dependencies = [
  "paste",
  "rayon",
  "serde",
+ "serde_json",
  "tracing",
 ]
 

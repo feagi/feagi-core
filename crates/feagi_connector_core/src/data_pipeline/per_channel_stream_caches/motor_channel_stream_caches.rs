@@ -15,6 +15,8 @@ pub(crate) struct MotorChannelStreamCaches {
     pipeline_runners: Vec<MotorPipelineStageRunner>,
     has_channel_been_updated: Vec<bool>,
     value_updated_callbacks: Vec<FeagiSignal<WrappedIOData>>,
+    friendly_name: String,
+    channel_index_override: Option<CorticalChannelIndex>
 }
 
 impl MotorChannelStreamCaches {
@@ -33,6 +35,8 @@ impl MotorChannelStreamCaches {
             pipeline_runners,
             has_channel_been_updated: vec![false; *number_channels as usize],
             value_updated_callbacks: callbacks,
+            friendly_name: String::new(),
+            channel_index_override: None
         })
     }
 

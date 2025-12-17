@@ -393,6 +393,15 @@ impl MotorDeviceCache {
     pub fn get_neurons(&self) -> &CorticalMappedXYZPNeuronVoxels {
         &self.neuron_data
     }
+
+    pub fn export_registered_motors_as_config_json(&self) -> Result<serde_json::Value, FeagiDataError> {
+        let mut output = serde_json::Map::new();
+        for ((motor_cortical_unit, cortical_group_index), motor_channel_stream_caches) in &self.stream_caches {
+            let motor_name = motor_cortical_unit.get_snake_case_name().to_string();
+            let cortical_group_name = cortical_group_index.to_string();
+
+        };
+    }
     
     // Returns true if data was retrieved
     pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
