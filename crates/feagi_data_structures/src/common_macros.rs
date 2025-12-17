@@ -19,7 +19,8 @@ macro_rules! define_index {
         #[doc = $doc]
         #[repr(transparent)]
         #[derive(
-            Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord
+            Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord,
+            serde::Serialize, serde::Deserialize
         )]
         pub struct $name($inner);
 
@@ -82,7 +83,7 @@ macro_rules! define_index {
 macro_rules! define_nonzero_count {
     ($name:ident, $base:ty, $doc:expr) => {
         #[doc = $doc]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
         pub struct $name {
             value: $base,
         }
@@ -202,7 +203,7 @@ macro_rules! define_xy_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
 
         #[doc = $doc_string]
-        #[derive(Clone, Debug, PartialEq, Copy, Hash, Eq)]
+        #[derive(Clone, Debug, PartialEq, Copy, Hash, Eq, serde::Serialize, serde::Deserialize)]
         pub struct $name {
             pub width: $var_type,
             pub height: $var_type,
@@ -451,7 +452,7 @@ macro_rules! define_xyz_mapping{
 macro_rules! define_xyz_dimension_range {
     ($name:ident, $var_type:ty, $coordinate_type:ty, $friendly_name:expr, $doc:expr) => {
         #[doc = $doc]
-        #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
         pub struct $name {
             pub width: std::ops::Range<$var_type>,
             pub height: std::ops::Range<$var_type>,
