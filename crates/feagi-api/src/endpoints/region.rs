@@ -5,7 +5,7 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json, Path};
 use crate::common::ApiState;
 
 /// GET /v1/region/regions_members

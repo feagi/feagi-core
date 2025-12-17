@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use tracing::{info, warn, debug};
+use tracing::{debug, info, trace, warn};
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
@@ -285,21 +285,35 @@ impl ConnectomeManager {
         let is_power_area = &area.cortical_id == &power_id;
         
         if is_death_area {
-            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=0 to _death area (id={})", area.cortical_id);
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=0 to _death area (id={})",
+                area.cortical_id
+            );
             area.cortical_idx = 0;
         } else if is_power_area {
-            info!("✅ [CORE-AREA] Assigning RESERVED cortical_idx=1 to _power area (id={})", area.cortical_id);
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=1 to _power area (id={})",
+                area.cortical_id
+            );
             area.cortical_idx = 1;
         } else {
             // Regular areas: assign cortical_idx if not set (will be ≥2 due to next_cortical_idx=2 initialization)
             if area.cortical_idx == 0 {
                 area.cortical_idx = self.next_cortical_idx;
                 self.next_cortical_idx += 1;
-                info!("📍 [REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be ≥2)", area.cortical_idx, area.cortical_id.as_base_64());
+                trace!(
+                    target: "feagi-bdu",
+                    "[REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be ≥2)",
+                    area.cortical_idx,
+                    area.cortical_id.as_base_64()
+                );
             } else {
                 // Check for reserved index collision
                 if area.cortical_idx == 0 || area.cortical_idx == 1 {
-                    warn!("❌ Regular area '{}' attempted to use RESERVED cortical_idx={}! Reassigning to next available.", 
+                    warn!(
+                        "Regular area '{}' attempted to use RESERVED cortical_idx={}! Reassigning to next available.",
                         area.cortical_id, area.cortical_idx);
                     area.cortical_idx = self.next_cortical_idx;
                     self.next_cortical_idx += 1;
@@ -334,7 +348,12 @@ impl ConnectomeManager {
         if let Some(ref npu) = self.npu {
             if let Ok(mut npu_lock) = npu.lock() {
                 npu_lock.register_cortical_area(cortical_idx, cortical_id.as_base_64());
-                debug!(target: "feagi-bdu", "  ✓ Registered cortical area idx={} → '{}' in NPU", cortical_idx, cortical_id.as_base_64());
+                trace!(
+                    target: "feagi-bdu",
+                    "Registered cortical area idx={} -> '{}' in NPU",
+                    cortical_idx,
+                    cortical_id.as_base_64()
+                );
             }
         }
         
@@ -885,7 +904,8 @@ impl ConnectomeManager {
         let voxels = area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize;
         let expected_neurons = voxels * per_voxel_cnt as usize;
         
-        tracing::debug!(target: "feagi-bdu", 
+        trace!(
+            target: "feagi-bdu",
             "Creating neurons for area {}: {}x{}x{} voxels × {} neurons/voxel = {} total neurons",
             cortical_id.as_base_64(),
             area.dimensions.width,
@@ -918,7 +938,12 @@ impl ConnectomeManager {
         )
         .map_err(|e| BduError::Internal(format!("NPU neuron creation failed: {}", e)))?;
         
-        info!(target: "feagi-bdu","Created {} neurons for area {} via NPU", neuron_count, cortical_id.as_base_64());
+        trace!(
+            target: "feagi-bdu",
+            "Created {} neurons for area {} via NPU",
+            neuron_count,
+            cortical_id.as_base_64()
+        );
         
         Ok(neuron_count)
     }
@@ -993,7 +1018,15 @@ impl ConnectomeManager {
             z,
         ).map_err(|e| BduError::Internal(format!("Failed to add neuron: {}", e)))?;
         
-        debug!(target: "feagi-bdu", "Created neuron {} in area {} at ({}, {}, {})", neuron_id.0, cortical_id, x, y, z);
+        trace!(
+            target: "feagi-bdu",
+            "Created neuron {} in area {} at ({}, {}, {})",
+            neuron_id.0,
+            cortical_id,
+            x,
+            y,
+            z
+        );
         
         Ok(neuron_id.0 as u64)
     }
@@ -1019,7 +1052,7 @@ impl ConnectomeManager {
         let deleted = npu_lock.delete_neuron(neuron_id as u32);
         
         if deleted {
-            debug!(target: "feagi-bdu","Deleted neuron {}", neuron_id);
+            trace!(target: "feagi-bdu", "Deleted neuron {}", neuron_id);
         }
         
         Ok(deleted)
@@ -1134,19 +1167,30 @@ impl ConnectomeManager {
                         )?
                     }
                     _ => {
-                        debug!(target: "feagi-bdu","Morphology {} not yet implemented, skipping", morphology_id);
+                        trace!(
+                            target: "feagi-bdu",
+                            "Morphology {} not yet implemented, skipping",
+                            morphology_id
+                        );
                         0
                     }
                 };
                 
                 total_synapses += synapse_count;
                 
-                debug!(target: "feagi-bdu","Applied {} morphology: {} -> {} = {} synapses",
+                trace!(
+                    target: "feagi-bdu",
+                    "Applied {} morphology: {} -> {} = {} synapses",
                     morphology_id, src_cortical_id, dst_cortical_id, synapse_count);
             }
         }
         
-        info!(target: "feagi-bdu","Created {} synapses for area {} via NPU", total_synapses, src_cortical_id);
+        trace!(
+            target: "feagi-bdu",
+            "Created {} synapses for area {} via NPU",
+            total_synapses,
+            src_cortical_id
+        );
         
         Ok(total_synapses)
     }

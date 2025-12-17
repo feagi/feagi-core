@@ -38,7 +38,7 @@ use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
 use feagi_neural::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, trace, warn};
 
 // Import Runtime trait and StdRuntime for backward compatibility
 use feagi_runtime::{Runtime, NeuronStorage, SynapseStorage};
@@ -1026,7 +1026,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
         cortical_id: &CorticalID,
         xyzp_data: &[(u32, u32, u32, f32)],
     ) -> usize {
-        use tracing::{warn, error};
+        use tracing::error;
         
         let cortical_id_str = cortical_id.to_string();
         let cortical_id_base64 = cortical_id.as_base_64();
@@ -1070,9 +1070,49 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
             self.inject_sensory_with_potentials(&neuron_potential_pairs);
         }
         
-        // Only log if there's an issue
+        // Only log if there's an issue.
+        //
+        // IMPORTANT: NPU is performance-sensitive. Any extra diagnostics must be gated behind
+        // tracing level checks so we don't do O(n) work (min/max scans, neuron counts, allocations)
+        // on every missed injection when TRACE isn't enabled.
         if found_count == 0 {
-            warn!("[NPU] No neurons found for injection! Area: '{}', coords: {}", cortical_id_str, coords.len());
+            if tracing::enabled!(tracing::Level::TRACE) {
+                // Root-cause diagnostics: report coordinate ranges so callers can compare against genome bbx/bby/bbz.
+                let (min_x, max_x, min_y, max_y, min_z, max_z) = coords.iter().fold(
+                    (u32::MAX, 0u32, u32::MAX, 0u32, u32::MAX, 0u32),
+                    |(min_x, max_x, min_y, max_y, min_z, max_z), &(x, y, z)| {
+                        (
+                            min_x.min(x),
+                            max_x.max(x),
+                            min_y.min(y),
+                            max_y.max(y),
+                            min_z.min(z),
+                            max_z.max(z),
+                        )
+                    },
+                );
+                let area_neuron_count = self
+                    .neuron_storage
+                    .read()
+                    .unwrap()
+                    .get_neuron_count(cortical_area);
+                let coord_sample: Vec<(u32, u32, u32)> = coords.iter().copied().take(5).collect();
+
+                trace!(
+                    "[NPU] No neurons found for injection! Area: '{}', cortical_area_idx={}, coords={}, x=[{}..{}], y=[{}..{}], z=[{}..{}], area_neurons={}, sample={:?}",
+                    cortical_id_str,
+                    cortical_area,
+                    coords.len(),
+                    min_x,
+                    max_x,
+                    min_y,
+                    max_y,
+                    min_z,
+                    max_z,
+                    area_neuron_count,
+                    coord_sample
+                );
+            }
         }
 
         found_count

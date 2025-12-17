@@ -41,7 +41,7 @@ use tokio::runtime::Runtime;
 // Import NonBlockingTransport trait for UDP transport methods
 #[cfg(feature = "udp-transport")]
 use crate::nonblocking::transport::NonBlockingTransport;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, trace, warn};
 
 /// Stream state for dynamic start/stop
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1377,7 +1377,7 @@ impl PNS {
         static TRANSPORT_LOG_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let log_count = TRANSPORT_LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if log_count % 100 == 0 {
-            info!("[PNS] 🔍 Active viz transports: {:?}", active_transports);
+            trace!("[PNS] Active viz transports: {:?}", active_transports);
         }
         
         let mut published_to = Vec::new();
@@ -1428,7 +1428,7 @@ impl PNS {
             static LOG_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let count = LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             if count % 100 == 0 {  // Log every 100th frame to avoid spam
-                info!("[PNS] 📡 Published visualization to: {:?}", published_to);
+                trace!("[PNS] Published visualization to: {:?}", published_to);
             }
             Ok(())
         } else if !errors.is_empty() {

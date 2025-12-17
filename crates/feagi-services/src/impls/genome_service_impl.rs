@@ -243,8 +243,17 @@ impl GenomeService for GenomeServiceImpl {
             let cortical_area_count = manager.get_cortical_area_count();
             let brain_region_ids = manager.get_brain_region_ids();
             let brain_region_count = brain_region_ids.len();
-            info!(target: "feagi-services", "Reading genome info: {} cortical areas, {} brain regions", cortical_area_count, brain_region_count);
-            info!(target: "feagi-services", "Brain region IDs: {:?}", brain_region_ids.iter().take(10).collect::<Vec<_>>());
+            trace!(
+                target: "feagi-services",
+                "Reading genome info: {} cortical areas, {} brain regions",
+                cortical_area_count,
+                brain_region_count
+            );
+            trace!(
+                target: "feagi-services",
+                "Brain region IDs: {:?}",
+                brain_region_ids.iter().take(10).collect::<Vec<_>>()
+            );
             (cortical_area_count, brain_region_count)
         }; // Lock dropped here
         

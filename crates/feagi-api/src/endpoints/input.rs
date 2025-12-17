@@ -5,7 +5,7 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json};
 use crate::common::ApiState;
 
 /// Get vision input configuration and settings.

@@ -6,7 +6,7 @@
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
 use crate::common::ApiResult;
-use crate::common::{State, Json, Path, Query};
+use crate::common::{State, Json, Path};
 use crate::common::ApiState;
 
 /// Get the current plasticity queue depth (number of pending plasticity operations).

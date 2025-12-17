@@ -25,7 +25,7 @@ use feagi_neural::types::{Precision, QuantizationSpec};
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
 use crate::models::{CorticalArea, CorticalID};
-use tracing::{info, warn, debug, error};
+use tracing::{debug, error, info, trace, warn};
 
 /// Development stage tracking
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,7 +147,12 @@ impl Neuroembryogenesis {
             match neurons_created {
                 Ok(count) => {
                     total_neurons += count as usize;
-                    info!(target: "feagi-bdu", "  ✓ Created {} neurons for area {}", count, area.cortical_id.as_base_64());
+                    trace!(
+                        target: "feagi-bdu",
+                        "Created {} neurons for area {}",
+                        count,
+                        area.cortical_id.as_base_64()
+                    );
                 }
                 Err(e) => {
                     error!(target: "feagi-bdu", "  ❌ FATAL: Failed to create neurons for {}: {}", area.cortical_id.as_base_64(), e);
@@ -178,7 +183,12 @@ impl Neuroembryogenesis {
             match synapses_created {
                 Ok(count) => {
                     total_synapses += count as usize;
-                    info!(target: "feagi-bdu", "  ✓ Created {} synapses for area {}", count, area.cortical_id);
+                    trace!(
+                        target: "feagi-bdu",
+                        "Created {} synapses for area {}",
+                        count,
+                        area.cortical_id
+                    );
                 }
                 Err(e) => {
                     warn!(target: "feagi-bdu", "  ⚠️ Failed to create synapses for {}: {}", area.cortical_id, e);
@@ -297,7 +307,7 @@ impl Neuroembryogenesis {
                 p.progress = progress_pct;
             });
             
-            debug!(target: "feagi-bdu","  ✓ Created cortical area: {} ({})", cortical_id, area.name);
+            trace!(target: "feagi-bdu", "Created cortical area: {} ({})", cortical_id, area.name);
         }
         
         // Ensure brain regions structure exists (auto-generate if missing)
@@ -647,7 +657,12 @@ impl Neuroembryogenesis {
             match neurons_created {
                 Ok(count) => {
                     total_neurons_created += count as usize;
-                    info!(target: "feagi-bdu","  Created {} neurons for area {}", count, cortical_id_str);
+                    trace!(
+                        target: "feagi-bdu",
+                        "Created {} neurons for area {}",
+                        count,
+                        cortical_id_str
+                    );
                 }
                 Err(e) => {
                     // If NPU not connected, calculate expected count
@@ -669,7 +684,7 @@ impl Neuroembryogenesis {
         
         // Compare with genome stats (info only - stats may count only innate neurons while we create all voxels)
         if expected_neurons > 0 && total_neurons_created != expected_neurons {
-            debug!(target: "feagi-bdu",
+            trace!(target: "feagi-bdu",
                 created_neurons = total_neurons_created,
                 genome_stats_innate = expected_neurons,
                 "Neuron creation complete (genome stats may only count innate neurons)"
@@ -707,7 +722,7 @@ impl Neuroembryogenesis {
                 .unwrap_or(false);
             
             if !has_dstmap {
-                debug!(target: "feagi-bdu","  No dstmap for area {}", &src_area.cortical_id);
+                trace!(target: "feagi-bdu", "No dstmap for area {}", &src_area.cortical_id);
                 continue;
             }
             
@@ -725,7 +740,12 @@ impl Neuroembryogenesis {
             match synapses_created {
                 Ok(count) => {
                     total_synapses_created += count as usize;
-                    info!(target: "feagi-bdu","  Created {} synapses for area {}", count, src_cortical_id_str);
+                    trace!(
+                        target: "feagi-bdu",
+                        "Created {} synapses for area {}",
+                        count,
+                        src_cortical_id_str
+                    );
                 }
                 Err(e) => {
                     // If NPU not connected, estimate count

@@ -20,8 +20,6 @@ use wasm_bindgen_futures::{spawn_local, JsFuture};
 use wasm_bindgen::prelude::*;
 #[cfg(feature = "wasm")]
 use js_sys::Promise;
-#[cfg(feature = "wasm")]
-use web_sys::Window;
 
 /// The WASM async runtime using wasm-bindgen-futures.
 /// 

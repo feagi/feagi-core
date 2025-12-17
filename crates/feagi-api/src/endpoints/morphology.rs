@@ -6,7 +6,7 @@
 // Removed - using crate::common::State instead
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, BTreeMap};
-use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json, Path};
 use crate::common::ApiState;
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]

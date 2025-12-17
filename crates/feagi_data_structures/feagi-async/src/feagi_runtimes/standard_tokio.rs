@@ -105,7 +105,7 @@ impl FeagiAsyncRuntime for TokioHandle {
         Box::pin(tokio::time::sleep(duration))
     }
 
-    fn try_block_on<F, T>(&self, future: F) -> Result<T, crate::BlockOnError>
+    fn try_block_on<F, T>(&self, _future: F) -> Result<T, crate::BlockOnError>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,

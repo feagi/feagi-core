@@ -12,7 +12,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::DynamicNPU;
-use crate::burst_loop_runner::{VisualizationPublisher, MotorPublisher, RawFireQueueSnapshot};
+use crate::burst_loop_runner::{MotorPublisher, VisualizationPublisher};
 use feagi_async::FeagiAsyncRuntime;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -31,11 +31,11 @@ pub async fn async_burst_loop<R: FeagiAsyncRuntime>(
     npu: Arc<Mutex<DynamicNPU>>,
     frequency_hz: Arc<Mutex<f64>>,
     running: Arc<AtomicBool>,
-    viz_publisher: Option<Arc<dyn VisualizationPublisher>>,
-    motor_publisher: Option<Arc<dyn MotorPublisher>>,
-    motor_subscriptions: Arc<ParkingLotRwLock<AHashMap<String, ahash::AHashSet<String>>>>,
+    _viz_publisher: Option<Arc<dyn VisualizationPublisher>>,
+    _motor_publisher: Option<Arc<dyn MotorPublisher>>,
+    _motor_subscriptions: Arc<ParkingLotRwLock<AHashMap<String, ahash::AHashSet<String>>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>,
-    parameter_queue: ParameterUpdateQueue,
+    _parameter_queue: ParameterUpdateQueue,
 ) {
     info!("[ASYNC-BURST-LOOP] Starting async burst loop");
     
@@ -46,12 +46,12 @@ pub async fn async_burst_loop<R: FeagiAsyncRuntime>(
         
         // Process burst
         let burst_result = {
-            let mut npu_guard = npu.lock().unwrap();
+            let npu_guard = npu.lock().unwrap();
             npu_guard.process_burst()
         };
         
         match burst_result {
-            Ok(result) => {
+            Ok(_result) => {
                 burst_num += 1;
                 cached_burst_count.store(burst_num, Ordering::Relaxed);
                 

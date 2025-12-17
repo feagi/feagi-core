@@ -27,7 +27,7 @@ use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
 
@@ -644,11 +644,14 @@ fn burst_loop(
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
     info!(
-        "[{}] [BURST-LOOP] 🚀 Starting main loop at {:.2} Hz",
+        "[{}] [BURST-LOOP] Starting main loop at {:.2} Hz",
         timestamp, initial_freq
     );
     
-    info!("[BURST-LOOP] 🔍 DIAGNOSTIC: Entering while loop with running={}", running.load(Ordering::Acquire));
+    trace!(
+        "[BURST-LOOP] Entering while loop with running={}",
+        running.load(Ordering::Acquire)
+    );
 
     let mut burst_num = 0u64;
     let mut last_stats_time = Instant::now();
@@ -661,7 +664,7 @@ fn burst_loop(
         
         // DIAGNOSTIC: Log that we're alive
         if burst_num % 100 == 0 {
-            info!("[BURST-LOOP] ✅ Burst {} starting (loop is alive)", burst_num);
+            trace!("[BURST-LOOP] Burst {} starting (loop is alive)", burst_num);
         }
 
         // Track actual burst interval
@@ -689,14 +692,21 @@ fn burst_loop(
         
         let lock_start = Instant::now();
         if burst_num < 5 || burst_num % 100 == 0 {
-            info!("🔍 [BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...", burst_num);
+            trace!(
+                "[BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...",
+                burst_num
+            );
         }
         
         let should_exit = {
             let mut npu_lock = npu.lock().unwrap();
             let lock_acquired = Instant::now();
             if burst_num < 5 || burst_num % 100 == 0 {
-                info!("🔍 [BURST-TIMING] Burst {}: NPU lock acquired in {:?}", burst_num, lock_acquired.duration_since(lock_start));
+                trace!(
+                    "[BURST-TIMING] Burst {}: NPU lock acquired in {:?}",
+                    burst_num,
+                    lock_acquired.duration_since(lock_start)
+                );
             }
             
             // Check flag again after acquiring lock (in case shutdown happened during lock wait)
@@ -770,7 +780,7 @@ fn burst_loop(
                 }
                 
                 let process_start = Instant::now();
-                debug!("🔍 [BURST-TIMING] Starting process_burst()...");
+                debug!("[BURST-TIMING] Starting process_burst()...");
                 
                 match npu_lock.process_burst() {
                     Ok(result) => {
@@ -778,8 +788,12 @@ fn burst_loop(
                         let duration = process_done.duration_since(process_start);
                         
                         if burst_num < 5 || burst_num % 100 == 0 {
-                            info!("🔍 [BURST-TIMING] Burst {}: process_burst() completed in {:?}, {} neurons fired", 
-                                burst_num, duration, result.neuron_count);
+                            trace!(
+                                "[BURST-TIMING] Burst {}: process_burst() completed in {:?}, {} neurons fired",
+                                burst_num,
+                                duration,
+                                result.neuron_count
+                            );
                         }
                         
                         total_neurons_fired += result.neuron_count;
@@ -800,7 +814,7 @@ fn burst_loop(
         };
         
         if burst_num < 5 || burst_num % 100 == 0 {
-            info!("🔍 [BURST-TIMING] Burst {}: NPU lock RELEASED", burst_num);
+            trace!("[BURST-TIMING] Burst {}: NPU lock RELEASED", burst_num);
         }
         
         // Exit if shutdown was requested
@@ -844,22 +858,36 @@ fn burst_loop(
         let needs_fire_data = has_shm_writer || should_publish_viz || needs_motor;
         
         if burst_num % 100 == 0 {
-            info!("[BURST-LOOP] 🔍 Sampling conditions: needs_fire_data={} (shm={}, viz={}, motor={})",
-                  needs_fire_data, has_shm_writer, should_publish_viz, needs_motor);
+            trace!(
+                "[BURST-LOOP] Sampling conditions: needs_fire_data={} (shm={}, viz={}, motor={})",
+                needs_fire_data,
+                has_shm_writer,
+                should_publish_viz,
+                needs_motor
+            );
         }
         
         let shared_fire_data_opt = if needs_fire_data {
             // Force sample FQ only when we're going to use it (avoid wasted work!)
             let sample_start = Instant::now();
-            debug!("🔍 [BURST-TIMING] Sampling fire queue (shared for viz+motor)...");
+            debug!("[BURST-TIMING] Sampling fire queue (shared for viz+motor)...");
             let fire_data_opt = npu.lock().unwrap().force_sample_fire_queue();
             let sample_done = Instant::now();
-            debug!("🔍 [BURST-TIMING] Fire queue sampling completed in {:?}", sample_done.duration_since(sample_start));
+            debug!(
+                "[BURST-TIMING] Fire queue sampling completed in {:?}",
+                sample_done.duration_since(sample_start)
+            );
             
             if burst_num % 100 == 0 {
-                info!("[BURST-LOOP] 🔍 Fire queue sample result: has_data={}", fire_data_opt.is_some());
+                trace!(
+                    "[BURST-LOOP] Fire queue sample result: has_data={}",
+                    fire_data_opt.is_some()
+                );
                 if let Some(ref data) = fire_data_opt {
-                    info!("[BURST-LOOP] 🔍   Fire data contains {} cortical areas", data.len());
+                    trace!(
+                        "[BURST-LOOP] Fire data contains {} cortical areas",
+                        data.len()
+                    );
                 }
             }
             
@@ -920,7 +948,11 @@ fn burst_loop(
                         
                         let count = PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         if count % 30 == 0 {
-                            info!("[BURST-LOOP] 📊 Viz handoff #{}: {} neurons → PNS (serialization off-thread)", count, total_neurons);
+                            trace!(
+                                "[BURST-LOOP] Viz handoff #{}: {} neurons -> PNS (serialization off-thread)",
+                                count,
+                                total_neurons
+                            );
                         }
 
                         if let Err(e) = publisher.publish_raw_fire_queue(raw_snapshot.clone()) {
@@ -951,7 +983,7 @@ fn burst_loop(
             fire_data_arc_opt  // Return Arc for motor reuse
         } else {
             if burst_num % 100 == 0 {
-                info!("[BURST-LOOP] 🔍 Fire queue sampling SKIPPED (no consumers need data)");
+                trace!("[BURST-LOOP] Fire queue sampling skipped (no consumers need data)");
             }
             None  // No fire data needed
         }; // Assign to shared_fire_data_opt
@@ -961,8 +993,11 @@ fn burst_loop(
         
         // CRITICAL: Log motor publisher state every 100 bursts (using INFO to guarantee visibility)
         if burst_num % 100 == 0 {
-            info!("[BURST-LOOP] 🎮 MOTOR PUBLISHER STATE: has_publisher={}, has_shm={}", 
-                   has_motor_publisher, has_motor_shm);
+            trace!(
+                "[BURST-LOOP] MOTOR PUBLISHER STATE: has_publisher={}, has_shm={}",
+                has_motor_publisher,
+                has_motor_shm
+            );
         }
         
         if needs_motor {
@@ -1004,11 +1039,15 @@ fn burst_loop(
                 // DEBUG: Log subscription state every 30 bursts
                 if burst_num % 30 == 0 {
                     if subscriptions.is_empty() {
-                        info!("[BURST-LOOP] 🎮 DEBUG: No motor subscriptions");
+                        trace!("[BURST-LOOP] No motor subscriptions");
                     } else {
-                        info!("[BURST-LOOP] 🎮 DEBUG: {} motor subscriptions", subscriptions.len());
+                        trace!("[BURST-LOOP] {} motor subscriptions", subscriptions.len());
                         for (agent_id, cortical_ids) in subscriptions.iter() {
-                            info!("[BURST-LOOP] 🎮 DEBUG:   Agent '{}' → {:?}", agent_id, cortical_ids);
+                            trace!(
+                                "[BURST-LOOP] Agent '{}' -> {:?}",
+                                agent_id,
+                                cortical_ids
+                            );
                         }
                     }
                 }

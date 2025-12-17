@@ -134,7 +134,6 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::visualization;
     use crate::endpoints::monitoring;
     use crate::endpoints::evolution;
-    use crate::endpoints::snapshot;
     use crate::endpoints::network;
     
     Router::new()

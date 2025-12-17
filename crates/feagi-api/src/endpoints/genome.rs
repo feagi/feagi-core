@@ -6,7 +6,7 @@
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
 use tracing::info;
-use crate::common::{ApiError, ApiResult, State, Json, Query, Path};
+use crate::common::{ApiError, ApiResult, State, Json, Query};
 use crate::common::ApiState;
 use feagi_services::types::LoadGenomeParams;
 
