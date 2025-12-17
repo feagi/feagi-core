@@ -8,7 +8,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json};
 use crate::common::ApiState;
 
 // ============================================================================

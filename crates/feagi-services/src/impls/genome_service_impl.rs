@@ -16,7 +16,7 @@ use feagi_burst_engine::ParameterUpdateQueue;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::collections::HashMap;
-use tracing::{info, warn, debug};
+use tracing::{info, trace, warn};
 use feagi_bdu::neuroembryogenesis::Neuroembryogenesis;
 use serde_json::Value;
 use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea, CorticalAreaDimensions};
@@ -235,7 +235,7 @@ impl GenomeService for GenomeServiceImpl {
     }
 
     async fn get_genome_info(&self) -> ServiceResult<GenomeInfo> {
-        debug!(target: "feagi-services", "Getting genome info");
+        trace!(target: "feagi-services", "Getting genome info");
         
         // CRITICAL: Minimize lock scope - drop lock immediately after reading values
         let (cortical_area_count, brain_region_count) = {
@@ -282,7 +282,7 @@ impl GenomeService for GenomeServiceImpl {
     }
 
     async fn validate_genome(&self, json_str: String) -> ServiceResult<bool> {
-        debug!(target: "feagi-services", "Validating genome JSON");
+        trace!(target: "feagi-services", "Validating genome JSON");
         
         // Parse genome
         let genome = feagi_evo::load_genome_from_json(&json_str)
@@ -558,7 +558,13 @@ info!(target: "feagi-services", "[FAST-UPDATE] Parameter-only update for {}", co
                         parameter_name: param_name.clone(),
                         value: value.clone(),
                     });
-                    debug!(target: "feagi-services", "[PARAM-QUEUE] Queued {}={} for area {}", param_name, value, cortical_id);
+                    trace!(
+                        target: "feagi-services",
+                        "[PARAM-QUEUE] Queued {}={} for area {}",
+                        param_name,
+                        value,
+                        cortical_id
+                    );
                 }
             }
             info!(target: "feagi-services", "[FAST-UPDATE] Queued parameter updates (will apply in next burst)");

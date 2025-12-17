@@ -13,6 +13,7 @@ pub mod http {
 }
 #[cfg(feature = "zmq")]
 pub mod zmq;
+#[cfg(not(feature = "http"))]
 pub mod wasm;
 
 

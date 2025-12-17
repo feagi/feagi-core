@@ -65,7 +65,7 @@ pub fn create_http_server(state: ApiState) -> Router {
         
         // Catch-all route for debugging unmatched requests
         .fallback(|| async {
-            tracing::warn!(target: "feagi-api", "⚠️ Unmatched request - 404 Not Found");
+            tracing::warn!(target: "feagi-api", "Unmatched request - 404 Not Found");
             (StatusCode::NOT_FOUND, "404 Not Found")
         })
         
@@ -80,7 +80,7 @@ pub fn create_http_server(state: ApiState) -> Router {
                 .make_span_with(|request: &axum::http::Request<_>| {
                     tracing::span!(
                         target: "feagi-api",
-                        tracing::Level::DEBUG,
+                        tracing::Level::TRACE,
                         "request",
                         method = %request.method(),
                         uri = %request.uri(),
@@ -88,12 +88,12 @@ pub fn create_http_server(state: ApiState) -> Router {
                     )
                 })
                 .on_request(|request: &axum::http::Request<_>, _span: &tracing::Span| {
-                    tracing::debug!(target: "feagi-api", "📥 Incoming request: {} {}", request.method(), request.uri());
+                    tracing::trace!(target: "feagi-api", "Incoming request: {} {}", request.method(), request.uri());
                 })
                 .on_response(|response: &axum::http::Response<_>, latency: std::time::Duration, span: &tracing::Span| {
-                    tracing::debug!(
+                    tracing::trace!(
                         target: "feagi-api",
-                        "📤 Response: status={}, latency={:?}",
+                        "Response: status={}, latency={:?}",
                         response.status(),
                         latency
                     );
@@ -107,7 +107,7 @@ pub fn create_http_server(state: ApiState) -> Router {
                     tracing::trace!(target: "feagi-api", "Stream ended, duration={:?}", stream_duration);
                 })
                 .on_failure(|_error: tower_http::classify::ServerErrorsFailureClass, latency: std::time::Duration, _span: &tracing::Span| {
-                    tracing::error!(target: "feagi-api", "❌ Request failed, latency={:?}", latency);
+                    tracing::error!(target: "feagi-api", "Request failed, latency={:?}", latency);
                 })
         )
 }
@@ -520,7 +520,7 @@ async fn log_request_response_bodies(
                 // Log request body if it's JSON
                 if let Ok(body_str) = String::from_utf8(bytes.to_vec()) {
                     if !body_str.is_empty() {
-                        tracing::debug!(target: "feagi-api", "📥 Request body: {}", body_str);
+                        tracing::trace!(target: "feagi-api", "Request body: {}", body_str);
                     }
                 }
                 bytes
@@ -549,7 +549,7 @@ async fn log_request_response_bodies(
             if bytes.len() < 10000 {  // Only log responses < 10KB
                 if let Ok(body_str) = String::from_utf8(bytes.to_vec()) {
                     if !body_str.is_empty() && body_str.starts_with('{') {
-                        tracing::debug!(target: "feagi-api", "📤 Response body: {}", body_str);
+                        tracing::trace!(target: "feagi-api", "Response body: {}", body_str);
                     }
                 }
             }

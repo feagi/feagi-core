@@ -17,7 +17,7 @@ use feagi_bdu::models::CorticalAreaExt;
 use feagi_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use tracing::debug;
+use tracing::trace;
 
 /// Default implementation of AnalyticsService
 pub struct AnalyticsServiceImpl {
@@ -40,7 +40,7 @@ impl AnalyticsServiceImpl {
 #[async_trait]
 impl AnalyticsService for AnalyticsServiceImpl {
     async fn get_system_health(&self) -> ServiceResult<SystemHealth> {
-        debug!(target: "feagi-services","Getting system health");
+        trace!(target: "feagi-services", "Getting system health");
         
         let neuron_count = self.get_total_neuron_count().await?;
         let manager = self.connectome.read();
@@ -75,7 +75,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
         &self,
         cortical_id: &str,
     ) -> ServiceResult<CorticalAreaStats> {
-        debug!(target: "feagi-services","Getting cortical area stats: {}", cortical_id);
+        trace!(target: "feagi-services", "Getting cortical area stats: {}", cortical_id);
         
         let manager = self.connectome.read();
         let neuron_count = manager.get_neuron_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
@@ -93,7 +93,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
     }
 
     async fn get_all_cortical_area_stats(&self) -> ServiceResult<Vec<CorticalAreaStats>> {
-        debug!(target: "feagi-services","Getting all cortical area stats");
+        trace!(target: "feagi-services", "Getting all cortical area stats");
         
         let all_stats = self.connectome.read().get_all_area_stats();
         
@@ -116,7 +116,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
         source_area: &str,
         target_area: &str,
     ) -> ServiceResult<ConnectivityStats> {
-        debug!(target: "feagi-services",
+        trace!(target: "feagi-services",
             "Getting connectivity stats: {} -> {}",
             source_area,
             target_area
@@ -192,28 +192,28 @@ impl AnalyticsService for AnalyticsServiceImpl {
     }
 
     async fn get_total_neuron_count(&self) -> ServiceResult<usize> {
-        debug!(target: "feagi-services","Getting total neuron count");
+        trace!(target: "feagi-services", "Getting total neuron count");
         
         let count = self.connectome.read().get_neuron_count();
         Ok(count)
     }
 
     async fn get_total_synapse_count(&self) -> ServiceResult<usize> {
-        debug!(target: "feagi-services","Getting total synapse count");
+        trace!(target: "feagi-services", "Getting total synapse count");
         
         let count = self.connectome.read().get_synapse_count();
         Ok(count)
     }
 
     async fn get_populated_areas(&self) -> ServiceResult<Vec<(String, usize)>> {
-        debug!(target: "feagi-services","Getting populated areas");
+        trace!(target: "feagi-services", "Getting populated areas");
         
         let areas = self.connectome.read().get_populated_areas();
         Ok(areas)
     }
 
     async fn get_neuron_density(&self, cortical_id: &str) -> ServiceResult<f32> {
-        debug!(target: "feagi-services","Getting neuron density for area: {}", cortical_id);
+        trace!(target: "feagi-services", "Getting neuron density for area: {}", cortical_id);
         
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
@@ -224,21 +224,21 @@ impl AnalyticsService for AnalyticsServiceImpl {
     }
 
     async fn is_brain_initialized(&self) -> ServiceResult<bool> {
-        debug!(target: "feagi-services","Checking if brain is initialized");
+        trace!(target: "feagi-services", "Checking if brain is initialized");
         
         let initialized = self.connectome.read().is_initialized();
         Ok(initialized)
     }
 
     async fn is_burst_engine_ready(&self) -> ServiceResult<bool> {
-        debug!(target: "feagi-services","Checking if burst engine is ready");
+        trace!(target: "feagi-services", "Checking if burst engine is ready");
         
         let ready = self.connectome.read().has_npu();
         Ok(ready)
     }
 
     async fn get_regular_neuron_count(&self) -> ServiceResult<usize> {
-        debug!(target: "feagi-services","Getting regular (non-memory) neuron count");
+        trace!(target: "feagi-services", "Getting regular (non-memory) neuron count");
         
         let manager = self.connectome.read();
         let mut regular_count = 0;
@@ -257,7 +257,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
     }
 
     async fn get_memory_neuron_count(&self) -> ServiceResult<usize> {
-        debug!(target: "feagi-services","Getting memory neuron count");
+        trace!(target: "feagi-services", "Getting memory neuron count");
         
         let manager = self.connectome.read();
         let mut memory_count = 0;
