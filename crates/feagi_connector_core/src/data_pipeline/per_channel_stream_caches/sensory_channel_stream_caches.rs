@@ -142,7 +142,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(Box<dyn PipelineStageProperties>)` - The stage's properties
     /// * `Err(FeagiDataError)` - If channel or stage index is out of bounds
-    pub fn try_get_single_stage_properties(&self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+    pub fn try_get_single_stage_properties(&self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         pipeline_runner.try_get_single_stage_properties(pipeline_stage_property_index)
     }
@@ -155,7 +155,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(Vec<Box<dyn PipelineStageProperties>>)` - Properties for all stages in order
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    pub fn get_all_stage_properties(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
+    pub fn get_all_stage_properties(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(pipeline_runner.get_all_stage_properties())
     }
@@ -170,7 +170,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the properties were successfully updated
     /// * `Err(FeagiDataError)` - If channel/stage index is invalid or update fails
-    pub fn try_update_single_stage_properties(&mut self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, replacing_property: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    pub fn try_update_single_stage_properties(&mut self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, replacing_property: PipelineStageProperties) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_update_single_stage_properties(pipeline_stage_property_index, replacing_property)
     }
@@ -184,7 +184,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If all properties were successfully updated
     /// * `Err(FeagiDataError)` - If channel is invalid, count mismatch, or update fails
-    pub fn try_update_all_stage_properties(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    pub fn try_update_all_stage_properties(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_update_all_stage_properties(new_pipeline_stage_properties)
     }
@@ -199,7 +199,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the stage was successfully replaced
     /// * `Err(FeagiDataError)` - If indices are invalid or types are incompatible
-    pub fn try_replace_single_stage(&mut self, cortical_channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    pub fn try_replace_single_stage(&mut self, cortical_channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_replace_single_stage(replacing_at_index, new_pipeline_stage_properties)
     }
@@ -213,7 +213,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If all stages were successfully replaced
     /// * `Err(FeagiDataError)` - If channel is invalid or stages are incompatible
-    pub fn try_replace_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    pub fn try_replace_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
     }

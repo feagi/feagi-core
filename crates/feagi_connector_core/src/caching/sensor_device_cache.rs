@@ -11,7 +11,6 @@ use feagi_data_structures::genomic::SensoryCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use crate::data_pipeline::per_channel_stream_caches::SensoryChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_pipeline::stage_properties::*;
 use crate::data_types::*;
 use crate::data_types::descriptors::*;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -89,7 +88,7 @@ macro_rules! sensor_unit_functions {
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
                 stage_index: PipelineStagePropertyIndex
-            ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
+            ) -> Result<PipelineStageProperties, FeagiDataError>
             {
                 const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
                 let stage = self.try_get_single_stage_properties(SENSOR_UNIT_TYPE, group, channel_index, stage_index)?;
@@ -100,7 +99,7 @@ macro_rules! sensor_unit_functions {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
+            ) -> Result<Vec<PipelineStageProperties>, FeagiDataError>
             {
                 const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
                 let stages = self.try_get_all_stage_properties(SENSOR_UNIT_TYPE, group, channel_index)?;
@@ -112,7 +111,7 @@ macro_rules! sensor_unit_functions {
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
                 pipeline_stage_property_index: PipelineStagePropertyIndex,
-                updating_property: Box<dyn PipelineStageProperties + Sync + Send>
+                updating_property: PipelineStageProperties
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
@@ -124,7 +123,7 @@ macro_rules! sensor_unit_functions {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
-                updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+                updated_pipeline_stage_properties: Vec<PipelineStageProperties>
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
@@ -137,7 +136,7 @@ macro_rules! sensor_unit_functions {
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
                 pipeline_stage_property_index: PipelineStagePropertyIndex,
-                replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
+                replacing_property: PipelineStageProperties
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
@@ -149,7 +148,7 @@ macro_rules! sensor_unit_functions {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
-                new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+                new_pipeline_stage_properties: Vec<PipelineStageProperties>
             ) -> Result<(), FeagiDataError>
             {
                 const SENSOR_UNIT_TYPE: SensoryCorticalUnit = SensoryCorticalUnit::$cortical_type_key_name;
@@ -320,8 +319,10 @@ macro_rules! sensor_unit_functions {
                 let initial_val: WrappedIOData = WrappedIOType::SegmentedImageFrame(Some(segmented_image_properties)).create_blank_data_of_type()?;
                 self.register(SensoryCorticalUnit::$sensory_unit, group, encoder, number_channels, initial_val)?;
 
+                let stage_properties = PipelineStageProperties::new_image_frame_segmentator(input_image_properties.clone(), segmented_image_properties.clone(), initial_gaze.clone());
+
                 for channel_index in 0..*number_channels {
-                    let segmentator_pipeline = vec![ImageFrameSegmentatorStageProperties::new_box(input_image_properties.clone(), segmented_image_properties.clone(), initial_gaze.clone())];
+                    let segmentator_pipeline = vec![stage_properties.clone()];
                     self.[<$snake_case_name _replace_all_stages>](group, channel_index.into(), segmentator_pipeline);
                 }
                 Ok(())
@@ -534,36 +535,36 @@ impl SensorDeviceCache {
 
     fn try_get_single_stage_properties(&self, sensor_type: SensoryCorticalUnit,
                                        group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex,
-                                       pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties+Send+Sync>, FeagiDataError> {
+                                       pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
         sensor_stream_caches.try_get_single_stage_properties(channel_index, pipeline_stage_property_index)
     }
 
-    fn try_get_all_stage_properties(&self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
+    fn try_get_all_stage_properties(&self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
         sensor_stream_caches.get_all_stage_properties(channel_index)
     }
 
     fn try_update_single_stage_properties(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex,
                                           channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
-                                          replacing_property: Box<dyn PipelineStageProperties + Sync + Send>)
+                                          replacing_property: PipelineStageProperties)
                                           -> Result<(), FeagiDataError> {
 
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
         sensor_stream_caches.try_update_single_stage_properties(channel_index, pipeline_stage_property_index, replacing_property)
     }
 
-    fn try_update_all_stage_properties(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    fn try_update_all_stage_properties(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
         sensor_stream_caches.try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
     }
 
-    fn try_replace_single_stage(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    fn try_replace_single_stage(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
         sensor_stream_caches.try_replace_single_stage(channel_index, replacing_at_index, new_pipeline_stage_properties)
     }
 
-    fn try_replace_all_stages(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    fn try_replace_all_stages(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
         sensor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
     }

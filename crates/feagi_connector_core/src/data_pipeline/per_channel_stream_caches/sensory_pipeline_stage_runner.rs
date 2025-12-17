@@ -131,32 +131,32 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Retrieves the properties of a single stage in the pipeline.
-    pub fn try_get_single_stage_properties(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+    pub fn try_get_single_stage_properties(&self, stage_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
         PipelineStageRunner::try_get_single_stage_properties(self, stage_index)
     }
 
     /// Retrieves the properties of all stages in the pipeline.
-    pub fn get_all_stage_properties(&self) -> Vec<Box<dyn PipelineStageProperties + Sync + Send>> {
+    pub fn get_all_stage_properties(&self) -> Vec<PipelineStageProperties> {
         PipelineStageRunner::get_all_stage_properties(self)
     }
 
     /// Updates the properties of a single stage in the pipeline.
-    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
         PipelineStageRunner::try_update_single_stage_properties(self, updating_stage_index, updated_properties)
     }
 
     /// Updates the properties of all stages in the pipeline.
-    pub fn try_update_all_stage_properties(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    pub fn try_update_all_stage_properties(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         PipelineStageRunner::try_update_all_stage_properties(self, new_pipeline_stage_properties)
     }
 
     /// Replaces a single stage in the pipeline with a new stage.
-    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
         PipelineStageRunner::try_replace_single_stage(self, replacing_at_index, new_pipeline_stage_properties)
     }
 
     /// Replaces all stages in the pipeline with new stages.
-    pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         PipelineStageRunner::try_replace_all_stages(self, new_pipeline_stage_properties)
     }
 

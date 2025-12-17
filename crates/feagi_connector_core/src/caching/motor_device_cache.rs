@@ -100,7 +100,7 @@ macro_rules! motor_unit_functions {
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
                 stage_index: PipelineStagePropertyIndex
-            ) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError>
+            ) -> Result<PipelineStageProperties, FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
                 let stage = self.try_get_single_stage_properties(MOTOR_UNIT_TYPE, group, channel_index, stage_index)?;
@@ -111,7 +111,7 @@ macro_rules! motor_unit_functions {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex
-            ) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError>
+            ) -> Result<Vec<PipelineStageProperties>, FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
                 let stages = self.try_get_all_stage_properties(MOTOR_UNIT_TYPE, group, channel_index)?;
@@ -123,7 +123,7 @@ macro_rules! motor_unit_functions {
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
                 pipeline_stage_property_index: PipelineStagePropertyIndex,
-                updating_property: Box<dyn PipelineStageProperties + Sync + Send>
+                updating_property: PipelineStageProperties
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
@@ -135,7 +135,7 @@ macro_rules! motor_unit_functions {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
-                updated_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+                updated_pipeline_stage_properties: Vec<PipelineStageProperties>
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
@@ -148,7 +148,7 @@ macro_rules! motor_unit_functions {
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
                 pipeline_stage_property_index: PipelineStagePropertyIndex,
-                replacing_property: Box<dyn PipelineStageProperties + Sync + Send>
+                replacing_property: PipelineStageProperties
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
@@ -160,7 +160,7 @@ macro_rules! motor_unit_functions {
                 &mut self,
                 group: CorticalGroupIndex,
                 channel_index: CorticalChannelIndex,
-                new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>
+                new_pipeline_stage_properties: Vec<PipelineStageProperties>
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
@@ -457,36 +457,36 @@ impl MotorDeviceCache {
 
     //region Stages
 
-    fn try_get_single_stage_properties(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+    fn try_get_single_stage_properties(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, stage_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         motor_stream_caches.try_get_single_stage_properties(channel_index, stage_index)
     }
 
-    fn try_get_all_stage_properties(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<Box<dyn PipelineStageProperties + Sync + Send>>, FeagiDataError> {
+    fn try_get_all_stage_properties(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         motor_stream_caches.get_all_stage_properties(channel_index)
     }
 
     fn try_update_single_stage_properties(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex,
                                           channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
-                                          replacing_property: Box<dyn PipelineStageProperties + Sync + Send>)
+                                          replacing_property: PipelineStageProperties)
                                           -> Result<(), FeagiDataError> {
 
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_update_single_stage_properties(channel_index, pipeline_stage_property_index, replacing_property)
     }
 
-    fn try_update_all_stage_properties(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    fn try_update_all_stage_properties(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
     }
 
-    fn try_replace_single_stage(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    fn try_replace_single_stage(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_replace_single_stage(channel_index, replacing_at_index, new_pipeline_stage_properties)
     }
 
-    fn try_replace_all_stages(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    fn try_replace_all_stages(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
     }

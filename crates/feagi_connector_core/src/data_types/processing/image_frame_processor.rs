@@ -3,7 +3,7 @@ use feagi_data_structures::FeagiDataError;
 use crate::data_types::descriptors::{ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution};
 use crate::data_types::ImageFrame;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ImageFrameProcessor {
     /// Properties that the input image must match (resolution, color space, channel layout)
     input_image_properties: ImageFrameProperties,
