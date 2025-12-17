@@ -55,13 +55,13 @@ pub(crate) trait PipelineStageRunner {
     }
 
     /// Retrieves the properties of a single stage in the pipeline.
-    fn try_get_single_stage_properties(&self, stage_index: PipelineStagePropertyIndex) -> Result<Box<dyn PipelineStageProperties + Sync + Send>, FeagiDataError> {
+    fn try_get_single_stage_properties(&self, stage_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(stage_index)?;
         Ok(self.get_stages()[*stage_index as usize].create_properties())
     }
 
     /// Retrieves the properties of all stages in the pipeline.
-    fn get_all_stage_properties(&self) -> Vec<Box<dyn PipelineStageProperties + Sync + Send>> {
+    fn get_all_stage_properties(&self) -> Vec<PipelineStageProperties> {
         self.get_stages()
             .iter()
             .map(|stage| stage.create_properties())
@@ -80,7 +80,7 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If the properties were successfully updated
     /// * `Err(FeagiDataError)` - If the index is invalid or properties can't be loaded
-    fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(updating_stage_index)?;
         self.get_stages_mut_internal()[*updating_stage_index as usize].load_properties(updated_properties)?;
         Ok(())
@@ -98,7 +98,7 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If all properties were successfully updated
     /// * `Err(FeagiDataError)` - if given pipeline is not compatible with current stages
-    fn try_update_all_stage_properties(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    fn try_update_all_stage_properties(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         if new_pipeline_stage_properties.len() != self.get_stages().len() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Unable to update {} contained stages with {} properties!",
@@ -128,7 +128,7 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If the stage was successfully replaced
     /// * `Err(FeagiDataError)` - If index is invalid or types are incompatible
-    fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
+    fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(replacing_at_index)?;
         verify_replacing_stage_properties(
             self.get_stages(),
@@ -153,7 +153,7 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If all stages were successfully replaced
     /// * `Err(FeagiDataError)` - If stages are incompatible or creation fails
-    fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<Box<dyn PipelineStageProperties + Sync + Send>>) -> Result<(), FeagiDataError> {
+    fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
         verify_pipeline_stage_properties(
             &new_pipeline_stage_properties,
             self.get_fixed_type(),
@@ -212,7 +212,7 @@ pub(crate) trait PipelineStageRunner {
 /// * `Ok(())` - If the properties form a valid pipeline
 /// * `Err(FeagiDataError)` - If the properties are incompatible
 pub(crate) fn verify_pipeline_stage_properties(
-    pipeline_stage_properties: &Vec<Box<dyn PipelineStageProperties + Sync + Send>>,
+    pipeline_stage_properties: &Vec<PipelineStageProperties>,
     fixed_type: &WrappedIOType,
     direction: PipelineDirection,
 ) -> Result<(), FeagiDataError> {
@@ -271,7 +271,7 @@ pub(crate) fn verify_pipeline_stage_properties(
 #[inline]
 pub(crate) fn verify_replacing_stage_properties(
     current_stages: &Vec<Box<dyn PipelineStage>>,
-    new_stage_properties: &Box<dyn PipelineStageProperties + Sync + Send>,
+    new_stage_properties: &PipelineStageProperties,
     fixed_type: &WrappedIOType,
     new_stage_index: PipelineStagePropertyIndex,
     direction: PipelineDirection,
@@ -365,4 +365,3 @@ pub(crate) fn verify_replacing_stage_properties(
 ⠀⠀⠀⠀⠁⠇⠡⠩⡫⢿⣝⡻⡮⣒⢽⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 —————————————————————————————————
  */
-

@@ -8,7 +8,6 @@ use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
-use crate::data_pipeline::stage_properties::ImageQuickDiffStageProperties;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::{ImageFrame, Percentage};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -46,7 +45,7 @@ impl PipelineStage for ImageFrameQuickDiffStage {
         &self.diff_cache
     }
 
-    fn process_new_input(&mut self, value: &WrappedIOData, time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+    fn process_new_input(&mut self, value: &WrappedIOData, _time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
         quick_diff_and_check_if_pass(value, &self.previous_frame_cache, &mut self.diff_cache, &self.inclusive_pixel_range, self.samples_count_lower_bound, self.samples_count_upper_bound)?;
         self.previous_frame_cache = value.clone();
         Ok(&self.diff_cache)
@@ -60,43 +59,45 @@ impl PipelineStage for ImageFrameQuickDiffStage {
         self
     }
 
-    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
-        ImageQuickDiffStageProperties::new_box(
-            self.inclusive_pixel_range.clone(),
-            self.acceptable_amount_of_activity_in_image.clone(),
-            self.input_definition.clone()
-        )
+    fn create_properties(&self) -> PipelineStageProperties {
+        PipelineStageProperties::ImageQuickDiff {
+            per_pixel_allowed_range: self.inclusive_pixel_range.clone(),
+            acceptable_amount_of_activity_in_image: self.acceptable_amount_of_activity_in_image.clone(),
+            image_properties: self.input_definition,
+        }
     }
 
-    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        use crate::data_pipeline::stage_properties::ImageQuickDiffStageProperties;
-        
-        // Extract ImageQuickDiffStageProperties from the trait object
-        let props = properties.as_any()
-            .downcast_ref::<ImageQuickDiffStageProperties>()
-            .ok_or_else(|| FeagiDataError::BadParameters(
+    fn load_properties(&mut self, properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
+        match properties {
+            PipelineStageProperties::ImageQuickDiff { 
+                per_pixel_allowed_range,
+                acceptable_amount_of_activity_in_image,
+                ..
+            } => {
+                if per_pixel_allowed_range.is_empty() {
+                    return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+                }
+
+                if acceptable_amount_of_activity_in_image.is_empty() {
+                    return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
+                }
+
+                // Update the threshold and activity range
+                self.inclusive_pixel_range = per_pixel_allowed_range;
+                self.acceptable_amount_of_activity_in_image = acceptable_amount_of_activity_in_image;
+                
+                // Recalculate sample count bounds based on new activity range
+                let total_pixels = self.input_definition.get_number_of_samples();
+                let sample_count_bounds = get_sample_count_lower_upper_bounds(&self.acceptable_amount_of_activity_in_image, total_pixels);
+                self.samples_count_lower_bound = sample_count_bounds.0;
+                self.samples_count_upper_bound = sample_count_bounds.1;
+                
+                Ok(())
+            }
+            _ => Err(FeagiDataError::BadParameters(
                 "load_properties called with incompatible properties type for ImageFrameQuickDiffStage".into()
-            ))?;
-
-        if props.per_pixel_allowed_range.is_empty() {
-            return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+            ))
         }
-
-        if props.acceptable_amount_of_activity_in_image.is_empty() {
-            return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
-        }
-
-        // Update the threshold and activity range
-        self.inclusive_pixel_range = props.per_pixel_allowed_range.clone();
-        self.acceptable_amount_of_activity_in_image = props.acceptable_amount_of_activity_in_image.clone();
-        
-        // Recalculate sample count bounds based on new activity range
-        let total_pixels = self.input_definition.get_number_of_samples();
-        let sample_count_bounds = get_sample_count_lower_upper_bounds(&self.acceptable_amount_of_activity_in_image, total_pixels);
-        self.samples_count_lower_bound = sample_count_bounds.0;
-        self.samples_count_upper_bound = sample_count_bounds.1;
-        
-        Ok(())
     }
 }
 
