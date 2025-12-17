@@ -20,7 +20,7 @@ use feagi_data_structures::FeagiDataError;
 /// // Fails validation
 /// assert!(Percentage::new_from_0_1(1.5).is_err());
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct Percentage {
     value: f32,
 }
@@ -182,7 +182,7 @@ impl From<&Percentage> for f32 {
 }
 
 /// A signed percentage value, from -100 to 100%
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub struct SignedPercentage {
     value: f32,
 }
@@ -336,7 +336,7 @@ impl From<&SignedPercentage> for f32 {
 //region 2D Percentage Types
 
 /// Represents 2 percentages over 2 dimensions, going from 0 - 100%
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Percentage2D {
     pub a: Percentage,
     pub b: Percentage,
@@ -414,7 +414,7 @@ impl From<&Percentage2D> for (f32, f32) {
 }
 
 /// Represents 2 signed percentages over 2 dimensions, going from -100 - 100%
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
 pub struct SignedPercentage2D {
     pub a: SignedPercentage,
     pub b: SignedPercentage,
@@ -495,7 +495,7 @@ impl From<&SignedPercentage2D> for (f32, f32) {
 //region 3D Percentage Types
 
 /// Represents 3 percentages over 3 dimensions, going from 0 - 100%
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Percentage3D {
     pub a: Percentage,
     pub b: Percentage,
@@ -577,7 +577,7 @@ impl From<&Percentage3D> for (f32, f32, f32) {
 }
 
 /// Represents 3 signed percentages over 3 dimensions, going from -100 - 100%
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
 pub struct SignedPercentage3D {
     pub a: SignedPercentage,
     pub b: SignedPercentage,
@@ -663,7 +663,7 @@ impl From<&SignedPercentage3D> for (f32, f32, f32) {
 //region 4D Percentage Types
 
 /// Represents 4 percentages over 4 dimensions, going from 0 - 100%
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
 pub struct Percentage4D {
     pub a: Percentage,
     pub b: Percentage,
@@ -750,7 +750,7 @@ impl From<&Percentage4D> for (f32, f32, f32, f32) {
 }
 
 /// Represents 4 signed percentages over 4 dimensions, going from -100 - 100%
-#[derive(Clone, Debug, PartialEq, Copy)]
+#[derive(Clone, Debug, PartialEq, Copy, serde::Serialize, serde::Deserialize)]
 pub struct SignedPercentage4D {
     pub a: SignedPercentage,
     pub b: SignedPercentage,

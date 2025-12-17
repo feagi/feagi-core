@@ -8,7 +8,7 @@ use crate::data_types::descriptors::{CornerPoints, ImageXYPoint, ImageXYResoluti
 ///
 /// This structure defines the coordinates and size of the central region
 /// in a normalized coordinate space (0.0 to 1.0).
-#[derive(PartialEq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub struct GazeProperties {
     pub(crate) eccentricity_location_xy: Percentage2D,
     pub(crate) modulation_size: Percentage,

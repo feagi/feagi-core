@@ -32,7 +32,7 @@ define_xyz_dimensions!(ImageXYZDimensions, u32, "ImageXYZDimensions", 0, "Descri
 ///
 /// This structure stores the desired output resolution for each of the segments
 /// in a grid arrangement (3x3): corners, edges, and center.
-#[derive(PartialEq, Clone, Copy, Debug, Eq, Hash)]
+#[derive(PartialEq, Clone, Copy, Debug, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SegmentedXYImageResolutions {
     pub lower_left: ImageXYResolution,
     pub lower_middle: ImageXYResolution,
@@ -126,7 +126,7 @@ impl Display for SegmentedXYImageResolutions {
 /// This enum defines the possible color spaces:
 /// - Linear: Linear color space
 /// - Gamma: Gamma-corrected color space
-#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ColorSpace {
     Linear,
     Gamma
@@ -148,7 +148,7 @@ impl Display for ColorSpace {
 /// - RG: Two channels (red, green)
 /// - RGB: Three channels (red, green, blue)
 /// - RGBA: Four channels (red, green, blue, alpha)
-#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ColorChannelLayout {
     GrayScale = 1, // R
     RG = 2,
@@ -214,7 +214,7 @@ impl From<ColorChannelLayout> for u32 {
 /// - HeightsChannelsWidths: Alternative format
 /// - ChannelsWidthsHeights: Alternative format
 /// - WidthsChannelsHeights: Alternative format
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Hash, serde::Serialize, serde::Deserialize)]
 pub enum MemoryOrderLayout {
     HeightsWidthsChannels, // default, also called row major
     ChannelsHeightsWidths, // common in machine learning
@@ -240,7 +240,7 @@ impl Display for MemoryOrderLayout {
 
 //region Image Frame Properties
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ImageFrameProperties {
     image_resolution: ImageXYResolution,
     color_space: ColorSpace,
@@ -351,7 +351,7 @@ impl Display for ImageFrameProperties {
 //region Segmented Image Frame Properties
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SegmentedImageFrameProperties {
     segment_xy_resolutions: SegmentedXYImageResolutions,
     center_color_channel: ColorChannelLayout,
@@ -410,7 +410,7 @@ impl Display for SegmentedImageFrameProperties {
 
 //region Corner Points
 /// Holds pixel coordinates for cropping
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct CornerPoints {
     pub upper_left: ImageXYPoint,
     pub lower_right: ImageXYPoint,
