@@ -9,16 +9,16 @@ define_stage_properties! {
     /// Properties for ImageFrameQuickDiffStage that configures quick difference detection
     /// between consecutive image frames.
     name: ImageQuickDiffStageProperties,
-    
+
     fields: {
-        pub per_pixel_allowed_range: RangeInclusive<u8>,
-        pub acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
+        per_pixel_allowed_range: RangeInclusive<u8>,
+        acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
         image_properties: ImageFrameProperties,
     },
-    
+
     input_type: |s| WrappedIOType::ImageFrame(Some(s.image_properties)),
     output_type: |s| WrappedIOType::ImageFrame(Some(s.image_properties)),
-    
+
     create_stage: |s| {
         ImageFrameQuickDiffStage::new_box(
             s.image_properties,
@@ -26,7 +26,7 @@ define_stage_properties! {
             s.acceptable_amount_of_activity_in_image.clone()
         ).unwrap()
     },
-    
+
     display: (
         "ImageQuickDiffStageProperties(per pixel allow range: {:?}, acceptable_amount_of_activity_in_image: {:?}, image_properties: {:?})",
         per_pixel_allowed_range,

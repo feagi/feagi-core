@@ -12,7 +12,7 @@ use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub(crate) trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
+pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// Returns the data type this processor expects as input.
     ///
     /// This is used by `ProcessorRunner` to validate that processing can be chained

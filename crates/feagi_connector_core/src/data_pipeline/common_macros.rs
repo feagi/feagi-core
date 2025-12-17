@@ -38,7 +38,7 @@ macro_rules! define_stage_properties {
         fields: {
             $(
                 $(#[$field_meta:meta])*
-                $vis:vis $field_name:ident : $field_type:ty
+                $field_name:ident : $field_type:ty
             ),* $(,)?
         },
         
@@ -54,7 +54,7 @@ macro_rules! define_stage_properties {
         pub struct $name {
             $(
                 $(#[$field_meta])*
-                $vis $field_name: $field_type,
+                pub $field_name: $field_type,
             )*
         }
         
@@ -80,7 +80,7 @@ macro_rules! define_stage_properties {
             fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
                 self
             }
-            
+
             fn create_stage(&self) -> Box<dyn $crate::data_pipeline::PipelineStage> {
                 let $self_stage = self;
                 $create_stage_expr
