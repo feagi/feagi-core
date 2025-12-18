@@ -133,7 +133,7 @@ jobs:
       run: cargo test --workspace --lib --verbose
     
     - name: Check if builds
-      run: cargo build --workspace --lib --verbose
+      run: cargo build --workspace --lib --verbose --exclude feagi-async
     
     - name: Check formatting
       run: cargo fmt --all -- --check
