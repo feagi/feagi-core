@@ -47,19 +47,20 @@ jobs:
         echo "Version: $VERSION"
     
     - name: Build release
-      run: cargo build --release --verbose
+      run: cargo build --release --lib --verbose
     
-    - name: Publish to crates.io
+    - name: Publish all workspace crates to crates.io
       run: |
-        echo "📦 Publishing feagi-core v${{ steps.version.outputs.version }}..."
+        echo "📦 Publishing all feagi-core workspace crates (v${{ steps.version.outputs.version }})..."
+        echo "This will publish 23+ crates in dependency order with delays for indexing."
+        echo ""
         
-        # Package the crate first to verify it's ready
-        cargo package --verbose
+        # Run the multi-crate publish script
+        chmod +x scripts/publish-crates.sh
+        ./scripts/publish-crates.sh
         
-        # Publish to crates.io
-        cargo publish --token ${{ secrets.CARGO_PUSH_TOKEN }}
-        
-        echo "✅ Successfully published feagi-core"
+        echo ""
+        echo "✅ Successfully published all workspace crates"
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
     
