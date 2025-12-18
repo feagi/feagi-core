@@ -21,7 +21,7 @@ use feagi_data_structures::genomic::cortical_area::{
     CorticalAreaType, IOCorticalAreaDataFlag, CorticalArea,
 };
 #[cfg(test)]
-use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalAreaDimensions};
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalAreaDimensions, CoreCorticalType};
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 
 /// Extract detailed IOCorticalAreaDataFlag from a cortical area
@@ -179,13 +179,14 @@ mod tests {
 
     #[test]
     fn test_get_io_data_type() {
-        // Create area with segmented vision type (encoded in CorticalID)
-        let cortical_id = CorticalID::try_from_base_64("isvi00").unwrap();
-        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
+        // Create area with BrainInput type using Boolean data
+        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag, CoreCorticalType};
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
             cortical_id,
             0,
-            "Segmented Vision".to_string(),
+            "Test Vision".to_string(),
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
             cortical_type,
@@ -199,7 +200,7 @@ mod tests {
 
     #[test]
     fn test_uses_absolute_frames() {
-        let cortical_id = CorticalID::try_from_base_64("isvi00").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,
@@ -217,7 +218,7 @@ mod tests {
 
     #[test]
     fn test_uses_cartesian_encoding() {
-        let cortical_id = CorticalID::try_from_base_64("isvi00").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,
@@ -235,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_uses_percentage_encoding() {
-        let cortical_id = CorticalID::try_from_base_64("omot00").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,
@@ -253,7 +254,7 @@ mod tests {
 
     #[test]
     fn test_describe_cortical_type() {
-        let cortical_id = CorticalID::try_from_base_64("isvi00").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,

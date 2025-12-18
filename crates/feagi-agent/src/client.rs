@@ -720,12 +720,10 @@ mod tests {
 
     #[test]
     fn test_client_creation() {
-        let config = AgentConfig::new("test_agent", AgentType::Sensory).with_vision_capability(
-            "camera",
-            (640, 480),
-            3,
-            "i_vision",
-        );
+        let config = AgentConfig::new("test_agent", AgentType::Sensory)
+            .with_vision_capability("camera", (640, 480), 3, "i_vision")
+            .with_registration_endpoint("tcp://localhost:8000")
+            .with_sensory_endpoint("tcp://localhost:5558");
 
         let client = AgentClient::new(config);
         assert!(client.is_ok());

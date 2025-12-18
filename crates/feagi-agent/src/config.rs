@@ -483,12 +483,10 @@ mod tests {
 
     #[test]
     fn test_config_validation_valid() {
-        let config = AgentConfig::new("test", AgentType::Sensory).with_vision_capability(
-            "camera",
-            (640, 480),
-            3,
-            "vision",
-        );
+        let config = AgentConfig::new("test", AgentType::Sensory)
+            .with_vision_capability("camera", (640, 480), 3, "vision")
+            .with_registration_endpoint("tcp://localhost:8000")
+            .with_sensory_endpoint("tcp://localhost:5558");
         assert!(config.validate().is_ok());
     }
 }

@@ -138,7 +138,7 @@ mod tests {
         let mut brain_regions = HashMap::new();
         
         // Create a test cortical area
-        let cortical_id = CorticalID::try_from_base_64("test01").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
             cortical_id.clone(),
             0,
@@ -183,7 +183,7 @@ mod tests {
         
         // Create test data
         let mut cortical_areas = HashMap::new();
-        let cortical_id = CorticalID::try_from_base_64("test01").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
             cortical_id.clone(),
             0,

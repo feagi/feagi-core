@@ -37,7 +37,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use tracing::{debug, info, trace, warn};
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CoreCorticalType};
 use crate::types::{BduError, BduResult};
 use feagi_npu_neural::types::NeuronId;
 
@@ -3052,11 +3052,11 @@ mod tests {
         assert_eq!(manager.get_cortical_idx(&feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap()), Some(0));
         
         // idx -> ID lookup
-        let expected_id = CorticalID::try_from_base_64("test01").unwrap();
+        let expected_id = CoreCorticalType::Power.to_cortical_id();
         assert_eq!(manager.get_cortical_id(0), Some(&expected_id));
         
         // Get area
-        let retrieved_area = manager.get_cortical_area(&CorticalID::try_from_base_64("test01").unwrap()).unwrap();
+        let retrieved_area = manager.get_cortical_area(&CoreCorticalType::Power.to_cortical_id()).unwrap();
         assert_eq!(retrieved_area.name, "Test Area");
     }
     

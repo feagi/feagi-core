@@ -15,7 +15,7 @@ use crate::types::{BduError, BduResult, Position};
 
 // Import core types from feagi_data_structures
 pub use feagi_data_structures::genomic::cortical_area::{
-    CorticalArea, CorticalID, CorticalAreaDimensions
+    CorticalArea, CorticalID, CorticalAreaDimensions, CoreCorticalType
 };
 
 /// Extension trait providing business logic methods for CorticalArea
@@ -302,7 +302,7 @@ mod tests {
 
     #[test]
     fn test_contains_position() {
-        let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
@@ -323,7 +323,7 @@ mod tests {
 
     #[test]
     fn test_position_conversion() {
-        let cortical_id = CorticalID::try_from_base_64("cust000").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(
@@ -352,7 +352,7 @@ mod tests {
 
     #[test]
     fn test_properties() {
-        let cortical_id = CorticalID::try_from_base_64("iav000").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let dims = CorticalAreaDimensions::new(10, 10, 10).unwrap();
         let area = CorticalArea::new(

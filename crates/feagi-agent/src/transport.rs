@@ -145,7 +145,8 @@ mod tests {
                     "host": "0.0.0.0"
                 }
             ],
-            "recommended_transport": "zmq"
+            "recommended_transport": "zmq",
+            "cortical_areas": {}
         });
         
         let response = RegistrationResponse::from_json(&json).unwrap();
@@ -180,7 +181,8 @@ mod tests {
                     "host": "0.0.0.0"
                 }
             ],
-            "recommended_transport": "zmq"
+            "recommended_transport": "zmq",
+            "cortical_areas": {}
         });
         
         let response = RegistrationResponse::from_json(&json).unwrap();
