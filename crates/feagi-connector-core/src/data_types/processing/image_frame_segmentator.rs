@@ -1,4 +1,5 @@
 use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
 use crate::data_types::descriptors::{ColorChannelLayout, ImageFrameProperties, SegmentedImageFrameProperties};
 use crate::data_types::{GazeProperties, ImageFrame, ImageFrameProcessor, SegmentedImageFrame};
 
@@ -75,8 +76,10 @@ impl ImageFrameSegmentator {
     
     fn get_new_ordered_transformers(input_properties: &ImageFrameProperties, output_properties: &SegmentedImageFrameProperties, gaze: &GazeProperties) 
         -> Result<[ImageFrameProcessor; 9], FeagiDataError> {
-        
-        let cropping_points = gaze.calculate_source_corner_points_for_segmented_video_frame(input_properties.get_image_resolution())?;
+
+        let center_cortical_resolution = output_properties.get_resolutions().center;
+        let center_cortical_dimensions = CorticalAreaDimensions::new(center_cortical_resolution.width, center_cortical_resolution.height, *output_properties.get_center_color_channel() as u32)?;
+        let cropping_points = gaze.calculate_source_corner_points_for_segmented_video_frame(input_properties.get_image_resolution(), center_cortical_dimensions)?;
         let center_color_channels = output_properties.get_center_color_channel();
         let peripheral_color_channels = output_properties.get_peripheral_color_channels();
         let color_space = output_properties.get_color_space();
