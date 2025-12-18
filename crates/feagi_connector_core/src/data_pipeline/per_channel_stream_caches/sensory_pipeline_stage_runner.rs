@@ -12,7 +12,9 @@ pub(crate) struct SensoryPipelineStageRunner {
     expected_processed_sensor_type: WrappedIOType, // The type expected to be output by the stage runner
     last_instant_data_processed: Instant,
     pipeline_stages: Vec<Box<dyn PipelineStage>>,
-    preprocessed_cached_value: WrappedIOData
+    preprocessed_cached_value: WrappedIOData,
+    channel_friendly_name: String,
+    channel_index_override: Option<usize>,
 }
 
 impl PipelineStageRunner for SensoryPipelineStageRunner {
@@ -39,6 +41,22 @@ impl PipelineStageRunner for SensoryPipelineStageRunner {
     fn get_last_processed_instant(&self) -> Instant {
         self.last_instant_data_processed
     }
+
+    fn get_channel_friendly_name(&self) -> &str {
+        &self.channel_friendly_name
+    }
+
+    fn set_channel_friendly_name(&mut self, channel_friendly_name: String) {
+        self.channel_friendly_name = channel_friendly_name;
+    }
+
+    fn get_channel_index_override(&self) -> Option<usize> {
+        self.channel_index_override
+    }
+
+    fn set_channel_index_override(&mut self, channel_index_override: Option<usize>) {
+        self.channel_index_override = channel_index_override;
+    }
 }
 
 impl SensoryPipelineStageRunner {
@@ -51,7 +69,9 @@ impl SensoryPipelineStageRunner {
             expected_processed_sensor_type: type_to_be_outputted,
             last_instant_data_processed: Instant::now(),
             pipeline_stages: Vec::new(),
-            preprocessed_cached_value: initial_sensory_cached_value
+            preprocessed_cached_value: initial_sensory_cached_value,
+            channel_friendly_name: String::new(),
+            channel_index_override: None,
         })
     }
 

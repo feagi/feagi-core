@@ -42,6 +42,14 @@ pub(crate) trait PipelineStageRunner {
     fn get_last_processed_instant(&self) -> Instant;
 
     //region Defaults Implementations
+
+    fn get_channel_friendly_name(&self) -> &str;
+
+    fn set_channel_friendly_name(&mut self, channel_friendly_name: String);
+
+    fn get_channel_index_override(&self) -> Option<usize>;
+
+    fn set_channel_index_override(&mut self, channel_index_override: Option<usize>);
     
     fn does_contain_stages(&self) -> bool {
         !self.get_stages().is_empty()
@@ -200,10 +208,10 @@ pub(crate) trait PipelineStageRunner {
         Ok(())
     }
 
-    fn export_as_json(&self, device_group_friendly_name: String, channel_index_override: Option<usize>) -> Result<serde_json::Value, FeagiDataError> {
+    fn export_as_json(&self) -> Result<serde_json::Value, FeagiDataError> {
         let mut output = serde_json::Map::new();
-        output.insert("friendly_name".to_string(), serde_json::Value::String(device_group_friendly_name));
-        output.insert("channel_index_override".to_string(), serde_json::to_value(channel_index_override).map_err(|err| FeagiDataError::InternalError(err.to_string()))?);
+        output.insert("friendly_name".to_string(), serde_json::Value::String(self.get_channel_friendly_name().to_string()));
+        output.insert("channel_index_override".to_string(), serde_json::to_value(self.get_channel_index_override()).unwrap());
 
         let mut json_stages: Vec<serde_json::Value> = Vec::new();
         let stages = self.get_stages();
@@ -212,7 +220,6 @@ pub(crate) trait PipelineStageRunner {
             json_stages.push(serde_json::to_value(&stage_properties).map_err(|err| FeagiDataError::InternalError(err.to_string()))?);
         };
         output.insert("pipeline_stages".to_string(), serde_json::Value::Array(json_stages));
-
         Ok(serde_json::to_value(output).map_err(|err| FeagiDataError::InternalError(err.to_string()))?)
     }
 

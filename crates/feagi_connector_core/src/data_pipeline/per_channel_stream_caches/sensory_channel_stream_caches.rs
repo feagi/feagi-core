@@ -23,8 +23,7 @@ pub(crate) struct SensoryChannelStreamCaches {
     neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
     pipeline_runners: Vec<SensoryPipelineStageRunner>,
     last_update_time: Instant,
-    friendly_name: String,
-    channel_index_override: Option<CorticalChannelIndex>
+    device_friendly_name: String,
 }
 
 impl SensoryChannelStreamCaches {
@@ -38,8 +37,7 @@ impl SensoryChannelStreamCaches {
             neuron_encoder,
             pipeline_runners,
             last_update_time: Instant::now(),
-            friendly_name: String::new(),
-            channel_index_override: None
+            device_friendly_name: String::new(),
         })
     }
 

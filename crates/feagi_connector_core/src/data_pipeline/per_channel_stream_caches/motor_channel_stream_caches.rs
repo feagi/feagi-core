@@ -15,8 +15,7 @@ pub(crate) struct MotorChannelStreamCaches {
     pipeline_runners: Vec<MotorPipelineStageRunner>,
     has_channel_been_updated: Vec<bool>,
     value_updated_callbacks: Vec<FeagiSignal<WrappedIOData>>,
-    friendly_name: String,
-    channel_index_override: Option<CorticalChannelIndex>
+    device_friendly_name: String,
 }
 
 impl MotorChannelStreamCaches {
@@ -35,8 +34,7 @@ impl MotorChannelStreamCaches {
             pipeline_runners,
             has_channel_been_updated: vec![false; *number_channels as usize],
             value_updated_callbacks: callbacks,
-            friendly_name: String::new(),
-            channel_index_override: None
+            device_friendly_name: String::new(),
         })
     }
 
@@ -125,6 +123,19 @@ impl MotorChannelStreamCaches {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_removing_all_stages()?;
         Ok(())
+    }
+
+    pub(crate) fn export_as_json(&self) -> Result<serde_json::Value, FeagiDataError> {
+        let mut output = serde_json::Map::new();
+        output.insert("friendly_name".to_string(), serde_json::Value::String(self.device_friendly_name.clone()));
+
+        let mut channels_data: Vec<serde_json::Value> = Vec::new();
+        for pipeline_stage_runner in &self.pipeline_runners {
+            let channel_data = pipeline_stage_runner.export_as_json()?;
+            channels_data.push(channel_data);
+        };
+        output.insert("channels".to_string(), serde_json::Value::Array(channels_data));
+        Ok(output.into())
     }
 
     //endregion
