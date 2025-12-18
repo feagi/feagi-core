@@ -397,10 +397,21 @@ impl MotorDeviceCache {
     pub fn export_registered_motors_as_config_json(&self) -> Result<serde_json::Value, FeagiDataError> {
         let mut output = serde_json::Map::new();
         for ((motor_cortical_unit, cortical_group_index), motor_channel_stream_caches) in &self.stream_caches {
-            let motor_name = motor_cortical_unit.get_snake_case_name().to_string();
+            let motor_unit_name = motor_cortical_unit.get_snake_case_name().to_string();
             let cortical_group_name = cortical_group_index.to_string();
 
+            let motor_units_map = {
+                if !output.contains_key(&motor_unit_name) {
+                    _ = output.insert(motor_unit_name.clone(), serde_json::Value::from(serde_json::Map::new()));
+                }
+                output.get_mut(&motor_unit_name).unwrap()
+            };
+
+            let motor_units_map: &mut serde_json::Map<String, serde_json::Value> = motor_units_map.into();
+
+            motor_units_map.insert(motor_unit_name.clone(), motor_channel_stream_caches.export_as_json()?);
         };
+        Ok(serde_json::Value::Object(output))
     }
     
     // Returns true if data was retrieved
