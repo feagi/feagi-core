@@ -589,9 +589,8 @@ mod tests {
         
         assert_eq!(parsed.version, "2.1");
         assert_eq!(parsed.cortical_areas.len(), 1);
-        // OLD: Input was "_power" (6 bytes)
-        // NEW: Converted to "_power__" (8 bytes, padded at end with underscores) then base64 encoded
-        assert_eq!(parsed.cortical_areas[0].cortical_id.as_base_64(), "X3Bvd2VyX18=");
+        // Input was "_power" (6 bytes), converted to "___power" (8 bytes, padded at start with underscores) then base64 encoded
+        assert_eq!(parsed.cortical_areas[0].cortical_id.as_base_64(), "X19fcG93ZXI=");
         assert_eq!(parsed.cortical_areas[0].name, "Test Area");
         assert_eq!(parsed.brain_regions.len(), 1);
         
