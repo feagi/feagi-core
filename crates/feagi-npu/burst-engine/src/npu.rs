@@ -2328,6 +2328,7 @@ impl<R: Runtime, T: NeuralValue, B: crate::backend::ComputeBackend<T, R::NeuronS
 #[cfg(test)]
 mod tests {
     use super::*;
+    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
 
     // ═══════════════════════════════════════════════════════════
     // Core NPU Creation & Initialization
@@ -2335,6 +2336,7 @@ mod tests {
 
     #[test]
     fn test_npu_creation() {
+
         let npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
         assert_eq!(npu.get_neuron_count(), 0);
         assert_eq!(npu.get_synapse_count(), 0);
@@ -2343,6 +2345,7 @@ mod tests {
 
     #[test]
     fn test_npu_creation_with_zero_capacity() {
+
         let npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(0, 0, 0);
         assert_eq!(npu.get_neuron_count(), 0);
         assert_eq!(npu.get_synapse_count(), 0);
@@ -2350,6 +2353,7 @@ mod tests {
 
     #[test]
     fn test_npu_creation_with_large_capacity() {
+
         let npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1_000_000, 10_000_000, 100);
         assert_eq!(npu.get_neuron_count(), 0);
     }
@@ -2360,7 +2364,10 @@ mod tests {
 
     #[test]
     fn test_add_neurons() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
 
         let id1 = npu
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2377,6 +2384,8 @@ mod tests {
     #[test]
     fn test_add_neuron_sequential_ids() {
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
 
         for i in 0..10 {
             let id = npu
@@ -2391,6 +2400,8 @@ mod tests {
     #[test]
     fn test_add_neuron_different_parameters() {
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
 
         // High threshold
         let _n1 = npu
@@ -2418,6 +2429,9 @@ mod tests {
     #[test]
     fn test_add_neuron_different_cortical_areas() {
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        npu.register_cortical_area(3, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let _power = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2434,7 +2448,9 @@ mod tests {
 
     #[test]
     fn test_add_neuron_3d_coordinates() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let _n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 5, 10, 15)
@@ -2449,7 +2465,9 @@ mod tests {
 
     #[test]
     fn test_add_synapses() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2472,7 +2490,9 @@ mod tests {
 
     #[test]
     fn test_add_multiple_synapses() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2514,7 +2534,9 @@ mod tests {
 
     #[test]
     fn test_add_inhibitory_synapse() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2537,7 +2559,9 @@ mod tests {
 
     #[test]
     fn test_synapse_removal() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2562,7 +2586,9 @@ mod tests {
 
     #[test]
     fn test_remove_nonexistent_synapse() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2580,7 +2606,9 @@ mod tests {
 
     #[test]
     fn test_burst_processing() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         // Add a power neuron
         let _power_neuron = npu
@@ -2597,7 +2625,9 @@ mod tests {
 
     #[test]
     fn test_burst_counter_increments() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         for i in 1..=10 {
             let result = npu.process_burst().unwrap();
@@ -2608,7 +2638,11 @@ mod tests {
 
     #[test]
     fn test_power_injection_auto_discovery() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
 
         // Add 5 power neurons (cortical_area=1)
         for i in 0..5 {
@@ -2630,7 +2664,9 @@ mod tests {
 
     #[test]
     fn test_set_power_amount() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         // Add power neuron with high threshold
         npu.add_neuron(5.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2646,7 +2682,11 @@ mod tests {
 
     #[test]
     fn test_empty_burst_no_power() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
 
         // Add only regular neurons (no power area)
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2659,9 +2699,12 @@ mod tests {
 
     #[test]
     fn test_power_injection_zero_to_n_transition() {
+
         // Test the startup race condition: burst loop starts before genome load
         // This simulates what happens in production when burst engine starts before embryogenesis
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.set_power_amount(0.5);
 
         // Burst 1: No power neurons yet (pre-embryogenesis)
@@ -2689,7 +2732,11 @@ mod tests {
 
     #[test]
     fn test_inject_sensory_input() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
 
         let neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2703,7 +2750,11 @@ mod tests {
 
     #[test]
     fn test_inject_multiple_sensory_inputs() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2722,7 +2773,11 @@ mod tests {
 
     #[test]
     fn test_sensory_accumulation_on_same_neuron() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
 
         let neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
@@ -2742,7 +2797,9 @@ mod tests {
 
     #[test]
     fn test_fire_ledger_recording() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let _neuron = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2758,7 +2815,9 @@ mod tests {
 
     #[test]
     fn test_fire_ledger_window_configuration() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         npu.configure_fire_ledger_window(1, 50);
 
@@ -2772,7 +2831,9 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_rate_limiting() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
@@ -2788,7 +2849,9 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_motor_subscribers() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         assert!(!npu.has_motor_subscribers());
 
@@ -2801,7 +2864,9 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_viz_subscribers() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         assert!(!npu.has_visualization_subscribers());
 
@@ -2814,7 +2879,9 @@ mod tests {
 
     #[test]
     fn test_get_latest_fire_queue_sample() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
@@ -2834,10 +2901,12 @@ mod tests {
 
     #[test]
     fn test_register_cortical_area_name() {
-        let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
 
-        npu.register_cortical_area(1, "visual_cortex".to_string());
-        npu.register_cortical_area(2, "motor_cortex".to_string());
+        let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+
 
         // Names are registered successfully
     }
@@ -2848,7 +2917,9 @@ mod tests {
 
     #[test]
     fn test_add_synapse_to_nonexistent_neuron() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -2871,7 +2942,9 @@ mod tests {
 
     #[test]
     fn test_burst_with_empty_npu() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let result = npu.process_burst().unwrap();
 
@@ -2882,7 +2955,11 @@ mod tests {
 
     #[test]
     fn test_large_sensory_batch() {
+
         let mut npu = <RustNPU<feagi_npu_runtime_std::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 10);
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
 
         // Add 100 neurons
         let mut neurons = Vec::new();

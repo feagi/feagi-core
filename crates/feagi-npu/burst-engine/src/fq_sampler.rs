@@ -285,7 +285,7 @@ mod tests {
         let neuron = FiringNeuron {
             neuron_id: NeuronId(100),
             membrane_potential: 1.5,
-            cortical_area: CorticalID::try_from_u64(1).unwrap(),
+            cortical_idx: 1,
             x: 0,
             y: 0,
             z: 0,
@@ -315,7 +315,7 @@ mod tests {
         let neuron = FiringNeuron {
             neuron_id: NeuronId(100),
             membrane_potential: 1.0,
-            cortical_area: CorticalID::try_from_u64(1).unwrap(),
+            cortical_idx: 1,
             x: 0,
             y: 0,
             z: 0,

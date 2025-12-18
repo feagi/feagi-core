@@ -36,12 +36,22 @@ These are **also published separately** for advanced use cases:
 
 | Crate | Version | Description | Users Who Need It |
 |-------|---------|-------------|------------------|
-| `feagi-types` | 2.0.0 | Core data structures | Library authors |
+| **NPU Subsystem** ||||
+| `feagi-npu-neural` | 2.0.0 | Core neural types & algorithms | Library authors, embedded |
+| `feagi-npu-runtime` | 2.0.0 | Runtime trait definitions | Platform implementers |
+| `feagi-npu-runtime-std` | 2.0.0 | Desktop/server runtime | Standard applications |
+| `feagi-npu-runtime-embedded` | 2.0.0 | Embedded runtime | ESP32, RTOS, no_std |
+| `feagi-npu-burst-engine` | 2.0.0 | NPU execution engine | Inference-only apps |
+| `feagi-npu-plasticity` | 2.0.0 | Synaptic learning (STDP) | Training, research |
+| **Infrastructure** ||||
+| `feagi-config` | 2.0.0 | Configuration loader | All applications |
 | `feagi-state-manager` | 2.0.0 | Runtime state | Advanced integrations |
-| `feagi-burst-engine` | 2.0.0 | NPU execution | Inference-only apps |
+| `feagi-observability` | 2.0.0 | Logging & telemetry | Production deployments |
+| `feagi-embedded` | 2.0.0 | Platform HALs | Embedded platforms |
+| **Algorithms** ||||
 | `feagi-bdu` | 2.0.0 | Neurogenesis | Training/development tools |
-| `feagi-plasticity` | 2.0.0 | Synaptic learning | Research implementations |
 | `feagi-connectome-serialization` | 2.0.0 | Persistence | Model management tools |
+| **I/O & Agent** ||||
 | `feagi-io` | 2.0.0 | I/O layer | Agent bridges |
 | `feagi-agent` | 2.0.0 | Client SDK | Agent developers |
 
@@ -49,7 +59,9 @@ These are **also published separately** for advanced use cases:
 ```toml
 # For inference-only application (minimal dependencies)
 [dependencies]
-feagi-burst-engine = "2.0"
+feagi-npu-neural = "2.0"
+feagi-npu-runtime-std = "2.0"
+feagi-npu-burst-engine = "2.0"
 feagi-connectome-serialization = "2.0"
 ```
 
@@ -60,31 +72,50 @@ feagi-connectome-serialization = "2.0"
 ```bash
 cd /Users/nadji/code/FEAGI-2.0/feagi-core
 
-# 1. Foundation (no dependencies)
-cargo publish -p feagi-types
+# Phase 1: Foundation (no internal dependencies)
+cargo publish -p feagi-npu-neural
+cargo publish -p feagi-npu-runtime
+cargo publish -p feagi-config
+cargo publish -p feagi-observability
+cargo publish -p feagi-data-structures
 
-# 2. Infrastructure (depends on types)
+# Phase 2: Runtime implementations
+cargo publish -p feagi-npu-runtime-std
+cargo publish -p feagi-npu-runtime-embedded
+cargo publish -p feagi-embedded
 cargo publish -p feagi-state-manager
 
-# 3. Algorithms (depend on state-manager)
-cargo publish -p feagi-burst-engine
-cargo publish -p feagi-bdu
-cargo publish -p feagi-plasticity
+# Phase 3: Data & Serialization
+cargo publish -p feagi-data-serialization
 cargo publish -p feagi-connectome-serialization
 
-# 4. I/O layer (depends on algorithms)
-cargo publish -p feagi-io
-cargo publish -p feagi-agent
+# Phase 4: Core algorithms
+cargo publish -p feagi-npu-burst-engine
+cargo publish -p feagi-npu-plasticity
+cargo publish -p feagi-bdu
+cargo publish -p feagi-evo
 
-# 5. Main facade crate (re-exports everything)
+# Phase 5: I/O & Transport
+cargo publish -p feagi-transports
+cargo publish -p feagi-io
+cargo publish -p feagi-connector-core
+
+# Phase 6: Services & API
+cargo publish -p feagi-services
+cargo publish -p feagi-agent
+cargo publish -p feagi-api
+
+# Phase 7: Main facade crate (re-exports everything)
 cargo publish
 ```
 
 ### Dry Run (Test Before Publishing)
 
 ```bash
-cargo publish --dry-run -p feagi-types
-cargo publish --dry-run -p feagi-state-manager
+cargo publish --dry-run -p feagi-npu-neural
+cargo publish --dry-run -p feagi-npu-runtime
+cargo publish --dry-run -p feagi-npu-runtime-std
+cargo publish --dry-run -p feagi-npu-burst-engine
 # ... etc
 cargo publish --dry-run  # Main crate
 ```

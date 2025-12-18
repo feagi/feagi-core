@@ -459,10 +459,7 @@ where
 // ============================================================================
 
 #[cfg(test)]
-use feagi_npu_runtime_std::StdRuntime;
-
-#[cfg(test)]
-impl DynamicNPUGeneric<StdRuntime, CPUBackend> {
+impl DynamicNPUGeneric<feagi_npu_runtime_std::StdRuntime, CPUBackend> {
     /// Create new f32 NPU with StdRuntime and CPUBackend (backward compatible)
     /// 
     /// # Deprecation Notice

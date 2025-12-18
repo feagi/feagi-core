@@ -329,14 +329,14 @@ mod tests {
 
         // Create FCL with enough potential to fire
         let mut fcl = FireCandidateList::new();
-        fcl.add_candidate(id, 1.5);
+        fcl.add_candidate(NeuronId(id as u32), 1.5);
 
         // Process dynamics
         let result = process_neural_dynamics(&fcl, &mut neurons, 0).unwrap();
 
         assert_eq!(result.neurons_fired, 1);
         assert_eq!(result.fire_queue.total_neurons(), 1);
-        assert_eq!(neurons.get_potential(id), 0.0); // Reset after firing
+        assert_eq!(neurons.membrane_potentials[0].to_f32(), 0.0); // Reset after firing
         assert_eq!(neurons.refractory_countdowns[0], 5); // Refractory set
     }
 
@@ -349,13 +349,13 @@ mod tests {
             .unwrap();
 
         let mut fcl = FireCandidateList::new();
-        fcl.add_candidate(id, 0.5); // Below threshold
+        fcl.add_candidate(NeuronId(id as u32), 0.5); // Below threshold
 
         let result = process_neural_dynamics(&fcl, &mut neurons, 0).unwrap();
 
         assert_eq!(result.neurons_fired, 0);
         assert_eq!(result.fire_queue.total_neurons(), 0);
-        assert!(neurons.get_potential(id) > 0.0); // Potential accumulated
+        assert!(neurons.membrane_potentials[0].to_f32() > 0.0); // Potential accumulated
     }
 
     #[test]
@@ -370,7 +370,7 @@ mod tests {
         neurons.refractory_countdowns[0] = 3;
 
         let mut fcl = FireCandidateList::new();
-        fcl.add_candidate(id, 2.0); // Well above threshold
+        fcl.add_candidate(NeuronId(id as u32), 2.0); // Well above threshold
 
         let result = process_neural_dynamics(&fcl, &mut neurons, 0).unwrap();
 
@@ -399,16 +399,16 @@ mod tests {
             .unwrap();
 
         // Set initial potential
-        neurons.set_potential(id, 1.0);
+        neurons.membrane_potentials[0] = 1.0;
 
         // Add small candidate potential
         let mut fcl = FireCandidateList::new();
-        fcl.add_candidate(id, 0.1);
+        fcl.add_candidate(NeuronId(id as u32), 0.1);
 
         process_neural_dynamics(&fcl, &mut neurons, 0).unwrap();
 
         // Expected LIF: (1.0 + 0.1) + 0.5 * (0.0 - 1.1) = 1.1 - 0.55 = 0.55
-        assert!((neurons.get_potential(id) - 0.55).abs() < 0.001);
+        assert!((neurons.membrane_potentials[0].to_f32() - 0.55).abs() < 0.001);
     }
 
     #[test]
@@ -427,7 +427,7 @@ mod tests {
         // Create FCL with all above threshold
         let mut fcl = FireCandidateList::new();
         for id in &ids {
-            fcl.add_candidate(*id, 1.5);
+            fcl.add_candidate(NeuronId(*id as u32), 1.5);
         }
 
         let result = process_neural_dynamics(&fcl, &mut neurons, 0).unwrap();
