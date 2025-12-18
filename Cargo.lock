@@ -1788,7 +1788,7 @@ dependencies = [
 name = "feagi"
 version = "2.0.0"
 dependencies = [
- "feagi-agent-sdk",
+ "feagi-agent",
  "feagi-bdu",
  "feagi-burst-engine",
  "feagi-connectome-serialization",
@@ -1801,7 +1801,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-agent-sdk"
+name = "feagi-agent"
 version = "2.0.0"
 dependencies = [
  "criterion",

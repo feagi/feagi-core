@@ -62,7 +62,7 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
   - Sensory injection, motor output, visualization streaming
   - **Status**: Should be moved to separate `feagi-io` repository
 
-- **`feagi-agent-sdk`**: Rust agent SDK
+- **`feagi-agent`**: Rust agent SDK
   - Client library for building agents in Rust
   - ZMQ connection management
   - Sensory/motor data structures
@@ -91,7 +91,7 @@ feagi-burst-engine  feagi-bdu        feagi-plasticity  feagi-connectome-serializ
     └───────────────────┴────────────────────┴──────────────────┘
                             ↓
                     feagi-io (I/O layer)
-                    feagi-agent-sdk (I/O layer)
+                    feagi-agent (I/O layer)
                             ↓
                     feagi-inference-engine (application)
 
@@ -142,7 +142,7 @@ use wasm_sync::Mutex;    // Multi-threaded WASM
 
 ### Planned
 - 📋 Move `feagi-io` to `feagi-io` repository
-- 📋 Move `feagi-agent-sdk` to `feagi-io` or `feagi-connector` repository
+- 📋 Move `feagi-agent` to `feagi-io` or `feagi-connector` repository
 - 📋 Publish all crates to crates.io with synchronized versions
 
 ## Design Principles

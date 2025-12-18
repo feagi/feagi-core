@@ -127,7 +127,7 @@ Due to dependency relationships, crates must be published in this order:
 14. `feagi-evo`
 15. `feagi-transports`
 16. `feagi-io`
-17. `feagi-agent-sdk`
+17. `feagi-agent`
 18. `feagi-services`
 19. `feagi-api`
 

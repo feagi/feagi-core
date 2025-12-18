@@ -29,7 +29,7 @@ Successfully integrated `feagi-observability` into all feagi-core crates that re
   - `converter_flat_full.rs`
   - `genome/parser.rs`
 
-### ✅ feagi-agent-sdk
+### ✅ feagi-agent
 - Added `feagi-observability` dependency
 - Replaced all `log::*!` imports with `tracing::*!`
 - Updated files:
@@ -52,7 +52,7 @@ All integrated crates compile successfully:
 - ✅ feagi-services
 - ✅ feagi-bdu
 - ✅ feagi-evo
-- ✅ feagi-agent-sdk
+- ✅ feagi-agent
 - ✅ feagi-api
 - ✅ feagi-burst-engine
 

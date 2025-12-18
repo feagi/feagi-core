@@ -140,7 +140,7 @@ This crate is part of the FEAGI project:
 - **Main Project**: [feagi](https://crates.io/crates/feagi)
 - **Data Structures**: [feagi_data_structures](https://crates.io/crates/feagi_data_structures)
 - **Data Serialization**: [feagi_data_serialization](https://crates.io/crates/feagi_data_serialization)
-- **Agent SDK**: [feagi-agent-sdk](https://crates.io/crates/feagi-agent-sdk)
+- **Agent SDK**: [feagi-agent](https://crates.io/crates/feagi-agent)
 
 ## License
 

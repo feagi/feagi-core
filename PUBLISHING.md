@@ -43,7 +43,7 @@ These are **also published separately** for advanced use cases:
 | `feagi-plasticity` | 2.0.0 | Synaptic learning | Research implementations |
 | `feagi-connectome-serialization` | 2.0.0 | Persistence | Model management tools |
 | `feagi-io` | 2.0.0 | I/O layer | Agent bridges |
-| `feagi-agent-sdk` | 2.0.0 | Client SDK | Agent developers |
+| `feagi-agent` | 2.0.0 | Client SDK | Agent developers |
 
 **Advanced usage**:
 ```toml
@@ -74,7 +74,7 @@ cargo publish -p feagi-connectome-serialization
 
 # 4. I/O layer (depends on algorithms)
 cargo publish -p feagi-io
-cargo publish -p feagi-agent-sdk
+cargo publish -p feagi-agent
 
 # 5. Main facade crate (re-exports everything)
 cargo publish
@@ -147,7 +147,7 @@ feagi 2.0.0
 ├── feagi-plasticity 2.0.0
 ├── feagi-connectome-serialization 2.0.0
 ├── feagi-io 2.0.0
-└── feagi-agent-sdk 2.0.0
+└── feagi-agent 2.0.0
 ```
 
 ## Version Synchronization

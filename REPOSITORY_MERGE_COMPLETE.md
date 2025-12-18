@@ -42,7 +42,7 @@ feagi-core/
 │   ├── feagi_connector_core/      # Data processing pipelines
 │   ├── feagi_data_serialization/  # Binary serialization formats
 │   ├── feagi_data_structures/     # Core data types
-│   ├── feagi-agent-sdk/
+│   ├── feagi-agent/
 │   ├── feagi-api/
 │   ├── feagi-bdu/
 │   ├── feagi-burst-engine/
@@ -195,7 +195,7 @@ The following crates can be published NOW:
 **Phase 3 - Services:**
 - `feagi-services`
 - `feagi-transports`
-- `feagi-agent-sdk`
+- `feagi-agent`
 
 ### Blockers for Full Publication:
 

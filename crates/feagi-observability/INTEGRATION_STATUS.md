@@ -10,7 +10,7 @@
 - **feagi-services** - Uses `log = "0.4"` directly
 - **feagi-bdu** - Uses `log = "0.4"` directly
 - **feagi-evo** - Uses `log = "0.4"` directly
-- **feagi-agent-sdk** - Uses `log = "0.4"` directly
+- **feagi-agent** - Uses `log = "0.4"` directly
 - **feagi-api** - Uses `tracing` but NOT `feagi-observability` macros
 - **feagi-burst-engine** - No logging dependency at all
 - **feagi-io** - No logging dependency
@@ -30,7 +30,7 @@
 
 ### Phase 2: API and SDK Crates
 5. **feagi-api** - Add `feagi-observability` dependency, use its macros
-6. **feagi-agent-sdk** - Replace `log` with `feagi-observability` macros
+6. **feagi-agent** - Replace `log` with `feagi-observability` macros
 
 ### Phase 3: Transport and Infrastructure
 7. **feagi-io** - Add `feagi-observability` for logging

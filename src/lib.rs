@@ -179,7 +179,7 @@ pub use feagi_connectome_serialization as serialization;
 pub use feagi_io as io;
 
 #[cfg(feature = "agent-sdk")]
-pub use feagi_agent_sdk as agent_sdk;
+pub use feagi_agent as agent;
 
 /// Prelude - commonly used types and traits
 pub mod prelude {

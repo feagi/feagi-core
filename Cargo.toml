@@ -45,7 +45,7 @@ plasticity = ["feagi-plasticity"]
 state-manager = ["feagi-state-manager"]
 serialization = ["feagi-connectome-serialization"]
 pns = ["feagi-io"]
-agent-sdk = ["feagi-agent-sdk"]
+agent-sdk = ["feagi-agent"]
 
 [dependencies]
 # Foundation (vendored into feagi-core when published)
@@ -64,7 +64,7 @@ feagi-connectome-serialization = { version = "2.0.0", path = "crates/feagi-conne
 
 # I/O (vendored)
 feagi-io = { version = "2.0.0", path = "crates/feagi-io", optional = true }
-feagi-agent-sdk = { version = "2.0.0", path = "crates/feagi-agent-sdk", optional = true }
+feagi-agent = { version = "2.0.0", path = "crates/feagi-agent", optional = true }
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
@@ -102,7 +102,7 @@ members = [
     
     # === I/O Layer (TODO: Move to feagi-io repo) ===
     "crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
-    "crates/feagi-agent-sdk",          # Agent SDK (Rust client library)
+    "crates/feagi-agent",              # Agent library (Rust client library)
     
     # === Applications ===
     "crates/feagi-transports",         # Transport layer abstractions

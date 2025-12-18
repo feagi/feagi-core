@@ -123,7 +123,7 @@ FEAGI_DEBUG=all ./feagi
 - `feagi-config`
 - `feagi-io`
 - `feagi-transports`
-- `feagi-agent-sdk`
+- `feagi-agent`
 - `feagi-state-manager`
 - `feagi-plasticity`
 - `feagi-connectome-serialization`

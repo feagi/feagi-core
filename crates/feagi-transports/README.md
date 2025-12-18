@@ -324,7 +324,7 @@ Apache-2.0
 
 - `feagi-io`: Peripheral Nervous System (uses server features)
 - `feagi-api`: REST API layer (uses server features)
-- `feagi-agent-sdk`: Rust agent library (uses client features)
+- `feagi-agent`: Rust agent library (uses client features)
 
 
 
