@@ -10,12 +10,12 @@
 //! - All cortical types work correctly
 
 use feagi_bdu::{ConnectomeManager, Neuroembryogenesis};
-use feagi_burst_engine::{RustNPU, DynamicNPU};
+use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_evo::{RuntimeGenome, GenomeMetadata, CorticalArea as GenomeCorticalArea};
-use feagi_runtime_std::StdRuntime;
-use feagi_burst_engine::backend::CPUBackend;
+use feagi_npu_runtime_std::StdRuntime;
+use feagi_npu_burst_engine::backend::CPUBackend;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;
 
@@ -136,7 +136,7 @@ fn test_neurogenesis_to_visualization_serialization() {
                 .expect("Area should be registered");
             
             // Create fire queue data (simulating what burst_loop_runner does)
-            use feagi_burst_engine::burst_loop_runner::RawFireQueueData;
+            use feagi_npu_burst_engine::burst_loop_runner::RawFireQueueData;
             let fire_data = RawFireQueueData {
                 cortical_area_idx: cortical_idx,
                 cortical_area_name: area_name.clone(),
@@ -186,7 +186,7 @@ fn test_neurogenesis_to_visualization_serialization() {
                 .expect("Area should be registered");
             
             // Create fire queue data (simulating what burst_loop_runner does)
-            use feagi_burst_engine::burst_loop_runner::RawFireQueueData;
+            use feagi_npu_burst_engine::burst_loop_runner::RawFireQueueData;
             let fire_data = RawFireQueueData {
                 cortical_area_idx: cortical_idx,
                 cortical_area_name: area_name.clone(),

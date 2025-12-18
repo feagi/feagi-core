@@ -154,8 +154,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Re-export foundation
-// Note: feagi_types removed - use feagi_neural::types or feagi_data_structures instead
-pub use feagi_neural::types;
+// Note: feagi_types removed - use feagi_npu_neural::types or feagi_data_structures instead
+pub use feagi_npu_neural::types;
 
 // Re-export infrastructure
 #[cfg(feature = "state-manager")]
@@ -163,13 +163,13 @@ pub use feagi_state_manager as state_manager;
 
 // Re-export algorithms
 #[cfg(feature = "burst-engine")]
-pub use feagi_burst_engine as burst_engine;
+pub use feagi_npu_burst_engine as burst_engine;
 
 #[cfg(feature = "bdu")]
 pub use feagi_bdu as bdu;
 
 #[cfg(feature = "plasticity")]
-pub use feagi_plasticity as plasticity;
+pub use feagi_npu_plasticity as plasticity;
 
 #[cfg(feature = "serialization")]
 pub use feagi_connectome_serialization as serialization;

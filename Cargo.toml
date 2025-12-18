@@ -24,7 +24,7 @@ default = ["std", "full"]
 # Platform targets
 std = [
     "feagi-state-manager/std",
-    "feagi-burst-engine/default",
+    "feagi-npu-burst-engine/default",
 ]
 no_std = [
     "feagi-state-manager/no_std",
@@ -39,9 +39,9 @@ compute = ["burst-engine", "bdu", "plasticity", "serialization", "state-manager"
 io = ["pns", "agent-sdk"]
 
 # Individual components
-burst-engine = ["feagi-burst-engine"]
+burst-engine = ["feagi-npu-burst-engine"]
 bdu = ["feagi-bdu"]
-plasticity = ["feagi-plasticity"]
+plasticity = ["feagi-npu-plasticity"]
 state-manager = ["feagi-state-manager"]
 serialization = ["feagi-connectome-serialization"]
 pns = ["feagi-io"]
@@ -50,16 +50,16 @@ agent-sdk = ["feagi-agent"]
 [dependencies]
 # Foundation (vendored into feagi-core when published)
 feagi-evo = { version = "2.0.0", path = "crates/feagi-evo" }
-feagi-neural = { version = "2.0.0", path = "crates/feagi-neural" }
+feagi-npu-neural = { version = "2.0.0", path = "crates/feagi-npu/neural" }
 serde_json = "1.0"
 
 # Infrastructure (vendored)
 feagi-state-manager = { version = "2.0.0", path = "crates/feagi-state-manager", optional = true }
 
 # Algorithms (vendored)
-feagi-burst-engine = { version = "2.0.0", path = "crates/feagi-burst-engine", optional = true }
+feagi-npu-burst-engine = { version = "2.0.0", path = "crates/feagi-npu/burst-engine", optional = true }
 feagi-bdu = { version = "2.0.0", path = "crates/feagi-bdu", optional = true }
-feagi-plasticity = { version = "2.0.0", path = "crates/feagi-plasticity", optional = true }
+feagi-npu-plasticity = { version = "2.0.0", path = "crates/feagi-npu/plasticity", optional = true }
 feagi-connectome-serialization = { version = "2.0.0", path = "crates/feagi-connectome-serialization", optional = true }
 
 # I/O (vendored)
@@ -76,38 +76,36 @@ members = [
     # === Foundation Layer ===
     "crates/feagi-config",             # Configuration loader (TOML + overrides)
     
-    # === Platform-Agnostic Core ===
-    "crates/feagi-neural",             # ALL neural computation: types + algorithms + models (no_std)
+    # === NPU Subsystem (Neural Processing Unit) ===
+    "crates/feagi-npu/neural",         # Neural computation: types + algorithms + models (no_std)
+    "crates/feagi-npu/runtime",        # Runtime trait definitions (no_std)
+    "crates/feagi-npu/runtime-std",    # Desktop/Server runtime (Vec, Rayon)
+    "crates/feagi-npu/runtime-embedded", # ESP32/RTOS runtime (fixed arrays, no_std)
+    "crates/feagi-npu/burst-engine",   # NPU execution & inference
     
-    # === Runtime Abstraction (NEW - Refactor Phase 1) ===
-    "crates/feagi-runtime",            # Runtime trait definitions (no_std)
-    
-    # === Runtime Adapters (NEW - Phase 2) ===
-    "crates/feagi-runtime-std",        # Desktop/Server (Vec, Rayon)
-    "crates/feagi-runtime-embedded",   # ESP32/RTOS (fixed arrays, no_std)
+    # === Platform HALs ===
     "crates/feagi-embedded",           # Platform abstraction + implementations (ESP32, Arduino, etc.)
     
-    # === Infrastructure Layer ===
-    "crates/feagi-state-manager",      # Runtime state management (NEW)
+    # === Infrastructure Layer (Cross-Cutting) ===
+    "crates/feagi-state-manager",      # Runtime state management
     "crates/feagi-evo",                # Genome I/O and evolution (genotype)
     "crates/feagi-services",           # Service layer (stable application boundary)
     "crates/feagi-api",                # REST API layer (HTTP + ZMQ transports)
     "crates/feagi-observability",      # Unified observability (logging, telemetry, profiling)
     
-    # === Algorithm Layer (Core Neural Computation) ===
-    "crates/feagi-burst-engine",       # NPU execution & inference
+    # === Algorithm Layer ===
     "crates/feagi-bdu",                # Neurogenesis (brain development)
-    "crates/feagi-plasticity",         # Synaptic learning (STDP, memory) + stdp_core (no_std)
+    "crates/feagi-npu/plasticity",     # Synaptic learning (STDP, memory)
     "crates/feagi-connectome-serialization",  # Connectome persistence
     
-    # === I/O Layer (TODO: Move to feagi-io repo) ===
+    # === I/O Layer ===
     "crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
     "crates/feagi-agent",              # Agent library (Rust client library)
     
     # === Applications ===
     "crates/feagi-transports",         # Transport layer abstractions
     
-    # === Data Processing (merged from feagi-data-processing) ===
+    # === Data Processing ===
     "crates/feagi-connector-core",     # Connector agent core functionality
     "crates/feagi-data-serialization", # Data serialization formats
     "crates/feagi-data-structures",    # Core data structures

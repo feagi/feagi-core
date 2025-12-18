@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use feagi_bdu::Neuroembryogenesis;
-use feagi_burst_engine::DynamicNPU;
+use feagi_npu_burst_engine::DynamicNPU;
 use feagi_evo::{RuntimeGenome, templates};
 use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions as Dimensions, AreaType, CorticalID};
 

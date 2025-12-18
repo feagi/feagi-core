@@ -66,19 +66,19 @@ pub type ServiceResult<T> = Result<T, ServiceError>;
 // ERROR CONVERSIONS FROM BACKEND
 // ============================================================================
 
-impl From<feagi_neural::types::FeagiError> for ServiceError {
-    fn from(err: feagi_neural::types::FeagiError) -> Self {
+impl From<feagi_npu_neural::types::FeagiError> for ServiceError {
+    fn from(err: feagi_npu_neural::types::FeagiError) -> Self {
         match err {
-            feagi_neural::types::FeagiError::CorticalAreaNotFound(_) => {
+            feagi_npu_neural::types::FeagiError::CorticalAreaNotFound(_) => {
                 ServiceError::NotFound {
                     resource: "CorticalArea".to_string(),
                     id: err.to_string(),
                 }
             }
-            feagi_neural::types::FeagiError::InvalidArea(msg) => {
+            feagi_npu_neural::types::FeagiError::InvalidArea(msg) => {
                 ServiceError::InvalidInput(msg)
             }
-            feagi_neural::types::FeagiError::InvalidRegion(msg) => {
+            feagi_npu_neural::types::FeagiError::InvalidRegion(msg) => {
                 ServiceError::InvalidInput(msg)
             }
             _ => ServiceError::Backend(err.to_string()),

@@ -37,10 +37,10 @@ pub struct RegistrationHandler {
     shm_base_path: String,
     /// Optional reference to burst engine's sensory agent manager for SHM I/O
     sensory_agent_manager:
-        Arc<parking_lot::Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>>>>,
+        Arc<parking_lot::Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::AgentManager>>>>>,
     /// Optional reference to burst loop runner for motor subscription tracking
     burst_runner:
-        Arc<parking_lot::Mutex<Option<Arc<parking_lot::RwLock<feagi_burst_engine::BurstLoopRunner>>>>>,
+        Arc<parking_lot::Mutex<Option<Arc<parking_lot::RwLock<feagi_npu_burst_engine::BurstLoopRunner>>>>>,
     /// Optional reference to GenomeService for creating cortical areas
     genome_service:
         Arc<parking_lot::Mutex<Option<Arc<dyn feagi_services::traits::GenomeService + Send + Sync>>>>,
@@ -135,7 +135,7 @@ impl RegistrationHandler {
     /// Set burst runner reference (for motor subscription tracking)
     pub fn set_burst_runner(
         &self,
-        runner: Arc<parking_lot::RwLock<feagi_burst_engine::BurstLoopRunner>>,
+        runner: Arc<parking_lot::RwLock<feagi_npu_burst_engine::BurstLoopRunner>>,
     ) {
         *self.burst_runner.lock() = Some(runner);
         info!("🦀 [REGISTRATION] Burst runner connected for motor subscriptions");
@@ -144,7 +144,7 @@ impl RegistrationHandler {
     /// Set the sensory agent manager (for SHM I/O coordination)
     pub fn set_sensory_agent_manager(
         &self,
-        manager: Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>,
+        manager: Arc<std::sync::Mutex<feagi_npu_burst_engine::AgentManager>>,
     ) {
         *self.sensory_agent_manager.lock() = Some(manager);
         info!("🦀 [REGISTRATION] Sensory agent manager connected");
@@ -929,7 +929,7 @@ impl RegistrationHandler {
                         })
                         .collect();
                     
-                    let config = feagi_burst_engine::AgentConfig {
+                    let config = feagi_npu_burst_engine::AgentConfig {
                         agent_id: request.agent_id.clone(),
                         shm_path: std::path::PathBuf::from(shm_path),
                         rate_hz: sensory.rate_hz,

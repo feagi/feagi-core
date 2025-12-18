@@ -69,7 +69,7 @@ impl VisualizationSendConfig {
 /// Contains raw fire queue data that will be serialized on the worker thread
 struct VisualizationQueueItem {
     topic: Vec<u8>,
-    raw_fire_data: feagi_burst_engine::RawFireQueueSnapshot,
+    raw_fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
     /// Optional: For backwards compatibility with pre-serialized data (SHM path)
     pre_serialized_payload: Option<Vec<u8>>,
 }
@@ -205,7 +205,7 @@ impl VisualizationStream {
 
     /// Publish raw fire queue data (NEW ARCHITECTURE - serialization in worker thread)
     /// This keeps serialization out of the burst engine hot path
-    pub fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> Result<(), String> {
+    pub fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<(), String> {
         // Fast path: If stream not running, don't even try to enqueue
         if !*self.running.lock() {
             return Ok(()); // Silently discard - expected when no viz agents connected
@@ -318,7 +318,7 @@ impl VisualizationStream {
     
     /// Serialize raw fire queue data to FeagiByteContainer format
     /// This runs on the PNS worker thread, NOT the burst engine thread
-    fn serialize_fire_queue(fire_data: &feagi_burst_engine::RawFireQueueSnapshot) -> Result<Vec<u8>, String> {
+    fn serialize_fire_queue(fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<Vec<u8>, String> {
         use feagi_data_structures::genomic::cortical_area::CorticalID;
         use feagi_data_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,

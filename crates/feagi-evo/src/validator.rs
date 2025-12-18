@@ -125,7 +125,7 @@ pub fn auto_fix_genome(genome: &mut RuntimeGenome) -> usize {
         fixes_applied += 1;
     } else {
         // Normalize to canonical format
-        use feagi_neural::types::Precision;
+        use feagi_npu_neural::types::Precision;
         match Precision::from_str(&genome.physiology.quantization_precision) {
             Ok(precision) => {
                 let canonical = precision.as_str().to_string();
@@ -514,7 +514,7 @@ fn validate_physiology(genome: &RuntimeGenome, result: &mut ValidationResult) {
 
 /// Validate quantization precision value
 fn validate_quantization_precision(precision: &str, result: &mut ValidationResult) {
-        use feagi_neural::types::Precision;
+        use feagi_npu_neural::types::Precision;
     
     // Try to parse the precision string
     match Precision::from_str(precision) {

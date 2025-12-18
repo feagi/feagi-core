@@ -12,7 +12,7 @@ use crate::traits::SystemService;
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::BurstLoopRunner;
+use feagi_npu_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::SystemTime;

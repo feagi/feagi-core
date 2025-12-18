@@ -57,12 +57,12 @@ pub enum BduError {
     Internal(String),
 }
 
-// Convert from feagi_neural::types::FeagiError
-impl From<feagi_neural::types::FeagiError> for BduError {
-    fn from(err: feagi_neural::types::FeagiError) -> Self {
+// Convert from feagi_npu_neural::types::FeagiError
+impl From<feagi_npu_neural::types::FeagiError> for BduError {
+    fn from(err: feagi_npu_neural::types::FeagiError) -> Self {
         match &err {
-            feagi_neural::types::FeagiError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
-            feagi_neural::types::FeagiError::InvalidRegion(msg) => BduError::InvalidArea(msg.clone()),
+            feagi_npu_neural::types::FeagiError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
+            feagi_npu_neural::types::FeagiError::InvalidRegion(msg) => BduError::InvalidArea(msg.clone()),
             _ => BduError::Internal(err.to_string()),
         }
     }

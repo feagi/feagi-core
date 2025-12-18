@@ -1790,12 +1790,12 @@ version = "2.0.0"
 dependencies = [
  "feagi-agent",
  "feagi-bdu",
- "feagi-burst-engine",
  "feagi-connectome-serialization",
  "feagi-evo",
  "feagi-io",
- "feagi-neural",
- "feagi-plasticity",
+ "feagi-npu-burst-engine",
+ "feagi-npu-neural",
+ "feagi-npu-plasticity",
  "feagi-state-manager",
  "serde_json",
 ]
@@ -1830,13 +1830,13 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "feagi-bdu",
- "feagi-burst-engine",
  "feagi-data-structures",
  "feagi-evo",
  "feagi-io",
- "feagi-neural",
+ "feagi-npu-burst-engine",
+ "feagi-npu-neural",
+ "feagi-npu-runtime-std",
  "feagi-observability",
- "feagi-runtime-std",
  "feagi-services",
  "feagi-transports",
  "http-body-util",
@@ -1886,12 +1886,12 @@ dependencies = [
  "ahash",
  "chrono",
  "criterion",
- "feagi-burst-engine",
  "feagi-data-structures",
  "feagi-evo",
- "feagi-neural",
+ "feagi-npu-burst-engine",
+ "feagi-npu-neural",
+ "feagi-npu-runtime-std",
  "feagi-observability",
- "feagi-runtime-std",
  "getrandom 0.2.16",
  "ndarray",
  "once_cell",
@@ -1904,36 +1904,6 @@ dependencies = [
  "serde_json",
  "thiserror 1.0.69",
  "tracing",
-]
-
-[[package]]
-name = "feagi-burst-engine"
-version = "2.0.0"
-dependencies = [
- "ahash",
- "bytemuck",
- "chrono",
- "criterion",
- "cudarc",
- "feagi-async",
- "feagi-connectome-serialization",
- "feagi-data-serialization",
- "feagi-data-structures",
- "feagi-neural",
- "feagi-observability",
- "feagi-runtime",
- "feagi-runtime-std",
- "feagi-state-manager",
- "half",
- "memmap2",
- "ndarray",
- "parking_lot",
- "pollster",
- "rayon",
- "serde_json",
- "thiserror 1.0.69",
- "tracing",
- "wgpu",
 ]
 
 [[package]]
@@ -2009,8 +1979,8 @@ dependencies = [
  "esp-idf-hal",
  "esp-idf-svc",
  "esp-idf-sys",
- "feagi-neural",
- "feagi-runtime-embedded",
+ "feagi-npu-neural",
+ "feagi-npu-runtime-embedded",
  "heapless",
  "log",
  "panic-halt",
@@ -2027,7 +1997,7 @@ dependencies = [
  "env_logger",
  "feagi-bdu",
  "feagi-data-structures",
- "feagi-neural",
+ "feagi-npu-neural",
  "feagi-observability",
  "js-sys",
  "rand 0.8.5",
@@ -2052,10 +2022,10 @@ dependencies = [
  "base64 0.22.1",
  "crossbeam",
  "feagi-bdu",
- "feagi-burst-engine",
  "feagi-data-serialization",
  "feagi-data-structures",
- "feagi-neural",
+ "feagi-npu-burst-engine",
+ "feagi-npu-neural",
  "feagi-services",
  "feagi-transports",
  "lz4",
@@ -2071,12 +2041,80 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-neural"
+name = "feagi-npu-burst-engine"
+version = "2.0.0"
+dependencies = [
+ "ahash",
+ "bytemuck",
+ "chrono",
+ "criterion",
+ "cudarc",
+ "feagi-async",
+ "feagi-connectome-serialization",
+ "feagi-data-serialization",
+ "feagi-data-structures",
+ "feagi-npu-neural",
+ "feagi-npu-runtime",
+ "feagi-npu-runtime-std",
+ "feagi-observability",
+ "feagi-state-manager",
+ "half",
+ "memmap2",
+ "ndarray",
+ "parking_lot",
+ "pollster",
+ "rayon",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tracing",
+ "wgpu",
+]
+
+[[package]]
+name = "feagi-npu-neural"
 version = "2.0.0"
 dependencies = [
  "ahash",
  "serde",
  "serde_json",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "feagi-npu-plasticity"
+version = "2.0.0"
+dependencies = [
+ "ahash",
+ "feagi-npu-neural",
+ "rayon",
+ "sha2",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "feagi-npu-runtime"
+version = "2.0.0"
+dependencies = [
+ "feagi-npu-neural",
+]
+
+[[package]]
+name = "feagi-npu-runtime-embedded"
+version = "2.0.0"
+dependencies = [
+ "feagi-npu-neural",
+ "feagi-npu-runtime",
+ "spin",
+]
+
+[[package]]
+name = "feagi-npu-runtime-std"
+version = "2.0.0"
+dependencies = [
+ "ahash",
+ "feagi-npu-neural",
+ "feagi-npu-runtime",
+ "rayon",
  "thiserror 1.0.69",
 ]
 
@@ -2101,54 +2139,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-plasticity"
-version = "2.0.0"
-dependencies = [
- "ahash",
- "feagi-neural",
- "rayon",
- "sha2",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "feagi-runtime"
-version = "2.0.0"
-dependencies = [
- "feagi-neural",
-]
-
-[[package]]
-name = "feagi-runtime-embedded"
-version = "2.0.0"
-dependencies = [
- "feagi-neural",
- "feagi-runtime",
- "spin",
-]
-
-[[package]]
-name = "feagi-runtime-std"
-version = "2.0.0"
-dependencies = [
- "ahash",
- "feagi-neural",
- "feagi-runtime",
- "rayon",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "feagi-services"
 version = "2.0.0"
 dependencies = [
  "async-trait",
  "chrono",
  "feagi-bdu",
- "feagi-burst-engine",
  "feagi-data-structures",
  "feagi-evo",
- "feagi-neural",
+ "feagi-npu-burst-engine",
+ "feagi-npu-neural",
  "feagi-observability",
  "parking_lot",
  "serde",

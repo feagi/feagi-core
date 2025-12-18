@@ -21,7 +21,7 @@ Licensed under the Apache License, Version 2.0
 use std::sync::Arc;
 use parking_lot::RwLock;
 use feagi_evo::RuntimeGenome;
-use feagi_neural::types::{Precision, QuantizationSpec};
+use feagi_npu_neural::types::{Precision, QuantizationSpec};
 use crate::connectome_manager::ConnectomeManager;
 use crate::types::BduResult;
 use crate::models::{CorticalArea, CorticalID};

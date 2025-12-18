@@ -184,7 +184,7 @@ impl ZmqStreams {
     }
 
     /// Publish raw fire queue data (NEW ARCHITECTURE - serialization in PNS thread)
-    pub fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> Result<(), IOError> {
+    pub fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<(), IOError> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
             info!(

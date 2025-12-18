@@ -39,10 +39,10 @@ use tracing::{debug, info, trace, warn};
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use crate::types::{BduError, BduResult};
-use feagi_neural::types::NeuronId;
+use feagi_npu_neural::types::NeuronId;
 
 // NPU integration (optional dependency)
-// use feagi_burst_engine::RustNPU; // Now using DynamicNPU
+// use feagi_npu_burst_engine::RustNPU; // Now using DynamicNPU
 
 /// Global singleton instance of ConnectomeManager
 static INSTANCE: Lazy<Arc<RwLock<ConnectomeManager>>> =
@@ -118,7 +118,7 @@ pub struct ConnectomeManager {
     /// 
     /// This is set by the Python process manager after NPU initialization.
     /// All neuron/synapse data queries delegate to the NPU.
-    npu: Option<Arc<Mutex<feagi_burst_engine::DynamicNPU>>>,
+    npu: Option<Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>>,
     
     /// Cached neuron count (lock-free read) - updated by burst engine
     /// This prevents health checks from blocking on NPU lock
@@ -215,7 +215,7 @@ impl ConnectomeManager {
     /// let npu = Arc::new(Mutex::new(RustNPU::new(1_000_000, 10_000_000, 10)));
     /// let manager = ConnectomeManager::new_for_testing_with_npu(npu);
     /// ```
-    pub fn new_for_testing_with_npu(npu: Arc<Mutex<feagi_burst_engine::DynamicNPU>>) -> Self {
+    pub fn new_for_testing_with_npu(npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> Self {
         Self {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
@@ -776,7 +776,7 @@ impl ConnectomeManager {
     ///
     /// * `npu` - Arc to the Rust NPU
     ///
-    pub fn set_npu(&mut self, npu: Arc<Mutex<feagi_burst_engine::DynamicNPU>>) {
+    pub fn set_npu(&mut self, npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>) {
         self.npu = Some(npu);
         info!(target: "feagi-bdu","🔗 ConnectomeManager: NPU reference set");
         
@@ -797,7 +797,7 @@ impl ConnectomeManager {
     /// 
     /// * `Option<&Arc<Mutex<RustNPU>>>` - Reference to NPU if connected
     /// 
-    pub fn get_npu(&self) -> Option<&Arc<Mutex<feagi_burst_engine::DynamicNPU>>> {
+    pub fn get_npu(&self) -> Option<&Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>> {
         self.npu.as_ref()
     }
     
@@ -1980,16 +1980,16 @@ impl ConnectomeManager {
         
         // Create synapse via NPU
         let syn_type = if synapse_type == 0 {
-            feagi_neural::synapse::SynapseType::Excitatory
+            feagi_npu_neural::synapse::SynapseType::Excitatory
         } else {
-            feagi_neural::synapse::SynapseType::Inhibitory
+            feagi_npu_neural::synapse::SynapseType::Inhibitory
         };
         
         let synapse_idx = npu_lock.add_synapse(
             NeuronId(source_neuron_id as u32),
             NeuronId(target_neuron_id as u32),
-            feagi_neural::types::SynapticWeight(weight),
-            feagi_neural::types::SynapticConductance(conductance),
+            feagi_npu_neural::types::SynapticWeight(weight),
+            feagi_npu_neural::types::SynapticConductance(conductance),
             syn_type,
         ).map_err(|e| BduError::Internal(format!("Failed to create synapse: {}", e)))?;
         
@@ -2062,7 +2062,7 @@ impl ConnectomeManager {
         let updated = npu_lock.update_synapse_weight(
             NeuronId(source_neuron_id as u32),
             NeuronId(target_neuron_id as u32),
-            feagi_neural::types::SynapticWeight(new_weight),
+            feagi_npu_neural::types::SynapticWeight(new_weight),
         );
         
         if updated {
@@ -3221,15 +3221,15 @@ mod tests {
     #[test]
     fn test_synapse_operations() {
         use std::sync::{Arc, Mutex};
-        use feagi_burst_engine::npu::RustNPU;
+        use feagi_npu_burst_engine::npu::RustNPU;
         
         // Get ConnectomeManager singleton
         let manager_arc = ConnectomeManager::instance();
         
         // Create and attach NPU
-        use feagi_runtime_std::StdRuntime;
-        use feagi_burst_engine::backend::CPUBackend;
-        use feagi_burst_engine::DynamicNPU;
+        use feagi_npu_runtime_std::StdRuntime;
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::DynamicNPU;
         
         let runtime = StdRuntime;
         let backend = CPUBackend::new();

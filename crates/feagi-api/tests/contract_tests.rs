@@ -12,9 +12,9 @@ use feagi_services::{
     AnalyticsServiceImpl, NeuronServiceImpl,
 };
 use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::{RustNPU, DynamicNPU};
-use feagi_runtime_std::StdRuntime;
-use feagi_burst_engine::backend::CPUBackend;
+use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
+use feagi_npu_runtime_std::StdRuntime;
+use feagi_npu_burst_engine::backend::CPUBackend;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use tower::ServiceExt; // For .oneshot()

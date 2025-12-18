@@ -21,7 +21,7 @@
 //! ## Usage
 //! ```ignore
 //! use feagi_connectome_serialization::{save_connectome, load_connectome};
-//! use feagi_burst_engine::RustNPU;
+//! use feagi_npu_burst_engine::RustNPU;
 //!
 //! // Save connectome
 //! let npu = RustNPU::new(10000, 100000, 20);

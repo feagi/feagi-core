@@ -10,7 +10,7 @@
 
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::{BurstLoopRunner, RustNPU};
+use feagi_npu_burst_engine::{BurstLoopRunner, RustNPU};
 use feagi_services::*;
 use feagi_services::SystemServiceImpl;
 use parking_lot::{Mutex as ParkingLotMutex, RwLock};
@@ -68,17 +68,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Dummy publishers for testing
     struct DummyViz;
-    impl feagi_burst_engine::VisualizationPublisher for DummyViz {
+    impl feagi_npu_burst_engine::VisualizationPublisher for DummyViz {
         fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> { Ok(()) }
     }
     struct DummyMotor;
-    impl feagi_burst_engine::MotorPublisher for DummyMotor {
+    impl feagi_npu_burst_engine::MotorPublisher for DummyMotor {
         fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> { Ok(()) }
     }
     
-    use feagi_runtime_std::StdRuntime;
-    use feagi_burst_engine::backend::CPUBackend;
-    use feagi_burst_engine::DynamicNPU;
+    use feagi_npu_runtime_std::StdRuntime;
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_burst_engine::DynamicNPU;
     
     let runtime = StdRuntime;
     let backend = CPUBackend::new();

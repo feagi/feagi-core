@@ -12,7 +12,7 @@ name = "feagi_evo"
 
 [dependencies]
 # Core types from existing FEAGI crates  
-feagi-neural = { path = "../feagi-neural" }
+feagi-npu-neural = { path = "../feagi-npu/neural" }
 feagi-data-structures = { workspace = true }
 
 # Serialization

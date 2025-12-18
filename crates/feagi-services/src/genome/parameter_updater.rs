@@ -14,7 +14,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-// use feagi_burst_engine::RustNPU; // Now using DynamicNPU
+// use feagi_npu_burst_engine::RustNPU; // Now using DynamicNPU
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use serde_json::Value;
@@ -29,11 +29,11 @@ use crate::ServiceResult;
 /// 
 /// Performance: ~2-5ms vs ~100-200ms for synapse rebuild (20-40x faster)
 pub struct CorticalParameterUpdater {
-    npu: Arc<Mutex<feagi_burst_engine::DynamicNPU>>,
+    npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
 }
 
 impl CorticalParameterUpdater {
-    pub fn new(npu: Arc<Mutex<feagi_burst_engine::DynamicNPU>>) -> Self {
+    pub fn new(npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> Self {
         Self { npu }
     }
     

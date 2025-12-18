@@ -41,7 +41,7 @@ pub struct ApiControlStream {
     router: Arc<Mutex<Option<ZmqRouter>>>,
     running: Arc<Mutex<bool>>,
     /// Reference to Rust NPU for direct queries (no Python overhead!)
-    npu: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>>>>,
+    npu: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
     /// RPC callback to Python CoreAPIService (for generic method calls)
     rpc_callback: RpcCallback,
 }
@@ -74,7 +74,7 @@ impl ApiControlStream {
     }
 
     /// Set the Rust NPU reference for direct queries
-    pub fn set_npu(&mut self, npu: Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) {
+    pub fn set_npu(&mut self, npu: Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) {
         *self.npu.lock() = Some(npu);
         info!("🦀 [API-CONTROL] NPU connected for direct queries");
     }
@@ -179,7 +179,7 @@ impl ApiControlStream {
 
     /// Process a request using the NPU (domain logic - unchanged)
     fn process_request(
-        npu_mutex: &Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>>>>,
+        npu_mutex: &Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
         rpc_callback: &RpcCallback,
         request_json: &str,
     ) -> String {
@@ -215,7 +215,7 @@ impl ApiControlStream {
 
     /// Route API request to appropriate handler (domain logic - unchanged)
     fn route_request(
-        npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>,
+        npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
         rpc_callback: &RpcCallback,
         request: &ApiRequest,
     ) -> serde_json::Value {
@@ -254,7 +254,7 @@ impl ApiControlStream {
 
     // All handler methods below are domain logic - unchanged from original
 
-    fn handle_npu_stats(npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_npu_stats(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         
         serde_json::json!({
@@ -267,7 +267,7 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_cortical_areas(npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_cortical_areas(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         let area_count = npu_lock.get_registered_cortical_area_count();
         
@@ -280,7 +280,7 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_cortical_area_info(_npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>, path: &str) -> serde_json::Value {
+    fn handle_cortical_area_info(_npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>, path: &str) -> serde_json::Value {
         let area_name = path.strip_prefix("/v1/npu/cortical_area/").unwrap_or("");
         
         serde_json::json!({
@@ -291,7 +291,7 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_fire_queue(_npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_fire_queue(_npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
         serde_json::json!({
             "status": 501,
             "body": {"error": "Fire queue query not yet implemented"}
@@ -308,7 +308,7 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_brain_readiness(npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_brain_readiness(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         let is_ready = npu_lock.get_burst_count() > 0 || npu_lock.get_neuron_count() > 0;
         serde_json::json!({
@@ -317,7 +317,7 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_burst_engine_state(npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_burst_engine_state(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         let state = if npu_lock.get_burst_count() > 0 || npu_lock.get_neuron_count() > 0 { 2 } else { 0 };
         serde_json::json!({
@@ -326,7 +326,7 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_genome_state(npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_genome_state(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         let state = if npu_lock.get_registered_cortical_area_count() > 0 { 2 } else { 0 };
         serde_json::json!({
@@ -335,7 +335,7 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_brain_stats(npu: &Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_brain_stats(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         serde_json::json!({
             "status": 200,

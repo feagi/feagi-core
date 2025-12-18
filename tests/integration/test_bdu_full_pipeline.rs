@@ -9,11 +9,11 @@
 /// No HTTP/API layer - direct testing of business logic.
 
 use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::{RustNPU, DynamicNPU};
+use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
 use feagi_evo::{load_genome_from_file, validate_genome};
 use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, AreaType};
-use feagi_runtime_std::StdRuntime;
-use feagi_burst_engine::backend::CPUBackend;
+use feagi_npu_runtime_std::StdRuntime;
+use feagi_npu_burst_engine::backend::CPUBackend;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;
 

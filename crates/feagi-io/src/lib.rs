@@ -59,7 +59,7 @@ enum StreamState {
 /// Minimal PNS clone for callbacks (only the Arc fields needed for dynamic gating)
 #[derive(Clone)]
 struct IOSystemForCallbacks {
-    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>>>>,
+    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
     agent_registry: Arc<RwLock<AgentRegistry>>,
     #[cfg(feature = "zmq-transport")]
     zmq_streams: Arc<Mutex<Option<ZmqStreams>>>,
@@ -524,11 +524,11 @@ pub struct IOSystem {
     running: Arc<RwLock<bool>>,
     /// Optional reference to burst engine's sensory agent manager for SHM I/O
     sensory_agent_manager:
-        Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>>>>,
+        Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::AgentManager>>>>>,
     
     // === Dynamic Stream Gating ===
     /// NPU reference for genome state checking (dynamic gating)
-    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>>>>,
+    npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
     /// Sensory stream state
     sensory_stream_state: Arc<Mutex<StreamState>>,
     /// Motor stream state
@@ -666,7 +666,7 @@ impl IOSystem {
     /// Should be called before starting the PNS
     pub fn set_sensory_agent_manager(
         &self,
-        manager: Arc<std::sync::Mutex<feagi_burst_engine::AgentManager>>,
+        manager: Arc<std::sync::Mutex<feagi_npu_burst_engine::AgentManager>>,
     ) {
         *self.sensory_agent_manager.lock() = Some(manager.clone());
         // Also propagate to registration handler
@@ -680,7 +680,7 @@ impl IOSystem {
     /// Should be called after creating BurstLoopRunner
     pub fn set_burst_runner(
         &self,
-        runner: Arc<parking_lot::RwLock<feagi_burst_engine::BurstLoopRunner>>,
+        runner: Arc<parking_lot::RwLock<feagi_npu_burst_engine::BurstLoopRunner>>,
     ) {
         // Propagate to registration handler for motor subscription management
         self.registration_handler
@@ -691,7 +691,7 @@ impl IOSystem {
 
     /// Set NPU reference for dynamic stream gating
     /// Should be called during initialization, before starting streams
-    pub fn set_npu_for_gating(&self, npu: Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>) {
+    pub fn set_npu_for_gating(&self, npu: Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) {
         *self.npu_ref.lock() = Some(Arc::clone(&npu));
         info!("🦀 [PNS] NPU connected for dynamic stream gating");
     }
@@ -701,7 +701,7 @@ impl IOSystem {
     #[cfg(feature = "zmq-transport")]
     pub fn connect_npu_to_sensory_stream(
         &self,
-        npu: Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>,
+        npu: Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
     ) {
         if let Some(streams) = self.zmq_streams.lock().as_ref() {
             streams.get_sensory_stream().set_npu(npu);
@@ -716,7 +716,7 @@ impl IOSystem {
     #[cfg(feature = "zmq-transport")]
     pub fn connect_npu_to_api_control_stream(
         &self,
-        npu: Arc<std::sync::Mutex<feagi_burst_engine::DynamicNPU>>,
+        npu: Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
     ) {
         if let Some(streams) = self.zmq_streams.lock().as_mut() {
             streams.get_api_control_stream_mut().set_npu(npu);
@@ -1362,7 +1362,7 @@ impl IOSystem {
     /// PNS will serialize on its own thread to avoid blocking burst engine
     /// 
     /// **PER-AGENT TRANSPORT:** Only publishes to transports that have active agents
-    pub fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> Result<()> {
+    pub fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<()> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
             info!(
@@ -1495,13 +1495,13 @@ impl IOSystem {
 }
 
 /// Implement VisualizationPublisher trait for burst engine integration (NO PYTHON IN HOT PATH!)
-impl feagi_burst_engine::VisualizationPublisher for IOSystem {
-    fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> std::result::Result<(), String> {
+impl feagi_npu_burst_engine::VisualizationPublisher for IOSystem {
+    fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> std::result::Result<(), String> {
         self.publish_raw_fire_queue(fire_data).map_err(|e| e.to_string())
     }
 }
 
-impl feagi_burst_engine::MotorPublisher for IOSystem {
+impl feagi_npu_burst_engine::MotorPublisher for IOSystem {
     fn publish_motor(&self, agent_id: &str, data: &[u8]) -> std::result::Result<(), String> {
         self.publish_motor(agent_id, data).map_err(|e| e.to_string())
     }

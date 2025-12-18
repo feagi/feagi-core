@@ -217,7 +217,7 @@ impl WebSocketStreams {
     }
     
     /// Publish raw fire queue data from burst engine (matches ZMQ API)
-    pub fn publish_raw_fire_queue(&self, fire_data: feagi_burst_engine::RawFireQueueSnapshot) -> Result<()> {
+    pub fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<()> {
         // Serialize the fire queue data to FeagiByteContainer format (same as ZMQ)
         let serialized = Self::serialize_fire_queue(&fire_data)
             .map_err(|e| IOError::Transport(format!("Failed to serialize fire queue: {}", e)))?;
@@ -231,7 +231,7 @@ impl WebSocketStreams {
     
     /// Serialize raw fire queue data to FeagiByteContainer format
     /// Same logic as ZMQ visualization stream
-    fn serialize_fire_queue(fire_data: &feagi_burst_engine::RawFireQueueSnapshot) -> std::result::Result<Vec<u8>, String> {
+    fn serialize_fire_queue(fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot) -> std::result::Result<Vec<u8>, String> {
         use feagi_data_structures::genomic::cortical_area::CorticalID;
         use feagi_data_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,

@@ -12,7 +12,7 @@ use crate::traits::GenomeService;
 use crate::types::*;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::ParameterUpdateQueue;
+use feagi_npu_burst_engine::ParameterUpdateQueue;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -561,7 +561,7 @@ info!(target: "feagi-services", "[FAST-UPDATE] Parameter-only update for {}", co
                 // Only queue parameters that affect NPU neurons
                 let classifier = CorticalChangeClassifier::parameter_changes();
                 if classifier.contains(param_name.as_str()) {
-                    queue.push(feagi_burst_engine::ParameterUpdate {
+                    queue.push(feagi_npu_burst_engine::ParameterUpdate {
                         cortical_idx,
                         cortical_id: cortical_id.to_string(),
                         parameter_name: param_name.clone(),

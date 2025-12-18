@@ -14,7 +14,7 @@ use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
 use feagi_bdu::ConnectomeManager;
 use feagi_bdu::models::CorticalAreaExt;
-use feagi_burst_engine::BurstLoopRunner;
+use feagi_npu_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use tracing::trace;

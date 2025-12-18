@@ -21,7 +21,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use feagi_bdu::BrainDevelopmentUnit;
-use feagi_burst_engine::DynamicNPU;
+use feagi_npu_burst_engine::DynamicNPU;
 use feagi_evo::{RuntimeGenome, templates};
 use feagi_types::{Dimensions, AreaType, CorticalArea};
 
