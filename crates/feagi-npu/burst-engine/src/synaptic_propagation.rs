@@ -200,8 +200,8 @@ impl Default for SynapticPropagationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::CorticalID;
-    use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
+    
+    use feagi_npu_runtime_std::SynapseArray;
 
     fn create_test_synapses() -> SynapseArray {
         let mut synapse_storage = SynapseArray {

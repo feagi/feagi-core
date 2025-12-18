@@ -47,7 +47,7 @@ parking_lot = "0.12"
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 rand = { version = "0.8", features = ["std", "std_rng"] }
 # Use async-tokio feature for desktop builds
-feagi-npu-burst-engine = { path = "../feagi-npu/burst-engine", default-features = false, features = ["async-tokio"] }
+feagi-npu-burst-engine = { path = "../feagi-npu/burst-engine", default-features = false, features = ["async-tokio", "std"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

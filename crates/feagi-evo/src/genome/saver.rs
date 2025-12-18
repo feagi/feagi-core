@@ -14,7 +14,8 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 use feagi_data_structures::genomic::BrainRegion;
-use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea};
+use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalArea, CorticalAreaType, CorticalAreaDimensions, IOCorticalAreaDataFlag};
+use feagi_data_structures::genomic::brain_regions::RegionID;
 use crate::types::{EvoError, EvoResult};
 
 /// Genome saver
@@ -149,17 +150,17 @@ mod tests {
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean),
         ).unwrap();
         
         cortical_areas.insert(cortical_id, area);
         
         // Create a test brain region
         let region = BrainRegion::new(
-            "root".to_string(),
+            RegionID::new(),
             "Root".to_string(),
-            RegionType::Custom,
+            RegionType::Undefined,
         ).unwrap();
         
         brain_regions.insert("root".to_string(), (region, None));
@@ -194,16 +195,16 @@ mod tests {
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
-            (5, 5, 5),
-            AreaType::Motor,
+            (5, 5, 5).into(),
+            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
         ).unwrap();
         cortical_areas.insert(cortical_id, area);
         
         let mut brain_regions = HashMap::new();
         let region = BrainRegion::new(
-            "root".to_string(),
+            RegionID::new(),
             "Root Region".to_string(),
-            RegionType::Custom,
+            RegionType::Undefined,
         ).unwrap();
         brain_regions.insert("root".to_string(), (region, None));
         
@@ -230,6 +231,6 @@ mod tests {
         assert_eq!(area.cortical_id, expected_power_id);
         assert_eq!(area.name, "Test Area");
         assert_eq!(area.dimensions.width, 10);
-        assert_eq!(area.position, (5, 5, 5));
+        assert_eq!(area.position, (5, 5, 5).into());
     }
 }

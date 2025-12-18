@@ -164,9 +164,8 @@ fn positioning_to_string(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_bdu::{AreaType, Dimensions, CorticalArea, CorticalID};
+    use feagi_bdu::{Dimensions, CorticalArea, CorticalID};
     use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
-    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 
     #[test]
     fn test_to_cortical_type_info_cartesian_plane() {
@@ -180,8 +179,8 @@ mod tests {
             0,
             "Vision Input".to_string(),
             Dimensions::new(128, 128, 3).unwrap(),
-            (0, 0, 0),
-            AreaType::Sensory,
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean),
         )
         .unwrap();
 
@@ -211,8 +210,8 @@ mod tests {
             0,
             "Motor Output".to_string(),
             Dimensions::new(10, 10, 1).unwrap(),
-            (0, 0, 0),
-            AreaType::Motor,
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
         )
         .unwrap();
 
@@ -240,8 +239,8 @@ mod tests {
             0,
             "Motor Area".to_string(),
             Dimensions::new(10, 10, 1).unwrap(),
-            (0, 0, 0),
-            AreaType::Motor,
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
         )
         .unwrap();
 

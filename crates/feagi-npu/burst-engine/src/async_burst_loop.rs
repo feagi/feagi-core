@@ -13,20 +13,31 @@ Licensed under the Apache License, Version 2.0
 
 #[cfg(feature = "std")]
 use crate::DynamicNPU;
+#[cfg(feature = "std")]
 use crate::burst_loop_runner::{MotorPublisher, VisualizationPublisher};
+
+#[cfg(feature = "std")]
 use feagi_async::FeagiAsyncRuntime;
+#[cfg(feature = "std")]
 use std::sync::{Arc, Mutex};
+#[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "std")]
 use std::time::Duration;
+#[cfg(feature = "std")]
 use tracing::{info, warn};
+#[cfg(feature = "std")]
 use parking_lot::RwLock as ParkingLotRwLock;
+#[cfg(feature = "std")]
 use ahash::AHashMap;
+#[cfg(feature = "std")]
 use crate::parameter_update_queue::ParameterUpdateQueue;
 
 /// Async burst loop that uses FeagiAsyncRuntime for platform-agnostic async operations
 ///
 /// This is the async equivalent of the synchronous `burst_loop` function.
 /// It can run on both desktop (Tokio) and WASM platforms.
+#[cfg(feature = "std")]
 pub async fn async_burst_loop<R: FeagiAsyncRuntime>(
     runtime: Arc<R>,
     npu: Arc<Mutex<DynamicNPU>>,

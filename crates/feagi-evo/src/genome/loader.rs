@@ -39,9 +39,9 @@ pub fn load_genome_from_file<P: AsRef<Path>>(path: P) -> EvoResult<RuntimeGenome
 /// ```rust,ignore
 /// let precision = peek_quantization_precision("genome.json")?;
 /// let npu = match precision.as_str() {
-///     "fp32" | "f32" => DynamicNPU::F32(RustNPU::<f32>::new(...)?),
-///     "int8" => DynamicNPU::INT8(RustNPU::<INT8Value>::new(...)?),
-///     _ => DynamicNPU::INT8(RustNPU::<INT8Value>::new(...)?), // default
+///     "fp32" | "f32" => DynamicNPUGeneric::F32(RustNPU::<f32>::new(...)?),
+///     "int8" => DynamicNPUGeneric::INT8(RustNPU::<INT8Value>::new(...)?),
+///     _ => DynamicNPUGeneric::INT8(RustNPU::<INT8Value>::new(...)?), // default
 /// };
 /// ```
 pub fn peek_quantization_precision<P: AsRef<Path>>(path: P) -> EvoResult<String> {

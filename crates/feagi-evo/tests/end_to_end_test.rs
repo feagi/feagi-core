@@ -39,8 +39,8 @@ fn test_complete_genome_workflow() {
         0,
         "Test Area".to_string(),
         CorticalAreaDimensions::new(10, 10, 10).unwrap(),
-        (0, 0, 0),
-        AreaType::Custom,
+        (0, 0, 0).into(),
+        CorticalAreaType::Custom,
     ).expect("Failed to create cortical area");
     
     genome.cortical_areas.insert(test_id, area);

@@ -652,6 +652,7 @@ mod tests {
                 genome_description: "Valid test genome".to_string(),
                 version: "2.0".to_string(),
                 timestamp: 1234567890.0,
+                brain_regions_root: None,
             },
             cortical_areas: HashMap::new(),
             brain_regions: HashMap::new(),
@@ -668,14 +669,15 @@ mod tests {
         
         // Add a valid cortical area (use _power which is a valid core ID)
         let test_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
-        use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, AreaType};
+        use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, CorticalAreaType};
+        use feagi_data_structures::genomic::cortical_area::CustomCorticalType;
         let area = CorticalArea::new(
             test_id.clone(),
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
-            (0, 0, 0),
-            AreaType::Custom,
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
         ).expect("Failed to create cortical area");
         
         genome.cortical_areas.insert(test_id, area);

@@ -60,11 +60,11 @@ impl GenomeSaver {
             ]));
             
             // Area type
-            let cortical_type = match area.area_type {
-                crate::models::cortical_area::AreaType::Sensory => "IPU",
-                crate::models::cortical_area::AreaType::Motor => "OPU",
-                crate::models::cortical_area::AreaType::Memory => "MEMORY",
-                crate::models::cortical_area::AreaType::Custom => "CUSTOM",
+            let cortical_type = match area.cortical_type {
+                crate::models::cortical_area::CorticalAreaType::Sensory => "IPU",
+                crate::models::cortical_area::CorticalAreaType::Motor => "OPU",
+                crate::models::cortical_area::CorticalAreaType::Memory => "MEMORY",
+                crate::models::cortical_area::CorticalAreaType::Custom => "CUSTOM",
             };
             area_data.insert("cortical_type".to_string(), json!(cortical_type));
             
@@ -145,7 +145,7 @@ mod tests {
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0),
-            AreaType::Sensory,
+            CorticalAreaType::Sensory,
         ).unwrap();
         
         cortical_areas.insert("test01".to_string(), area);
@@ -154,7 +154,7 @@ mod tests {
         let region = BrainRegion::new(
             "root".to_string(),
             "Root".to_string(),
-            RegionType::Custom,
+            RegionType::Undefined,
         ).unwrap();
         
         brain_regions.insert("root".to_string(), (region, None));
@@ -190,7 +190,7 @@ mod tests {
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (5, 5, 5),
-            AreaType::Motor,
+            CorticalAreaType::Motor,
         ).unwrap();
         cortical_areas.insert(cortical_id, area);
         
@@ -198,7 +198,7 @@ mod tests {
         let region = BrainRegion::new(
             "root".to_string(),
             "Root Region".to_string(),
-            RegionType::Custom,
+            RegionType::Undefined,
         ).unwrap();
         brain_regions.insert("root".to_string(), (region, None));
         

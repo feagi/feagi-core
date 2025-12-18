@@ -655,7 +655,8 @@ mod tests {
         let area = &parsed.cortical_areas[0];
         
         // Old type system (deprecated)
-        assert_eq!(area.area_type, AreaType::Memory);
+        use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
+        assert!(matches!(area.cortical_type, CorticalAreaType::Memory(_)));
         
         // Properties stored correctly
         assert!(area.properties.contains_key("is_mem_type"));

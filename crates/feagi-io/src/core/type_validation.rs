@@ -198,8 +198,8 @@ pub fn should_use_compression(area: &CorticalArea) -> bool {
 mod tests {
     use super::*;
     use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalAreaDimensions};
-    use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
-    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{IOCorticalAreaDataFlag, FrameChangeHandling, PercentageNeuronPositioning};
+    
+    
 
     #[test]
     fn test_validate_sensory_compatibility() {

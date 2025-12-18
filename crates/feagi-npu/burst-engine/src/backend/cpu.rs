@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_cpu_backend_creation() {
-        use feagi_npu_runtime_std::{StdRuntime, NeuronArray, SynapseArray};
+        use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
         let backend = CPUBackend::new();
         assert_eq!(<CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::backend_name(&backend), "CPU (SIMD) - LIF");
     }

@@ -361,7 +361,7 @@ impl GenomeParser {
             let title = raw_region.title.clone()
                 .unwrap_or_else(|| region_id.clone());
             
-            let region_type = RegionType::Custom; // Default to Custom
+            let region_type = RegionType::Undefined; // Default to Custom
             
             let mut region = BrainRegion::new(
                 region_id.clone(),
@@ -408,14 +408,14 @@ impl GenomeParser {
     /// Parse area type string to AreaType enum
     fn parse_area_type(type_str: Option<&str>) -> BduResult<AreaType> {
         match type_str {
-            Some("IPU") => Ok(AreaType::Sensory),
-            Some("OPU") => Ok(AreaType::Motor),
-            Some("MEMORY") => Ok(AreaType::Memory),
-            Some("CORE") => Ok(AreaType::Custom), // CORE maps to Custom for now
-            Some("CUSTOM") | None => Ok(AreaType::Custom),
+            Some("IPU") => Ok(CorticalAreaType::Sensory),
+            Some("OPU") => Ok(CorticalAreaType::Motor),
+            Some("MEMORY") => Ok(CorticalAreaType::Memory),
+            Some("CORE") => Ok(CorticalAreaType::Custom), // CORE maps to Custom for now
+            Some("CUSTOM") | None => Ok(CorticalAreaType::Custom),
             Some(other) => {
                 warn!(target: "feagi-bdu","Unknown cortical_type '{}', defaulting to Custom", other);
-                Ok(AreaType::Custom)
+                Ok(CorticalAreaType::Custom)
             }
         }
     }
@@ -499,7 +499,7 @@ mod tests {
         
         assert_eq!(parsed.cortical_areas.len(), 1);
         let area = &parsed.cortical_areas[0];
-        assert_eq!(area.area_type, AreaType::Memory);
+        assert_eq!(area.cortical_type, CorticalAreaType::Memory);
         assert!(area.properties.contains_key("is_mem_type"));
         assert!(area.properties.contains_key("firing_threshold"));
     }
