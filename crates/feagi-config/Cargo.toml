@@ -1,8 +1,8 @@
 [package]
 name = "feagi-config"
-version = "2.0.0"
+version = "2.0.1-beta.1"
 edition = "2021"
-authors = ["Neuraville Inc. <feagi@neuraville.com>"]
+authors.workspace = true
 license = "Apache-2.0"
 description = "Configuration loader for FEAGI - Cross-platform TOML-based configuration with override support"
 repository = "https://github.com/feagi/feagi-core"

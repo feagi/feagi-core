@@ -1,4 +1,5 @@
 [package]
+authors.workspace = true
 name = "feagi-data-serialization"
 edition.workspace = true
 version.workspace = true

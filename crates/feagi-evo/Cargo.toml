@@ -1,8 +1,8 @@
 [package]
 name = "feagi-evo"
-version = "2.0.0"
+version = "2.0.1-beta.1"
 edition = "2021"
-authors = ["FEAGI Team"]
+authors.workspace = true
 description = "Evolution and Genome Management - Genotype operations for FEAGI"
 license = "Apache-2.0"
 

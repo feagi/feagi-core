@@ -1,8 +1,8 @@
 [package]
 name = "feagi-agent"
-version = "2.0.0"
+version = "2.0.1-beta.1"
 edition = "2021"
-authors = ["FEAGI Team"]
+authors.workspace = true
 description = "Client library for building FEAGI agents in Rust"
 license = "Apache-2.0"
 readme = "README.md"

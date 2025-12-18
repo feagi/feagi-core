@@ -1,11 +1,11 @@
 [package]
 name = "feagi-state-manager"
-version = "2.0.0"
+version = "2.0.1-beta.1"
 edition = "2021"
 license = "Apache-2.0"
 description = "Runtime state management for FEAGI - cross-platform, RTOS-compatible"
 repository = "https://github.com/feagi/feagi-core"
-authors = ["Neuraville Inc."]
+authors.workspace = true
 
 [features]
 default = ["std"]
