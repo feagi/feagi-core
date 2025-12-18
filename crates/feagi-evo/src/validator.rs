@@ -256,10 +256,12 @@ fn validate_cortical_areas(genome: &RuntimeGenome, result: &mut ValidationResult
 
 /// Validate cortical ID format and compliance with feagi-data-processing templates
 fn validate_cortical_id_format(_cortical_id: &CorticalID, display: &str, result: &mut ValidationResult) {
-    // Check if display format is 8 characters (required)
-    if display.len() != 8 {
+    // Base64 encoded 8-byte IDs are 12 characters (with padding)
+    // Old format IDs are 8 characters
+    // Accept both formats for backward compatibility
+    if display.len() != 8 && display.len() != 12 {
         result.add_error(format!(
-            "Invalid cortical ID length: '{}' is {} characters (must be exactly 8)",
+            "Invalid cortical ID length: '{}' is {} characters (must be 8 or 12)",
             display, display.len()
         ));
         return;
@@ -667,10 +669,10 @@ mod tests {
             stats: GenomeStats::default(),
         };
         
-        // Add a valid cortical area (use _power which is a valid core ID)
-        let test_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
-        use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, CorticalAreaType};
+        // Add a valid cortical area (use CoreCorticalType::Power)
+        use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, CorticalAreaType, CoreCorticalType};
         use feagi_data_structures::genomic::cortical_area::CustomCorticalType;
+        let test_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
             test_id.clone(),
             0,

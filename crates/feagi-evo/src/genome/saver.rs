@@ -144,7 +144,8 @@ mod tests {
         let mut brain_regions = HashMap::new();
         
         // Create a test cortical area (use valid core ID)
-        let cortical_id = CorticalID::try_from_base_64("_power").unwrap();
+        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
             cortical_id.clone(),
             0,
@@ -188,8 +189,9 @@ mod tests {
         use crate::genome::GenomeParser;
         
         // Create test data (use valid core ID)
+        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
         let mut cortical_areas = HashMap::new();
-        let cortical_id = CorticalID::try_from_base_64("_power").unwrap();
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
             cortical_id.clone(),
             0,

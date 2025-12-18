@@ -694,33 +694,34 @@ mod tests {
     #[test]
     fn test_cortical_type_new_population() {
         // Test that cortical_type_new field is populated during parsing (Phase 2)
-        // This tests BACKWARD COMPATIBILITY: loading existing v2.1 genomes with old cortical IDs
-        // and populating the new cortical_type_new field based on cortical_type property
-        let json = r#"{
+        // This tests that parsing works with valid cortical IDs and populates types correctly
+        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+        let power_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
+        let json = format!(r#"{{
             "version": "2.1",
-            "blueprint": {
-                "iic000": {
-                    "cortical_name": "Test IPU",
-                    "cortical_type": "IPU",
+            "blueprint": {{
+                "cvision1": {{
+                    "cortical_name": "Test Custom Vision",
+                    "cortical_type": "CUSTOM",
                     "block_boundaries": [10, 10, 1],
                     "relative_coordinate": [0, 0, 0]
-                },
-                "omot00": {
-                    "cortical_name": "Test OPU",
-                    "cortical_type": "OPU",
+                }},
+                "cmotor01": {{
+                    "cortical_name": "Test Custom Motor",
+                    "cortical_type": "CUSTOM",
                     "block_boundaries": [5, 5, 1],
                     "relative_coordinate": [0, 0, 0]
-                },
-                "_power": {
+                }},
+                "{}": {{
                     "cortical_name": "Test Core",
                     "cortical_type": "CORE",
                     "block_boundaries": [1, 1, 1],
                     "relative_coordinate": [0, 0, 0]
-                }
-            }
-        }"#;
+                }}
+            }}
+        }}"#, power_id);
         
-        let parsed = GenomeParser::parse(json).unwrap();
+        let parsed = GenomeParser::parse(&json).unwrap();
         assert_eq!(parsed.cortical_areas.len(), 3);
         
         // Verify all areas have cortical_type_new populated

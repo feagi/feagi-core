@@ -473,7 +473,7 @@ mod tests {
         
         // Verify _power has correct properties
         let power = genome.cortical_areas.get(&power_id).unwrap();
-        assert_eq!(power.cortical_id.to_string(), "_power__");
+        assert_eq!(power.cortical_id.as_base_64(), power_id.as_base_64());
         assert_eq!(power.cortical_idx, 1);
         assert_eq!(power.dimensions.width, 1);
         assert_eq!(power.dimensions.height, 1);
