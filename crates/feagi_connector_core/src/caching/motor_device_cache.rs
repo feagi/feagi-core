@@ -400,17 +400,14 @@ impl MotorDeviceCache {
             let motor_unit_name = motor_cortical_unit.get_snake_case_name().to_string();
             let cortical_group_name = cortical_group_index.to_string();
 
-            let motor_units_map = {
-                if !output.contains_key(&motor_unit_name) {
-                    _ = output.insert(motor_unit_name.clone(), serde_json::Value::from(serde_json::Map::new()));
-                }
-                output.get_mut(&motor_unit_name).unwrap()
-            };
+            let motor_units_map = output
+                .entry(motor_unit_name)
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()))
+                .as_object_mut()
+                .expect("Just inserted an Object");
 
-            let motor_units_map: &mut serde_json::Map<String, serde_json::Value> = motor_units_map.into();
-
-            motor_units_map.insert(motor_unit_name.clone(), motor_channel_stream_caches.export_as_json()?);
-        };
+            motor_units_map.insert(cortical_group_name, motor_channel_stream_caches.export_as_json()?);
+        }
         Ok(serde_json::Value::Object(output))
     }
     

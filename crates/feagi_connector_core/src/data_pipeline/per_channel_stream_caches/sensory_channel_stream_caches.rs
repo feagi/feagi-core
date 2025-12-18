@@ -237,6 +237,19 @@ impl SensoryChannelStreamCaches {
         Ok(())
     }
 
+    pub(crate) fn export_as_json(&self) -> Result<serde_json::Value, FeagiDataError> {
+        let mut output = serde_json::Map::new();
+        output.insert("friendly_name".to_string(), serde_json::Value::String(self.device_friendly_name.clone()));
+
+        let mut channels_data: Vec<serde_json::Value> = Vec::new();
+        for pipeline_stage_runner in &self.pipeline_runners {
+            let channel_data = pipeline_stage_runner.export_as_json()?;
+            channels_data.push(channel_data);
+        };
+        output.insert("channels".to_string(), serde_json::Value::Array(channels_data));
+        Ok(output.into())
+    }
+
     //endregion
 
     /// Encodes recently updated sensor data into neuron voxel representations.
