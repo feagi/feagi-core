@@ -1,0 +1,27 @@
+[package]
+name = "feagi-npu-runtime-std"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Standard runtime adapter for FEAGI (Desktop/Server)"
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+# Runtime trait definitions
+feagi-npu-runtime = { path = "../runtime" }
+
+# Platform-agnostic core (types + algorithms)
+feagi-npu-neural = { path = "../neural" }
+
+# Standard library dependencies
+rayon = { workspace = true }  # Parallel processing
+ahash = { workspace = true }  # Fast hashing
+thiserror = { workspace = true }  # Error handling
+
+[dev-dependencies]
+
