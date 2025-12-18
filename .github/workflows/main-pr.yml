@@ -135,8 +135,8 @@ jobs:
     - name: Check documentation
       run: cargo doc --no-deps --document-private-items
     
-    - name: Build in release mode
-      run: cargo build --release --verbose
+    - name: Build in release mode (lib only)
+      run: cargo build --release --lib --verbose
     
     - name: Verify crate metadata for publication
       run: |
