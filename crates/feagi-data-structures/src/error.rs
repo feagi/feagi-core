@@ -40,18 +40,28 @@ pub enum FeagiDataError {
 
 impl Display for FeagiDataError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self { 
-            FeagiDataError::DeserializationError(msg) => write!(f, "Failed to Deserialize Bytes: {}", msg),
-            FeagiDataError::SerializationError(msg) => write!(f, "Failed to Serialize Bytes: {}", msg),
+        match self {
+            FeagiDataError::DeserializationError(msg) => {
+                write!(f, "Failed to Deserialize Bytes: {}", msg)
+            }
+            FeagiDataError::SerializationError(msg) => {
+                write!(f, "Failed to Serialize Bytes: {}", msg)
+            }
             FeagiDataError::BadParameters(msg) => write!(f, "Bad Parameters: {}", msg),
             FeagiDataError::NeuronError(msg) => write!(f, "NeuronError: {}", msg),
-            FeagiDataError::InternalError(msg) => write!(f, "Internal Error, please raise an issue on Github: {}", msg),
+            FeagiDataError::InternalError(msg) => write!(
+                f,
+                "Internal Error, please raise an issue on Github: {}",
+                msg
+            ),
             FeagiDataError::ConstError(msg) => write!(f, "ConstError: {}", msg),
-            FeagiDataError::NotImplemented => write!(f, "This function is not yet implemented! Please raise an issue on Github!")
+            FeagiDataError::NotImplemented => write!(
+                f,
+                "This function is not yet implemented! Please raise an issue on Github!"
+            ),
         }
     }
 }
 impl Error for FeagiDataError {}
-
 
 //  TODO From<> from other error types

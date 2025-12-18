@@ -22,8 +22,8 @@
 
 use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType, ComputeBackend};
 use feagi_npu_burst_engine::FireCandidateList;
-    use feagi_npu_neural::types::NeuronId;
-    use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
+use feagi_npu_neural::types::NeuronId;
+use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
 
 /// Helper: Create test genome
 fn create_test_genome(
@@ -142,10 +142,7 @@ fn test_full_fcl_all_neurons() {
     assert!(result.is_ok(), "Full FCL should be processed");
     let (fired, processed, _) = result.unwrap();
 
-    assert_eq!(
-        processed, neuron_count,
-        "All neurons should be processed"
-    );
+    assert_eq!(processed, neuron_count, "All neurons should be processed");
     assert!(
         fired.len() > neuron_count / 2,
         "Most neurons should fire with high potentials"
@@ -321,8 +318,8 @@ fn test_fcl_with_invalid_neuron_ids() {
     let mut fcl = FireCandidateList::new();
     fcl.add_candidate(NeuronId(0), 2.0); // Valid
     fcl.add_candidate(NeuronId(999), 2.0); // Valid (last neuron)
-    // Note: FCL validates IDs during add_candidate, so we can't easily add invalid IDs
-    // This test verifies that valid boundary cases work
+                                           // Note: FCL validates IDs during add_candidate, so we can't easily add invalid IDs
+                                           // This test verifies that valid boundary cases work
 
     let result = backend.process_neural_dynamics(&fcl, &mut neuron_array, 1);
 
@@ -496,4 +493,3 @@ fn test_fcl_medium_density() {
 
     println!("✅ Medium density FCL (10%) handled");
 }
-

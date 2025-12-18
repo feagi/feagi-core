@@ -4,32 +4,32 @@
 /// Logging abstraction for embedded platforms
 pub trait Logger {
     /// Log a message with specified level
-    /// 
+    ///
     /// # Arguments
     /// * `level` - Log level
     /// * `message` - Message to log
     fn log(&self, level: LogLevel, message: &str);
-    
+
     /// Log an error message
     fn error(&self, message: &str) {
         self.log(LogLevel::Error, message);
     }
-    
+
     /// Log a warning message
     fn warn(&self, message: &str) {
         self.log(LogLevel::Warn, message);
     }
-    
+
     /// Log an info message
     fn info(&self, message: &str) {
         self.log(LogLevel::Info, message);
     }
-    
+
     /// Log a debug message
     fn debug(&self, message: &str) {
         self.log(LogLevel::Debug, message);
     }
-    
+
     /// Log a trace message
     fn trace(&self, message: &str) {
         self.log(LogLevel::Trace, message);
@@ -63,4 +63,3 @@ impl LogLevel {
         }
     }
 }
-

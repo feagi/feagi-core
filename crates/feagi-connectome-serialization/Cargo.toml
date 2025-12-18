@@ -9,7 +9,7 @@ description = "Connectome serialization/deserialization for FEAGI inference engi
 
 [dependencies]
 # feagi-types merged into feagi-neural (Phase 2)
-# feagi-npu-neural = { path = "../feagi-npu/neural" }  # Not currently needed
+# feagi-npu-neural = { version = "0.0.0", path = "../feagi-npu/neural" }  # Not currently needed
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }

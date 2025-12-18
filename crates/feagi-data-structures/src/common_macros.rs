@@ -1,13 +1,13 @@
 //region Index / Count
 
 /// Creates a strongly-typed index wrapper around an integer type.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::define_index;
-/// 
+///
 /// define_index!(NodeId, u32, "Unique identifier for a node");
-/// 
+///
 /// let id = NodeId::from(42);
 /// assert_eq!(*id, 42);
 /// let raw: u32 = id.into();
@@ -19,13 +19,20 @@ macro_rules! define_index {
         #[doc = $doc]
         #[repr(transparent)]
         #[derive(
-            Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord,
-            serde::Serialize, serde::Deserialize
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            Hash,
+            PartialOrd,
+            Ord,
+            serde::Serialize,
+            serde::Deserialize,
         )]
         pub struct $name($inner);
 
         impl $name {
-
             // const constructor
             pub const fn from(var: $inner) -> Self {
                 Self(var)
@@ -83,7 +90,18 @@ macro_rules! define_index {
 macro_rules! define_nonzero_count {
     ($name:ident, $base:ty, $doc:expr) => {
         #[doc = $doc]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+        #[derive(
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            Hash,
+            PartialOrd,
+            Ord,
+            serde::Serialize,
+            serde::Deserialize,
+        )]
         pub struct $name {
             value: $base,
         }
@@ -92,17 +110,17 @@ macro_rules! define_nonzero_count {
             /// Creates a new instance, returns Err if validation fails
             pub fn new(value: $base) -> Result<Self, FeagiDataError> {
                 if value == 0 {
-                    return Err(FeagiDataError::BadParameters("Count cannot be zero!".into()));
+                    return Err(FeagiDataError::BadParameters(
+                        "Count cannot be zero!".into(),
+                    ));
                 }
-                Ok($name{
-                    value,
-                })
+                Ok($name { value })
             }
         }
         impl TryFrom<$base> for $name {
             type Error = FeagiDataError;
             fn try_from(value: $base) -> Result<Self, FeagiDataError> {
-                $name::new({value})
+                $name::new({ value })
             }
         }
 
@@ -124,8 +142,7 @@ macro_rules! define_nonzero_count {
                 self.value.fmt(f)
             }
         }
-
-    }
+    };
 }
 
 // endregion
@@ -133,13 +150,13 @@ macro_rules! define_nonzero_count {
 //region XY
 
 /// Creates a 2D coordinate type with x,y fields.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::define_xy_coordinates;
-/// 
+///
 /// define_xy_coordinates!(Point2D, i32, "Point2D", "A 2D point with integer coordinates");
-/// 
+///
 /// let point = Point2D::new(10, 20);
 /// assert_eq!(point.x, 10);
 /// assert_eq!(point.y, 20);
@@ -148,7 +165,6 @@ macro_rules! define_nonzero_count {
 #[macro_export]
 macro_rules! define_xy_coordinates {
     ($name:ident, $var_type:ty, $friendly_name:expr, $doc_string:expr) => {
-
         #[doc = $doc_string]
         #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, serde::Serialize, serde::Deserialize)]
         pub struct $name {
@@ -179,29 +195,27 @@ macro_rules! define_xy_coordinates {
                 write!(f, "{}({}, {})", $friendly_name, self.x, self.y)
             }
         }
-
     };
 }
 
 /// Creates a 2D dimension type with width,height fields and validation.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::{define_xy_dimensions, FeagiDataError};
-/// 
+///
 /// define_xy_dimensions!(Size2D, u32, "Size2D", 0, "A 2D size with positive dimensions");
-/// 
+///
 /// let size = Size2D::new(640, 480).unwrap();
 /// assert_eq!(size.width, 640);
 /// assert_eq!(size.height, 480);
-/// 
+///
 /// let invalid = Size2D::new(0, 480);
 /// assert!(invalid.is_err());
 /// ```
 #[macro_export]
 macro_rules! define_xy_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
-
         #[doc = $doc_string]
         #[derive(Clone, Debug, PartialEq, Copy, Hash, Eq, serde::Serialize, serde::Deserialize)]
         pub struct $name {
@@ -212,9 +226,15 @@ macro_rules! define_xy_dimensions {
         impl $name {
             pub fn new(x: $var_type, y: $var_type) -> Result<Self, FeagiDataError> {
                 if x == $invalid_zero_value || y == $invalid_zero_value {
-                    return Err(FeagiDataError::BadParameters(format!("Value cannot be {:?} in a {:?}!", $invalid_zero_value, $friendly_name)));
+                    return Err(FeagiDataError::BadParameters(format!(
+                        "Value cannot be {:?} in a {:?}!",
+                        $invalid_zero_value, $friendly_name
+                    )));
                 }
-                Ok(Self { width: x, height: y })
+                Ok(Self {
+                    width: x,
+                    height: y,
+                })
             }
         }
 
@@ -234,16 +254,22 @@ macro_rules! define_xy_dimensions {
             type Error = FeagiDataError;
             fn try_from(value: ($var_type, $var_type)) -> Result<Self, Self::Error> {
                 if value.0 == $invalid_zero_value {
-                    return Err(FeagiDataError::BadParameters(format!("X value cannot be zero!")));
+                    return Err(FeagiDataError::BadParameters(format!(
+                        "X value cannot be zero!"
+                    )));
                 }
                 if value.1 == $invalid_zero_value {
-                    return Err(FeagiDataError::BadParameters(format!("Y value cannot be zero!")));
+                    return Err(FeagiDataError::BadParameters(format!(
+                        "Y value cannot be zero!"
+                    )));
                 }
-                Ok(Self { width: value.0, height: value.1 })
+                Ok(Self {
+                    width: value.0,
+                    height: value.1,
+                })
             }
         }
-
-    }
+    };
 }
 
 //endregion
@@ -251,13 +277,13 @@ macro_rules! define_xy_dimensions {
 //region XYZ
 
 /// Creates a 3D coordinate type with x,y,z fields.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::define_xyz_coordinates;
-/// 
+///
 /// define_xyz_coordinates!(Point3D, u32, "Point3D", "A 3D point with u32 coordinates");
-/// 
+///
 /// let point = Point3D::new(1, 2, 3);
 /// assert_eq!(point.x, 1);
 /// assert_eq!(point.y, 2);
@@ -267,7 +293,6 @@ macro_rules! define_xy_dimensions {
 #[macro_export]
 macro_rules! define_xyz_coordinates {
     ($name:ident, $var_type:ty, $friendly_name:expr, $doc_string:expr) => {
-
         #[doc = $doc_string]
         #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, serde::Serialize, serde::Deserialize)]
         pub struct $name {
@@ -299,31 +324,29 @@ macro_rules! define_xyz_coordinates {
                 write!(f, "{}({}, {}, {})", $friendly_name, self.x, self.y, self.z)
             }
         }
-
     };
 }
 
 /// Creates a 3D dimension type with width,height,depth fields and validation.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::{define_xyz_dimensions, FeagiDataError};
-/// 
+///
 /// define_xyz_dimensions!(Volume3D, u32, "Volume3D", 0, "A 3D volume with positive dimensions");
-/// 
+///
 /// let vol = Volume3D::new(10, 20, 30).unwrap();
 /// assert_eq!(vol.width, 10);
 /// assert_eq!(vol.height, 20);
 /// assert_eq!(vol.depth, 30);
 /// assert_eq!(vol.number_elements(), 6000);
-/// 
+///
 /// let invalid = Volume3D::new(0, 20, 30);
 /// assert!(invalid.is_err());
 /// ```
 #[macro_export]
 macro_rules! define_xyz_dimensions {
     ($name:ident, $var_type:ty, $friendly_name:expr, $invalid_zero_value:expr, $doc_string:expr) => {
-
         #[doc = $doc_string]
         #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, serde::Serialize, serde::Deserialize)]
         pub struct $name {
@@ -334,14 +357,24 @@ macro_rules! define_xyz_dimensions {
 
         impl $name {
             pub fn new(x: $var_type, y: $var_type, z: $var_type) -> Result<Self, FeagiDataError> {
-                if x == $invalid_zero_value || y == $invalid_zero_value || z == $invalid_zero_value {
-                    return Err(FeagiDataError::BadParameters(format!("Value cannot be {:?} in a {:?}!", $invalid_zero_value, $friendly_name)));
+                if x == $invalid_zero_value || y == $invalid_zero_value || z == $invalid_zero_value
+                {
+                    return Err(FeagiDataError::BadParameters(format!(
+                        "Value cannot be {:?} in a {:?}!",
+                        $invalid_zero_value, $friendly_name
+                    )));
                 }
-                Ok(Self { width: x, height: y, depth: z })
+                Ok(Self {
+                    width: x,
+                    height: y,
+                    depth: z,
+                })
             }
 
             /// Convenience method for creating from tuple (validates)
-            pub fn from_tuple(tuple: ($var_type, $var_type, $var_type)) -> Result<Self, FeagiDataError> {
+            pub fn from_tuple(
+                tuple: ($var_type, $var_type, $var_type),
+            ) -> Result<Self, FeagiDataError> {
                 Self::new(tuple.0, tuple.1, tuple.2)
             }
 
@@ -373,7 +406,11 @@ macro_rules! define_xyz_dimensions {
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}<{}, {}, {}>", $friendly_name, self.width, self.height, self.depth)
+                write!(
+                    f,
+                    "{}<{}, {}, {}>",
+                    $friendly_name, self.width, self.height, self.depth
+                )
             }
         }
 
@@ -387,37 +424,47 @@ macro_rules! define_xyz_dimensions {
             type Error = FeagiDataError;
             fn try_from(value: ($var_type, $var_type, $var_type)) -> Result<Self, Self::Error> {
                 if value.0 == $invalid_zero_value {
-                    return Err(FeagiDataError::BadParameters(format!("X value cannot be zero!")));
+                    return Err(FeagiDataError::BadParameters(format!(
+                        "X value cannot be zero!"
+                    )));
                 }
                 if value.1 == $invalid_zero_value {
-                    return Err(FeagiDataError::BadParameters(format!("Y value cannot be zero!")));
+                    return Err(FeagiDataError::BadParameters(format!(
+                        "Y value cannot be zero!"
+                    )));
                 }
                 if value.2 == $invalid_zero_value {
-                    return Err(FeagiDataError::BadParameters(format!("Z value cannot be zero!")));
+                    return Err(FeagiDataError::BadParameters(format!(
+                        "Z value cannot be zero!"
+                    )));
                 }
-                Ok(Self { width: value.0, height: value.1, depth: value.2 })
+                Ok(Self {
+                    width: value.0,
+                    height: value.1,
+                    depth: value.2,
+                })
             }
         }
-    }
+    };
 }
 
 /// Creates bidirectional conversions between two XYZ dimension types.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::{define_xyz_dimensions, define_xyz_mapping, FeagiDataError};
-/// 
+///
 /// define_xyz_dimensions!(VolumeA, u32, "VolumeA", 0, "Volume type A");
 /// define_xyz_dimensions!(VolumeB, u32, "VolumeB", 0, "Volume type B");
 /// define_xyz_mapping!(VolumeA, VolumeB);
-/// 
+///
 /// let vol_a = VolumeA::new(10, 20, 30).unwrap();
 /// let vol_b: VolumeB = vol_a.into();
 /// let back_to_a: VolumeA = vol_b.into();
 /// assert_eq!(vol_a, back_to_a);
 /// ```
 #[macro_export]
-macro_rules! define_xyz_mapping{
+macro_rules! define_xyz_mapping {
     ($XYZ_a:ident, $XYZ_b:ident) => {
         impl From<$XYZ_a> for $XYZ_b {
             fn from(a: $XYZ_a) -> Self {
@@ -429,22 +476,22 @@ macro_rules! define_xyz_mapping{
                 $XYZ_a::new(b.width, b.height, b.depth).unwrap()
             }
         }
-    }
+    };
 }
 
 /// Creates a 3D dimension range type for spatial bounds checking.
-/// 
+///
 /// # Example
 /// ```
 /// use feagi_data_structures::{define_xyz_dimensions, define_xyz_dimension_range, FeagiDataError};
-/// 
+///
 /// define_xyz_dimensions!(Position3D, u32, "Position3D", 0, "3D position coordinates");
 /// define_xyz_dimension_range!(BoundingBox3D, u32, Position3D, "BoundingBox3D", "3D bounding box for spatial queries");
-/// 
+///
 /// let bounds = BoundingBox3D::new(0..10, 0..20, 0..30).unwrap();
 /// let pos = Position3D::new(5, 15, 25).unwrap();
 /// assert!(bounds.verify_coordinate_within_range(&pos).is_ok());
-/// 
+///
 /// let out_of_bounds = Position3D::new(15, 15, 25).unwrap();
 /// assert!(bounds.verify_coordinate_within_range(&out_of_bounds).is_err());
 /// ```
@@ -456,28 +503,48 @@ macro_rules! define_xyz_dimension_range {
         pub struct $name {
             pub width: std::ops::Range<$var_type>,
             pub height: std::ops::Range<$var_type>,
-            pub depth: std::ops::Range<$var_type>
+            pub depth: std::ops::Range<$var_type>,
         }
 
         impl $name {
             /// Creates a new dimension range, ensuring no ranges are empty.
-            pub fn new(x: std::ops::Range<$var_type>, y: std::ops::Range<$var_type>, z: std::ops::Range<$var_type>) -> Result<Self, FeagiDataError> {
-                Ok($name {width: x, height: y, depth: z})
+            pub fn new(
+                x: std::ops::Range<$var_type>,
+                y: std::ops::Range<$var_type>,
+                z: std::ops::Range<$var_type>,
+            ) -> Result<Self, FeagiDataError> {
+                Ok($name {
+                    width: x,
+                    height: y,
+                    depth: z,
+                })
             }
 
             /// Verifies that a coordinate falls within all axis ranges.
-            pub fn verify_coordinate_within_range(&self, coordinate: &$coordinate_type) -> Result<(), FeagiDataError> {
-                if self.width.contains(&coordinate.width) && self.height.contains(&coordinate.height) && self.depth.contains(&coordinate.depth) {
+            pub fn verify_coordinate_within_range(
+                &self,
+                coordinate: &$coordinate_type,
+            ) -> Result<(), FeagiDataError> {
+                if self.width.contains(&coordinate.width)
+                    && self.height.contains(&coordinate.height)
+                    && self.depth.contains(&coordinate.depth)
+                {
                     return Ok(());
                 }
-                Err(FeagiDataError::BadParameters(format!("Coordinate {:?} is not contained by this given range of {:?}!", coordinate, self)))
-
+                Err(FeagiDataError::BadParameters(format!(
+                    "Coordinate {:?} is not contained by this given range of {:?}!",
+                    coordinate, self
+                )))
             }
         }
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(f, "{}<{:?}, {:?}, {:?}>", $friendly_name, self.width, self.height, self.depth)
+                write!(
+                    f,
+                    "{}<{:?}, {:?}, {:?}>",
+                    $friendly_name, self.width, self.height, self.depth
+                )
             }
         }
     };

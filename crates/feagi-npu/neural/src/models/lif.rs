@@ -13,16 +13,16 @@
 //! The LIF model is the default and simplest neuron model in FEAGI.
 //!
 //! ## Model Dynamics
-//! 
+//!
 //! ```text
 //! Synaptic Contribution (per active synapse):
 //!     contribution = sign × weight × psp
-//!     
+//!
 //!     Where:
 //!     - sign = +1.0 (excitatory) or -1.0 (inhibitory)
 //!     - weight = synaptic weight normalized [0, 1]
 //!     - psp = postsynaptic potential normalized [0, 1]
-//!     
+//!
 //!     Result range: -1.0 to +1.0
 //!
 //! Membrane Potential Update:
@@ -41,7 +41,7 @@
 //!         FIRE and reset to V_rest
 //! ```
 
-use super::traits::{NeuronModel, ModelParameters};
+use super::traits::{ModelParameters, NeuronModel};
 use crate::synapse::SynapseType;
 
 /// LIF (Leaky Integrate-and-Fire) neuron model
@@ -124,7 +124,7 @@ impl NeuronModel for LIFModel {
 pub struct LIFParameters {
     /// Leak coefficient (0.0-1.0): percentage of (V - V_rest) lost per burst
     pub leak_coefficient: f32,
-    
+
     /// Resting potential: baseline membrane potential when no input
     pub resting_potential: f32,
 }
@@ -147,8 +147,8 @@ impl LIFParameters {
 impl Default for LIFParameters {
     fn default() -> Self {
         Self {
-            leak_coefficient: 0.1,    // 10% leak per burst
-            resting_potential: 0.0,   // Zero baseline
+            leak_coefficient: 0.1,  // 10% leak per burst
+            resting_potential: 0.0, // Zero baseline
         }
     }
 }
@@ -201,10 +201,9 @@ mod tests {
 
         // Test with positive synaptic input
         let new_mp = model.update_membrane_potential(
-            0.5,  // current MP
-            0.3,  // synaptic input
-            &params,
-            1.0,  // dt
+            0.5, // current MP
+            0.3, // synaptic input
+            &params, 1.0, // dt
         );
         // Expected: 0.5 + 0.3 - 0.1 * (0.5 - 0.0) = 0.75
         assert!((new_mp - 0.75).abs() < 1e-6);
@@ -239,4 +238,3 @@ mod tests {
         assert!(params_invalid.validate().is_err());
     }
 }
-

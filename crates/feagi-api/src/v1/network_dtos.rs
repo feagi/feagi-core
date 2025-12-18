@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Network API DTOs
-//! 
+//!
 //! Request/response types for network configuration
 
 use serde::{Deserialize, Serialize};
@@ -29,5 +29,3 @@ pub struct NetworkSuccessResponse {
     pub message: String,
     pub success: bool,
 }
-
-

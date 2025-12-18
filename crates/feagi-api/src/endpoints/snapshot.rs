@@ -3,7 +3,7 @@
 
 /*!
  * FEAGI v1 Snapshot API
- * 
+ *
  * Endpoints for creating, managing, and restoring brain snapshots
  * Maps to Python: feagi/api/v1/snapshot.py
  */

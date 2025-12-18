@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tracing::{info, error};
+use tracing::{error, info};
 
 /// Heartbeat Tracker
 pub struct HeartbeatTracker {
@@ -65,7 +65,7 @@ impl HeartbeatTracker {
                                 .as_millis() as u64;
                             let time_since_last_seen_ms = now.saturating_sub(agent_info.last_seen);
                             let timeout_threshold_ms = registry.get_timeout_ms();
-                            
+
                             info!(
                                 "🦀 [HEARTBEAT] 🚨 DEREGISTRATION CAUSE for '{}': \
                                 Last heartbeat was {}ms ago (threshold: {}ms, exceeded by: {}ms)",
@@ -78,19 +78,13 @@ impl HeartbeatTracker {
                                 "🦀 [HEARTBEAT]   ├─ Agent last_seen: {} (Unix epoch ms)",
                                 agent_info.last_seen
                             );
-                            info!(
-                                "🦀 [HEARTBEAT]   ├─ Current time: {} (Unix epoch ms)",
-                                now
-                            );
+                            info!("🦀 [HEARTBEAT]   ├─ Current time: {} (Unix epoch ms)", now);
                             info!(
                                 "🦀 [HEARTBEAT]   ├─ Time inactive: {:.2}s / {:.2}s timeout",
                                 time_since_last_seen_ms as f64 / 1000.0,
                                 timeout_threshold_ms as f64 / 1000.0
                             );
-                            info!(
-                                "🦀 [HEARTBEAT]   └─ Agent type: {}",
-                                agent_info.agent_type
-                            );
+                            info!("🦀 [HEARTBEAT]   └─ Agent type: {}", agent_info.agent_type);
                         }
                     }
                 }

@@ -1,11 +1,15 @@
-use std::time::Instant;
-use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex};
-use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
+use crate::data_pipeline::per_channel_stream_caches::{
+    PipelineStageRunner, SensoryPipelineStageRunner,
+};
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_pipeline::per_channel_stream_caches::{PipelineStageRunner, SensoryPipelineStageRunner};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex,
+};
+use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_data_structures::FeagiDataError;
+use std::time::Instant;
 
 /// Manages multiple sensory data streams with independent processing pipelines per channel.
 ///
@@ -27,11 +31,16 @@ pub(crate) struct SensoryChannelStreamCaches {
 }
 
 impl SensoryChannelStreamCaches {
-    pub fn new(neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>, number_channels: CorticalChannelCount, initial_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
-        let pipeline_runners: Vec<SensoryPipelineStageRunner> =
-            std::iter::repeat_with(|| SensoryPipelineStageRunner::new(initial_cached_value.clone()).unwrap())
-                .take(*number_channels as usize)
-                .collect();
+    pub fn new(
+        neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
+        number_channels: CorticalChannelCount,
+        initial_cached_value: WrappedIOData,
+    ) -> Result<Self, FeagiDataError> {
+        let pipeline_runners: Vec<SensoryPipelineStageRunner> = std::iter::repeat_with(|| {
+            SensoryPipelineStageRunner::new(initial_cached_value.clone()).unwrap()
+        })
+        .take(*number_channels as usize)
+        .collect();
 
         Ok(Self {
             neuron_encoder,
@@ -59,13 +68,19 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the channel exists
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    pub fn verify_channel_exists(&self, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-        _ =  self.try_get_pipeline_runner(channel_index)?;
+    pub fn verify_channel_exists(
+        &self,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<(), FeagiDataError> {
+        _ = self.try_get_pipeline_runner(channel_index)?;
         Ok(())
     }
 
     /// Retrieves the expected input data type for a channel
-    pub fn get_input_type_for_channel(&self, cortical_channel_index: CorticalChannelIndex) -> Result<WrappedIOType, FeagiDataError> {
+    pub fn get_input_type_for_channel(
+        &self,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<WrappedIOType, FeagiDataError> {
         let runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(runner.get_expected_type_to_input_and_process())
     }
@@ -85,7 +100,10 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(&WrappedIOData)` - Reference to the unprocessed input data
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    pub fn try_get_channel_preprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_get_channel_preprocessed_value(
+        &self,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(pipeline_runner.get_preprocessed_cached_value())
     }
@@ -101,15 +119,22 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(&WrappedIOData)` - Reference to the processed output data
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    pub fn try_get_channel_recent_postprocessed_value(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_get_channel_recent_postprocessed_value(
+        &self,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(pipeline_runner.get_postprocessed_sensor_value())
     }
 
-
-    pub fn try_replace_input_channel_cache_value_and_run_pipeline(&mut self, cortical_channel_index: CorticalChannelIndex, value: WrappedIOData, update_instant: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn try_replace_input_channel_cache_value_and_run_pipeline(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+        value: WrappedIOData,
+        update_instant: Instant,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
         // We assume value is of correct type
-        self.last_update_time = update_instant;// TODO cant this cause weird issues?
+        self.last_update_time = update_instant; // TODO cant this cause weird issues?
         let runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         runner.verify_input_sensor_data(&value)?;
         let mut_val = runner.get_preprocessed_cached_value_mut();
@@ -126,7 +151,10 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(Instant)` - The timestamp when the channel was last updated
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    pub fn try_get_channel_update_instant(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Instant, FeagiDataError> {
+    pub fn try_get_channel_update_instant(
+        &self,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<Instant, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(pipeline_runner.get_last_processed_instant())
     }
@@ -144,7 +172,11 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(Box<dyn PipelineStageProperties>)` - The stage's properties
     /// * `Err(FeagiDataError)` - If channel or stage index is out of bounds
-    pub fn try_get_single_stage_properties(&self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
+    pub fn try_get_single_stage_properties(
+        &self,
+        cortical_channel_index: CorticalChannelIndex,
+        pipeline_stage_property_index: PipelineStagePropertyIndex,
+    ) -> Result<PipelineStageProperties, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         pipeline_runner.try_get_single_stage_properties(pipeline_stage_property_index)
     }
@@ -157,7 +189,10 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(Vec<Box<dyn PipelineStageProperties>>)` - Properties for all stages in order
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    pub fn get_all_stage_properties(&self, cortical_channel_index: CorticalChannelIndex) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
+    pub fn get_all_stage_properties(
+        &self,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(pipeline_runner.get_all_stage_properties())
     }
@@ -172,9 +207,15 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the properties were successfully updated
     /// * `Err(FeagiDataError)` - If channel/stage index is invalid or update fails
-    pub fn try_update_single_stage_properties(&mut self, cortical_channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex, replacing_property: PipelineStageProperties) -> Result<(), FeagiDataError> {
+    pub fn try_update_single_stage_properties(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+        pipeline_stage_property_index: PipelineStagePropertyIndex,
+        replacing_property: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
-        pipeline_runner.try_update_single_stage_properties(pipeline_stage_property_index, replacing_property)
+        pipeline_runner
+            .try_update_single_stage_properties(pipeline_stage_property_index, replacing_property)
     }
 
     /// Updates the properties of all pipeline stages for a specific channel.
@@ -186,7 +227,11 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If all properties were successfully updated
     /// * `Err(FeagiDataError)` - If channel is invalid, count mismatch, or update fails
-    pub fn try_update_all_stage_properties(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    pub fn try_update_all_stage_properties(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_update_all_stage_properties(new_pipeline_stage_properties)
     }
@@ -201,7 +246,12 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the stage was successfully replaced
     /// * `Err(FeagiDataError)` - If indices are invalid or types are incompatible
-    pub fn try_replace_single_stage(&mut self, cortical_channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
+    pub fn try_replace_single_stage(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+        replacing_at_index: PipelineStagePropertyIndex,
+        new_pipeline_stage_properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_replace_single_stage(replacing_at_index, new_pipeline_stage_properties)
     }
@@ -215,7 +265,11 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If all stages were successfully replaced
     /// * `Err(FeagiDataError)` - If channel is invalid or stages are incompatible
-    pub fn try_replace_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    pub fn try_replace_all_stages(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_replace_all_stages(new_pipeline_stage_properties)
     }
@@ -231,7 +285,10 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If all stages were successfully removed
     /// * `Err(FeagiDataError)` - If channel is invalid or input/output types don't match
-    pub fn try_removing_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+    pub fn try_removing_all_stages(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_removing_all_stages()?;
         Ok(())
@@ -239,21 +296,32 @@ impl SensoryChannelStreamCaches {
 
     pub(crate) fn export_as_json(&self) -> Result<serde_json::Value, FeagiDataError> {
         let mut output = serde_json::Map::new();
-        output.insert("friendly_name".to_string(), serde_json::Value::String(self.device_friendly_name.clone()));
+        output.insert(
+            "friendly_name".to_string(),
+            serde_json::Value::String(self.device_friendly_name.clone()),
+        );
 
         let mut channels_data: Vec<serde_json::Value> = Vec::new();
         for pipeline_stage_runner in &self.pipeline_runners {
             let channel_data = pipeline_stage_runner.export_as_json()?;
             channels_data.push(channel_data);
         }
-        output.insert("channels".to_string(), serde_json::Value::Array(channels_data));
+        output.insert(
+            "channels".to_string(),
+            serde_json::Value::Array(channels_data),
+        );
         Ok(output.into())
     }
 
-    pub(crate) fn import_from_json(&mut self, json: &serde_json::Value) -> Result<(), FeagiDataError> {
-        let json_map = json.as_object().ok_or_else(||
-            FeagiDataError::DeserializationError("Expected JSON object for SensoryChannelStreamCaches".to_string())
-        )?;
+    pub(crate) fn import_from_json(
+        &mut self,
+        json: &serde_json::Value,
+    ) -> Result<(), FeagiDataError> {
+        let json_map = json.as_object().ok_or_else(|| {
+            FeagiDataError::DeserializationError(
+                "Expected JSON object for SensoryChannelStreamCaches".to_string(),
+            )
+        })?;
 
         // Get friendly name
         if let Some(friendly_name) = json_map.get("friendly_name") {
@@ -261,17 +329,22 @@ impl SensoryChannelStreamCaches {
         }
 
         // Get channels array
-        let channels = json_map.get("channels")
+        let channels = json_map
+            .get("channels")
             .and_then(|v| v.as_array())
-            .ok_or_else(|| FeagiDataError::DeserializationError("Expected 'channels' array".to_string()))?;
+            .ok_or_else(|| {
+                FeagiDataError::DeserializationError("Expected 'channels' array".to_string())
+            })?;
 
         self.pipeline_runners.clear();
 
         // Import each channel
         for (runner, channel_json) in self.pipeline_runners.iter_mut().zip(channels.iter()) {
-            let channel_map = channel_json.as_object().ok_or_else(||
-                FeagiDataError::DeserializationError("Expected channel to be JSON object".to_string())
-            )?;
+            let channel_map = channel_json.as_object().ok_or_else(|| {
+                FeagiDataError::DeserializationError(
+                    "Expected channel to be JSON object".to_string(),
+                )
+            })?;
             runner.import_from_json(channel_map)?;
         }
 
@@ -296,11 +369,20 @@ impl SensoryChannelStreamCaches {
     ///
     /// # Note
     /// The neuron data is expected to be cleared before calling this method.
-    pub(crate) fn update_neuron_data_with_recently_updated_cached_sensor_data(&mut self, neuron_data: &mut CorticalMappedXYZPNeuronVoxels, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+    pub(crate) fn update_neuron_data_with_recently_updated_cached_sensor_data(
+        &mut self,
+        neuron_data: &mut CorticalMappedXYZPNeuronVoxels,
+        time_of_burst: Instant,
+    ) -> Result<(), FeagiDataError> {
         // TODO We need a new trait method to just have all channels cleared if not up to date
         // Note: We expect neuron data to be cleared before this step
-        self.neuron_encoder.write_neuron_data_multi_channel_from_processed_cache(&self.pipeline_runners, time_of_burst, neuron_data)?;
-        
+        self.neuron_encoder
+            .write_neuron_data_multi_channel_from_processed_cache(
+                &self.pipeline_runners,
+                time_of_burst,
+                neuron_data,
+            )?;
+
         Ok(())
     }
 
@@ -317,13 +399,15 @@ impl SensoryChannelStreamCaches {
     /// * `Ok(&PipelineStageRunner)` - Reference to the pipeline runner
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
     #[inline]
-    fn try_get_pipeline_runner(&self, cortical_channel_index: CorticalChannelIndex) -> Result<&SensoryPipelineStageRunner, FeagiDataError> {
+    fn try_get_pipeline_runner(
+        &self,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<&SensoryPipelineStageRunner, FeagiDataError> {
         match self.pipeline_runners.get(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
                                                               cortical_channel_index, self.pipeline_runners.len())))
         }
-
     }
 
     /// Retrieves a mutable reference to a pipeline runner for a specific channel.
@@ -338,17 +422,17 @@ impl SensoryChannelStreamCaches {
     /// * `Ok(&mut PipelineStageRunner)` - Mutable reference to the pipeline runner
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
     #[inline]
-    fn try_get_pipeline_runner_mut(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<&mut SensoryPipelineStageRunner, FeagiDataError> {
+    fn try_get_pipeline_runner_mut(
+        &mut self,
+        cortical_channel_index: CorticalChannelIndex,
+    ) -> Result<&mut SensoryPipelineStageRunner, FeagiDataError> {
         let runner_count = self.pipeline_runners.len();
         match self.pipeline_runners.get_mut(*cortical_channel_index as usize) {
             Some(pipeline_runner) => Ok(pipeline_runner),
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
                                                               cortical_channel_index, runner_count)))
         }
-
     }
 
     //endregion
-
 }
-

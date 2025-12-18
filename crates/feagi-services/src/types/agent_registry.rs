@@ -141,7 +141,7 @@ pub struct AgentInfo {
 
     /// Agent capabilities
     pub capabilities: AgentCapabilities,
-    
+
     /// Transport method the agent chose to use
     pub chosen_transport: Option<String>, // "zmq", "websocket", "shm", or "hybrid"
 
@@ -219,7 +219,8 @@ impl AgentRegistry {
     pub fn new(max_agents: usize, timeout_ms: u64) -> Self {
         tracing::info!(
             "🦀 [REGISTRY] Initialized (max_agents={}, timeout_ms={})",
-            max_agents, timeout_ms
+            max_agents,
+            timeout_ms
         );
         Self {
             agents: std::collections::HashMap::new(),
@@ -285,12 +286,12 @@ impl AgentRegistry {
     /// Update heartbeat for an agent
     pub fn heartbeat(&mut self, agent_id: &str) -> Result<(), String> {
         use tracing::debug;
-        
+
         if let Some(agent) = self.agents.get_mut(agent_id) {
             let old_last_seen = agent.last_seen;
             agent.update_activity();
             let new_last_seen = agent.last_seen;
-            
+
             debug!(
                 "💓 [REGISTRY] Heartbeat updated for '{}': last_seen {} -> {} (+{}ms)",
                 agent_id,
@@ -298,7 +299,7 @@ impl AgentRegistry {
                 new_last_seen,
                 new_last_seen.saturating_sub(old_last_seen)
             );
-            
+
             Ok(())
         } else {
             Err(format!("Agent {} not found", agent_id))
@@ -357,47 +358,52 @@ impl AgentRegistry {
     pub fn count(&self) -> usize {
         self.agents.len()
     }
-    
+
     /// Check if any agent has sensory capability (for stream gating)
     pub fn has_sensory_agents(&self) -> bool {
         self.agents.values().any(|agent| {
             agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some()
         })
     }
-    
+
     /// Check if any agent has motor capability (for stream gating)
     pub fn has_motor_agents(&self) -> bool {
-        self.agents.values().any(|agent| {
-            agent.capabilities.motor.is_some()
-        })
+        self.agents
+            .values()
+            .any(|agent| agent.capabilities.motor.is_some())
     }
-    
+
     /// Check if any agent has visualization capability (for stream gating)
     pub fn has_visualization_agents(&self) -> bool {
-        self.agents.values().any(|agent| {
-            agent.capabilities.visualization.is_some()
-        })
+        self.agents
+            .values()
+            .any(|agent| agent.capabilities.visualization.is_some())
     }
-    
+
     /// Get count of agents with sensory capability
     pub fn count_sensory_agents(&self) -> usize {
-        self.agents.values().filter(|agent| {
-            agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some()
-        }).count()
+        self.agents
+            .values()
+            .filter(|agent| {
+                agent.capabilities.sensory.is_some() || agent.capabilities.vision.is_some()
+            })
+            .count()
     }
-    
+
     /// Get count of agents with motor capability
     pub fn count_motor_agents(&self) -> usize {
-        self.agents.values().filter(|agent| {
-            agent.capabilities.motor.is_some()
-        }).count()
+        self.agents
+            .values()
+            .filter(|agent| agent.capabilities.motor.is_some())
+            .count()
     }
-    
+
     /// Get count of agents with visualization capability
     pub fn count_visualization_agents(&self) -> usize {
-        self.agents.values().filter(|agent| {
-            agent.capabilities.visualization.is_some()
-        }).count()
+        self.agents
+            .values()
+            .filter(|agent| agent.capabilities.visualization.is_some())
+            .count()
     }
 
     /// Get the configured timeout threshold in milliseconds
@@ -471,4 +477,3 @@ impl AgentRegistry {
         Ok(())
     }
 }
-

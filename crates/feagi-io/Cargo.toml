@@ -1,7 +1,7 @@
 [package]
 authors.workspace = true
 name = "feagi-io"
-version = "2.0.1-beta.1"
+version = "0.0.0"
 edition = "2021"
 license = "Apache-2.0"
 description = "FEAGI I/O System - Agent I/O, registration, ZMQ & SHM"
@@ -15,11 +15,11 @@ websocket-transport = ["udp-transport"]       # WebSocket requires tokio (shares
 all-transports = ["zmq-transport", "udp-transport", "shm-transport", "websocket-transport"]
 
 [dependencies]
-feagi-npu-burst-engine = { path = "../feagi-npu/burst-engine" }
-feagi-bdu = { path = "../feagi-bdu" }  # For CorticalAreaExt
-feagi-services = { path = "../feagi-services" }  # For GenomeService and ConnectomeService
-feagi-transports = { path = "../feagi-transports", features = ["zmq-server", "websocket-server"] }
-feagi-npu-neural = { path = "../feagi-npu/neural" }  # For types
+feagi-npu-burst-engine = { version = "0.0.0", path = "../feagi-npu/burst-engine" }
+feagi-bdu = { version = "0.0.0", path = "../feagi-bdu" }  # For CorticalAreaExt
+feagi-services = { version = "0.0.0", path = "../feagi-services" }  # For GenomeService and ConnectomeService
+feagi-transports = { version = "0.0.0", path = "../feagi-transports", features = ["zmq-server", "websocket-server"] }
+feagi-npu-neural = { version = "0.0.0", path = "../feagi-npu/neural" }  # For types
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi-data-structures.workspace = true
 feagi-data-serialization = { workspace = true }

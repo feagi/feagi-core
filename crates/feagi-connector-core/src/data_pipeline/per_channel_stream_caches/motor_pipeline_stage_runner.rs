@@ -1,9 +1,9 @@
-use std::time::Instant;
-use feagi_data_structures::FeagiDataError;
-use crate::data_pipeline::PipelineStagePropertyIndex;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
+use crate::data_pipeline::PipelineStagePropertyIndex;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data_structures::FeagiDataError;
+use std::time::Instant;
 
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
 
@@ -60,7 +60,6 @@ impl PipelineStageRunner for MotorPipelineStageRunner {
 }
 
 impl MotorPipelineStageRunner {
-
     /// Creates a new pipeline stage runner with the specified configuration.
     pub fn new(initial_motor_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
         let expected_decoded_motor_type: WrappedIOType = (&initial_motor_cached_value).into();
@@ -80,7 +79,7 @@ impl MotorPipelineStageRunner {
     /// Returns the type of data expected to be outputted
     pub fn get_expected_type_to_output_after_processing(&self) -> WrappedIOType {
         if self.does_contain_stages() {
-            return self.pipeline_stages.last().unwrap().get_output_data_type()
+            return self.pipeline_stages.last().unwrap().get_output_data_type();
         }
         self.expected_decoded_motor_type
     }
@@ -98,17 +97,24 @@ impl MotorPipelineStageRunner {
         if self.pipeline_stages.is_empty() {
             return &self.preprocessed_cached_value;
         }
-        self.pipeline_stages.last().unwrap().get_most_recent_output()
+        self.pipeline_stages
+            .last()
+            .unwrap()
+            .get_most_recent_output()
     }
 
     /// Processes the currently cached value through the pipeline stages (if available), then returns a reference to the result
-    pub fn process_cached_decoded_motor_value(&mut self, time_of_update: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+    pub fn process_cached_decoded_motor_value(
+        &mut self,
+        time_of_update: Instant,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
         if self.pipeline_stages.is_empty() {
             return Ok(&self.preprocessed_cached_value);
         }
 
         // Process the first processor with the input value
-        self.pipeline_stages[0].process_new_input(&self.preprocessed_cached_value, time_of_update)?;
+        self.pipeline_stages[0]
+            .process_new_input(&self.preprocessed_cached_value, time_of_update)?;
 
         // Process subsequent processing using split_at_mut to avoid borrowing conflicts
         for i in 1..self.pipeline_stages.len() {
@@ -131,7 +137,10 @@ impl MotorPipelineStageRunner {
     }
 
     /// Retrieves the properties of a single stage in the pipeline.
-    pub fn try_get_single_stage_properties(&self, stage_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
+    pub fn try_get_single_stage_properties(
+        &self,
+        stage_index: PipelineStagePropertyIndex,
+    ) -> Result<PipelineStageProperties, FeagiDataError> {
         PipelineStageRunner::try_get_single_stage_properties(self, stage_index)
     }
 
@@ -141,22 +150,44 @@ impl MotorPipelineStageRunner {
     }
 
     /// Updates the properties of a single stage in the pipeline.
-    pub fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
-        PipelineStageRunner::try_update_single_stage_properties(self, updating_stage_index, updated_properties)
+    pub fn try_update_single_stage_properties(
+        &mut self,
+        updating_stage_index: PipelineStagePropertyIndex,
+        updated_properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
+        PipelineStageRunner::try_update_single_stage_properties(
+            self,
+            updating_stage_index,
+            updated_properties,
+        )
     }
 
     /// Updates the properties of all stages in the pipeline.
-    pub fn try_update_all_stage_properties(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    pub fn try_update_all_stage_properties(
+        &mut self,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
         PipelineStageRunner::try_update_all_stage_properties(self, new_pipeline_stage_properties)
     }
 
     /// Replaces a single stage in the pipeline with a new stage.
-    pub fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
-        PipelineStageRunner::try_replace_single_stage(self, replacing_at_index, new_pipeline_stage_properties)
+    pub fn try_replace_single_stage(
+        &mut self,
+        replacing_at_index: PipelineStagePropertyIndex,
+        new_pipeline_stage_properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
+        PipelineStageRunner::try_replace_single_stage(
+            self,
+            replacing_at_index,
+            new_pipeline_stage_properties,
+        )
     }
 
     /// Replaces all stages in the pipeline with new stages.
-    pub fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    pub fn try_replace_all_stages(
+        &mut self,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
         PipelineStageRunner::try_replace_all_stages(self, new_pipeline_stage_properties)
     }
 

@@ -3,17 +3,14 @@
 //! This enum defines all possible pipeline stage configurations.
 //! Properties are serializable and can be dynamically updated at runtime.
 
-use std::ops::RangeInclusive;
 use crate::data_pipeline::stages::{
-    ImageFrameProcessorStage,
-    ImageFrameSegmentatorStage,
-    ImageFrameQuickDiffStage,
+    ImageFrameProcessorStage, ImageFrameQuickDiffStage, ImageFrameSegmentatorStage,
     ImagePixelValueCountThresholdStage,
 };
-use crate::data_types::{ImageFrameProcessor, GazeProperties, ImageFrameSegmentator, Percentage};
 use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFrameProperties};
+use crate::data_types::{GazeProperties, ImageFrameProcessor, ImageFrameSegmentator, Percentage};
 use crate::wrapped_io_data::WrappedIOType;
-
+use std::ops::RangeInclusive;
 
 /// Macro to define the PipelineStageProperties enum with all its variants and implementations.
 ///
@@ -147,7 +144,6 @@ macro_rules! define_pipeline_stage_properties_enum {
         }
     };
 }
-
 
 define_pipeline_stage_properties_enum! {
     variants: {

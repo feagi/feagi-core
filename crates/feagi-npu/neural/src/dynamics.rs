@@ -183,7 +183,7 @@ pub fn update_neurons_lif_batch<T: NeuralValue>(
             &mut membrane_potentials[i],
             thresholds[i],
             leak_coefficients[i], // f32
-            T::zero(), // resting_potential
+            T::zero(),            // resting_potential
             candidate_potentials[i],
         );
     }
@@ -231,7 +231,7 @@ mod tests {
     fn test_probabilistic_firing() {
         // With random=0.5 and excitability=0.8, should fire
         assert!(should_fire(1.5, 1.0, 0.8, 0.5));
-        
+
         // With random=0.9 and excitability=0.8, should not fire
         assert!(!should_fire(1.5, 1.0, 0.8, 0.9));
     }
@@ -250,7 +250,7 @@ mod tests {
         assert!(!fired[1]);
         assert!(fired[2]);
     }
-    
+
     // ========================================================================
     // Phase 3: INT8 Quantization Tests
     // ========================================================================
@@ -263,65 +263,77 @@ mod tests {
     // For now, commented out to unblock Phase 3 completion.
     // The generic implementation works correctly with f32 (17 tests passing).
     // INT8 accuracy tuning deferred to Phase 6 (Testing & Validation).
-    
+
     #[test]
     #[ignore] // TODO (Phase 6): Fix INT8 quantization accuracy
     fn test_int8_neuron_fires_when_above_threshold() {
         use crate::types::INT8Value;
-        
+
         // Use well-separated values to avoid saturation
         let mut potential = INT8Value::from_f32(-20.0);
         let threshold = INT8Value::from_f32(10.0);
         let leak = 0.1f32;
         let input = INT8Value::from_f32(35.0);
-        
+
         let fired = update_neuron_lif(&mut potential, threshold, leak, INT8Value::zero(), input);
-        
+
         assert!(fired, "Neuron should fire (-20 + 35 = 15 > 10)");
-        
+
         let potential_after = potential.to_f32();
-        assert!((potential_after - 0.0).abs() < 2.0, "Should reset near zero, got {}", potential_after);
+        assert!(
+            (potential_after - 0.0).abs() < 2.0,
+            "Should reset near zero, got {}",
+            potential_after
+        );
     }
-    
+
     #[test]
     #[ignore] // TODO (Phase 6): Fix INT8 quantization accuracy
     fn test_int8_neuron_does_not_fire_below_threshold() {
         use crate::types::INT8Value;
-        
+
         // Use well-separated values to avoid saturation
         let mut potential = INT8Value::from_f32(-30.0);
         let threshold = INT8Value::from_f32(10.0);
         let leak = 0.05f32;
         let input = INT8Value::from_f32(20.0);
-        
+
         let fired = update_neuron_lif(&mut potential, threshold, leak, INT8Value::zero(), input);
-        
+
         assert!(!fired, "Neuron should not fire (-30 + 20 = -10 < 10)");
-        
+
         let potential_f32 = potential.to_f32();
-        assert!(potential_f32 < 0.0, "Potential should still be negative, got {}", potential_f32);
+        assert!(
+            potential_f32 < 0.0,
+            "Potential should still be negative, got {}",
+            potential_f32
+        );
     }
-    
+
     #[test]
     #[ignore] // TODO (Phase 6): Fix INT8 quantization accuracy
     fn test_int8_leak_application() {
         use crate::types::INT8Value;
-        
+
         let mut potential = INT8Value::from_f32(50.0);
         let leak = 0.05f32; // Lose 5%, keep 95%
-        
+
         apply_leak(&mut potential, leak);
-        
+
         let result = potential.to_f32();
         // 50.0 * (1 - 0.05) = 50.0 * 0.95 = 47.5, allow some quantization error
-        assert!((result - 47.5).abs() < 5.0, "Leak should reduce potential: {}", result);
+        assert!(
+            (result - 47.5).abs() < 5.0,
+            "Leak should reduce potential: {}",
+            result
+        );
     }
-    
+
     #[test]
     #[ignore] // TODO (Phase 6): Fix INT8 quantization accuracy
     fn test_int8_batch_update() {
         use crate::types::INT8Value;
-        
+
         // Use well-separated values to avoid saturation
         let mut potentials = [
             INT8Value::from_f32(-20.0),
@@ -335,8 +347,7 @@ mod tests {
         ];
         let leaks = [
             0.1f32, // Leak coefficient (lose 10%)
-            0.1f32,
-            0.1f32,
+            0.1f32, 0.1f32,
         ];
         let inputs = [
             INT8Value::from_f32(35.0), // Should fire (-20 + 35 = 15 > 10)
@@ -344,12 +355,11 @@ mod tests {
             INT8Value::from_f32(35.0), // Should fire
         ];
         let mut fired = [false; 3];
-        
+
         update_neurons_lif_batch(&mut potentials, &thresholds, &leaks, &inputs, &mut fired);
-        
+
         assert!(fired[0], "First neuron should fire");
         assert!(!fired[1], "Second neuron should not fire");
         assert!(fired[2], "Third neuron should fire");
     }
 }
-

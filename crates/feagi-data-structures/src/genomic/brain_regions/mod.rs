@@ -11,10 +11,10 @@ Moved from feagi-core/crates/feagi-bdu/src/models/brain_region.rs
 mod region_id;
 pub use region_id::RegionID;
 
+use crate::genomic::cortical_area::CorticalID;
+use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use crate::FeagiDataError;
-use crate::genomic::cortical_area::CorticalID;
 
 /// Type of brain region (placeholder for future functional/anatomical classification)
 ///
@@ -86,7 +86,11 @@ impl BrainRegion {
     ///
     /// Returns error if name is empty
     ///
-    pub fn new(region_id: RegionID, name: String, region_type: RegionType) -> Result<Self, FeagiDataError> {
+    pub fn new(
+        region_id: RegionID,
+        name: String,
+        region_type: RegionType,
+    ) -> Result<Self, FeagiDataError> {
         if name.trim().is_empty() {
             return Err(FeagiDataError::BadParameters(
                 "name cannot be empty".to_string(),
@@ -163,22 +167,24 @@ impl BrainRegion {
     /// Convert to dictionary representation (for serialization)
     pub fn to_dict(&self) -> serde_json::Value {
         // Convert CorticalIDs to their base64 string representation for JSON
-        let area_ids: Vec<String> = self.cortical_areas.iter()
+        let area_ids: Vec<String> = self
+            .cortical_areas
+            .iter()
             .map(|id| id.as_base_64())
             .collect();
-        
+
         let mut dict = serde_json::json!({
             "id": self.region_id.to_string(),
             "name": self.name,
             "region_type": self.region_type.to_string(),
             "cortical_areas": area_ids,
         });
-        
+
         // Add all properties from the HashMap
         for (key, value) in &self.properties {
             dict[key] = value.clone();
         }
-        
+
         dict
     }
 }

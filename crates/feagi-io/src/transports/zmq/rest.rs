@@ -9,7 +9,7 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
-use tracing::{info, error, debug};
+use tracing::{debug, error, info};
 
 /// REST request from agent
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,27 +266,30 @@ impl RestStream {
         match handler.lock().process_heartbeat(&agent_id) {
             Ok(_) => {
                 let count = HEARTBEAT_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
-                
+
                 // Log every heartbeat at DEBUG level, and periodic summary at INFO level
                 debug!(
                     "💓 [ZMQ-REST] Heartbeat received from '{}' at {} (count: {})",
                     agent_id, now, count
                 );
-                
+
                 if count == 1 || count % 30 == 0 {
                     info!(
                         "🦀 [PNS] 💓 Heartbeat #{} received from {} (timestamp: {})",
                         count, agent_id, now
                     );
                 }
-                
+
                 serde_json::json!({
                     "status": 200,
                     "body": {"message": "ok"}
                 })
             }
             Err(e) => {
-                error!("🦀 [PNS] 💓 Heartbeat FAILED for '{}' at {}: {}", agent_id, now, e);
+                error!(
+                    "🦀 [PNS] 💓 Heartbeat FAILED for '{}' at {}: {}",
+                    agent_id, now, e
+                );
                 serde_json::json!({
                     "status": 404,
                     "body": {"error": e}

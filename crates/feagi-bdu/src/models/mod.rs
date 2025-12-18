@@ -27,20 +27,17 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-pub mod cortical_area;
 pub mod brain_region_hierarchy;
+pub mod cortical_area;
 
 // Re-export CorticalArea types from feagi_data_structures (single source of truth)
-pub use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalID, CorticalAreaDimensions};
+pub use feagi_data_structures::genomic::cortical_area::{
+    CorticalArea, CorticalAreaDimensions, CorticalID,
+};
 
 // Re-export extension trait for business logic
 pub use cortical_area::CorticalAreaExt;
 
 // BrainRegion and RegionType now come from feagi_data_structures
-pub use feagi_data_structures::genomic::{BrainRegion, RegionType};
 pub use brain_region_hierarchy::BrainRegionHierarchy;
-
-
-
-
-
+pub use feagi_data_structures::genomic::{BrainRegion, RegionType};

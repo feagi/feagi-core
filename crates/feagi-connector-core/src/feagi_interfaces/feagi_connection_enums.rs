@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone, Copy, PartialEq, Default, Hash)]
 pub enum FeagiInterfaceStatus {
     #[default]
@@ -13,5 +12,5 @@ pub enum DeviceRegistrationStatus {
     #[default]
     Unknown,
     DevicesNotMatched,
-    DevicesMatched
+    DevicesMatched,
 }

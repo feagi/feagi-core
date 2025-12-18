@@ -1,10 +1,15 @@
+use crate::data_types::descriptors::{
+    ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
+};
+use crate::data_types::{
+    GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D,
+    SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
+    SignedPercentage4D,
+};
+use crate::wrapped_io_data::WrappedIOData;
+use feagi_data_structures::FeagiDataError;
 use std::fmt::write;
 use std::mem::discriminant;
-use feagi_data_structures::FeagiDataError;
-use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties};
-use crate::data_types::{GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
-use crate::wrapped_io_data::WrappedIOData;
-
 
 /// Type descriptor for wrapped I/O data.
 ///
@@ -37,14 +42,13 @@ pub enum WrappedIOType {
     ImageFrame(Option<ImageFrameProperties>),
     SegmentedImageFrame(Option<SegmentedImageFrameProperties>),
     MiscData(Option<MiscDataDimensions>),
-    GazeProperties
+    GazeProperties,
 }
 
 // NOTE: Due to some variations in some of the types, this isn't practical to turn into a macro.
 // This isn't too bad though.
 
 impl WrappedIOType {
-
     /// Checks if two types are the same variant, ignoring associated data.
     ///
     /// # Example
@@ -63,7 +67,7 @@ impl WrappedIOType {
     pub fn is_of(&self, io_type: &WrappedIOData) -> bool {
         WrappedIOType::from(io_type) == *self
     }
-    
+
     /// Creates a zero-initialized instance of wrapped data for this type.
     ///
     /// For types with associated properties (images, misc data), those properties
@@ -71,37 +75,72 @@ impl WrappedIOType {
     pub fn create_blank_data_of_type(&self) -> Result<WrappedIOData, FeagiDataError> {
         match self {
             WrappedIOType::Boolean => Ok(WrappedIOData::Boolean(false)),
-            WrappedIOType::Percentage => Ok(WrappedIOData::Percentage(Percentage::new_from_0_1_unchecked(0.0))),
-            WrappedIOType::Percentage_2D => Ok(WrappedIOData::Percentage_2D(Percentage2D::new_identical_percentages(Percentage::new_from_0_1_unchecked(0.0)))),
-            WrappedIOType::Percentage_3D => Ok(WrappedIOData::Percentage_3D(Percentage3D::new_identical_percentages(Percentage::new_from_0_1_unchecked(0.0)))),
-            WrappedIOType::Percentage_4D => Ok(WrappedIOData::Percentage_4D(Percentage4D::new_identical_percentages(Percentage::new_from_0_1_unchecked(0.0)))),
+            WrappedIOType::Percentage => Ok(WrappedIOData::Percentage(
+                Percentage::new_from_0_1_unchecked(0.0),
+            )),
+            WrappedIOType::Percentage_2D => Ok(WrappedIOData::Percentage_2D(
+                Percentage2D::new_identical_percentages(Percentage::new_from_0_1_unchecked(0.0)),
+            )),
+            WrappedIOType::Percentage_3D => Ok(WrappedIOData::Percentage_3D(
+                Percentage3D::new_identical_percentages(Percentage::new_from_0_1_unchecked(0.0)),
+            )),
+            WrappedIOType::Percentage_4D => Ok(WrappedIOData::Percentage_4D(
+                Percentage4D::new_identical_percentages(Percentage::new_from_0_1_unchecked(0.0)),
+            )),
 
-            WrappedIOType::SignedPercentage => Ok(WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0))),
-            WrappedIOType::SignedPercentage_2D => Ok(WrappedIOData::SignedPercentage_2D(SignedPercentage2D::new_identical_percentages(SignedPercentage::new_from_m1_1_unchecked(0.0)))),
-            WrappedIOType::SignedPercentage_3D => Ok(WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_identical_percentages(SignedPercentage::new_from_m1_1_unchecked(0.0)))),
-            WrappedIOType::SignedPercentage_4D => Ok(WrappedIOData::SignedPercentage_4D(SignedPercentage4D::new_identical_percentages(SignedPercentage::new_from_m1_1_unchecked(0.0)))),
+            WrappedIOType::SignedPercentage => Ok(WrappedIOData::SignedPercentage(
+                SignedPercentage::new_from_m1_1_unchecked(0.0),
+            )),
+            WrappedIOType::SignedPercentage_2D => Ok(WrappedIOData::SignedPercentage_2D(
+                SignedPercentage2D::new_identical_percentages(
+                    SignedPercentage::new_from_m1_1_unchecked(0.0),
+                ),
+            )),
+            WrappedIOType::SignedPercentage_3D => Ok(WrappedIOData::SignedPercentage_3D(
+                SignedPercentage3D::new_identical_percentages(
+                    SignedPercentage::new_from_m1_1_unchecked(0.0),
+                ),
+            )),
+            WrappedIOType::SignedPercentage_4D => Ok(WrappedIOData::SignedPercentage_4D(
+                SignedPercentage4D::new_identical_percentages(
+                    SignedPercentage::new_from_m1_1_unchecked(0.0),
+                ),
+            )),
 
             WrappedIOType::ImageFrame(image_properties) => {
                 if image_properties.is_none() {
-                    return Err(FeagiDataError::BadParameters("Image frame properties is None! Cannot Created Default Wrapped Data!".into()));
+                    return Err(FeagiDataError::BadParameters(
+                        "Image frame properties is None! Cannot Created Default Wrapped Data!"
+                            .into(),
+                    ));
                 }
-                Ok(WrappedIOData::ImageFrame(ImageFrame::new_from_image_frame_properties(&image_properties.unwrap())?))
+                Ok(WrappedIOData::ImageFrame(
+                    ImageFrame::new_from_image_frame_properties(&image_properties.unwrap())?,
+                ))
             }
             WrappedIOType::SegmentedImageFrame(segmented_image_properties) => {
                 if segmented_image_properties.is_none() {
                     return Err(FeagiDataError::BadParameters("Segmented Image frame properties is None! Cannot Created Default Wrapped Data!".into()));
                 }
-                Ok(WrappedIOData::SegmentedImageFrame(SegmentedImageFrame::from_segmented_image_frame_properties(&segmented_image_properties.unwrap())?))
+                Ok(WrappedIOData::SegmentedImageFrame(
+                    SegmentedImageFrame::from_segmented_image_frame_properties(
+                        &segmented_image_properties.unwrap(),
+                    )?,
+                ))
             }
             WrappedIOType::MiscData(misc_dimensions) => {
                 if misc_dimensions.is_none() {
-                    return Err(FeagiDataError::BadParameters("Misc Dimensions is None! Cannot Created Default Wrapped Data!".into()));
+                    return Err(FeagiDataError::BadParameters(
+                        "Misc Dimensions is None! Cannot Created Default Wrapped Data!".into(),
+                    ));
                 }
-                Ok(WrappedIOData::MiscData(MiscData::new(&misc_dimensions.unwrap())?))
+                Ok(WrappedIOData::MiscData(MiscData::new(
+                    &misc_dimensions.unwrap(),
+                )?))
             }
-            WrappedIOType::GazeProperties => {
-                Ok(WrappedIOData::GazeProperties(GazeProperties::create_default_centered()))
-            }
+            WrappedIOType::GazeProperties => Ok(WrappedIOData::GazeProperties(
+                GazeProperties::create_default_centered(),
+            )),
         }
     }
 }
@@ -128,9 +167,7 @@ impl std::fmt::Display for WrappedIOType {
             WrappedIOType::SegmentedImageFrame(segment_properties) => {
                 let s: String = match segment_properties {
                     None => "No Requirements".to_string(),
-                    Some(properties) => {
-                        properties.to_string()
-                    }
+                    Some(properties) => properties.to_string(),
                 };
                 write!(f, "SegmentedImageFrame({})", s)
             }
@@ -158,9 +195,15 @@ impl From<WrappedIOData> for WrappedIOType {
             WrappedIOData::SignedPercentage_2D(_) => WrappedIOType::SignedPercentage_2D,
             WrappedIOData::SignedPercentage_3D(_) => WrappedIOType::SignedPercentage_3D,
             WrappedIOData::SignedPercentage_4D(_) => WrappedIOType::SignedPercentage_4D,
-            WrappedIOData::ImageFrame(image) => WrappedIOType::ImageFrame(Some(image.get_image_frame_properties())),
-            WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(Some(segments.get_segmented_image_frame_properties())),
-            WrappedIOData::MiscData(dimensions) => {WrappedIOType::MiscData(Some(dimensions.get_dimensions()))}
+            WrappedIOData::ImageFrame(image) => {
+                WrappedIOType::ImageFrame(Some(image.get_image_frame_properties()))
+            }
+            WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(
+                Some(segments.get_segmented_image_frame_properties()),
+            ),
+            WrappedIOData::MiscData(dimensions) => {
+                WrappedIOType::MiscData(Some(dimensions.get_dimensions()))
+            }
             WrappedIOData::GazeProperties(_) => WrappedIOType::GazeProperties,
         }
     }
@@ -178,9 +221,15 @@ impl From<&WrappedIOData> for WrappedIOType {
             WrappedIOData::SignedPercentage_2D(_) => WrappedIOType::SignedPercentage_2D,
             WrappedIOData::SignedPercentage_3D(_) => WrappedIOType::SignedPercentage_3D,
             WrappedIOData::SignedPercentage_4D(_) => WrappedIOType::SignedPercentage_4D,
-            WrappedIOData::ImageFrame(image) => WrappedIOType::ImageFrame(Some(image.get_image_frame_properties())),
-            WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(Some(segments.get_segmented_image_frame_properties())),
-            WrappedIOData::MiscData(dimensions) => {WrappedIOType::MiscData(Some(dimensions.get_dimensions()))}
+            WrappedIOData::ImageFrame(image) => {
+                WrappedIOType::ImageFrame(Some(image.get_image_frame_properties()))
+            }
+            WrappedIOData::SegmentedImageFrame(segments) => WrappedIOType::SegmentedImageFrame(
+                Some(segments.get_segmented_image_frame_properties()),
+            ),
+            WrappedIOData::MiscData(dimensions) => {
+                WrappedIOType::MiscData(Some(dimensions.get_dimensions()))
+            }
             WrappedIOData::GazeProperties(_) => WrappedIOType::GazeProperties,
         }
     }

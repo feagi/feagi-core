@@ -9,11 +9,11 @@ Transformation methods live in feagi-bdu.
 Moved from feagi-core/crates/feagi-bdu/src/models/cortical_area.rs
 */
 
+use super::{CorticalAreaDimensions, CorticalAreaType, CorticalID};
+use crate::genomic::descriptors::GenomeCoordinate3D;
+use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::FeagiDataError;
-use crate::genomic::descriptors::GenomeCoordinate3D;
-use super::{CorticalAreaDimensions, CorticalID, CorticalAreaType};
 
 /// Cortical area metadata (genome representation)
 ///

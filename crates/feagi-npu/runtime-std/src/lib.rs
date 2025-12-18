@@ -26,22 +26,22 @@
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod neuron_array;
-pub mod synapse_array;
 pub mod runtime;
+pub mod synapse_array;
 
 pub use neuron_array::NeuronArray;
-pub use synapse_array::SynapseArray;
 pub use runtime::StdRuntime;
+pub use synapse_array::SynapseArray;
 
 /// Runtime configuration for std platform
 #[derive(Debug, Clone)]
 pub struct RuntimeConfig {
     /// Number of parallel threads (0 = auto-detect)
     pub num_threads: usize,
-    
+
     /// Enable SIMD optimizations
     pub enable_simd: bool,
-    
+
     /// Initial capacity hint for arrays
     pub initial_capacity: usize,
 }
@@ -55,5 +55,3 @@ impl Default for RuntimeConfig {
         }
     }
 }
-
-

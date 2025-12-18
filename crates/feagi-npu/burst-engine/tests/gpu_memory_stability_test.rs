@@ -21,8 +21,8 @@
 
 use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType};
 use feagi_npu_burst_engine::FireCandidateList;
-    use feagi_npu_neural::types::NeuronId;
-    use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
+use feagi_npu_neural::types::NeuronId;
+use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
 
 /// Helper: Create test genome
 fn create_test_genome(
@@ -92,7 +92,7 @@ fn test_gpu_1000_burst_stability() {
         .expect("GPU initialization should succeed");
 
     println!("Starting 1000-burst stability test...");
-    
+
     let mut total_fired = 0u64;
     let mut total_processed = 0u64;
 
@@ -238,7 +238,10 @@ fn test_gpu_performance_consistency() {
     println!("Performance statistics (100 bursts):");
     println!("  Mean: {:.1} μs", mean_time);
     println!("  Std Dev: {:.1} μs", std_dev);
-    println!("  Coefficient of Variation: {:.1}%", (std_dev / mean_time) * 100.0);
+    println!(
+        "  Coefficient of Variation: {:.1}%",
+        (std_dev / mean_time) * 100.0
+    );
 
     // Performance should be relatively consistent (CV < 50%)
     let cv = std_dev / mean_time;
@@ -266,7 +269,10 @@ fn test_gpu_repeated_initialization() {
             synapse_array.capacity,
             &config,
         )
-        .expect(&format!("GPU backend creation {} should succeed", iteration));
+        .expect(&format!(
+            "GPU backend creation {} should succeed",
+            iteration
+        ));
 
         backend
             .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -316,11 +322,7 @@ fn test_gpu_varying_fcl_sizes() {
         }
 
         let result = backend.process_neural_dynamics(&fcl, &mut neuron_array, 1);
-        assert!(
-            result.is_ok(),
-            "FCL size {} should be handled",
-            size
-        );
+        assert!(result.is_ok(), "FCL size {} should be handled", size);
 
         let (_, processed, _) = result.unwrap();
         assert_eq!(
@@ -425,11 +427,7 @@ fn test_gpu_zero_activity_periods() {
             .expect("Synaptic propagation should succeed");
 
         let result = backend.process_neural_dynamics(&fcl, &mut neuron_array, burst as u64);
-        assert!(
-            result.is_ok(),
-            "Burst {} should succeed",
-            burst
-        );
+        assert!(result.is_ok(), "Burst {} should succeed", burst);
     }
 
     println!("✅ Alternating activity/silence handled correctly");
@@ -544,7 +542,7 @@ fn test_gpu_large_then_small_fcl() {
         .expect("GPU initialization should succeed");
 
     // Test going from large FCL to small FCL (tests buffer cleanup)
-    
+
     // Large FCL
     let mut fcl_large = FireCandidateList::new();
     for i in 0..2500 {
@@ -569,4 +567,3 @@ fn test_gpu_large_then_small_fcl() {
 
     println!("✅ Transition from large to small FCL works correctly");
 }
-

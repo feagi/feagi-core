@@ -15,14 +15,14 @@ use futures_util::future::select;
 #[cfg(feature = "wasm")]
 use futures_util::FutureExt;
 #[cfg(feature = "wasm")]
-use wasm_bindgen_futures::{spawn_local, JsFuture};
+use js_sys::Promise;
 #[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 #[cfg(feature = "wasm")]
-use js_sys::Promise;
+use wasm_bindgen_futures::{spawn_local, JsFuture};
 
 /// The WASM async runtime using wasm-bindgen-futures.
-/// 
+///
 /// This is a single-threaded runtime suitable for browser and web environments.
 /// Note: There is no `block_on` equivalent in WASM - everything must be async.
 #[cfg(feature = "wasm")]
@@ -44,7 +44,7 @@ impl Default for WasmRuntime {
 }
 
 /// A task handle for WASM that wraps a oneshot channel receiver.
-/// 
+///
 /// Since `spawn_local` doesn't return a handle, we use a channel internally
 /// to communicate the result back to the caller.
 #[cfg(feature = "wasm")]
@@ -70,7 +70,7 @@ impl<T> Future for WasmTaskHandle<T> {
 unsafe impl<T: Send> Send for WasmTaskHandle<T> {}
 
 /// A Send-safe wrapper for WASM delay future
-/// 
+///
 /// In WASM, everything runs on a single thread, so Send is trivially satisfied.
 /// This wrapper makes JsFuture Send-safe for use in the trait.
 #[cfg(feature = "wasm")]
@@ -105,7 +105,7 @@ impl FeagiAsyncRuntime for WasmRuntime {
         T: Send + 'static,
     {
         let (tx, rx) = oneshot::channel();
-        
+
         // spawn_local doesn't require Send on the future in WASM,
         // but we accept Send futures to match the trait signature
         spawn_local(async move {
@@ -113,7 +113,7 @@ impl FeagiAsyncRuntime for WasmRuntime {
             // Ignore send errors - receiver may have been dropped
             let _ = tx.send(result);
         });
-        
+
         WasmTaskHandle(rx)
     }
 
@@ -133,12 +133,12 @@ impl FeagiAsyncRuntime for WasmRuntime {
                 .expect("setTimeout should work");
             // closure is kept alive by the Promise
         });
-        
+
         // Wrap JsFuture in a Send-safe wrapper
         let delay_future = WasmDelayFuture {
             inner: JsFuture::from(promise),
         };
-        
+
         Box::pin(delay_future)
     }
 
@@ -148,7 +148,7 @@ impl FeagiAsyncRuntime for WasmRuntime {
         T: Send + 'static,
     {
         Err(crate::BlockOnError::not_supported(
-            "WASM does not support blocking operations. All operations must be async."
+            "WASM does not support blocking operations. All operations must be async.",
         ))
     }
 

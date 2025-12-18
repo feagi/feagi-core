@@ -10,9 +10,9 @@
 
 //! Standard runtime implementation for desktop/server platforms
 
-use feagi_npu_runtime::{Runtime, Result};
 use crate::{NeuronArray, SynapseArray};
 use feagi_npu_neural::types::NeuralValue;
+use feagi_npu_runtime::{Result, Runtime};
 
 /// Standard runtime for desktop/server (Vec-based, dynamic allocation)
 #[derive(Debug, Clone, Copy)]
@@ -34,27 +34,30 @@ impl Default for StdRuntime {
 impl Runtime for StdRuntime {
     type NeuronStorage<T: NeuralValue> = NeuronArray<T>;
     type SynapseStorage = SynapseArray;
-    
-    fn create_neuron_storage<T: NeuralValue>(&self, capacity: usize) -> Result<Self::NeuronStorage<T>> {
+
+    fn create_neuron_storage<T: NeuralValue>(
+        &self,
+        capacity: usize,
+    ) -> Result<Self::NeuronStorage<T>> {
         Ok(NeuronArray::new(capacity))
     }
-    
+
     fn create_synapse_storage(&self, capacity: usize) -> Result<Self::SynapseStorage> {
         Ok(SynapseArray::new(capacity))
     }
-    
+
     fn supports_parallel(&self) -> bool {
-        true  // Rayon for parallel processing
+        true // Rayon for parallel processing
     }
-    
+
     fn supports_simd(&self) -> bool {
-        true  // x86_64 SIMD
+        true // x86_64 SIMD
     }
-    
+
     fn memory_limit(&self) -> Option<usize> {
-        None  // Unlimited (system RAM)
+        None // Unlimited (system RAM)
     }
-    
+
     fn platform_name(&self) -> &'static str {
         "Standard (Desktop/Server)"
     }
@@ -63,7 +66,7 @@ impl Runtime for StdRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_std_runtime_creation() {
         let runtime = StdRuntime::new();
@@ -71,7 +74,7 @@ mod tests {
         assert!(runtime.supports_parallel());
         assert!(runtime.memory_limit().is_none());
     }
-    
+
     #[test]
     fn test_create_neuron_storage_f32() {
         let runtime = StdRuntime::new();
@@ -79,4 +82,3 @@ mod tests {
         assert_eq!(storage.count, 0);
     }
 }
-

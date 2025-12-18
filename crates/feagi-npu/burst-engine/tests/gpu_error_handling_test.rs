@@ -96,8 +96,11 @@ fn test_gpu_out_of_memory_handling() {
             let err_msg = format!("{:?}", e);
             println!("✅ GPU OOM handled gracefully: {}", err_msg);
             assert!(
-                err_msg.contains("memory") || err_msg.contains("OOM") || err_msg.contains("out of")
-                    || err_msg.contains("failed") || err_msg.contains("allocation"),
+                err_msg.contains("memory")
+                    || err_msg.contains("OOM")
+                    || err_msg.contains("out of")
+                    || err_msg.contains("failed")
+                    || err_msg.contains("allocation"),
                 "Error should mention memory/allocation issues: {}",
                 err_msg
             );
@@ -319,8 +322,9 @@ fn test_backend_creation_with_auto_selection() {
     #[cfg(feature = "gpu")]
     {
         // Large genome - should consider GPU if available
-        let large_backend = create_backend::<f32>(BackendType::Auto, 1_000_000, 100_000_000, &config)
-            .expect("Large genome backend should be created");
+        let large_backend =
+            create_backend::<f32>(BackendType::Auto, 1_000_000, 100_000_000, &config)
+                .expect("Large genome backend should be created");
         println!("Large genome → {}", large_backend.backend_name());
     }
 }
@@ -362,4 +366,3 @@ fn test_multiple_backend_instances() {
         }
     }
 }
-

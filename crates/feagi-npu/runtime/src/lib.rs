@@ -98,4 +98,3 @@ pub const RUNTIME_TRAIT_VERSION: u32 = 1;
 pub const fn runtime_trait_version() -> u32 {
     RUNTIME_TRAIT_VERSION
 }
-

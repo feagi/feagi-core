@@ -272,7 +272,7 @@ mod tests {
     use super::*;
     use crate::fire_structures::FiringNeuron;
     use feagi_npu_neural::types::NeuronId;
-// Note: CorticalID removed - use feagi_data_structures::CorticalID
+    // Note: CorticalID removed - use feagi_data_structures::CorticalID
 
     #[test]
     fn test_fq_sampler_basic() {

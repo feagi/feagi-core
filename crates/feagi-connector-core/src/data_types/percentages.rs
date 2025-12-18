@@ -1,6 +1,5 @@
 use feagi_data_structures::FeagiDataError;
 
-
 //region 1D Percentage Types
 
 /// A validated percentage value constrained to [0.0, 1.0].
@@ -26,8 +25,7 @@ pub struct Percentage {
 }
 
 impl Percentage {
-
-//region Constructors
+    //region Constructors
 
     pub const fn new_zero() -> Self {
         Percentage { value: 0.0 }
@@ -43,21 +41,29 @@ impl Percentage {
 
     /// Creates a percentage from a value in [0.0, 1.0] with validation.
     pub fn new_from_0_1(value: f32) -> Result<Percentage, FeagiDataError> {
-    if value > 1.0 || value < 0.0 {
-    return Err(FeagiDataError::BadParameters("Percentage Value must be between 0 and 1!".into()));
-    }
+        if value > 1.0 || value < 0.0 {
+            return Err(FeagiDataError::BadParameters(
+                "Percentage Value must be between 0 and 1!".into(),
+            ));
+        }
         Ok(Percentage { value })
     }
 
     pub fn new_from_interp_m1_1(value: f32) -> Result<Percentage, FeagiDataError> {
-    if value > 1.0 || value < -1.0 {
-    return Err(FeagiDataError::BadParameters("Signed Percentage Value to interp from must be between -1 and 1!".into()));
-    }
-        Ok(Percentage { value: (value + 1.0) / 2.0 })
+        if value > 1.0 || value < -1.0 {
+            return Err(FeagiDataError::BadParameters(
+                "Signed Percentage Value to interp from must be between -1 and 1!".into(),
+            ));
+        }
+        Ok(Percentage {
+            value: (value + 1.0) / 2.0,
+        })
     }
 
     pub fn new_from_interp_m1_1_unchecked(value: f32) -> Self {
-        Percentage { value: (value + 1.0) / 2.0 }
+        Percentage {
+            value: (value + 1.0) / 2.0,
+        }
     }
 
     pub fn new_from_u8_0_255(value: u8) -> Result<Percentage, FeagiDataError> {
@@ -66,29 +72,43 @@ impl Percentage {
 
     pub fn new_from_0_100(value: f32) -> Result<Percentage, FeagiDataError> {
         if value > 100.0 || value < 0.0 {
-            return Err(FeagiDataError::BadParameters("Percentage Value must be between 0 and 100!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Percentage Value must be between 0 and 100!".into(),
+            ));
         }
-        Ok(Percentage { value: value / 100.0 })
+        Ok(Percentage {
+            value: value / 100.0,
+        })
     }
 
-    pub fn new_from_linear_interp(value: f32, range: &std::ops::Range<f32>) -> Result<Percentage, FeagiDataError> {
+    pub fn new_from_linear_interp(
+        value: f32,
+        range: &std::ops::Range<f32>,
+    ) -> Result<Percentage, FeagiDataError> {
         if value < range.start || value > range.end {
-            return Err(FeagiDataError::BadParameters(format!("Given value {} is out of range {:?}!", value, range)));
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given value {} is out of range {:?}!",
+                value, range
+            )));
         }
-        Ok(Percentage { value: Self::linear_interp(value, range) })
+        Ok(Percentage {
+            value: Self::linear_interp(value, range),
+        })
     }
 
-//endregion
+    //endregion
 
-//region Update
+    //region Update
 
-    pub(crate) fn inplace_update_unchecked(&mut self, value: f32)  {
+    pub(crate) fn inplace_update_unchecked(&mut self, value: f32) {
         self.value = value;
     }
 
     pub fn inplace_update_from_0_1(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if value > 1.0 || value < 0.0 {
-            return Err(FeagiDataError::BadParameters("Percentage Value must be between 0 and 1!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Percentage Value must be between 0 and 1!".into(),
+            ));
         }
         self.value = value;
         Ok(())
@@ -100,23 +120,32 @@ impl Percentage {
 
     pub fn inplace_update_0_100(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if value > 100.0 || value < 0.0 {
-            return Err(FeagiDataError::BadParameters("Percentage Value must be between 0 and 100!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Percentage Value must be between 0 and 100!".into(),
+            ));
         }
         self.value = value / 100.0;
         Ok(())
     }
 
-    pub fn inplace_update_linear_interp(&mut self, value: f32, range: &std::ops::Range<f32>) -> Result<(), FeagiDataError> {
+    pub fn inplace_update_linear_interp(
+        &mut self,
+        value: f32,
+        range: &std::ops::Range<f32>,
+    ) -> Result<(), FeagiDataError> {
         if value < range.start || value > range.end {
-            return Err(FeagiDataError::BadParameters(format!("Given value {} is out of range {:?}!", value, range)));
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given value {} is out of range {:?}!",
+                value, range
+            )));
         }
         self.value = Self::linear_interp(value, range);
         Ok(())
     }
 
-//endregion
+    //endregion
 
-//region Properties
+    //region Properties
 
     pub fn get_as_0_1(&self) -> f32 {
         self.value
@@ -136,17 +165,16 @@ impl Percentage {
         self.value
     }
 
-//endregion
+    //endregion
 
-//region Internal
+    //region Internal
 
     #[inline]
     fn linear_interp(input: f32, range: &std::ops::Range<f32>) -> f32 {
         (input - range.start) / (range.end - range.start)
     }
 
-//endregion
-
+    //endregion
 }
 
 impl std::fmt::Display for Percentage {
@@ -156,7 +184,7 @@ impl std::fmt::Display for Percentage {
 }
 
 impl TryFrom<f32> for Percentage {
-type Error = FeagiDataError;
+    type Error = FeagiDataError;
     fn try_from(value: f32) -> Result<Self, Self::Error> {
         Percentage::new_from_0_1(value)
     }
@@ -188,7 +216,6 @@ pub struct SignedPercentage {
 }
 
 impl SignedPercentage {
-
     //region Constructors
 
     pub fn new_from_m1_1_unchecked(value: f32) -> Self {
@@ -197,37 +224,56 @@ impl SignedPercentage {
 
     pub fn new_from_m1_1(value: f32) -> Result<SignedPercentage, FeagiDataError> {
         if value > 1.0 || value < -1.0 {
-            return Err(FeagiDataError::BadParameters("Signed Percentage Value must be between -1 and 1!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Signed Percentage Value must be between -1 and 1!".into(),
+            ));
         }
         Ok(SignedPercentage { value })
     }
 
     pub fn new_scaled_from_0_1(value: f32) -> Result<SignedPercentage, FeagiDataError> {
         if value > 1.0 || value < 0.0 {
-            return Err(FeagiDataError::BadParameters("Percentage Value to interp from must be between 0 and 1!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Percentage Value to interp from must be between 0 and 1!".into(),
+            ));
         }
-        Ok(SignedPercentage { value: (value - 0.5) * 2.0})
+        Ok(SignedPercentage {
+            value: (value - 0.5) * 2.0,
+        })
     }
 
     pub fn new_scaled_from_0_1_unchecked(value: f32) -> Self {
-        SignedPercentage { value: (value - 0.5) * 2.0}
+        SignedPercentage {
+            value: (value - 0.5) * 2.0,
+        }
     }
 
     pub fn new_from_m100_100(value: f32) -> Result<SignedPercentage, FeagiDataError> {
         if value > 100.0 || value < -100.0 {
-            return Err(FeagiDataError::BadParameters("Signed Percentage Value must be between -100 and 100!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Signed Percentage Value must be between -100 and 100!".into(),
+            ));
         }
-        Ok(SignedPercentage { value: value / 100.0 })
+        Ok(SignedPercentage {
+            value: value / 100.0,
+        })
     }
 
-    pub fn new_from_linear_interp(value: f32, range: &std::ops::Range<f32>) -> Result<SignedPercentage, FeagiDataError> {
+    pub fn new_from_linear_interp(
+        value: f32,
+        range: &std::ops::Range<f32>,
+    ) -> Result<SignedPercentage, FeagiDataError> {
         if value < range.start || value > range.end {
-            return Err(FeagiDataError::BadParameters(format!("Given value {} is out of range {:?}!", value, range)));
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given value {} is out of range {:?}!",
+                value, range
+            )));
         }
-        Ok(SignedPercentage { value: Self::linear_interp(value, range) })
-
+        Ok(SignedPercentage {
+            value: Self::linear_interp(value, range),
+        })
     }
-    
+
     pub fn is_positive(&self) -> bool {
         self.value > 0.0
     }
@@ -240,13 +286,15 @@ impl SignedPercentage {
 
     //region Update
 
-    pub(crate) fn inplace_update_unchecked(&mut self, value: f32)  {
+    pub(crate) fn inplace_update_unchecked(&mut self, value: f32) {
         self.value = value;
     }
 
     pub fn inplace_update_from_m1_1(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if value > 1.0 || value < -1.0 {
-            return Err(FeagiDataError::BadParameters("Percentage Value must be between -1 and 1!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Percentage Value must be between -1 and 1!".into(),
+            ));
         }
         self.value = value;
         Ok(())
@@ -254,15 +302,24 @@ impl SignedPercentage {
 
     pub fn inplace_update_m100_100(&mut self, value: f32) -> Result<(), FeagiDataError> {
         if value > 100.0 || value < -100.0 {
-            return Err(FeagiDataError::BadParameters("Percentage Value must be between -1 and 1!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Percentage Value must be between -1 and 1!".into(),
+            ));
         }
         self.value = value / 100.0;
         Ok(())
     }
 
-    pub fn inplace_update_linear_interp(&mut self, value: f32, range: &std::ops::Range<f32>) -> Result<(), FeagiDataError> {
+    pub fn inplace_update_linear_interp(
+        &mut self,
+        value: f32,
+        range: &std::ops::Range<f32>,
+    ) -> Result<(), FeagiDataError> {
         if value < range.start || value > range.end {
-            return Err(FeagiDataError::BadParameters(format!("Given value {} is out of range {:?}!", value, range)));
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given value {} is out of range {:?}!",
+                value, range
+            )));
         }
         self.value = Self::linear_interp(value, range);
         Ok(())
@@ -296,7 +353,6 @@ impl SignedPercentage {
     }
 
     //endregion
-
 }
 
 impl std::fmt::Display for SignedPercentage {
@@ -360,7 +416,7 @@ impl Percentage2D {
             b: percentage,
         }
     }
-    
+
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -374,7 +430,6 @@ impl std::fmt::Display for Percentage2D {
 }
 
 impl TryFrom<(f32, f32)> for Percentage2D {
-    
     type Error = FeagiDataError;
     fn try_from(value: (f32, f32)) -> Result<Self, Self::Error> {
         let a: Percentage = value.0.try_into()?;
@@ -385,7 +440,10 @@ impl TryFrom<(f32, f32)> for Percentage2D {
 
 impl From<(Percentage, Percentage)> for Percentage2D {
     fn from(value: (Percentage, Percentage)) -> Self {
-        Percentage2D { a: value.0, b: value.1 }
+        Percentage2D {
+            a: value.0,
+            b: value.1,
+        }
     }
 }
 
@@ -438,7 +496,7 @@ impl SignedPercentage2D {
             b: percentage,
         }
     }
-    
+
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -462,7 +520,10 @@ impl TryFrom<(f32, f32)> for SignedPercentage2D {
 
 impl From<(SignedPercentage, SignedPercentage)> for SignedPercentage2D {
     fn from(value: (SignedPercentage, SignedPercentage)) -> Self {
-        SignedPercentage2D { a: value.0, b: value.1 }
+        SignedPercentage2D {
+            a: value.0,
+            b: value.1,
+        }
     }
 }
 
@@ -522,7 +583,7 @@ impl Percentage3D {
             c: percentage,
         }
     }
-    
+
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -548,7 +609,11 @@ impl TryFrom<(f32, f32, f32)> for Percentage3D {
 
 impl From<(Percentage, Percentage, Percentage)> for Percentage3D {
     fn from(value: (Percentage, Percentage, Percentage)) -> Self {
-        Percentage3D { a: value.0, b: value.1, c: value.2 }
+        Percentage3D {
+            a: value.0,
+            b: value.1,
+            c: value.2,
+        }
     }
 }
 
@@ -566,13 +631,21 @@ impl From<&Percentage3D> for (Percentage, Percentage, Percentage) {
 
 impl From<Percentage3D> for (f32, f32, f32) {
     fn from(value: Percentage3D) -> Self {
-        (value.a.get_as_0_1(), value.b.get_as_0_1(), value.c.get_as_0_1())
+        (
+            value.a.get_as_0_1(),
+            value.b.get_as_0_1(),
+            value.c.get_as_0_1(),
+        )
     }
 }
 
 impl From<&Percentage3D> for (f32, f32, f32) {
     fn from(value: &Percentage3D) -> Self {
-        (value.a.get_as_0_1(), value.b.get_as_0_1(), value.c.get_as_0_1())
+        (
+            value.a.get_as_0_1(),
+            value.b.get_as_0_1(),
+            value.c.get_as_0_1(),
+        )
     }
 }
 
@@ -604,7 +677,7 @@ impl SignedPercentage3D {
             c: percentage,
         }
     }
-    
+
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -630,7 +703,11 @@ impl TryFrom<(f32, f32, f32)> for SignedPercentage3D {
 
 impl From<(SignedPercentage, SignedPercentage, SignedPercentage)> for SignedPercentage3D {
     fn from(value: (SignedPercentage, SignedPercentage, SignedPercentage)) -> Self {
-        SignedPercentage3D { a: value.0, b: value.1, c: value.2 }
+        SignedPercentage3D {
+            a: value.0,
+            b: value.1,
+            c: value.2,
+        }
     }
 }
 
@@ -648,13 +725,21 @@ impl From<&SignedPercentage3D> for (SignedPercentage, SignedPercentage, SignedPe
 
 impl From<SignedPercentage3D> for (f32, f32, f32) {
     fn from(value: SignedPercentage3D) -> Self {
-        (value.a.get_as_m1_1(), value.b.get_as_m1_1(), value.c.get_as_m1_1())
+        (
+            value.a.get_as_m1_1(),
+            value.b.get_as_m1_1(),
+            value.c.get_as_m1_1(),
+        )
     }
 }
 
 impl From<&SignedPercentage3D> for (f32, f32, f32) {
     fn from(value: &SignedPercentage3D) -> Self {
-        (value.a.get_as_m1_1(), value.b.get_as_m1_1(), value.c.get_as_m1_1())
+        (
+            value.a.get_as_m1_1(),
+            value.b.get_as_m1_1(),
+            value.c.get_as_m1_1(),
+        )
     }
 }
 
@@ -693,7 +778,7 @@ impl Percentage4D {
             d: percentage,
         }
     }
-    
+
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -704,7 +789,11 @@ impl Percentage4D {
 
 impl std::fmt::Display for Percentage4D {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Percentage4D({}, {}, {}, {})", self.a, self.b, self.c, self.d)
+        write!(
+            f,
+            "Percentage4D({}, {}, {}, {})",
+            self.a, self.b, self.c, self.d
+        )
     }
 }
 
@@ -721,7 +810,12 @@ impl TryFrom<(f32, f32, f32, f32)> for Percentage4D {
 
 impl From<(Percentage, Percentage, Percentage, Percentage)> for Percentage4D {
     fn from(value: (Percentage, Percentage, Percentage, Percentage)) -> Self {
-        Percentage4D { a: value.0, b: value.1, c: value.2, d: value.3 }
+        Percentage4D {
+            a: value.0,
+            b: value.1,
+            c: value.2,
+            d: value.3,
+        }
     }
 }
 
@@ -739,13 +833,23 @@ impl From<&Percentage4D> for (Percentage, Percentage, Percentage, Percentage) {
 
 impl From<Percentage4D> for (f32, f32, f32, f32) {
     fn from(value: Percentage4D) -> Self {
-        (value.a.get_as_0_1(), value.b.get_as_0_1(), value.c.get_as_0_1(), value.d.get_as_0_1())
+        (
+            value.a.get_as_0_1(),
+            value.b.get_as_0_1(),
+            value.c.get_as_0_1(),
+            value.d.get_as_0_1(),
+        )
     }
 }
 
 impl From<&Percentage4D> for (f32, f32, f32, f32) {
     fn from(value: &Percentage4D) -> Self {
-        (value.a.get_as_0_1(), value.b.get_as_0_1(), value.c.get_as_0_1(), value.d.get_as_0_1())
+        (
+            value.a.get_as_0_1(),
+            value.b.get_as_0_1(),
+            value.c.get_as_0_1(),
+            value.d.get_as_0_1(),
+        )
     }
 }
 
@@ -759,7 +863,12 @@ pub struct SignedPercentage4D {
 }
 
 impl SignedPercentage4D {
-    pub fn new(a: SignedPercentage, b: SignedPercentage, c: SignedPercentage, d: SignedPercentage) -> Self {
+    pub fn new(
+        a: SignedPercentage,
+        b: SignedPercentage,
+        c: SignedPercentage,
+        d: SignedPercentage,
+    ) -> Self {
         Self { a, b, c, d }
     }
 
@@ -780,7 +889,7 @@ impl SignedPercentage4D {
             d: percentage,
         }
     }
-    
+
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -791,7 +900,11 @@ impl SignedPercentage4D {
 
 impl std::fmt::Display for SignedPercentage4D {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "SignedPercentage4D({}, {}, {}, {})", self.a, self.b, self.c, self.d)
+        write!(
+            f,
+            "SignedPercentage4D({}, {}, {}, {})",
+            self.a, self.b, self.c, self.d
+        )
     }
 }
 
@@ -806,19 +919,52 @@ impl TryFrom<(f32, f32, f32, f32)> for SignedPercentage4D {
     }
 }
 
-impl From<(SignedPercentage, SignedPercentage, SignedPercentage, SignedPercentage)> for SignedPercentage4D {
-    fn from(value: (SignedPercentage, SignedPercentage, SignedPercentage, SignedPercentage)) -> Self {
-        SignedPercentage4D { a: value.0, b: value.1, c: value.2, d: value.3 }
+impl
+    From<(
+        SignedPercentage,
+        SignedPercentage,
+        SignedPercentage,
+        SignedPercentage,
+    )> for SignedPercentage4D
+{
+    fn from(
+        value: (
+            SignedPercentage,
+            SignedPercentage,
+            SignedPercentage,
+            SignedPercentage,
+        ),
+    ) -> Self {
+        SignedPercentage4D {
+            a: value.0,
+            b: value.1,
+            c: value.2,
+            d: value.3,
+        }
     }
 }
 
-impl From<SignedPercentage4D> for (SignedPercentage, SignedPercentage, SignedPercentage, SignedPercentage) {
+impl From<SignedPercentage4D>
+    for (
+        SignedPercentage,
+        SignedPercentage,
+        SignedPercentage,
+        SignedPercentage,
+    )
+{
     fn from(value: SignedPercentage4D) -> Self {
         (value.a, value.b, value.c, value.d)
     }
 }
 
-impl From<&SignedPercentage4D> for (SignedPercentage, SignedPercentage, SignedPercentage, SignedPercentage) {
+impl From<&SignedPercentage4D>
+    for (
+        SignedPercentage,
+        SignedPercentage,
+        SignedPercentage,
+        SignedPercentage,
+    )
+{
     fn from(value: &SignedPercentage4D) -> Self {
         (value.a, value.b, value.c, value.d)
     }
@@ -826,13 +972,23 @@ impl From<&SignedPercentage4D> for (SignedPercentage, SignedPercentage, SignedPe
 
 impl From<SignedPercentage4D> for (f32, f32, f32, f32) {
     fn from(value: SignedPercentage4D) -> Self {
-        (value.a.get_as_m1_1(), value.b.get_as_m1_1(), value.c.get_as_m1_1(), value.d.get_as_m1_1())
+        (
+            value.a.get_as_m1_1(),
+            value.b.get_as_m1_1(),
+            value.c.get_as_m1_1(),
+            value.d.get_as_m1_1(),
+        )
     }
 }
 
 impl From<&SignedPercentage4D> for (f32, f32, f32, f32) {
     fn from(value: &SignedPercentage4D) -> Self {
-        (value.a.get_as_m1_1(), value.b.get_as_m1_1(), value.c.get_as_m1_1(), value.d.get_as_m1_1())
+        (
+            value.a.get_as_m1_1(),
+            value.b.get_as_m1_1(),
+            value.c.get_as_m1_1(),
+            value.d.get_as_m1_1(),
+        )
     }
 }
 

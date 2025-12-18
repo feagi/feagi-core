@@ -22,10 +22,10 @@ use feagi_services::AnalyticsService;
 pub struct ZmqRequest {
     /// HTTP method (GET, POST, PUT, DELETE, etc.)
     pub method: String,
-    
+
     /// Request path (e.g., "/v1/system/health_check")
     pub path: String,
-    
+
     /// Request body as JSON (optional)
     pub body: Option<serde_json::Value>,
 }
@@ -35,7 +35,7 @@ pub struct ZmqRequest {
 pub struct ZmqResponse {
     /// HTTP-like status code
     pub status: u16,
-    
+
     /// Response body as JSON
     pub body: serde_json::Value,
 }
@@ -57,22 +57,22 @@ pub async fn route_zmq_request(
 ) -> ZmqResponse {
     // Create anonymous auth context (stub - same as HTTP)
     let auth_ctx = AuthContext::anonymous();
-    
+
     // Route based on method and path
     match (request.method.as_str(), request.path.as_str()) {
         // Health check endpoints
         ("GET", "/health") | ("GET", "/v1/system/health_check") => {
             handle_health_check(&auth_ctx, state).await
         }
-        
+
         ("GET", "/ready") | ("GET", "/v1/system/readiness_check") => {
             handle_readiness_check(&auth_ctx, state).await
         }
-        
+
         // TODO: Add more endpoint routes
         // ("GET", path) if path.starts_with("/v1/cortical_area") => { ... }
         // ("POST", "/v1/cortical_area") => { ... }
-        
+
         // Not found
         _ => {
             let error = ApiError::not_found("Endpoint", &request.path);

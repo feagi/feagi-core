@@ -117,5 +117,3 @@ mod tests {
         assert_ne!(random1, random2);
     }
 }
-
-

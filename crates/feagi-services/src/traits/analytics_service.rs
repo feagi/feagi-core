@@ -34,10 +34,7 @@ pub trait AnalyticsService: Send + Sync {
     /// # Errors
     /// * `ServiceError::NotFound` - Cortical area not found
     ///
-    async fn get_cortical_area_stats(
-        &self,
-        cortical_id: &str,
-    ) -> ServiceResult<CorticalAreaStats>;
+    async fn get_cortical_area_stats(&self, cortical_id: &str) -> ServiceResult<CorticalAreaStats>;
 
     /// Get statistics for all cortical areas
     ///
@@ -128,8 +125,3 @@ pub trait AnalyticsService: Send + Sync {
     ///
     async fn get_memory_neuron_count(&self) -> ServiceResult<usize>;
 }
-
-
-
-
-

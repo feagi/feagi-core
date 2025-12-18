@@ -13,10 +13,10 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use std::collections::HashMap;
-use serde_json::Value;
-use sha2::{Sha256, Digest};
 use crate::{EvoResult, GenomeSignatures};
+use serde_json::Value;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 
 /// Generate all genome signatures
 pub fn generate_signatures(
@@ -43,14 +43,14 @@ fn generate_genome_signature(
         "blueprint": blueprint,
         "neuron_morphologies": morphologies,
     });
-    
+
     if let Some(phys) = physiology {
         combined["physiology"] = phys.clone();
     }
-    
+
     // Serialize with deterministic ordering
     let json_str = serde_json::to_string(&combined)?;
-    
+
     // Generate SHA-256 hash
     Ok(hash_string(&json_str))
 }
@@ -83,7 +83,7 @@ fn hash_string(s: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(s.as_bytes());
     let result = hasher.finalize();
-    
+
     // Convert to hex string and take first 16 characters (matches Python behavior)
     format!("{:x}", result)[..16].to_string()
 }
@@ -91,56 +91,65 @@ fn hash_string(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_hash_string() {
         let hash1 = hash_string("test");
         let hash2 = hash_string("test");
         let hash3 = hash_string("different");
-        
+
         assert_eq!(hash1, hash2, "Same input should produce same hash");
-        assert_ne!(hash1, hash3, "Different inputs should produce different hashes");
+        assert_ne!(
+            hash1, hash3,
+            "Different inputs should produce different hashes"
+        );
         assert_eq!(hash1.len(), 16, "Hash should be 16 characters");
     }
-    
+
     #[test]
     fn test_generate_blueprint_signature() {
         let mut blueprint = HashMap::new();
-        blueprint.insert("test_area".to_string(), serde_json::json!({
-            "dimensions": [10, 10, 10],
-            "position": [0, 0, 0],
-        }));
-        
+        blueprint.insert(
+            "test_area".to_string(),
+            serde_json::json!({
+                "dimensions": [10, 10, 10],
+                "position": [0, 0, 0],
+            }),
+        );
+
         let signature = generate_blueprint_signature(&blueprint).unwrap();
         assert_eq!(signature.len(), 16);
     }
-    
+
     #[test]
     fn test_generate_physiology_signature() {
         let physiology = Some(serde_json::json!({
             "simulation_timestep": 0.025,
             "max_age": 10000000,
         }));
-        
+
         let signature = generate_physiology_signature(&physiology).unwrap();
         assert_eq!(signature.len(), 16);
     }
-    
+
     #[test]
     fn test_generate_full_signatures() {
         let mut blueprint = HashMap::new();
         blueprint.insert("test".to_string(), serde_json::json!({}));
-        
+
         let mut morphologies = HashMap::new();
-        morphologies.insert("test_morph".to_string(), serde_json::json!({
-            "type": "vectors",
-            "parameters": { "vectors": [[1, 0, 0]] }
-        }));
-        
+        morphologies.insert(
+            "test_morph".to_string(),
+            serde_json::json!({
+                "type": "vectors",
+                "parameters": { "vectors": [[1, 0, 0]] }
+            }),
+        );
+
         let physiology = Some(serde_json::json!({ "simulation_timestep": 0.025 }));
-        
+
         let signatures = generate_signatures(&blueprint, &morphologies, &physiology).unwrap();
-        
+
         assert_eq!(signatures.genome.len(), 16);
         assert_eq!(signatures.blueprint.len(), 16);
         assert_eq!(signatures.physiology.len(), 16);
@@ -148,7 +157,3 @@ mod tests {
         assert_eq!(signatures.morphologies.unwrap().len(), 16);
     }
 }
-
-
-
-

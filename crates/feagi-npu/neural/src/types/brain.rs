@@ -17,4 +17,3 @@
 // Placeholder types for no_std
 #[cfg(not(feature = "std"))]
 pub struct CorticalArea;
-

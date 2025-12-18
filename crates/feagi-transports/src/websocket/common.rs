@@ -18,7 +18,7 @@ pub enum WsMessage {
         compressed: bool,
         sequence: u64,
     },
-    
+
     /// Motor command from FEAGI to agent
     Motor {
         agent_id: String,
@@ -27,13 +27,10 @@ pub enum WsMessage {
         data: Vec<u8>,
         sequence: u64,
     },
-    
+
     /// Visualization data (binary only, no JSON wrapper)
-    Visualization {
-        data: Vec<u8>,
-        compressed: bool,
-    },
-    
+    Visualization { data: Vec<u8>, compressed: bool },
+
     /// Control command (request/response)
     ControlRequest {
         request_id: String,
@@ -42,23 +39,19 @@ pub enum WsMessage {
         path: String,
         body: Option<serde_json::Value>,
     },
-    
+
     /// Control response
     ControlResponse {
         request_id: String,
         status: u16,
         body: Option<serde_json::Value>,
     },
-    
+
     /// Heartbeat/ping
-    Ping {
-        timestamp: u64,
-    },
-    
+    Ping { timestamp: u64 },
+
     /// Heartbeat response
-    Pong {
-        timestamp: u64,
-    },
+    Pong { timestamp: u64 },
 }
 
 impl WsMessage {
@@ -72,7 +65,7 @@ impl WsMessage {
             sequence,
         }
     }
-    
+
     /// Create a motor message
     pub fn motor(agent_id: String, command: String, data: Vec<u8>, sequence: u64) -> Self {
         Self::Motor {
@@ -83,12 +76,12 @@ impl WsMessage {
             sequence,
         }
     }
-    
+
     /// Create a visualization message
     pub fn visualization(data: Vec<u8>, compressed: bool) -> Self {
         Self::Visualization { data, compressed }
     }
-    
+
     /// Create a control request
     pub fn control_request(
         request_id: String,
@@ -105,7 +98,7 @@ impl WsMessage {
             body,
         }
     }
-    
+
     /// Create a control response
     pub fn control_response(
         request_id: String,
@@ -118,14 +111,14 @@ impl WsMessage {
             body,
         }
     }
-    
+
     /// Create a ping message
     pub fn ping() -> Self {
         Self::Ping {
             timestamp: current_timestamp(),
         }
     }
-    
+
     /// Create a pong message
     pub fn pong() -> Self {
         Self::Pong {
@@ -157,15 +150,16 @@ mod tests {
 
     #[test]
     fn test_sensory_message() {
-        let msg = WsMessage::sensory(
-            "robot_1".to_string(),
-            vec![1, 2, 3],
-            false,
-            100,
-        );
-        
+        let msg = WsMessage::sensory("robot_1".to_string(), vec![1, 2, 3], false, 100);
+
         match msg {
-            WsMessage::Sensory { agent_id, data, compressed, sequence, .. } => {
+            WsMessage::Sensory {
+                agent_id,
+                data,
+                compressed,
+                sequence,
+                ..
+            } => {
                 assert_eq!(agent_id, "robot_1");
                 assert_eq!(data, vec![1, 2, 3]);
                 assert!(!compressed);
@@ -174,7 +168,7 @@ mod tests {
             _ => panic!("Wrong message type"),
         }
     }
-    
+
     #[test]
     fn test_control_request() {
         let msg = WsMessage::control_request(
@@ -184,9 +178,15 @@ mod tests {
             "/genome/cortical_areas".to_string(),
             None,
         );
-        
+
         match msg {
-            WsMessage::ControlRequest { request_id, agent_id, method, path, .. } => {
+            WsMessage::ControlRequest {
+                request_id,
+                agent_id,
+                method,
+                path,
+                ..
+            } => {
                 assert_eq!(request_id, "req_123");
                 assert_eq!(agent_id, "robot_1");
                 assert_eq!(method, "GET");
@@ -196,4 +196,3 @@ mod tests {
         }
     }
 }
-

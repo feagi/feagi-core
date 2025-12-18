@@ -8,8 +8,8 @@
 
 use std::collections::HashMap;
 
-use crate::common::{ApiError, ApiResult, State, Json, Query, Path};
 use crate::common::ApiState;
+use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use crate::v1::agent_dtos::*;
 use feagi_services::traits::agent_service::{
     AgentRegistration, HeartbeatRequest as ServiceHeartbeatRequest,
@@ -51,16 +51,16 @@ pub async fn register_agent(
         Ok(response) => {
             // Convert service TransportConfig to API TransportConfig
             let transports = response.transports.map(|ts| {
-                ts.into_iter().map(|t| {
-                    crate::v1::agent_dtos::TransportConfig {
+                ts.into_iter()
+                    .map(|t| crate::v1::agent_dtos::TransportConfig {
                         transport_type: t.transport_type,
                         enabled: t.enabled,
                         ports: t.ports,
                         host: t.host,
-                    }
-                }).collect()
+                    })
+                    .collect()
             });
-            
+
             Ok(Json(AgentRegistrationResponse {
                 status: response.status,
                 message: response.message,
@@ -73,7 +73,7 @@ pub async fn register_agent(
                 shm_paths: response.shm_paths,
                 cortical_areas: response.cortical_areas,
             }))
-        },
+        }
         Err(e) => {
             // Check if error is about unsupported transport (validation error)
             let error_msg = e.to_string();
@@ -130,9 +130,7 @@ pub async fn heartbeat(
     ),
     tag = "agent"
 )]
-pub async fn list_agents(
-    State(state): State<ApiState>,
-) -> ApiResult<Json<Vec<String>>> {
+pub async fn list_agents(State(state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     let agent_service = state
         .agent_service
         .as_ref()
@@ -140,10 +138,7 @@ pub async fn list_agents(
 
     match agent_service.list_agents().await {
         Ok(agent_ids) => Ok(Json(agent_ids)),
-        Err(e) => Err(ApiError::internal(format!(
-            "Failed to list agents: {}",
-            e
-        ))),
+        Err(e) => Err(ApiError::internal(format!("Failed to list agents: {}", e))),
     }
 }
 
@@ -329,21 +324,25 @@ pub async fn get_fq_sampler_status(
         .agent_service
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
-    
+
     let runtime_service = state.runtime_service.as_ref();
-    
+
     // Get all agents
-    let agent_ids = agent_service.list_agents().await
+    let agent_ids = agent_service
+        .list_agents()
+        .await
         .map_err(|e| ApiError::internal(format!("Failed to list agents: {}", e)))?;
-    
+
     // Get FCL sampler config from RuntimeService
-    let (fcl_frequency, fcl_consumer) = runtime_service.get_fcl_sampler_config().await
+    let (fcl_frequency, fcl_consumer) = runtime_service
+        .get_fcl_sampler_config()
+        .await
         .map_err(|e| ApiError::internal(format!("Failed to get sampler config: {}", e)))?;
-    
+
     // Build response matching Python structure
     let mut visualization_agents = Vec::new();
     let mut motor_agents = Vec::new();
-    
+
     for agent_id in &agent_ids {
         if let Ok(props) = agent_service.get_agent_properties(agent_id).await {
             if props.capabilities.contains_key("visualization") {
@@ -354,44 +353,79 @@ pub async fn get_fq_sampler_status(
             }
         }
     }
-    
+
     let mut fq_coordination = HashMap::new();
-    
+
     let mut viz_sampler = HashMap::new();
-    viz_sampler.insert("enabled".to_string(), serde_json::json!(!visualization_agents.is_empty()));
-    viz_sampler.insert("reason".to_string(), serde_json::json!(
-        if visualization_agents.is_empty() {
+    viz_sampler.insert(
+        "enabled".to_string(),
+        serde_json::json!(!visualization_agents.is_empty()),
+    );
+    viz_sampler.insert(
+        "reason".to_string(),
+        serde_json::json!(if visualization_agents.is_empty() {
             "No visualization agents connected".to_string()
         } else {
-            format!("{} visualization agent(s) connected", visualization_agents.len())
-        }
-    ));
-    viz_sampler.insert("agents_requiring".to_string(), serde_json::json!(visualization_agents));
+            format!(
+                "{} visualization agent(s) connected",
+                visualization_agents.len()
+            )
+        }),
+    );
+    viz_sampler.insert(
+        "agents_requiring".to_string(),
+        serde_json::json!(visualization_agents),
+    );
     viz_sampler.insert("frequency_hz".to_string(), serde_json::json!(fcl_frequency));
-    fq_coordination.insert("visualization_fq_sampler".to_string(), serde_json::json!(viz_sampler));
-    
+    fq_coordination.insert(
+        "visualization_fq_sampler".to_string(),
+        serde_json::json!(viz_sampler),
+    );
+
     let mut motor_sampler = HashMap::new();
-    motor_sampler.insert("enabled".to_string(), serde_json::json!(!motor_agents.is_empty()));
-    motor_sampler.insert("reason".to_string(), serde_json::json!(
-        if motor_agents.is_empty() {
+    motor_sampler.insert(
+        "enabled".to_string(),
+        serde_json::json!(!motor_agents.is_empty()),
+    );
+    motor_sampler.insert(
+        "reason".to_string(),
+        serde_json::json!(if motor_agents.is_empty() {
             "No motor agents connected".to_string()
         } else {
             format!("{} motor agent(s) connected", motor_agents.len())
-        }
-    ));
-    motor_sampler.insert("agents_requiring".to_string(), serde_json::json!(motor_agents));
+        }),
+    );
+    motor_sampler.insert(
+        "agents_requiring".to_string(),
+        serde_json::json!(motor_agents),
+    );
     motor_sampler.insert("frequency_hz".to_string(), serde_json::json!(100.0));
-    fq_coordination.insert("motor_fq_sampler".to_string(), serde_json::json!(motor_sampler));
-    
+    fq_coordination.insert(
+        "motor_fq_sampler".to_string(),
+        serde_json::json!(motor_sampler),
+    );
+
     let mut response = HashMap::new();
-    response.insert("fq_sampler_coordination".to_string(), serde_json::json!(fq_coordination));
-    response.insert("agent_registry".to_string(), serde_json::json!({
-        "total_agents": agent_ids.len(),
-        "agent_ids": agent_ids
-    }));
-    response.insert("system_status".to_string(), serde_json::json!("coordinated_via_registration_manager"));
-    response.insert("fcl_sampler_consumer".to_string(), serde_json::json!(fcl_consumer));
-    
+    response.insert(
+        "fq_sampler_coordination".to_string(),
+        serde_json::json!(fq_coordination),
+    );
+    response.insert(
+        "agent_registry".to_string(),
+        serde_json::json!({
+            "total_agents": agent_ids.len(),
+            "agent_ids": agent_ids
+        }),
+    );
+    response.insert(
+        "system_status".to_string(),
+        serde_json::json!("coordinated_via_registration_manager"),
+    );
+    response.insert(
+        "fcl_sampler_consumer".to_string(),
+        serde_json::json!(fcl_consumer),
+    );
+
     Ok(Json(response))
 }
 
@@ -409,20 +443,26 @@ pub async fn get_capabilities(
     State(_state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, Vec<String>>>> {
     let mut response = HashMap::new();
-    response.insert("agent_types".to_string(), vec![
-        "sensory".to_string(),
-        "motor".to_string(),
-        "both".to_string(),
-        "visualization".to_string(),
-        "infrastructure".to_string(),
-    ]);
-    response.insert("capability_types".to_string(), vec![
-        "vision".to_string(),
-        "motor".to_string(),
-        "visualization".to_string(),
-        "sensory".to_string(),
-    ]);
-    
+    response.insert(
+        "agent_types".to_string(),
+        vec![
+            "sensory".to_string(),
+            "motor".to_string(),
+            "both".to_string(),
+            "visualization".to_string(),
+            "infrastructure".to_string(),
+        ],
+    );
+    response.insert(
+        "capability_types".to_string(),
+        vec![
+            "vision".to_string(),
+            "motor".to_string(),
+            "visualization".to_string(),
+            "sensory".to_string(),
+        ],
+    );
+
     Ok(Json(response))
 }
 
@@ -448,23 +488,43 @@ pub async fn get_agent_info(
         .agent_service
         .as_ref()
         .ok_or_else(|| ApiError::internal("Agent service not available"))?;
-    
-    let properties = agent_service.get_agent_properties(&agent_id).await
+
+    let properties = agent_service
+        .get_agent_properties(&agent_id)
+        .await
         .map_err(|e| ApiError::not_found("agent", &e.to_string()))?;
-    
+
     let mut response = HashMap::new();
     response.insert("agent_id".to_string(), serde_json::json!(agent_id));
-    response.insert("agent_type".to_string(), serde_json::json!(properties.agent_type));
-    response.insert("agent_ip".to_string(), serde_json::json!(properties.agent_ip));
-    response.insert("agent_data_port".to_string(), serde_json::json!(properties.agent_data_port));
-    response.insert("capabilities".to_string(), serde_json::json!(properties.capabilities));
-    response.insert("agent_version".to_string(), serde_json::json!(properties.agent_version));
-    response.insert("controller_version".to_string(), serde_json::json!(properties.controller_version));
+    response.insert(
+        "agent_type".to_string(),
+        serde_json::json!(properties.agent_type),
+    );
+    response.insert(
+        "agent_ip".to_string(),
+        serde_json::json!(properties.agent_ip),
+    );
+    response.insert(
+        "agent_data_port".to_string(),
+        serde_json::json!(properties.agent_data_port),
+    );
+    response.insert(
+        "capabilities".to_string(),
+        serde_json::json!(properties.capabilities),
+    );
+    response.insert(
+        "agent_version".to_string(),
+        serde_json::json!(properties.agent_version),
+    );
+    response.insert(
+        "controller_version".to_string(),
+        serde_json::json!(properties.controller_version),
+    );
     response.insert("status".to_string(), serde_json::json!("active"));
     if let Some(ref transport) = properties.chosen_transport {
         response.insert("chosen_transport".to_string(), serde_json::json!(transport));
     }
-    
+
     Ok(Json(response))
 }
 
@@ -522,10 +582,12 @@ pub async fn post_configure(
     Json(config): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Agent configuration requested: {} params", config.len());
-    
+
     Ok(Json(HashMap::from([
-        ("message".to_string(), "Agent configuration updated".to_string()),
-        ("status".to_string(), "not_yet_implemented".to_string())
+        (
+            "message".to_string(),
+            "Agent configuration updated".to_string(),
+        ),
+        ("status".to_string(), "not_yet_implemented".to_string()),
     ])))
 }
-

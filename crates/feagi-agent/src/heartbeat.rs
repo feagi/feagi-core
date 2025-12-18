@@ -4,11 +4,11 @@
 //! Heartbeat service for maintaining agent liveness
 
 use crate::error::{Result, SdkError};
-use tracing::{debug, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
+use tracing::{debug, warn};
 
 /// Heartbeat service managing periodic keepalive messages
 pub struct HeartbeatService {
@@ -96,12 +96,15 @@ impl HeartbeatService {
     /// 3. Force terminate if stuck
     pub fn stop(&mut self) {
         if !self.running.load(Ordering::Relaxed) {
-            debug!("[HEARTBEAT] Service already stopped for agent: {}", self.agent_id);
+            debug!(
+                "[HEARTBEAT] Service already stopped for agent: {}",
+                self.agent_id
+            );
             return;
         }
 
         debug!("[HEARTBEAT] Stopping service for agent: {}", self.agent_id);
-        
+
         // Step 1: Signal thread to stop
         self.running.store(false, Ordering::Relaxed);
 
@@ -109,7 +112,10 @@ impl HeartbeatService {
         if let Some(thread) = self.thread.take() {
             match thread.join() {
                 Ok(_) => {
-                    debug!("[HEARTBEAT] Thread stopped cleanly for agent: {}", self.agent_id);
+                    debug!(
+                        "[HEARTBEAT] Thread stopped cleanly for agent: {}",
+                        self.agent_id
+                    );
                 }
                 Err(e) => {
                     warn!(
@@ -119,8 +125,11 @@ impl HeartbeatService {
                 }
             }
         }
-        
-        debug!("[HEARTBEAT] Service fully stopped for agent: {}", self.agent_id);
+
+        debug!(
+            "[HEARTBEAT] Service fully stopped for agent: {}",
+            self.agent_id
+        );
     }
 
     /// Send a single heartbeat message

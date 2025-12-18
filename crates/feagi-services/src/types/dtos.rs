@@ -53,12 +53,16 @@ pub struct CorticalAreaInfo {
     pub dimensions: (usize, usize, usize),
     #[serde(rename = "coordinates_3d", alias = "position")]
     pub position: (i32, i32, i32),
-    pub area_type: String, // "Sensory", "Motor", "Memory", "Custom"
+    pub area_type: String,      // "Sensory", "Motor", "Memory", "Custom"
     pub cortical_group: String, // "IPU", "OPU", "CORE", "CUSTOM", "MEMORY" - uppercase classification
     pub neuron_count: usize,
     pub synapse_count: usize,
     pub visible: bool,
-    #[serde(rename = "cortical_sub_group", alias = "sub_group", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        rename = "cortical_sub_group",
+        alias = "sub_group",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub sub_group: Option<String>,
     pub neurons_per_voxel: u32,
     pub postsynaptic_current: f64,
@@ -74,28 +78,28 @@ pub struct CorticalAreaInfo {
     pub leak_variability: f64,
     pub burst_engine_active: bool,
     pub properties: HashMap<String, serde_json::Value>,
-    
+
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)
     /// 4-character cortical subtype (e.g., "isvi", "imot", "ibat") - only for IPU/OPU
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_subtype: Option<String>,
-    
+
     /// Encoding type: "Absolute" or "Incremental" - only for IPU/OPU
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding_type: Option<String>,
-    
+
     /// Encoding format: "Linear" or "Fractional" - only for IPU/OPU
     #[serde(skip_serializing_if = "Option::is_none")]
     pub encoding_format: Option<String>,
-    
+
     /// Unit ID (0, 1, 2, ...) - only for IPU/OPU
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unit_id: Option<u8>,
-    
+
     /// Group ID (0, 1, 2, ...) - only for IPU/OPU
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<u8>,
-    
+
     /// Parent brain region ID (UUID string) - which brain region this cortical area belongs to
     /// This is required by Brain Visualizer to correctly place cortical areas in the 3D scene
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -200,9 +204,9 @@ pub struct GenomeInfo {
     pub version: String,
     pub cortical_area_count: usize,
     pub brain_region_count: usize,
-    pub simulation_timestep: f64,  // Simulation timestep in seconds from physiology
-    pub genome_num: Option<i32>,   // Genome version/generation number
-    pub genome_timestamp: Option<i64>,  // Unix timestamp when genome was loaded/created
+    pub simulation_timestep: f64, // Simulation timestep in seconds from physiology
+    pub genome_num: Option<i32>,  // Genome version/generation number
+    pub genome_timestamp: Option<i64>, // Unix timestamp when genome was loaded/created
 }
 
 /// Parameters for loading a genome
@@ -288,22 +292,22 @@ pub struct SystemHealth {
 pub struct RuntimeStatus {
     /// Whether the burst engine is running
     pub is_running: bool,
-    
+
     /// Whether the burst engine is paused
     pub is_paused: bool,
-    
+
     /// Current burst frequency (Hz)
     pub frequency_hz: f64,
-    
+
     /// Total burst count since start
     pub burst_count: u64,
-    
+
     /// Current burst rate (bursts per second, measured)
     pub current_rate_hz: f64,
-    
+
     /// Total neurons fired in last burst
     pub last_burst_neuron_count: usize,
-    
+
     /// Average processing time per burst (milliseconds)
     pub avg_burst_time_ms: f64,
 }
@@ -351,10 +355,10 @@ pub struct VersionInfo {
     /// Map of crate name to version (e.g., "feagi_bdu" -> "2.0.0")
     /// Only includes crates actually linked into this binary
     pub crates: std::collections::HashMap<String, String>,
-    
+
     /// Build timestamp (if available)
     pub build_timestamp: String,
-    
+
     /// Rust compiler version used
     pub rust_version: String,
 }
@@ -396,4 +400,3 @@ pub struct CapacityInfo {
     pub current_cortical_areas: usize,
     pub max_cortical_areas: usize,
 }
-

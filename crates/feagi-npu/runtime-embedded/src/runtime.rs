@@ -10,9 +10,9 @@
 
 //! Embedded runtime implementation for ESP32, RTOS, no_std platforms
 
-use feagi_npu_runtime::{Runtime, NeuronStorage, SynapseStorage, Result, RuntimeError};
 use crate::{NeuronArray, SynapseArray};
 use feagi_npu_neural::types::NeuralValue;
+use feagi_npu_runtime::{NeuronStorage, Result, Runtime, RuntimeError, SynapseStorage};
 
 /// Embedded runtime for ESP32, Arduino, STM32 (fixed-size, no_std)
 #[derive(Debug, Clone, Copy)]
@@ -32,10 +32,13 @@ impl Default for EmbeddedRuntime {
 }
 
 impl Runtime for EmbeddedRuntime {
-    type NeuronStorage<T: NeuralValue> = NeuronArray<T, 10000>;  // Default const
-    type SynapseStorage = SynapseArray<50000>;  // Default const
-    
-    fn create_neuron_storage<T: NeuralValue>(&self, capacity: usize) -> Result<Self::NeuronStorage<T>> {
+    type NeuronStorage<T: NeuralValue> = NeuronArray<T, 10000>; // Default const
+    type SynapseStorage = SynapseArray<50000>; // Default const
+
+    fn create_neuron_storage<T: NeuralValue>(
+        &self,
+        capacity: usize,
+    ) -> Result<Self::NeuronStorage<T>> {
         // Embedded uses const generics, capacity is compile-time
         // For now, use default const (will be improved with const generics in Phase 3)
         if capacity > 10000 {
@@ -46,7 +49,7 @@ impl Runtime for EmbeddedRuntime {
         }
         Ok(NeuronArray::new())
     }
-    
+
     fn create_synapse_storage(&self, capacity: usize) -> Result<Self::SynapseStorage> {
         if capacity > 50000 {
             return Err(RuntimeError::CapacityExceeded {
@@ -56,19 +59,19 @@ impl Runtime for EmbeddedRuntime {
         }
         Ok(SynapseArray::new())
     }
-    
+
     fn supports_parallel(&self) -> bool {
-        false  // Single-threaded (no OS or basic RTOS)
+        false // Single-threaded (no OS or basic RTOS)
     }
-    
+
     fn supports_simd(&self) -> bool {
-        false  // Most embedded targets don't have SIMD
+        false // Most embedded targets don't have SIMD
     }
-    
+
     fn memory_limit(&self) -> Option<usize> {
-        Some(512 * 1024)  // 512 KB typical (ESP32-S3 has more)
+        Some(512 * 1024) // 512 KB typical (ESP32-S3 has more)
     }
-    
+
     fn platform_name(&self) -> &'static str {
         "Embedded (ESP32/RTOS/no_std)"
     }
@@ -77,7 +80,7 @@ impl Runtime for EmbeddedRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_embedded_runtime_creation() {
         let runtime = EmbeddedRuntime::new();
@@ -85,14 +88,14 @@ mod tests {
         assert!(!runtime.supports_parallel());
         assert_eq!(runtime.memory_limit(), Some(512 * 1024));
     }
-    
+
     #[test]
     fn test_create_neuron_storage_within_limit() {
         let runtime = EmbeddedRuntime::new();
         let storage = runtime.create_neuron_storage::<f32>(1000).unwrap();
         assert_eq!(storage.count, 0);
     }
-    
+
     #[test]
     fn test_create_neuron_storage_exceeds_limit() {
         let runtime = EmbeddedRuntime::new();
@@ -100,4 +103,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-

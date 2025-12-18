@@ -4,13 +4,13 @@
 //! for all data pipeline processing in the FEAGI system. Processors implementing this
 //! trait can be chained together to create complex data processing pipelines.
 
+use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data_structures::FeagiDataError;
+use std::any::Any;
 use std::fmt;
 use std::fmt::Debug;
 use std::time::Instant;
-use std::any::Any;
-use feagi_data_structures::FeagiDataError;
-use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// Returns the data type this processor expects as input.
@@ -24,7 +24,7 @@ pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// This is used by `ProcessorRunner` to validate processor chain compatibility
     /// and determine the final output type of processing pipeline.
     fn get_output_data_type(&self) -> WrappedIOType;
-    
+
     /// Returns a reference to the most recently processed output value from internal cached memory.
     fn get_most_recent_output(&self) -> &WrappedIOData;
 
@@ -47,10 +47,14 @@ pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// # Note
     /// Type checking is not performed here - it's the responsibility of `ProcessorRunner`
     /// to ensure input types are compatible before calling this method.
-    fn process_new_input(&mut self, value: &WrappedIOData, time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError>;
+    fn process_new_input(
+        &mut self,
+        value: &WrappedIOData,
+        time_of_input: Instant,
+    ) -> Result<&WrappedIOData, FeagiDataError>;
 
     fn clone_box(&self) -> Box<dyn PipelineStage>;
-    
+
     /// Provide access to `Any` trait for downcasting
     fn as_any(&self) -> &dyn Any;
 
@@ -58,5 +62,8 @@ pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     fn create_properties(&self) -> PipelineStageProperties;
 
     /// Loads properties into this stage, updating its configuration
-    fn load_properties(&mut self, properties: PipelineStageProperties) -> Result<(), FeagiDataError>;
+    fn load_properties(
+        &mut self,
+        properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError>;
 }

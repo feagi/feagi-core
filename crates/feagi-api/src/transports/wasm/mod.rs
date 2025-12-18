@@ -40,4 +40,3 @@ pub mod types;
 
 pub use adapter::WasmApiAdapter;
 pub use state::create_api_state_from_genome;
-

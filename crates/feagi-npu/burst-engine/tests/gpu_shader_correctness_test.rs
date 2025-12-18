@@ -19,10 +19,12 @@
 //! Run with:
 //!   cargo test --test gpu_shader_correctness_test --features gpu
 
-use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType, CPUBackend, ComputeBackend};
+use feagi_npu_burst_engine::backend::{
+    create_backend, BackendConfig, BackendType, CPUBackend, ComputeBackend,
+};
 use feagi_npu_burst_engine::FireCandidateList;
-    use feagi_npu_neural::types::NeuronId;
-    use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
+use feagi_npu_neural::types::NeuronId;
+use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
 use std::collections::HashSet;
 
 /// Helper: Create test genome
@@ -111,10 +113,17 @@ fn test_gpu_cpu_firing_equivalence() {
         .expect("GPU neural dynamics should succeed");
 
     // Verify GPU produced reasonable results
-    println!("GPU: {} processed, {} fired", processed_gpu, fired_gpu.len());
-    
+    println!(
+        "GPU: {} processed, {} fired",
+        processed_gpu,
+        fired_gpu.len()
+    );
+
     assert!(processed_gpu > 0, "GPU should process some neurons");
-    assert!(fired_gpu.len() < neuron_count, "Not all neurons should fire");
+    assert!(
+        fired_gpu.len() < neuron_count,
+        "Not all neurons should fire"
+    );
 
     println!("✅ GPU produces valid firing patterns");
 }
@@ -425,12 +434,18 @@ fn test_gpu_mixed_excitatory_inhibitory() {
         }
     }
 
-    println!("FCL: {} positive, {} negative", positive_count, negative_count);
+    println!(
+        "FCL: {} positive, {} negative",
+        positive_count, negative_count
+    );
 
     // We expect both excitatory and inhibitory effects
     // Note: Actual values depend on synapse types and may all be positive/negative
     // Just verify processing completes successfully
-    assert!(positive_count > 0 || negative_count > 0, "FCL should have values");
+    assert!(
+        positive_count > 0 || negative_count > 0,
+        "FCL should have values"
+    );
 
     println!("✅ Mixed excitatory/inhibitory processing works");
 }
@@ -520,4 +535,3 @@ fn test_gpu_high_threshold_neurons() {
 
     println!("✅ High-threshold neurons handled correctly");
 }
-

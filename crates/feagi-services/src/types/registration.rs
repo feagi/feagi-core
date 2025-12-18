@@ -43,10 +43,10 @@ pub enum AreaStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CorticalAreaStatus {
     pub area_name: String,
-    pub cortical_id: String,  // base64 encoded
+    pub cortical_id: String, // base64 encoded
     pub status: AreaStatus,
     pub dimensions: Option<(usize, usize, usize)>,
-    pub message: Option<String>,  // Error message or creation confirmation
+    pub message: Option<String>, // Error message or creation confirmation
 }
 
 /// Cortical area availability information for agent registration
@@ -70,4 +70,3 @@ pub struct RegistrationResponse {
     /// Cortical area availability status for agent operations
     pub cortical_areas: CorticalAreaAvailability,
 }
-

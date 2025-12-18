@@ -132,12 +132,11 @@ mod tests {
     fn test_batch_apply() {
         let mut weights = [100, 150, 200];
         let deltas = [50, -50, 100];
-        
+
         apply_weight_changes_batch(&mut weights, &deltas);
-        
+
         assert_eq!(weights[0], 150);
         assert_eq!(weights[1], 100);
         assert_eq!(weights[2], 255); // Clamped
     }
 }
-

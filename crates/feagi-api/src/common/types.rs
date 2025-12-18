@@ -7,13 +7,13 @@
 //! without modification.
 
 #[cfg(feature = "http")]
-pub use axum::extract::{State, Query, Path};
+pub use crate::transports::http::server::ApiState;
+#[cfg(feature = "http")]
+pub use axum::extract::{Path, Query, State};
 #[cfg(feature = "http")]
 pub use axum::response::Json;
-#[cfg(feature = "http")]
-pub use crate::transports::http::server::ApiState;
 
 #[cfg(not(feature = "http"))]
-pub use crate::transports::wasm::types::{State, Json, Query, Path};
-#[cfg(not(feature = "http"))]
 pub use crate::transports::http::server::ApiState;
+#[cfg(not(feature = "http"))]
+pub use crate::transports::wasm::types::{Json, Path, Query, State};

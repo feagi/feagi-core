@@ -2,14 +2,16 @@
 //!
 //! This module provides data structures and enums for describing dat properties
 
+use super::{
+    ImageFrame, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame,
+};
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelDimensions;
+use feagi_data_structures::FeagiDataError;
+use feagi_data_structures::{
+    define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping,
+};
 use std::cmp;
 use std::fmt::Display;
-use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::{define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping};
-use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelDimensions;
-use super::{ImageFrame, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame};
-
-
 
 //region Images
 
@@ -17,7 +19,13 @@ use super::{ImageFrame, Percentage, Percentage2D, Percentage3D, Percentage4D, Se
 
 define_xy_coordinates!(ImageXYPoint, u32, "ImageXYPoint", "Represents a coordinate on an image. +x goes to the right, +y goes downward. (0,0) is in the top_left");
 
-define_xy_dimensions!(ImageXYResolution, u32, "ImageXYResolution", 0, "Describes the resolution of the image (width and height)");
+define_xy_dimensions!(
+    ImageXYResolution,
+    u32,
+    "ImageXYResolution",
+    0,
+    "Describes the resolution of the image (width and height)"
+);
 
 //endregion
 
@@ -46,7 +54,6 @@ pub struct SegmentedXYImageResolutions {
 }
 
 impl SegmentedXYImageResolutions {
-
     pub fn new(
         lower_left: ImageXYResolution,
         lower_middle: ImageXYResolution,
@@ -86,16 +93,24 @@ impl SegmentedXYImageResolutions {
     /// A Result containing either:
     /// - Ok(SegmentedVisionTargetResolutions) if all resolutions are valid (non-zero)
     /// - Err(DataProcessingError) if any resolution has zero width or height
-    pub fn create_with_same_sized_peripheral(center_resolution: ImageXYResolution, peripheral_resolutions: ImageXYResolution) -> SegmentedXYImageResolutions {
-
-        SegmentedXYImageResolutions::new(peripheral_resolutions, peripheral_resolutions,
-                                         peripheral_resolutions, peripheral_resolutions,
-                                         center_resolution, peripheral_resolutions,
-                                         peripheral_resolutions, peripheral_resolutions,
-                                         peripheral_resolutions)
+    pub fn create_with_same_sized_peripheral(
+        center_resolution: ImageXYResolution,
+        peripheral_resolutions: ImageXYResolution,
+    ) -> SegmentedXYImageResolutions {
+        SegmentedXYImageResolutions::new(
+            peripheral_resolutions,
+            peripheral_resolutions,
+            peripheral_resolutions,
+            peripheral_resolutions,
+            center_resolution,
+            peripheral_resolutions,
+            peripheral_resolutions,
+            peripheral_resolutions,
+            peripheral_resolutions,
+        )
     }
 
-    pub fn as_ordered_array(&self) ->[&ImageXYResolution; 9] {
+    pub fn as_ordered_array(&self) -> [&ImageXYResolution; 9] {
         [
             &self.lower_left,
             &self.lower_middle,
@@ -129,7 +144,7 @@ impl Display for SegmentedXYImageResolutions {
 #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ColorSpace {
     Linear,
-    Gamma
+    Gamma,
 }
 
 impl Display for ColorSpace {
@@ -175,7 +190,11 @@ impl TryFrom<usize> for ColorChannelLayout {
             2 => Ok(ColorChannelLayout::RG),
             3 => Ok(ColorChannelLayout::RGB),
             4 => Ok(ColorChannelLayout::RGBA),
-            _ => Err(FeagiDataError::BadParameters(format!("No Channel Layout has {} channels! Acceptable values are 1,2,3,4!", value)).into())
+            _ => Err(FeagiDataError::BadParameters(format!(
+                "No Channel Layout has {} channels! Acceptable values are 1,2,3,4!",
+                value
+            ))
+            .into()),
         }
     }
 }
@@ -188,7 +207,9 @@ impl TryFrom<image::ColorType> for ColorChannelLayout {
             image::ColorType::La8 => Ok(ColorChannelLayout::RG),
             image::ColorType::Rgb8 => Ok(ColorChannelLayout::RGB),
             image::ColorType::Rgba8 => Ok(ColorChannelLayout::RGBA),
-            _ => Err(FeagiDataError::BadParameters("Unsupported image color!".to_string()))
+            _ => Err(FeagiDataError::BadParameters(
+                "Unsupported image color!".to_string(),
+            )),
         }
     }
 }
@@ -259,8 +280,12 @@ impl ImageFrameProperties {
     /// # Returns
     ///
     /// A new ImageFrameProperties instance with the specified configuration.
-    pub fn new(image_resolution: ImageXYResolution, color_space: ColorSpace, color_channel_layout: ColorChannelLayout) -> Result<Self, FeagiDataError> {
-        Ok(ImageFrameProperties{
+    pub fn new(
+        image_resolution: ImageXYResolution,
+        color_space: ColorSpace,
+        color_channel_layout: ColorChannelLayout,
+    ) -> Result<Self, FeagiDataError> {
+        Ok(ImageFrameProperties {
             image_resolution,
             color_space,
             color_channel_layout,
@@ -285,18 +310,29 @@ impl ImageFrameProperties {
     ///
     /// Returns an error with a descriptive message if:
     /// - The resolution doesn't match
-    /// - The color space doesn't match  
+    /// - The color space doesn't match
     /// - The channel layout doesn't match
-    pub fn verify_image_frame_matches_properties(&self, image_frame: &ImageFrame) -> Result<(), FeagiDataError> {
+    pub fn verify_image_frame_matches_properties(
+        &self,
+        image_frame: &ImageFrame,
+    ) -> Result<(), FeagiDataError> {
         if image_frame.get_xy_resolution() != self.image_resolution {
-            return Err(FeagiDataError::BadParameters(format!{"Expected resolution of {} but received an image with resolution of {}!",
-                                                             self.image_resolution, image_frame.get_xy_resolution()}).into())
+            return Err(FeagiDataError::BadParameters(
+                format! {"Expected resolution of {} but received an image with resolution of {}!",
+                self.image_resolution, image_frame.get_xy_resolution()},
+            )
+            .into());
         }
         if image_frame.get_color_space() != &self.color_space {
-            return Err(FeagiDataError::BadParameters(format!("Expected color space of {}, but got image with color space of {}!", self.color_space.to_string(), self.color_space.to_string())).into())
+            return Err(FeagiDataError::BadParameters(format!(
+                "Expected color space of {}, but got image with color space of {}!",
+                self.color_space.to_string(),
+                self.color_space.to_string()
+            ))
+            .into());
         }
         if image_frame.get_channel_layout() != &self.color_channel_layout {
-            return Err(FeagiDataError::BadParameters(format!("Expected color channel layout of {}, but got image with color channel layout of {}!", self.color_channel_layout.to_string(), self.color_channel_layout.to_string())).into())
+            return Err(FeagiDataError::BadParameters(format!("Expected color channel layout of {}, but got image with color channel layout of {}!", self.color_channel_layout.to_string(), self.color_channel_layout.to_string())).into());
         }
         Ok(())
     }
@@ -328,20 +364,25 @@ impl ImageFrameProperties {
         self.color_channel_layout
     }
 
-
     pub fn get_number_of_channels(&self) -> usize {
         self.color_channel_layout.into()
     }
 
-
     pub fn get_number_of_samples(&self) -> usize {
-        self.image_resolution.width as usize * self.image_resolution.height as usize * self.get_number_of_channels()
+        self.image_resolution.width as usize
+            * self.image_resolution.height as usize
+            * self.get_number_of_channels()
     }
 }
 
 impl Display for ImageFrameProperties {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let s = format!("ImageFrameProperties({}, {}, {})", self.image_resolution, self.color_space.to_string(), self.color_channel_layout.to_string());
+        let s = format!(
+            "ImageFrameProperties({}, {}, {})",
+            self.image_resolution,
+            self.color_space.to_string(),
+            self.color_channel_layout.to_string()
+        );
         write!(f, "{}", s)
     }
 }
@@ -349,7 +390,6 @@ impl Display for ImageFrameProperties {
 //endregion
 
 //region Segmented Image Frame Properties
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct SegmentedImageFrameProperties {
@@ -359,7 +399,6 @@ pub struct SegmentedImageFrameProperties {
     color_space: ColorSpace,
 }
 impl SegmentedImageFrameProperties {
-
     pub fn new(
         segment_xy_resolutions: SegmentedXYImageResolutions,
         center_color_channel: ColorChannelLayout,
@@ -390,14 +429,19 @@ impl SegmentedImageFrameProperties {
         &self.color_space
     }
 
-    pub fn verify_segmented_image_frame_matches_properties(&self, segmented_image_frame: &SegmentedImageFrame) -> Result<(), FeagiDataError> {
+    pub fn verify_segmented_image_frame_matches_properties(
+        &self,
+        segmented_image_frame: &SegmentedImageFrame,
+    ) -> Result<(), FeagiDataError> {
         if self != &segmented_image_frame.get_segmented_image_frame_properties() {
-            return Err(FeagiDataError::BadParameters("Segmented image frame does not match the expected segmented frame properties!".into()).into())
+            return Err(FeagiDataError::BadParameters(
+                "Segmented image frame does not match the expected segmented frame properties!"
+                    .into(),
+            )
+            .into());
         }
         Ok(())
     }
-
-
 }
 
 impl Display for SegmentedImageFrameProperties {
@@ -414,17 +458,22 @@ impl Display for SegmentedImageFrameProperties {
 pub struct CornerPoints {
     pub upper_left: ImageXYPoint,
     pub lower_right: ImageXYPoint,
-
 }
 
 impl CornerPoints {
-
-    pub fn new(upper_left: ImageXYPoint, lower_right: ImageXYPoint) -> Result<Self, FeagiDataError> {
+    pub fn new(
+        upper_left: ImageXYPoint,
+        lower_right: ImageXYPoint,
+    ) -> Result<Self, FeagiDataError> {
         if lower_right.x <= upper_left.x || lower_right.y <= upper_left.y {
-            return Err(FeagiDataError::BadParameters("Given Points are not forming a proper rectangle!".into()).into())
+            return Err(FeagiDataError::BadParameters(
+                "Given Points are not forming a proper rectangle!".into(),
+            )
+            .into());
         }
         Ok(CornerPoints {
-            upper_left, lower_right
+            upper_left,
+            lower_right,
         })
     }
     pub fn get_upper_right(&self) -> ImageXYPoint {
@@ -442,14 +491,21 @@ impl CornerPoints {
     pub fn get_height(&self) -> u32 {
         self.lower_right.y - self.upper_left.y
     }
-    
+
     pub fn enclosed_area_width_height(&self) -> ImageXYResolution {
         ImageXYResolution::new(self.get_width(), self.get_height()).unwrap()
     }
 
-    pub fn verify_fits_in_resolution(&self, resolution: ImageXYResolution) -> Result<(), FeagiDataError> {
+    pub fn verify_fits_in_resolution(
+        &self,
+        resolution: ImageXYResolution,
+    ) -> Result<(), FeagiDataError> {
         if self.lower_right.x > resolution.width || self.lower_right.y > resolution.height {
-            return Err(FeagiDataError::BadParameters(format!("Corner Points {} do not fit in given resolution {}!", self, resolution)).into())
+            return Err(FeagiDataError::BadParameters(format!(
+                "Corner Points {} do not fit in given resolution {}!",
+                self, resolution
+            ))
+            .into());
         }
         Ok(())
     }
@@ -457,7 +513,12 @@ impl CornerPoints {
 
 impl Display for CornerPoints {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "CornerPoints(Upper Left: {}, Lower Right: {})", self.upper_left.to_string(), self.lower_right.to_string())
+        write!(
+            f,
+            "CornerPoints(Upper Left: {}, Lower Right: {})",
+            self.upper_left.to_string(),
+            self.lower_right.to_string()
+        )
     }
 }
 

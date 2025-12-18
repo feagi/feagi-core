@@ -28,7 +28,7 @@ pub struct FeagiConfig {
     pub agent: AgentConfig,
     pub ports: PortsConfig,
     pub zmq: ZmqConfig,
-    pub websocket: WebSocketConfig,  // FEAGI 2.0: WebSocket transport
+    pub websocket: WebSocketConfig,   // FEAGI 2.0: WebSocket transport
     pub transports: TransportsConfig, // FEAGI 2.0: Multi-transport coordination
     pub timeouts: TimeoutsConfig,
     pub agents: AgentsConfig,
@@ -154,7 +154,7 @@ impl Default for AgentConfig {
     fn default() -> Self {
         Self {
             registration_port: 30001,
-            sensory_port: 5555,  // NOTE: This is agent config (different from ports.zmq_sensory_port)
+            sensory_port: 5555, // NOTE: This is agent config (different from ports.zmq_sensory_port)
             motor_port: 30005,
             host: "0.0.0.0".to_string(),
             auto_create_missing_cortical_areas: true,
@@ -592,9 +592,7 @@ pub struct BurstEngineSleepConfig {
 
 impl Default for BurstEngineSleepConfig {
     fn default() -> Self {
-        Self {
-            enabled: true,
-        }
+        Self { enabled: true }
     }
 }
 
@@ -777,4 +775,3 @@ impl Default for SnapshotConfig {
         }
     }
 }
-

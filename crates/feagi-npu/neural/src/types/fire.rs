@@ -16,7 +16,6 @@ use std::{collections::VecDeque, vec::Vec};
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
 
-
 /// Fire Candidate List (FCL) - neurons that might fire this burst
 #[cfg(feature = "std")]
 #[derive(Debug, Clone)]
@@ -54,7 +53,9 @@ impl FireCandidateList {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (NeuronId, f32)> + '_ {
-        self.candidates.iter().map(|(&id, &pot)| (NeuronId(id), pot))
+        self.candidates
+            .iter()
+            .map(|(&id, &pot)| (NeuronId(id), pot))
     }
 }
 
@@ -145,4 +146,3 @@ pub struct FireQueue;
 
 #[cfg(not(feature = "std"))]
 pub struct FireLedger;
-

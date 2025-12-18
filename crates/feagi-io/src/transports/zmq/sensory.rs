@@ -7,7 +7,7 @@
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use std::thread;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]
@@ -99,7 +99,7 @@ impl SensoryStream {
         *self.npu.lock() = Some(npu);
         info!("🦀 [SENSORY-STREAM] NPU connected for direct injection");
     }
-    
+
     /// Set the AgentRegistry reference for security gating
     pub fn set_agent_registry(&self, registry: Arc<RwLock<crate::core::AgentRegistry>>) {
         *self.agent_registry.lock() = Some(registry);
@@ -279,13 +279,23 @@ impl SensoryStream {
                         // Process the binary data
                         let message_bytes: &[u8] = msg.as_ref();
                         let t_zmq_receive_start = std::time::Instant::now();
-                        debug!("🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes", message_count, message_bytes.len());
+                        debug!(
+                            "🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes",
+                            message_count,
+                            message_bytes.len()
+                        );
 
                         // Try to deserialize as binary XYZP data (using feagi-data-processing)
-                        match Self::deserialize_and_inject_xyzp(message_bytes, &npu, &agent_registry, &rejected_no_genome, &rejected_no_agents) {
+                        match Self::deserialize_and_inject_xyzp(
+                            message_bytes,
+                            &npu,
+                            &agent_registry,
+                            &rejected_no_genome,
+                            &rejected_no_agents,
+                        ) {
                             Ok(neuron_count) => {
                                 *total_neurons.lock() += neuron_count as u64;
-                                
+
                                 // Log stats periodically (every 100 messages)
                                 if message_count % 100 == 0 {
                                     let t_zmq_total = t_zmq_receive_start.elapsed();
@@ -353,7 +363,7 @@ impl SensoryStream {
             None => return Err("NPU not connected".to_string()),
         };
         drop(npu_lock); // Release early
-        
+
         // SECURITY GATE 1: Check if genome is loaded
         {
             let npu = npu_arc.lock().unwrap();
@@ -366,7 +376,7 @@ impl SensoryStream {
                 return Err("Security: No genome loaded".to_string());
             }
         }
-        
+
         // SECURITY GATE 2: Check if any sensory agents are registered
         {
             let registry_lock = agent_registry_mutex.lock();
@@ -389,7 +399,7 @@ impl SensoryStream {
         // Deserialize using FeagiByteContainer (proper container format)
         let mut byte_container = FeagiByteContainer::new_empty();
         let mut data_vec = message_bytes.to_vec();
-        
+
         // Load bytes into container
         byte_container
             .try_write_data_to_container_and_verify(&mut |bytes| {
@@ -411,7 +421,7 @@ impl SensoryStream {
         let boxed_struct = byte_container
             .try_create_new_struct_from_index(0)
             .map_err(|e| format!("Failed to deserialize structure from container: {:?}", e))?;
-        
+
         // Downcast to CorticalMappedXYZPNeuronVoxels using as_any().downcast_ref()
         let cortical_mapped = boxed_struct
             .as_any()
@@ -420,34 +430,38 @@ impl SensoryStream {
 
         // ✅ CLEAN ARCHITECTURE: IOSystem just transports XYZP, NPU handles all neural logic
         // The NPU owns coordinate-to-ID conversion and does it efficiently in batch
-        
+
         let mut total_injected = 0;
-        
+
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
             // Step 1: Extract raw XYZP data (NO LOCKS)
             let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
             let num_neurons = neuron_arrays.len();
-            
+
             // Build XYZP array
             let xyzp_data: Vec<(u32, u32, u32, f32)> = (0..num_neurons)
                 .map(|i| (x_coords[i], y_coords[i], z_coords[i], potentials[i]))
                 .collect();
-            
+
             // Step 2: Quick lock - NPU handles everything (name resolution + coordinate conversion + injection)
             let mut npu = npu_arc.lock().unwrap();
-            
+
             // NPU handles: CorticalID → cortical_idx lookup, coordinates → neuron IDs, injection
             let injected = npu.inject_sensory_xyzp_by_id(&cortical_id, &xyzp_data);
             total_injected += injected;
-            
+
             drop(npu);
-            
+
             // Only log missing neurons at debug level (common case, not an error)
             if injected == 0 {
-                debug!("[ZMQ-SENSORY] No neurons injected for area '{}' ({} coords)", cortical_id.as_base_64(), xyzp_data.len());
+                debug!(
+                    "[ZMQ-SENSORY] No neurons injected for area '{}' ({} coords)",
+                    cortical_id.as_base_64(),
+                    xyzp_data.len()
+                );
             }
         }
-        
+
         Ok(total_injected)
     }
 

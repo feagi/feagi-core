@@ -11,7 +11,7 @@
 //! GPU Detection Example
 //!
 //! Tests if WGPU can detect and initialize GPU on this system.
-//! 
+//!
 //! Usage:
 //!   cargo run --example gpu_detection --features gpu
 //!
@@ -78,18 +78,30 @@ fn main() {
                     // Test 4: Get limits
                     println!("Test 4: GPU Device Limits:");
                     let limits = device.limits();
-                    println!("  Max buffer size:              {} MB", limits.max_buffer_size / 1_000_000);
-                    println!("  Max storage buffer binding:   {} MB", limits.max_storage_buffer_binding_size / 1_000_000);
-                    println!("  Max compute workgroup size:   {:?}", (
-                        limits.max_compute_workgroup_size_x,
-                        limits.max_compute_workgroup_size_y,
-                        limits.max_compute_workgroup_size_z
-                    ));
-                    println!("  Max workgroups per dimension: {:?}", (
-                        limits.max_compute_workgroups_per_dimension,
-                        limits.max_compute_workgroups_per_dimension,
-                        limits.max_compute_workgroups_per_dimension
-                    ));
+                    println!(
+                        "  Max buffer size:              {} MB",
+                        limits.max_buffer_size / 1_000_000
+                    );
+                    println!(
+                        "  Max storage buffer binding:   {} MB",
+                        limits.max_storage_buffer_binding_size / 1_000_000
+                    );
+                    println!(
+                        "  Max compute workgroup size:   {:?}",
+                        (
+                            limits.max_compute_workgroup_size_x,
+                            limits.max_compute_workgroup_size_y,
+                            limits.max_compute_workgroup_size_z
+                        )
+                    );
+                    println!(
+                        "  Max workgroups per dimension: {:?}",
+                        (
+                            limits.max_compute_workgroups_per_dimension,
+                            limits.max_compute_workgroups_per_dimension,
+                            limits.max_compute_workgroups_per_dimension
+                        )
+                    );
                     println!();
 
                     // Test 5: Estimate FEAGI performance
@@ -102,7 +114,7 @@ fn main() {
                     let shader_source = r#"
                         @group(0) @binding(0) var<storage, read> input: array<f32>;
                         @group(0) @binding(1) var<storage, read_write> output: array<f32>;
-                        
+
                         @compute @workgroup_size(256)
                         fn main(@builtin(global_invocation_id) global_id: vec3<u32>) {
                             let idx = global_id.x;
@@ -117,12 +129,13 @@ fn main() {
                         source: wgpu::ShaderSource::Wgsl(shader_source.into()),
                     });
 
-                    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                        label: Some("Test Pipeline"),
-                        layout: None,
-                        module: &shader,
-                        entry_point: "main",
-                    });
+                    let pipeline =
+                        device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                            label: Some("Test Pipeline"),
+                            layout: None,
+                            module: &shader,
+                            entry_point: "main",
+                        });
 
                     println!("  ✓ Compute shader compiled successfully");
                     println!("  ✓ Compute pipeline created successfully");
@@ -180,40 +193,40 @@ fn estimate_performance(info: &wgpu::AdapterInfo) {
         wgpu::Backend::Metal => {
             // Apple Silicon estimates
             if info.name.contains("M4") {
-                (10.0, 120.0)  // M4 Pro: ~10 TFLOPS, ~120 GB/s
+                (10.0, 120.0) // M4 Pro: ~10 TFLOPS, ~120 GB/s
             } else if info.name.contains("M3") {
-                (8.0, 100.0)   // M3 Pro: ~8 TFLOPS, ~100 GB/s
+                (8.0, 100.0) // M3 Pro: ~8 TFLOPS, ~100 GB/s
             } else if info.name.contains("M2") {
-                (5.0, 80.0)    // M2 Pro: ~5 TFLOPS, ~80 GB/s
+                (5.0, 80.0) // M2 Pro: ~5 TFLOPS, ~80 GB/s
             } else if info.name.contains("M1") {
-                (4.0, 60.0)    // M1 Pro: ~4 TFLOPS, ~60 GB/s
+                (4.0, 60.0) // M1 Pro: ~4 TFLOPS, ~60 GB/s
             } else {
-                (3.0, 40.0)    // Intel/AMD GPU on Mac
+                (3.0, 40.0) // Intel/AMD GPU on Mac
             }
         }
         wgpu::Backend::Vulkan => {
             // NVIDIA/AMD estimates (Linux/Windows)
             if info.name.contains("RTX 4090") {
-                (82.0, 1000.0)  // RTX 4090: 82 TFLOPS, 1 TB/s
+                (82.0, 1000.0) // RTX 4090: 82 TFLOPS, 1 TB/s
             } else if info.name.contains("RTX 4080") {
-                (48.0, 717.0)   // RTX 4080: 48 TFLOPS, 717 GB/s
+                (48.0, 717.0) // RTX 4080: 48 TFLOPS, 717 GB/s
             } else if info.name.contains("RTX 4070") {
-                (29.0, 504.0)   // RTX 4070: 29 TFLOPS, 504 GB/s
+                (29.0, 504.0) // RTX 4070: 29 TFLOPS, 504 GB/s
             } else if info.name.contains("RTX 3090") {
-                (35.0, 936.0)   // RTX 3090: 35 TFLOPS, 936 GB/s
+                (35.0, 936.0) // RTX 3090: 35 TFLOPS, 936 GB/s
             } else if info.name.contains("RX 7900") {
-                (61.0, 960.0)   // AMD RX 7900 XTX: 61 TFLOPS, 960 GB/s
+                (61.0, 960.0) // AMD RX 7900 XTX: 61 TFLOPS, 960 GB/s
             } else if info.name.contains("Arc A770") {
-                (17.2, 560.0)   // Intel Arc A770: 17.2 TFLOPS, 560 GB/s
+                (17.2, 560.0) // Intel Arc A770: 17.2 TFLOPS, 560 GB/s
             } else {
-                (10.0, 200.0)   // Generic GPU
+                (10.0, 200.0) // Generic GPU
             }
         }
         wgpu::Backend::Dx12 => {
             // Windows DirectX 12 (similar to Vulkan estimates)
-            (10.0, 200.0)       // Generic GPU
+            (10.0, 200.0) // Generic GPU
         }
-        _ => (5.0, 100.0),      // Fallback
+        _ => (5.0, 100.0), // Fallback
     };
 
     println!("  Estimated GPU Performance:");
@@ -226,27 +239,28 @@ fn estimate_performance(info: &wgpu::AdapterInfo) {
     println!("  ┌──────────────┬────────────┬──────────────┬─────────┐");
     println!("  │ Neurons      │ Synapses   │ CPU Time     │ Speedup │");
     println!("  ├──────────────┼────────────┼──────────────┼─────────┤");
-    
+
     let test_cases = vec![
         (100_000, 10_000_000),
         (500_000, 50_000_000),
         (1_000_000, 100_000_000),
         (5_000_000, 500_000_000),
     ];
-    
+
     for (neurons, synapses) in test_cases {
         let cpu_time_us = estimate_cpu_time(neurons, synapses);
         let gpu_time_us = estimate_gpu_time(neurons, synapses, tflops, bandwidth_gbs);
         let speedup = cpu_time_us / gpu_time_us;
-        
-        println!("  │ {:<12} │ {:<10} │ {:>8.0} μs │ {:>6.1}x │",
+
+        println!(
+            "  │ {:<12} │ {:<10} │ {:>8.0} μs │ {:>6.1}x │",
             format_number(neurons),
             format_number(synapses),
             cpu_time_us,
             speedup.max(0.1).min(100.0)
         );
     }
-    
+
     println!("  └──────────────┴────────────┴──────────────┴─────────┘");
     println!();
 }
@@ -267,14 +281,14 @@ fn estimate_gpu_time(neurons: usize, synapses: usize, tflops: f64, bandwidth_gbs
     let synaptic_ops = synapses as f64 * 10.0;
     let neural_ops = neurons as f64 * 20.0;
     let compute_us = (synaptic_ops + neural_ops) / (gpu_flops / 1_000_000.0);
-    
+
     // Transfer time (FCL optimization: only 1% of neurons)
     let firing_rate = 0.01;
     let transfer_bytes = (neurons as f64 * 4.0 * 2.0)  // Membrane potentials
                        + (neurons as f64 * 0.125)       // Fired mask
-                       + (neurons as f64 * firing_rate * 4.0);  // Fired IDs
+                       + (neurons as f64 * firing_rate * 4.0); // Fired IDs
     let transfer_us = (transfer_bytes / (bandwidth_gbs * 1_000_000_000.0)) * 1_000_000.0 + 200.0;
-    
+
     compute_us + transfer_us
 }
 
@@ -303,5 +317,3 @@ fn main() {
     eprintln!("║    cargo build --release                                     ║");
     eprintln!("╚═══════════════════════════════════════════════════════════════╝");
 }
-
-

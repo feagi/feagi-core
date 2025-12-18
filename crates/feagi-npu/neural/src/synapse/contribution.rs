@@ -158,4 +158,3 @@ mod tests {
         assert!(contributions[2] > 0.0); // Excitatory
     }
 }
-

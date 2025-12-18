@@ -51,7 +51,7 @@ impl WsRouter {
     /// Create a new WebSocket ROUTER socket
     pub fn new(config: ServerConfig) -> TransportResult<Self> {
         config.base.validate()?;
-        
+
         Ok(Self {
             config,
             running: Arc::new(RwLock::new(false)),
@@ -60,43 +60,44 @@ impl WsRouter {
             request_tx: Arc::new(RwLock::new(None)),
         })
     }
-    
+
     /// Create with address
     pub async fn with_address(address: impl Into<String>) -> TransportResult<Self> {
         let config = ServerConfig::new(address);
         Self::new(config)
     }
-    
+
     /// Start the WebSocket server
     pub async fn start_async(&mut self) -> TransportResult<()> {
         if *self.running.read() {
             return Err(TransportError::AlreadyRunning);
         }
-        
+
         let addr = self.config.base.address.clone();
         let listener = TcpListener::bind(&addr)
             .await
             .map_err(|e| TransportError::BindFailed(e.to_string()))?;
-        
+
         info!("🦀 [WS-ROUTER] Listening on {}", addr);
-        
+
         let (request_tx, request_rx) = mpsc::unbounded_channel();
         *self.request_tx.write() = Some(request_tx.clone());
         *self.request_rx.write() = Some(request_rx);
         *self.running.write() = true;
-        
+
         let running = self.running.clone();
-        
+
         let handle = tokio::spawn(async move {
             while *running.read() {
                 match listener.accept().await {
                     Ok((stream, peer_addr)) => {
                         debug!("[WS-ROUTER] New connection from {}", peer_addr);
-                        
+
                         let request_tx_clone = request_tx.clone();
-                        
+
                         tokio::spawn(async move {
-                            if let Err(e) = handle_client(stream, peer_addr, request_tx_clone).await {
+                            if let Err(e) = handle_client(stream, peer_addr, request_tx_clone).await
+                            {
                                 warn!("[WS-ROUTER] Client {} error: {}", peer_addr, e);
                             }
                         });
@@ -107,9 +108,9 @@ impl WsRouter {
                 }
             }
         });
-        
+
         *self.server_handle.write() = Some(handle);
-        
+
         Ok(())
     }
 }
@@ -120,23 +121,23 @@ impl Transport for WsRouter {
             "Use start_async() for WebSocket transports".to_string(),
         ))
     }
-    
+
     fn stop(&mut self) -> TransportResult<()> {
         *self.running.write() = false;
         *self.request_tx.write() = None;
         *self.request_rx.write() = None;
-        
+
         if let Some(handle) = self.server_handle.write().take() {
             handle.abort();
         }
-        
+
         Ok(())
     }
-    
+
     fn is_running(&self) -> bool {
         *self.running.read()
     }
-    
+
     fn transport_type(&self) -> &str {
         "websocket-router"
     }
@@ -145,34 +146,32 @@ impl Transport for WsRouter {
 impl RequestReplyServer for WsRouter {
     fn receive(&self) -> TransportResult<(Vec<u8>, Box<dyn ReplyHandle>)> {
         let mut rx_guard = self.request_rx.write();
-        let rx = rx_guard
-            .as_mut()
-            .ok_or(TransportError::NotRunning)?;
-        
+        let rx = rx_guard.as_mut().ok_or(TransportError::NotRunning)?;
+
         match rx.try_recv() {
             Ok((data, reply_tx)) => {
-                let handle = Box::new(WsReplyHandle { reply_tx: RefCell::new(Some(reply_tx)) });
+                let handle = Box::new(WsReplyHandle {
+                    reply_tx: RefCell::new(Some(reply_tx)),
+                });
                 Ok((data, handle))
             }
-            Err(mpsc::error::TryRecvError::Empty) => {
-                Err(TransportError::NoData)
-            }
+            Err(mpsc::error::TryRecvError::Empty) => Err(TransportError::NoData),
             Err(e) => Err(TransportError::ReceiveFailed(e.to_string())),
         }
     }
-    
+
     fn receive_timeout(&self, timeout_ms: u64) -> TransportResult<(Vec<u8>, Box<dyn ReplyHandle>)> {
         let mut rx_guard = self.request_rx.write();
-        let rx = rx_guard
-            .as_mut()
-            .ok_or(TransportError::NotRunning)?;
-        
+        let rx = rx_guard.as_mut().ok_or(TransportError::NotRunning)?;
+
         // Use a different approach since tokio doesn't have blocking_recv_timeout
         let start = std::time::Instant::now();
         loop {
             match rx.try_recv() {
                 Ok((data, reply_tx)) => {
-                    let handle = Box::new(WsReplyHandle { reply_tx: RefCell::new(Some(reply_tx)) });
+                    let handle = Box::new(WsReplyHandle {
+                        reply_tx: RefCell::new(Some(reply_tx)),
+                    });
                     return Ok((data, handle));
                 }
                 Err(mpsc::error::TryRecvError::Empty) => {
@@ -185,7 +184,7 @@ impl RequestReplyServer for WsRouter {
             }
         }
     }
-    
+
     fn poll(&self, timeout_ms: u64) -> TransportResult<bool> {
         self.receive_timeout(timeout_ms).map(|_| true)
     }
@@ -199,18 +198,18 @@ async fn handle_client(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let ws_stream = accept_async(stream).await?;
     let (mut write, mut read) = ws_stream.split();
-    
+
     info!("[WS-ROUTER] Client {} connected", peer_addr);
-    
+
     while let Some(msg) = read.next().await {
         match msg {
             Ok(Message::Binary(data)) => {
                 let (reply_tx, reply_rx) = oneshot::channel();
-                
+
                 if request_tx.send((data, reply_tx)).is_err() {
                     break;
                 }
-                
+
                 // Wait for reply
                 match reply_rx.await {
                     Ok(response) => {
@@ -223,11 +222,11 @@ async fn handle_client(
             }
             Ok(Message::Text(text)) => {
                 let (reply_tx, reply_rx) = oneshot::channel();
-                
+
                 if request_tx.send((text.into_bytes(), reply_tx)).is_err() {
                     break;
                 }
-                
+
                 // Wait for reply
                 match reply_rx.await {
                     Ok(response) => {
@@ -246,33 +245,32 @@ async fn handle_client(
             _ => {}
         }
     }
-    
+
     info!("[WS-ROUTER] Client {} disconnected", peer_addr);
-    
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_wsrouter_creation() {
         let config = ServerConfig::new("127.0.0.1:30024");
         let router_socket = WsRouter::new(config);
         assert!(router_socket.is_ok());
     }
-    
+
     #[tokio::test]
     async fn test_wsrouter_start_stop() {
         let mut router_socket = WsRouter::with_address("127.0.0.1:30025").await.unwrap();
         assert!(!router_socket.is_running());
-        
+
         router_socket.start_async().await.unwrap();
         assert!(router_socket.is_running());
-        
+
         router_socket.stop().unwrap();
         assert!(!router_socket.is_running());
     }
 }
-

@@ -114,8 +114,8 @@ mod gpu_integration {
 
     /// Helper: Create test neuron array
     fn create_test_neurons(count: usize) -> NeuronArray<f32> {
-        use feagi_npu_neural::types::*;
         use ahash::AHashMap;
+        use feagi_npu_neural::types::*;
 
         NeuronArray {
             capacity: count,
@@ -142,8 +142,8 @@ mod gpu_integration {
 
     /// Helper: Create test synapse array
     fn create_test_synapses(neuron_count: usize, synapse_count: usize) -> SynapseArray {
-        use feagi_npu_neural::types::*;
         use ahash::AHashMap;
+        use feagi_npu_neural::types::*;
 
         let source_neurons: Vec<u32> = (0..synapse_count)
             .map(|i| (i % neuron_count) as u32)

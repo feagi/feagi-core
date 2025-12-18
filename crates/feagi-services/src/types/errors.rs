@@ -18,10 +18,7 @@ use thiserror::Error;
 pub enum ServiceError {
     /// Resource not found (404 in HTTP, NOT_FOUND in ZMQ)
     #[error("Not found: {resource} with id '{id}'")]
-    NotFound {
-        resource: String,
-        id: String,
-    },
+    NotFound { resource: String, id: String },
 
     /// Invalid input parameters (400 in HTTP, BAD_REQUEST in ZMQ)
     #[error("Invalid input: {0}")]
@@ -29,10 +26,7 @@ pub enum ServiceError {
 
     /// Resource already exists (409 in HTTP, CONFLICT in ZMQ)
     #[error("Already exists: {resource} with id '{id}'")]
-    AlreadyExists {
-        resource: String,
-        id: String,
-    },
+    AlreadyExists { resource: String, id: String },
 
     /// Operation not permitted (403 in HTTP, FORBIDDEN in ZMQ)
     #[error("Operation not permitted: {0}")]
@@ -95,15 +89,9 @@ impl From<feagi_data_structures::FeagiDataError> for ServiceError {
 impl From<feagi_bdu::BduError> for ServiceError {
     fn from(err: feagi_bdu::BduError) -> Self {
         match err {
-            feagi_bdu::BduError::InvalidArea(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
-            feagi_bdu::BduError::InvalidGenome(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
-            feagi_bdu::BduError::InvalidMorphology(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
+            feagi_bdu::BduError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
+            feagi_bdu::BduError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
+            feagi_bdu::BduError::InvalidMorphology(msg) => ServiceError::InvalidInput(msg),
             _ => ServiceError::Backend(err.to_string()),
         }
     }
@@ -112,15 +100,9 @@ impl From<feagi_bdu::BduError> for ServiceError {
 impl From<feagi_evo::EvoError> for ServiceError {
     fn from(err: feagi_evo::EvoError) -> Self {
         match err {
-            feagi_evo::EvoError::InvalidGenome(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
-            feagi_evo::EvoError::InvalidArea(msg) => {
-                ServiceError::InvalidInput(msg)
-            }
+            feagi_evo::EvoError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
+            feagi_evo::EvoError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
             _ => ServiceError::Backend(err.to_string()),
         }
     }
 }
-
-

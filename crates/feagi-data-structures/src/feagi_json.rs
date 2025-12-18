@@ -1,12 +1,12 @@
-use serde_json;
 use crate::FeagiDataError;
+use serde_json;
 
 /// A wrapper around serde_json::Value for handling JSON data in FEAGI.
-/// 
+///
 /// Provides methods to create, parse, and manipulate JSON data with error handling.
 #[derive(Clone, Debug, Hash)]
 pub struct FeagiJSON {
-    json : serde_json::Value,
+    json: serde_json::Value,
 }
 
 impl FeagiJSON {
@@ -36,9 +36,11 @@ impl FeagiJSON {
     pub fn from_json_string(string: String) -> Result<FeagiJSON, FeagiDataError> {
         match serde_json::from_str(&string) {
             Ok(json_value) => Ok(FeagiJSON { json: json_value }),
-            Err(e) => Err(FeagiDataError::BadParameters(
-                format!("Failed to parse JSON string: {}", e)
-            ).into()),
+            Err(e) => Err(FeagiDataError::BadParameters(format!(
+                "Failed to parse JSON string: {}",
+                e
+            ))
+            .into()),
         }
     }
 
@@ -63,4 +65,3 @@ impl std::fmt::Display for FeagiJSON {
         write!(f, "{}", self.json)
     }
 }
-

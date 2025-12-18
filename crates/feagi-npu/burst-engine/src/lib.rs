@@ -36,32 +36,32 @@
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+#[cfg(any(feature = "async-tokio", feature = "wasm"))]
+pub mod async_burst_loop; // Pure Rust burst loop
 pub mod backend;
 #[cfg(feature = "std")]
 pub mod burst_loop_runner;
-#[cfg(any(feature = "async-tokio", feature = "wasm"))]
-pub mod async_burst_loop; // Pure Rust burst loop
 pub mod fire_ledger;
 pub mod fire_structures;
 pub mod fq_sampler;
 pub mod motor_shm_writer;
 pub mod neural_dynamics;
 // Neuron models moved to feagi-neural::models (Phase 2b)
-pub mod npu;
 pub mod dynamic_npu;
+pub mod npu;
 pub mod parameter_update_queue;
 pub mod sensory; // Rust sensory injection system
-// Disabled - uses DynamicNPU
-// pub mod sleep; // Sleep manager for energy efficiency and memory optimization
+                 // Disabled - uses DynamicNPU
+                 // pub mod sleep; // Sleep manager for energy efficiency and memory optimization
 pub mod synaptic_propagation;
 pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM writer
 
 pub use backend::*;
 #[cfg(feature = "std")]
 pub use burst_loop_runner::*;
-pub use dynamic_npu::DynamicNPUGeneric;
 #[cfg(feature = "std")]
 pub use dynamic_npu::DynamicNPU;
+pub use dynamic_npu::DynamicNPUGeneric;
 pub use fire_ledger::*;
 pub use fire_structures::*;
 pub use fq_sampler::*;

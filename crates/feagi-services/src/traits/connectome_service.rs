@@ -242,27 +242,29 @@ pub trait ConnectomeService: Send + Sync {
     /// * `bool` - True if brain region exists
     ///
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool>;
-    
+
     // ========================================================================
     // MORPHOLOGY OPERATIONS
     // ========================================================================
-    
+
     /// Get all morphologies from the loaded genome
     ///
     /// # Returns
     /// * `HashMap<String, MorphologyInfo>` - All morphology definitions
     ///
-    async fn get_morphologies(&self) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>>;
-    
+    async fn get_morphologies(
+        &self,
+    ) -> ServiceResult<std::collections::HashMap<String, MorphologyInfo>>;
+
     // ========================================================================
     // CORTICAL MAPPING OPERATIONS
     // ========================================================================
-    
+
     /// Update cortical mapping between two cortical areas
     ///
     /// # Arguments
     /// * `src_area_id` - Source cortical area ID
-    /// * `dst_area_id` - Destination cortical area ID  
+    /// * `dst_area_id` - Destination cortical area ID
     /// * `mapping_data` - List of connection specifications
     ///
     /// # Returns
@@ -279,4 +281,3 @@ pub trait ConnectomeService: Send + Sync {
         mapping_data: Vec<serde_json::Value>,
     ) -> ServiceResult<usize>;
 }
-

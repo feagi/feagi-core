@@ -14,7 +14,7 @@
 //! Tests multiple genome sizes to find the crossover point where GPU becomes beneficial.
 
 use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use feagi_npu_neural::types::{NeuronArray, SynapseArray, FireCandidateList, NeuronId};
+use feagi_npu_neural::types::{FireCandidateList, NeuronArray, NeuronId, SynapseArray};
 
 /// Create a test genome with specified size
 fn create_test_genome(
@@ -80,7 +80,7 @@ fn generate_fired_neurons(neuron_count: usize, firing_rate: f32) -> Vec<u32> {
 /// Benchmark CPU backend
 fn bench_cpu_backend(c: &mut Criterion) {
     use feagi_npu_burst_engine::backend::{CPUBackend, ComputeBackend};
-    
+
     let mut group = c.benchmark_group("cpu_backend");
 
     let test_sizes = vec![
@@ -97,7 +97,7 @@ fn bench_cpu_backend(c: &mut Criterion) {
         let fired_neurons = generate_fired_neurons(neuron_count, 0.01);
 
         group.throughput(Throughput::Elements(neuron_count as u64));
-        
+
         // Full burst (synaptic + neural)
         group.bench_with_input(
             BenchmarkId::new("full_burst", label),
@@ -142,7 +142,7 @@ fn bench_cpu_backend(c: &mut Criterion) {
             },
         );
 
-        // Neural dynamics only  
+        // Neural dynamics only
         group.bench_with_input(
             BenchmarkId::new("neural_only", label),
             &neuron_count,
@@ -158,7 +158,7 @@ fn bench_cpu_backend(c: &mut Criterion) {
                         &mut backend,
                         black_box(&fcl),
                         black_box(&mut neuron_array),
-                        black_box(1)
+                        black_box(1),
                     );
                 });
             },
@@ -171,8 +171,8 @@ fn bench_cpu_backend(c: &mut Criterion) {
 /// Benchmark GPU backend (if available)
 #[cfg(feature = "gpu")]
 fn bench_gpu_backend(c: &mut Criterion) {
-    use feagi_npu_burst_engine::backend::{WGPUBackend, ComputeBackend};
-    
+    use feagi_npu_burst_engine::backend::{ComputeBackend, WGPUBackend};
+
     // Check if GPU is available
     if !is_gpu_available() {
         println!("⚠️  GPU not available, skipping GPU benchmarks");
@@ -189,28 +189,32 @@ fn bench_gpu_backend(c: &mut Criterion) {
     const GPU_MAX_SYNAPSES: usize = 10_000_000;
 
     let test_sizes = vec![
-        (10_000, 100, "10K_100syn"),      // 1M synapses
-        (50_000, 100, "50K_100syn"),      // 5M synapses
-        (100_000, 100, "100K_100syn"),    // 10M synapses (at binding limit)
-        (250_000, 40, "250K_40syn"),      // 10M synapses (different density)
-        (500_000, 20, "500K_20syn"),      // 10M synapses (sparse)
+        (10_000, 100, "10K_100syn"),   // 1M synapses
+        (50_000, 100, "50K_100syn"),   // 5M synapses
+        (100_000, 100, "100K_100syn"), // 10M synapses (at binding limit)
+        (250_000, 40, "250K_40syn"),   // 10M synapses (different density)
+        (500_000, 20, "500K_20syn"),   // 10M synapses (sparse)
     ];
 
     for (neuron_count, synapses_per_neuron, label) in test_sizes {
         let total_synapses = neuron_count * synapses_per_neuron;
-        
+
         if total_synapses > GPU_MAX_SYNAPSES {
-            println!("⚠️  Skipping {} - exceeds GPU buffer limit ({} > {})", 
-                label, total_synapses, GPU_MAX_SYNAPSES);
+            println!(
+                "⚠️  Skipping {} - exceeds GPU buffer limit ({} > {})",
+                label, total_synapses, GPU_MAX_SYNAPSES
+            );
             continue;
         }
-        
+
         let (mut neuron_array, synapse_array) =
             create_test_genome(neuron_count, synapses_per_neuron);
         let fired_neurons = generate_fired_neurons(neuron_count, 0.01);
 
-        println!("📊 GPU Benchmark: {} neurons, {} synapses/neuron = {} total synapses",
-            neuron_count, synapses_per_neuron, total_synapses);
+        println!(
+            "📊 GPU Benchmark: {} neurons, {} synapses/neuron = {} total synapses",
+            neuron_count, synapses_per_neuron, total_synapses
+        );
 
         // Create GPU backend
         let mut backend = match WGPUBackend::new(neuron_count * 2, total_synapses) {
@@ -228,7 +232,7 @@ fn bench_gpu_backend(c: &mut Criterion) {
         }
 
         group.throughput(Throughput::Elements(neuron_count as u64));
-        
+
         // Full burst (synaptic + neural)
         group.bench_with_input(
             BenchmarkId::new("full_burst", label),
@@ -277,33 +281,33 @@ fn is_gpu_available() -> bool {
 /// Compare CPU vs GPU for different genome sizes
 #[cfg(feature = "gpu")]
 fn bench_cpu_vs_gpu_comparison(c: &mut Criterion) {
-    use feagi_npu_burst_engine::backend::{CPUBackend, WGPUBackend, ComputeBackend};
-    
+    use feagi_npu_burst_engine::backend::{CPUBackend, ComputeBackend, WGPUBackend};
+
     if !is_gpu_available() {
         println!("⚠️  GPU not available, skipping comparison benchmarks");
         return;
     }
 
     let mut group = c.benchmark_group("cpu_vs_gpu");
-    
+
     const GPU_MAX_SYNAPSES: usize = 10_000_000;
 
     // Adjusted to stay within GPU buffer limits (128MB binding limit)
     let test_sizes = vec![
-        (10_000, 100, "10K"),     // 1M synapses
-        (100_000, 100, "100K"),   // 10M synapses (at GPU binding limit)
-        (250_000, 40, "250K"),    // 10M synapses  
-        (500_000, 20, "500K"),    // 10M synapses (sparse)
+        (10_000, 100, "10K"),   // 1M synapses
+        (100_000, 100, "100K"), // 10M synapses (at GPU binding limit)
+        (250_000, 40, "250K"),  // 10M synapses
+        (500_000, 20, "500K"),  // 10M synapses (sparse)
     ];
 
     for (neuron_count, synapses_per_neuron, label) in test_sizes {
         let total_synapses = neuron_count * synapses_per_neuron;
-        
+
         if total_synapses > GPU_MAX_SYNAPSES {
             println!("⚠️  Skipping {} - exceeds GPU buffer limit", label);
             continue;
         }
-        
+
         let (mut neuron_array_cpu, synapse_array) =
             create_test_genome(neuron_count, synapses_per_neuron);
         let mut neuron_array_gpu = neuron_array_cpu.clone();
@@ -336,7 +340,10 @@ fn bench_cpu_vs_gpu_comparison(c: &mut Criterion) {
 
         // GPU benchmark
         if let Ok(mut backend) = WGPUBackend::new(neuron_count * 2, total_synapses) {
-            if backend.initialize_persistent_data(&neuron_array_gpu, &synapse_array).is_ok() {
+            if backend
+                .initialize_persistent_data(&neuron_array_gpu, &synapse_array)
+                .is_ok()
+            {
                 group.bench_with_input(BenchmarkId::new("gpu", label), &neuron_count, |b, _| {
                     let mut fcl = FireCandidateList::new();
                     b.iter(|| {
@@ -369,7 +376,7 @@ fn bench_cpu_vs_gpu_comparison(c: &mut Criterion) {
 /// Test backend auto-selection logic
 fn bench_auto_selection(c: &mut Criterion) {
     use feagi_npu_burst_engine::backend::{select_backend, BackendConfig};
-    
+
     let mut group = c.benchmark_group("auto_selection");
 
     let test_cases = vec![
@@ -396,75 +403,71 @@ fn bench_auto_selection(c: &mut Criterion) {
 /// Benchmark different firing rates (CPU backend)
 fn bench_firing_rate_cpu(c: &mut Criterion) {
     use feagi_npu_burst_engine::backend::{CPUBackend, ComputeBackend};
-    
+
     let mut group = c.benchmark_group("firing_rate_cpu");
-    
+
     // Test different firing rates at fixed genome size
     let neuron_count = 100_000;
     let synapses_per_neuron = 100;
     let (mut neuron_array, synapse_array) = create_test_genome(neuron_count, synapses_per_neuron);
-    
+
     let firing_rates = vec![
-        (0.001, "0.1%"),   // 100 neurons fire
-        (0.01, "1%"),       // 1,000 neurons fire
-        (0.05, "5%"),       // 5,000 neurons fire
-        (0.10, "10%"),      // 10,000 neurons fire
-        (0.25, "25%"),      // 25,000 neurons fire
+        (0.001, "0.1%"), // 100 neurons fire
+        (0.01, "1%"),    // 1,000 neurons fire
+        (0.05, "5%"),    // 5,000 neurons fire
+        (0.10, "10%"),   // 10,000 neurons fire
+        (0.25, "25%"),   // 25,000 neurons fire
     ];
-    
+
     for (rate, label) in firing_rates {
         let fired_neurons = generate_fired_neurons(neuron_count, rate);
         let fire_count = fired_neurons.len();
-        
+
         group.throughput(Throughput::Elements(fire_count as u64));
-        group.bench_with_input(
-            BenchmarkId::new("full_burst", label),
-            &rate,
-            |b, _| {
-                let mut backend: CPUBackend = CPUBackend::new();
-                let mut fcl = FireCandidateList::new();
-                b.iter(|| {
-                    fcl.clear();
-                    let _ = <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
-                        &mut backend,
-                        black_box(&fired_neurons),
-                        black_box(&synapse_array),
-                        black_box(&mut fcl),
-                    );
-                    let fcl_size = fcl.len();
-                    let _ = <CPUBackend as ComputeBackend<f32>>::process_neural_dynamics(
-                        &mut backend,
-                        black_box(&fcl),
-                        black_box(&mut neuron_array),
-                        black_box(1),
-                    );
-                    // Return FCL size for measurement
-                    black_box(fcl_size)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("full_burst", label), &rate, |b, _| {
+            let mut backend: CPUBackend = CPUBackend::new();
+            let mut fcl = FireCandidateList::new();
+            b.iter(|| {
+                fcl.clear();
+                let _ = <CPUBackend as ComputeBackend<f32>>::process_synaptic_propagation(
+                    &mut backend,
+                    black_box(&fired_neurons),
+                    black_box(&synapse_array),
+                    black_box(&mut fcl),
+                );
+                let fcl_size = fcl.len();
+                let _ = <CPUBackend as ComputeBackend<f32>>::process_neural_dynamics(
+                    &mut backend,
+                    black_box(&fcl),
+                    black_box(&mut neuron_array),
+                    black_box(1),
+                );
+                // Return FCL size for measurement
+                black_box(fcl_size)
+            });
+        });
     }
-    
+
     group.finish();
 }
 
 /// Benchmark different firing rates (GPU backend)
 #[cfg(feature = "gpu")]
 fn bench_firing_rate_gpu(c: &mut Criterion) {
-    use feagi_npu_burst_engine::backend::{WGPUBackend, ComputeBackend};
-    
+    use feagi_npu_burst_engine::backend::{ComputeBackend, WGPUBackend};
+
     if !is_gpu_available() {
         println!("⚠️  GPU not available, skipping firing rate GPU benchmarks");
         return;
     }
-    
+
     let mut group = c.benchmark_group("firing_rate_gpu");
-    
+
     // Test different firing rates at fixed genome size (smaller due to buffer limits)
     let neuron_count = 50_000;
     let synapses_per_neuron = 100;
     let (mut neuron_array, synapse_array) = create_test_genome(neuron_count, synapses_per_neuron);
-    
+
     // Create GPU backend once
     let synapse_count = neuron_count * synapses_per_neuron;
     let mut backend = match WGPUBackend::new(neuron_count * 2, synapse_count) {
@@ -474,49 +477,48 @@ fn bench_firing_rate_gpu(c: &mut Criterion) {
             return;
         }
     };
-    
-    if backend.initialize_persistent_data(&neuron_array, &synapse_array).is_err() {
+
+    if backend
+        .initialize_persistent_data(&neuron_array, &synapse_array)
+        .is_err()
+    {
         println!("⚠️  Failed to initialize GPU data for firing rate tests");
         return;
     }
-    
+
     let firing_rates = vec![
-        (0.001, "0.1%"),   // 50 neurons fire
-        (0.01, "1%"),       // 500 neurons fire
-        (0.05, "5%"),       // 2,500 neurons fire
-        (0.10, "10%"),      // 5,000 neurons fire
-        (0.25, "25%"),      // 12,500 neurons fire
+        (0.001, "0.1%"), // 50 neurons fire
+        (0.01, "1%"),    // 500 neurons fire
+        (0.05, "5%"),    // 2,500 neurons fire
+        (0.10, "10%"),   // 5,000 neurons fire
+        (0.25, "25%"),   // 12,500 neurons fire
     ];
-    
+
     for (rate, label) in firing_rates {
         let fired_neurons = generate_fired_neurons(neuron_count, rate);
         let fire_count = fired_neurons.len();
-        
+
         group.throughput(Throughput::Elements(fire_count as u64));
-        group.bench_with_input(
-            BenchmarkId::new("full_burst", label),
-            &rate,
-            |b, _| {
-                let mut fcl = FireCandidateList::new();
-                b.iter(|| {
-                    fcl.clear();
-                    let _ = backend.process_synaptic_propagation(
-                        black_box(&fired_neurons),
-                        black_box(&synapse_array),
-                        black_box(&mut fcl),
-                    );
-                    let fcl_size = fcl.len();
-                    let _ = backend.process_neural_dynamics(
-                        black_box(&fcl),
-                        black_box(&mut neuron_array),
-                        black_box(1),
-                    );
-                    black_box(fcl_size)
-                });
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("full_burst", label), &rate, |b, _| {
+            let mut fcl = FireCandidateList::new();
+            b.iter(|| {
+                fcl.clear();
+                let _ = backend.process_synaptic_propagation(
+                    black_box(&fired_neurons),
+                    black_box(&synapse_array),
+                    black_box(&mut fcl),
+                );
+                let fcl_size = fcl.len();
+                let _ = backend.process_neural_dynamics(
+                    black_box(&fcl),
+                    black_box(&mut neuron_array),
+                    black_box(1),
+                );
+                black_box(fcl_size)
+            });
+        });
     }
-    
+
     group.finish();
 }
 

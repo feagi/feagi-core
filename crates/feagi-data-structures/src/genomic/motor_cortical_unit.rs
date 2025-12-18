@@ -1,11 +1,13 @@
-use std::fmt::{Display, Formatter};
-use std::collections::HashMap;
-use crate::motor_cortical_units;
-use crate::genomic::cortical_area::{CorticalID, CorticalAreaType, IOCorticalAreaDataFlag};
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
-use crate::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
+use crate::genomic::cortical_area::io_cortical_area_data_type::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+use crate::genomic::cortical_area::{CorticalAreaType, CorticalID, IOCorticalAreaDataFlag};
 use crate::genomic::sensory_cortical_unit::UnitTopology;
+use crate::motor_cortical_units;
 use paste;
+use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 
 macro_rules! define_motor_cortical_units_enum {
     (
@@ -69,10 +71,10 @@ macro_rules! define_motor_cortical_units_enum {
             }
 
             /// Parse a motor cortical unit from its snake_case name
-            /// 
+            ///
             /// # Arguments
             /// * `name` - The snake_case name (e.g., "positional_servo", "led_matrix")
-            /// 
+            ///
             /// # Returns
             /// * `Some(MotorCorticalUnit)` - If name matches a known type
             /// * `None` - If name is not recognized
@@ -161,4 +163,3 @@ macro_rules! define_motor_cortical_units_enum {
 }
 // Generate the MotorCorticalUnit enum and all helper methods from the template
 motor_cortical_units!(define_motor_cortical_units_enum);
-

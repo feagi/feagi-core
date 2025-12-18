@@ -7,7 +7,6 @@ Core types for BDU operations.
 These types match the Python API for seamless integration.
 */
 
-
 /// Cortical area identifier (6-character string in Python)
 pub type AreaId = String;
 
@@ -61,8 +60,12 @@ pub enum BduError {
 impl From<feagi_npu_neural::types::FeagiError> for BduError {
     fn from(err: feagi_npu_neural::types::FeagiError) -> Self {
         match &err {
-            feagi_npu_neural::types::FeagiError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
-            feagi_npu_neural::types::FeagiError::InvalidRegion(msg) => BduError::InvalidArea(msg.clone()),
+            feagi_npu_neural::types::FeagiError::InvalidArea(msg) => {
+                BduError::InvalidArea(msg.clone())
+            }
+            feagi_npu_neural::types::FeagiError::InvalidRegion(msg) => {
+                BduError::InvalidArea(msg.clone())
+            }
             _ => BduError::Internal(err.to_string()),
         }
     }

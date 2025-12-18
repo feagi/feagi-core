@@ -12,9 +12,9 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use std::sync::{Arc, Mutex};
-use std::collections::VecDeque;
 use serde_json::Value;
+use std::collections::VecDeque;
+use std::sync::{Arc, Mutex};
 
 /// A single parameter update command
 #[derive(Debug, Clone)]
@@ -30,11 +30,11 @@ pub struct ParameterUpdate {
 }
 
 /// Thread-safe queue for parameter updates
-/// 
+///
 /// ARCHITECTURE:
 /// - API thread: Pushes updates (non-blocking, just mutex on queue)
 /// - Burst thread: Consumes updates between bursts (when NPU is free)
-/// 
+///
 /// PERFORMANCE:
 /// - Queue operations: ~1-2µs (fast mutex, no contention)
 /// - Zero impact on burst timing
@@ -49,22 +49,22 @@ impl ParameterUpdateQueue {
             queue: Arc::new(Mutex::new(VecDeque::with_capacity(100))),
         }
     }
-    
+
     /// Push a parameter update (non-blocking, called from API thread)
     pub fn push(&self, update: ParameterUpdate) {
         self.queue.lock().unwrap().push_back(update);
     }
-    
+
     /// Drain all pending updates (called from burst thread between bursts)
     pub fn drain_all(&self) -> Vec<ParameterUpdate> {
         self.queue.lock().unwrap().drain(..).collect()
     }
-    
+
     /// Get queue size (for monitoring)
     pub fn len(&self) -> usize {
         self.queue.lock().unwrap().len()
     }
-    
+
     /// Check if queue is empty
     pub fn is_empty(&self) -> bool {
         self.queue.lock().unwrap().is_empty()
@@ -84,5 +84,3 @@ impl Clone for ParameterUpdateQueue {
         }
     }
 }
-
-

@@ -52,10 +52,10 @@ async fn handle_http_request(
 ) -> HttpResponse {
     // 1. Parse HTTP request to DTO
     let params = CreateNeuronParams { ... };
-    
+
     // 2. Call service (transport-agnostic)
     let result = service.create_neuron(params).await?;
-    
+
     // 3. Convert DTO to HTTP response
     HttpResponse::ok(result)
 }
@@ -88,30 +88,49 @@ Licensed under the Apache License, Version 2.0
 */
 
 #[cfg(feature = "std")]
+pub mod genome;
+#[cfg(feature = "std")]
 pub mod impls;
 pub mod traits;
 pub mod types;
-#[cfg(feature = "std")]
-pub mod genome;
 
 // Re-export main API
 pub use traits::{
     AnalyticsService, ConnectomeService, GenomeService, NeuronService, RuntimeService,
-    SnapshotService, SnapshotMetadata, SnapshotCreateOptions,
+    SnapshotCreateOptions, SnapshotMetadata, SnapshotService,
 };
 
 pub use types::{
-    // DTOs
-    BrainRegionInfo, ConnectivityStats, CorticalAreaInfo, CorticalAreaStats,
-    CreateBrainRegionParams, CreateCorticalAreaParams, UpdateCorticalAreaParams,
-    CreateNeuronParams, CreateSynapseParams, GenomeInfo, LoadGenomeParams, NeuronInfo,
-    SaveGenomeParams, SynapseInfo, SystemHealth, RuntimeStatus,
-    // Registration DTOs
-    registration::{AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest, RegistrationResponse, TransportConfig},
     // Agent registry types
-    agent_registry::{AgentType, AgentInfo, AgentCapabilities, AgentTransport, VisionCapability, MotorCapability, VisualizationCapability, SensoryCapability, AgentRegistry},
+    agent_registry::{
+        AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
+        SensoryCapability, VisionCapability, VisualizationCapability,
+    },
+    // Registration DTOs
+    registration::{
+        AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
+        RegistrationResponse, TransportConfig,
+    },
+    // DTOs
+    BrainRegionInfo,
+    ConnectivityStats,
+    CorticalAreaInfo,
+    CorticalAreaStats,
+    CreateBrainRegionParams,
+    CreateCorticalAreaParams,
+    CreateNeuronParams,
+    CreateSynapseParams,
+    GenomeInfo,
+    LoadGenomeParams,
+    NeuronInfo,
+    RuntimeStatus,
+    SaveGenomeParams,
     // Errors
-    ServiceError, ServiceResult,
+    ServiceError,
+    ServiceResult,
+    SynapseInfo,
+    SystemHealth,
+    UpdateCorticalAreaParams,
 };
 
 // Re-export implementations (optional - adapters can use their own)
@@ -123,4 +142,3 @@ pub use impls::{
 
 /// Version of this crate (for feagi-rust version reporting)
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-

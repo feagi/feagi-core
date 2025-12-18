@@ -14,10 +14,10 @@ std = []
 
 [dependencies]
 # Runtime trait definitions
-feagi-npu-runtime = { path = "../runtime" }
+feagi-npu-runtime = { version = "0.0.0", path = "../runtime" }
 
 # Platform-agnostic core (no_std compatible, types + algorithms)
-feagi-npu-neural = { path = "../neural" }
+feagi-npu-neural = { version = "0.0.0", path = "../neural" }
 
 # Embedded dependencies (no_std)
 spin = "0.9"  # Spinlock-based Mutex (no OS required)

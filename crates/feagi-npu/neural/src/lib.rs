@@ -57,20 +57,32 @@ pub use utils::*;
 
 // Re-export types
 pub use types::{
-    NeuronId, SynapseId,
-    NeuralValue, INT8Value, INT8LeakCoefficient, Precision, QuantizationSpec,
-    Synapse, SynapticWeight, SynapticConductance, SynapticContribution,
-    Position,
+    Error,
     // Dimensions moved to feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
-    FeagiError, Result, Error,
-    FireCandidateList, FireQueue, FireLedger,
+    FeagiError,
+    FireCandidateList,
+    FireLedger,
     // CorticalArea, BrainRegion, RegionType, BrainRegionHierarchy moved to feagi_data_structures
+    FireQueue,
+    INT8LeakCoefficient,
+    INT8Value,
+    NeuralValue,
+    NeuronId,
+    Position,
+    Precision,
+    QuantizationSpec,
+    Result,
+    Synapse,
+    SynapseId,
+    SynapticConductance,
+    SynapticContribution,
+    SynapticWeight,
 };
 
 // Re-export synapse module
-pub use synapse::{SynapseType, compute_synaptic_contribution, compute_synaptic_contributions_batch};
+pub use synapse::{
+    compute_synaptic_contribution, compute_synaptic_contributions_batch, SynapseType,
+};
 
 // Re-export neuron models
-pub use models::{NeuronModel, ModelParameters, LIFModel, LIFParameters};
-
-
+pub use models::{LIFModel, LIFParameters, ModelParameters, NeuronModel};

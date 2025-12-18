@@ -13,10 +13,10 @@ name = "feagi_services"
 
 [dependencies]
 # Core FEAGI crates (backend)
-feagi-npu-neural = { path = "../feagi-npu/neural" }  # For types
-feagi-evo = { path = "../feagi-evo" }
-feagi-bdu = { path = "../feagi-bdu", default-features = false }
-feagi-npu-burst-engine = { path = "../feagi-npu/burst-engine", default-features = false }
+feagi-npu-neural = { version = "0.0.0", path = "../feagi-npu/neural" }  # For types
+feagi-evo = { version = "0.0.0", path = "../feagi-evo" }
+feagi-bdu = { version = "0.0.0", path = "../feagi-bdu", default-features = false }
+feagi-npu-burst-engine = { version = "0.0.0", path = "../feagi-npu/burst-engine", default-features = false }
 # feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
 feagi-data-structures = { workspace = true }

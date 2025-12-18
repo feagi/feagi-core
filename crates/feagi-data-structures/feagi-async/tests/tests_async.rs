@@ -19,7 +19,7 @@
 //! ```bash
 //! wasm-pack test --headless --chrome --no-default-features --features wasm
 //! wasm-pack test --headless --firefox --no-default-features --features wasm
-//! ``` 
+//! ```
 
 use feagi_async::FeagiAsyncRuntime;
 
@@ -69,18 +69,21 @@ async fn run_test_logic<R: FeagiAsyncRuntime>(runtime: &R) {
 /// Test delay() method - demonstrates platform-agnostic delay usage
 async fn run_delay_test<R: FeagiAsyncRuntime>(runtime: &R) {
     use std::time::{Duration, Instant};
-    
+
     let start = Instant::now();
-    
+
     // Use delay() via the trait - platform-agnostic
     runtime.delay(Duration::from_millis(10)).await;
-    
+
     let elapsed = start.elapsed();
-    
+
     // Should have delayed at least 10ms (may be slightly more due to scheduling)
-    assert!(elapsed >= Duration::from_millis(10), 
-            "Delay should be at least 10ms, got {:?}", elapsed);
-    
+    assert!(
+        elapsed >= Duration::from_millis(10),
+        "Delay should be at least 10ms, got {:?}",
+        elapsed
+    );
+
     println!("Delay test passed! Elapsed: {:?}", elapsed);
 }
 
@@ -116,19 +119,20 @@ async fn test_delay() {
 async fn run_block_on_test<R: FeagiAsyncRuntime>(runtime: &R) {
     // Create a simple future that doesn't capture runtime
     // Note: This test only works with TokioRuntime (not TokioHandle or WasmRuntime)
-    let simple_future = async {
-        42
-    };
-    
+    let simple_future = async { 42 };
+
     let result = runtime.try_block_on(simple_future);
-    
+
     match result {
         Ok(value) => {
             assert_eq!(value, 42);
             println!("Block on test passed! Value: {}", value);
         }
         Err(e) => {
-            println!("Block on not supported (expected for WASM/TokioHandle): {}", e);
+            println!(
+                "Block on not supported (expected for WASM/TokioHandle): {}",
+                e
+            );
             // This is expected for WASM and TokioHandle, so we don't fail the test
         }
     }
@@ -137,14 +141,14 @@ async fn run_block_on_test<R: FeagiAsyncRuntime>(runtime: &R) {
 /// Test with_timeout() - should timeout if future takes too long
 async fn run_timeout_test<R: FeagiAsyncRuntime>(runtime: &R) {
     use std::time::Duration;
-    
+
     // Test 1: Future completes before timeout
     let fast_future = async { 42 };
     let timeout_future = runtime.with_timeout(fast_future, Duration::from_millis(100));
     let result = timeout_future.await;
     assert_eq!(result, Ok(42));
     println!("Fast future test passed!");
-    
+
     // Test 2: Future times out
     // Create delay future separately to avoid capturing runtime
     let delay_future = runtime.delay(Duration::from_millis(200));

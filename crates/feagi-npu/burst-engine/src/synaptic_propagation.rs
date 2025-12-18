@@ -39,8 +39,8 @@
 //! - Rust Target: <3ms (50-100x speedup)
 
 use ahash::AHashMap;
-use feagi_npu_neural::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
 use rayon::prelude::*;
 
@@ -158,9 +158,8 @@ impl SynapticPropagationEngine {
                     _ => FeagiSynapseType::Inhibitory,
                 };
 
-                let contribution = SynapticContribution(
-                    compute_synaptic_contribution(weight, psp, synapse_type)
-                );
+                let contribution =
+                    SynapticContribution(compute_synaptic_contribution(weight, psp, synapse_type));
 
                 Some((target_neuron, cortical_area, contribution))
             })
@@ -200,17 +199,17 @@ impl Default for SynapticPropagationEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     use feagi_npu_runtime_std::SynapseArray;
 
     fn create_test_synapses() -> SynapseArray {
         let mut synapse_storage = SynapseArray {
             count: 3,
-            source_neurons: vec![1, 1, 2],     // Raw u32 values
-            target_neurons: vec![10, 11, 10],  // Raw u32 values
-            weights: vec![255, 128, 200],      // Raw u8 values
+            source_neurons: vec![1, 1, 2],    // Raw u32 values
+            target_neurons: vec![10, 11, 10], // Raw u32 values
+            weights: vec![255, 128, 200],     // Raw u8 values
             postsynaptic_potentials: vec![255, 255, 200], // Raw u8 values (renamed from conductances)
-            types: vec![0, 1, 0],              // 0=excitatory, 1=inhibitory
+            types: vec![0, 1, 0],                         // 0=excitatory, 1=inhibitory
             valid_mask: vec![true, true, true],
             source_index: ahash::AHashMap::new(),
         };

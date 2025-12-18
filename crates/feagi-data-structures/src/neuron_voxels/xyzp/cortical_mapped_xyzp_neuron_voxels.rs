@@ -1,10 +1,10 @@
+use crate::genomic::cortical_area::CorticalID;
+use crate::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
 use std::collections::HashMap;
 use std::mem::size_of;
-use crate::genomic::cortical_area::CorticalID;
-use crate::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays};
 
 /// Neuron voxel data organized by cortical area.
-/// 
+///
 /// Maps cortical area identifiers to their respective neuron voxel collections,
 /// allowing efficient storage and retrieval of neural activity across different
 /// brain regions.
@@ -18,12 +18,12 @@ pub struct CorticalMappedXYZPNeuronVoxels {
 }
 
 impl CorticalMappedXYZPNeuronVoxels {
-
     /// Size in bytes of each cortical area header in binary format.
-    pub const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize = CorticalID::NUMBER_OF_BYTES + size_of::<u32>() + size_of::<u32>();
+    pub const NUMBER_BYTES_PER_CORTICAL_ID_HEADER: usize =
+        CorticalID::NUMBER_OF_BYTES + size_of::<u32>() + size_of::<u32>();
     /// Size in bytes of the cortical count field in binary format.
     pub const NUMBER_BYTES_CORTICAL_COUNT_HEADER: usize = size_of::<u16>();
-    
+
     /// Creates a new empty neuron data collection.
     ///
     /// This creates a new instance with an empty hash map, suitable for
@@ -38,9 +38,11 @@ impl CorticalMappedXYZPNeuronVoxels {
     /// assert_eq!(neuron_data.len(), 0);
     /// ```
     pub fn new() -> CorticalMappedXYZPNeuronVoxels {
-        CorticalMappedXYZPNeuronVoxels {mappings: HashMap::new()}
+        CorticalMappedXYZPNeuronVoxels {
+            mappings: HashMap::new(),
+        }
     }
-    
+
     //region HashMap like implementation
     /// Creates a new neuron data collection with pre-allocated capacity.
     ///
@@ -61,7 +63,9 @@ impl CorticalMappedXYZPNeuronVoxels {
     /// assert_eq!(neuron_data.len(), 0);
     /// ```
     pub fn new_with_capacity(capacity: usize) -> CorticalMappedXYZPNeuronVoxels {
-        CorticalMappedXYZPNeuronVoxels {mappings: HashMap::with_capacity(capacity)}
+        CorticalMappedXYZPNeuronVoxels {
+            mappings: HashMap::with_capacity(capacity),
+        }
     }
 
     /// Returns the number of cortical areas currently stored.
@@ -72,7 +76,7 @@ impl CorticalMappedXYZPNeuronVoxels {
     pub fn len(&self) -> usize {
         self.mappings.len()
     }
-    
+
     /// Checks if the neuron data collection is empty.
     ///
     /// # Returns
@@ -90,7 +94,7 @@ impl CorticalMappedXYZPNeuronVoxels {
     pub fn is_empty(&self) -> bool {
         self.mappings.is_empty()
     }
-    
+
     /// Returns the current capacity of the internal hash map.
     ///
     /// # Returns
@@ -108,7 +112,7 @@ impl CorticalMappedXYZPNeuronVoxels {
     pub fn capacity(&self) -> usize {
         self.mappings.capacity()
     }
-    
+
     /// Reserves capacity for at least the specified number of additional cortical areas.
     ///
     /// The actual capacity reserved may be greater than requested to optimize
@@ -130,7 +134,7 @@ impl CorticalMappedXYZPNeuronVoxels {
     pub fn reserve(&mut self, additional_capacity: usize) {
         self.mappings.reserve(additional_capacity);
     }
-    
+
     /// Shrinks the capacity of the hash map to match its current size.
     ///
     /// This reduces memory usage by deallocating unused capacity.
@@ -170,7 +174,10 @@ impl CorticalMappedXYZPNeuronVoxels {
     /// # Returns
     ///
     /// `Some(&mut NeuronVoxelXYZPArrays)` if the cortical area exists, `None` otherwise.
-    pub fn get_neurons_of_mut(&mut self, cortical_id: &CorticalID) -> Option<&mut NeuronVoxelXYZPArrays> {
+    pub fn get_neurons_of_mut(
+        &mut self,
+        cortical_id: &CorticalID,
+    ) -> Option<&mut NeuronVoxelXYZPArrays> {
         self.mappings.get_mut(&cortical_id)
     }
 
@@ -186,7 +193,7 @@ impl CorticalMappedXYZPNeuronVoxels {
     pub fn contains_cortical_id(&self, cortical_id: &CorticalID) -> bool {
         self.mappings.contains_key(cortical_id)
     }
-    
+
     /// Inserts neuron data for a cortical area.
     ///
     /// If the cortical area already exists, its data will be replaced, and the old data returned.
@@ -200,7 +207,11 @@ impl CorticalMappedXYZPNeuronVoxels {
     ///
     /// `Some(NeuronVoxelXYZPArrays)` of the old data if being overwritten
     /// `None` if nothing is being overwritten
-    pub fn insert(&mut self, cortical_id: CorticalID, neuron_data: NeuronVoxelXYZPArrays) -> Option<NeuronVoxelXYZPArrays> {
+    pub fn insert(
+        &mut self,
+        cortical_id: CorticalID,
+        neuron_data: NeuronVoxelXYZPArrays,
+    ) -> Option<NeuronVoxelXYZPArrays> {
         self.mappings.insert(cortical_id, neuron_data)
     }
 
@@ -217,7 +228,7 @@ impl CorticalMappedXYZPNeuronVoxels {
     pub fn remove(&mut self, cortical_id: CorticalID) -> Option<NeuronVoxelXYZPArrays> {
         self.mappings.remove(&cortical_id)
     }
-    
+
     /// Removes all cortical areas and their neuron data.
     ///
     /// This operation clears the entire collection while maintaining the allocated capacity.
@@ -244,7 +255,7 @@ impl CorticalMappedXYZPNeuronVoxels {
             neuron_arrays.clear();
         }
     }
-    
+
     /// Returns an iterator over the neuron data collections.
     ///
     /// This iterator yields references to the neuron arrays for each cortical area,
@@ -264,10 +275,9 @@ impl CorticalMappedXYZPNeuronVoxels {
     ///     println!("Cortical area has {} neurons", neurons.len());
     /// }
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item=&NeuronVoxelXYZPArrays> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = &NeuronVoxelXYZPArrays> + '_ {
         self.mappings.values()
     }
-    
 
     /// Returns a mutable iterator over the neuron data collections.
     ///
@@ -288,10 +298,10 @@ impl CorticalMappedXYZPNeuronVoxels {
     ///     neurons.clear(); // Clear all neuron arrays
     /// }
     /// ```
-    pub fn iter_mut(&mut self) -> impl Iterator<Item=&mut NeuronVoxelXYZPArrays> + '_ {
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut NeuronVoxelXYZPArrays> + '_ {
         self.mappings.values_mut()
     }
-    
+
     /// Returns an iterator over the cortical area identifiers.
     ///
     /// This iterator yields references to the cortical IDs for each area that has neuron data,
@@ -311,12 +321,12 @@ impl CorticalMappedXYZPNeuronVoxels {
     ///     println!("Found cortical area: {:?}", cortical_id);
     /// }
     /// ```
-    pub fn keys(&self) -> impl Iterator<Item=&CorticalID> + '_ {
+    pub fn keys(&self) -> impl Iterator<Item = &CorticalID> + '_ {
         self.mappings.keys()
     }
-    
+
     //endregion
-    
+
     /// Ensures a cortical area exists and returns a cleared, mutable reference to its neuron voxels.
     ///
     /// If the cortical area exists, clears its neuron voxels and returns a mutable reference.
@@ -327,13 +337,19 @@ impl CorticalMappedXYZPNeuronVoxels {
     ///
     /// # Returns
     /// A mutable reference to the (cleared) neuron voxel array for this cortical area.
-    pub fn ensure_clear_and_borrow_mut(&mut self, cortical_id: &CorticalID) -> &mut NeuronVoxelXYZPArrays {
-        if self.mappings.contains_key(cortical_id) { // If already contains neuron array, clear it and return it
+    pub fn ensure_clear_and_borrow_mut(
+        &mut self,
+        cortical_id: &CorticalID,
+    ) -> &mut NeuronVoxelXYZPArrays {
+        if self.mappings.contains_key(cortical_id) {
+            // If already contains neuron array, clear it and return it
             let neurons = self.mappings.get_mut(cortical_id).unwrap();
             neurons.clear();
             return neurons;
         }
-        _ = self.mappings.insert(cortical_id.clone(), NeuronVoxelXYZPArrays::new());
+        _ = self
+            .mappings
+            .insert(cortical_id.clone(), NeuronVoxelXYZPArrays::new());
         self.mappings.get_mut(cortical_id).unwrap()
     }
 }
@@ -538,10 +554,17 @@ impl<'a> IntoIterator for &'a mut CorticalMappedXYZPNeuronVoxels {
 
 impl std::fmt::Display for CorticalMappedXYZPNeuronVoxels {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut inner :String = String::new();
+        let mut inner: String = String::new();
         for cortical_id_and_data in self {
-            inner.push_str(format!("[{}, {}],", cortical_id_and_data.0.to_string(), cortical_id_and_data.1.to_string()).as_str());
-        };
+            inner.push_str(
+                format!(
+                    "[{}, {}],",
+                    cortical_id_and_data.0.to_string(),
+                    cortical_id_and_data.1.to_string()
+                )
+                .as_str(),
+            );
+        }
         _ = inner.pop(); // Remove the last comma
         write!(f, "CorticalMappedXYZPNeuronData({})", inner)
     }

@@ -1,9 +1,8 @@
-use std::fmt;
-use serde::{Deserialize, Serialize};
-use crate::FeagiDataError;
-use crate::genomic::cortical_area::CorticalID;
 use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
-
+use crate::genomic::cortical_area::CorticalID;
+use crate::FeagiDataError;
+use serde::{Deserialize, Serialize};
+use std::fmt;
 
 pub type DataTypeConfigurationFlag = u16; // 16 Total bits
 
@@ -28,7 +27,9 @@ pub enum IOCorticalAreaDataFlag {
 }
 
 impl IOCorticalAreaDataFlag {
-    pub const fn try_from_data_type_configuration_flag(value: DataTypeConfigurationFlag) -> Result<Self, FeagiDataError> {
+    pub const fn try_from_data_type_configuration_flag(
+        value: DataTypeConfigurationFlag,
+    ) -> Result<Self, FeagiDataError> {
         let variant = value & 0xFF; // Bits 0-7
         let frame_handling = (value >> 8) & 0x01; // Bit 8
         let positioning = (value >> 9) & 0x01; // Bit 9
@@ -47,25 +48,53 @@ impl IOCorticalAreaDataFlag {
 
         match variant {
             0 => Ok(IOCorticalAreaDataFlag::Boolean),
-            1 => Ok(IOCorticalAreaDataFlag::Percentage(frame_handling_enum, positioning_enum)),
-            2 => Ok(IOCorticalAreaDataFlag::Percentage2D(frame_handling_enum, positioning_enum)),
-            3 => Ok(IOCorticalAreaDataFlag::Percentage3D(frame_handling_enum, positioning_enum)),
-            4 => Ok(IOCorticalAreaDataFlag::Percentage4D(frame_handling_enum, positioning_enum)),
-            5 => Ok(IOCorticalAreaDataFlag::SignedPercentage(frame_handling_enum, positioning_enum)),
-            6 => Ok(IOCorticalAreaDataFlag::SignedPercentage2D(frame_handling_enum, positioning_enum)),
-            7 => Ok(IOCorticalAreaDataFlag::SignedPercentage3D(frame_handling_enum, positioning_enum)),
-            8 => Ok(IOCorticalAreaDataFlag::SignedPercentage4D(frame_handling_enum, positioning_enum)),
+            1 => Ok(IOCorticalAreaDataFlag::Percentage(
+                frame_handling_enum,
+                positioning_enum,
+            )),
+            2 => Ok(IOCorticalAreaDataFlag::Percentage2D(
+                frame_handling_enum,
+                positioning_enum,
+            )),
+            3 => Ok(IOCorticalAreaDataFlag::Percentage3D(
+                frame_handling_enum,
+                positioning_enum,
+            )),
+            4 => Ok(IOCorticalAreaDataFlag::Percentage4D(
+                frame_handling_enum,
+                positioning_enum,
+            )),
+            5 => Ok(IOCorticalAreaDataFlag::SignedPercentage(
+                frame_handling_enum,
+                positioning_enum,
+            )),
+            6 => Ok(IOCorticalAreaDataFlag::SignedPercentage2D(
+                frame_handling_enum,
+                positioning_enum,
+            )),
+            7 => Ok(IOCorticalAreaDataFlag::SignedPercentage3D(
+                frame_handling_enum,
+                positioning_enum,
+            )),
+            8 => Ok(IOCorticalAreaDataFlag::SignedPercentage4D(
+                frame_handling_enum,
+                positioning_enum,
+            )),
             9 => {
                 // CartesianPlane doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
-                    return Err(FeagiDataError::ConstError("CartesianPlane variant does not support positioning parameter"));
+                    return Err(FeagiDataError::ConstError(
+                        "CartesianPlane variant does not support positioning parameter",
+                    ));
                 }
                 Ok(IOCorticalAreaDataFlag::CartesianPlane(frame_handling_enum))
             }
             10 => {
                 // Misc doesn't use positioning, but we'll accept it if set to 0
                 if positioning != 0 {
-                    return Err(FeagiDataError::ConstError("Misc variant does not support positioning parameter"));
+                    return Err(FeagiDataError::ConstError(
+                        "Misc variant does not support positioning parameter",
+                    ));
                 }
                 Ok(IOCorticalAreaDataFlag::Misc(frame_handling_enum))
             }
@@ -102,11 +131,17 @@ impl IOCorticalAreaDataFlag {
 
         // Pack: variant (8 bits) | frame_handling (1 bit)| positioning (1 bit) << 5
         variant | (frame_bits << 8) | (positioning_bits << 9)
-
     }
 
-    pub const fn as_io_cortical_id(&self, is_input: bool, cortical_unit_identifier: [u8; 3], cortical_unit_index: CorticalUnitIndex, cortical_group_index: CorticalGroupIndex) -> CorticalID {
-        let data_type_configuration: DataTypeConfigurationFlag = self.to_data_type_configuration_flag();
+    pub const fn as_io_cortical_id(
+        &self,
+        is_input: bool,
+        cortical_unit_identifier: [u8; 3],
+        cortical_unit_index: CorticalUnitIndex,
+        cortical_group_index: CorticalGroupIndex,
+    ) -> CorticalID {
+        let data_type_configuration: DataTypeConfigurationFlag =
+            self.to_data_type_configuration_flag();
         let data_type_configuration_bytes: [u8; 2] = data_type_configuration.to_le_bytes();
 
         let cortical_id_bytes: [u8; CorticalID::NUMBER_OF_BYTES] = [
@@ -124,7 +159,6 @@ impl IOCorticalAreaDataFlag {
             bytes: cortical_id_bytes,
         }
     }
-
 }
 
 impl From<&IOCorticalAreaDataFlag> for DataTypeConfigurationFlag {
@@ -151,14 +185,30 @@ impl fmt::Display for IOCorticalAreaDataFlag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             IOCorticalAreaDataFlag::Boolean => write!(f, "Boolean()"),
-            IOCorticalAreaDataFlag::Percentage(frame, percentage) => write!(f, "Percentage({}, {})", frame, percentage),
-            IOCorticalAreaDataFlag::Percentage2D(frame, percentage) => write!(f, "Percentage2D({}, {})", frame, percentage),
-            IOCorticalAreaDataFlag::Percentage3D(frame, percentage) => write!(f, "Percentage3D({}, {})", frame, percentage),
-            IOCorticalAreaDataFlag::Percentage4D(frame, percentage) => write!(f, "Percentage4D({}, {})", frame, percentage),
-            IOCorticalAreaDataFlag::SignedPercentage(frame, percentage) => write!(f, "SignedPercentage({}, {})", frame, percentage),
-            IOCorticalAreaDataFlag::SignedPercentage2D(frame, percentage) => write!(f, "SignedPercentage2D({}, {})", frame, percentage),
-            IOCorticalAreaDataFlag::SignedPercentage3D(frame, percentage) => write!(f, "SignedPercentage3D({}, {})", frame, percentage),
-            IOCorticalAreaDataFlag::SignedPercentage4D(frame, percentage) => write!(f, "SignedPercentage4D({}, {})", frame, percentage),
+            IOCorticalAreaDataFlag::Percentage(frame, percentage) => {
+                write!(f, "Percentage({}, {})", frame, percentage)
+            }
+            IOCorticalAreaDataFlag::Percentage2D(frame, percentage) => {
+                write!(f, "Percentage2D({}, {})", frame, percentage)
+            }
+            IOCorticalAreaDataFlag::Percentage3D(frame, percentage) => {
+                write!(f, "Percentage3D({}, {})", frame, percentage)
+            }
+            IOCorticalAreaDataFlag::Percentage4D(frame, percentage) => {
+                write!(f, "Percentage4D({}, {})", frame, percentage)
+            }
+            IOCorticalAreaDataFlag::SignedPercentage(frame, percentage) => {
+                write!(f, "SignedPercentage({}, {})", frame, percentage)
+            }
+            IOCorticalAreaDataFlag::SignedPercentage2D(frame, percentage) => {
+                write!(f, "SignedPercentage2D({}, {})", frame, percentage)
+            }
+            IOCorticalAreaDataFlag::SignedPercentage3D(frame, percentage) => {
+                write!(f, "SignedPercentage3D({}, {})", frame, percentage)
+            }
+            IOCorticalAreaDataFlag::SignedPercentage4D(frame, percentage) => {
+                write!(f, "SignedPercentage4D({}, {})", frame, percentage)
+            }
             IOCorticalAreaDataFlag::CartesianPlane(frame) => write!(f, "CartesianPlane({})", frame),
             IOCorticalAreaDataFlag::Misc(frame) => write!(f, "Misc({})", frame),
         }

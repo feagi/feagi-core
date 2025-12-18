@@ -28,7 +28,7 @@ pub struct SystemServiceImpl {
 
 impl SystemServiceImpl {
     /// Create new SystemServiceImpl
-    /// 
+    ///
     /// The version_info should be populated by the application (e.g., feagi-rust)
     /// with the versions of all crates it was compiled with
     pub fn new(
@@ -46,10 +46,7 @@ impl SystemServiceImpl {
 
     /// Get uptime in seconds
     fn get_uptime_seconds(&self) -> u64 {
-        self.start_time
-            .elapsed()
-            .map(|d| d.as_secs())
-            .unwrap_or(0)
+        self.start_time.elapsed().map(|d| d.as_secs()).unwrap_or(0)
     }
 
     /// Get FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
@@ -181,7 +178,7 @@ impl SystemService for SystemServiceImpl {
 
     async fn get_version(&self) -> ServiceResult<VersionInfo> {
         trace!(target: "feagi-services", "Getting version information");
-        
+
         // Return the version info that was provided by the application at startup
         // The application (e.g., feagi-rust) knows which crates it compiled with
         // and provides that information when creating SystemServiceImpl
@@ -216,12 +213,12 @@ impl SystemService for SystemServiceImpl {
         // For now, return basic stats
         Ok(RuntimeStats {
             total_bursts: burst_count,
-            total_neurons_fired: 0,         // TODO: Track in BurstLoopRunner
-            total_processing_time_ms: 0,    // TODO: Track in BurstLoopRunner
-            avg_burst_time_ms: 0.0,         // TODO: Track in BurstLoopRunner
-            avg_neurons_per_burst: 0.0,     // TODO: Track in BurstLoopRunner
-            current_rate_hz: 0.0,           // TODO: Track in BurstLoopRunner
-            peak_rate_hz: 0.0,              // TODO: Track in BurstLoopRunner
+            total_neurons_fired: 0,      // TODO: Track in BurstLoopRunner
+            total_processing_time_ms: 0, // TODO: Track in BurstLoopRunner
+            avg_burst_time_ms: 0.0,      // TODO: Track in BurstLoopRunner
+            avg_neurons_per_burst: 0.0,  // TODO: Track in BurstLoopRunner
+            current_rate_hz: 0.0,        // TODO: Track in BurstLoopRunner
+            peak_rate_hz: 0.0,           // TODO: Track in BurstLoopRunner
             uptime_seconds: self.get_uptime_seconds(),
         })
     }
@@ -240,8 +237,7 @@ impl SystemService for SystemServiceImpl {
         let npu_synapses_bytes = synapse_count * 16; // ~16 bytes per synapse
         let npu_total_bytes = npu_neurons_bytes + npu_synapses_bytes;
 
-        let connectome_metadata_bytes = 
-            manager.get_cortical_area_count() * 512 + // ~512 bytes per area metadata
+        let connectome_metadata_bytes = manager.get_cortical_area_count() * 512 + // ~512 bytes per area metadata
             manager.get_brain_region_ids().len() * 256; // ~256 bytes per region
 
         let total_allocated_bytes = npu_total_bytes + connectome_metadata_bytes;
@@ -289,4 +285,3 @@ impl SystemService for SystemServiceImpl {
         })
     }
 }
-

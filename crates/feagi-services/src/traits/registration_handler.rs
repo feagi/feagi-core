@@ -9,6 +9,8 @@ use crate::types::registration::{RegistrationRequest, RegistrationResponse};
 /// Implemented by feagi-io::RegistrationHandler
 pub trait RegistrationHandlerTrait: Send + Sync {
     /// Process a registration request
-    fn process_registration(&self, request: RegistrationRequest) -> Result<RegistrationResponse, String>;
+    fn process_registration(
+        &self,
+        request: RegistrationRequest,
+    ) -> Result<RegistrationResponse, String>;
 }
-

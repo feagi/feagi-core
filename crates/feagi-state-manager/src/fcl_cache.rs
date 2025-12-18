@@ -41,22 +41,25 @@ impl FCLWindowCache {
             default_window_size,
         }
     }
-    
+
     pub fn get(&self, cortical_area: u32) -> usize {
         let cache = self.cache.read();
-        cache.get(&cortical_area).copied().unwrap_or(self.default_window_size)
+        cache
+            .get(&cortical_area)
+            .copied()
+            .unwrap_or(self.default_window_size)
     }
-    
+
     pub fn set(&self, cortical_area: u32, window_size: usize) {
         let mut cache = self.cache.write();
         cache.insert(cortical_area, window_size);
     }
-    
+
     pub fn remove(&self, cortical_area: u32) {
         let mut cache = self.cache.write();
         cache.remove(&cortical_area);
     }
-    
+
     pub fn get_all(&self) -> AHashMap<u32, usize> {
         let cache = self.cache.read();
         cache.clone()
@@ -78,22 +81,25 @@ impl FCLWindowCache {
             default_window_size,
         }
     }
-    
+
     pub fn get(&self, cortical_area: u32) -> usize {
         let cache = self.cache.read();
-        cache.get(&cortical_area).copied().unwrap_or(self.default_window_size)
+        cache
+            .get(&cortical_area)
+            .copied()
+            .unwrap_or(self.default_window_size)
     }
-    
+
     pub fn set(&self, cortical_area: u32, window_size: usize) {
         let mut cache = self.cache.write();
         cache.insert(cortical_area, window_size);
     }
-    
+
     pub fn remove(&self, cortical_area: u32) {
         let mut cache = self.cache.write();
         cache.remove(&cortical_area);
     }
-    
+
     pub fn get_all(&self) -> AHashMap<u32, usize> {
         let cache = self.cache.read();
         cache.clone()
@@ -115,22 +121,25 @@ impl FCLWindowCache {
             default_window_size,
         }
     }
-    
+
     pub fn get(&self, cortical_area: u32) -> usize {
         let cache = self.cache.borrow();
-        cache.get(&cortical_area).copied().unwrap_or(self.default_window_size)
+        cache
+            .get(&cortical_area)
+            .copied()
+            .unwrap_or(self.default_window_size)
     }
-    
+
     pub fn set(&self, cortical_area: u32, window_size: usize) {
         let mut cache = self.cache.borrow_mut();
         cache.insert(cortical_area, window_size);
     }
-    
+
     pub fn remove(&self, cortical_area: u32) {
         let mut cache = self.cache.borrow_mut();
         cache.remove(&cortical_area);
     }
-    
+
     pub fn get_all(&self) -> AHashMap<u32, usize> {
         let cache = self.cache.borrow();
         cache.clone()
@@ -152,22 +161,25 @@ impl FCLWindowCache {
             default_window_size,
         }
     }
-    
+
     pub fn get(&self, cortical_area: u32) -> usize {
         let cache = self.cache.lock().unwrap();
-        cache.get(&cortical_area).copied().unwrap_or(self.default_window_size)
+        cache
+            .get(&cortical_area)
+            .copied()
+            .unwrap_or(self.default_window_size)
     }
-    
+
     pub fn set(&self, cortical_area: u32, window_size: usize) {
         let mut cache = self.cache.lock().unwrap();
         cache.insert(cortical_area, window_size);
     }
-    
+
     pub fn remove(&self, cortical_area: u32) {
         let mut cache = self.cache.lock().unwrap();
         cache.remove(&cortical_area);
     }
-    
+
     pub fn get_all(&self) -> AHashMap<u32, usize> {
         let cache = self.cache.lock().unwrap();
         cache.clone()
@@ -177,31 +189,31 @@ impl FCLWindowCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_default_window_size() {
         let cache = FCLWindowCache::new(20);
         assert_eq!(cache.get(0), 20);
     }
-    
+
     #[test]
     fn test_set_and_get() {
         let cache = FCLWindowCache::new(20);
-        
+
         cache.set(0, 10);
         assert_eq!(cache.get(0), 10);
-        
+
         cache.set(1, 30);
         assert_eq!(cache.get(1), 30);
     }
-    
+
     #[test]
     fn test_remove() {
         let cache = FCLWindowCache::new(20);
-        
+
         cache.set(0, 10);
         assert_eq!(cache.get(0), 10);
-        
+
         cache.remove(0);
         assert_eq!(cache.get(0), 20); // Back to default
     }

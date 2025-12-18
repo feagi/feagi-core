@@ -6,16 +6,20 @@
 //! mimicking how human vision works with high acuity in the center and lower acuity in
 //! the periphery.
 
+use super::descriptors::{
+    ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
+};
+use super::ImageFrame;
+use feagi_data_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelIndex, CorticalGroupIndex,
+};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::neuron_voxels::xyzp::{
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
+};
+use feagi_data_structures::FeagiDataError;
 use ndarray::Array3;
 use rayon::prelude::*;
-use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelIndex, CorticalGroupIndex};
-use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays};
-use super::ImageFrame;
-use super::descriptors::{ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions};
-
-
 
 /// A frame divided into nine segments with different resolutions for peripheral vision simulation.
 ///
@@ -60,11 +64,9 @@ pub struct SegmentedImageFrame {
     lower_middle: ImageFrame,
     /// Center segment of the vision frame (typically higher resolution)
     center: ImageFrame,
-
 }
 
 impl SegmentedImageFrame {
-    
     //region Constructors
 
     /// Creates a new SegmentedVisionFrame with specified resolutions and color properties.
@@ -85,30 +87,72 @@ impl SegmentedImageFrame {
     /// A Result containing either:
     /// - Ok(SegmentedVisionFrame) if all segments were created successfully
     /// - Err(DataProcessingError) if any segment creation fails
-    pub fn new(segment_resolutions: &SegmentedXYImageResolutions, color_space: &ColorSpace,
-               center_color_channels: &ColorChannelLayout, peripheral_color_channels: &ColorChannelLayout) -> Result<SegmentedImageFrame, FeagiDataError> {
+    pub fn new(
+        segment_resolutions: &SegmentedXYImageResolutions,
+        color_space: &ColorSpace,
+        center_color_channels: &ColorChannelLayout,
+        peripheral_color_channels: &ColorChannelLayout,
+    ) -> Result<SegmentedImageFrame, FeagiDataError> {
         Ok(SegmentedImageFrame {
-            lower_left: ImageFrame::new(peripheral_color_channels, &color_space, &segment_resolutions.lower_left)?,
-            middle_left: ImageFrame::new(peripheral_color_channels, &color_space, &segment_resolutions.middle_left)?,
-            upper_left: ImageFrame::new(peripheral_color_channels, &color_space, &segment_resolutions.upper_left)?,
-            upper_middle: ImageFrame::new(peripheral_color_channels, &color_space, &segment_resolutions.upper_middle)?,
-            upper_right: ImageFrame::new(peripheral_color_channels, &color_space, &segment_resolutions.upper_right)?,
-            middle_right: ImageFrame::new(peripheral_color_channels, &color_space, &segment_resolutions.middle_right)?,
-            lower_right: ImageFrame::new(peripheral_color_channels, &color_space, &segment_resolutions.lower_right)?,
-            lower_middle: ImageFrame::new(peripheral_color_channels, &color_space, &segment_resolutions.lower_middle)?,
-            center: ImageFrame::new(center_color_channels, &color_space, &segment_resolutions.center)?,
+            lower_left: ImageFrame::new(
+                peripheral_color_channels,
+                &color_space,
+                &segment_resolutions.lower_left,
+            )?,
+            middle_left: ImageFrame::new(
+                peripheral_color_channels,
+                &color_space,
+                &segment_resolutions.middle_left,
+            )?,
+            upper_left: ImageFrame::new(
+                peripheral_color_channels,
+                &color_space,
+                &segment_resolutions.upper_left,
+            )?,
+            upper_middle: ImageFrame::new(
+                peripheral_color_channels,
+                &color_space,
+                &segment_resolutions.upper_middle,
+            )?,
+            upper_right: ImageFrame::new(
+                peripheral_color_channels,
+                &color_space,
+                &segment_resolutions.upper_right,
+            )?,
+            middle_right: ImageFrame::new(
+                peripheral_color_channels,
+                &color_space,
+                &segment_resolutions.middle_right,
+            )?,
+            lower_right: ImageFrame::new(
+                peripheral_color_channels,
+                &color_space,
+                &segment_resolutions.lower_right,
+            )?,
+            lower_middle: ImageFrame::new(
+                peripheral_color_channels,
+                &color_space,
+                &segment_resolutions.lower_middle,
+            )?,
+            center: ImageFrame::new(
+                center_color_channels,
+                &color_space,
+                &segment_resolutions.center,
+            )?,
         })
     }
 
-    pub fn from_segmented_image_frame_properties(properties: &SegmentedImageFrameProperties) -> Result<SegmentedImageFrame, FeagiDataError> {
+    pub fn from_segmented_image_frame_properties(
+        properties: &SegmentedImageFrameProperties,
+    ) -> Result<SegmentedImageFrame, FeagiDataError> {
         Self::new(
             properties.get_resolutions(),
             properties.get_color_space(),
             properties.get_center_color_channel(),
-            properties.get_peripheral_color_channels()
+            properties.get_peripheral_color_channels(),
         )
     }
-    
+
     //region
 
     //region get properties
@@ -118,7 +162,7 @@ impl SegmentedImageFrame {
             self.get_segmented_frame_target_resolutions(),
             self.center.get_channel_layout().clone(),
             self.lower_right.get_channel_layout().clone(), // all peripherals should be the same
-            self.get_color_space().clone()
+            self.get_color_space().clone(),
         )
     }
 
@@ -165,7 +209,7 @@ impl SegmentedImageFrame {
             self.middle_right.get_xy_resolution(),
             self.upper_left.get_xy_resolution(),
             self.upper_middle.get_xy_resolution(),
-            self.upper_right.get_xy_resolution()
+            self.upper_right.get_xy_resolution(),
         )
     }
 
@@ -185,16 +229,31 @@ impl SegmentedImageFrame {
     }
 
     pub fn get_ordered_image_frame_references(&self) -> [&ImageFrame; 9] {
-        [&self.lower_left, &self.lower_middle, &self.lower_right, &self.middle_left,
-            &self.center, &self.middle_right, &self.upper_left,
-            &self.upper_middle, &self.upper_right]
+        [
+            &self.lower_left,
+            &self.lower_middle,
+            &self.lower_right,
+            &self.middle_left,
+            &self.center,
+            &self.middle_right,
+            &self.upper_left,
+            &self.upper_middle,
+            &self.upper_right,
+        ]
     }
 
-
     pub fn get_mut_ordered_image_frame_references(&mut self) -> [&mut ImageFrame; 9] {
-        [&mut self.lower_left, &mut self.lower_middle, &mut self.lower_right, &mut self.middle_left, &mut self.center,
-            &mut self.middle_right, &mut self.upper_left, &mut self.upper_middle,
-            &mut self.upper_right]
+        [
+            &mut self.lower_left,
+            &mut self.lower_middle,
+            &mut self.lower_right,
+            &mut self.middle_left,
+            &mut self.center,
+            &mut self.middle_right,
+            &mut self.upper_left,
+            &mut self.upper_middle,
+            &mut self.upper_right,
+        ]
     }
 
     pub(crate) fn get_image_internal_data_mut(&mut self) -> [&mut Array3<u8>; 9] {
@@ -214,27 +273,29 @@ impl SegmentedImageFrame {
 
     //endregion
 
-
-
     //region neuron export
 
-    pub(crate) fn overwrite_neuron_data(&self, write_targets: &mut[NeuronVoxelXYZPArrays; 9], channel_index: CorticalChannelIndex ) -> Result<(), FeagiDataError> {
+    pub(crate) fn overwrite_neuron_data(
+        &self,
+        write_targets: &mut [NeuronVoxelXYZPArrays; 9],
+        channel_index: CorticalChannelIndex,
+    ) -> Result<(), FeagiDataError> {
         let ordered_images = self.get_ordered_image_frame_references();
         let mut total_neurons = 0;
-        write_targets.par_iter_mut()
-            .enumerate()
-            .try_for_each(|(image_ordered_index, write_target) | -> Result<(), FeagiDataError> {
-                ordered_images[image_ordered_index].overwrite_neuron_data(write_target, channel_index)?; // Handles clearing the array if needed
+        write_targets.par_iter_mut().enumerate().try_for_each(
+            |(image_ordered_index, write_target)| -> Result<(), FeagiDataError> {
+                ordered_images[image_ordered_index]
+                    .overwrite_neuron_data(write_target, channel_index)?; // Handles clearing the array if needed
                 Ok(())
-            })?;
-        
+            },
+        )?;
+
         total_neurons = write_targets.iter().map(|wt| wt.len()).sum();
         Ok(())
     }
     //endregion
 
-
-    pub fn blink_segments(&mut self)  {
+    pub fn blink_segments(&mut self) {
         self.lower_left.blink_image();
         self.lower_middle.blink_image();
         self.lower_right.blink_image();

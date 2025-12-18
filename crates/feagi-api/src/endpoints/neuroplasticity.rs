@@ -4,29 +4,38 @@
 //! Neuroplasticity API Endpoints - Exact port from Python `/v1/neuroplasticity/*`
 
 // Removed - using crate::common::State instead
-use std::collections::HashMap;
 use crate::common::ApiResult;
-use crate::common::{State, Json, Path};
 use crate::common::ApiState;
+use crate::common::{Json, Path, State};
+use std::collections::HashMap;
 
 /// Get the current plasticity queue depth (number of pending plasticity operations).
-#[utoipa::path(get, path = "/v1/neuroplasticity/plasticity_queue_depth", tag = "neuroplasticity")]
+#[utoipa::path(
+    get,
+    path = "/v1/neuroplasticity/plasticity_queue_depth",
+    tag = "neuroplasticity"
+)]
 pub async fn get_plasticity_queue_depth(State(_state): State<ApiState>) -> ApiResult<Json<i32>> {
     // TODO: Get from plasticity service
     Ok(Json(0))
 }
 
 /// Set the plasticity queue depth to control how many operations can be pending.
-#[utoipa::path(put, path = "/v1/neuroplasticity/plasticity_queue_depth", tag = "neuroplasticity")]
+#[utoipa::path(
+    put,
+    path = "/v1/neuroplasticity/plasticity_queue_depth",
+    tag = "neuroplasticity"
+)]
 pub async fn put_plasticity_queue_depth(
     State(_state): State<ApiState>,
     Json(depth): Json<i32>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Plasticity queue depth set to {}", depth);
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), format!("Plasticity queue depth set to {}", depth))
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        format!("Plasticity queue depth set to {}", depth),
+    )])))
 }
 
 /// Get neuroplasticity status across all cortical areas including enabled state and queue depth.
@@ -38,12 +47,17 @@ pub async fn put_plasticity_queue_depth(
         (status = 200, description = "Plasticity status", body = HashMap<String, serde_json::Value>)
     )
 )]
-pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+pub async fn get_status(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     let mut response = HashMap::new();
-    response.insert("global_plasticity_enabled".to_string(), serde_json::json!(true));
+    response.insert(
+        "global_plasticity_enabled".to_string(),
+        serde_json::json!(true),
+    );
     response.insert("transforming_areas".to_string(), serde_json::json!([]));
     response.insert("queue_depth".to_string(), serde_json::json!(0));
-    
+
     Ok(Json(response))
 }
 
@@ -75,9 +89,10 @@ pub async fn post_configure(
     Json(_config): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Update plasticity configuration
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Neuroplasticity configuration updated".to_string())
-    ])))
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Neuroplasticity configuration updated".to_string(),
+    )])))
 }
 
 /// Enable neuroplasticity for a specific cortical area.
@@ -97,10 +112,11 @@ pub async fn post_enable_area(
     Path(area_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Enabling plasticity for area: {}", area_id);
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), format!("Plasticity enabled for area {}", area_id))
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        format!("Plasticity enabled for area {}", area_id),
+    )])))
 }
 
 /// Disable neuroplasticity for a specific cortical area.
@@ -120,11 +136,9 @@ pub async fn post_disable_area(
     Path(area_id): Path<String>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     tracing::info!(target: "feagi-api", "Disabling plasticity for area: {}", area_id);
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), format!("Plasticity disabled for area {}", area_id))
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        format!("Plasticity disabled for area {}", area_id),
+    )])))
 }
-
-
-

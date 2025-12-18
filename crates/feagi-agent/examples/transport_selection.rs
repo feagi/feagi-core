@@ -38,10 +38,8 @@ struct RegistrationInfo {
 }
 
 fn parse_registration_response(response: &Value) -> Result<RegistrationInfo, String> {
-    let body = response
-        .get("body")
-        .ok_or("Missing body in response")?;
-    
+    let body = response.get("body").ok_or("Missing body in response")?;
+
     // Parse transports
     let mut transports = Vec::new();
     if let Some(transport_array) = body.get("transports").and_then(|t| t.as_array()) {
@@ -51,12 +49,12 @@ fn parse_registration_response(response: &Value) -> Result<RegistrationInfo, Str
                 .and_then(|t| t.as_str())
                 .unwrap_or("unknown")
                 .to_string();
-            
+
             let enabled = transport
                 .get("enabled")
                 .and_then(|e| e.as_bool())
                 .unwrap_or(false);
-            
+
             let mut ports = HashMap::new();
             if let Some(ports_obj) = transport.get("ports").and_then(|p| p.as_object()) {
                 for (key, value) in ports_obj {
@@ -65,13 +63,13 @@ fn parse_registration_response(response: &Value) -> Result<RegistrationInfo, Str
                     }
                 }
             }
-            
+
             let host = transport
                 .get("host")
                 .and_then(|h| h.as_str())
                 .unwrap_or("0.0.0.0")
                 .to_string();
-            
+
             transports.push(TransportOption {
                 transport_type,
                 enabled,
@@ -80,7 +78,7 @@ fn parse_registration_response(response: &Value) -> Result<RegistrationInfo, Str
             });
         }
     }
-    
+
     // Parse legacy ZMQ ports
     let zmq_ports = body
         .get("zmq_ports")
@@ -90,7 +88,7 @@ fn parse_registration_response(response: &Value) -> Result<RegistrationInfo, Str
                 .filter_map(|(k, v)| v.as_u64().map(|port| (k.clone(), port as u16)))
                 .collect()
         });
-    
+
     Ok(RegistrationInfo {
         status: body
             .get("status")
@@ -115,37 +113,34 @@ fn choose_transport(
     preference: Option<&str>,
 ) -> Option<TransportOption> {
     // Filter enabled transports
-    let available: Vec<&TransportOption> = reg_info
-        .transports
-        .iter()
-        .filter(|t| t.enabled)
-        .collect();
-    
+    let available: Vec<&TransportOption> =
+        reg_info.transports.iter().filter(|t| t.enabled).collect();
+
     if available.is_empty() {
         return None;
     }
-    
+
     // If preference specified, try that first
     if let Some(pref) = preference {
         if let Some(transport) = available.iter().find(|t| t.transport_type == pref) {
             return Some((*transport).clone());
         }
     }
-    
+
     // Fall back to recommended
     if let Some(recommended) = &reg_info.recommended_transport {
         if let Some(transport) = available.iter().find(|t| &t.transport_type == recommended) {
             return Some((*transport).clone());
         }
     }
-    
+
     // Last resort: first available
     available.first().map(|t| (*t).clone())
 }
 
 fn main() {
     println!("🦀 FEAGI Agent Transport Selection Example\n");
-    
+
     // Simulate registration response from FEAGI
     let registration_response = serde_json::json!({
         "status": 200,
@@ -183,23 +178,31 @@ fn main() {
             "recommended_transport": "zmq"
         }
     });
-    
+
     // Parse registration info
-    let reg_info = parse_registration_response(&registration_response)
-        .expect("Failed to parse response");
-    
+    let reg_info =
+        parse_registration_response(&registration_response).expect("Failed to parse response");
+
     println!("📋 Registration Info:");
     println!("   Status: {}", reg_info.status);
-    println!("   Message: {}", reg_info.message.as_deref().unwrap_or("N/A"));
-    println!("   Recommended: {}", reg_info.recommended_transport.as_deref().unwrap_or("N/A"));
+    println!(
+        "   Message: {}",
+        reg_info.message.as_deref().unwrap_or("N/A")
+    );
+    println!(
+        "   Recommended: {}",
+        reg_info.recommended_transport.as_deref().unwrap_or("N/A")
+    );
     println!();
-    
+
     println!("🌐 Available Transports:");
     for (i, transport) in reg_info.transports.iter().enumerate() {
-        println!("   {}. {} (enabled: {})", 
-                 i + 1, 
-                 transport.transport_type, 
-                 transport.enabled);
+        println!(
+            "   {}. {} (enabled: {})",
+            i + 1,
+            transport.transport_type,
+            transport.enabled
+        );
         println!("      Host: {}", transport.host);
         println!("      Ports:");
         for (stream, port) in &transport.ports {
@@ -207,40 +210,57 @@ fn main() {
         }
         println!();
     }
-    
+
     // Example 1: Auto-select (use recommended)
     println!("🎯 Example 1: Auto-select (recommended)");
-    let auto_transport = choose_transport(&reg_info, None)
-        .expect("No transports available");
-    println!("   Selected: {} on {}", auto_transport.transport_type, auto_transport.host);
-    println!("   Sensory port: {}", auto_transport.ports.get("sensory").unwrap_or(&0));
+    let auto_transport = choose_transport(&reg_info, None).expect("No transports available");
+    println!(
+        "   Selected: {} on {}",
+        auto_transport.transport_type, auto_transport.host
+    );
+    println!(
+        "   Sensory port: {}",
+        auto_transport.ports.get("sensory").unwrap_or(&0)
+    );
     println!();
-    
+
     // Example 2: Prefer WebSocket
     println!("🎯 Example 2: Prefer WebSocket");
-    let ws_transport = choose_transport(&reg_info, Some("websocket"))
-        .expect("WebSocket not available");
-    println!("   Selected: {} on {}", ws_transport.transport_type, ws_transport.host);
-    println!("   Sensory port: {}", ws_transport.ports.get("sensory").unwrap_or(&0));
+    let ws_transport =
+        choose_transport(&reg_info, Some("websocket")).expect("WebSocket not available");
+    println!(
+        "   Selected: {} on {}",
+        ws_transport.transport_type, ws_transport.host
+    );
+    println!(
+        "   Sensory port: {}",
+        ws_transport.ports.get("sensory").unwrap_or(&0)
+    );
     println!();
-    
+
     // Example 3: Force ZMQ
     println!("🎯 Example 3: Force ZMQ");
-    let zmq_transport = choose_transport(&reg_info, Some("zmq"))
-        .expect("ZMQ not available");
-    println!("   Selected: {} on {}", zmq_transport.transport_type, zmq_transport.host);
-    println!("   Sensory port: {}", zmq_transport.ports.get("sensory").unwrap_or(&0));
+    let zmq_transport = choose_transport(&reg_info, Some("zmq")).expect("ZMQ not available");
+    println!(
+        "   Selected: {} on {}",
+        zmq_transport.transport_type, zmq_transport.host
+    );
+    println!(
+        "   Sensory port: {}",
+        zmq_transport.ports.get("sensory").unwrap_or(&0)
+    );
     println!();
-    
+
     // Example 4: Check what would happen in browser (WebSocket only capable)
     println!("🎯 Example 4: Browser scenario (WebSocket only)");
     let browser_transport = choose_transport(&reg_info, Some("websocket"))
         .expect("Browser requires WebSocket but it's not available");
     println!("   Browser will use: {}", browser_transport.transport_type);
-    println!("   Viz WebSocket: ws://{}:{}/visualization",
-             browser_transport.host,
-             browser_transport.ports.get("visualization").unwrap_or(&0));
-    
+    println!(
+        "   Viz WebSocket: ws://{}:{}/visualization",
+        browser_transport.host,
+        browser_transport.ports.get("visualization").unwrap_or(&0)
+    );
+
     println!("\n✅ Transport selection demonstration complete!");
 }
-

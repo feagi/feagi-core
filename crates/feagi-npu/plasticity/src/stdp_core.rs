@@ -57,7 +57,7 @@ impl Default for STDPConfig {
 /// use feagi_npu_plasticity::stdp_core::{compute_stdp_weight_change, STDPConfig};
 ///
 /// let config = STDPConfig::default();
-/// 
+///
 /// // Pre before post (dt > 0) → potentiation
 /// let delta_w = compute_stdp_weight_change(5, &config);
 /// assert!(delta_w > 0.0);
@@ -120,11 +120,7 @@ pub fn update_weight_stdp(current_weight: u8, dt: i32, config: &STDPConfig) -> u
 /// # Safety
 /// Slices must have the same length.
 #[inline]
-pub fn compute_stdp_batch(
-    time_diffs: &[i32],
-    config: &STDPConfig,
-    weight_changes: &mut [f32],
-) {
+pub fn compute_stdp_batch(time_diffs: &[i32], config: &STDPConfig, weight_changes: &mut [f32]) {
     let count = time_diffs.len();
     debug_assert_eq!(weight_changes.len(), count);
 
@@ -221,5 +217,3 @@ mod tests {
         assert!(changes[0] > changes[3]); // Closer spike stronger
     }
 }
-
-

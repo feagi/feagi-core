@@ -88,7 +88,7 @@ pub enum ConnectionStatus {
 pub trait BluetoothProvider {
     /// Platform-specific error type
     type Error: core::fmt::Debug;
-    
+
     /// Start BLE advertising with the given device name
     ///
     /// This should set up the BLE stack (if not already initialized) and
@@ -107,22 +107,22 @@ pub trait BluetoothProvider {
     /// On some platforms (e.g., TrouBLE), this might block until a connection
     /// is made. Check platform documentation for blocking behavior.
     fn start_advertising(&mut self, device_name: &str) -> Result<(), Self::Error>;
-    
+
     /// Stop BLE advertising
     ///
     /// If already connected, this may also disconnect.
     fn stop_advertising(&mut self) -> Result<(), Self::Error>;
-    
+
     /// Check if BLE is currently connected to a client
     ///
     /// Returns `true` if a client is connected and data can be exchanged.
     fn is_connected(&self) -> bool;
-    
+
     /// Get current connection status
     ///
     /// Provides more detail than `is_connected()`.
     fn connection_status(&self) -> ConnectionStatus;
-    
+
     /// Send data over BLE to the connected client
     ///
     /// On most platforms, this uses the TX characteristic (Notify).
@@ -139,7 +139,7 @@ pub trait BluetoothProvider {
     /// This method MAY block until the data is queued for transmission.
     /// It does NOT wait for acknowledgment from the client.
     fn send(&mut self, data: &[u8]) -> Result<(), Self::Error>;
-    
+
     /// Receive data from the connected client
     ///
     /// On most platforms, this reads from the RX characteristic (Write).
@@ -154,7 +154,7 @@ pub trait BluetoothProvider {
     /// This method SHOULD NOT block. If no data is available, return
     /// an error or `Ok(0)`.
     fn receive(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error>;
-    
+
     /// Flush any pending transmit data
     ///
     /// This is optional and may be a no-op on some platforms.
@@ -170,10 +170,10 @@ pub trait BluetoothProvider {
 pub trait AsyncBluetoothProvider: BluetoothProvider {
     /// Async version of `start_advertising`
     async fn start_advertising_async(&mut self, device_name: &str) -> Result<(), Self::Error>;
-    
+
     /// Async version of `send`
     async fn send_async(&mut self, data: &[u8]) -> Result<(), Self::Error>;
-    
+
     /// Async version of `receive`
     async fn receive_async(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error>;
 }
@@ -181,14 +181,14 @@ pub trait AsyncBluetoothProvider: BluetoothProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     // Mock BLE implementation for testing
     struct MockBluetooth {
         connected: bool,
         send_buffer: heapless::Vec<u8, 256>,
         receive_buffer: heapless::Vec<u8, 256>,
     }
-    
+
     impl MockBluetooth {
         fn new() -> Self {
             Self {
@@ -198,24 +198,24 @@ mod tests {
             }
         }
     }
-    
+
     impl BluetoothProvider for MockBluetooth {
         type Error = &'static str;
-        
+
         fn start_advertising(&mut self, _device_name: &str) -> Result<(), Self::Error> {
             self.connected = false;
             Ok(())
         }
-        
+
         fn stop_advertising(&mut self) -> Result<(), Self::Error> {
             self.connected = false;
             Ok(())
         }
-        
+
         fn is_connected(&self) -> bool {
             self.connected
         }
-        
+
         fn connection_status(&self) -> ConnectionStatus {
             if self.connected {
                 ConnectionStatus::Connected
@@ -223,18 +223,20 @@ mod tests {
                 ConnectionStatus::Disconnected
             }
         }
-        
+
         fn send(&mut self, data: &[u8]) -> Result<(), Self::Error> {
             if !self.connected {
                 return Err("Not connected");
             }
             self.send_buffer.clear();
             for &byte in data {
-                self.send_buffer.push(byte).map_err(|_| "Send buffer full")?;
+                self.send_buffer
+                    .push(byte)
+                    .map_err(|_| "Send buffer full")?;
             }
             Ok(())
         }
-        
+
         fn receive(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
             if !self.connected {
                 return Err("Not connected");
@@ -245,20 +247,20 @@ mod tests {
             Ok(len)
         }
     }
-    
+
     #[test]
     fn test_mock_bluetooth_advertising() {
         let mut ble = MockBluetooth::new();
         assert!(!ble.is_connected());
         assert!(ble.start_advertising("test").is_ok());
     }
-    
+
     #[test]
     fn test_mock_bluetooth_send_not_connected() {
         let mut ble = MockBluetooth::new();
         assert!(ble.send(b"test").is_err());
     }
-    
+
     #[test]
     fn test_mock_bluetooth_send_connected() {
         let mut ble = MockBluetooth::new();
@@ -266,24 +268,23 @@ mod tests {
         assert!(ble.send(b"test").is_ok());
         assert_eq!(ble.send_buffer.as_slice(), b"test");
     }
-    
+
     #[test]
     fn test_mock_bluetooth_receive_not_connected() {
         let mut ble = MockBluetooth::new();
         let mut buf = [0u8; 16];
         assert!(ble.receive(&mut buf).is_err());
     }
-    
+
     #[test]
     fn test_mock_bluetooth_receive_connected() {
         let mut ble = MockBluetooth::new();
         ble.connected = true;
         ble.receive_buffer.extend_from_slice(b"data").unwrap();
-        
+
         let mut buf = [0u8; 16];
         let len = ble.receive(&mut buf).unwrap();
         assert_eq!(len, 4);
         assert_eq!(&buf[..len], b"data");
     }
 }
-

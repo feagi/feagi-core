@@ -7,11 +7,11 @@ RegionID - UUID-based unique identifier for brain regions.
 Provides type safety and global uniqueness for brain region identifiers.
 */
 
+use crate::FeagiDataError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use uuid::Uuid;
-use crate::FeagiDataError;
 
 /// Unique identifier for a brain region, based on UUID v7.
 ///
@@ -54,7 +54,9 @@ impl RegionID {
     /// assert_ne!(region_id.to_string(), "");
     /// ```
     pub fn new() -> Self {
-        Self { uuid: Uuid::now_v7() }
+        Self {
+            uuid: Uuid::now_v7(),
+        }
     }
 
     /// Creates a RegionID from a UUID.
@@ -174,8 +176,7 @@ impl<'de> Deserialize<'de> for RegionID {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        RegionID::from_string(&s)
-            .map_err(serde::de::Error::custom)
+        RegionID::from_string(&s).map_err(serde::de::Error::custom)
     }
 }
 
@@ -187,7 +188,7 @@ mod tests {
     fn test_region_id_new() {
         let id1 = RegionID::new();
         let id2 = RegionID::new();
-        
+
         // Each new ID should be unique
         assert_ne!(id1, id2);
     }
@@ -196,7 +197,7 @@ mod tests {
     fn test_region_id_from_uuid() {
         let uuid = Uuid::now_v7();
         let region_id = RegionID::from_uuid(uuid);
-        
+
         assert_eq!(region_id.as_uuid(), uuid);
     }
 
@@ -204,7 +205,7 @@ mod tests {
     fn test_region_id_from_string() {
         let uuid_str = "550e8400-e29b-41d4-a716-446655440000";
         let region_id = RegionID::from_string(uuid_str).unwrap();
-        
+
         assert_eq!(region_id.to_string(), uuid_str);
     }
 
@@ -218,7 +219,7 @@ mod tests {
     fn test_region_id_display() {
         let region_id = RegionID::new();
         let display_str = region_id.to_string();
-        
+
         // Should be a valid UUID string (36 characters with dashes)
         assert_eq!(display_str.len(), 36);
         assert!(display_str.contains('-'));
@@ -228,17 +229,17 @@ mod tests {
     fn test_region_id_from_str() {
         let uuid_str = "550e8400-e29b-41d4-a716-446655440000";
         let region_id: RegionID = uuid_str.parse().unwrap();
-        
+
         assert_eq!(region_id.to_string(), uuid_str);
     }
 
     #[test]
     fn test_region_id_serialization() {
         let region_id = RegionID::new();
-        
+
         // Serialize to JSON
         let json = serde_json::to_string(&region_id).unwrap();
-        
+
         // Should be a quoted UUID string
         assert!(json.starts_with('"'));
         assert!(json.ends_with('"'));
@@ -249,22 +250,22 @@ mod tests {
     fn test_region_id_deserialization() {
         let uuid_str = "550e8400-e29b-41d4-a716-446655440000";
         let json = format!("\"{}\"", uuid_str);
-        
+
         let region_id: RegionID = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(region_id.to_string(), uuid_str);
     }
 
     #[test]
     fn test_region_id_roundtrip() {
         let original = RegionID::new();
-        
+
         // Serialize
         let json = serde_json::to_string(&original).unwrap();
-        
+
         // Deserialize
         let deserialized: RegionID = serde_json::from_str(&json).unwrap();
-        
+
         assert_eq!(original, deserialized);
     }
 
@@ -272,7 +273,7 @@ mod tests {
     fn test_region_id_as_bytes() {
         let region_id = RegionID::new();
         let bytes = region_id.as_bytes();
-        
+
         assert_eq!(bytes.len(), 16);
     }
 
@@ -280,7 +281,7 @@ mod tests {
     fn test_region_id_default() {
         let id1 = RegionID::default();
         let id2 = RegionID::default();
-        
+
         // Each default should generate a new unique ID
         assert_ne!(id1, id2);
     }
@@ -290,21 +291,21 @@ mod tests {
         let uuid = Uuid::now_v7();
         let id1 = RegionID::from_uuid(uuid);
         let id2 = RegionID::from_uuid(uuid);
-        
+
         assert_eq!(id1, id2);
     }
 
     #[test]
     fn test_region_id_hash() {
         use std::collections::HashSet;
-        
+
         let id1 = RegionID::new();
         let id2 = RegionID::new();
-        
+
         let mut set = HashSet::new();
         set.insert(id1);
         set.insert(id2);
-        
+
         assert_eq!(set.len(), 2);
         assert!(set.contains(&id1));
         assert!(set.contains(&id2));

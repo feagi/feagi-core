@@ -1,5 +1,5 @@
 /// Encoding/decoding strategy types for neuron voxel data.
-/// 
+///
 /// Specifies how data should be encoded into or decoded from neuron voxel representations.
 /// Supports various data types (percentages, images) with different encoding methods
 /// Primarily used in macros for code generation

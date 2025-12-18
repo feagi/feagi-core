@@ -4,8 +4,8 @@
 //! Reconnection logic with exponential backoff
 
 use crate::error::Result;
-use tracing::{info, warn};
 use std::time::Duration;
+use tracing::{info, warn};
 
 /// Reconnection strategy with exponential backoff
 pub struct ReconnectionStrategy {

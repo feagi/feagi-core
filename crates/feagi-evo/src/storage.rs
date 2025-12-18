@@ -120,9 +120,9 @@ pub mod fs_storage {
     //! Uses async file I/O via tokio for non-blocking operations.
 
     use super::{GenomeStorage, StorageError};
-    use std::path::{Path, PathBuf};
-    use core::pin::Pin;
     use core::future::Future;
+    use core::pin::Pin;
+    use std::path::{Path, PathBuf};
 
     /// File system-based genome storage
     ///
@@ -149,11 +149,11 @@ pub mod fs_storage {
         /// Returns error if base_path doesn't exist or can't be created
         pub fn new<P: AsRef<Path>>(base_path: P) -> Result<Self, StorageError> {
             let path = base_path.as_ref().to_path_buf();
-            
+
             // Create directory if it doesn't exist
             std::fs::create_dir_all(&path)
                 .map_err(|e| StorageError::IOError(format!("Failed to create directory: {}", e)))?;
-            
+
             Ok(Self { base_path: path })
         }
 
@@ -164,7 +164,7 @@ pub mod fs_storage {
                 .chars()
                 .filter(|c| c.is_alphanumeric() || *c == '-' || *c == '_')
                 .collect::<String>();
-            
+
             self.base_path.join(format!("{}.json", sanitized))
         }
     }
@@ -177,15 +177,13 @@ pub mod fs_storage {
         ) -> Pin<Box<dyn Future<Output = Result<String, StorageError>> + Send + '_>> {
             let path = self.genome_path(genome_id);
             Box::pin(async move {
-                tokio::fs::read_to_string(&path)
-                    .await
-                    .map_err(|e| {
-                        if e.kind() == std::io::ErrorKind::NotFound {
-                            StorageError::NotFound
-                        } else {
-                            StorageError::IOError(format!("Failed to read file: {}", e))
-                        }
-                    })
+                tokio::fs::read_to_string(&path).await.map_err(|e| {
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        StorageError::NotFound
+                    } else {
+                        StorageError::IOError(format!("Failed to read file: {}", e))
+                    }
+                })
             })
         }
 
@@ -196,16 +194,17 @@ pub mod fs_storage {
         ) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>> {
             let path = self.genome_path(genome_id);
             let json = genome_json.to_string();
-            
+
             Box::pin(async move {
                 // Validate JSON before saving
-                serde_json::from_str::<serde_json::Value>(&json)
-                    .map_err(|e| StorageError::SerializationError(format!("Invalid JSON: {}", e)))?;
-                
+                serde_json::from_str::<serde_json::Value>(&json).map_err(|e| {
+                    StorageError::SerializationError(format!("Invalid JSON: {}", e))
+                })?;
+
                 tokio::fs::write(&path, json)
                     .await
                     .map_err(|e| StorageError::IOError(format!("Failed to write file: {}", e)))?;
-                
+
                 Ok(())
             })
         }
@@ -215,14 +214,14 @@ pub mod fs_storage {
         ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, StorageError>> + Send + '_>> {
             let base_path = self.base_path.clone();
             Box::pin(async move {
-                let mut entries = tokio::fs::read_dir(&base_path)
-                    .await
-                    .map_err(|e| StorageError::IOError(format!("Failed to read directory: {}", e)))?;
-                
+                let mut entries = tokio::fs::read_dir(&base_path).await.map_err(|e| {
+                    StorageError::IOError(format!("Failed to read directory: {}", e))
+                })?;
+
                 let mut genome_ids = Vec::new();
-                while let Some(entry) = entries.next_entry().await
-                    .map_err(|e| StorageError::IOError(format!("Failed to read directory entry: {}", e)))?
-                {
+                while let Some(entry) = entries.next_entry().await.map_err(|e| {
+                    StorageError::IOError(format!("Failed to read directory entry: {}", e))
+                })? {
                     let path = entry.path();
                     if path.extension().and_then(|s| s.to_str()) == Some("json") {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
@@ -230,7 +229,7 @@ pub mod fs_storage {
                         }
                     }
                 }
-                
+
                 Ok(genome_ids)
             })
         }
@@ -241,15 +240,13 @@ pub mod fs_storage {
         ) -> Pin<Box<dyn Future<Output = Result<(), StorageError>> + Send + '_>> {
             let path = self.genome_path(genome_id);
             Box::pin(async move {
-                tokio::fs::remove_file(&path)
-                    .await
-                    .map_err(|e| {
-                        if e.kind() == std::io::ErrorKind::NotFound {
-                            StorageError::NotFound
-                        } else {
-                            StorageError::IOError(format!("Failed to delete file: {}", e))
-                        }
-                    })
+                tokio::fs::remove_file(&path).await.map_err(|e| {
+                    if e.kind() == std::io::ErrorKind::NotFound {
+                        StorageError::NotFound
+                    } else {
+                        StorageError::IOError(format!("Failed to delete file: {}", e))
+                    }
+                })
             })
         }
     }
@@ -258,34 +255,33 @@ pub mod fs_storage {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[cfg(feature = "async-tokio")]
     #[tokio::test]
     async fn test_filesystem_storage() {
         use tempfile::TempDir;
-        
+
         let temp_dir = TempDir::new().unwrap();
         let storage = FileSystemStorage::new(temp_dir.path()).unwrap();
-        
+
         // Test save
         let genome_id = "test_genome";
         let genome_json = r#"{"genome_id": "test_genome", "version": "2.1"}"#;
         storage.save_genome(genome_id, genome_json).await.unwrap();
-        
+
         // Test load
         let loaded = storage.load_genome(genome_id).await.unwrap();
         assert_eq!(loaded, genome_json);
-        
+
         // Test list
         let genomes = storage.list_genomes().await.unwrap();
         assert!(genomes.contains(&genome_id.to_string()));
-        
+
         // Test delete
         storage.delete_genome(genome_id).await.unwrap();
-        
+
         // Verify deleted
         let result = storage.load_genome(genome_id).await;
         assert!(matches!(result, Err(StorageError::NotFound)));
     }
 }
-

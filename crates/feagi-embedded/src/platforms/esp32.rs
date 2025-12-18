@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// ESP32 platform implementation
-/// 
+///
 /// Supports ESP32, ESP32-S3, ESP32-C3 (RISC-V) variants
-
 use crate::hal::*;
 
 #[cfg(feature = "esp32")]
@@ -31,7 +30,7 @@ pub struct Esp32Platform {
 #[cfg(feature = "esp32")]
 impl Esp32Platform {
     /// Initialize ESP32 platform with default configuration
-    /// 
+    ///
     /// # Returns
     /// Initialized Esp32Platform or error
     ///
@@ -56,25 +55,19 @@ impl Esp32Platform {
 
         esp32_log(LogLevel::Info, "ESP32 platform initialized");
 
-        Ok(Self {
-            uart: None,
-        })
+        Ok(Self { uart: None })
     }
-    
+
     /// Initialize with UART
-    /// 
+    ///
     /// # Arguments
     /// * `tx_pin` - TX pin number
     /// * `rx_pin` - RX pin number
     /// * `baudrate` - Baud rate (default: 115200)
-    /// 
+    ///
     /// # Returns
     /// Initialized Esp32Platform with UART or error
-    pub fn init_with_uart(
-        tx_pin: u32,
-        rx_pin: u32,
-        baudrate: u32,
-    ) -> anyhow::Result<Self> {
+    pub fn init_with_uart(tx_pin: u32, rx_pin: u32, baudrate: u32) -> anyhow::Result<Self> {
         // Initialize ESP-IDF
         esp_idf_sys::link_patches();
 
@@ -87,15 +80,13 @@ impl Esp32Platform {
         let mut baud_buf: String<32> = String::new();
         let _ = write!(baud_buf, "  Baudrate: {}", baudrate);
         esp32_log(LogLevel::Info, baud_buf.as_str());
-        
+
         // TODO: Implement UART initialization
         // This requires accessing Peripherals which needs refactoring
-        
-        Ok(Self {
-            uart: None,
-        })
+
+        Ok(Self { uart: None })
     }
-    
+
     /// Get ESP32 chip model
     pub fn chip_model(&self) -> &'static str {
         #[cfg(feature = "esp32-s3")]
@@ -115,7 +106,7 @@ impl TimeProvider for Esp32Platform {
     fn get_time_us(&self) -> u64 {
         unsafe { esp_idf_sys::esp_timer_get_time() as u64 }
     }
-    
+
     fn delay_us(&self, us: u32) {
         unsafe { esp_idf_sys::esp_rom_delay_us(us) }
     }
@@ -124,7 +115,7 @@ impl TimeProvider for Esp32Platform {
 #[cfg(feature = "esp32")]
 impl SerialIO for Esp32Platform {
     type Error = esp_idf_sys::EspError;
-    
+
     fn write(&mut self, data: &[u8]) -> Result<usize, Self::Error> {
         if let Some(uart) = &mut self.uart {
             uart.write(data)
@@ -136,7 +127,7 @@ impl SerialIO for Esp32Platform {
             Ok(data.len())
         }
     }
-    
+
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
         if let Some(uart) = &mut self.uart {
             uart.read(buffer, 0)
@@ -144,7 +135,7 @@ impl SerialIO for Esp32Platform {
             Ok(0) // No UART configured
         }
     }
-    
+
     fn flush(&mut self) -> Result<(), Self::Error> {
         if let Some(uart) = &mut self.uart {
             // Use wait_tx_done instead of flush for ESP-IDF
@@ -167,13 +158,11 @@ impl Platform for Esp32Platform {
     fn name(&self) -> &'static str {
         self.chip_model()
     }
-    
+
     fn cpu_frequency_hz(&self) -> u32 {
-        unsafe {
-            (esp_idf_sys::esp_rom_get_cpu_ticks_per_us() as u64 * 1_000_000) as u32
-        }
+        unsafe { (esp_idf_sys::esp_rom_get_cpu_ticks_per_us() as u64 * 1_000_000) as u32 }
     }
-    
+
     fn available_memory_bytes(&self) -> usize {
         unsafe { esp_idf_sys::esp_get_free_heap_size() as usize }
     }
@@ -208,4 +197,3 @@ fn esp32_log(level: LogLevel, message: &str) {
         );
     }
 }
-

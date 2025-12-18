@@ -15,16 +15,16 @@
 //! changing the high-level burst processing logic.
 
 mod cpu;
-#[cfg(feature = "gpu")]
-mod wgpu_backend;
 #[cfg(feature = "cuda")]
 mod cuda_backend;
+#[cfg(feature = "gpu")]
+mod wgpu_backend;
 
 pub use cpu::CPUBackend;
+#[cfg(feature = "cuda")]
+pub use cuda_backend::{enumerate_cuda_devices, is_cuda_available, CUDABackend};
 #[cfg(feature = "gpu")]
 pub use wgpu_backend::WGPUBackend;
-#[cfg(feature = "cuda")]
-pub use cuda_backend::{CUDABackend, is_cuda_available, enumerate_cuda_devices};
 
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::{NeuronStorage, SynapseStorage};
@@ -70,7 +70,9 @@ pub struct BurstTiming {
 /// - `T: NeuralValue` - Numeric type for membrane potentials
 /// - `N: NeuronStorage` - Neuron storage implementation
 /// - `S: SynapseStorage` - Synapse storage implementation
-pub trait ComputeBackend<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage>: Send + Sync {
+pub trait ComputeBackend<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage>:
+    Send + Sync
+{
     /// Get backend type name for logging/debugging
     fn backend_name(&self) -> &str;
 
@@ -294,13 +296,13 @@ impl Default for BackendConfig {
 pub struct GpuConfig {
     /// Enable GPU processing globally
     pub use_gpu: bool,
-    
+
     /// Enable hybrid CPU/GPU auto-selection based on genome size
     pub hybrid_enabled: bool,
-    
+
     /// Threshold in synapses to consider GPU in hybrid mode
     pub gpu_threshold: usize,
-    
+
     /// Fraction of GPU memory to use (0.0-1.0)
     pub gpu_memory_fraction: f64,
 }
@@ -340,7 +342,7 @@ impl GpuConfig {
                 BackendType::CPU
             }
         };
-        
+
         let backend_config = BackendConfig {
             // Estimate neuron threshold from synapse threshold
             // Assume ~100 synapses per neuron (typical for FEAGI genomes)
@@ -350,7 +352,7 @@ impl GpuConfig {
             force_gpu: self.use_gpu && !self.hybrid_enabled,
             ..Default::default()
         };
-        
+
         (backend_type, backend_config)
     }
 }
@@ -421,17 +423,17 @@ pub fn select_backend(
     }
 
     // Auto-selection: Try CUDA first (best performance), then WGPU (cross-platform), then CPU
-    
+
     // Check CUDA threshold
     let _meets_cuda_neuron_threshold = neuron_count >= config.cuda_neuron_threshold;
     let _meets_cuda_synapse_threshold = synapse_count >= config.cuda_synapse_threshold;
-    
+
     #[cfg(feature = "cuda")]
     {
         if _meets_cuda_neuron_threshold || _meets_cuda_synapse_threshold {
             if is_cuda_available() {
                 let speedup = estimate_cuda_speedup(neuron_count, synapse_count);
-                
+
                 // Use CUDA if speedup is meaningful (>1.5x)
                 if speedup > 1.5 {
                     return BackendDecision {
@@ -640,7 +642,7 @@ pub fn create_backend<T: NeuralValue>(
                 info!("   Future: f16 GPU support planned for mixed-precision training");
                 return Ok(Box::new(CPUBackend::new()));
             }
-            
+
             info!("🎮 Using WGPU backend (cross-platform GPU)");
             // SAFETY: We've verified T == f32 above, so this is safe
             // We use unsafe transmute because we can't directly cast Box<WGPUBackend> to Box<dyn ComputeBackend<T>>
@@ -659,7 +661,7 @@ pub fn create_backend<T: NeuralValue>(
                 info!("   Future: f16/int8 CUDA support planned for mixed-precision training");
                 return Ok(Box::new(CPUBackend::new()));
             }
-            
+
             info!("🚀 Using CUDA backend (NVIDIA GPU - high performance)");
             // SAFETY: We've verified T == f32 above, so this is safe
             let backend = CUDABackend::new(neuron_capacity, synapse_capacity)?;

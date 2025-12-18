@@ -1,7 +1,5 @@
-
 pub enum AgentCapabilities {
-    SendFeagiInputNeurons, // Sensory
+    SendFeagiInputNeurons,     // Sensory
     ReceiveFeagiOutputNeurons, // Motor
-    AutoGeneration()
-
+    AutoGeneration(),
 }

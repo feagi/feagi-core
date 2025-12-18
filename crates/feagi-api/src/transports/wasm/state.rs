@@ -24,12 +24,18 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
 
     ApiState {
         agent_service: None, // No agents in WASM standalone mode
-        genome_service: genome_service as Arc<dyn feagi_services::traits::GenomeService + Send + Sync>,
-        connectome_service: connectome_service as Arc<dyn feagi_services::traits::ConnectomeService + Send + Sync>,
-        analytics_service: analytics_service as Arc<dyn feagi_services::traits::AnalyticsService + Send + Sync>,
-        runtime_service: runtime_service as Arc<dyn feagi_services::traits::RuntimeService + Send + Sync>,
-        neuron_service: neuron_service as Arc<dyn feagi_services::traits::NeuronService + Send + Sync>,
-        system_service: system_service as Arc<dyn feagi_services::traits::SystemService + Send + Sync>,
+        genome_service: genome_service
+            as Arc<dyn feagi_services::traits::GenomeService + Send + Sync>,
+        connectome_service: connectome_service
+            as Arc<dyn feagi_services::traits::ConnectomeService + Send + Sync>,
+        analytics_service: analytics_service
+            as Arc<dyn feagi_services::traits::AnalyticsService + Send + Sync>,
+        runtime_service: runtime_service
+            as Arc<dyn feagi_services::traits::RuntimeService + Send + Sync>,
+        neuron_service: neuron_service
+            as Arc<dyn feagi_services::traits::NeuronService + Send + Sync>,
+        system_service: system_service
+            as Arc<dyn feagi_services::traits::SystemService + Send + Sync>,
         snapshot_service: None, // TODO: Implement if needed
         feagi_session_timestamp: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -37,4 +43,3 @@ pub fn create_api_state_from_genome(genome: Arc<RuntimeGenome>) -> ApiState {
             .as_millis() as i64,
     }
 }
-

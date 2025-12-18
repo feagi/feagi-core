@@ -14,7 +14,7 @@ use pyo3::prelude::*;
 /// # Arguments (from Python)
 ///
 /// * `src_area_id` - str
-/// * `dst_area_id` - str  
+/// * `dst_area_id` - str
 /// * `src_neuron_id` - int
 /// * `src_dimensions` - tuple[int, int, int]
 /// * `dst_dimensions` - tuple[int, int, int]
@@ -126,7 +126,7 @@ fn py_syn_block_connection(
     // Convert from Python's i32 coordinates to Rust's u32 coordinates
     let loc_u32 = (neuron_location.0 as u32, neuron_location.1 as u32, neuron_location.2 as u32);
     let scale_u32 = scaling_factor as u32;
-    
+
     match crate::connectivity::rules::syn_block_connection(
         src_area_id, dst_area_id, loc_u32, src_dimensions, dst_dimensions, scale_u32
     ) {
@@ -207,19 +207,19 @@ impl PyMortonSpatialHash {
             inner: std::sync::Arc::new(crate::spatial::MortonSpatialHash::new()),
         }
     }
-    
+
     fn add_neuron(&self, cortical_area: String, x: u32, y: u32, z: u32, neuron_id: u64) -> bool {
         self.inner.add_neuron(cortical_area, x, y, z, neuron_id)
     }
-    
+
     fn get_neuron_at_coordinate(&self, cortical_area: &str, x: u32, y: u32, z: u32) -> Option<u64> {
         self.inner.get_neuron_at_coordinate(cortical_area, x, y, z)
     }
-    
+
     fn get_neurons_at_coordinate(&self, cortical_area: &str, x: u32, y: u32, z: u32) -> Vec<u64> {
         self.inner.get_neurons_at_coordinate(cortical_area, x, y, z)
     }
-    
+
     fn get_neurons_in_region(
         &self,
         cortical_area: &str,
@@ -228,19 +228,19 @@ impl PyMortonSpatialHash {
     ) -> Vec<u64> {
         self.inner.get_neurons_in_region(cortical_area, x1, y1, z1, x2, y2, z2)
     }
-    
+
     fn get_neuron_position(&self, neuron_id: u64) -> Option<(String, u32, u32, u32)> {
         self.inner.get_neuron_position(neuron_id)
     }
-    
+
     fn remove_neuron(&self, neuron_id: u64) -> bool {
         self.inner.remove_neuron(neuron_id)
     }
-    
+
     fn clear(&self) {
         self.inner.clear();
     }
-    
+
     fn get_stats(&self) -> PyResult<PyObject> {
         Python::with_gil(|py| {
             let stats = self.inner.get_stats();
@@ -318,9 +318,9 @@ fn py_match_patterns(
     dst_dimensions: (usize, usize, usize),
 ) -> PyResult<Vec<(i32, i32, i32)>> {
     use crate::connectivity::rules::patterns::{PatternElement, match_patterns_batch};
-    
+
     let src_u32 = (src_coordinate.0 as u32, src_coordinate.1 as u32, src_coordinate.2 as u32);
-    
+
     // Convert integer patterns to PatternElement
     let parsed_patterns: Vec<_> = patterns.iter().map(|(src, dst)| {
         let src_pattern = (
@@ -335,14 +335,14 @@ fn py_match_patterns(
         );
         (src_pattern, dst_pattern)
     }).collect();
-    
+
     let results = match_patterns_batch(
         src_u32,
         &parsed_patterns,
         src_dimensions,
         dst_dimensions,
     );
-    
+
     Ok(results.iter().map(|(x, y, z)| (*x as i32, *y as i32, *z as i32)).collect())
 }
 
@@ -353,13 +353,13 @@ fn py_find_source_coordinates(
     src_dimensions: (usize, usize, usize),
 ) -> PyResult<Vec<(i32, i32, i32)>> {
     use crate::connectivity::rules::patterns::{PatternElement, find_source_coordinates};
-    
+
     let pattern = (
         PatternElement::from_int(src_pattern.0),
         PatternElement::from_int(src_pattern.1),
         PatternElement::from_int(src_pattern.2),
     );
-    
+
     let results = find_source_coordinates(&pattern, src_dimensions);
     Ok(results.iter().map(|(x, y, z)| (*x as i32, *y as i32, *z as i32)).collect())
 }
@@ -399,26 +399,26 @@ fn feagi_bdu(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Projector functions
     m.add_function(wrap_pyfunction!(py_syn_projector, m)?)?;
     m.add_function(wrap_pyfunction!(py_syn_projector_batch, m)?)?;
-    
+
     // Phase 2 morphologies
     m.add_function(wrap_pyfunction!(py_syn_block_connection, m)?)?;
     m.add_function(wrap_pyfunction!(py_syn_expander, m)?)?;
     m.add_function(wrap_pyfunction!(py_syn_expander_batch, m)?)?;
     m.add_function(wrap_pyfunction!(py_syn_reducer_x, m)?)?;
-    
-    // Phase 3C: Vector morphologies  
+
+    // Phase 3C: Vector morphologies
     m.add_function(wrap_pyfunction!(py_apply_vector_offset, m)?)?;
     m.add_function(wrap_pyfunction!(py_match_vectors_batch, m)?)?;
-    
+
     // Phase 3D: Pattern morphologies
     m.add_function(wrap_pyfunction!(py_match_patterns, m)?)?;
     m.add_function(wrap_pyfunction!(py_find_source_coordinates, m)?)?;
-    
+
     // Phase 3E: Trivial morphologies
     m.add_function(wrap_pyfunction!(py_syn_randomizer, m)?)?;
     m.add_function(wrap_pyfunction!(py_syn_lateral_pairs_x, m)?)?;
     m.add_function(wrap_pyfunction!(py_syn_last_to_first, m)?)?;
-    
+
     // Phase 3B: Morton spatial hash
     m.add_class::<PyMortonSpatialHash>()?;
     m.add_function(wrap_pyfunction!(py_morton_encode_3d, m)?)?;

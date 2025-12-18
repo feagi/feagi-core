@@ -12,61 +12,61 @@
 //!
 //! Uses `Vec` for dynamic growth and Rayon for parallel processing.
 
-use feagi_npu_neural::{update_neuron_lif, is_refractory};
+use ahash::AHashMap;
 use feagi_npu_neural::types::NeuralValue;
+use feagi_npu_neural::{is_refractory, update_neuron_lif};
 use feagi_npu_runtime::{NeuronStorage, Result, RuntimeError};
-use rayon::prelude::*;
-use ahash::AHashMap;  // Faster hash map (already a dependency)
+use rayon::prelude::*; // Faster hash map (already a dependency)
 
 /// Dynamic neuron array for desktop/server environments
-/// 
+///
 /// Generic over `T: NeuralValue` to support multiple quantization levels
 pub struct NeuronArray<T: NeuralValue> {
     /// Current number of neurons
     pub count: usize,
-    
+
     /// Membrane potentials (quantized to T)
     pub membrane_potentials: Vec<T>,
-    
+
     /// Firing thresholds (quantized to T)
     pub thresholds: Vec<T>,
-    
+
     /// Leak coefficients (kept as f32 for precision)
     pub leak_coefficients: Vec<f32>,
-    
+
     /// Resting potentials
     pub resting_potentials: Vec<T>,
-    
+
     /// Neuron types (0=excitatory, 1=inhibitory)
     pub neuron_types: Vec<i32>,
-    
+
     /// Refractory periods
     pub refractory_periods: Vec<u16>,
-    
+
     /// Refractory countdowns (state)
     pub refractory_countdowns: Vec<u16>,
-    
+
     /// Excitability factors
     pub excitabilities: Vec<f32>,
-    
+
     /// Consecutive fire counts
     pub consecutive_fire_counts: Vec<u16>,
-    
+
     /// Consecutive fire limits
     pub consecutive_fire_limits: Vec<u16>,
-    
+
     /// Snooze periods (extended refractory)
     pub snooze_periods: Vec<u16>,
-    
+
     /// Membrane potential charge accumulation flags
     pub mp_charge_accumulation: Vec<bool>,
-    
+
     /// Cortical area IDs
     pub cortical_areas: Vec<u32>,
-    
+
     /// 3D coordinates (flat: [x0,y0,z0, x1,y1,z1, ...])
     pub coordinates: Vec<u32>,
-    
+
     /// Valid mask
     pub valid_mask: Vec<bool>,
 }
@@ -93,7 +93,7 @@ impl<T: NeuralValue> NeuronArray<T> {
             valid_mask: vec![false; capacity],
         }
     }
-    
+
     /// Add a neuron with simplified parameters (for backward compatibility)
     pub fn add_neuron_simple(
         &mut self,
@@ -107,22 +107,25 @@ impl<T: NeuralValue> NeuronArray<T> {
             self,
             threshold,
             leak,
-            T::zero(),  // resting potential
-            0,  // neuron type (excitatory)
+            T::zero(), // resting potential
+            0,         // neuron type (excitatory)
             refractory_period,
             excitability,
-            0,  // consecutive fire limit (unlimited)
-            0,  // snooze period
-            true,  // mp_charge_accumulation
-            0,  // cortical area
-            0, 0, 0,  // x, y, z coords
-        ).expect("Failed to add neuron")
+            0,    // consecutive fire limit (unlimited)
+            0,    // snooze period
+            true, // mp_charge_accumulation
+            0,    // cortical area
+            0,
+            0,
+            0, // x, y, z coords
+        )
+        .expect("Failed to add neuron")
     }
-    
+
     /// Process burst in parallel using Rayon
     ///
     /// Uses platform-agnostic core functions internally.
-    /// 
+    ///
     /// NOTE: Due to Rust's borrowing rules, parallel processing computes
     /// results first, then applies mutations sequentially. For very small
     /// networks (<100 neurons), sequential may be faster.
@@ -138,12 +141,12 @@ impl<T: NeuralValue> NeuronArray<T> {
                 if !self.valid_mask[idx] {
                     return (idx, false, T::zero());
                 }
-                
+
                 let in_refractory = self.refractory_countdowns[idx] > 0;
                 if in_refractory {
                     return (idx, false, T::zero());
                 }
-                
+
                 // Simulate neuron update (read-only)
                 let mut potential = self.membrane_potentials[idx];
                 let input = candidate_potentials.get(idx).copied().unwrap_or(T::zero());
@@ -154,11 +157,11 @@ impl<T: NeuralValue> NeuronArray<T> {
                     T::zero(),
                     input,
                 );
-                
+
                 (idx, fired, potential)
             })
             .collect();
-        
+
         // Phase 2: Apply mutations sequentially
         let mut fired_indices = Vec::new();
         for (idx, fired, new_potential) in results {
@@ -167,19 +170,19 @@ impl<T: NeuralValue> NeuronArray<T> {
                 self.refractory_countdowns[idx] -= 1;
                 continue;
             }
-            
+
             // Apply potential update
             self.membrane_potentials[idx] = new_potential;
-            
+
             if fired {
                 self.refractory_countdowns[idx] = self.refractory_periods[idx];
                 fired_indices.push(idx);
             }
         }
-        
+
         fired_indices
     }
-    
+
     /// Process burst sequentially (single-threaded)
     pub fn process_burst_sequential(
         &mut self,
@@ -187,16 +190,16 @@ impl<T: NeuralValue> NeuronArray<T> {
         _burst_count: u64,
     ) -> Vec<usize> {
         let mut fired_indices = Vec::new();
-        
+
         for idx in 0..self.count {
             if !self.valid_mask[idx] {
                 continue;
             }
-            
+
             if is_refractory(&mut self.refractory_countdowns[idx]) {
                 continue;
             }
-            
+
             let input = candidate_potentials.get(idx).copied().unwrap_or(T::zero());
             let fired = update_neuron_lif(
                 &mut self.membrane_potentials[idx],
@@ -205,13 +208,13 @@ impl<T: NeuralValue> NeuronArray<T> {
                 T::zero(),
                 input,
             );
-            
+
             if fired {
                 self.refractory_countdowns[idx] = self.refractory_periods[idx];
                 fired_indices.push(idx);
             }
         }
-        
+
         fired_indices
     }
 }
@@ -219,143 +222,143 @@ impl<T: NeuralValue> NeuronArray<T> {
 // Implement NeuronStorage trait for runtime abstraction
 impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     type Value = T;
-    
+
     // Read-only property accessors
     fn membrane_potentials(&self) -> &[Self::Value] {
         &self.membrane_potentials[..self.count]
     }
-    
+
     fn thresholds(&self) -> &[Self::Value] {
         &self.thresholds[..self.count]
     }
-    
+
     fn leak_coefficients(&self) -> &[f32] {
         &self.leak_coefficients[..self.count]
     }
-    
+
     fn resting_potentials(&self) -> &[Self::Value] {
         &self.resting_potentials[..self.count]
     }
-    
+
     fn neuron_types(&self) -> &[i32] {
         &self.neuron_types[..self.count]
     }
-    
+
     fn refractory_periods(&self) -> &[u16] {
         &self.refractory_periods[..self.count]
     }
-    
+
     fn refractory_countdowns(&self) -> &[u16] {
         &self.refractory_countdowns[..self.count]
     }
-    
+
     fn excitabilities(&self) -> &[f32] {
         &self.excitabilities[..self.count]
     }
-    
+
     fn consecutive_fire_counts(&self) -> &[u16] {
         &self.consecutive_fire_counts[..self.count]
     }
-    
+
     fn consecutive_fire_limits(&self) -> &[u16] {
         &self.consecutive_fire_limits[..self.count]
     }
-    
+
     fn snooze_periods(&self) -> &[u16] {
         &self.snooze_periods[..self.count]
     }
-    
+
     fn mp_charge_accumulation(&self) -> &[bool] {
         &self.mp_charge_accumulation[..self.count]
     }
-    
+
     fn cortical_areas(&self) -> &[u32] {
         &self.cortical_areas[..self.count]
     }
-    
+
     fn coordinates(&self) -> &[u32] {
         &self.coordinates[..self.count * 3]
     }
-    
+
     fn valid_mask(&self) -> &[bool] {
         &self.valid_mask[..self.count]
     }
-    
+
     // Mutable property accessors
     fn membrane_potentials_mut(&mut self) -> &mut [Self::Value] {
         let count = self.count;
         &mut self.membrane_potentials[..count]
     }
-    
+
     fn thresholds_mut(&mut self) -> &mut [Self::Value] {
         let count = self.count;
         &mut self.thresholds[..count]
     }
-    
+
     fn leak_coefficients_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.leak_coefficients[..count]
     }
-    
+
     fn resting_potentials_mut(&mut self) -> &mut [Self::Value] {
         let count = self.count;
         &mut self.resting_potentials[..count]
     }
-    
+
     fn neuron_types_mut(&mut self) -> &mut [i32] {
         let count = self.count;
         &mut self.neuron_types[..count]
     }
-    
+
     fn refractory_periods_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.refractory_periods[..count]
     }
-    
+
     fn refractory_countdowns_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.refractory_countdowns[..count]
     }
-    
+
     fn excitabilities_mut(&mut self) -> &mut [f32] {
         let count = self.count;
         &mut self.excitabilities[..count]
     }
-    
+
     fn consecutive_fire_counts_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.consecutive_fire_counts[..count]
     }
-    
+
     fn consecutive_fire_limits_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.consecutive_fire_limits[..count]
     }
-    
+
     fn snooze_periods_mut(&mut self) -> &mut [u16] {
         let count = self.count;
         &mut self.snooze_periods[..count]
     }
-    
+
     fn mp_charge_accumulation_mut(&mut self) -> &mut [bool] {
         let count = self.count;
         &mut self.mp_charge_accumulation[..count]
     }
-    
+
     fn valid_mask_mut(&mut self) -> &mut [bool] {
         let count = self.count;
         &mut self.valid_mask[..count]
     }
-    
+
     // Metadata
     fn count(&self) -> usize {
         self.count
     }
-    
+
     fn capacity(&self) -> usize {
         self.membrane_potentials.len()
     }
-    
+
     // Neuron creation
     fn add_neuron(
         &mut self,
@@ -374,7 +377,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         z: u32,
     ) -> Result<usize> {
         let idx = self.count;
-        
+
         // Grow if needed
         if idx >= self.membrane_potentials.len() {
             self.membrane_potentials.push(T::zero());
@@ -410,11 +413,11 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             self.coordinates[idx * 3 + 2] = z;
             self.valid_mask[idx] = true;
         }
-        
+
         self.count += 1;
         Ok(idx)
     }
-    
+
     fn add_neurons_batch(
         &mut self,
         thresholds: &[Self::Value],
@@ -432,17 +435,26 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         z_coords: &[u32],
     ) -> Result<()> {
         let n = thresholds.len();
-        
+
         // Validate all slices are same length
-        if leak_coefficients.len() != n || resting_potentials.len() != n 
-            || neuron_types.len() != n || refractory_periods.len() != n
-            || excitabilities.len() != n || consecutive_fire_limits.len() != n
-            || snooze_periods.len() != n || mp_charge_accumulations.len() != n
-            || cortical_areas.len() != n || x_coords.len() != n
-            || y_coords.len() != n || z_coords.len() != n {
-            return Err(RuntimeError::InvalidParameters("Batch neuron creation: all slices must have same length".into()));
+        if leak_coefficients.len() != n
+            || resting_potentials.len() != n
+            || neuron_types.len() != n
+            || refractory_periods.len() != n
+            || excitabilities.len() != n
+            || consecutive_fire_limits.len() != n
+            || snooze_periods.len() != n
+            || mp_charge_accumulations.len() != n
+            || cortical_areas.len() != n
+            || x_coords.len() != n
+            || y_coords.len() != n
+            || z_coords.len() != n
+        {
+            return Err(RuntimeError::InvalidParameters(
+                "Batch neuron creation: all slices must have same length".into(),
+            ));
         }
-        
+
         for i in 0..n {
             self.add_neuron(
                 thresholds[i],
@@ -460,10 +472,10 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
                 z_coords[i],
             )?;
         }
-        
+
         Ok(())
     }
-    
+
     fn get_neuron_at_coordinate(
         &self,
         cortical_area: u32,
@@ -473,7 +485,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     ) -> Option<usize> {
         // Linear search through coordinates
         for idx in 0..self.count {
-            if self.valid_mask[idx] 
+            if self.valid_mask[idx]
                 && self.cortical_areas[idx] == cortical_area
                 && self.coordinates[idx * 3] == x
                 && self.coordinates[idx * 3 + 1] == y
@@ -484,19 +496,19 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         }
         None
     }
-    
+
     fn get_neurons_in_cortical_area(&self, cortical_area: u32) -> Vec<usize> {
         (0..self.count)
             .filter(|&idx| self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area)
             .collect()
     }
-    
+
     fn get_neuron_count(&self, cortical_area: u32) -> usize {
         (0..self.count)
             .filter(|&idx| self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area)
             .count()
     }
-    
+
     fn get_cortical_area(&self, neuron_idx: usize) -> Option<u32> {
         if neuron_idx < self.count && self.valid_mask[neuron_idx] {
             Some(self.cortical_areas[neuron_idx])
@@ -504,7 +516,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             None
         }
     }
-    
+
     fn get_coordinates(&self, neuron_idx: usize) -> Option<(u32, u32, u32)> {
         if neuron_idx < self.count && self.valid_mask[neuron_idx] {
             Some((
@@ -516,7 +528,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             None
         }
     }
-    
+
     fn batch_coordinate_lookup(
         &self,
         cortical_area: u32,
@@ -526,12 +538,12 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         // This changes complexity from O(n*m) to O(m + n) where n=coords, m=neurons in area
         // Sequential iteration has better cache locality than parallel for this workload
         // AHashMap provides 2-3x faster hashing than default SipHash
-        
+
         // Pre-allocate hash map with capacity hint (reduces reallocations)
         // Estimate: typically 10-50% of coords match, but use coords.len() as safe upper bound
-        let mut coord_map: AHashMap<(u32, u32, u32), usize> = 
+        let mut coord_map: AHashMap<(u32, u32, u32), usize> =
             AHashMap::with_capacity(coords.len().min(self.count));
-        
+
         // Sequential iteration: better cache locality, compiler can auto-vectorize
         // Access patterns: valid_mask[idx], cortical_areas[idx], coordinates[idx*3..idx*3+3]
         // These are contiguous in memory, allowing SIMD auto-vectorization
@@ -547,9 +559,10 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             let z = self.coordinates[coord_base + 2];
             coord_map.insert((x, y, z), idx);
         }
-        
+
         // Fast O(1) lookups for each coordinate
-        coords.iter()
+        coords
+            .iter()
             .map(|&coord| coord_map.get(&coord).copied())
             .collect()
     }
@@ -558,7 +571,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_add_neuron_f32() {
         let mut array = NeuronArray::<f32>::new(10);
@@ -566,32 +579,31 @@ mod tests {
         assert_eq!(idx, 0);
         assert_eq!(array.count, 1);
     }
-    
+
     #[test]
     fn test_process_burst_sequential_f32() {
         let mut array = NeuronArray::<f32>::new(10);
         array.add_neuron_simple(1.0, 0.1, 5, 1.0);
         array.add_neuron_simple(1.0, 0.1, 5, 1.0);
-        
+
         // High input - should fire
         let inputs = vec![1.5, 0.5]; // First fires, second doesn't
         let fired = array.process_burst_sequential(&inputs, 0);
-        
+
         assert_eq!(fired.len(), 1);
         assert_eq!(fired[0], 0);
     }
-    
+
     #[test]
     fn test_process_burst_parallel_f32() {
         let mut array = NeuronArray::<f32>::new(100);
         for _ in 0..100 {
             array.add_neuron_simple(1.0, 0.1, 5, 1.0);
         }
-        
+
         let inputs = vec![1.5; 100]; // All should fire
         let fired = array.process_burst_parallel(&inputs, 0);
-        
+
         assert_eq!(fired.len(), 100);
     }
 }
-

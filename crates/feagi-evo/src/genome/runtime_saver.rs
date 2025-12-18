@@ -11,9 +11,9 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use std::path::Path;
-use std::fs;
 use crate::{EvoResult, RuntimeGenome};
+use std::fs;
+use std::path::Path;
 
 /// Save RuntimeGenome to JSON file
 pub fn save_genome_to_file<P: AsRef<Path>>(genome: &RuntimeGenome, path: P) -> EvoResult<()> {
@@ -33,9 +33,9 @@ pub fn save_genome_to_json(genome: &RuntimeGenome) -> EvoResult<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{RuntimeGenome, GenomeMetadata, PhysiologyConfig, GenomeSignatures, GenomeStats};
+    use crate::{GenomeMetadata, GenomeSignatures, GenomeStats, PhysiologyConfig, RuntimeGenome};
     use std::collections::HashMap;
-    
+
     #[test]
     fn test_save_minimal_genome() {
         let genome = RuntimeGenome {
@@ -59,10 +59,9 @@ mod tests {
             },
             stats: GenomeStats::default(),
         };
-        
+
         let json_str = save_genome_to_json(&genome).unwrap();
         assert!(json_str.contains("test_genome"));
         assert!(json_str.contains("3.0")); // Version bumped to 3.0
     }
 }
-

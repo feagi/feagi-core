@@ -1,16 +1,15 @@
-use std::ops::{RangeInclusive};
-use ndarray::Array1;
-use rayon::prelude::*;
-use crate::FeagiDataError;
 use crate::genomic::cortical_area::descriptors::NeuronVoxelCoordinate;
 use crate::neuron_voxels::xyzp::NeuronVoxelXYZP;
-
+use crate::FeagiDataError;
+use ndarray::Array1;
+use rayon::prelude::*;
+use std::ops::RangeInclusive;
 
 /// Structure-of-arrays storage for neuron voxel data.
-/// 
+///
 /// Stores neuron voxel coordinates and potentials in separate parallel arrays.
 /// WARNING: Does not check for duplicate neuron coordinates automatically!
-#[derive(Clone,Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct NeuronVoxelXYZPArrays {
     /// X coordinates of neuron voxels (using Cartesian coordinate system)
     x: Vec<u32>, // Remember, FEAGI is cartesian!
@@ -23,9 +22,8 @@ pub struct NeuronVoxelXYZPArrays {
 }
 
 impl NeuronVoxelXYZPArrays {
-    
     //region Unique Constructors
-    
+
     /// Creates a new empty NeuronVoxelXYZPArrays instance.
     ///
     /// # Returns
@@ -71,17 +69,19 @@ impl NeuronVoxelXYZPArrays {
     /// let arrays = NeuronVoxelXYZPArrays::new_from_vectors(x, y, z, p).unwrap();
     /// assert_eq!(arrays.len(), 3);
     /// ```
-    pub fn new_from_vectors(x: Vec<u32>, y: Vec<u32>, z: Vec<u32>, p: Vec<f32>) -> Result<Self, FeagiDataError> {
+    pub fn new_from_vectors(
+        x: Vec<u32>,
+        y: Vec<u32>,
+        z: Vec<u32>,
+        p: Vec<f32>,
+    ) -> Result<Self, FeagiDataError> {
         let len = x.len();
         if len != y.len() || len != z.len() || len != p.len() {
-            return Err(FeagiDataError::BadParameters("Input vectors must be the same length to generate XYZP neuron data!!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "Input vectors must be the same length to generate XYZP neuron data!!".into(),
+            ));
         }
-        Ok(NeuronVoxelXYZPArrays {
-            x,
-            y,
-            z,
-            p
-        })
+        Ok(NeuronVoxelXYZPArrays { x, y, z, p })
     }
 
     /// Creates a new NeuronVoxelXYZPArrays instance from four ndarray Array1 instances of equal length.
@@ -108,18 +108,30 @@ impl NeuronVoxelXYZPArrays {
     /// let arrays = NeuronVoxelXYZPArrays::new_from_ndarrays(x_nd, y_nd, z_nd, p_nd).unwrap();
     /// assert_eq!(arrays.len(), 3);
     /// ```
-    pub fn new_from_ndarrays(x_nd: Array1<u32>, y_nd: Array1<u32>, z_nd: Array1<u32>, p_nd: Array1<f32>) -> Result<Self, FeagiDataError> {
+    pub fn new_from_ndarrays(
+        x_nd: Array1<u32>,
+        y_nd: Array1<u32>,
+        z_nd: Array1<u32>,
+        p_nd: Array1<f32>,
+    ) -> Result<Self, FeagiDataError> {
         let len = x_nd.len();
         if len != y_nd.len() || len != z_nd.len() || len != p_nd.len() {
-            return Err(FeagiDataError::BadParameters("ND Arrays must be the same length to generate XYZP neuron data!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "ND Arrays must be the same length to generate XYZP neuron data!".into(),
+            ));
         }
-        Ok(NeuronVoxelXYZPArrays { x: x_nd.to_vec(), y: y_nd.to_vec(), z: z_nd.to_vec(), p: p_nd.to_vec()})
+        Ok(NeuronVoxelXYZPArrays {
+            x: x_nd.to_vec(),
+            y: y_nd.to_vec(),
+            z: z_nd.to_vec(),
+            p: p_nd.to_vec(),
+        })
     }
-    
+
     //endregion
-    
+
     //region Array-Like Implementations
-    
+
     /// Creates a new NeuronVoxelXYZPArrays instance with capacity for the specified maximum number of neuron voxels.
     ///
     /// # Arguments
@@ -135,7 +147,7 @@ impl NeuronVoxelXYZPArrays {
             p: Vec::with_capacity(number_of_neurons_initial),
         }
     }
-    
+
     /// Returns the current capacity, IE the number of neurons that can be stored in allocated memory.
     ///
     /// # Returns
@@ -151,7 +163,7 @@ impl NeuronVoxelXYZPArrays {
     pub fn capacity(&self) -> usize {
         self.x.capacity() // all are the same
     }
-    
+
     /// Returns the number of additional neuron voxels that can be stored without reallocation.
     ///
     /// # Returns
@@ -186,7 +198,7 @@ impl NeuronVoxelXYZPArrays {
     pub fn len(&self) -> usize {
         self.p.len() // all of these are of equal length
     }
-    
+
     /// Shrinks the capacity of all internal vectors to match their current length.
     ///
     /// This reduces memory usage by deallocating unused capacity.
@@ -206,7 +218,7 @@ impl NeuronVoxelXYZPArrays {
         self.z.shrink_to_fit();
         self.p.shrink_to_fit();
     }
-    
+
     /// Ensures the vectors have at least the specified total capacity.
     ///
     /// If the current capacity is already sufficient, this function does nothing.
@@ -229,7 +241,7 @@ impl NeuronVoxelXYZPArrays {
         }
         self.reserve(number_of_neurons_total - self.len());
     }
-    
+
     /// Reserves capacity for at least the specified number of additional neuron voxels.
     ///
     /// The actual capacity reserved may be greater than requested to optimize
@@ -315,48 +327,76 @@ impl NeuronVoxelXYZPArrays {
     /// assert_eq!(neuron.neuron_voxel_coordinate.x, 1);
     /// ```
     pub fn get(&self, index: usize) -> Result<NeuronVoxelXYZP, FeagiDataError> {
-        if index >= self.len()  {
-            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronVoxelXYZPArray length of {}!", index, self.len())).into())
+        if index >= self.len() {
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
+                index,
+                self.len()
+            ))
+            .into());
         }
         let x = self.x[index];
         let y = self.y[index];
         let z = self.z[index];
         let potential = self.p[index];
-        Ok(NeuronVoxelXYZP { neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z), potential})
+        Ok(NeuronVoxelXYZP {
+            neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z),
+            potential,
+        })
     }
 
     /// Gets the X component of the neuron at the specified index
     pub fn get_x(&self, index: usize) -> Result<u32, FeagiDataError> {
-        if index >= self.len()  {
-            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronVoxelXYZPArray length of {}!", index, self.len())).into())
+        if index >= self.len() {
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
+                index,
+                self.len()
+            ))
+            .into());
         }
         Ok(self.x[index])
     }
 
     /// Gets the Y component of the neuron at the specified index
     pub fn get_y(&self, index: usize) -> Result<u32, FeagiDataError> {
-        if index >= self.len()  {
-            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronVoxelXYZPArray length of {}!", index, self.len())).into())
+        if index >= self.len() {
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
+                index,
+                self.len()
+            ))
+            .into());
         }
         Ok(self.y[index])
     }
 
     /// Gets the Z component of the neuron at the specified index
     pub fn get_z(&self, index: usize) -> Result<u32, FeagiDataError> {
-        if index >= self.len()  {
-            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronVoxelXYZPArray length of {}!", index, self.len())).into())
+        if index >= self.len() {
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
+                index,
+                self.len()
+            ))
+            .into());
         }
         Ok(self.z[index])
     }
 
     /// Gets the P component of the neuron at the specified index
     pub fn get_p(&self, index: usize) -> Result<f32, FeagiDataError> {
-        if index >= self.len()  {
-            return Err(FeagiDataError::BadParameters(format!("Given index {} is exceeds NeuronVoxelXYZPArray length of {}!", index, self.len())).into())
+        if index >= self.len() {
+            return Err(FeagiDataError::BadParameters(format!(
+                "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
+                index,
+                self.len()
+            ))
+            .into());
         }
         Ok(self.p[index])
     }
-    
+
     /// Removes and returns the last neuron from the arrays.
     ///
     /// # Returns
@@ -378,13 +418,11 @@ impl NeuronVoxelXYZPArrays {
         let z = self.z.pop();
         let p = self.p.pop();
         match x {
-            Some(x) => {
-                Some(NeuronVoxelXYZP {
-                    neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y.unwrap(), z.unwrap()),
-                    potential: p.unwrap()
-                })
-            }
-            None => {None}
+            Some(x) => Some(NeuronVoxelXYZP {
+                neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y.unwrap(), z.unwrap()),
+                potential: p.unwrap(),
+            }),
+            None => None,
         }
     }
 
@@ -396,7 +434,7 @@ impl NeuronVoxelXYZPArrays {
         self.z.clear();
         self.p.clear();
     }
-    
+
     /// Checks if no neuron voxels are in this structure.
     ///
     /// # Returns
@@ -415,7 +453,7 @@ impl NeuronVoxelXYZPArrays {
     pub fn is_empty(&self) -> bool {
         self.x.is_empty()
     }
-    
+
     /// Returns an iterator over all neuron voxels in the arrays.
     ///
     /// # Returns
@@ -438,17 +476,18 @@ impl NeuronVoxelXYZPArrays {
     /// assert_eq!(second.neuron_voxel_coordinate.y, 5);
     /// assert_eq!(second.neuron_voxel_coordinate.z, 6);
     /// ```
-    pub fn iter(&self) -> impl Iterator<Item=NeuronVoxelXYZP> + '_ {
-        self.x.iter()
+    pub fn iter(&self) -> impl Iterator<Item = NeuronVoxelXYZP> + '_ {
+        self.x
+            .iter()
             .zip(&self.y)
             .zip(&self.z)
             .zip(&self.p)
-            .map(|(((x,y),z),p)| NeuronVoxelXYZP {
+            .map(|(((x, y), z), p)| NeuronVoxelXYZP {
                 neuron_voxel_coordinate: NeuronVoxelCoordinate::new(*x, *y, *z),
-                potential: *p
+                potential: *p,
             })
     }
-    
+
     /// Returns an iterator over all neuron voxels with their indices.
     ///
     /// # Returns
@@ -466,21 +505,26 @@ impl NeuronVoxelXYZPArrays {
     ///     println!("Neuron {} at position {}", neuron.neuron_voxel_coordinate.x, index);
     /// }
     /// ```
-    pub fn enumerate(&self) -> impl Iterator<Item=(usize, NeuronVoxelXYZP)> + '_ {
-        self.x.iter().enumerate()
+    pub fn enumerate(&self) -> impl Iterator<Item = (usize, NeuronVoxelXYZP)> + '_ {
+        self.x
+            .iter()
+            .enumerate()
             .zip(&self.y)
             .zip(&self.z)
             .zip(&self.p)
-            .map(|(((x,y),z),p)|
-                (x.0,
-                 NeuronVoxelXYZP {
-                    neuron_voxel_coordinate: NeuronVoxelCoordinate::new(*x.1, *y, *z),
-                    potential: *p
-            }))
+            .map(|(((x, y), z), p)| {
+                (
+                    x.0,
+                    NeuronVoxelXYZP {
+                        neuron_voxel_coordinate: NeuronVoxelCoordinate::new(*x.1, *y, *z),
+                        potential: *p,
+                    },
+                )
+            })
     }
-    
+
     //endregion
-    
+
     /// Updates the internal vectors using an external function before checking for validity.
     /// This allows for custom in-place modifications of the neuron data vectors with automated checking.
     ///
@@ -488,15 +532,24 @@ impl NeuronVoxelXYZPArrays {
     /// * `vectors_changer` - A function that takes mutable references to the four vectors and updates them
     ///
     /// # Returns
-    /// * `Result<(), NeuronError>` - Success or an error if the update fails or results in the 
+    /// * `Result<(), NeuronError>` - Success or an error if the update fails or results in the
     ///   x y z p vectors being of different lengths by its conclusion
-    pub fn update_vectors_from_external<F>(&mut self, vectors_changer: F) -> Result<(), FeagiDataError>
-    where F: FnOnce(&mut Vec<u32>, &mut Vec<u32>, &mut Vec<u32>, &mut Vec<f32>) -> Result<(), FeagiDataError>
+    pub fn update_vectors_from_external<F>(
+        &mut self,
+        vectors_changer: F,
+    ) -> Result<(), FeagiDataError>
+    where
+        F: FnOnce(
+            &mut Vec<u32>,
+            &mut Vec<u32>,
+            &mut Vec<u32>,
+            &mut Vec<f32>,
+        ) -> Result<(), FeagiDataError>,
     {
         vectors_changer(&mut self.x, &mut self.y, &mut self.z, &mut self.p)?;
         self.verify_equal_vector_lengths()
     }
-    
+
     /// Creates a vector of NeuronVoxelXYZP instances from the current arrays.
     ///
     /// # Returns
@@ -518,11 +571,13 @@ impl NeuronVoxelXYZPArrays {
     pub fn copy_as_neuron_xyzp_vec(&self) -> Vec<NeuronVoxelXYZP> {
         let mut output: Vec<NeuronVoxelXYZP> = Vec::with_capacity(self.len());
         for i in 0..self.x.len() {
-            output.push(NeuronVoxelXYZP::new(self.x[i], self.y[i], self.z[i], self.p[i]));
-        };
+            output.push(NeuronVoxelXYZP::new(
+                self.x[i], self.y[i], self.z[i], self.p[i],
+            ));
+        }
         output
     }
-    
+
     /// Converts the current arrays into a tuple of ndarray Array1 instances.
     ///
     /// # Returns
@@ -542,15 +597,17 @@ impl NeuronVoxelXYZPArrays {
     /// assert_eq!(z[0], 3);
     /// assert_eq!(p[1], 0.7);
     /// ```
-    pub fn copy_as_tuple_of_nd_arrays(&self) -> (Array1<u32>, Array1<u32>, Array1<u32>, Array1<f32>) {
+    pub fn copy_as_tuple_of_nd_arrays(
+        &self,
+    ) -> (Array1<u32>, Array1<u32>, Array1<u32>, Array1<f32>) {
         (
             Array1::from_vec(self.x.clone()),
             Array1::from_vec(self.y.clone()),
             Array1::from_vec(self.z.clone()),
-            Array1::from_vec(self.p.clone())
+            Array1::from_vec(self.p.clone()),
         )
     }
-    
+
     /// Returns the total size in bytes required to store all neuron voxels.
     ///
     /// This calculates the number of bytes needed for binary serialization
@@ -571,7 +628,7 @@ impl NeuronVoxelXYZPArrays {
     pub fn get_size_in_number_of_bytes(&self) -> usize {
         self.len() * NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON
     }
-    
+
     /// Returns references to the internal vectors.
     ///
     /// # Returns
@@ -593,8 +650,7 @@ impl NeuronVoxelXYZPArrays {
     pub fn borrow_xyzp_vectors(&self) -> (&Vec<u32>, &Vec<u32>, &Vec<u32>, &Vec<f32>) {
         (&self.x, &self.y, &self.z, &self.p)
     }
-    
-    
+
     /// Creates a new NeuronVoxelXYZPArrays from filtering neuron voxels based on their locations.
     ///
     /// # Arguments
@@ -623,31 +679,33 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// assert_eq!(filtered.len(), 2);
     /// ```
-    pub fn filter_neurons_by_location_bounds(&self, x_range: RangeInclusive<u32>, y_range: RangeInclusive<u32>, z_range: RangeInclusive<u32>) -> Result<NeuronVoxelXYZPArrays, FeagiDataError> {
+    pub fn filter_neurons_by_location_bounds(
+        &self,
+        x_range: RangeInclusive<u32>,
+        y_range: RangeInclusive<u32>,
+        z_range: RangeInclusive<u32>,
+    ) -> Result<NeuronVoxelXYZPArrays, FeagiDataError> {
         let mut xv: Vec<u32> = Vec::new();
         let mut yv: Vec<u32> = Vec::new();
         let mut zv: Vec<u32> = Vec::new();
         let mut pv: Vec<f32> = Vec::new();
-        
+
         // TODO Could this be optimized at all?
-        for (&x, (&y, (&z, &p))) in self.x.iter()
-            .zip(self.y.iter()
-                .zip(self.z.iter()
-                    .zip(self.p.iter()))) {
-            if x_range.contains(&x)
-                && y_range.contains(&y)
-                && z_range.contains(&z)
-            {
+        for (&x, (&y, (&z, &p))) in self
+            .x
+            .iter()
+            .zip(self.y.iter().zip(self.z.iter().zip(self.p.iter())))
+        {
+            if x_range.contains(&x) && y_range.contains(&y) && z_range.contains(&z) {
                 xv.push(x);
                 yv.push(y);
                 zv.push(z);
                 pv.push(p);
             }
-        };
-        
+        }
+
         NeuronVoxelXYZPArrays::new_from_vectors(xv, yv, zv, pv)
     }
-
 
     /// Validates that all four internal vectors have the same length. This must never fail.
     ///
@@ -656,16 +714,21 @@ impl NeuronVoxelXYZPArrays {
     fn verify_equal_vector_lengths(&self) -> Result<(), FeagiDataError> {
         let len = self.x.len();
         if !((self.y.len() == len) && (self.x.len() == len) && (self.z.len() == len)) {
-            return Err(FeagiDataError::InternalError("Internal XYCP Arrays do not have equal lengths!".into()).into());
+            return Err(FeagiDataError::InternalError(
+                "Internal XYCP Arrays do not have equal lengths!".into(),
+            )
+            .into());
         }
         Ok(())
     }
-    
 }
 
 impl std::fmt::Display for NeuronVoxelXYZPArrays {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let s = format!("'NeuronVoxelXYZPArrays(X: {:?}, Y: {:?}, Z: {:?}, P: {:?})'", self.x, self.y, self.z, self.p);
+        let s = format!(
+            "'NeuronVoxelXYZPArrays(X: {:?}, Y: {:?}, Z: {:?}, P: {:?})'",
+            self.x, self.y, self.z, self.p
+        );
         write!(f, "{}", s)
     }
 }
@@ -698,12 +761,10 @@ impl Iterator for NeuronVoxelXYZPArraysIntoIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         match (self.x.next(), self.y.next(), self.z.next(), self.p.next()) {
-            (Some(x), Some(y), Some(z), Some(p)) => {
-                Some(NeuronVoxelXYZP {
-                    neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z),
-                    potential: p,
-                })
-            }
+            (Some(x), Some(y), Some(z), Some(p)) => Some(NeuronVoxelXYZP {
+                neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y, z),
+                potential: p,
+            }),
             _ => None,
         }
     }
@@ -750,7 +811,8 @@ impl ParallelIterator for NeuronVoxelXYZPArraysParIter {
         C: rayon::iter::plumbing::UnindexedConsumer<Self::Item>,
     {
         // Use rayon's zip to parallelize across the four vectors
-        self.x.into_par_iter()
+        self.x
+            .into_par_iter()
             .zip(self.y.into_par_iter())
             .zip(self.z.into_par_iter())
             .zip(self.p.into_par_iter())
@@ -771,7 +833,8 @@ impl IndexedParallelIterator for NeuronVoxelXYZPArraysParIter {
     where
         C: rayon::iter::plumbing::Consumer<Self::Item>,
     {
-        self.x.into_par_iter()
+        self.x
+            .into_par_iter()
             .zip(self.y.into_par_iter())
             .zip(self.z.into_par_iter())
             .zip(self.p.into_par_iter())
@@ -786,7 +849,8 @@ impl IndexedParallelIterator for NeuronVoxelXYZPArraysParIter {
     where
         CB: rayon::iter::plumbing::ProducerCallback<Self::Item>,
     {
-        self.x.into_par_iter()
+        self.x
+            .into_par_iter()
             .zip(self.y.into_par_iter())
             .zip(self.z.into_par_iter())
             .zip(self.p.into_par_iter())

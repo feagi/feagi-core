@@ -21,29 +21,29 @@ pub enum RuntimeError {
         /// Available capacity
         available: usize,
     },
-    
+
     /// Out of memory
     OutOfMemory {
         /// Requested bytes
         requested_bytes: usize,
     },
-    
+
     /// Invalid parameters provided
     #[cfg(feature = "std")]
     InvalidParameters(String),
-    
+
     /// Invalid operation (only available with std feature)
     #[cfg(feature = "std")]
     InvalidOperation(String),
-    
+
     /// Platform not supported (only available with std feature)
     #[cfg(feature = "std")]
     PlatformNotSupported(String),
-    
+
     /// Storage error (only available with std feature)
     #[cfg(feature = "std")]
     StorageError(String),
-    
+
     /// Generic error (for no_std environments)
     #[cfg(not(feature = "std"))]
     GenericError,
@@ -52,7 +52,10 @@ pub enum RuntimeError {
 impl fmt::Display for RuntimeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            RuntimeError::CapacityExceeded { requested, available } => {
+            RuntimeError::CapacityExceeded {
+                requested,
+                available,
+            } => {
                 write!(
                     f,
                     "Capacity exceeded: requested {}, available {}",
@@ -91,4 +94,3 @@ impl std::error::Error for RuntimeError {}
 
 /// Result type for runtime operations
 pub type Result<T> = core::result::Result<T, RuntimeError>;
-

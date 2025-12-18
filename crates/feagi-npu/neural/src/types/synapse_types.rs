@@ -3,7 +3,6 @@
 
 //! Synapse type definitions
 
-
 /// Synaptic weight (0-255, stored as u8 for memory efficiency)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SynapticWeight(pub u8);
@@ -75,4 +74,3 @@ pub struct MembranePotential(pub f32);
 /// Neuron firing threshold
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct FiringThreshold(pub f32);
-

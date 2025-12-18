@@ -1,4 +1,1 @@
-
-pub trait FeagiConnectionInterfaceDefinition {
-    
-}
+pub trait FeagiConnectionInterfaceDefinition {}

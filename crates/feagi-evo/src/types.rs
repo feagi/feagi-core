@@ -18,22 +18,22 @@ pub type EvoResult<T> = Result<T, EvoError>;
 pub enum EvoError {
     #[error("Invalid genome: {0}")]
     InvalidGenome(String),
-    
+
     #[error("Genome validation failed: {0}")]
     ValidationFailed(String),
-    
+
     #[error("JSON parsing error: {0}")]
     JsonError(String),
-    
+
     #[error("I/O error: {0}")]
     IoError(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
-    
+
     #[error("Invalid cortical area: {0}")]
     InvalidArea(String),
-    
+
     #[error("Invalid brain region: {0}")]
     InvalidRegion(String),
 }
@@ -56,9 +56,10 @@ impl From<std::io::Error> for EvoError {
 impl From<feagi_data_structures::FeagiDataError> for EvoError {
     fn from(err: feagi_data_structures::FeagiDataError) -> Self {
         match &err {
-            feagi_data_structures::FeagiDataError::BadParameters(msg) => EvoError::InvalidArea(msg.clone()),
+            feagi_data_structures::FeagiDataError::BadParameters(msg) => {
+                EvoError::InvalidArea(msg.clone())
+            }
             _ => EvoError::Internal(err.to_string()),
         }
     }
 }
-

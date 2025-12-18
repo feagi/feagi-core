@@ -13,53 +13,53 @@ pub type TransportResult<T> = Result<T, TransportError>;
 pub enum TransportError {
     /// Failed to initialize transport
     InitializationFailed(String),
-    
+
     /// Failed to bind server socket
     BindFailed(String),
-    
+
     /// Failed to connect client socket
     ConnectFailed(String),
-    
+
     /// Failed to send message
     SendFailed(String),
-    
+
     /// Failed to receive message
     ReceiveFailed(String),
-    
+
     /// Timeout occurred
     Timeout,
-    
+
     /// No data available (non-blocking receive)
     NoData,
-    
+
     /// Connection closed
     ConnectionClosed,
-    
+
     /// Transport is not running
     NotRunning,
-    
+
     /// Transport is already running
     AlreadyRunning,
-    
+
     /// Invalid configuration
     InvalidConfig(String),
-    
+
     /// Message too large
     MessageTooLarge { size: usize, max_size: usize },
-    
+
     /// Invalid message format
     InvalidMessage(String),
-    
+
     /// Transport-specific error
     #[cfg(feature = "zmq-server")]
     Zmq(zmq::Error),
-    
+
     /// I/O error
     Io(std::io::Error),
-    
+
     /// Serialization error
     Serialization(String),
-    
+
     /// Other error
     Other(String),
 }
@@ -135,7 +135,3 @@ impl From<&str> for TransportError {
         Self::Other(msg.to_string())
     }
 }
-
-
-
-

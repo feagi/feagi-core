@@ -1,7 +1,7 @@
-use std::path::PathBuf;
 use clap::{Parser, ValueEnum};
-use image::{DynamicImage, ImageBuffer, Rgb};
 use feagi_connector_core as feagi_connector;
+use image::{DynamicImage, ImageBuffer, Rgb};
+use std::path::PathBuf;
 
 // region Args
 /// Protocol for communication with FEAGI
@@ -64,24 +64,30 @@ fn main() {
     println!("Video path: {:?}", args.video_path);
     println!("Socket path: {}", args.socket_path);
     println!("With gaze reflex: {}", args.with_gaze_reflex);
-    println!("Eccentricity: ({}, {})", args.eccentricity_x, args.eccentricity_y);
+    println!(
+        "Eccentricity: ({}, {})",
+        args.eccentricity_x, args.eccentricity_y
+    );
     println!("Modularity: ({}, {})", args.modularity_x, args.modularity_y);
 
     // Sanity Checks
     {
         match args.video_path.try_exists() {
             Err(e) => panic!("Unable to access filesystem! {}", e),
-            Ok(false) => panic!("Unable to locate file at path {}", args.video_path.display()),
+            Ok(false) => panic!(
+                "Unable to locate file at path {}",
+                args.video_path.display()
+            ),
             Ok(true) => (),
         }
-        if !(0.0..1.0f32).contains(&args.eccentricity_x) || !(0.0..1.0f32).contains(&args.eccentricity_y) || !(0.0..1.0f32).contains(&args.modularity_x) || !(0.0..1.0f32).contains(&args.modularity_y) {
+        if !(0.0..1.0f32).contains(&args.eccentricity_x)
+            || !(0.0..1.0f32).contains(&args.eccentricity_y)
+            || !(0.0..1.0f32).contains(&args.modularity_x)
+            || !(0.0..1.0f32).contains(&args.modularity_y)
+        {
             panic!("Modularity and Eccentricity values must be within 0 and 1!")
         }
     }
 
-
-
-
     // TODO: Implement video streaming logic
 }
-

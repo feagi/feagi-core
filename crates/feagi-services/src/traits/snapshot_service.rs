@@ -5,8 +5,8 @@
 //!
 //! This service manages brain snapshots (genome + optional NPU state).
 
-use async_trait::async_trait;
 use crate::types::*;
+use async_trait::async_trait;
 
 /// Snapshot metadata
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -24,7 +24,7 @@ pub struct SnapshotMetadata {
 pub struct SnapshotCreateOptions {
     pub name: Option<String>,
     pub description: Option<String>,
-    pub stateful: bool, // Include NPU state
+    pub stateful: bool,    // Include NPU state
     pub compression: bool, // Compress snapshot
 }
 
@@ -39,29 +39,32 @@ pub trait SnapshotService: Send + Sync {
     /// # Returns
     /// * `SnapshotMetadata` - Created snapshot metadata
     ///
-    async fn create_snapshot(&self, options: SnapshotCreateOptions) -> ServiceResult<SnapshotMetadata>;
-    
+    async fn create_snapshot(
+        &self,
+        options: SnapshotCreateOptions,
+    ) -> ServiceResult<SnapshotMetadata>;
+
     /// Restore a snapshot
     ///
     /// # Arguments
     /// * `snapshot_id` - Snapshot to restore
     ///
     async fn restore_snapshot(&self, snapshot_id: &str) -> ServiceResult<()>;
-    
+
     /// List all available snapshots
     ///
     /// # Returns
     /// * `Vec<SnapshotMetadata>` - List of snapshot metadata
     ///
     async fn list_snapshots(&self) -> ServiceResult<Vec<SnapshotMetadata>>;
-    
+
     /// Delete a snapshot
     ///
     /// # Arguments
     /// * `snapshot_id` - Snapshot to delete
     ///
     async fn delete_snapshot(&self, snapshot_id: &str) -> ServiceResult<()>;
-    
+
     /// Get snapshot artifact data
     ///
     /// # Arguments
@@ -71,6 +74,9 @@ pub trait SnapshotService: Send + Sync {
     /// # Returns
     /// * Raw snapshot data
     ///
-    async fn get_snapshot_artifact(&self, snapshot_id: &str, format: &str) -> ServiceResult<Vec<u8>>;
+    async fn get_snapshot_artifact(
+        &self,
+        snapshot_id: &str,
+        format: &str,
+    ) -> ServiceResult<Vec<u8>>;
 }
-

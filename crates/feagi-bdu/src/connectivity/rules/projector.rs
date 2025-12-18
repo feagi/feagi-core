@@ -71,8 +71,16 @@ pub fn syn_projector(
     project_last_layer_of: Option<usize>,
 ) -> BduResult<Vec<Position>> {
     // Convert to Dimensions for convenience
-    let src_dims = Dimensions::from_tuple((src_dimensions.0 as u32, src_dimensions.1 as u32, src_dimensions.2 as u32))?;
-    let dst_dims = Dimensions::from_tuple((dst_dimensions.0 as u32, dst_dimensions.1 as u32, dst_dimensions.2 as u32))?;
+    let src_dims = Dimensions::from_tuple((
+        src_dimensions.0 as u32,
+        src_dimensions.1 as u32,
+        src_dimensions.2 as u32,
+    ))?;
+    let dst_dims = Dimensions::from_tuple((
+        dst_dimensions.0 as u32,
+        dst_dimensions.1 as u32,
+        dst_dimensions.2 as u32,
+    ))?;
 
     // Validate neuron location is within source bounds
     if !src_dims.contains(neuron_location) {
@@ -87,9 +95,21 @@ pub fn syn_projector(
         apply_transpose(src_dims, dst_dims, neuron_location, (tx, ty, tz))
     } else {
         (
-            [src_dims.width as usize, src_dims.height as usize, src_dims.depth as usize],
-            [dst_dims.width as usize, dst_dims.height as usize, dst_dims.depth as usize],
-            [neuron_location.0 as usize, neuron_location.1 as usize, neuron_location.2 as usize],
+            [
+                src_dims.width as usize,
+                src_dims.height as usize,
+                src_dims.depth as usize,
+            ],
+            [
+                dst_dims.width as usize,
+                dst_dims.height as usize,
+                dst_dims.depth as usize,
+            ],
+            [
+                neuron_location.0 as usize,
+                neuron_location.1 as usize,
+                neuron_location.2 as usize,
+            ],
         )
     };
 
@@ -120,7 +140,7 @@ pub fn syn_projector(
         for &y in &dst_voxels[1] {
             for &z in &dst_voxels[2] {
                 // Bounds check (should always pass if calculate_axis_projection is correct)
-                #[allow(unused_comparisons)]  // Keep for future signed coordinate support
+                #[allow(unused_comparisons)] // Keep for future signed coordinate support
                 if x >= 0
                     && y >= 0
                     && z >= 0
@@ -141,7 +161,7 @@ pub fn syn_projector(
 ///
 /// Handles three cases:
 /// 1. Source > Dest: Scale down (many-to-one)
-/// 2. Source < Dest: Scale up (one-to-many)  
+/// 2. Source < Dest: Scale up (one-to-many)
 /// 3. Source == Dest: Direct mapping (one-to-one)
 fn calculate_axis_projection(
     location: u32,
@@ -192,8 +212,16 @@ fn apply_transpose(
     location: Position,
     transpose: (usize, usize, usize),
 ) -> ([usize; 3], [usize; 3], [usize; 3]) {
-    let src_arr = [src_dims.width as usize, src_dims.height as usize, src_dims.depth as usize];
-    let dst_arr = [dst_dims.width as usize, dst_dims.height as usize, dst_dims.depth as usize];
+    let src_arr = [
+        src_dims.width as usize,
+        src_dims.height as usize,
+        src_dims.depth as usize,
+    ];
+    let dst_arr = [
+        dst_dims.width as usize,
+        dst_dims.height as usize,
+        dst_dims.depth as usize,
+    ];
     let loc_arr = [location.0, location.1, location.2];
 
     let src_transposed = [

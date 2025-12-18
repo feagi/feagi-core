@@ -15,7 +15,7 @@
 
 use super::ComputeBackend;
 use crate::neural_dynamics;
-use feagi_npu_neural::models::{NeuronModel, LIFModel};
+use feagi_npu_neural::models::{LIFModel, NeuronModel};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::{NeuronStorage, SynapseStorage};
 
@@ -23,7 +23,7 @@ use feagi_npu_runtime::{NeuronStorage, SynapseStorage};
 pub struct CPUBackend {
     /// Backend name for logging
     name: String,
-    
+
     /// Neuron model for computational dynamics
     neuron_model: LIFModel,
 }
@@ -33,7 +33,7 @@ impl CPUBackend {
     pub fn new() -> Self {
         Self::new_lif()
     }
-    
+
     /// Create a new CPU backend with LIF neuron model (explicit)
     pub fn new_lif() -> Self {
         Self {
@@ -49,7 +49,9 @@ impl Default for CPUBackend {
     }
 }
 
-impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBackend<T, N, S> for CPUBackend {
+impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBackend<T, N, S>
+    for CPUBackend
+{
     fn backend_name(&self) -> &str {
         &self.name
     }
@@ -68,28 +70,26 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
         for syn_idx in 0..synapse_storage.count() {
             let source_id = synapse_storage.source_neurons()[syn_idx];
             if fired_neurons.contains(&source_id) {
-                    if !synapse_storage.valid_mask()[syn_idx] {
-                        continue;
-                    }
+                if !synapse_storage.valid_mask()[syn_idx] {
+                    continue;
+                }
 
-                    let target_id = synapse_storage.target_neurons()[syn_idx];
-                    let weight = synapse_storage.weights()[syn_idx] as f32 / 255.0; // Normalize to [0,1]
-                    let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32 / 255.0;
-                    let synapse_type = if synapse_storage.types()[syn_idx] == 0 {
-                        SynapseType::Excitatory
-                    } else {
-                        SynapseType::Inhibitory
-                    };
+                let target_id = synapse_storage.target_neurons()[syn_idx];
+                let weight = synapse_storage.weights()[syn_idx] as f32 / 255.0; // Normalize to [0,1]
+                let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32 / 255.0;
+                let synapse_type = if synapse_storage.types()[syn_idx] == 0 {
+                    SynapseType::Excitatory
+                } else {
+                    SynapseType::Inhibitory
+                };
 
-                    // ✅ Use neuron model trait (LIF formula)
-                    // Result range: -1.0 to +1.0 (both weight and psp normalized [0,1])
-                    let contribution = self.neuron_model.compute_synaptic_contribution(
-                        weight,
-                        psp,
-                        synapse_type,
-                    );
+                // ✅ Use neuron model trait (LIF formula)
+                // Result range: -1.0 to +1.0 (both weight and psp normalized [0,1])
+                let contribution =
+                    self.neuron_model
+                        .compute_synaptic_contribution(weight, psp, synapse_type);
 
-                    // Accumulate into FCL
+                // Accumulate into FCL
                 fcl.add_candidate(NeuronId(target_id), contribution);
                 synapse_count += 1;
             }
@@ -131,7 +131,12 @@ mod tests {
     fn test_cpu_backend_creation() {
         use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
         let backend = CPUBackend::new();
-        assert_eq!(<CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::backend_name(&backend), "CPU (SIMD) - LIF");
+        assert_eq!(
+            <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::backend_name(
+                &backend
+            ),
+            "CPU (SIMD) - LIF"
+        );
     }
 
     #[test]

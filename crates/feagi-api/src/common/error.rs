@@ -6,7 +6,7 @@
 #[cfg(feature = "http")]
 use axum::{
     http::StatusCode,
-    response::{IntoResponse, Response, Json},
+    response::{IntoResponse, Json, Response},
 };
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -31,10 +31,10 @@ pub enum ApiErrorCode {
 pub struct ApiError {
     /// HTTP status code
     pub code: u16,
-    
+
     /// Error message
     pub message: String,
-    
+
     /// Optional error details
     #[serde(skip_serializing_if = "Option::is_none")]
     pub details: Option<String>,
@@ -49,45 +49,44 @@ impl ApiError {
             details: None,
         }
     }
-    
+
     /// Set error code
     pub fn with_code(mut self, code: ApiErrorCode) -> Self {
         self.code = code as u16;
         self
     }
-    
+
     /// Set error details
     pub fn with_details(mut self, details: impl Into<String>) -> Self {
         self.details = Some(details.into());
         self
     }
-    
+
     /// Create a "not found" error
     pub fn not_found(resource: &str, id: &str) -> Self {
-        Self::new(format!("{} '{}' not found", resource, id))
-            .with_code(ApiErrorCode::NotFound)
+        Self::new(format!("{} '{}' not found", resource, id)).with_code(ApiErrorCode::NotFound)
     }
-    
+
     /// Create an "invalid input" error
     pub fn invalid_input(message: impl Into<String>) -> Self {
         Self::new(message).with_code(ApiErrorCode::BadRequest)
     }
-    
+
     /// Create a "conflict" error
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(message).with_code(ApiErrorCode::Conflict)
     }
-    
+
     /// Create an "internal error"
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(message).with_code(ApiErrorCode::Internal)
     }
-    
+
     /// Create a "forbidden" error
     pub fn forbidden(message: impl Into<String>) -> Self {
         Self::new(message).with_code(ApiErrorCode::Forbidden)
     }
-    
+
     /// Create a "not implemented" error
     pub fn not_implemented(message: impl Into<String>) -> Self {
         Self::new(message).with_code(ApiErrorCode::NotImplemented)
@@ -109,21 +108,11 @@ impl From<ServiceError> for ApiError {
                 ApiError::new(format!("{} '{}' already exists", resource, id))
                     .with_code(ApiErrorCode::Conflict)
             }
-            ServiceError::Internal(msg) => {
-                ApiError::new(msg).with_code(ApiErrorCode::Internal)
-            }
-            ServiceError::Forbidden(msg) => {
-                ApiError::new(msg).with_code(ApiErrorCode::Forbidden)
-            }
-            ServiceError::Backend(msg) => {
-                ApiError::new(msg).with_code(ApiErrorCode::Internal)
-            }
-            ServiceError::StateError(msg) => {
-                ApiError::new(msg).with_code(ApiErrorCode::Internal)
-            }
-            ServiceError::InvalidState(msg) => {
-                ApiError::new(msg).with_code(ApiErrorCode::Conflict)
-            }
+            ServiceError::Internal(msg) => ApiError::new(msg).with_code(ApiErrorCode::Internal),
+            ServiceError::Forbidden(msg) => ApiError::new(msg).with_code(ApiErrorCode::Forbidden),
+            ServiceError::Backend(msg) => ApiError::new(msg).with_code(ApiErrorCode::Internal),
+            ServiceError::StateError(msg) => ApiError::new(msg).with_code(ApiErrorCode::Internal),
+            ServiceError::InvalidState(msg) => ApiError::new(msg).with_code(ApiErrorCode::Conflict),
             ServiceError::NotImplemented(msg) => {
                 ApiError::new(msg).with_code(ApiErrorCode::NotImplemented)
             }
@@ -135,9 +124,9 @@ impl From<ServiceError> for ApiError {
 #[cfg(feature = "http")]
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let status_code = StatusCode::from_u16(self.code)
-            .unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
-        
+        let status_code =
+            StatusCode::from_u16(self.code).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
+
         (status_code, Json(self)).into_response()
     }
 }
@@ -160,7 +149,7 @@ mod tests {
             resource: "Cortical Area".to_string(),
             id: "v1".to_string(),
         };
-        
+
         let api_error: ApiError = service_error.into();
         assert_eq!(api_error.code, 404);
         assert!(api_error.message.contains("Cortical Area"));

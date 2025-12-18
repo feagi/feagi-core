@@ -17,7 +17,7 @@ pub use visualization::{
     VisualizationOverflowStrategy, VisualizationSendConfig, VisualizationStream,
 };
 
-use crate::core::{IOError, RegistrationHandler, AgentRegistry};
+use crate::core::{AgentRegistry, IOError, RegistrationHandler};
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use tracing::{debug, info};
@@ -63,7 +63,7 @@ impl ZmqStreams {
         let sensory_stream =
             SensoryStream::new(Arc::clone(&context), sensory_address, sensory_config)
                 .map_err(|e| IOError::Zmq(format!("Sensory stream: {}", e)))?;
-        
+
         // Wire up agent registry for security gating
         sensory_stream.set_agent_registry(Arc::clone(&agent_registry));
 
@@ -102,44 +102,44 @@ impl ZmqStreams {
         info!("🦀 [ZMQ-STREAMS] ✅ Data streams started (sensory/motor/viz)");
         Ok(())
     }
-    
+
     // === Individual Stream Control (for dynamic gating) ===
-    
+
     /// Start sensory stream only
     pub fn start_sensory_stream(&self) -> Result<(), IOError> {
         self.sensory_stream
             .start()
             .map_err(|e| IOError::Zmq(format!("Sensory start: {}", e)))
     }
-    
+
     /// Stop sensory stream only
     pub fn stop_sensory_stream(&self) -> Result<(), IOError> {
         self.sensory_stream
             .stop()
             .map_err(|e| IOError::Zmq(format!("Sensory stop: {}", e)))
     }
-    
+
     /// Start motor stream only
     pub fn start_motor_stream(&self) -> Result<(), IOError> {
         self.motor_stream
             .start()
             .map_err(|e| IOError::Zmq(format!("Motor start: {}", e)))
     }
-    
+
     /// Stop motor stream only
     pub fn stop_motor_stream(&self) -> Result<(), IOError> {
         self.motor_stream
             .stop()
             .map_err(|e| IOError::Zmq(format!("Motor stop: {}", e)))
     }
-    
+
     /// Start visualization stream only
     pub fn start_viz_stream(&self) -> Result<(), IOError> {
         self.viz_stream
             .start()
             .map_err(|e| IOError::Zmq(format!("Viz start: {}", e)))
     }
-    
+
     /// Stop visualization stream only
     pub fn stop_viz_stream(&self) -> Result<(), IOError> {
         self.viz_stream
@@ -184,7 +184,10 @@ impl ZmqStreams {
     }
 
     /// Publish raw fire queue data (NEW ARCHITECTURE - serialization in PNS thread)
-    pub fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<(), IOError> {
+    pub fn publish_raw_fire_queue(
+        &self,
+        fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
+    ) -> Result<(), IOError> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
             info!(
@@ -198,13 +201,14 @@ impl ZmqStreams {
             .publish_raw_fire_queue(fire_data)
             .map_err(|e| IOError::Zmq(format!("Viz publish: {}", e)))
     }
-    
+
     /// Publish motor data to a specific agent via ZMQ
     pub fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<(), IOError> {
         // Log every motor publish for debugging
         debug!(
             "[ZMQ-STREAMS] 🎮 Publishing motor data to '{}': {} bytes via ZMQ",
-            agent_id, data.len()
+            agent_id,
+            data.len()
         );
 
         // Publish with agent_id as topic prefix for agent-specific delivery

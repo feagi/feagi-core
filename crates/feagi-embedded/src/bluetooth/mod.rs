@@ -85,8 +85,7 @@ pub mod nus;
 
 // Re-export the shared transport protocol for backward compatibility
 // The protocol is now in the transports module since it works with both BLE and USB
-pub use crate::transports::protocol::{Protocol as BluetoothProtocol, Command, PacketCommand};
+pub use crate::transports::protocol::{Command, PacketCommand, Protocol as BluetoothProtocol};
 
 // Platform-specific implementations are in src/platforms/
 // and enabled via feature flags
-

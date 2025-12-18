@@ -20,7 +20,7 @@ use axum::{extract::State, response::Json};
 
 // Use WASM-compatible types when http feature is disabled
 #[cfg(not(feature = "http"))]
-use crate::transports::wasm::types::{State, Json};
+use crate::transports::wasm::types::{Json, State};
 
 /// WASM Transport Adapter
 ///
@@ -57,14 +57,15 @@ impl WasmApiAdapter {
     ) -> Result<String, String> {
         // Import endpoints module - now works with or without http feature!
         use crate::endpoints;
-        
+
         // Route to appropriate endpoint function (reuses endpoint logic!)
         let result: ApiResult<serde_json::Value> = match (method, path) {
             // ========================================================================
             // SYSTEM ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/system/health_check") => {
-                endpoints::system::get_health_check(State(self.state.clone())).await
+                endpoints::system::get_health_check(State(self.state.clone()))
+                    .await
                     .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
@@ -72,155 +73,122 @@ impl WasmApiAdapter {
             // CORTICAL AREA ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/cortical_area/cortical_area/geometry") => {
-                endpoints::cortical_area::get_cortical_area_geometry(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::cortical_area::get_cortical_area_geometry(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             ("GET", "/v1/cortical_area/ipu/types") => {
-                endpoints::cortical_area::get_ipu_types(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::cortical_area::get_ipu_types(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             ("GET", "/v1/cortical_area/opu/types") => {
-                endpoints::cortical_area::get_opu_types(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::cortical_area::get_opu_types(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             ("GET", "/v1/cortical_area/cortical_area_id_list") => {
-                endpoints::cortical_area::get_cortical_area_id_list(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::cortical_area::get_cortical_area_id_list(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             ("GET", "/v1/cortical_area/cortical_area_name_list") => {
-                endpoints::cortical_area::get_cortical_area_name_list(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::cortical_area::get_cortical_area_name_list(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             // ========================================================================
             // MORPHOLOGY ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/morphology/morphologies") => {
-                endpoints::morphology::get_morphologies(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::morphology::get_morphologies(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             // ========================================================================
             // MAPPING ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/cortical_area/cortical_map_detailed") => {
-                endpoints::cortical_area::get_cortical_map_detailed(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::cortical_area::get_cortical_map_detailed(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             // ========================================================================
             // REGION ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/region/regions_members") => {
-                endpoints::region::get_regions_members(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::region::get_regions_members(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             // ========================================================================
             // GENOME ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("POST", "/v1/genome/save") => {
-                let payload: std::collections::HashMap<String, String> = match serde_json::from_str(body.unwrap_or("{}")) {
-                    Ok(p) => p,
-                    Err(e) => return Err(format!("Invalid JSON: {}", e)),
-                };
-                endpoints::genome::post_save(
-                    State(self.state.clone()),
-                    Json(payload),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                let payload: std::collections::HashMap<String, String> =
+                    match serde_json::from_str(body.unwrap_or("{}")) {
+                        Ok(p) => p,
+                        Err(e) => return Err(format!("Invalid JSON: {}", e)),
+                    };
+                endpoints::genome::post_save(State(self.state.clone()), Json(payload))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             ("GET", "/v1/genome/file_name") => {
-                endpoints::genome::get_file_name(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::genome::get_file_name(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             // ========================================================================
             // BURST ENGINE ENDPOINTS - REUSING endpoint logic
             // ========================================================================
             ("GET", "/v1/burst_engine/simulation_timestep") => {
-                endpoints::burst_engine::get_simulation_timestep(
-                    State(self.state.clone()),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                endpoints::burst_engine::get_simulation_timestep(State(self.state.clone()))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             // ========================================================================
             // AGENT ENDPOINTS - REUSING endpoint logic
             // ========================================================================
-            ("GET", "/v1/agent/list") => {
-                endpoints::agent::list_agents(
-                    State(self.state.clone()),
-                )
+            ("GET", "/v1/agent/list") => endpoints::agent::list_agents(State(self.state.clone()))
                 .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
-            }
+                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null)),
 
             ("POST", "/v1/agent/manual_stimulation") => {
                 use crate::v1::agent_dtos::ManualStimulationRequest;
-                let payload: ManualStimulationRequest = match serde_json::from_str(body.unwrap_or("{}")) {
-                    Ok(p) => p,
-                    Err(e) => return Err(format!("Invalid JSON: {}", e)),
-                };
-                endpoints::agent::manual_stimulation(
-                    State(self.state.clone()),
-                    Json(payload),
-                )
-                .await
-                .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
+                let payload: ManualStimulationRequest =
+                    match serde_json::from_str(body.unwrap_or("{}")) {
+                        Ok(p) => p,
+                        Err(e) => return Err(format!("Invalid JSON: {}", e)),
+                    };
+                endpoints::agent::manual_stimulation(State(self.state.clone()), Json(payload))
+                    .await
+                    .map(|json| serde_json::to_value(json.0).unwrap_or(serde_json::Value::Null))
             }
 
             // ========================================================================
             // UNKNOWN ENDPOINT
             // ========================================================================
             _ => {
-                return Err(format!(
-                    "Unknown endpoint: {} {}",
-                    method, path
-                ));
+                return Err(format!("Unknown endpoint: {} {}", method, path));
             }
         };
 
         // Serialize result to JSON string
         match result {
-            Ok(data) => {
-                serde_json::to_string_pretty(&data)
-                    .map_err(|e| format!("Serialization error: {}", e))
-            }
+            Ok(data) => serde_json::to_string_pretty(&data)
+                .map_err(|e| format!("Serialization error: {}", e)),
             Err(e) => {
                 // Convert ApiError to error JSON
                 let error_response = serde_json::json!({
@@ -233,5 +201,4 @@ impl WasmApiAdapter {
             }
         }
     }
-    
 }

@@ -1,10 +1,12 @@
-use serde_json::json;
-use feagi_core_data_structures_and_processing::io_data::FeagiJSON;
-use feagi_core_data_structures_and_processing::neuron_data::xyzp::{CorticalMappedXYZPNeuronData, NeuronVoxelXYZP, NeuronVoxelXYZPArrays};
 use feagi_core_data_structures_and_processing::genomic_structures::CorticalID;
+use feagi_core_data_structures_and_processing::io_data::FeagiJSON;
 use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructure;
-use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructureType;
 use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructureCompatible;
+use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructureType;
+use feagi_core_data_structures_and_processing::neuron_data::xyzp::{
+    CorticalMappedXYZPNeuronData, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
+};
+use serde_json::json;
 
 #[test]
 fn test_combined_neuron_json_multistruct_serialize_deserialize() {
@@ -25,7 +27,7 @@ fn test_combined_neuron_json_multistruct_serialize_deserialize() {
 
     // Create neuron structure (similar to the neuron tests)
     let cortical_id_a = CorticalID::from_bytes(b"cAAAAA").unwrap();
-    
+
     let neuron_a_1 = NeuronVoxelXYZP::new(10, 20, 30, 0.75);
     let neuron_a_2 = NeuronVoxelXYZP::new(40, 50, 60, 0.25);
     let mut neurons_a = NeuronVoxelXYZPArrays::with_capacity(2);
@@ -46,47 +48,85 @@ fn test_combined_neuron_json_multistruct_serialize_deserialize() {
     let neuron_byte_structure = neuron_mappings.as_new_feagi_byte_structure().unwrap();
 
     // Verify individual structures have correct types
-    assert_eq!(json_byte_structure.try_get_structure_type().unwrap(), FeagiByteStructureType::JSON);
-    assert_eq!(neuron_byte_structure.try_get_structure_type().unwrap(), FeagiByteStructureType::NeuronCategoricalXYZP);
+    assert_eq!(
+        json_byte_structure.try_get_structure_type().unwrap(),
+        FeagiByteStructureType::JSON
+    );
+    assert_eq!(
+        neuron_byte_structure.try_get_structure_type().unwrap(),
+        FeagiByteStructureType::NeuronCategoricalXYZP
+    );
 
     // Create combined multi-struct
-    let combined_byte_structure = FeagiByteStructure::create_from_2_existing(
-        &json_byte_structure, 
-        &neuron_byte_structure
-    ).unwrap();
+    let combined_byte_structure =
+        FeagiByteStructure::create_from_2_existing(&json_byte_structure, &neuron_byte_structure)
+            .unwrap();
 
     // Verify the combined structure is a multi-struct
     assert!(combined_byte_structure.is_multistruct().unwrap());
-    assert_eq!(combined_byte_structure.try_get_structure_type().unwrap(), FeagiByteStructureType::MultiStructHolder);
-    assert_eq!(combined_byte_structure.contained_structure_count().unwrap(), 2);
+    assert_eq!(
+        combined_byte_structure.try_get_structure_type().unwrap(),
+        FeagiByteStructureType::MultiStructHolder
+    );
+    assert_eq!(
+        combined_byte_structure.contained_structure_count().unwrap(),
+        2
+    );
 
     // Check the order of internal structure types
     let ordered_types = combined_byte_structure.get_ordered_object_types().unwrap();
     assert_eq!(ordered_types.len(), 2);
     assert_eq!(ordered_types[0], FeagiByteStructureType::JSON);
-    assert_eq!(ordered_types[1], FeagiByteStructureType::NeuronCategoricalXYZP);
+    assert_eq!(
+        ordered_types[1],
+        FeagiByteStructureType::NeuronCategoricalXYZP
+    );
 
     // Serialize to bytes (simulate network transmission)
     let serialized_bytes = combined_byte_structure.copy_out_as_byte_vector();
 
     // Deserialize from bytes
-    let received_combined_structure = FeagiByteStructure::create_from_bytes(serialized_bytes).unwrap();
+    let received_combined_structure =
+        FeagiByteStructure::create_from_bytes(serialized_bytes).unwrap();
 
     // Verify the received structure is still a multi-struct with correct properties
     assert!(received_combined_structure.is_multistruct().unwrap());
-    assert_eq!(received_combined_structure.contained_structure_count().unwrap(), 2);
+    assert_eq!(
+        received_combined_structure
+            .contained_structure_count()
+            .unwrap(),
+        2
+    );
 
     // Extract individual structures from the multi-struct
-    let received_json_structure_bytes = received_combined_structure.copy_out_single_byte_structure_from_multistruct(0).unwrap();
-    let received_neuron_structure_bytes = received_combined_structure.copy_out_single_byte_structure_from_multistruct(1).unwrap();
+    let received_json_structure_bytes = received_combined_structure
+        .copy_out_single_byte_structure_from_multistruct(0)
+        .unwrap();
+    let received_neuron_structure_bytes = received_combined_structure
+        .copy_out_single_byte_structure_from_multistruct(1)
+        .unwrap();
 
     // Verify individual structure types are correct
-    assert_eq!(received_json_structure_bytes.try_get_structure_type().unwrap(), FeagiByteStructureType::JSON);
-    assert_eq!(received_neuron_structure_bytes.try_get_structure_type().unwrap(), FeagiByteStructureType::NeuronCategoricalXYZP);
+    assert_eq!(
+        received_json_structure_bytes
+            .try_get_structure_type()
+            .unwrap(),
+        FeagiByteStructureType::JSON
+    );
+    assert_eq!(
+        received_neuron_structure_bytes
+            .try_get_structure_type()
+            .unwrap(),
+        FeagiByteStructureType::NeuronCategoricalXYZP
+    );
 
     // Convert back to original data types
-    let recovered_json_structure = FeagiJSON::new_from_feagi_byte_structure(&received_json_structure_bytes).unwrap();
-    let recovered_neuron_mappings = CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&received_neuron_structure_bytes).unwrap();
+    let recovered_json_structure =
+        FeagiJSON::new_from_feagi_byte_structure(&received_json_structure_bytes).unwrap();
+    let recovered_neuron_mappings = CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(
+        &received_neuron_structure_bytes,
+    )
+    .unwrap();
 
     // Verify JSON data integrity
     let recovered_json_value = recovered_json_structure.borrow_json_value();
@@ -94,11 +134,19 @@ fn test_combined_neuron_json_multistruct_serialize_deserialize() {
 
     // Verify neuron data integrity
     assert_eq!(recovered_neuron_mappings.len(), 2);
-    assert!(recovered_neuron_mappings.contains_cortical_id(&CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap()));
-    assert!(recovered_neuron_mappings.contains_cortical_id(&CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap()));
+    assert!(recovered_neuron_mappings.contains_cortical_id(
+        &CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap()
+    ));
+    assert!(recovered_neuron_mappings.contains_cortical_id(
+        &CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap()
+    ));
 
-    let recovered_neurons_a = recovered_neuron_mappings.get_neurons_of(&CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap()).unwrap();
-    let recovered_neurons_b = recovered_neuron_mappings.get_neurons_of(&CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap()).unwrap();
+    let recovered_neurons_a = recovered_neuron_mappings
+        .get_neurons_of(&CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap())
+        .unwrap();
+    let recovered_neurons_b = recovered_neuron_mappings
+        .get_neurons_of(&CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap())
+        .unwrap();
 
     let recovered_neuron_vec_a = recovered_neurons_a.copy_as_neuron_xyzp_vec();
     let recovered_neuron_vec_b = recovered_neurons_b.copy_as_neuron_xyzp_vec();
@@ -141,7 +189,8 @@ fn test_multistruct_with_multiple_json_and_neuron_structures() {
 
     // Create multi-struct from all 4 structures
     let all_structures = vec![&json1_bytes, &neuron1_bytes, &json2_bytes, &neuron2_bytes];
-    let combined_structure = FeagiByteStructure::create_from_multiple_existing(all_structures).unwrap();
+    let combined_structure =
+        FeagiByteStructure::create_from_multiple_existing(all_structures).unwrap();
 
     // Verify multi-struct properties
     assert!(combined_structure.is_multistruct().unwrap());
@@ -150,9 +199,15 @@ fn test_multistruct_with_multiple_json_and_neuron_structures() {
     // Verify structure order
     let ordered_types = combined_structure.get_ordered_object_types().unwrap();
     assert_eq!(ordered_types[0], FeagiByteStructureType::JSON);
-    assert_eq!(ordered_types[1], FeagiByteStructureType::NeuronCategoricalXYZP);
+    assert_eq!(
+        ordered_types[1],
+        FeagiByteStructureType::NeuronCategoricalXYZP
+    );
     assert_eq!(ordered_types[2], FeagiByteStructureType::JSON);
-    assert_eq!(ordered_types[3], FeagiByteStructureType::NeuronCategoricalXYZP);
+    assert_eq!(
+        ordered_types[3],
+        FeagiByteStructureType::NeuronCategoricalXYZP
+    );
 
     // Serialize and deserialize
     let bytes = combined_structure.copy_out_as_byte_vector();
@@ -160,13 +215,21 @@ fn test_multistruct_with_multiple_json_and_neuron_structures() {
 
     // Extract and verify all structures
     for i in 0..4 {
-        let extracted = received_structure.copy_out_single_byte_structure_from_multistruct(i).unwrap();
+        let extracted = received_structure
+            .copy_out_single_byte_structure_from_multistruct(i)
+            .unwrap();
         match i {
-            0 | 2 => assert_eq!(extracted.try_get_structure_type().unwrap(), FeagiByteStructureType::JSON),
-            1 | 3 => assert_eq!(extracted.try_get_structure_type().unwrap(), FeagiByteStructureType::NeuronCategoricalXYZP),
+            0 | 2 => assert_eq!(
+                extracted.try_get_structure_type().unwrap(),
+                FeagiByteStructureType::JSON
+            ),
+            1 | 3 => assert_eq!(
+                extracted.try_get_structure_type().unwrap(),
+                FeagiByteStructureType::NeuronCategoricalXYZP
+            ),
             _ => unreachable!(),
         }
     }
 
     println!("✓ Successfully handled multi-struct with 4 different structures!");
-} 
+}

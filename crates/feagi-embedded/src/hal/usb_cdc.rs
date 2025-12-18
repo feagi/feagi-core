@@ -101,7 +101,7 @@ pub enum UsbConnectionStatus {
 pub trait UsbCdcProvider {
     /// Platform-specific error type
     type Error: core::fmt::Debug;
-    
+
     /// Initialize USB CDC serial
     ///
     /// This sets up the USB stack, configures endpoints, and begins enumeration.
@@ -118,7 +118,7 @@ pub trait UsbCdcProvider {
     ///
     /// This method MAY block briefly during USB enumeration (~100-500ms).
     fn init(&mut self) -> Result<(), Self::Error>;
-    
+
     /// Check if USB is connected and host is ready
     ///
     /// Returns `true` if:
@@ -131,12 +131,12 @@ pub trait UsbCdcProvider {
     /// - Not enumerated
     /// - Host terminal closed (DTR de-asserted)
     fn is_connected(&self) -> bool;
-    
+
     /// Get current USB connection status
     ///
     /// Provides more detail than `is_connected()`.
     fn connection_status(&self) -> UsbConnectionStatus;
-    
+
     /// Write data to USB CDC (send to host)
     ///
     /// Writes data to the TX buffer. Data will be sent to the host in the next
@@ -159,7 +159,7 @@ pub trait UsbCdcProvider {
     /// - `Ok(n)` where `n` is the number of bytes written (may be less than `data.len()`)
     /// - `Err(e)` if write failed
     fn write(&mut self, data: &[u8]) -> Result<usize, Self::Error>;
-    
+
     /// Read data from USB CDC (receive from host)
     ///
     /// Reads available data from the RX buffer into the provided buffer.
@@ -173,7 +173,7 @@ pub trait UsbCdcProvider {
     ///
     /// This method MUST NOT block. If no data is available, return `Ok(0)` immediately.
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error>;
-    
+
     /// Flush TX buffer (block until all data is sent)
     ///
     /// Waits until all pending TX data has been sent to the host.
@@ -188,7 +188,7 @@ pub trait UsbCdcProvider {
     /// - Before disconnecting USB
     /// - After writing critical data (e.g., error messages)
     fn flush(&mut self) -> Result<(), Self::Error>;
-    
+
     /// Get number of bytes available to read (optional)
     ///
     /// Returns the number of bytes in the RX buffer.
@@ -196,7 +196,7 @@ pub trait UsbCdcProvider {
     fn available(&self) -> usize {
         0 // Default: unknown
     }
-    
+
     /// Get free space in TX buffer (optional)
     ///
     /// Returns the number of bytes that can be written without blocking.
@@ -215,12 +215,12 @@ pub trait AsyncUsbCdcProvider: UsbCdcProvider {
     ///
     /// Waits until data can be written (if TX buffer is full).
     async fn write_async(&mut self, data: &[u8]) -> Result<usize, Self::Error>;
-    
+
     /// Async version of `read`
     ///
     /// Waits until data is available (blocks if RX buffer is empty).
     async fn read_async(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error>;
-    
+
     /// Async version of `flush`
     async fn flush_async(&mut self) -> Result<(), Self::Error>;
 }
@@ -245,12 +245,12 @@ pub fn read_line<T: UsbCdcProvider>(usb: &mut T, buffer: &mut [u8]) -> Result<us
             break; // No more data available
         }
         total += n;
-        
+
         // Check for newline
         if buffer[..total].contains(&b'\n') {
             break;
         }
-        
+
         // Buffer full
         if total >= buffer.len() {
             break;
@@ -262,14 +262,14 @@ pub fn read_line<T: UsbCdcProvider>(usb: &mut T, buffer: &mut [u8]) -> Result<us
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     // Mock USB CDC implementation for testing
     struct MockUsbCdc {
         connected: bool,
         tx_buffer: heapless::Vec<u8, 256>,
         rx_buffer: heapless::Vec<u8, 256>,
     }
-    
+
     impl MockUsbCdc {
         fn new() -> Self {
             Self {
@@ -278,7 +278,7 @@ mod tests {
                 rx_buffer: heapless::Vec::new(),
             }
         }
-        
+
         // Helper: Simulate host sending data
         fn _push_rx_data(&mut self, data: &[u8]) {
             for &byte in data {
@@ -286,19 +286,19 @@ mod tests {
             }
         }
     }
-    
+
     impl UsbCdcProvider for MockUsbCdc {
         type Error = &'static str;
-        
+
         fn init(&mut self) -> Result<(), Self::Error> {
             self.connected = false; // Not connected until enumerated
             Ok(())
         }
-        
+
         fn is_connected(&self) -> bool {
             self.connected
         }
-        
+
         fn connection_status(&self) -> UsbConnectionStatus {
             if self.connected {
                 UsbConnectionStatus::Connected
@@ -306,12 +306,12 @@ mod tests {
                 UsbConnectionStatus::Disconnected
             }
         }
-        
+
         fn write(&mut self, data: &[u8]) -> Result<usize, Self::Error> {
             if !self.connected {
                 return Err("Not connected");
             }
-            
+
             let mut written = 0;
             for &byte in data {
                 if self.tx_buffer.push(byte).is_ok() {
@@ -322,19 +322,19 @@ mod tests {
             }
             Ok(written)
         }
-        
+
         fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
             let len = self.rx_buffer.len().min(buffer.len());
             buffer[..len].copy_from_slice(&self.rx_buffer[..len]);
-            
+
             // Remove read bytes from RX buffer
             for _ in 0..len {
                 self.rx_buffer.remove(0);
             }
-            
+
             Ok(len)
         }
-        
+
         fn flush(&mut self) -> Result<(), Self::Error> {
             if !self.connected {
                 return Err("Not connected");
@@ -342,83 +342,82 @@ mod tests {
             self.tx_buffer.clear(); // Simulate data sent
             Ok(())
         }
-        
+
         fn available(&self) -> usize {
             self.rx_buffer.len()
         }
-        
+
         fn write_capacity(&self) -> usize {
             self.tx_buffer.capacity() - self.tx_buffer.len()
         }
     }
-    
+
     #[test]
     fn test_mock_usb_init() {
         let mut usb = MockUsbCdc::new();
         assert!(usb.init().is_ok());
         assert!(!usb.is_connected());
     }
-    
+
     #[test]
     fn test_mock_usb_write_not_connected() {
         let mut usb = MockUsbCdc::new();
         assert!(usb.write(b"test").is_err());
     }
-    
+
     #[test]
     fn test_mock_usb_write_connected() {
         let mut usb = MockUsbCdc::new();
         usb.connected = true;
-        
+
         let written = usb.write(b"Hello").unwrap();
         assert_eq!(written, 5);
         assert_eq!(usb.tx_buffer.as_slice(), b"Hello");
     }
-    
+
     #[test]
     fn test_mock_usb_read() {
         let mut usb = MockUsbCdc::new();
         usb._push_rx_data(b"Data from host");
-        
+
         let mut buf = [0u8; 64];
         let len = usb.read(&mut buf).unwrap();
         assert_eq!(len, 14);
         assert_eq!(&buf[..len], b"Data from host");
     }
-    
+
     #[test]
     fn test_mock_usb_flush() {
         let mut usb = MockUsbCdc::new();
         usb.connected = true;
         usb.write(b"test").unwrap();
-        
+
         assert!(!usb.tx_buffer.is_empty());
         usb.flush().unwrap();
         assert!(usb.tx_buffer.is_empty());
     }
-    
+
     #[test]
     fn test_writeln_helper() {
         let mut usb = MockUsbCdc::new();
         usb.connected = true;
-        
+
         writeln(&mut usb, b"Line 1").unwrap();
         assert_eq!(usb.tx_buffer.as_slice(), b"Line 1\n");
     }
-    
+
     #[test]
     fn test_connection_status() {
         let usb = MockUsbCdc::new();
         assert_eq!(usb.connection_status(), UsbConnectionStatus::Disconnected);
     }
-    
+
     #[test]
     fn test_available_and_capacity() {
         let mut usb = MockUsbCdc::new();
         usb._push_rx_data(b"test");
-        
+
         assert_eq!(usb.available(), 4);
         assert_eq!(usb.write_capacity(), 256); // Empty TX buffer
     }
 }
-

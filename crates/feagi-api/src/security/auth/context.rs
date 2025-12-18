@@ -19,13 +19,13 @@ pub enum AuthMethod {
 pub struct AuthContext {
     /// Principal ID (user/service identifier)
     pub principal_id: String,
-    
+
     /// Authentication method used
     pub auth_method: AuthMethod,
-    
+
     /// User roles (future RBAC)
     pub roles: Vec<String>,
-    
+
     /// Whether the principal is authenticated
     pub is_authenticated: bool,
 }
@@ -43,7 +43,11 @@ impl AuthContext {
 
     /// Create authenticated context (future)
     #[allow(dead_code)]
-    pub fn authenticated(principal_id: impl Into<String>, method: AuthMethod, roles: Vec<String>) -> Self {
+    pub fn authenticated(
+        principal_id: impl Into<String>,
+        method: AuthMethod,
+        roles: Vec<String>,
+    ) -> Self {
         Self {
             principal_id: principal_id.into(),
             auth_method: method,
@@ -54,17 +58,17 @@ impl AuthContext {
 
     /// Check if user has role (stub - always returns true for now)
     pub fn has_role(&self, _role: &str) -> bool {
-        true  // Stub: always allow
+        true // Stub: always allow
     }
 
     /// Require authentication (stub - always succeeds for now)
     pub fn require_auth(&self) -> Result<(), AuthError> {
-        Ok(())  // Stub: always allow
+        Ok(()) // Stub: always allow
     }
 
     /// Require specific role (stub - always succeeds for now)
     pub fn require_role(&self, _role: &str) -> Result<(), AuthError> {
-        Ok(())  // Stub: always allow
+        Ok(()) // Stub: always allow
     }
 }
 
@@ -89,8 +93,3 @@ impl std::fmt::Display for AuthError {
 }
 
 impl std::error::Error for AuthError {}
-
-
-
-
-

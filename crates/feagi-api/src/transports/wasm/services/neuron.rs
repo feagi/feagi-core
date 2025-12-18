@@ -19,15 +19,21 @@ impl WasmNeuronService {
 #[async_trait]
 impl NeuronService for WasmNeuronService {
     async fn create_neuron(&self, _params: CreateNeuronParams) -> ServiceResult<NeuronInfo> {
-        Err(ServiceError::NotImplemented("WASM mode is read-only".to_string()))
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
     }
 
     async fn delete_neuron(&self, _neuron_id: u64) -> ServiceResult<()> {
-        Err(ServiceError::NotImplemented("WASM mode is read-only".to_string()))
+        Err(ServiceError::NotImplemented(
+            "WASM mode is read-only".to_string(),
+        ))
     }
 
     async fn get_neuron(&self, _neuron_id: u64) -> ServiceResult<NeuronInfo> {
-        Err(ServiceError::NotImplemented("Neuron lookup not yet implemented in WASM".to_string()))
+        Err(ServiceError::NotImplemented(
+            "Neuron lookup not yet implemented in WASM".to_string(),
+        ))
     }
 
     async fn get_neuron_at_coordinates(
@@ -35,7 +41,9 @@ impl NeuronService for WasmNeuronService {
         _cortical_id: &str,
         _coordinates: (u32, u32, u32),
     ) -> ServiceResult<Option<NeuronInfo>> {
-        Err(ServiceError::NotImplemented("Neuron lookup by coordinates not yet implemented in WASM".to_string()))
+        Err(ServiceError::NotImplemented(
+            "Neuron lookup by coordinates not yet implemented in WASM".to_string(),
+        ))
     }
 
     async fn list_neurons_in_area(
@@ -43,15 +51,20 @@ impl NeuronService for WasmNeuronService {
         _cortical_id: &str,
         _limit: Option<usize>,
     ) -> ServiceResult<Vec<NeuronInfo>> {
-        Err(ServiceError::NotImplemented("Neuron listing not yet implemented in WASM".to_string()))
+        Err(ServiceError::NotImplemented(
+            "Neuron listing not yet implemented in WASM".to_string(),
+        ))
     }
 
     async fn get_neuron_count(&self, _cortical_id: &str) -> ServiceResult<usize> {
-        Err(ServiceError::NotImplemented("Neuron count not yet implemented in WASM".to_string()))
+        Err(ServiceError::NotImplemented(
+            "Neuron count not yet implemented in WASM".to_string(),
+        ))
     }
 
     async fn neuron_exists(&self, _neuron_id: u64) -> ServiceResult<bool> {
-        Err(ServiceError::NotImplemented("Neuron existence check not yet implemented in WASM".to_string()))
+        Err(ServiceError::NotImplemented(
+            "Neuron existence check not yet implemented in WASM".to_string(),
+        ))
     }
 }
-

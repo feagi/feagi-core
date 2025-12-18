@@ -17,24 +17,26 @@ use feagi_transports::prelude::*;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     let _ = tracing_subscriber::fmt::try_init();
-    
+
     println!("🦀 Starting WebSocket Subscriber");
-    
+
     // Create subscriber
     let mut subscriber = WsSub::with_address("ws://127.0.0.1:9050").await?;
     subscriber.start_async().await?;
-    
+
     // Subscribe to topics
     subscriber.subscribe(b"visualization")?;
     println!("✅ Subscribed to: visualization");
     println!("📡 Waiting for messages...");
-    
+
     loop {
         match subscriber.receive_timeout(1000) {
             Ok((topic, data)) => {
-                println!("📥 Received: {} -> {}", 
-                         String::from_utf8_lossy(&topic),
-                         String::from_utf8_lossy(&data));
+                println!(
+                    "📥 Received: {} -> {}",
+                    String::from_utf8_lossy(&topic),
+                    String::from_utf8_lossy(&data)
+                );
             }
             Err(TransportError::Timeout) => {
                 // Timeout is normal, just continue
@@ -46,7 +48,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-    
+
     Ok(())
 }
-

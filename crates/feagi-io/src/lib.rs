@@ -82,25 +82,28 @@ impl IOSystemForCallbacks {
             false
         }
     }
-    
+
     fn should_sensory_stream_run(&self) -> bool {
         self.is_genome_loaded() && self.agent_registry.read().has_sensory_agents()
     }
-    
+
     fn should_motor_stream_run(&self) -> bool {
         self.is_genome_loaded() && self.agent_registry.read().has_motor_agents()
     }
-    
+
     fn should_viz_stream_run(&self) -> bool {
         self.is_genome_loaded() && self.agent_registry.read().has_visualization_agents()
     }
-    
+
     fn get_active_viz_transports(&self) -> Vec<String> {
         let registry = self.agent_registry.read();
         let mut transports = std::collections::HashSet::new();
-        
+
         for agent in registry.get_all() {
-            if matches!(agent.agent_type, AgentType::Visualization | AgentType::Infrastructure) {
+            if matches!(
+                agent.agent_type,
+                AgentType::Visualization | AgentType::Infrastructure
+            ) {
                 if let Some(ref chosen) = agent.chosen_transport {
                     transports.insert(chosen.clone());
                 } else {
@@ -109,41 +112,47 @@ impl IOSystemForCallbacks {
                 }
             }
         }
-        
+
         transports.into_iter().collect()
     }
-    
+
     fn try_start_sensory_stream(&self) {
         let mut state = self.sensory_stream_state.lock();
-        
+
         // Check if already starting/running
         if *state != StreamState::Stopped {
-            debug!("[PNS-DYNAMIC] Sensory stream already {:?}, not starting", *state);
+            debug!(
+                "[PNS-DYNAMIC] Sensory stream already {:?}, not starting",
+                *state
+            );
             return;
         }
-        
+
         // Check conditions and log WHY if not met
         let genome_loaded = self.is_genome_loaded();
         let has_agents = self.agent_registry.read().has_sensory_agents();
         let agent_count = self.agent_registry.read().count_sensory_agents();
-        
+
         if !genome_loaded || !has_agents {
             warn!("⚠️  [PNS-DYNAMIC] Cannot start sensory stream:");
             warn!("    - Genome loaded: {} (has neurons)", genome_loaded);
-            warn!("    - Sensory agents registered: {} (count: {})", has_agents, agent_count);
+            warn!(
+                "    - Sensory agents registered: {} (count: {})",
+                has_agents, agent_count
+            );
             return;
         }
-        
+
         *state = StreamState::Starting;
         drop(state);
-        
+
         // Double-check before actually starting
         if !self.should_sensory_stream_run() {
             *self.sensory_stream_state.lock() = StreamState::Stopped;
             warn!("⚠️  [PNS-DYNAMIC] Sensory stream conditions changed during startup, aborting");
             return;
         }
-        
+
         #[cfg(feature = "zmq-transport")]
         {
             if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -161,16 +170,16 @@ impl IOSystemForCallbacks {
             }
         }
     }
-    
+
     fn try_stop_sensory_stream(&self) {
         let mut state = self.sensory_stream_state.lock();
         if *state != StreamState::Running {
             return;
         }
-        
+
         *state = StreamState::Stopping;
         drop(state);
-        
+
         #[cfg(feature = "zmq-transport")]
         {
             if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -187,35 +196,41 @@ impl IOSystemForCallbacks {
             }
         }
     }
-    
+
     fn try_start_motor_stream(&self) {
         let mut state = self.motor_stream_state.lock();
-        
+
         if *state != StreamState::Stopped {
-            debug!("[PNS-DYNAMIC] Motor stream already {:?}, not starting", *state);
+            debug!(
+                "[PNS-DYNAMIC] Motor stream already {:?}, not starting",
+                *state
+            );
             return;
         }
-        
+
         let genome_loaded = self.is_genome_loaded();
         let has_agents = self.agent_registry.read().has_motor_agents();
         let agent_count = self.agent_registry.read().count_motor_agents();
-        
+
         if !genome_loaded || !has_agents {
             warn!("⚠️  [PNS-DYNAMIC] Cannot start motor stream:");
             warn!("    - Genome loaded: {} (has neurons)", genome_loaded);
-            warn!("    - Motor agents registered: {} (count: {})", has_agents, agent_count);
+            warn!(
+                "    - Motor agents registered: {} (count: {})",
+                has_agents, agent_count
+            );
             return;
         }
-        
+
         *state = StreamState::Starting;
         drop(state);
-        
+
         if !self.should_motor_stream_run() {
             *self.motor_stream_state.lock() = StreamState::Stopped;
             warn!("⚠️  [PNS-DYNAMIC] Motor stream conditions changed during startup, aborting");
             return;
         }
-        
+
         #[cfg(feature = "zmq-transport")]
         {
             if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -233,16 +248,16 @@ impl IOSystemForCallbacks {
             }
         }
     }
-    
+
     fn try_stop_motor_stream(&self) {
         let mut state = self.motor_stream_state.lock();
         if *state != StreamState::Running {
             return;
         }
-        
+
         *state = StreamState::Stopping;
         drop(state);
-        
+
         #[cfg(feature = "zmq-transport")]
         {
             if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -259,51 +274,56 @@ impl IOSystemForCallbacks {
             }
         }
     }
-    
+
     fn try_start_viz_stream(&self) {
         let mut state = self.viz_stream_state.lock();
-        
+
         // Allow restart if stuck in Starting (recovery from failed startup)
         if *state == StreamState::Running {
             debug!("[PNS-DYNAMIC] Viz stream already Running, not restarting");
             return;
         }
-        
+
         if *state == StreamState::Starting {
             warn!("⚠️ [PNS-DYNAMIC] Viz stream stuck in Starting state - forcing restart");
             *state = StreamState::Stopped; // Reset to allow restart
         }
-        
+
         let genome_loaded = self.is_genome_loaded();
         let has_agents = self.agent_registry.read().has_visualization_agents();
         let agent_count = self.agent_registry.read().count_visualization_agents();
-        
+
         if !genome_loaded || !has_agents {
             warn!("⚠️  [PNS-DYNAMIC] Cannot start visualization stream:");
             warn!("    - Genome loaded: {} (has neurons)", genome_loaded);
-            warn!("    - Visualization agents registered: {} (count: {})", has_agents, agent_count);
+            warn!(
+                "    - Visualization agents registered: {} (count: {})",
+                has_agents, agent_count
+            );
             return;
         }
-        
+
         *state = StreamState::Starting;
         drop(state);
-        
+
         if !self.should_viz_stream_run() {
             *self.viz_stream_state.lock() = StreamState::Stopped;
             warn!("⚠️  [PNS-DYNAMIC] Viz stream conditions changed during startup, aborting");
             return;
         }
-        
+
         // Determine which transports need to be started based on agent preferences
         let active_transports = self.get_active_viz_transports();
-        let needs_zmq = active_transports.contains(&"zmq".to_string()) || 
-                        active_transports.contains(&"shm".to_string()) ||
-                        active_transports.is_empty(); // Default to ZMQ if no preference
+        let needs_zmq = active_transports.contains(&"zmq".to_string())
+            || active_transports.contains(&"shm".to_string())
+            || active_transports.is_empty(); // Default to ZMQ if no preference
         let needs_websocket = active_transports.contains(&"websocket".to_string());
-        
-        info!("🔍 [PNS-DYNAMIC] Starting viz streams for transports: {:?} (ZMQ: {}, WebSocket: {})", 
-              active_transports, needs_zmq, needs_websocket);
-        
+
+        info!(
+            "🔍 [PNS-DYNAMIC] Starting viz streams for transports: {:?} (ZMQ: {}, WebSocket: {})",
+            active_transports, needs_zmq, needs_websocket
+        );
+
         // Start ZMQ viz stream only if agents are using it
         #[cfg(feature = "zmq-transport")]
         {
@@ -323,7 +343,7 @@ impl IOSystemForCallbacks {
                 info!("⏭️ [PNS-DYNAMIC] Skipping ZMQ viz stream (no agents using ZMQ/SHM)");
             }
         }
-        
+
         // Start WebSocket viz stream only if agents are using it
         #[cfg(feature = "websocket-transport")]
         {
@@ -333,8 +353,10 @@ impl IOSystemForCallbacks {
                 if let Some(ref streams) = *ws_lock {
                     match streams.start_data_streams() {
                         Ok(()) => {
-                            info!("🟢 [PNS-DYNAMIC] WebSocket viz stream started on port {}", 
-                                  self.websocket_viz_port);
+                            info!(
+                                "🟢 [PNS-DYNAMIC] WebSocket viz stream started on port {}",
+                                self.websocket_viz_port
+                            );
                         }
                         Err(e) => {
                             error!("❌ [PNS-DYNAMIC] Failed to start WebSocket viz: {}", e);
@@ -350,23 +372,23 @@ impl IOSystemForCallbacks {
                 info!("⏭️ [PNS-DYNAMIC] Skipping WebSocket viz stream (no agents using WebSocket)");
             }
         }
-        
+
         // Mark as running after starting all enabled transports
         info!("🔍 [PNS-DYNAMIC] Setting viz stream state to Running...");
         *self.viz_stream_state.lock() = StreamState::Running;
         let count = self.agent_registry.read().count_visualization_agents();
         info!("🟢 [PNS-DYNAMIC] Viz streams started for {} agents", count);
     }
-    
+
     fn try_stop_viz_stream(&self) {
         let mut state = self.viz_stream_state.lock();
         if *state != StreamState::Running {
             return;
         }
-        
+
         *state = StreamState::Stopping;
         drop(state);
-        
+
         #[cfg(feature = "zmq-transport")]
         {
             if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -383,50 +405,65 @@ impl IOSystemForCallbacks {
             }
         }
     }
-    
+
     fn evaluate_all_stream_states(&self) {
         if self.should_sensory_stream_run() {
             self.try_start_sensory_stream();
         } else {
             self.try_stop_sensory_stream();
         }
-        
+
         if self.should_motor_stream_run() {
             self.try_start_motor_stream();
         } else {
             self.try_stop_motor_stream();
         }
-        
+
         if self.should_viz_stream_run() {
             self.try_start_viz_stream();
         } else {
             self.try_stop_viz_stream();
         }
     }
-    
+
     fn on_agent_registered_dynamic(&self, agent_id: &str) {
-        info!("🔄 [PNS-DYNAMIC] Agent '{}' registered, evaluating stream conditions...", agent_id);
-        
+        info!(
+            "🔄 [PNS-DYNAMIC] Agent '{}' registered, evaluating stream conditions...",
+            agent_id
+        );
+
         // Log current state BEFORE evaluation
         let genome_loaded = self.is_genome_loaded();
         let sensory_count = self.agent_registry.read().count_sensory_agents();
         let motor_count = self.agent_registry.read().count_motor_agents();
         let viz_count = self.agent_registry.read().count_visualization_agents();
-        
+
         info!("🔍 [PNS-DYNAMIC] Current state:");
         info!("    - Genome loaded: {}", genome_loaded);
         info!("    - Sensory agents: {}", sensory_count);
         info!("    - Motor agents: {}", motor_count);
         info!("    - Visualization agents: {}", viz_count);
-        info!("    - Sensory stream state: {:?}", *self.sensory_stream_state.lock());
-        info!("    - Motor stream state: {:?}", *self.motor_stream_state.lock());
-        info!("    - Viz stream state: {:?}", *self.viz_stream_state.lock());
-        
+        info!(
+            "    - Sensory stream state: {:?}",
+            *self.sensory_stream_state.lock()
+        );
+        info!(
+            "    - Motor stream state: {:?}",
+            *self.motor_stream_state.lock()
+        );
+        info!(
+            "    - Viz stream state: {:?}",
+            *self.viz_stream_state.lock()
+        );
+
         self.evaluate_all_stream_states();
     }
-    
+
     fn on_agent_deregistered_dynamic(&self, agent_id: &str) {
-        info!("🔄 [PNS-DYNAMIC] Agent '{}' deregistered, evaluating stream conditions...", agent_id);
+        info!(
+            "🔄 [PNS-DYNAMIC] Agent '{}' deregistered, evaluating stream conditions...",
+            agent_id
+        );
         self.evaluate_all_stream_states();
     }
 }
@@ -443,10 +480,10 @@ pub mod transports;
 // Re-export commonly used types from core
 pub use core::{
     AgentCapabilities, AgentDisconnectedEvent, AgentInfo, AgentRegisteredEvent, AgentRegistry,
-    AgentTransport, AgentType, HeartbeatTracker, MotorCapability, MotorCommandEvent, IOConfig,
-    IOError, RegistrationHandler, RegistrationRequest, RegistrationResponse, Result, SensoryCapability, SensoryDataEvent,
-    SharedFBC, StreamType, TransportConfig, TransportMode, VisionCapability, VisualizationCapability,
-    VisualizationReadyEvent, WebSocketConfig,
+    AgentTransport, AgentType, HeartbeatTracker, IOConfig, IOError, MotorCapability,
+    MotorCommandEvent, RegistrationHandler, RegistrationRequest, RegistrationResponse, Result,
+    SensoryCapability, SensoryDataEvent, SharedFBC, StreamType, TransportConfig, TransportMode,
+    VisionCapability, VisualizationCapability, VisualizationReadyEvent, WebSocketConfig,
 };
 
 // Re-export transport-specific types
@@ -525,7 +562,7 @@ pub struct IOSystem {
     /// Optional reference to burst engine's sensory agent manager for SHM I/O
     sensory_agent_manager:
         Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::AgentManager>>>>>,
-    
+
     // === Dynamic Stream Gating ===
     /// NPU reference for genome state checking (dynamic gating)
     npu_ref: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
@@ -561,35 +598,41 @@ impl IOSystem {
     pub fn with_config(config: IOConfig) -> Result<Self> {
         let agent_registry = Arc::new(RwLock::new(AgentRegistry::with_defaults()));
         let heartbeat_tracker = Arc::new(Mutex::new(HeartbeatTracker::new()));
-        
+
         // Extract ports from config addresses (e.g., "tcp://0.0.0.0:5564" -> 5564)
-        let motor_port = config.zmq_motor_address
+        let motor_port = config
+            .zmq_motor_address
             .split(':')
             .last()
             .and_then(|s| s.parse::<u16>().ok())
-            .unwrap_or(5564);  // @architecture:acceptable - emergency fallback
-        let viz_port = config.zmq_viz_address
+            .unwrap_or(5564); // @architecture:acceptable - emergency fallback
+        let viz_port = config
+            .zmq_viz_address
             .split(':')
             .last()
             .and_then(|s| s.parse::<u16>().ok())
-            .unwrap_or(5562);  // @architecture:acceptable - emergency fallback
-        
+            .unwrap_or(5562); // @architecture:acceptable - emergency fallback
+
         // Extract sensory port from config
-        let sensory_port = config.zmq_sensory_address
+        let sensory_port = config
+            .zmq_sensory_address
             .split(':')
             .last()
             .and_then(|s| s.parse::<u16>().ok())
-            .unwrap_or(5558);  // @architecture:acceptable - emergency fallback
-        
-        info!("🦀 [PNS] Port configuration: sensory={}, motor={}, viz={}", sensory_port, motor_port, viz_port);
-        
+            .unwrap_or(5558); // @architecture:acceptable - emergency fallback
+
+        info!(
+            "🦀 [PNS] Port configuration: sensory={}, motor={}, viz={}",
+            sensory_port, motor_port, viz_port
+        );
+
         let mut registration_handler_instance = RegistrationHandler::new(
             Arc::clone(&agent_registry),
             sensory_port,
             motor_port,
             viz_port,
         );
-        
+
         // Configure WebSocket transport
         registration_handler_instance.set_websocket_config(
             config.websocket.enabled,
@@ -599,7 +642,7 @@ impl IOSystem {
             config.websocket.visualization_port,
             config.websocket.registration_port,
         );
-        
+
         let registration_handler = Arc::new(Mutex::new(registration_handler_instance));
 
         Ok(Self {
@@ -633,12 +676,12 @@ impl IOSystem {
             agent_disconnected: Arc::new(Mutex::new(FeagiSignal::new())),
         })
     }
-    
+
     /// Wire dynamic gating callbacks to registration handler
     /// Must be called after PNS is wrapped in Arc (in main.rs)
     pub fn wire_dynamic_gating_callbacks(pns: &Arc<Self>) {
         let pns_weak = Arc::downgrade(pns);
-        
+
         let on_registered = {
             let pns_weak = pns_weak.clone();
             move |agent_id: String| {
@@ -655,10 +698,14 @@ impl IOSystem {
                 }
             }
         };
-        
+
         // Register callbacks using the setter methods
-        pns.registration_handler.lock().set_on_agent_registered_dynamic(on_registered);
-        pns.registration_handler.lock().set_on_agent_deregistered_dynamic(on_deregistered);
+        pns.registration_handler
+            .lock()
+            .set_on_agent_registered_dynamic(on_registered);
+        pns.registration_handler
+            .lock()
+            .set_on_agent_deregistered_dynamic(on_deregistered);
         info!("🦀 [PNS] Dynamic gating callbacks registered with RegistrationHandler");
     }
 
@@ -675,7 +722,7 @@ impl IOSystem {
             .set_sensory_agent_manager(manager);
         info!("🦀 [PNS] Sensory agent manager connected for SHM I/O");
     }
-    
+
     /// Set the burst runner (for motor subscription tracking)
     /// Should be called after creating BurstLoopRunner
     pub fn set_burst_runner(
@@ -683,19 +730,20 @@ impl IOSystem {
         runner: Arc<parking_lot::RwLock<feagi_npu_burst_engine::BurstLoopRunner>>,
     ) {
         // Propagate to registration handler for motor subscription management
-        self.registration_handler
-            .lock()
-            .set_burst_runner(runner);
+        self.registration_handler.lock().set_burst_runner(runner);
         info!("🦀 [PNS] Burst runner connected for motor subscriptions");
     }
 
     /// Set NPU reference for dynamic stream gating
     /// Should be called during initialization, before starting streams
-    pub fn set_npu_for_gating(&self, npu: Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) {
+    pub fn set_npu_for_gating(
+        &self,
+        npu: Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) {
         *self.npu_ref.lock() = Some(Arc::clone(&npu));
         info!("🦀 [PNS] NPU connected for dynamic stream gating");
     }
-    
+
     /// Connect the Rust NPU to the sensory stream for direct injection
     /// Should be called after starting the PNS
     #[cfg(feature = "zmq-transport")]
@@ -729,13 +777,16 @@ impl IOSystem {
     /// Set RPC callback for generic CoreAPIService method calls
     pub fn set_api_rpc_callback<F>(&self, callback: F)
     where
-        F: Fn(&str, serde_json::Value) -> std::result::Result<serde_json::Value, String> + Send + Sync + 'static,
+        F: Fn(&str, serde_json::Value) -> std::result::Result<serde_json::Value, String>
+            + Send
+            + Sync
+            + 'static,
     {
         if let Some(streams) = self.zmq_streams.lock().as_mut() {
             // Wrap callback to ensure it matches the expected signature
-            streams.get_api_control_stream_mut().set_rpc_callback(move |method, payload| {
-                callback(method, payload)
-            });
+            streams
+                .get_api_control_stream_mut()
+                .set_rpc_callback(move |method, payload| callback(method, payload));
             info!("🦀 [PNS] RPC callback registered for CoreAPIService");
         } else {
             info!("🦀 [PNS] [ERR] Cannot set RPC callback: ZMQ streams not started");
@@ -763,7 +814,7 @@ impl IOSystem {
     }
 
     // === Dynamic Stream Gating - Condition Checking ===
-    
+
     /// Check if genome is loaded in NPU
     fn is_genome_loaded(&self) -> bool {
         if let Some(npu_arc) = self.npu_ref.lock().as_ref() {
@@ -772,42 +823,42 @@ impl IOSystem {
             false
         }
     }
-    
+
     /// Check if sensory stream should be running
     fn should_sensory_stream_run(&self) -> bool {
         self.is_genome_loaded() && self.agent_registry.read().has_sensory_agents()
     }
-    
+
     /// Check if motor stream should be running
     fn should_motor_stream_run(&self) -> bool {
         self.is_genome_loaded() && self.agent_registry.read().has_motor_agents()
     }
-    
+
     /// Check if visualization stream should be running
     fn should_viz_stream_run(&self) -> bool {
         self.is_genome_loaded() && self.agent_registry.read().has_visualization_agents()
     }
 
     // === Dynamic Stream Gating - Stream Control ===
-    
+
     /// Dynamically start sensory stream if conditions are met
     fn try_start_sensory_stream(&self) {
         let mut state = self.sensory_stream_state.lock();
         match *state {
             StreamState::Stopped => {
                 if !self.should_sensory_stream_run() {
-                    return;  // Conditions not met
+                    return; // Conditions not met
                 }
-                
+
                 *state = StreamState::Starting;
                 drop(state);
-                
+
                 // Double-check conditions after state transition (race protection)
                 if !self.should_sensory_stream_run() {
                     *self.sensory_stream_state.lock() = StreamState::Stopped;
                     return;
                 }
-                
+
                 // Start stream
                 #[cfg(feature = "zmq-transport")]
                 {
@@ -831,7 +882,7 @@ impl IOSystem {
             }
         }
     }
-    
+
     /// Dynamically stop sensory stream
     fn try_stop_sensory_stream(&self) {
         let mut state = self.sensory_stream_state.lock();
@@ -839,7 +890,7 @@ impl IOSystem {
             StreamState::Running => {
                 *state = StreamState::Stopping;
                 drop(state);
-                
+
                 #[cfg(feature = "zmq-transport")]
                 {
                     if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -861,7 +912,7 @@ impl IOSystem {
             }
         }
     }
-    
+
     /// Dynamically start motor stream if conditions are met
     fn try_start_motor_stream(&self) {
         let mut state = self.motor_stream_state.lock();
@@ -870,15 +921,15 @@ impl IOSystem {
                 if !self.should_motor_stream_run() {
                     return;
                 }
-                
+
                 *state = StreamState::Starting;
                 drop(state);
-                
+
                 if !self.should_motor_stream_run() {
                     *self.motor_stream_state.lock() = StreamState::Stopped;
                     return;
                 }
-                
+
                 #[cfg(feature = "zmq-transport")]
                 {
                     if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -899,7 +950,7 @@ impl IOSystem {
             _ => {}
         }
     }
-    
+
     /// Dynamically stop motor stream
     fn try_stop_motor_stream(&self) {
         let mut state = self.motor_stream_state.lock();
@@ -907,7 +958,7 @@ impl IOSystem {
             StreamState::Running => {
                 *state = StreamState::Stopping;
                 drop(state);
-                
+
                 #[cfg(feature = "zmq-transport")]
                 {
                     if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -927,7 +978,7 @@ impl IOSystem {
             _ => {}
         }
     }
-    
+
     /// Dynamically start visualization stream if conditions are met
     fn try_start_viz_stream(&self) {
         let mut state = self.viz_stream_state.lock();
@@ -936,22 +987,23 @@ impl IOSystem {
                 if !self.should_viz_stream_run() {
                     return;
                 }
-                
+
                 *state = StreamState::Starting;
                 drop(state);
-                
+
                 if !self.should_viz_stream_run() {
                     *self.viz_stream_state.lock() = StreamState::Stopped;
                     return;
                 }
-                
+
                 #[cfg(feature = "zmq-transport")]
                 {
                     if let Some(streams) = self.zmq_streams.lock().as_ref() {
                         match streams.start_viz_stream() {
                             Ok(()) => {
                                 *self.viz_stream_state.lock() = StreamState::Running;
-                                let agent_count = self.agent_registry.read().count_visualization_agents();
+                                let agent_count =
+                                    self.agent_registry.read().count_visualization_agents();
                                 info!("🟢 [PNS-DYNAMIC] Visualization stream started: genome loaded, {} agents registered", agent_count);
                             }
                             Err(e) => {
@@ -965,7 +1017,7 @@ impl IOSystem {
             _ => {}
         }
     }
-    
+
     /// Dynamically stop visualization stream
     fn try_stop_viz_stream(&self) {
         let mut state = self.viz_stream_state.lock();
@@ -973,7 +1025,7 @@ impl IOSystem {
             StreamState::Running => {
                 *state = StreamState::Stopping;
                 drop(state);
-                
+
                 #[cfg(feature = "zmq-transport")]
                 {
                     if let Some(streams) = self.zmq_streams.lock().as_ref() {
@@ -993,7 +1045,7 @@ impl IOSystem {
             _ => {}
         }
     }
-    
+
     /// Evaluate all stream conditions and start/stop as needed
     fn evaluate_all_stream_states(&self) {
         // Sensory
@@ -1002,14 +1054,14 @@ impl IOSystem {
         } else {
             self.try_stop_sensory_stream();
         }
-        
+
         // Motor
         if self.should_motor_stream_run() {
             self.try_start_motor_stream();
         } else {
             self.try_stop_motor_stream();
         }
-        
+
         // Visualization
         if self.should_viz_stream_run() {
             self.try_start_viz_stream();
@@ -1019,13 +1071,13 @@ impl IOSystem {
     }
 
     // === Lifecycle Hooks ===
-    
+
     /// Called when genome is loaded - triggers stream evaluation
     pub fn on_genome_loaded(&self) {
         info!("🧬 [PNS-DYNAMIC] Genome loaded - evaluating stream conditions");
         self.evaluate_all_stream_states();
     }
-    
+
     /// Called when genome is unloaded - stops all data streams immediately
     pub fn on_genome_unloaded(&self) {
         warn!("🧬 [PNS-DYNAMIC] Genome unloaded - stopping all data streams");
@@ -1033,13 +1085,13 @@ impl IOSystem {
         self.try_stop_motor_stream();
         self.try_stop_viz_stream();
     }
-    
+
     /// Called when an agent registers - triggers stream evaluation
     pub fn on_agent_registered_dynamic(&self, _agent_id: &str) {
         debug!("[PNS-DYNAMIC] Agent registered - evaluating stream conditions");
         self.evaluate_all_stream_states();
     }
-    
+
     /// Called when an agent deregisters - triggers stream evaluation
     pub fn on_agent_deregistered_dynamic(&self, _agent_id: &str) {
         debug!("[PNS-DYNAMIC] Agent deregistered - evaluating stream conditions");
@@ -1048,7 +1100,7 @@ impl IOSystem {
 
     /// Start all PNS services
     /// Start only control streams (REST/registration) - safe before burst engine
-    /// 
+    ///
     /// This starts the REST API for agent registration and heartbeats but does NOT
     /// start sensory/motor/viz streams. Use this during FEAGI startup before the
     /// burst engine is ready.
@@ -1098,28 +1150,38 @@ impl IOSystem {
             .start(Arc::clone(&self.agent_registry));
 
         *self.running.write() = true;
-        
+
         // Wire up dynamic gating callbacks
         info!("🦀 [PNS] Wiring dynamic stream gating callbacks...");
         let pns_self = self.clone_for_callbacks();
-        self.registration_handler.lock().set_on_agent_registered_dynamic(move |agent_id: String| {
-            info!("🔔 [PNS-DYNAMIC-CALLBACK] Registration callback fired for agent: {}", agent_id);
-            pns_self.on_agent_registered_dynamic(&agent_id);
-        });
-        
+        self.registration_handler
+            .lock()
+            .set_on_agent_registered_dynamic(move |agent_id: String| {
+                info!(
+                    "🔔 [PNS-DYNAMIC-CALLBACK] Registration callback fired for agent: {}",
+                    agent_id
+                );
+                pns_self.on_agent_registered_dynamic(&agent_id);
+            });
+
         let pns_self = self.clone_for_callbacks();
-        self.registration_handler.lock().set_on_agent_deregistered_dynamic(move |agent_id: String| {
-            info!("🔔 [PNS-DYNAMIC-CALLBACK] Deregistration callback fired for agent: {}", agent_id);
-            pns_self.on_agent_deregistered_dynamic(&agent_id);
-        });
-        
+        self.registration_handler
+            .lock()
+            .set_on_agent_deregistered_dynamic(move |agent_id: String| {
+                info!(
+                    "🔔 [PNS-DYNAMIC-CALLBACK] Deregistration callback fired for agent: {}",
+                    agent_id
+                );
+                pns_self.on_agent_deregistered_dynamic(&agent_id);
+            });
+
         info!("🦀 [PNS] ✅ Dynamic gating callbacks wired");
         info!("🦀 [PNS] ✅ Control streams started - ready for agent registration");
         info!("🦀 [PNS] ⏸️  Data streams (sensory/motor/viz) will start dynamically when conditions are met");
 
         Ok(())
     }
-    
+
     /// Clone PNS for callbacks (only clone the Arc fields needed)
     fn clone_for_callbacks(&self) -> IOSystemForCallbacks {
         IOSystemForCallbacks {
@@ -1138,7 +1200,7 @@ impl IOSystem {
     }
 
     /// Start data streams (sensory/motor/viz) - requires burst engine running
-    /// 
+    ///
     /// This starts the data processing streams that require an active burst engine.
     /// Call this AFTER the burst engine has been started and is ready to process data.
     pub fn start_data_streams(&self) -> Result<()> {
@@ -1176,7 +1238,7 @@ impl IOSystem {
             let streams_lock = self.zmq_streams.lock();
             if let Some(ref zmq_streams) = *streams_lock {
                 match zmq_streams.start_data_streams() {
-                    Ok(()) => {},
+                    Ok(()) => {}
                     Err(e) => return Err(e),
                 }
             } else {
@@ -1195,11 +1257,14 @@ impl IOSystem {
                     match ws_streams.start_data_streams() {
                         Ok(()) => {
                             info!("🦀 [PNS] ✅ WebSocket data streams started");
-                            info!("🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}/visualization", 
+                            info!("🦀 [PNS] 🌐 Brain Visualizer can now connect to: ws://{}:{}/visualization",
                                   self.config.websocket.host, self.config.websocket.visualization_port);
-                        },
+                        }
                         Err(e) => {
-                            warn!("⚠️ [PNS] WebSocket streams start failed: {} (continuing with ZMQ)", e);
+                            warn!(
+                                "⚠️ [PNS] WebSocket streams start failed: {} (continuing with ZMQ)",
+                                e
+                            );
                         }
                     }
                 } else {
@@ -1253,7 +1318,7 @@ impl IOSystem {
     }
 
     /// Start all streams at once (legacy method for backward compatibility)
-    /// 
+    ///
     /// Equivalent to calling start_control_streams() followed by start_data_streams().
     /// Prefer using the split methods during FEAGI startup for proper sequencing.
     pub fn start(&self) -> Result<()> {
@@ -1332,19 +1397,22 @@ impl IOSystem {
     pub fn get_agent_registry(&self) -> Arc<RwLock<AgentRegistry>> {
         Arc::clone(&self.agent_registry)
     }
-    
+
     /// Get registration handler (for full transport negotiation)
     pub fn get_registration_handler(&self) -> Arc<parking_lot::Mutex<RegistrationHandler>> {
         Arc::clone(&self.registration_handler)
     }
-    
+
     /// Check which transports have active visualization agents
     fn get_active_viz_transports(&self) -> Vec<String> {
         let registry = self.agent_registry.read();
         let mut transports = std::collections::HashSet::new();
-        
+
         for agent in registry.get_all() {
-            if matches!(agent.agent_type, AgentType::Visualization | AgentType::Infrastructure) {
+            if matches!(
+                agent.agent_type,
+                AgentType::Visualization | AgentType::Infrastructure
+            ) {
                 if let Some(ref chosen) = agent.chosen_transport {
                     transports.insert(chosen.clone());
                 } else {
@@ -1353,16 +1421,19 @@ impl IOSystem {
                 }
             }
         }
-        
+
         transports.into_iter().collect()
     }
 
     /// Publish raw fire queue data (NEW ARCHITECTURE - serialization off burst thread)
     /// Called by burst engine with raw fire queue data
     /// PNS will serialize on its own thread to avoid blocking burst engine
-    /// 
+    ///
     /// **PER-AGENT TRANSPORT:** Only publishes to transports that have active agents
-    pub fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<()> {
+    pub fn publish_raw_fire_queue(
+        &self,
+        fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
+    ) -> Result<()> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
             info!(
@@ -1373,20 +1444,24 @@ impl IOSystem {
         }
 
         let active_transports = self.get_active_viz_transports();
-        
-        static TRANSPORT_LOG_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+        static TRANSPORT_LOG_COUNTER: std::sync::atomic::AtomicU64 =
+            std::sync::atomic::AtomicU64::new(0);
         let log_count = TRANSPORT_LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         if log_count % 100 == 0 {
             trace!("[PNS] Active viz transports: {:?}", active_transports);
         }
-        
+
         let mut published_to = Vec::new();
         let mut errors = Vec::new();
 
         // Publish to ZMQ if any agent is using it
         #[cfg(feature = "zmq-transport")]
         {
-            if active_transports.contains(&"zmq".to_string()) || active_transports.contains(&"shm".to_string()) || active_transports.is_empty() {
+            if active_transports.contains(&"zmq".to_string())
+                || active_transports.contains(&"shm".to_string())
+                || active_transports.is_empty()
+            {
                 if let Some(streams) = self.zmq_streams.lock().as_ref() {
                     match streams.publish_raw_fire_queue(fire_data.clone()) {
                         Ok(()) => published_to.push("ZMQ"),
@@ -1400,9 +1475,10 @@ impl IOSystem {
         // (allowing clients that don't send chosen_transport to still receive data)
         #[cfg(feature = "websocket-transport")]
         {
-            let should_publish_ws = active_transports.contains(&"websocket".to_string()) || 
-                (self.config.websocket.enabled && self.agent_registry.read().has_visualization_agents());
-            
+            let should_publish_ws = active_transports.contains(&"websocket".to_string())
+                || (self.config.websocket.enabled
+                    && self.agent_registry.read().has_visualization_agents());
+
             if should_publish_ws {
                 if let Some(streams) = self.websocket_streams.lock().as_ref() {
                     if streams.is_running() {
@@ -1412,7 +1488,9 @@ impl IOSystem {
                         }
                     } else {
                         if log_count % 100 == 0 {
-                            warn!("[PNS] ⚠️ WebSocket enabled but not running (servers not started)");
+                            warn!(
+                                "[PNS] ⚠️ WebSocket enabled but not running (servers not started)"
+                            );
                         }
                     }
                 } else {
@@ -1427,29 +1505,34 @@ impl IOSystem {
         if !published_to.is_empty() {
             static LOG_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let count = LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if count % 100 == 0 {  // Log every 100th frame to avoid spam
+            if count % 100 == 0 {
+                // Log every 100th frame to avoid spam
                 trace!("[PNS] Published visualization to: {:?}", published_to);
             }
             Ok(())
         } else if !errors.is_empty() {
             warn!("[PNS] ⚠️ Visualization publish failed: {:?}", errors);
-            Err(IOError::Transport(format!("All transports failed: {:?}", errors)))
+            Err(IOError::Transport(format!(
+                "All transports failed: {:?}",
+                errors
+            )))
         } else {
             // No transports running - this is OK during startup
             Ok(())
         }
     }
-    
+
     /// Publish motor data to a specific agent
     /// Called by burst engine to send motor commands
-    /// 
+    ///
     /// **MULTI-TRANSPORT:** Publishes to ALL enabled transports (ZMQ, WebSocket)
     pub fn publish_motor(&self, agent_id: &str, data: &[u8]) -> Result<()> {
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
             info!(
                 "[PNS] 🎮 publish_motor() called for agent '{}': {} bytes",
-                agent_id, data.len()
+                agent_id,
+                data.len()
             );
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
@@ -1485,25 +1568,38 @@ impl IOSystem {
         if !published_to.is_empty() {
             Ok(())
         } else if !errors.is_empty() {
-            warn!("[PNS] ⚠️ Motor publish failed for '{}': {:?}", agent_id, errors);
-            Err(IOError::Transport(format!("All transports failed: {:?}", errors)))
+            warn!(
+                "[PNS] ⚠️ Motor publish failed for '{}': {:?}",
+                agent_id, errors
+            );
+            Err(IOError::Transport(format!(
+                "All transports failed: {:?}",
+                errors
+            )))
         } else {
             // No transports running
-            Err(IOError::NotRunning("No motor transports available".to_string()))
+            Err(IOError::NotRunning(
+                "No motor transports available".to_string(),
+            ))
         }
     }
 }
 
 /// Implement VisualizationPublisher trait for burst engine integration (NO PYTHON IN HOT PATH!)
 impl feagi_npu_burst_engine::VisualizationPublisher for IOSystem {
-    fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> std::result::Result<(), String> {
-        self.publish_raw_fire_queue(fire_data).map_err(|e| e.to_string())
+    fn publish_raw_fire_queue(
+        &self,
+        fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
+    ) -> std::result::Result<(), String> {
+        self.publish_raw_fire_queue(fire_data)
+            .map_err(|e| e.to_string())
     }
 }
 
 impl feagi_npu_burst_engine::MotorPublisher for IOSystem {
     fn publish_motor(&self, agent_id: &str, data: &[u8]) -> std::result::Result<(), String> {
-        self.publish_motor(agent_id, data).map_err(|e| e.to_string())
+        self.publish_motor(agent_id, data)
+            .map_err(|e| e.to_string())
     }
 }
 

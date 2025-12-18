@@ -81,7 +81,9 @@ fn test_pub_sub() {
         // Publish messages
         for i in 0..5 {
             let message = format!("message_{}", i);
-            publisher.publish(b"test_topic", message.as_bytes()).unwrap();
+            publisher
+                .publish(b"test_topic", message.as_bytes())
+                .unwrap();
             thread::sleep(Duration::from_millis(10));
         }
 
@@ -188,7 +190,7 @@ fn test_timeout() {
     // Try to receive with timeout (should timeout since no client is sending)
     let result = server.receive_timeout(100);
     assert!(result.is_err());
-    
+
     if let Err(e) = result {
         assert!(matches!(e, TransportError::Timeout));
     }
@@ -206,4 +208,3 @@ fn test_invalid_config() {
     let result = config.base.validate();
     assert!(result.is_err());
 }
-

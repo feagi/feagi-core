@@ -122,18 +122,16 @@ mod tests {
     #[test]
     fn test_consecutive_limit() {
         let mut count = 0;
-        
+
         // No limit
         assert!(!check_consecutive_limit(&mut count, 0, true));
-        
+
         // With limit
         assert!(!check_consecutive_limit(&mut count, 3, true));
         assert_eq!(count, 1);
-        
+
         // Reset on non-fire
         assert!(!check_consecutive_limit(&mut count, 3, false));
         assert_eq!(count, 0);
     }
 }
-
-

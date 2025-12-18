@@ -41,9 +41,10 @@ pub fn random_bytes(buffer: &mut [u8]) {
     // Get browser's crypto API
     let window = web_sys::window().expect("no global window");
     let crypto = window.crypto().expect("crypto not available");
-    
+
     // Fill buffer directly - web_sys supports passing &mut [u8]
-    crypto.get_random_values_with_u8_array(buffer)
+    crypto
+        .get_random_values_with_u8_array(buffer)
         .expect("get_random_values failed");
 }
 
@@ -85,7 +86,7 @@ mod tests {
     fn test_random_bytes() {
         let mut buffer = [0u8; 32];
         random_bytes(&mut buffer);
-        
+
         // Extremely unlikely to get all zeros
         let all_zeros = buffer.iter().all(|&b| b == 0);
         assert!(!all_zeros, "random_bytes returned all zeros");
@@ -106,9 +107,12 @@ mod tests {
             let val = random_u64();
             values.insert(val);
         }
-        
+
         // Should have good entropy - at least 95 unique values out of 100
-        assert!(values.len() >= 95, "random_u64 has poor entropy: {} unique out of 100", values.len());
+        assert!(
+            values.len() >= 95,
+            "random_u64 has poor entropy: {} unique out of 100",
+            values.len()
+        );
     }
 }
-

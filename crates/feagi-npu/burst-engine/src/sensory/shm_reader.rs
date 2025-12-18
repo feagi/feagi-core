@@ -35,7 +35,7 @@ const HEADER_SIZE: usize = 256;
 /// once the full SHM protocol implementation is completed.
 /// Warning about unused struct is expected during migration.
 #[repr(C, packed)]
-#[allow(dead_code)]  // In development - will be used for SHM protocol validation
+#[allow(dead_code)] // In development - will be used for SHM protocol validation
 struct ShmHeader {
     magic: [u8; 8],        // 8 bytes
     version: u32,          // 4 bytes

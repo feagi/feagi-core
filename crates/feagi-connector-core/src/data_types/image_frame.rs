@@ -1,13 +1,12 @@
-
-use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
-use image::{DynamicImage, GenericImageView};
-use feagi_data_structures::FeagiDataError;
+use super::descriptors::{
+    ColorChannelLayout, ColorSpace, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions,
+    MemoryOrderLayout,
+};
 use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays};
-use super::descriptors::{ColorChannelLayout, ColorSpace, MemoryOrderLayout, ImageFrameProperties, ImageXYResolution, ImageXYZDimensions};
-
-
-
+use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+use feagi_data_structures::FeagiDataError;
+use image::{DynamicImage, GenericImageView};
+use ndarray::{Array3, ArrayView3, ArrayViewMut3, Zip};
 
 // Named constants for sRGB / linear conversions
 const SRGB_THRESHOLD: f32 = 0.04045;
@@ -19,7 +18,7 @@ const GAMMA_MIDPOINT: f32 = 128.0;
 const LINEAR_MIDPOINT: f32 = 0.5;
 
 /// A container for image data with support for various color formats and spaces.
-/// 
+///
 /// Stores pixel data as a 3D array with height, width, and channel dimensions.
 /// Supports RGB/RGBA formats and different color spaces (sRGB, Linear, Gamma).
 /// Can import/export various image formats and convert between color spaces.
@@ -38,29 +37,44 @@ impl ImageFrame {
     /// The internal memory layout used for storing pixel data
     pub const INTERNAL_MEMORY_LAYOUT: MemoryOrderLayout = MemoryOrderLayout::HeightsWidthsChannels;
 
-
-
     //region Common Constructors
 
     /// Creates a new ImageFrame with zero-filled pixel data.
-    pub fn new(channel_format: &ColorChannelLayout, color_space: &ColorSpace, xy_resolution: &ImageXYResolution) -> Result<ImageFrame, FeagiDataError> {
+    pub fn new(
+        channel_format: &ColorChannelLayout,
+        color_space: &ColorSpace,
+        xy_resolution: &ImageXYResolution,
+    ) -> Result<ImageFrame, FeagiDataError> {
         Ok(ImageFrame {
             channel_layout: *channel_format,
             color_space: *color_space,
-            pixels: Array3::<u8>::zeros((xy_resolution.height as usize, xy_resolution.width as usize, *channel_format as usize)),
+            pixels: Array3::<u8>::zeros((
+                xy_resolution.height as usize,
+                xy_resolution.width as usize,
+                *channel_format as usize,
+            )),
             skip_encoding: false,
         })
     }
 
     /// Creates a new ImageFrame from ImageFrameProperties.
-    pub fn new_from_image_frame_properties(image_frame_properties: &ImageFrameProperties) -> Result<ImageFrame, FeagiDataError>
-    {
-        ImageFrame::new(&image_frame_properties.get_color_channel_layout(), &image_frame_properties.get_color_space(), &image_frame_properties.get_image_resolution())
+    pub fn new_from_image_frame_properties(
+        image_frame_properties: &ImageFrameProperties,
+    ) -> Result<ImageFrame, FeagiDataError> {
+        ImageFrame::new(
+            &image_frame_properties.get_color_channel_layout(),
+            &image_frame_properties.get_color_space(),
+            &image_frame_properties.get_image_resolution(),
+        )
     }
 
     /// Creates an ImageFrame from a 3D array with specified memory layout.
-    pub fn from_array(input: Array3<u8>, color_space: &ColorSpace, source_memory_order: &MemoryOrderLayout) -> Result<ImageFrame, FeagiDataError> {
-        let pixel_data =  change_memory_order_to_row_major(input, source_memory_order);
+    pub fn from_array(
+        input: Array3<u8>,
+        color_space: &ColorSpace,
+        source_memory_order: &MemoryOrderLayout,
+    ) -> Result<ImageFrame, FeagiDataError> {
+        let pixel_data = change_memory_order_to_row_major(input, source_memory_order);
         let number_color_channels: usize = pixel_data.shape()[2];
         Ok(ImageFrame {
             pixels: pixel_data,
@@ -70,68 +84,97 @@ impl ImageFrame {
         })
     }
 
-    pub fn new_from_dynamic_image(img: DynamicImage, color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
+    pub fn new_from_dynamic_image(
+        img: DynamicImage,
+        color_space: &ColorSpace,
+    ) -> Result<ImageFrame, FeagiDataError> {
         let (width, height) = img.dimensions();
         let color_layout = ColorChannelLayout::try_from(img.color())?;
         match color_layout {
             ColorChannelLayout::GrayScale => {
                 let buffer = img.to_luma8();
-                let array = Array3::from_shape_vec(
-                    (height as usize, width as usize, 1),
-                    buffer.into_raw()).unwrap();
-                Self::from_array(array, color_space, &MemoryOrderLayout::HeightsWidthsChannels)
-            },
+                let array =
+                    Array3::from_shape_vec((height as usize, width as usize, 1), buffer.into_raw())
+                        .unwrap();
+                Self::from_array(
+                    array,
+                    color_space,
+                    &MemoryOrderLayout::HeightsWidthsChannels,
+                )
+            }
             ColorChannelLayout::RG => {
                 let buffer = img.to_luma_alpha8();
-                let array = Array3::from_shape_vec(
-                    (height as usize, width as usize, 2),
-                    buffer.into_raw()).unwrap();
-                Self::from_array(array, color_space, &MemoryOrderLayout::HeightsWidthsChannels)
+                let array =
+                    Array3::from_shape_vec((height as usize, width as usize, 2), buffer.into_raw())
+                        .unwrap();
+                Self::from_array(
+                    array,
+                    color_space,
+                    &MemoryOrderLayout::HeightsWidthsChannels,
+                )
             }
             ColorChannelLayout::RGB => {
                 let buffer = img.to_rgb8();
-                let array = Array3::from_shape_vec(
-                    (height as usize, width as usize, 3),
-                    buffer.into_raw()).unwrap();
-                Self::from_array(array, color_space, &MemoryOrderLayout::HeightsWidthsChannels)
+                let array =
+                    Array3::from_shape_vec((height as usize, width as usize, 3), buffer.into_raw())
+                        .unwrap();
+                Self::from_array(
+                    array,
+                    color_space,
+                    &MemoryOrderLayout::HeightsWidthsChannels,
+                )
             }
             ColorChannelLayout::RGBA => {
                 let buffer = img.to_rgba8();
-                let array = Array3::from_shape_vec(
-                    (height as usize, width as usize, 4),
-                    buffer.into_raw()).unwrap();
-                Self::from_array(array, color_space, &MemoryOrderLayout::HeightsWidthsChannels)
+                let array =
+                    Array3::from_shape_vec((height as usize, width as usize, 4), buffer.into_raw())
+                        .unwrap();
+                Self::from_array(
+                    array,
+                    color_space,
+                    &MemoryOrderLayout::HeightsWidthsChannels,
+                )
             }
         }
     }
 
-    pub fn new_from_png_bytes(input: &[u8], color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
+    pub fn new_from_png_bytes(
+        input: &[u8],
+        color_space: &ColorSpace,
+    ) -> Result<ImageFrame, FeagiDataError> {
         let image_format = image::ImageFormat::Png;
         let img = image::load_from_memory_with_format(input, image_format).unwrap();
         Self::new_from_dynamic_image(img, color_space)
     }
 
-    pub fn new_from_bmp_bytes(input: &[u8], color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
+    pub fn new_from_bmp_bytes(
+        input: &[u8],
+        color_space: &ColorSpace,
+    ) -> Result<ImageFrame, FeagiDataError> {
         let image_format = image::ImageFormat::Bmp;
         let img = image::load_from_memory_with_format(input, image_format).unwrap();
         Self::new_from_dynamic_image(img, color_space)
     }
 
-    pub fn new_from_jpeg_bytes(input: &[u8], color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
+    pub fn new_from_jpeg_bytes(
+        input: &[u8],
+        color_space: &ColorSpace,
+    ) -> Result<ImageFrame, FeagiDataError> {
         let image_format = image::ImageFormat::Jpeg;
         let img = image::load_from_memory_with_format(input, image_format).unwrap();
         Self::new_from_dynamic_image(img, color_space)
     }
 
-    pub fn new_from_tiff_bytes(input: &[u8], color_space: &ColorSpace) -> Result<ImageFrame, FeagiDataError> {
+    pub fn new_from_tiff_bytes(
+        input: &[u8],
+        color_space: &ColorSpace,
+    ) -> Result<ImageFrame, FeagiDataError> {
         let image_format = image::ImageFormat::Tiff;
         let img = image::load_from_memory_with_format(input, image_format).unwrap();
         Self::new_from_dynamic_image(img, color_space)
     }
 
     //endregion
-
-
 
     //region Properties
 
@@ -147,8 +190,9 @@ impl ImageFrame {
         ImageFrameProperties::new(
             self.get_xy_resolution(),
             self.color_space,
-            self.channel_layout
-        ).unwrap()
+            self.channel_layout,
+        )
+        .unwrap()
     }
 
     /// Returns a reference to the channel layout of this image.
@@ -192,7 +236,7 @@ impl ImageFrame {
     pub fn get_pixels_view(&self) -> ArrayView3<u8> {
         self.pixels.view()
     }
-    
+
     /// Returns a mutable view of the pixel data as a 3D array.
     pub fn get_pixels_view_mut(&mut self) -> ArrayViewMut3<u8> {
         self.pixels.view_mut()
@@ -218,8 +262,9 @@ impl ImageFrame {
         ImageXYZDimensions::new(
             self.pixels.shape()[0] as u32,
             self.pixels.shape()[1] as u32,
-            self.channel_layout.into()
-        ).unwrap()
+            self.channel_layout.into(),
+        )
+        .unwrap()
     }
 
     /// Returns a reference to the internal pixel data array.
@@ -259,10 +304,8 @@ impl ImageFrame {
     pub fn get_internal_byte_data_mut(&mut self) -> &mut [u8] {
         self.pixels.as_slice_mut().unwrap()
     }
-    
+
     //endregion
-
-
 
     //region Export as Image
 
@@ -275,8 +318,11 @@ impl ImageFrame {
     ///
     /// A DynamicImage containing the pixel data from this ImageFrame.
     pub fn export_as_dynamic_image(&self) -> Result<DynamicImage, FeagiDataError> {
-        let (width, height) = (self.get_xy_resolution().width as usize, self.get_xy_resolution().height as usize);
-        
+        let (width, height) = (
+            self.get_xy_resolution().width as usize,
+            self.get_xy_resolution().height as usize,
+        );
+
         match self.channel_layout {
             ColorChannelLayout::GrayScale => {
                 let mut buffer = Vec::with_capacity(width * height);
@@ -286,9 +332,13 @@ impl ImageFrame {
                     }
                 }
                 let img_buffer = image::GrayImage::from_raw(width as u32, height as u32, buffer)
-                    .ok_or_else(|| FeagiDataError::InternalError("Failed to create grayscale image".to_string()))?;
+                    .ok_or_else(|| {
+                        FeagiDataError::InternalError(
+                            "Failed to create grayscale image".to_string(),
+                        )
+                    })?;
                 Ok(DynamicImage::ImageLuma8(img_buffer))
-            },
+            }
             ColorChannelLayout::RG => {
                 let mut buffer = Vec::with_capacity(width * height * 2);
                 for y in 0..height {
@@ -297,10 +347,15 @@ impl ImageFrame {
                         buffer.push(self.pixels[(y, x, 1)]); // A
                     }
                 }
-                let img_buffer = image::GrayAlphaImage::from_raw(width as u32, height as u32, buffer)
-                    .ok_or_else(|| FeagiDataError::InternalError("Failed to create grayscale+alpha image".to_string()))?;
+                let img_buffer =
+                    image::GrayAlphaImage::from_raw(width as u32, height as u32, buffer)
+                        .ok_or_else(|| {
+                            FeagiDataError::InternalError(
+                                "Failed to create grayscale+alpha image".to_string(),
+                            )
+                        })?;
                 Ok(DynamicImage::ImageLumaA8(img_buffer))
-            },
+            }
             ColorChannelLayout::RGB => {
                 let mut buffer = Vec::with_capacity(width * height * 3);
                 for y in 0..height {
@@ -311,9 +366,11 @@ impl ImageFrame {
                     }
                 }
                 let img_buffer = image::RgbImage::from_raw(width as u32, height as u32, buffer)
-                    .ok_or_else(|| FeagiDataError::InternalError("Failed to create RGB image".to_string()))?;
+                    .ok_or_else(|| {
+                        FeagiDataError::InternalError("Failed to create RGB image".to_string())
+                    })?;
                 Ok(DynamicImage::ImageRgb8(img_buffer))
-            },
+            }
             ColorChannelLayout::RGBA => {
                 let mut buffer = Vec::with_capacity(width * height * 4);
                 for y in 0..height {
@@ -325,7 +382,9 @@ impl ImageFrame {
                     }
                 }
                 let img_buffer = image::RgbaImage::from_raw(width as u32, height as u32, buffer)
-                    .ok_or_else(|| FeagiDataError::InternalError("Failed to create RGBA image".to_string()))?;
+                    .ok_or_else(|| {
+                        FeagiDataError::InternalError("Failed to create RGBA image".to_string())
+                    })?;
                 Ok(DynamicImage::ImageRgba8(img_buffer))
             }
         }
@@ -339,7 +398,11 @@ impl ImageFrame {
     pub fn export_as_png_bytes(&self) -> Result<Vec<u8>, FeagiDataError> {
         let dynamic_img = self.export_as_dynamic_image()?;
         let mut buffer = Vec::new();
-        dynamic_img.write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Png)
+        dynamic_img
+            .write_to(
+                &mut std::io::Cursor::new(&mut buffer),
+                image::ImageFormat::Png,
+            )
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode PNG: {}", e)))?;
         Ok(buffer)
     }
@@ -352,7 +415,11 @@ impl ImageFrame {
     pub fn export_as_bmp_bytes(&self) -> Result<Vec<u8>, FeagiDataError> {
         let dynamic_img = self.export_as_dynamic_image()?;
         let mut buffer = Vec::new();
-        dynamic_img.write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Bmp)
+        dynamic_img
+            .write_to(
+                &mut std::io::Cursor::new(&mut buffer),
+                image::ImageFormat::Bmp,
+            )
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode BMP: {}", e)))?;
         Ok(buffer)
     }
@@ -367,14 +434,18 @@ impl ImageFrame {
     /// A Vec<u8> containing the JPEG-encoded image data.
     pub fn export_as_jpeg_bytes(&self) -> Result<Vec<u8>, FeagiDataError> {
         let mut dynamic_img = self.export_as_dynamic_image()?;
-        
+
         // JPEG doesn't support transparency, convert RGBA to RGB
         if matches!(self.channel_layout, ColorChannelLayout::RGBA) {
             dynamic_img = DynamicImage::ImageRgb8(dynamic_img.to_rgb8());
         }
-        
+
         let mut buffer = Vec::new();
-        dynamic_img.write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Jpeg)
+        dynamic_img
+            .write_to(
+                &mut std::io::Cursor::new(&mut buffer),
+                image::ImageFormat::Jpeg,
+            )
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode JPEG: {}", e)))?;
         Ok(buffer)
     }
@@ -387,14 +458,16 @@ impl ImageFrame {
     pub fn export_as_tiff_bytes(&self) -> Result<Vec<u8>, FeagiDataError> {
         let dynamic_img = self.export_as_dynamic_image()?;
         let mut buffer = Vec::new();
-        dynamic_img.write_to(&mut std::io::Cursor::new(&mut buffer), image::ImageFormat::Tiff)
+        dynamic_img
+            .write_to(
+                &mut std::io::Cursor::new(&mut buffer),
+                image::ImageFormat::Tiff,
+            )
             .map_err(|e| FeagiDataError::InternalError(format!("Failed to encode TIFF: {}", e)))?;
         Ok(buffer)
     }
 
     //endregion
-
-
 
     //region Image Processing
 
@@ -407,8 +480,7 @@ impl ImageFrame {
     pub fn change_brightness(&mut self, value: i32) {
         match self.color_space {
             ColorSpace::Gamma => {
-
-                Zip::indexed(&mut self.pixels).par_for_each(|(_y,_x,_c), color_val| {
+                Zip::indexed(&mut self.pixels).par_for_each(|(_y, _x, _c), color_val| {
                     let v = (*color_val as i32 + value).clamp(0, 255);
                     *color_val = v as u8;
                 });
@@ -416,7 +488,7 @@ impl ImageFrame {
             ColorSpace::Linear => {
                 // Convert to linear float, add value scaled to 0-1, clamp
                 let delta = value as f32 / 255.0;
-                
+
                 // TODO make parallel
                 Zip::from(&mut self.pixels).for_each(|px| {
                     let lin = Self::srgb_to_linear(*px as f32);
@@ -449,13 +521,11 @@ impl ImageFrame {
         }
     }
 
-   pub fn blink_image(&mut self) {
-       self.pixels.fill(0);
-   }
+    pub fn blink_image(&mut self) {
+        self.pixels.fill(0);
+    }
 
     //endregion
-
-
 
     //region Internal Color Space Conversions
 
@@ -465,7 +535,9 @@ impl ImageFrame {
         let c = c / 255.0;
         if c <= SRGB_THRESHOLD {
             c / LINEAR_SCALE
-        } else { ((c + SRGB_B) / SRGB_A).powf(2.4) }
+        } else {
+            ((c + SRGB_B) / SRGB_A).powf(2.4)
+        }
     }
 
     /// Convert linear [0.0..1.0] -> sRGB byte [0..255]
@@ -481,14 +553,15 @@ impl ImageFrame {
 
     //endregion
 
-
-
     //endregion
-
 
     // region Outputting Neurons
 
-    pub(crate) fn overwrite_neuron_data(&self, write_target: &mut NeuronVoxelXYZPArrays, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
+    pub(crate) fn overwrite_neuron_data(
+        &self,
+        write_target: &mut NeuronVoxelXYZPArrays,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<(), FeagiDataError> {
         const EPSILON: u8 = 1; // avoid writing near zero vals
 
         let x_offset: u32 = *channel_index * self.get_xy_resolution().width;
@@ -497,7 +570,7 @@ impl ImageFrame {
         write_target.clear();
 
         if self.skip_encoding {
-            return Ok(()) // Encoding is to be skipped
+            return Ok(()); // Encoding is to be skipped
         }
 
         write_target.ensure_capacity(total_pixels);
@@ -513,19 +586,18 @@ impl ImageFrame {
             // Therefore: y_feagi = height - 1 - row
             for ((row, col, c), color_val) in self.pixels.indexed_iter() {
                 if color_val > &EPSILON {
-                    x_vec.push(col as u32 + x_offset);  // col is width (x coordinate)
-                    y_vec.push(height - 1 - (row as u32));  // Flip Y: image top-left (0,0) -> FEAGI bottom-left (0,0)
+                    x_vec.push(col as u32 + x_offset); // col is width (x coordinate)
+                    y_vec.push(height - 1 - (row as u32)); // Flip Y: image top-left (0,0) -> FEAGI bottom-left (0,0)
                     c_vec.push(c as u32);
                     p_vec.push(*color_val as f32 / 255.0);
                 }
-            };
+            }
             Ok(())
         })?;
         Ok(())
     }
 
     // endregion
-
 }
 
 impl std::fmt::Display for ImageFrame {
@@ -534,7 +606,10 @@ impl std::fmt::Display for ImageFrame {
     }
 }
 
-fn change_memory_order_to_row_major(input: Array3<u8>, source_memory_order: &MemoryOrderLayout) -> Array3<u8> {
+fn change_memory_order_to_row_major(
+    input: Array3<u8>,
+    source_memory_order: &MemoryOrderLayout,
+) -> Array3<u8> {
     match source_memory_order {
         MemoryOrderLayout::HeightsWidthsChannels => input, // Nothing needed, we store in this format anyway
         MemoryOrderLayout::ChannelsHeightsWidths => input.permuted_axes([2, 0, 1]),

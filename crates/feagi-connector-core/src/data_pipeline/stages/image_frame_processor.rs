@@ -5,14 +5,14 @@
 //! It wraps an `ImageFrameTransformerDefinition` to provide streaming functionality
 //! with caching and efficient processing.
 
-use std::any::Any;
-use std::fmt::Display;
-use std::time::Instant;
-use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::{ImageFrame, ImageFrameProcessor};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data_structures::FeagiDataError;
+use std::any::Any;
+use std::fmt::Display;
+use std::time::Instant;
 
 /// A stream processor that applies image transformations to incoming frames.
 ///
@@ -26,7 +26,7 @@ use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 /// The processor applies transformations in the optimal order defined by the
 /// underlying `ImageFrameTransformerDefinition`:
 /// 1. **Cropping** - Extract regions of interest
-/// 2. **Resizing** - Scale to target dimensions  
+/// 2. **Resizing** - Scale to target dimensions
 /// 3. **Color space conversion** - Convert between Linear/Gamma
 /// 4. **Brightness adjustment** - Modify pixel intensity
 /// 5. **Contrast adjustment** - Adjust image contrast
@@ -47,27 +47,40 @@ pub struct ImageFrameProcessorStage {
 
 impl Display for ImageFrameProcessorStage {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "ImageFrameTransformerProcessor({:?})", self.transformer_definition)
+        write!(
+            f,
+            "ImageFrameTransformerProcessor({:?})",
+            self.transformer_definition
+        )
     }
 }
 
 impl PipelineStage for ImageFrameProcessorStage {
     fn get_input_data_type(&self) -> WrappedIOType {
-        WrappedIOType::ImageFrame(Some(*self.transformer_definition.get_input_image_properties()))
+        WrappedIOType::ImageFrame(Some(
+            *self.transformer_definition.get_input_image_properties(),
+        ))
     }
 
     fn get_output_data_type(&self) -> WrappedIOType {
-        WrappedIOType::ImageFrame(Some(self.transformer_definition.get_output_image_properties()))
+        WrappedIOType::ImageFrame(Some(
+            self.transformer_definition.get_output_image_properties(),
+        ))
     }
 
     fn get_most_recent_output(&self) -> &WrappedIOData {
         &self.cached
     }
 
-    fn process_new_input(&mut self, value: &WrappedIOData, _time_of_input: Instant) -> Result<&WrappedIOData, FeagiDataError> {
+    fn process_new_input(
+        &mut self,
+        value: &WrappedIOData,
+        _time_of_input: Instant,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
         let read_from: &ImageFrame = value.try_into()?;
         let write_target: &mut ImageFrame = (&mut self.cached).try_into()?;
-        self.transformer_definition.process_image(read_from, write_target)?;
+        self.transformer_definition
+            .process_image(read_from, write_target)?;
         write_target.skip_encoding = read_from.skip_encoding;
         Ok(&self.cached)
     }
@@ -82,11 +95,14 @@ impl PipelineStage for ImageFrameProcessorStage {
 
     fn create_properties(&self) -> PipelineStageProperties {
         PipelineStageProperties::ImageFrameProcessor {
-            transformer_definition: self.transformer_definition.clone()
+            transformer_definition: self.transformer_definition.clone(),
         }
     }
 
-    fn load_properties(&mut self, properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
+    fn load_properties(
+        &mut self,
+        properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
         match properties {
             PipelineStageProperties::ImageFrameProcessor { transformer_definition } => {
                 self.transformer_definition = transformer_definition;
@@ -115,13 +131,19 @@ impl ImageFrameProcessorStage {
     /// * `Ok(ImageFrameProcessor)` - Successfully created processor
     /// * `Err(FeagiDataError)` - If output buffer allocation fails
     pub fn new(transformer_definition: ImageFrameProcessor) -> Result<Self, FeagiDataError> {
-        Ok(ImageFrameProcessorStage{
-            cached: WrappedIOData::ImageFrame(ImageFrame::new_from_image_frame_properties(&transformer_definition.get_output_image_properties())?),
+        Ok(ImageFrameProcessorStage {
+            cached: WrappedIOData::ImageFrame(ImageFrame::new_from_image_frame_properties(
+                &transformer_definition.get_output_image_properties(),
+            )?),
             transformer_definition,
         })
     }
 
-    pub fn new_box(transformer_definition: ImageFrameProcessor) -> Result<Box<dyn PipelineStage + Send + Sync + 'static>, FeagiDataError> {
-        Ok(Box::new(ImageFrameProcessorStage::new(transformer_definition)?))
+    pub fn new_box(
+        transformer_definition: ImageFrameProcessor,
+    ) -> Result<Box<dyn PipelineStage + Send + Sync + 'static>, FeagiDataError> {
+        Ok(Box::new(ImageFrameProcessorStage::new(
+            transformer_definition,
+        )?))
     }
 }

@@ -8,11 +8,10 @@
 //! - Push: Send messages to server
 //! - Dealer: Request/reply client
 
-pub mod sub;
-pub mod push;
 pub mod dealer;
+pub mod push;
+pub mod sub;
 
-pub use sub::WsSub;
-pub use push::WsPush;
 pub use dealer::WsDealer;
-
+pub use push::WsPush;
+pub use sub::WsSub;

@@ -72,7 +72,7 @@ pub enum PacketCommand {
 
 impl TryFrom<u8> for PacketCommand {
     type Error = ();
-    
+
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0x01 => Ok(PacketCommand::NeuronFiring),
@@ -106,17 +106,17 @@ impl BluetoothProtocol {
             connected: false,
         }
     }
-    
+
     /// Get device name
     pub fn device_name(&self) -> &str {
         self.device_name
     }
-    
+
     /// Check if BLE is connected (set by platform layer)
     pub fn is_connected(&self) -> bool {
         self.connected
     }
-    
+
     /// Set connection status (called by platform BLE stack)
     pub fn set_connected(&mut self, connected: bool) {
         self.connected = connected;
@@ -125,7 +125,7 @@ impl BluetoothProtocol {
             self.receive_buffer.clear();
         }
     }
-    
+
     /// Process incoming BLE data from platform layer
     ///
     /// This appends data to the internal buffer for parsing.
@@ -141,7 +141,7 @@ impl BluetoothProtocol {
             }
         }
     }
-    
+
     /// Parse and consume the next command from the buffer
     ///
     /// Returns `Some(Command)` if a complete, valid command was parsed.
@@ -151,12 +151,12 @@ impl BluetoothProtocol {
         if let Some(coords) = self.parse_neuron_firing_packet() {
             return Some(Command::NeuronFiring { coordinates: coords });
         }
-        
+
         // TODO: Add other packet types (GPIO, PWM, etc.)
-        
+
         None
     }
-    
+
     /// Parse neuron firing packet from buffer
     ///
     /// Format: [0x01] [count] [x1, y1, x2, y2, ...]
@@ -164,16 +164,16 @@ impl BluetoothProtocol {
         if self.receive_buffer.len() < 2 {
             return None;
         }
-        
+
         if self.receive_buffer[0] != PacketCommand::NeuronFiring as u8 {
             return None;
         }
-        
+
         let count = self.receive_buffer[1] as usize;
         if count > 25 || self.receive_buffer.len() < 2 + count * 2 {
             return None;
         }
-        
+
         let mut coords = Vec::new();
         for i in 0..count {
             let x = self.receive_buffer[2 + i * 2];
@@ -182,26 +182,26 @@ impl BluetoothProtocol {
                 break; // Max 25 coordinates
             }
         }
-        
+
         // Consume processed bytes from buffer
         let consumed = 2 + count * 2;
         self.consume_bytes(consumed);
-        
+
         Some(coords)
     }
-    
+
     /// Remove consumed bytes from the front of the buffer
     fn consume_bytes(&mut self, count: usize) {
         if count >= self.receive_buffer.len() {
             self.receive_buffer.clear();
             return;
         }
-        
+
         // Shift remaining data to front
         for i in count..self.receive_buffer.len() {
             self.receive_buffer[i - count] = self.receive_buffer[i];
         }
-        
+
         // Truncate to new length
         for _ in 0..count {
             if self.receive_buffer.pop().is_none() {
@@ -209,7 +209,7 @@ impl BluetoothProtocol {
             }
         }
     }
-    
+
     /// Format capabilities JSON into a byte buffer
     ///
     /// Example capabilities string:
@@ -234,36 +234,36 @@ impl BluetoothProtocol {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_protocol_creation() {
         let protocol = BluetoothProtocol::new("FEAGI-test");
         assert_eq!(protocol.device_name(), "FEAGI-test");
         assert!(!protocol.is_connected());
     }
-    
+
     #[test]
     fn test_connection_status() {
         let mut protocol = BluetoothProtocol::new("FEAGI-test");
-        
+
         assert!(!protocol.is_connected());
         protocol.set_connected(true);
         assert!(protocol.is_connected());
         protocol.set_connected(false);
         assert!(!protocol.is_connected());
     }
-    
+
     #[test]
     fn test_parse_neuron_firing_valid() {
         let mut protocol = BluetoothProtocol::new("FEAGI-test");
-        
+
         // Valid packet: [0x01] [count=2] [x1=1, y1=2, x2=3, y2=4]
         let packet = [0x01, 0x02, 0x01, 0x02, 0x03, 0x04];
         protocol.process_received_data(&packet);
-        
+
         let result = protocol.receive_command();
         assert!(result.is_some());
-        
+
         if let Some(Command::NeuronFiring { coordinates }) = result {
             assert_eq!(coordinates.len(), 2);
             assert_eq!(coordinates[0], (1, 2));
@@ -272,35 +272,35 @@ mod tests {
             panic!("Expected NeuronFiring command");
         }
     }
-    
+
     #[test]
     fn test_parse_neuron_firing_invalid_header() {
         let mut protocol = BluetoothProtocol::new("FEAGI-test");
-        
+
         // Invalid header
         let packet = [0x02, 0x01, 0x00, 0x00];
         protocol.process_received_data(&packet);
-        
+
         let result = protocol.receive_command();
         assert!(result.is_none());
     }
-    
+
     #[test]
     fn test_parse_neuron_firing_incomplete() {
         let mut protocol = BluetoothProtocol::new("FEAGI-test");
-        
+
         // Incomplete packet (missing data)
         let packet = [0x01, 0x02, 0x01]; // Missing y coordinate
         protocol.process_received_data(&packet);
-        
+
         let result = protocol.receive_command();
         assert!(result.is_none());
     }
-    
+
     #[test]
     fn test_parse_neuron_firing_max_coords() {
         let mut protocol = BluetoothProtocol::new("FEAGI-test");
-        
+
         // Maximum 25 coordinates
         let mut packet = heapless::Vec::<u8, 256>::new();
         packet.push(0x01).unwrap(); // Command
@@ -310,28 +310,28 @@ mod tests {
             packet.push((i + 1) as u8).unwrap(); // y
         }
         protocol.process_received_data(&packet);
-        
+
         let result = protocol.receive_command();
         assert!(result.is_some());
-        
+
         if let Some(Command::NeuronFiring { coordinates }) = result {
             assert_eq!(coordinates.len(), 25);
         } else {
             panic!("Expected NeuronFiring command");
         }
     }
-    
+
     #[test]
     fn test_buffer_overflow_handling() {
         let mut protocol = BluetoothProtocol::new("FEAGI-test");
-        
+
         // Fill buffer beyond capacity
         let mut large_data = heapless::Vec::<u8, 300>::new();
         for i in 0..300 {
             let _ = large_data.push(i as u8);
         }
         protocol.process_received_data(&large_data);
-        
+
         // Buffer should handle overflow (clears and starts over)
         // Verify protocol still works after overflow
         let packet = [0x01, 0x01, 0x05, 0x06]; // Valid packet
@@ -339,31 +339,31 @@ mod tests {
         let result = protocol.receive_command();
         assert!(result.is_some()); // Should parse successfully
     }
-    
+
     #[test]
     fn test_get_capabilities_data() {
         let protocol = BluetoothProtocol::new("FEAGI-test");
         let caps = "{\"sensors\":{\"accel\":true}}";
         let data = protocol.get_capabilities_data(caps);
-        
+
         assert_eq!(data.len(), caps.len());
         assert_eq!(data.as_slice(), caps.as_bytes());
     }
-    
+
     #[test]
     fn test_disconnect_clears_buffer() {
         let mut protocol = BluetoothProtocol::new("FEAGI-test");
-        
+
         // Add some data
         protocol.process_received_data(&[0x01, 0x02, 0x03]);
-        
+
         // Disconnect should clear buffer
         protocol.set_connected(false);
-        
+
         // Add new valid packet
         let packet = [0x01, 0x01, 0x05, 0x06];
         protocol.process_received_data(&packet);
-        
+
         // Should parse new packet successfully (not confused by old data)
         let result = protocol.receive_command();
         assert!(result.is_some());

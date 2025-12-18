@@ -89,8 +89,3 @@ mod tests {
         assert_eq!(stats.utilization(), 0.0);
     }
 }
-
-
-
-
-

@@ -184,21 +184,21 @@ pub use feagi_agent as agent;
 /// Prelude - commonly used types and traits
 pub mod prelude {
     pub use crate::types::*;
-    
+
     #[cfg(feature = "burst-engine")]
-    pub use crate::burst_engine::{RustNPU, BurstResult};
-    
+    pub use crate::burst_engine::{BurstResult, RustNPU};
+
     #[cfg(feature = "state-manager")]
-    pub use crate::state_manager::{StateManager, BurstEngineState, GenomeState};
-    
+    pub use crate::state_manager::{BurstEngineState, GenomeState, StateManager};
+
     #[cfg(feature = "bdu")]
     pub use crate::bdu::connectivity::synaptogenesis::*;
-    
+
     #[cfg(feature = "plasticity")]
-    pub use crate::plasticity::service::{PlasticityService, PlasticityConfig};
-    
+    pub use crate::plasticity::service::{PlasticityConfig, PlasticityService};
+
     #[cfg(feature = "serialization")]
-    pub use crate::serialization::{save_connectome, load_connectome, ConnectomeSnapshot};
+    pub use crate::serialization::{load_connectome, save_connectome, ConnectomeSnapshot};
 }
 
 #[cfg(test)]
@@ -210,8 +210,3 @@ mod tests {
         let _neuron_id = NeuronId(0);
     }
 }
-
-
-
-
-

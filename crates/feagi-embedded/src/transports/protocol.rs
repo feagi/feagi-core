@@ -90,7 +90,7 @@ pub enum PacketCommand {
 
 impl TryFrom<u8> for PacketCommand {
     type Error = ();
-    
+
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
             0x01 => Ok(PacketCommand::NeuronFiring),
@@ -124,17 +124,17 @@ impl Protocol {
             connected: false,
         }
     }
-    
+
     /// Get device name
     pub fn device_name(&self) -> &str {
         self.device_name
     }
-    
+
     /// Check if connected (application-managed)
     pub fn is_connected(&self) -> bool {
         self.connected
     }
-    
+
     /// Set connection status (called by application)
     pub fn set_connected(&mut self, connected: bool) {
         self.connected = connected;
@@ -143,7 +143,7 @@ impl Protocol {
             self.receive_buffer.clear();
         }
     }
-    
+
     /// Process incoming data from transport layer
     ///
     /// This appends data to the internal buffer for parsing.
@@ -164,7 +164,7 @@ impl Protocol {
             }
         }
     }
-    
+
     /// Parse and consume the next command from the buffer
     ///
     /// Returns `Some(Command)` if a complete, valid command was parsed.
@@ -172,14 +172,16 @@ impl Protocol {
     pub fn receive_command(&mut self) -> Option<Command> {
         // Try neuron firing packet
         if let Some(coords) = self.parse_neuron_firing_packet() {
-            return Some(Command::NeuronFiring { coordinates: coords });
+            return Some(Command::NeuronFiring {
+                coordinates: coords,
+            });
         }
-        
+
         // TODO: Add other packet types (GPIO, PWM, LED matrix, capabilities)
-        
+
         None
     }
-    
+
     /// Parse neuron firing packet
     ///
     /// Format: [0x01] [count] [x1, y1, x2, y2, ...]
@@ -187,16 +189,16 @@ impl Protocol {
         if self.receive_buffer.len() < 2 {
             return None;
         }
-        
+
         if self.receive_buffer[0] != PacketCommand::NeuronFiring as u8 {
             return None;
         }
-        
+
         let count = self.receive_buffer[1] as usize;
         if count > 25 || self.receive_buffer.len() < 2 + count * 2 {
             return None;
         }
-        
+
         let mut coords = Vec::new();
         for i in 0..count {
             let x = self.receive_buffer[2 + i * 2];
@@ -205,26 +207,26 @@ impl Protocol {
                 break;
             }
         }
-        
+
         // Consume processed bytes
         let consumed = 2 + count * 2;
         self.consume_bytes(consumed);
-        
+
         Some(coords)
     }
-    
+
     /// Remove consumed bytes from buffer
     fn consume_bytes(&mut self, count: usize) {
         if count >= self.receive_buffer.len() {
             self.receive_buffer.clear();
             return;
         }
-        
+
         // Shift remaining data to front
         for i in count..self.receive_buffer.len() {
             self.receive_buffer[i - count] = self.receive_buffer[i];
         }
-        
+
         // Truncate to new length
         for _ in 0..count {
             if self.receive_buffer.pop().is_none() {
@@ -232,7 +234,7 @@ impl Protocol {
             }
         }
     }
-    
+
     /// Format capabilities JSON into byte buffer
     ///
     /// Example capabilities string:
@@ -260,35 +262,35 @@ pub use Protocol as BluetoothProtocol;
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_protocol_creation() {
         let protocol = Protocol::new("FEAGI-test");
         assert_eq!(protocol.device_name(), "FEAGI-test");
         assert!(!protocol.is_connected());
     }
-    
+
     #[test]
     fn test_connection_status() {
         let mut protocol = Protocol::new("FEAGI-test");
-        
+
         protocol.set_connected(true);
         assert!(protocol.is_connected());
         protocol.set_connected(false);
         assert!(!protocol.is_connected());
     }
-    
+
     #[test]
     fn test_parse_neuron_firing_valid() {
         let mut protocol = Protocol::new("FEAGI-test");
-        
+
         // Valid packet
         let packet = [0x01, 0x02, 0x01, 0x02, 0x03, 0x04];
         protocol.process_received_data(&packet);
-        
+
         let result = protocol.receive_command();
         assert!(result.is_some());
-        
+
         if let Some(Command::NeuronFiring { coordinates }) = result {
             assert_eq!(coordinates.len(), 2);
             assert_eq!(coordinates[0], (1, 2));
@@ -297,38 +299,37 @@ mod tests {
             panic!("Expected NeuronFiring command");
         }
     }
-    
+
     #[test]
     fn test_buffer_overflow_handling() {
         let mut protocol = Protocol::new("FEAGI-test");
-        
+
         // Fill buffer beyond capacity
         let mut large_data = heapless::Vec::<u8, 300>::new();
         for i in 0..300 {
             let _ = large_data.push(i as u8);
         }
         protocol.process_received_data(&large_data);
-        
+
         // Buffer should handle overflow
         let packet = [0x01, 0x01, 0x05, 0x06];
         protocol.process_received_data(&packet);
         let result = protocol.receive_command();
         assert!(result.is_some());
     }
-    
+
     #[test]
     fn test_disconnect_clears_buffer() {
         let mut protocol = Protocol::new("FEAGI-test");
-        
+
         protocol.process_received_data(&[0x01, 0x02, 0x03]);
         protocol.set_connected(false);
-        
+
         // Buffer should be cleared
         let packet = [0x01, 0x01, 0x05, 0x06];
         protocol.process_received_data(&packet);
-        
+
         let result = protocol.receive_command();
         assert!(result.is_some());
     }
 }
-

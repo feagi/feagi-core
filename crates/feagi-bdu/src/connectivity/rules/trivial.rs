@@ -5,8 +5,8 @@
 Trivial connectivity rules - simple, non-compute-intensive morphologies.
 */
 
-use crate::types::Position;
 use crate::rng::get_rng;
+use crate::types::Position;
 use rand::Rng;
 
 type Dimensions = (usize, usize, usize);

@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 use crate::types::{BduError, BduResult};
-use feagi_data_structures::genomic::BrainRegion;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::BrainRegion;
 
 /// Hierarchical tree structure for brain regions
 ///
@@ -105,7 +105,8 @@ impl BrainRegionHierarchy {
 
         // Update parent/child maps
         if let Some(parent) = parent_id {
-            self.parent_map.insert(region_id_str.clone(), parent.clone());
+            self.parent_map
+                .insert(region_id_str.clone(), parent.clone());
             self.children_map
                 .entry(parent)
                 .or_insert_with(HashSet::new)
@@ -146,7 +147,11 @@ impl BrainRegionHierarchy {
 
         // Get parent and children
         let parent_id = self.parent_map.get(region_id).cloned();
-        let children = self.children_map.get(region_id).cloned().unwrap_or_default();
+        let children = self
+            .children_map
+            .get(region_id)
+            .cloned()
+            .unwrap_or_default();
 
         // Reassign children to parent
         if let Some(parent) = &parent_id {
@@ -254,7 +259,7 @@ impl BrainRegionHierarchy {
     pub fn get_parent(&self, region_id: &str) -> Option<&String> {
         self.parent_map.get(region_id)
     }
-    
+
     /// Find which brain region contains a given cortical area
     ///
     /// Searches all brain regions to find which one contains the specified cortical area.
@@ -274,7 +279,7 @@ impl BrainRegionHierarchy {
         }
         None
     }
-    
+
     /// Get the root brain region ID (region with no parent)
     ///
     /// Searches for the region that has no parent in the parent_map.
@@ -352,9 +357,9 @@ impl BrainRegionHierarchy {
     pub fn region_count(&self) -> usize {
         self.regions.len()
     }
-    
+
     /// Get all regions as a cloned HashMap
-    /// 
+    ///
     /// This is useful for extracting all brain regions to sync with RuntimeGenome
     pub fn get_all_regions(&self) -> HashMap<String, BrainRegion> {
         self.regions.clone()
@@ -370,16 +375,12 @@ impl Default for BrainRegionHierarchy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::brain_regions::{RegionType, RegionID};
+    use feagi_data_structures::genomic::brain_regions::{RegionID, RegionType};
 
     #[test]
     fn test_hierarchy_creation() {
-        let root = BrainRegion::new(
-            RegionID::new(),
-            "Root".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
 
         let hierarchy = BrainRegionHierarchy::with_root(root);
 
@@ -389,66 +390,42 @@ mod tests {
 
     #[test]
     fn test_add_regions() {
-        let root = BrainRegion::new(
-            RegionID::new(),
-            "Root".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
 
         let mut hierarchy = BrainRegionHierarchy::with_root(root);
         let root_id = hierarchy.get_root_id().unwrap().clone();
 
         // Add child
-        let visual = BrainRegion::new(
-            RegionID::new(),
-            "Visual".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let visual =
+            BrainRegion::new(RegionID::new(), "Visual".to_string(), RegionType::Undefined).unwrap();
         let visual_id = visual.region_id.to_string();
 
-        hierarchy
-            .add_region(visual, Some(root_id.clone()))
-            .unwrap();
+        hierarchy.add_region(visual, Some(root_id.clone())).unwrap();
 
         assert_eq!(hierarchy.region_count(), 2);
-        assert_eq!(
-            hierarchy.get_parent(&visual_id),
-            Some(&root_id)
-        );
+        assert_eq!(hierarchy.get_parent(&visual_id), Some(&root_id));
     }
 
     #[test]
     fn test_remove_region() {
-        let root = BrainRegion::new(
-            RegionID::new(),
-            "Root".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
 
         let mut hierarchy = BrainRegionHierarchy::with_root(root);
         let root_id = hierarchy.get_root_id().unwrap().clone();
 
         // Add regions
-        let visual = BrainRegion::new(
-            RegionID::new(),
-            "Visual".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let visual =
+            BrainRegion::new(RegionID::new(), "Visual".to_string(), RegionType::Undefined).unwrap();
         let visual_id = visual.region_id.to_string();
 
-        let v1 = BrainRegion::new(RegionID::new(), "V1".to_string(), RegionType::Undefined).unwrap();
+        let v1 =
+            BrainRegion::new(RegionID::new(), "V1".to_string(), RegionType::Undefined).unwrap();
         let v1_id = v1.region_id.to_string();
 
-        hierarchy
-            .add_region(visual, Some(root_id.clone()))
-            .unwrap();
-        hierarchy
-            .add_region(v1, Some(visual_id.clone()))
-            .unwrap();
+        hierarchy.add_region(visual, Some(root_id.clone())).unwrap();
+        hierarchy.add_region(v1, Some(visual_id.clone())).unwrap();
 
         // Remove visual (v1 should be reassigned to root)
         hierarchy.remove_region(&visual_id).unwrap();
@@ -459,45 +436,28 @@ mod tests {
 
     #[test]
     fn test_change_parent() {
-        let root = BrainRegion::new(
-            RegionID::new(),
-            "Root".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
 
         let mut hierarchy = BrainRegionHierarchy::with_root(root);
         let root_id = hierarchy.get_root_id().unwrap().clone();
 
         // Add regions
-        let visual = BrainRegion::new(
-            RegionID::new(),
-            "Visual".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let visual =
+            BrainRegion::new(RegionID::new(), "Visual".to_string(), RegionType::Undefined).unwrap();
         let visual_id = visual.region_id.to_string();
 
-        let motor = BrainRegion::new(
-            RegionID::new(),
-            "Motor".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let motor =
+            BrainRegion::new(RegionID::new(), "Motor".to_string(), RegionType::Undefined).unwrap();
         let motor_id = motor.region_id.to_string();
 
-        let v1 = BrainRegion::new(RegionID::new(), "V1".to_string(), RegionType::Undefined).unwrap();
+        let v1 =
+            BrainRegion::new(RegionID::new(), "V1".to_string(), RegionType::Undefined).unwrap();
         let v1_id = v1.region_id.to_string();
 
-        hierarchy
-            .add_region(visual, Some(root_id.clone()))
-            .unwrap();
-        hierarchy
-            .add_region(motor, Some(root_id.clone()))
-            .unwrap();
-        hierarchy
-            .add_region(v1, Some(visual_id.clone()))
-            .unwrap();
+        hierarchy.add_region(visual, Some(root_id.clone())).unwrap();
+        hierarchy.add_region(motor, Some(root_id.clone())).unwrap();
+        hierarchy.add_region(v1, Some(visual_id.clone())).unwrap();
 
         // Move v1 from visual to motor
         hierarchy.change_parent(&v1_id, &motor_id).unwrap();
@@ -509,38 +469,26 @@ mod tests {
 
     #[test]
     fn test_get_descendants() {
-        let root = BrainRegion::new(
-            RegionID::new(),
-            "Root".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
 
         let mut hierarchy = BrainRegionHierarchy::with_root(root);
         let root_id = hierarchy.get_root_id().unwrap().clone();
 
         // Create tree: root -> visual -> v1, v2
-        let visual = BrainRegion::new(
-            RegionID::new(),
-            "Visual".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let visual =
+            BrainRegion::new(RegionID::new(), "Visual".to_string(), RegionType::Undefined).unwrap();
         let visual_id = visual.region_id.to_string();
 
-        let v1 = BrainRegion::new(RegionID::new(), "V1".to_string(), RegionType::Undefined).unwrap();
+        let v1 =
+            BrainRegion::new(RegionID::new(), "V1".to_string(), RegionType::Undefined).unwrap();
 
-        let v2 = BrainRegion::new(RegionID::new(), "V2".to_string(), RegionType::Undefined).unwrap();
+        let v2 =
+            BrainRegion::new(RegionID::new(), "V2".to_string(), RegionType::Undefined).unwrap();
 
-        hierarchy
-            .add_region(visual, Some(root_id.clone()))
-            .unwrap();
-        hierarchy
-            .add_region(v1, Some(visual_id.clone()))
-            .unwrap();
-        hierarchy
-            .add_region(v2, Some(visual_id.clone()))
-            .unwrap();
+        hierarchy.add_region(visual, Some(root_id.clone())).unwrap();
+        hierarchy.add_region(v1, Some(visual_id.clone())).unwrap();
+        hierarchy.add_region(v2, Some(visual_id.clone())).unwrap();
 
         // Get descendants of root
         let descendants = hierarchy.get_all_descendants(&root_id);
@@ -553,41 +501,25 @@ mod tests {
 
     #[test]
     fn test_cycle_prevention() {
-        let root = BrainRegion::new(
-            RegionID::new(),
-            "Root".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let root =
+            BrainRegion::new(RegionID::new(), "Root".to_string(), RegionType::Undefined).unwrap();
 
         let mut hierarchy = BrainRegionHierarchy::with_root(root);
         let root_id = hierarchy.get_root_id().unwrap().clone();
 
-        let visual = BrainRegion::new(
-            RegionID::new(),
-            "Visual".to_string(),
-            RegionType::Undefined,
-        )
-        .unwrap();
+        let visual =
+            BrainRegion::new(RegionID::new(), "Visual".to_string(), RegionType::Undefined).unwrap();
         let visual_id = visual.region_id.to_string();
 
-        let v1 = BrainRegion::new(RegionID::new(), "V1".to_string(), RegionType::Undefined).unwrap();
+        let v1 =
+            BrainRegion::new(RegionID::new(), "V1".to_string(), RegionType::Undefined).unwrap();
         let v1_id = v1.region_id.to_string();
 
-        hierarchy
-            .add_region(visual, Some(root_id.clone()))
-            .unwrap();
-        hierarchy
-            .add_region(v1, Some(visual_id.clone()))
-            .unwrap();
+        hierarchy.add_region(visual, Some(root_id.clone())).unwrap();
+        hierarchy.add_region(v1, Some(visual_id.clone())).unwrap();
 
         // Try to make visual a child of v1 (would create cycle)
         let result = hierarchy.change_parent(&visual_id, &v1_id);
         assert!(result.is_err());
     }
 }
-
-
-
-
-

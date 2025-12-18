@@ -13,10 +13,10 @@ std = []
 
 [dependencies]
 # Runtime trait definitions
-feagi-npu-runtime = { path = "../runtime" }
+feagi-npu-runtime = { version = "0.0.0", path = "../runtime" }
 
 # Platform-agnostic core (types + algorithms)
-feagi-npu-neural = { path = "../neural" }
+feagi-npu-neural = { version = "0.0.0", path = "../neural" }
 
 # Standard library dependencies
 rayon = { workspace = true }  # Parallel processing

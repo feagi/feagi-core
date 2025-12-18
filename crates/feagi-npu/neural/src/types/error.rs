@@ -3,8 +3,8 @@
 
 //! Error types for FEAGI operations
 
-use core::fmt;
 use super::ids::NeuronId;
+use core::fmt;
 
 #[cfg(feature = "std")]
 extern crate std;
@@ -42,10 +42,10 @@ pub enum FeagiError {
 
     #[cfg(feature = "std")]
     InvalidBackend(String),
-    
+
     #[cfg(feature = "std")]
     InvalidArea(String),
-    
+
     #[cfg(feature = "std")]
     OutOfBounds {
         x: i32,
@@ -55,19 +55,19 @@ pub enum FeagiError {
         height: usize,
         depth: usize,
     },
-    
+
     #[cfg(feature = "std")]
     InvalidRegion(String),
-    
+
     #[cfg(feature = "std")]
     RegionNotFound(String),
-    
+
     #[cfg(feature = "std")]
     CircularDependency(String),
-    
+
     #[cfg(feature = "std")]
     RuntimeError(String),
-    
+
     #[cfg(not(feature = "std"))]
     GenericError,
 }
@@ -82,13 +82,24 @@ impl fmt::Display for FeagiError {
             FeagiError::NeuronNotFound(id) => write!(f, "Neuron not found: {}", id),
             FeagiError::CorticalAreaNotFound(id) => write!(f, "Cortical area not found: {}", id),
             FeagiError::ArraySizeMismatch { expected, actual } => {
-                write!(f, "Array size mismatch: expected {}, got {}", expected, actual)
+                write!(
+                    f,
+                    "Array size mismatch: expected {}, got {}",
+                    expected, actual
+                )
             }
             FeagiError::ComputationError(msg) => write!(f, "Computation error: {}", msg),
             FeagiError::MemoryAllocationError(msg) => write!(f, "Memory allocation error: {}", msg),
             FeagiError::InvalidBackend(msg) => write!(f, "Invalid backend: {}", msg),
             FeagiError::InvalidArea(msg) => write!(f, "Invalid cortical area: {}", msg),
-            FeagiError::OutOfBounds { x, y, z, width, height, depth } => {
+            FeagiError::OutOfBounds {
+                x,
+                y,
+                z,
+                width,
+                height,
+                depth,
+            } => {
                 write!(
                     f,
                     "Out of bounds: position ({}, {}, {}) exceeds dimensions ({}, {}, {})",
@@ -97,10 +108,12 @@ impl fmt::Display for FeagiError {
             }
             FeagiError::InvalidRegion(msg) => write!(f, "Invalid brain region: {}", msg),
             FeagiError::RegionNotFound(msg) => write!(f, "Region not found: {}", msg),
-            FeagiError::CircularDependency(msg) => write!(f, "Circular dependency detected: {}", msg),
+            FeagiError::CircularDependency(msg) => {
+                write!(f, "Circular dependency detected: {}", msg)
+            }
             FeagiError::RuntimeError(msg) => write!(f, "Runtime error: {}", msg),
         }
-        
+
         #[cfg(not(feature = "std"))]
         match self {
             FeagiError::GenericError => write!(f, "FEAGI error"),
@@ -113,4 +126,3 @@ impl std::error::Error for FeagiError {}
 
 pub type Result<T> = core::result::Result<T, FeagiError>;
 pub type Error = FeagiError;
-

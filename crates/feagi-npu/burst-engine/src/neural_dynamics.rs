@@ -25,10 +25,7 @@ use feagi_npu_neural::types::*;
 use feagi_npu_runtime::NeuronStorage;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
-use feagi_npu_neural::{
-    excitability_random,
-    apply_leak,
-};
+use feagi_npu_neural::{apply_leak, excitability_random};
 
 /// Result of neural dynamics processing
 #[derive(Debug, Clone)]
@@ -274,7 +271,7 @@ fn process_single_neuron<T: NeuralValue>(
             return Some(FiringNeuron {
                 neuron_id,
                 membrane_potential: current_potential.to_f32(),
-                cortical_idx: neuron_array.cortical_areas()[idx],  // Use cortical_idx directly - no conversion needed
+                cortical_idx: neuron_array.cortical_areas()[idx], // Use cortical_idx directly - no conversion needed
                 x,
                 y,
                 z,
@@ -293,7 +290,10 @@ fn process_single_neuron<T: NeuralValue>(
 
     // Apply LIF leak (using platform-agnostic function from feagi-neural)
     let leak_coefficient = neuron_array.leak_coefficients()[idx];
-    apply_leak(&mut neuron_array.membrane_potentials_mut()[idx], leak_coefficient);
+    apply_leak(
+        &mut neuron_array.membrane_potentials_mut()[idx],
+        leak_coefficient,
+    );
 
     None
 }
@@ -304,7 +304,7 @@ fn process_single_neuron<T: NeuralValue>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_npu_runtime_std::NeuronArray;  // OK: dev-dependency for tests
+    use feagi_npu_runtime_std::NeuronArray; // OK: dev-dependency for tests
 
     #[test]
     fn test_neuron_fires_when_above_threshold() {

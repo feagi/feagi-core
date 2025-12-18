@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Platform implementations for embedded systems
-/// 
+///
 /// Each platform module implements the HAL traits defined in `crate::hal`.
-/// 
+///
 /// Available platforms:
 /// - ESP32 family (ESP32, ESP32-S3, ESP32-C3)
 /// - Arduino family (Due, Mega, Uno) - future
@@ -94,7 +94,7 @@ impl PlatformType {
             _ => "Unknown",
         }
     }
-    
+
     /// Detect platform at runtime
     pub fn detect() -> Option<Self> {
         #[cfg(feature = "esp32")]
@@ -102,21 +102,20 @@ impl PlatformType {
             // Generic ESP32 platform (covers ESP32, ESP32-S3, ESP32-C3)
             return Some(PlatformType::Esp32);
         }
-        
+
         #[cfg(feature = "arduino-due")]
         return Some(PlatformType::ArduinoDue);
-        
+
         #[cfg(feature = "stm32f4")]
         return Some(PlatformType::Stm32F4);
-        
+
         #[cfg(feature = "rpi-pico")]
         return Some(PlatformType::RaspberryPiPico);
-        
+
         #[cfg(feature = "hailo")]
         return Some(PlatformType::Hailo8);
-        
+
         #[allow(unreachable_code)]
         None
     }
 }
-

@@ -13,7 +13,7 @@ std = []
 alloc = []
 
 [dependencies]
-feagi-npu-neural = { path = "../neural", default-features = false }
+feagi-npu-neural = { version = "0.0.0", path = "../neural", default-features = false }
 # No dependencies - pure trait definitions
 # This ensures the trait crate is minimal and can be used anywhere
 

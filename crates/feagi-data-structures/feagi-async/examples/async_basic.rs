@@ -20,7 +20,7 @@ async fn fetch_greeting(name: &str) -> String {
 
 async fn run_application<R: FeagiAsyncRuntime>(runtime: &R) {
     use std::time::Duration;
-    
+
     println!("Application starting...");
 
     let handle1 = runtime.spawn(compute_answer(21, 21));
@@ -34,9 +34,9 @@ async fn run_application<R: FeagiAsyncRuntime>(runtime: &R) {
     let greeting = handle2.await;
     let sum = handle3.await;
 
-    println!("Answer: {}", answer);       // 42
-    println!("Greeting: {}", greeting);   // Hello, FEAGI!
-    println!("Sum: {}", sum);             // 15
+    println!("Answer: {}", answer); // 42
+    println!("Greeting: {}", greeting); // Hello, FEAGI!
+    println!("Sum: {}", sum); // 15
 
     // Demonstrate delay() - platform-agnostic delay
     println!("Delaying for 100ms...");

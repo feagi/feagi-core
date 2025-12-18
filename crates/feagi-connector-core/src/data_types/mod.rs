@@ -11,18 +11,17 @@
 //! These types handle memory layout, color space conversions, and provide
 //! efficient interfaces for common sensor/actuator data formats.
 
+pub mod descriptors;
+mod gaze_properties;
 mod image_frame;
-mod segmented_image_frame;
 mod misc_data;
 mod percentages;
-mod gaze_properties;
 pub(crate) mod processing;
-pub mod descriptors;
+mod segmented_image_frame;
 
-pub(crate) use processing::*;
+pub use gaze_properties::GazeProperties;
 pub use image_frame::ImageFrame;
-pub use segmented_image_frame::SegmentedImageFrame;
 pub use misc_data::MiscData;
 pub use percentages::*;
-pub use gaze_properties::GazeProperties;
-
+pub(crate) use processing::*;
+pub use segmented_image_frame::SegmentedImageFrame;

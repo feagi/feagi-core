@@ -11,10 +11,22 @@ use crate::{ConfigError, ConfigResult, FeagiConfig};
 /// Validation errors that can occur during config validation
 #[derive(Debug, Clone)]
 pub enum ConfigValidationError {
-    InvalidPortRange { port_name: String, port: u16 },
-    PortConflict { port1: String, port2: String, port: u16 },
-    MissingRequired { field: String },
-    InvalidValue { field: String, reason: String },
+    InvalidPortRange {
+        port_name: String,
+        port: u16,
+    },
+    PortConflict {
+        port1: String,
+        port2: String,
+        port: u16,
+    },
+    MissingRequired {
+        field: String,
+    },
+    InvalidValue {
+        field: String,
+        reason: String,
+    },
 }
 
 impl std::fmt::Display for ConfigValidationError {
@@ -77,7 +89,7 @@ pub fn validate_config(config: &FeagiConfig) -> ConfigResult<()> {
             .map(|e| format!("  - {}", e))
             .collect::<Vec<_>>()
             .join("\n");
-        
+
         return Err(ConfigError::ValidationError(format!(
             "Configuration validation failed:\n{}",
             error_messages
@@ -130,23 +142,31 @@ fn validate_port_ranges(config: &FeagiConfig, errors: &mut Vec<ConfigValidationE
 
 /// Validate that no two services use the same port
 fn validate_port_conflicts(config: &FeagiConfig, errors: &mut Vec<ConfigValidationError>) {
-    let mut port_map: std::collections::HashMap<u16, Vec<String>> = std::collections::HashMap::new();
+    let mut port_map: std::collections::HashMap<u16, Vec<String>> =
+        std::collections::HashMap::new();
 
     // Collect ports that MUST be unique
-    port_map.entry(config.api.port).or_default().push("api.port".to_string());
-    
+    port_map
+        .entry(config.api.port)
+        .or_default()
+        .push("api.port".to_string());
+
     // Note: agent.*_port and ports.zmq_*_port may legitimately use the same values
     // as they refer to the same underlying ZMQ endpoints from different perspectives.
     // We only check for conflicts within each namespace.
-    
+
     // Collect all ZMQ ports (these must be unique within the ports namespace)
     let zmq_ports = config.ports.all_ports();
-    let mut zmq_port_set: std::collections::HashMap<u16, Vec<String>> = std::collections::HashMap::new();
-    
+    let mut zmq_port_set: std::collections::HashMap<u16, Vec<String>> =
+        std::collections::HashMap::new();
+
     for (port_name, port) in zmq_ports {
-        zmq_port_set.entry(port).or_default().push(format!("ports.{}", port_name));
+        zmq_port_set
+            .entry(port)
+            .or_default()
+            .push(format!("ports.{}", port_name));
     }
-    
+
     // Check for conflicts within ZMQ ports
     for (port, services) in zmq_port_set.iter() {
         if services.len() > 1 {
@@ -161,7 +181,7 @@ fn validate_port_conflicts(config: &FeagiConfig, errors: &mut Vec<ConfigValidati
             }
         }
     }
-    
+
     // Check if API port conflicts with any ZMQ port
     if zmq_port_set.contains_key(&config.api.port) {
         for zmq_service in &zmq_port_set[&config.api.port] {
@@ -255,7 +275,7 @@ mod tests {
 
         let result = validate_config(&config);
         assert!(result.is_err());
-        
+
         if let Err(ConfigError::ValidationError(msg)) = result {
             assert!(msg.contains("api.port"));
             assert!(msg.contains("1024-65535"));
@@ -270,7 +290,7 @@ mod tests {
 
         let result = validate_config(&config);
         assert!(result.is_err());
-        
+
         if let Err(ConfigError::ValidationError(msg)) = result {
             assert!(msg.contains("Port conflict"));
             assert!(msg.contains("5555"));
@@ -284,7 +304,7 @@ mod tests {
 
         let result = validate_config(&config);
         assert!(result.is_err());
-        
+
         if let Err(ConfigError::ValidationError(msg)) = result {
             assert!(msg.contains("api.host"));
         }
@@ -297,7 +317,7 @@ mod tests {
 
         let result = validate_config(&config);
         assert!(result.is_err());
-        
+
         if let Err(ConfigError::ValidationError(msg)) = result {
             assert!(msg.contains("gpu_memory_fraction"));
             assert!(msg.contains("0.0 and 1.0"));
@@ -311,7 +331,7 @@ mod tests {
 
         let result = validate_config(&config);
         assert!(result.is_err());
-        
+
         if let Err(ConfigError::ValidationError(msg)) = result {
             assert!(msg.contains("burst_engine.mode"));
             assert!(msg.contains("inference"));
@@ -319,4 +339,3 @@ mod tests {
         }
     }
 }
-

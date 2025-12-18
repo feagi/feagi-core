@@ -26,7 +26,7 @@
 //! async fn main() -> Result<(), Box<dyn std::error::Error>> {
 //!     let mut publisher = WsPub::with_address("127.0.0.1:9050").await?;
 //!     publisher.start().await?;
-//!     
+//!
 //!     loop {
 //!         publisher.publish(b"topic", b"data").await?;
 //!         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -43,4 +43,3 @@ pub mod client;
 pub mod common;
 
 pub use common::*;
-

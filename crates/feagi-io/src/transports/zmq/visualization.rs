@@ -10,7 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 /// Overflow handling strategy when the visualization queue is saturated.
 #[derive(Clone, Copy, Debug)]
@@ -205,12 +205,15 @@ impl VisualizationStream {
 
     /// Publish raw fire queue data (NEW ARCHITECTURE - serialization in worker thread)
     /// This keeps serialization out of the burst engine hot path
-    pub fn publish_raw_fire_queue(&self, fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<(), String> {
+    pub fn publish_raw_fire_queue(
+        &self,
+        fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
+    ) -> Result<(), String> {
         // Fast path: If stream not running, don't even try to enqueue
         if !*self.running.lock() {
             return Ok(()); // Silently discard - expected when no viz agents connected
         }
-        
+
         static FIRST_LOG: AtomicBool = AtomicBool::new(false);
         if !FIRST_LOG.load(Ordering::Relaxed) {
             let total_neurons: usize = fire_data.values().map(|d| d.neuron_ids.len()).sum();
@@ -315,38 +318,46 @@ impl VisualizationStream {
 
         *self.worker_thread.lock() = Some(handle);
     }
-    
+
     /// Serialize raw fire queue data to FeagiByteContainer format
     /// This runs on the PNS worker thread, NOT the burst engine thread
-    fn serialize_fire_queue(fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot) -> Result<Vec<u8>, String> {
+    fn serialize_fire_queue(
+        fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot,
+    ) -> Result<Vec<u8>, String> {
+        use feagi_data_serialization::FeagiByteContainer;
         use feagi_data_structures::genomic::cortical_area::CorticalID;
         use feagi_data_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
-        use feagi_data_serialization::FeagiByteContainer;
-        
+
         let mut cortical_mapped = CorticalMappedXYZPNeuronVoxels::new();
-        
+
         for (_area_id, area_data) in fire_data {
             if area_data.neuron_ids.is_empty() {
                 continue;
             }
-            
+
             // Create CorticalID from area name
-            let cortical_id = CorticalID::try_from_base_64(&area_data.cortical_area_name)
-                .map_err(|e| format!("Failed to decode CorticalID from base64 '{}': {:?}", area_data.cortical_area_name, e))?;
-            
+            let cortical_id =
+                CorticalID::try_from_base_64(&area_data.cortical_area_name).map_err(|e| {
+                    format!(
+                        "Failed to decode CorticalID from base64 '{}': {:?}",
+                        area_data.cortical_area_name, e
+                    )
+                })?;
+
             // Create neuron voxel arrays (cloning vectors since we're on a different thread)
             let neuron_arrays = NeuronVoxelXYZPArrays::new_from_vectors(
                 area_data.coords_x.clone(),
                 area_data.coords_y.clone(),
                 area_data.coords_z.clone(),
                 area_data.potentials.clone(),
-            ).map_err(|e| format!("Failed to create neuron arrays: {:?}", e))?;
-            
+            )
+            .map_err(|e| format!("Failed to create neuron arrays: {:?}", e))?;
+
             cortical_mapped.insert(cortical_id, neuron_arrays);
         }
-        
+
         // Serialize to FeagiByteContainer
         // Note: overwrite_byte_data_with_single_struct_data() already handles efficient allocation internally:
         // - It pre-calculates size via get_number_of_bytes_needed()
@@ -356,7 +367,7 @@ impl VisualizationStream {
         byte_container
             .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)
             .map_err(|e| format!("Failed to encode into FeagiByteContainer: {:?}", e))?;
-        
+
         Ok(byte_container.get_byte_ref().to_vec())
     }
 
@@ -373,17 +384,21 @@ impl VisualizationStream {
             pre_serialized
         } else {
             // NEW PATH: Serialize raw fire queue data here (not in burst engine!)
-            let total_neurons: usize = item.raw_fire_data.values().map(|d| d.neuron_ids.len()).sum();
-            
+            let total_neurons: usize = item
+                .raw_fire_data
+                .values()
+                .map(|d| d.neuron_ids.len())
+                .sum();
+
             static FIRST_SERIALIZE_LOG: AtomicBool = AtomicBool::new(false);
             if !FIRST_SERIALIZE_LOG.load(Ordering::Relaxed) || total_neurons > 1000 {
-                info!("[ZMQ-VIZ] 🏗️ SERIALIZING: {} neurons from {} areas (on PNS worker thread, NOT burst thread)", 
+                info!("[ZMQ-VIZ] 🏗️ SERIALIZING: {} neurons from {} areas (on PNS worker thread, NOT burst thread)",
                     total_neurons, item.raw_fire_data.len());
                 FIRST_SERIALIZE_LOG.store(true, Ordering::Relaxed);
             }
-            
+
             let serialize_start = std::time::Instant::now();
-            
+
             // Serialize using FeagiByteContainer
             let serialized = match Self::serialize_fire_queue(&item.raw_fire_data) {
                 Ok(bytes) => bytes,
@@ -393,18 +408,26 @@ impl VisualizationStream {
                     return;
                 }
             };
-            
+
             let serialize_duration = serialize_start.elapsed();
             if total_neurons > 1000 {
-                info!("[ZMQ-VIZ] ⏱️ SERIALIZE TIME: {} neurons → {} bytes in {:?}", 
-                    total_neurons, serialized.len(), serialize_duration);
+                info!(
+                    "[ZMQ-VIZ] ⏱️ SERIALIZE TIME: {} neurons → {} bytes in {:?}",
+                    total_neurons,
+                    serialized.len(),
+                    serialize_duration
+                );
             }
-            
+
             serialized
         };
-        
+
         // Step 2: Compress (on PNS worker thread)
-        let compressed = match lz4::block::compress(&payload, Some(lz4::block::CompressionMode::FAST(1)), true) {
+        let compressed = match lz4::block::compress(
+            &payload,
+            Some(lz4::block::CompressionMode::FAST(1)),
+            true,
+        ) {
             Ok(c) => c,
             Err(e) => {
                 error!("[ZMQ-VIZ] ❌ LZ4 compression failed: {:?}", e);
@@ -412,7 +435,7 @@ impl VisualizationStream {
                 return;
             }
         };
-        
+
         // Step 3: Send via ZMQ
         let mut guard = socket.lock();
         let sock = match guard.as_mut() {
@@ -435,8 +458,13 @@ impl VisualizationStream {
                     // DIAGNOSTIC: Track actual ZMQ send rate
                     static SEND_COUNTER: AtomicU64 = AtomicU64::new(0);
                     let count = SEND_COUNTER.fetch_add(1, Ordering::Relaxed);
-                    if count % 30 == 0 {  // Log every 30 sends
-                        debug!("[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)", count, compressed.len());
+                    if count % 30 == 0 {
+                        // Log every 30 sends
+                        debug!(
+                            "[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)",
+                            count,
+                            compressed.len()
+                        );
                     }
                     break;
                 }

@@ -20,10 +20,9 @@
 //! 3. Add tests
 //! 4. Export in `mod.rs`
 
-pub mod traits;
 pub mod lif;
+pub mod traits;
 
 // Re-export core types
-pub use traits::{NeuronModel, ModelParameters};
 pub use lif::{LIFModel, LIFParameters};
-
+pub use traits::{ModelParameters, NeuronModel};

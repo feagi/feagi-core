@@ -1,8 +1,10 @@
-use ndarray::prelude::*;
-use feagi_core_data_structures_and_processing::neuron_data::xyzp::{CorticalMappedXYZPNeuronData, NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
 use feagi_core_data_structures_and_processing::genomic_structures::CorticalID;
 use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructure;
 use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructureCompatible;
+use feagi_core_data_structures_and_processing::neuron_data::xyzp::{
+    CorticalMappedXYZPNeuronData, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
+};
+use ndarray::prelude::*;
 
 #[test]
 fn test_minimal_memory_corruption_debug() {
@@ -23,11 +25,17 @@ fn test_minimal_memory_corruption_debug() {
 
     // Test 2: Create a manual bytes vector and serialize to it
     let mut manual_bytes = vec![0u8; size1];
-    println!("Manual bytes before serialization: {:?}", &manual_bytes[0..4.min(manual_bytes.len())]);
+    println!(
+        "Manual bytes before serialization: {:?}",
+        &manual_bytes[0..4.min(manual_bytes.len())]
+    );
 
     let result = cortical_mappings.overwrite_feagi_byte_structure_slice(&mut manual_bytes);
     println!("Serialization result: {:?}", result);
-    println!("Manual bytes after serialization: {:?}", &manual_bytes[0..4.min(manual_bytes.len())]);
+    println!(
+        "Manual bytes after serialization: {:?}",
+        &manual_bytes[0..4.min(manual_bytes.len())]
+    );
 
     // Test 3: Create FeagiByteStructure and immediately check
     let structure = FeagiByteStructure::create_from_bytes(manual_bytes.clone()).unwrap();
@@ -36,11 +44,17 @@ fn test_minimal_memory_corruption_debug() {
 
     // Test 4: Clone the slice reference
     let cloned_from_slice = slice_view.to_vec();
-    println!("Cloned from slice: {:?}", &cloned_from_slice[0..4.min(cloned_from_slice.len())]);
+    println!(
+        "Cloned from slice: {:?}",
+        &cloned_from_slice[0..4.min(cloned_from_slice.len())]
+    );
 
     // Test 5: Use the new copy method
     let copied_vector = structure.copy_out_as_byte_vector();
-    println!("Copied vector: {:?}", &copied_vector[0..4.min(copied_vector.len())]);
+    println!(
+        "Copied vector: {:?}",
+        &copied_vector[0..4.min(copied_vector.len())]
+    );
 
     // Check if they're all the same
     assert_eq!(manual_bytes[0..4], cloned_from_slice[0..4]);
@@ -49,7 +63,6 @@ fn test_minimal_memory_corruption_debug() {
 
 #[test]
 fn test_serialize_deserialize_neuron_mapped_areas() {
-
     // cortical area A
     let cortical_id_a = CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap();
     let neuron_a_1 = NeuronVoxelXYZP::new(1, 2, 3, 0.5);
@@ -57,7 +70,6 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     let mut neurons_a = NeuronVoxelXYZPArrays::with_capacity(2); // lets preallocate
     neurons_a.push(&neuron_a_1);
     neurons_a.push(&neuron_a_2);
-
 
     // cortical area b
     let cortical_id_b = CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap();
@@ -67,20 +79,21 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     neurons_b.push(&neuron_b_1);
     neurons_b.push(&neuron_b_2);
 
-    assert_eq!(
-        neurons_a.len(),
-        neurons_b.len()
-    );
+    assert_eq!(neurons_a.len(), neurons_b.len());
 
     // lets add cortical are C using arrays
     let cortical_id_c = CorticalID::new_custom_cortical_area_id("cCCCCC".to_string()).unwrap();
-    let neurons_c_x = array![1,2,3];
-    let neurons_c_y = array![4,5,6];
-    let neurons_c_z = array![7,8,9];
-    let neurons_c_p: Array::<f32, Ix1>  = array![0.1,0.2,0.3];
-    let neurons_c = NeuronVoxelXYZPArrays::new_from_ndarrays(neurons_c_x,
-                                                            neurons_c_y, neurons_c_z, neurons_c_p).unwrap();
-
+    let neurons_c_x = array![1, 2, 3];
+    let neurons_c_y = array![4, 5, 6];
+    let neurons_c_z = array![7, 8, 9];
+    let neurons_c_p: Array<f32, Ix1> = array![0.1, 0.2, 0.3];
+    let neurons_c = NeuronVoxelXYZPArrays::new_from_ndarrays(
+        neurons_c_x,
+        neurons_c_y,
+        neurons_c_z,
+        neurons_c_p,
+    )
+    .unwrap();
 
     // cortical mappings
     let mut cortical_mappings = CorticalMappedXYZPNeuronData::new();
@@ -91,23 +104,31 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
     // bytes data serialization
     let sending_byte_structure = cortical_mappings.as_new_feagi_byte_structure().unwrap();
     let bytes = sending_byte_structure.copy_out_as_byte_vector(); // raw bytes
-    
+
     // deserialize (lets pretend 'bytes' was sent over the network)
     let received_byte_structure = FeagiByteStructure::create_from_bytes(bytes).unwrap();
-    let received_cortical_mappings = CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&received_byte_structure).unwrap();
+    let received_cortical_mappings =
+        CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(&received_byte_structure)
+            .unwrap();
 
     assert_eq!(received_cortical_mappings.len(), 3);
-    assert!(received_cortical_mappings.contains_cortical_id(&CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap()));
-    assert!(received_cortical_mappings.contains_cortical_id(&CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap()));
+    assert!(received_cortical_mappings.contains_cortical_id(
+        &CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap()
+    ));
+    assert!(received_cortical_mappings.contains_cortical_id(
+        &CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap()
+    ));
 
-    let rec_neurons_a = received_cortical_mappings.get_neurons_of(&CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap()).unwrap();
-    let rec_neurons_b = received_cortical_mappings.get_neurons_of(&CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap()).unwrap();
+    let rec_neurons_a = received_cortical_mappings
+        .get_neurons_of(&CorticalID::new_custom_cortical_area_id("cAAAAA".to_string()).unwrap())
+        .unwrap();
+    let rec_neurons_b = received_cortical_mappings
+        .get_neurons_of(&CorticalID::new_custom_cortical_area_id("cBBBBB".to_string()).unwrap())
+        .unwrap();
 
     let rec_neuron_1_a = rec_neurons_a.copy_as_neuron_xyzp_vec()[0].clone();
     let rec_neuron_2_b = rec_neurons_b.copy_as_neuron_xyzp_vec()[1].clone();
 
     assert_eq!(rec_neuron_1_a, neuron_a_1);
     assert_eq!(rec_neuron_2_b, neuron_b_2);
-
 }
-

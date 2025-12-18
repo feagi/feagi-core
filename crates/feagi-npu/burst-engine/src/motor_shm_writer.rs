@@ -51,7 +51,7 @@ const DEFAULT_SLOT_SIZE: usize = 1 * 1024 * 1024; // 1 MB per slot
 pub struct MotorSHMWriter {
     /// SHM file path (kept for future debugging/logging during migration)
     /// Warning about unused field is expected - will be used for error messages
-    #[allow(dead_code)]  // In development - will be used for error messages/logging
+    #[allow(dead_code)] // In development - will be used for error messages/logging
     shm_path: PathBuf,
 
     /// Memory-mapped file

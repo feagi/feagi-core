@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 pub struct Message {
     /// Message payload
     pub data: Vec<u8>,
-    
+
     /// Optional metadata
     pub metadata: Option<MessageMetadata>,
 }
@@ -23,7 +23,7 @@ impl Message {
             metadata: None,
         }
     }
-    
+
     /// Create a message with metadata
     pub fn with_metadata(data: Vec<u8>, metadata: MessageMetadata) -> Self {
         Self {
@@ -31,7 +31,7 @@ impl Message {
             metadata: Some(metadata),
         }
     }
-    
+
     /// Get message size in bytes
     pub fn size(&self) -> usize {
         self.data.len()
@@ -55,16 +55,16 @@ impl From<&[u8]> for Message {
 pub struct MessageMetadata {
     /// Message ID
     pub id: Option<String>,
-    
+
     /// Timestamp (Unix epoch milliseconds)
     pub timestamp: Option<u64>,
-    
+
     /// Sender identity
     pub sender: Option<String>,
-    
+
     /// Message type/topic
     pub topic: Option<String>,
-    
+
     /// Custom key-value pairs
     pub custom: std::collections::HashMap<String, String>,
 }
@@ -85,7 +85,7 @@ impl Default for MessageMetadata {
 pub trait ReplyHandle: Send {
     /// Send reply
     fn send(&self, data: &[u8]) -> Result<(), crate::common::error::TransportError>;
-    
+
     /// Send error reply
     fn send_error(&self, error: &str) -> Result<(), crate::common::error::TransportError> {
         let error_msg = serde_json::json!({
@@ -108,23 +108,23 @@ impl MultipartMessage {
     pub fn new() -> Self {
         Self { parts: Vec::new() }
     }
-    
+
     /// Add a part
     pub fn add_part(mut self, part: Vec<u8>) -> Self {
         self.parts.push(part);
         self
     }
-    
+
     /// Get number of parts
     pub fn len(&self) -> usize {
         self.parts.len()
     }
-    
+
     /// Check if empty
     pub fn is_empty(&self) -> bool {
         self.parts.is_empty()
     }
-    
+
     /// Get total size in bytes
     pub fn total_size(&self) -> usize {
         self.parts.iter().map(|p| p.len()).sum()
@@ -136,7 +136,3 @@ impl Default for MultipartMessage {
         Self::new()
     }
 }
-
-
-
-

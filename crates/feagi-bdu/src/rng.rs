@@ -22,4 +22,3 @@ pub fn get_rng() -> impl Rng {
     use rand::rngs::OsRng;
     OsRng
 }
-

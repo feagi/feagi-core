@@ -1,6 +1,9 @@
-
+use crate::data_types::{
+    GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D,
+    SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D,
+    SignedPercentage4D,
+};
 use feagi_data_structures::FeagiDataError;
-use crate::data_types::{GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
 
 /// Internal macro to define the WrappedIOData enum with automatic trait implementations.
 ///

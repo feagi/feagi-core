@@ -21,7 +21,7 @@ use feagi_npu_neural::types::NeuronId;
 pub struct FiringNeuron {
     pub neuron_id: NeuronId,
     pub membrane_potential: f32,
-    pub cortical_idx: u32,  // Changed from CorticalID - NPU works with indices only
+    pub cortical_idx: u32, // Changed from CorticalID - NPU works with indices only
     pub x: u32,
     pub y: u32,
     pub z: u32,

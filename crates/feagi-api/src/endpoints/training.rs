@@ -3,13 +3,13 @@
 
 /*!
  * FEAGI v1 Training API
- * 
+ *
  * Endpoints for training, reinforcement learning, and fitness evaluation
  * Maps to Python: feagi/api/v1/training.py
  */
 
-use crate::common::{ApiError, ApiResult, State, Json};
 use crate::common::ApiState;
+use crate::common::{ApiError, ApiResult, Json, State};
 // Removed - using crate::common::State instead
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -33,15 +33,17 @@ pub async fn post_shock(
     Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // Validate shock configuration
-    let _shock = request.get("shock")
+    let _shock = request
+        .get("shock")
         .ok_or_else(|| ApiError::invalid_input("Missing 'shock' field"))?;
-    
+
     // TODO: Configure shock scenarios
     tracing::info!(target: "feagi-api", "Shock configuration updated");
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Shock configured successfully".to_string())
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Shock configured successfully".to_string(),
+    )])))
 }
 
 /// Get available shock/punishment options for training.
@@ -54,11 +56,13 @@ pub async fn post_shock(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_shock_options(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_shock_options(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
     // TODO: Retrieve available shock options
     let mut response = HashMap::new();
     response.insert("options".to_string(), json!(Vec::<String>::new()));
-    
+
     Ok(Json(response))
 }
 
@@ -72,12 +76,14 @@ pub async fn get_shock_options(State(_state): State<ApiState>) -> ApiResult<Json
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_shock_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_shock_status(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
     // TODO: Retrieve shock status
     let mut response = HashMap::new();
     response.insert("active".to_string(), json!(false));
     response.insert("scenarios".to_string(), json!(Vec::<String>::new()));
-    
+
     Ok(Json(response))
 }
 
@@ -96,10 +102,11 @@ pub async fn post_reward_intensity(
     Json(_request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Set reward intensity
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Reward intensity set successfully".to_string())
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Reward intensity set successfully".to_string(),
+    )])))
 }
 
 /// Set punishment intensity for negative reinforcement.
@@ -117,10 +124,11 @@ pub async fn post_punishment_intensity(
     Json(_request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Set punishment intensity
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Punishment intensity set successfully".to_string())
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Punishment intensity set successfully".to_string(),
+    )])))
 }
 
 /// Signal game over condition for episode termination.
@@ -133,12 +141,15 @@ pub async fn post_punishment_intensity(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn post_gameover(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
+pub async fn post_gameover(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Process game over condition
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Game over processed".to_string())
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Game over processed".to_string(),
+    )])))
 }
 
 // ============================================================================
@@ -155,11 +166,13 @@ pub async fn post_gameover(State(_state): State<ApiState>) -> ApiResult<Json<Has
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_brain_fitness(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_brain_fitness(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
     // TODO: Calculate and return brain fitness
     let mut response = HashMap::new();
     response.insert("fitness".to_string(), json!(0.0));
-    
+
     Ok(Json(response))
 }
 
@@ -173,11 +186,13 @@ pub async fn get_brain_fitness(State(_state): State<ApiState>) -> ApiResult<Json
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fitness_criteria(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_fitness_criteria(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
     // TODO: Retrieve fitness criteria
     let mut response = HashMap::new();
     response.insert("criteria".to_string(), json!({}));
-    
+
     Ok(Json(response))
 }
 
@@ -196,10 +211,11 @@ pub async fn put_fitness_criteria(
     Json(_request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Update fitness criteria
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Fitness criteria updated successfully".to_string())
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Fitness criteria updated successfully".to_string(),
+    )])))
 }
 
 /// Get fitness statistics including historical performance data.
@@ -212,11 +228,13 @@ pub async fn put_fitness_criteria(
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_fitness_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_fitness_stats(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
     // TODO: Retrieve fitness statistics
     let mut response = HashMap::new();
     response.insert("stats".to_string(), json!({}));
-    
+
     Ok(Json(response))
 }
 
@@ -230,11 +248,13 @@ pub async fn get_fitness_stats(State(_state): State<ApiState>) -> ApiResult<Json
         (status = 500, description = "Internal server error")
     )
 )]
-pub async fn get_training_report(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, Value>>> {
+pub async fn get_training_report(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, Value>>> {
     // TODO: Generate training report
     let mut response = HashMap::new();
     response.insert("report".to_string(), json!({}));
-    
+
     Ok(Json(response))
 }
 
@@ -253,7 +273,7 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     let mut response = HashMap::new();
     response.insert("active".to_string(), json!(false));
     response.insert("mode".to_string(), json!("idle"));
-    
+
     Ok(Json(response))
 }
 
@@ -272,7 +292,7 @@ pub async fn get_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap
     let mut response = HashMap::new();
     response.insert("total_episodes".to_string(), json!(0));
     response.insert("total_rewards".to_string(), json!(0.0));
-    
+
     Ok(Json(response))
 }
 
@@ -291,52 +311,91 @@ pub async fn post_config(
     Json(_request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Apply training configuration
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Training configured successfully".to_string())
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Training configured successfully".to_string(),
+    )])))
 }
 
 // EXACT Python paths:
 /// Apply reward signal for positive reinforcement learning.
 #[utoipa::path(post, path = "/v1/training/reward", tag = "training")]
-pub async fn post_reward(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Reward applied".to_string())])))
+pub async fn post_reward(
+    State(_state): State<ApiState>,
+    Json(_req): Json<HashMap<String, Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Reward applied".to_string(),
+    )])))
 }
 
 /// Apply punishment signal for negative reinforcement learning.
 #[utoipa::path(post, path = "/v1/training/punishment", tag = "training")]
-pub async fn post_punishment(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Punishment applied".to_string())])))
+pub async fn post_punishment(
+    State(_state): State<ApiState>,
+    Json(_req): Json<HashMap<String, Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Punishment applied".to_string(),
+    )])))
 }
 
 /// Activate shock/punishment scenario immediately.
 #[utoipa::path(post, path = "/v1/training/shock/activate", tag = "training")]
-pub async fn post_shock_activate(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Shock activated".to_string())])))
+pub async fn post_shock_activate(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Shock activated".to_string(),
+    )])))
 }
 
 /// Set fitness evaluation criteria (alternative endpoint).
 #[utoipa::path(post, path = "/v1/training/fitness_criteria", tag = "training")]
-pub async fn post_fitness_criteria(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Fitness criteria set".to_string())])))
+pub async fn post_fitness_criteria(
+    State(_state): State<ApiState>,
+    Json(_req): Json<HashMap<String, Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Fitness criteria set".to_string(),
+    )])))
 }
 
 /// Update fitness statistics with new data.
 #[utoipa::path(put, path = "/v1/training/fitness_stats", tag = "training")]
-pub async fn put_fitness_stats(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Fitness stats updated".to_string())])))
+pub async fn put_fitness_stats(
+    State(_state): State<ApiState>,
+    Json(_req): Json<HashMap<String, Value>>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Fitness stats updated".to_string(),
+    )])))
 }
 
 /// Delete fitness statistics data.
 #[utoipa::path(delete, path = "/v1/training/fitness_stats", tag = "training")]
-pub async fn delete_fitness_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Fitness stats deleted".to_string())])))
+pub async fn delete_fitness_stats(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Fitness stats deleted".to_string(),
+    )])))
 }
 
 /// Reset fitness statistics to initial state.
 #[utoipa::path(delete, path = "/v1/training/reset_fitness_stats", tag = "training")]
-pub async fn delete_reset_fitness_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Fitness stats reset".to_string())])))
+pub async fn delete_reset_fitness_stats(
+    State(_state): State<ApiState>,
+) -> ApiResult<Json<HashMap<String, String>>> {
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Fitness stats reset".to_string(),
+    )])))
 }
-

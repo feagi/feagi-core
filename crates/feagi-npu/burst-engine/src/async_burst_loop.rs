@@ -12,26 +12,26 @@ Licensed under the Apache License, Version 2.0
 */
 
 #[cfg(feature = "std")]
-use crate::DynamicNPU;
-#[cfg(feature = "std")]
 use crate::burst_loop_runner::{MotorPublisher, VisualizationPublisher};
+#[cfg(feature = "std")]
+use crate::DynamicNPU;
 
+#[cfg(feature = "std")]
+use crate::parameter_update_queue::ParameterUpdateQueue;
+#[cfg(feature = "std")]
+use ahash::AHashMap;
 #[cfg(feature = "std")]
 use feagi_async::FeagiAsyncRuntime;
 #[cfg(feature = "std")]
-use std::sync::{Arc, Mutex};
+use parking_lot::RwLock as ParkingLotRwLock;
 #[cfg(feature = "std")]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "std")]
+use std::sync::{Arc, Mutex};
 #[cfg(feature = "std")]
 use std::time::Duration;
 #[cfg(feature = "std")]
 use tracing::{info, warn};
-#[cfg(feature = "std")]
-use parking_lot::RwLock as ParkingLotRwLock;
-#[cfg(feature = "std")]
-use ahash::AHashMap;
-#[cfg(feature = "std")]
-use crate::parameter_update_queue::ParameterUpdateQueue;
 
 /// Async burst loop that uses FeagiAsyncRuntime for platform-agnostic async operations
 ///
@@ -50,26 +50,26 @@ pub async fn async_burst_loop<R: FeagiAsyncRuntime>(
     _parameter_queue: ParameterUpdateQueue,
 ) {
     info!("[ASYNC-BURST-LOOP] Starting async burst loop");
-    
+
     let mut burst_num = 0u64;
-    
+
     while running.load(Ordering::Acquire) {
         let burst_start = std::time::Instant::now();
-        
+
         // Process burst
         let burst_result = {
             let npu_guard = npu.lock().unwrap();
             npu_guard.process_burst()
         };
-        
+
         match burst_result {
             Ok(_result) => {
                 burst_num += 1;
                 cached_burst_count.store(burst_num, Ordering::Relaxed);
-                
+
                 // TODO: Handle visualization and motor publishing
                 // This will be implemented in Phase 2
-                
+
                 // Calculate delay for next burst
                 let frequency = *frequency_hz.lock().unwrap();
                 let interval_sec = 1.0 / frequency;
@@ -79,7 +79,7 @@ pub async fn async_burst_loop<R: FeagiAsyncRuntime>(
                 } else {
                     Duration::ZERO
                 };
-                
+
                 // Use async delay instead of thread::sleep
                 if sleep_duration > Duration::ZERO {
                     runtime.delay(sleep_duration).await;
@@ -91,13 +91,12 @@ pub async fn async_burst_loop<R: FeagiAsyncRuntime>(
                 runtime.delay(Duration::from_millis(10)).await;
             }
         }
-        
+
         // Check shutdown flag
         if !running.load(Ordering::Relaxed) {
             break;
         }
     }
-    
+
     info!("[ASYNC-BURST-LOOP] Burst loop stopped");
 }
-

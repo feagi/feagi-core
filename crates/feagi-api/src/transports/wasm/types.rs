@@ -22,7 +22,7 @@ impl<T> State<T> {
     pub fn new(value: T) -> Self {
         Self(value)
     }
-    
+
     pub fn into_inner(self) -> T {
         self.0
     }
@@ -42,7 +42,7 @@ impl<T> Json<T> {
     pub fn new(value: T) -> Self {
         Self(value)
     }
-    
+
     pub fn into_inner(self) -> T {
         self.0
     }
@@ -69,7 +69,7 @@ impl<T> Query<T> {
     pub fn new(value: T) -> Self {
         Self(value)
     }
-    
+
     pub fn into_inner(self) -> T {
         self.0
     }
@@ -90,9 +90,8 @@ impl<T> Path<T> {
     pub fn new(value: T) -> Self {
         Self(value)
     }
-    
+
     pub fn into_inner(self) -> T {
         self.0
     }
 }
-

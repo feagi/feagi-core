@@ -14,11 +14,11 @@ use utoipa::ToSchema;
 pub struct ApiResponse<T> {
     /// Whether the operation succeeded
     pub success: bool,
-    
+
     /// Response data (present if success = true)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub data: Option<T>,
-    
+
     /// ISO 8601 timestamp
     pub timestamp: String,
 }
@@ -32,7 +32,7 @@ impl<T> ApiResponse<T> {
             timestamp: Utc::now().to_rfc3339(),
         }
     }
-    
+
     /// Create an error response (no data)
     pub fn error() -> ApiResponse<()> {
         ApiResponse {

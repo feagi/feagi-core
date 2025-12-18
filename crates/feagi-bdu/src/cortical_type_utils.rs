@@ -17,12 +17,14 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_data_structures::genomic::cortical_area::{
-    CorticalAreaType, IOCorticalAreaDataFlag, CorticalArea,
-};
-#[cfg(test)]
-use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalAreaDimensions, CoreCorticalType};
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+#[cfg(test)]
+use feagi_data_structures::genomic::cortical_area::{
+    CoreCorticalType, CorticalAreaDimensions, CorticalID,
+};
+use feagi_data_structures::genomic::cortical_area::{
+    CorticalArea, CorticalAreaType, IOCorticalAreaDataFlag,
+};
 
 /// Extract detailed IOCorticalAreaDataFlag from a cortical area
 ///
@@ -44,15 +46,15 @@ pub fn uses_absolute_frames(area: &CorticalArea) -> bool {
         matches!(
             io_type,
             IOCorticalAreaDataFlag::Percentage(FrameChangeHandling::Absolute, _)
-            | IOCorticalAreaDataFlag::Percentage2D(FrameChangeHandling::Absolute, _)
-            | IOCorticalAreaDataFlag::Percentage3D(FrameChangeHandling::Absolute, _)
-            | IOCorticalAreaDataFlag::Percentage4D(FrameChangeHandling::Absolute, _)
-            | IOCorticalAreaDataFlag::SignedPercentage(FrameChangeHandling::Absolute, _)
-            | IOCorticalAreaDataFlag::SignedPercentage2D(FrameChangeHandling::Absolute, _)
-            | IOCorticalAreaDataFlag::SignedPercentage3D(FrameChangeHandling::Absolute, _)
-            | IOCorticalAreaDataFlag::SignedPercentage4D(FrameChangeHandling::Absolute, _)
-            | IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute)
-            | IOCorticalAreaDataFlag::Misc(FrameChangeHandling::Absolute)
+                | IOCorticalAreaDataFlag::Percentage2D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaDataFlag::Percentage3D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaDataFlag::Percentage4D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaDataFlag::SignedPercentage(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaDataFlag::SignedPercentage2D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaDataFlag::SignedPercentage3D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaDataFlag::SignedPercentage4D(FrameChangeHandling::Absolute, _)
+                | IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute)
+                | IOCorticalAreaDataFlag::Misc(FrameChangeHandling::Absolute)
         )
     } else {
         false
@@ -65,15 +67,15 @@ pub fn uses_incremental_frames(area: &CorticalArea) -> bool {
         matches!(
             io_type,
             IOCorticalAreaDataFlag::Percentage(FrameChangeHandling::Incremental, _)
-            | IOCorticalAreaDataFlag::Percentage2D(FrameChangeHandling::Incremental, _)
-            | IOCorticalAreaDataFlag::Percentage3D(FrameChangeHandling::Incremental, _)
-            | IOCorticalAreaDataFlag::Percentage4D(FrameChangeHandling::Incremental, _)
-            | IOCorticalAreaDataFlag::SignedPercentage(FrameChangeHandling::Incremental, _)
-            | IOCorticalAreaDataFlag::SignedPercentage2D(FrameChangeHandling::Incremental, _)
-            | IOCorticalAreaDataFlag::SignedPercentage3D(FrameChangeHandling::Incremental, _)
-            | IOCorticalAreaDataFlag::SignedPercentage4D(FrameChangeHandling::Incremental, _)
-            | IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Incremental)
-            | IOCorticalAreaDataFlag::Misc(FrameChangeHandling::Incremental)
+                | IOCorticalAreaDataFlag::Percentage2D(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaDataFlag::Percentage3D(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaDataFlag::Percentage4D(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaDataFlag::SignedPercentage(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaDataFlag::SignedPercentage2D(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaDataFlag::SignedPercentage3D(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaDataFlag::SignedPercentage4D(FrameChangeHandling::Incremental, _)
+                | IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Incremental)
+                | IOCorticalAreaDataFlag::Misc(FrameChangeHandling::Incremental)
         )
     } else {
         false
@@ -86,13 +88,13 @@ pub fn uses_percentage_encoding(area: &CorticalArea) -> bool {
         matches!(
             io_type,
             IOCorticalAreaDataFlag::Percentage(_, _)
-            | IOCorticalAreaDataFlag::Percentage2D(_, _)
-            | IOCorticalAreaDataFlag::Percentage3D(_, _)
-            | IOCorticalAreaDataFlag::Percentage4D(_, _)
-            | IOCorticalAreaDataFlag::SignedPercentage(_, _)
-            | IOCorticalAreaDataFlag::SignedPercentage2D(_, _)
-            | IOCorticalAreaDataFlag::SignedPercentage3D(_, _)
-            | IOCorticalAreaDataFlag::SignedPercentage4D(_, _)
+                | IOCorticalAreaDataFlag::Percentage2D(_, _)
+                | IOCorticalAreaDataFlag::Percentage3D(_, _)
+                | IOCorticalAreaDataFlag::Percentage4D(_, _)
+                | IOCorticalAreaDataFlag::SignedPercentage(_, _)
+                | IOCorticalAreaDataFlag::SignedPercentage2D(_, _)
+                | IOCorticalAreaDataFlag::SignedPercentage3D(_, _)
+                | IOCorticalAreaDataFlag::SignedPercentage4D(_, _)
         )
     } else {
         false
@@ -133,7 +135,12 @@ pub fn describe_cortical_type(area: &CorticalArea) -> String {
     } else {
         // Fallback to cortical_group
         use crate::models::CorticalAreaExt;
-        format!("{} ({})", area.cortical_id, area.get_cortical_group().unwrap_or_else(|| "UNKNOWN".to_string()))
+        format!(
+            "{} ({})",
+            area.cortical_id,
+            area.get_cortical_group()
+                .unwrap_or_else(|| "UNKNOWN".to_string())
+        )
     }
 }
 
@@ -155,19 +162,19 @@ pub fn validate_connectivity(
             src_area.cortical_id
         ));
     }
-    
+
     if dst_area.cortical_id.as_cortical_type().is_err() {
         return Err(format!(
             "Destination area {} has invalid cortical type",
             dst_area.cortical_id
         ));
     }
-    
+
     // Future phases: Add more specific validation rules
     // - Check dimensional compatibility
     // - Validate data encoding compatibility
     // - Verify frame handling compatibility
-    
+
     Ok(())
 }
 
@@ -180,7 +187,9 @@ mod tests {
     #[test]
     fn test_get_io_data_type() {
         // Create area with BrainInput type using Boolean data
-        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag, CoreCorticalType};
+        use feagi_data_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalAreaType, IOCorticalAreaDataFlag,
+        };
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
@@ -190,8 +199,9 @@ mod tests {
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
             cortical_type,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         // get_io_data_type now derives from cortical_id
         let io_type = get_io_data_type(&area);
         // Test that it returns a valid result based on cortical_id
@@ -201,7 +211,9 @@ mod tests {
     #[test]
     fn test_uses_absolute_frames() {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
+        let cortical_type = cortical_id
+            .as_cortical_type()
+            .expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -209,8 +221,9 @@ mod tests {
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
             cortical_type,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         // Test that frame handling can be detected from cortical_id
         let result = uses_absolute_frames(&area);
         let _ = result; // Test passes if no panic
@@ -219,7 +232,9 @@ mod tests {
     #[test]
     fn test_uses_cartesian_encoding() {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
+        let cortical_type = cortical_id
+            .as_cortical_type()
+            .expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -227,8 +242,9 @@ mod tests {
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
             cortical_type,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         // Test that encoding type can be detected from cortical_id
         let result = uses_cartesian_encoding(&area);
         let _ = result; // Test passes if no panic
@@ -237,7 +253,9 @@ mod tests {
     #[test]
     fn test_uses_percentage_encoding() {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
+        let cortical_type = cortical_id
+            .as_cortical_type()
+            .expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -245,9 +263,10 @@ mod tests {
             CorticalAreaDimensions::new(5, 5, 1).unwrap(),
             (0, 0, 0).into(),
             cortical_type,
-        ).unwrap();
-        
-        // Test that encoding type can be detected from cortical_id  
+        )
+        .unwrap();
+
+        // Test that encoding type can be detected from cortical_id
         let result = uses_percentage_encoding(&area);
         let _ = result; // Test passes if no panic
     }
@@ -255,7 +274,9 @@ mod tests {
     #[test]
     fn test_describe_cortical_type() {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
+        let cortical_type = cortical_id
+            .as_cortical_type()
+            .expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -263,11 +284,11 @@ mod tests {
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0).into(),
             cortical_type,
-        ).unwrap();
-        
+        )
+        .unwrap();
+
         let description = describe_cortical_type(&area);
         // Description now derived from cortical_id
         assert!(!description.is_empty());
     }
 }
-

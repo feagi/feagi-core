@@ -34,22 +34,22 @@
 extern crate std;
 
 pub mod neuron_array;
-pub mod synapse_array;
 pub mod runtime;
+pub mod synapse_array;
 
 pub use neuron_array::NeuronArray;
-pub use synapse_array::SynapseArray;
 pub use runtime::EmbeddedRuntime;
+pub use synapse_array::SynapseArray;
 
 /// Runtime configuration for embedded platforms
 #[derive(Debug, Clone, Copy)]
 pub struct RuntimeConfig {
     /// Maximum neurons supported
     pub max_neurons: usize,
-    
+
     /// Maximum synapses supported
     pub max_synapses: usize,
-    
+
     /// Burst frequency (Hz)
     pub burst_frequency: u32,
 }
@@ -63,5 +63,3 @@ impl Default for RuntimeConfig {
         }
     }
 }
-
-

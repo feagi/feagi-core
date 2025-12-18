@@ -2,14 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Arduino platform implementations
-/// 
+///
 /// Currently supports:
 /// - Arduino Due (ARM Cortex-M3, 84 MHz, 96KB SRAM)
-/// 
+///
 /// Future support:
 /// - Arduino Mega 2560 (AVR, 16 MHz, 8KB SRAM)
 /// - Arduino Uno (AVR, 16 MHz, 2KB SRAM)
-
 use crate::hal::*;
 
 // Arduino Due uses generic embedded-hal + cortex-m
@@ -27,7 +26,7 @@ pub struct ArduinoDuePlatform {
 #[cfg(feature = "arduino-due")]
 impl ArduinoDuePlatform {
     /// Initialize Arduino Due platform
-    /// 
+    ///
     /// # Returns
     /// Initialized ArduinoDuePlatform
     ///
@@ -41,11 +40,9 @@ impl ArduinoDuePlatform {
         // - DWT cycle counter for microsecond timing
         // - USART for serial communication
         // - GPIO for pins
-        Self {
-            start_time_ms: 0,
-        }
+        Self { start_time_ms: 0 }
     }
-    
+
     /// Get Arduino Due chip model
     pub fn chip_model(&self) -> &'static str {
         "Arduino Due (SAM3X8E)"
@@ -62,7 +59,7 @@ impl TimeProvider for ArduinoDuePlatform {
         // and convert to microseconds: cyccnt / (cpu_freq_mhz)
         self.start_time_ms as u64 * 1000
     }
-    
+
     fn delay_us(&self, us: u32) {
         // Arduino Due: Use busy-wait with nop instructions
         // At 84 MHz: 84 cycles per microsecond
@@ -71,7 +68,7 @@ impl TimeProvider for ArduinoDuePlatform {
             cortex_m::asm::nop();
         }
     }
-    
+
     fn delay_ms(&self, ms: u32) {
         self.delay_us(ms * 1000);
     }
@@ -80,19 +77,19 @@ impl TimeProvider for ArduinoDuePlatform {
 #[cfg(feature = "arduino-due")]
 impl SerialIO for ArduinoDuePlatform {
     type Error = ();
-    
+
     fn write(&mut self, data: &[u8]) -> Result<usize, Self::Error> {
         // Arduino HAL uses global serial
         // This is a simplified implementation
         // Real implementation would need serial peripheral access
         Ok(data.len())
     }
-    
+
     fn read(&mut self, buffer: &mut [u8]) -> Result<usize, Self::Error> {
         // Non-blocking read would need serial peripheral access
         Ok(0)
     }
-    
+
     fn flush(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
@@ -115,15 +112,15 @@ impl Platform for ArduinoDuePlatform {
     fn name(&self) -> &'static str {
         "Arduino Due"
     }
-    
+
     fn cpu_frequency_hz(&self) -> u32 {
-        84_000_000  // 84 MHz
+        84_000_000 // 84 MHz
     }
-    
+
     fn available_memory_bytes(&self) -> usize {
         // Arduino Due has 96KB SRAM
         // We can't easily query free memory on Arduino without malloc
-        96_000  // Total SRAM
+        96_000 // Total SRAM
     }
 }
 
@@ -140,4 +137,3 @@ impl ArduinoDuePlatform {
 
 // Note: Arduino Mega and Uno would need avr-hal instead of arduino-hal
 // They use AVR architecture, not ARM, so they need different implementation
-

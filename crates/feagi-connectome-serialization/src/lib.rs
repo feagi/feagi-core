@@ -242,12 +242,12 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
         let mut flags = [0u8; 1];
         file.read_exact(&mut flags)?;
         let compressed = (flags[0] & 1) != 0;
-        
+
         // Read uncompressed size
         let mut size_bytes = [0u8; 8];
         file.read_exact(&mut size_bytes)?;
         let size = u64::from_le_bytes(size_bytes);
-        
+
         (compressed, size as usize)
     } else {
         (false, 0) // Version 1 files are never compressed

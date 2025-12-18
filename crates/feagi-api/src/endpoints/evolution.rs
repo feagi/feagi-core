@@ -3,13 +3,13 @@
 
 /*!
  * FEAGI v1 Evolution API
- * 
+ *
  * Endpoints for evolutionary algorithms and genetic operations
  * Maps to Python: feagi/api/v1/evolution.py
  */
 
-use crate::common::{ApiError, ApiResult, State, Json};
 use crate::common::ApiState;
+use crate::common::{ApiError, ApiResult, Json, State};
 // Removed - using crate::common::State instead
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -34,7 +34,7 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     response.insert("active".to_string(), json!(false));
     response.insert("generation".to_string(), json!(0));
     response.insert("population_size".to_string(), json!(0));
-    
+
     Ok(Json(response))
 }
 
@@ -53,14 +53,15 @@ pub async fn post_config(
     Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // Validate config is provided
-    let _config = request.get("config")
+    let _config = request
+        .get("config")
         .ok_or_else(|| ApiError::invalid_input("Missing 'config' field"))?;
-    
+
     // TODO: Apply evolution configuration
     tracing::info!(target: "feagi-api", "Evolution configuration updated");
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Evolution configured successfully".to_string())
-    ])))
-}
 
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Evolution configured successfully".to_string(),
+    )])))
+}

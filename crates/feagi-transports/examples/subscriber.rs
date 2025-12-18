@@ -41,7 +41,3 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("📨 [{}]: {}", topic_str, message);
     }
 }
-
-
-
-

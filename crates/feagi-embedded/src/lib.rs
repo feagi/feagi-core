@@ -5,26 +5,26 @@
 #![warn(missing_docs)]
 
 //! # FEAGI Embedded
-//! 
+//!
 //! Platform abstraction and implementations for FEAGI embedded neural networks.
-//! 
+//!
 //! This crate provides:
 //! - **HAL traits** (`hal` module) - Platform-agnostic hardware abstractions
 //! - **Platform implementations** (`platforms` module) - Concrete implementations for ESP32, Arduino, STM32, etc.
-//! 
+//!
 //! ## Usage
-//! 
+//!
 //! ### Advanced Users (Direct HAL Usage)
 //! ```no_run
 //! use feagi_embedded::prelude::*;
 //! use feagi_npu_runtime_embedded::{NeuronArray, SynapseArray};
 //! use feagi_npu_neural::types::INT8Value;
-//! 
+//!
 //! fn main() -> ! {
 //!     let platform = Esp32Platform::init().expect("Failed to init");
 //!     let mut neurons = NeuronArray::<INT8Value, 1000>::new();
 //!     let mut synapses = SynapseArray::<5000>::new();
-//!     
+//!
 //!     // Custom network topology
 //!     // Custom burst loop
 //!     loop {
@@ -32,12 +32,12 @@
 //!     }
 //! }
 //! ```
-//! 
+//!
 //! ### SDK Users
 //! See `feagi-nano` crate for high-level SDK with NetworkBuilder, templates, etc.
-//! 
+//!
 //! ## Feature Flags
-//! 
+//!
 //! Platforms are selected via feature flags:
 //! - `esp32` - ESP32, ESP32-S3, ESP32-C3 support
 //! - `arduino-due` - Arduino Due support (future)
@@ -58,25 +58,15 @@ pub mod transports;
 
 // Re-export commonly used types
 pub use hal::{
-    Platform, 
-    TimeProvider, 
-    SerialIO, 
-    GpioProvider, 
-    Logger, 
-    LogLevel,
-    NeuralAccelerator,
-    AcceleratorCapabilities,
-    BluetoothProvider,
-    ConnectionStatus,
-    UsbCdcProvider,
-    UsbConnectionStatus,
+    AcceleratorCapabilities, BluetoothProvider, ConnectionStatus, GpioProvider, LogLevel, Logger,
+    NeuralAccelerator, Platform, SerialIO, TimeProvider, UsbCdcProvider, UsbConnectionStatus,
 };
 
 #[cfg(feature = "async")]
 pub use hal::{AsyncBluetoothProvider, AsyncUsbCdcProvider};
 
 // Re-export transport protocol
-pub use transports::{Protocol, Command, PacketCommand};
+pub use transports::{Command, PacketCommand, Protocol};
 
 // Re-export platform implementations
 #[cfg(feature = "esp32")]
@@ -99,7 +89,7 @@ pub use feagi_npu_neural::types::{INT8Value, NeuralValue};
 pub use feagi_npu_runtime_embedded::{NeuronArray, SynapseArray};
 
 /// Prelude module for convenient imports
-/// 
+///
 /// ```no_run
 /// use feagi_embedded::prelude::*;
 /// ```
@@ -108,19 +98,19 @@ pub mod prelude {
     pub use crate::platforms::*;
     pub use feagi_npu_neural::types::{INT8Value, NeuralValue};
     pub use feagi_npu_runtime_embedded::{NeuronArray, SynapseArray};
-    
+
     #[cfg(feature = "esp32")]
     pub use crate::platforms::Esp32Platform;
-    
+
     #[cfg(feature = "arduino-due")]
     pub use crate::platforms::ArduinoDuePlatform;
-    
+
     #[cfg(feature = "stm32f4")]
     pub use crate::platforms::Stm32F4Platform;
-    
+
     #[cfg(feature = "rpi-pico")]
     pub use crate::platforms::RpiPicoPlatform;
-    
+
     #[cfg(feature = "hailo")]
     pub use crate::platforms::{Hailo8Accelerator, HailoError, HybridCpuHailo};
 }
@@ -132,4 +122,3 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub fn version() -> &'static str {
     VERSION
 }
-

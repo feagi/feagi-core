@@ -41,7 +41,7 @@ pub struct WebSocketConfig {
 impl Default for WebSocketConfig {
     fn default() -> Self {
         Self {
-            enabled: false,  // Disabled by default, enabled via config
+            enabled: false, // Disabled by default, enabled via config
             host: "0.0.0.0".to_string(),
             sensory_port: 9051,
             motor_port: 9052,
@@ -52,7 +52,7 @@ impl Default for WebSocketConfig {
             ping_interval_ms: 60000,
             ping_timeout_ms: 60000,
             close_timeout_ms: 10000,
-            max_message_size: 10485760,  // 10MB
+            max_message_size: 10485760, // 10MB
             max_connections: 100,
         }
     }

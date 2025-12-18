@@ -1,13 +1,15 @@
-use std::time::Instant;
-use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions};
-use feagi_data_structures::neuron_voxels::xyzp::{CorticalMappedXYZPNeuronVoxels};
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
-use crate::data_types::{Percentage};
-use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{decode_unsigned_percentage_from_fractional_exponential_neurons};
+use crate::data_types::Percentage;
+use crate::neuron_voxel_coding::xyzp::coder_shared_functions::decode_unsigned_percentage_from_fractional_exponential_neurons;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelDimensions,
+};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_data_structures::FeagiDataError;
+use std::time::Instant;
 
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 1; // How many numbers are encoded per channel?
@@ -22,14 +24,18 @@ pub struct PercentageExponentialNeuronVoxelXYZPDecoder {
 
 // NOTE: we need to be cautious of multiple neuron_voxels coming in affecting the result (we should average them)
 
-
 impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
     fn get_decoded_data_type(&self) -> WrappedIOType {
         WrappedIOType::Percentage
     }
 
-    fn read_neuron_data_multi_channel_into_pipeline_input_cache(&mut self, neurons_to_read: &CorticalMappedXYZPNeuronVoxels, _time_of_read: Instant, pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>, channel_changed: &mut Vec<bool>) -> Result<(), FeagiDataError> {
-
+    fn read_neuron_data_multi_channel_into_pipeline_input_cache(
+        &mut self,
+        neurons_to_read: &CorticalMappedXYZPNeuronVoxels,
+        _time_of_read: Instant,
+        pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>,
+        channel_changed: &mut Vec<bool>,
+    ) -> Result<(), FeagiDataError> {
         // NOTE: Expecting channel_changed to be all false. Do not reset write_target, we will write to it if we got a value for the channel!
         const ONLY_ALLOWED_Y: u32 = 0; // This structure never has height
 
@@ -44,7 +50,8 @@ impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
             return Ok(());
         }
 
-        for scratch_per_z_depth in self.z_depth_scratch_space.iter_mut() { // Not worth making parallel
+        for scratch_per_z_depth in self.z_depth_scratch_space.iter_mut() {
+            // Not worth making parallel
             scratch_per_z_depth.clear()
         }
 
@@ -52,24 +59,28 @@ impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
         let max_possible_x_index = CHANNEL_WIDTH * number_of_channels; // Something is wrong if we reach here
         let z_depth: u32 = self.channel_dimensions.depth;
 
-
         for neuron in neuron_array.iter() {
-
             // Ignoring any neuron_voxels that have no potential (if sent for some reason).
             if neuron.neuron_voxel_coordinate.y != ONLY_ALLOWED_Y || neuron.potential == 0.0 {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index || neuron.neuron_voxel_coordinate.z >= z_depth {
+            if neuron.neuron_voxel_coordinate.x >= max_possible_x_index
+                || neuron.neuron_voxel_coordinate.z >= z_depth
+            {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            let z_row_vector = self.z_depth_scratch_space.get_mut(neuron.neuron_voxel_coordinate.x as usize).unwrap();
+            let z_row_vector = self
+                .z_depth_scratch_space
+                .get_mut(neuron.neuron_voxel_coordinate.x as usize)
+                .unwrap();
             z_row_vector.push(neuron.neuron_voxel_coordinate.z)
-        };
+        }
 
         // At this point, we have numbers in scratch space to average out
-        for channel_index in 0..number_of_channels as usize { // Literally not worth making parallel... right?
+        for channel_index in 0..number_of_channels as usize {
+            // Literally not worth making parallel... right?
             let z_row_index = channel_index;
 
             // We need to ensure if ANY of the numbers changed (as in they added anything to the vector for that row that only originally had 0), we update it and label it as such
@@ -80,26 +91,39 @@ impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
                 continue; // No data collected for this channel. Do not emit
             }
             channel_changed[channel_index] = true;
-            let percentage: &mut Percentage = pipelines_with_data_to_update.get_mut(channel_index).unwrap().get_preprocessed_cached_value_mut().try_into()?;
+            let percentage: &mut Percentage = pipelines_with_data_to_update
+                .get_mut(channel_index)
+                .unwrap()
+                .get_preprocessed_cached_value_mut()
+                .try_into()?;
             decode_unsigned_percentage_from_fractional_exponential_neurons(&z_vector, percentage);
-        };
+        }
 
         Ok(())
     }
 }
 
 impl PercentageExponentialNeuronVoxelXYZPDecoder {
-
-    pub fn new_box(cortical_read_target: CorticalID, z_resolution: u32, number_channels: CorticalChannelCount) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+    pub fn new_box(
+        cortical_read_target: CorticalID,
+        z_resolution: u32,
+        number_channels: CorticalChannelCount,
+    ) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         const CHANNEL_Y_HEIGHT: u32 = 1;
 
         let decoder = PercentageExponentialNeuronVoxelXYZPDecoder {
-            channel_dimensions: CorticalChannelDimensions::new(CHANNEL_WIDTH, CHANNEL_Y_HEIGHT, z_resolution)?,
+            channel_dimensions: CorticalChannelDimensions::new(
+                CHANNEL_WIDTH,
+                CHANNEL_Y_HEIGHT,
+                z_resolution,
+            )?,
             cortical_read_target,
-            z_depth_scratch_space: vec![Vec::new(); *number_channels as usize * NUMBER_PAIRS_PER_CHANNEL as usize],
+            z_depth_scratch_space: vec![
+                Vec::new();
+                *number_channels as usize
+                    * NUMBER_PAIRS_PER_CHANNEL as usize
+            ],
         };
         Ok(Box::new(decoder))
     }
 }
-
-

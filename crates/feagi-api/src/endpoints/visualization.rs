@@ -3,13 +3,13 @@
 
 /*!
  * FEAGI v1 Visualization API
- * 
+ *
  * Endpoints for managing visualization clients and streams
  * Maps to Python: feagi/api/v1/visualization.py
  */
 
-use crate::common::{ApiError, ApiResult, State, Json};
 use crate::common::ApiState;
+use crate::common::{ApiError, ApiResult, Json, State};
 // Removed - using crate::common::State instead
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -33,19 +33,23 @@ pub async fn post_register_client(
     Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, Value>>> {
     // Extract or generate client_id
-    let client_id = request.get("client_id")
+    let client_id = request
+        .get("client_id")
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
-    
+
     // TODO: Register visualization client with actual state management
     tracing::info!(target: "feagi-api", "Registered visualization client: {}", client_id);
-    
+
     let mut response = HashMap::new();
     response.insert("client_id".to_string(), json!(client_id));
     response.insert("success".to_string(), json!(true));
-    response.insert("message".to_string(), json!("Visualization client registered successfully"));
-    
+    response.insert(
+        "message".to_string(),
+        json!("Visualization client registered successfully"),
+    );
+
     Ok(Json(response))
 }
 
@@ -64,16 +68,18 @@ pub async fn post_unregister_client(
     Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // Validate client_id is provided
-    let client_id = request.get("client_id")
+    let client_id = request
+        .get("client_id")
         .and_then(|v| v.as_str())
         .ok_or_else(|| ApiError::invalid_input("Missing 'client_id' field"))?;
-    
+
     // TODO: Unregister visualization client
     tracing::info!(target: "feagi-api", "Unregistered visualization client: {}", client_id);
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Visualization client unregistered successfully".to_string())
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Visualization client unregistered successfully".to_string(),
+    )])))
 }
 
 /// Send heartbeat from visualization client to maintain active connection.
@@ -91,10 +97,11 @@ pub async fn post_heartbeat(
     Json(_request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // TODO: Process visualization heartbeat
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Heartbeat received".to_string())
-    ])))
+
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Heartbeat received".to_string(),
+    )])))
 }
 
 /// Get visualization system status including active clients and FQ sampler state.
@@ -114,7 +121,6 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     response.insert("active_clients".to_string(), json!(0));
     response.insert("fq_sampler_enabled".to_string(), json!(false));
     response.insert("message".to_string(), json!("Visualization system idle"));
-    
+
     Ok(Json(response))
 }
-

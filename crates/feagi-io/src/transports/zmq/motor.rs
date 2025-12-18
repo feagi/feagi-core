@@ -72,7 +72,7 @@ impl MotorStream {
         if !*self.running.lock() {
             return Ok(()); // Silently discard - this is expected when no motor agents connected
         }
-        
+
         let sock_guard = self.socket.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
@@ -83,14 +83,14 @@ impl MotorStream {
 
         Ok(())
     }
-    
+
     /// Publish motor data with agent_id as ZMQ topic for filtering
     pub fn publish_with_topic(&self, topic: &[u8], data: &[u8]) -> Result<(), String> {
         // Fast path: If stream not running, don't try to send
         if !*self.running.lock() {
             return Ok(()); // Silently discard - no agents connected
         }
-        
+
         let sock_guard = self.socket.lock();
         let sock = match sock_guard.as_ref() {
             Some(s) => s,
@@ -98,9 +98,13 @@ impl MotorStream {
         };
 
         // Send as multipart message: [topic, data]
-        debug!("[MOTOR-STREAM] 📤 Publishing multipart: topic='{}' ({} bytes), data={} bytes",
-              String::from_utf8_lossy(topic), topic.len(), data.len());
-        
+        debug!(
+            "[MOTOR-STREAM] 📤 Publishing multipart: topic='{}' ({} bytes), data={} bytes",
+            String::from_utf8_lossy(topic),
+            topic.len(),
+            data.len()
+        );
+
         // Use send_multipart with Vec (zmq crate API compatibility)
         let parts: Vec<&[u8]> = vec![topic, data];
         sock.send_multipart(parts, 0).map_err(|e| {

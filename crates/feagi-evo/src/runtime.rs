@@ -11,33 +11,33 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
-use feagi_data_structures::genomic::BrainRegion;
 use feagi_data_structures::genomic::cortical_area::CorticalArea;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::BrainRegion;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Complete runtime genome representation
 #[derive(Debug, Clone)]
 pub struct RuntimeGenome {
     /// Genome metadata
     pub metadata: GenomeMetadata,
-    
+
     /// Cortical areas (by cortical_id as CorticalID)
     pub cortical_areas: HashMap<CorticalID, CorticalArea>,
-    
+
     /// Brain regions (by region_id)
     pub brain_regions: HashMap<String, BrainRegion>,
-    
+
     /// Morphology registry
     pub morphologies: MorphologyRegistry,
-    
+
     /// Physiology configuration
     pub physiology: PhysiologyConfig,
-    
+
     /// Genome signatures
     pub signatures: GenomeSignatures,
-    
+
     /// Statistics
     pub stats: GenomeStats,
 }
@@ -50,7 +50,7 @@ pub struct GenomeMetadata {
     pub genome_description: String,
     pub version: String,
     pub timestamp: f64, // Unix timestamp
-    
+
     /// Root brain region ID (UUID string) - explicit identification for O(1) lookup
     /// This eliminates the need to search through all regions to find which has no parent
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -71,32 +71,32 @@ impl MorphologyRegistry {
             morphologies: HashMap::new(),
         }
     }
-    
+
     /// Add a morphology
     pub fn add_morphology(&mut self, id: String, morphology: Morphology) {
         self.morphologies.insert(id, morphology);
     }
-    
+
     /// Get a morphology by ID
     pub fn get(&self, id: &str) -> Option<&Morphology> {
         self.morphologies.get(id)
     }
-    
+
     /// Check if morphology exists
     pub fn contains(&self, id: &str) -> bool {
         self.morphologies.contains_key(id)
     }
-    
+
     /// Get all morphology IDs
     pub fn morphology_ids(&self) -> Vec<String> {
         self.morphologies.keys().cloned().collect()
     }
-    
+
     /// Get count of morphologies
     pub fn count(&self) -> usize {
         self.morphologies.len()
     }
-    
+
     /// Iterate over all morphologies
     pub fn iter(&self) -> impl Iterator<Item = (&String, &Morphology)> {
         self.morphologies.iter()
@@ -108,10 +108,10 @@ impl MorphologyRegistry {
 pub struct Morphology {
     /// Morphology type: "vectors", "patterns", "functions", or "composite"
     pub morphology_type: MorphologyType,
-    
+
     /// Morphology parameters
     pub parameters: MorphologyParameters,
-    
+
     /// Morphology class: "core", "custom", etc.
     pub class: String,
 }
@@ -122,13 +122,13 @@ pub struct Morphology {
 pub enum MorphologyType {
     /// Vector-based morphology (3D offset vectors)
     Vectors,
-    
+
     /// Pattern-based morphology (source → destination patterns)
     Patterns,
-    
+
     /// Function-based morphology (built-in algorithms)
     Functions,
-    
+
     /// Composite morphology (combines multiple morphologies)
     Composite,
 }
@@ -139,15 +139,15 @@ pub enum MorphologyType {
 pub enum MorphologyParameters {
     /// Vector parameters: list of [x, y, z] offsets
     Vectors { vectors: Vec<[i32; 3]> },
-    
+
     /// Pattern parameters: list of [source_pattern, dest_pattern] pairs
-    Patterns { 
-        patterns: Vec<[Vec<PatternElement>; 2]> 
+    Patterns {
+        patterns: Vec<[Vec<PatternElement>; 2]>,
     },
-    
+
     /// Function parameters: empty for built-in functions
     Functions {},
-    
+
     /// Composite parameters: combines seed + pattern + mapper
     Composite {
         src_seed: [u32; 3],
@@ -196,16 +196,23 @@ impl<'de> Deserialize<'de> for PatternElement {
                 if let Some(i) = n.as_i64() {
                     Ok(PatternElement::Value(i as i32))
                 } else {
-                    Err(serde::de::Error::custom("Pattern element must be an integer"))
+                    Err(serde::de::Error::custom(
+                        "Pattern element must be an integer",
+                    ))
                 }
             }
             serde_json::Value::String(s) => match s.as_str() {
                 "*" => Ok(PatternElement::Wildcard),
                 "?" => Ok(PatternElement::Skip),
                 "!" => Ok(PatternElement::Exclude),
-                _ => Err(serde::de::Error::custom(format!("Unknown pattern element: {}", s))),
+                _ => Err(serde::de::Error::custom(format!(
+                    "Unknown pattern element: {}",
+                    s
+                ))),
             },
-            _ => Err(serde::de::Error::custom("Pattern element must be number or string")),
+            _ => Err(serde::de::Error::custom(
+                "Pattern element must be number or string",
+            )),
         }
     }
 }
@@ -215,22 +222,22 @@ impl<'de> Deserialize<'de> for PatternElement {
 pub struct PhysiologyConfig {
     /// Simulation timestep in seconds (formerly burst_delay)
     pub simulation_timestep: f64,
-    
+
     /// Maximum neuron age
     pub max_age: u64,
-    
+
     /// Evolution burst count
     pub evolution_burst_count: u64,
-    
+
     /// IPU idle threshold
     pub ipu_idle_threshold: u64,
-    
+
     /// Plasticity queue depth
     pub plasticity_queue_depth: usize,
-    
+
     /// Lifespan management interval
     pub lifespan_mgmt_interval: u64,
-    
+
     /// Quantization precision for numeric values
     /// Options: "fp32" (default), "fp16", "int8"
     #[serde(default = "default_quantization_precision")]
@@ -238,7 +245,7 @@ pub struct PhysiologyConfig {
 }
 
 pub fn default_quantization_precision() -> String {
-    "int8".to_string()  // Default to INT8 for memory efficiency
+    "int8".to_string() // Default to INT8 for memory efficiency
 }
 
 impl Default for PhysiologyConfig {
@@ -260,13 +267,13 @@ impl Default for PhysiologyConfig {
 pub struct GenomeSignatures {
     /// Full genome signature
     pub genome: String,
-    
+
     /// Blueprint signature
     pub blueprint: String,
-    
+
     /// Physiology signature
     pub physiology: String,
-    
+
     /// Morphologies signature (optional, for future extension)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub morphologies: Option<String>,
@@ -277,10 +284,10 @@ pub struct GenomeSignatures {
 pub struct GenomeStats {
     /// Innate cortical area count
     pub innate_cortical_area_count: usize,
-    
+
     /// Innate neuron count
     pub innate_neuron_count: usize,
-    
+
     /// Innate synapse count
     pub innate_synapse_count: usize,
 }
@@ -298,17 +305,17 @@ impl Default for GenomeStats {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_morphology_registry_creation() {
         let registry = MorphologyRegistry::new();
         assert_eq!(registry.count(), 0);
     }
-    
+
     #[test]
     fn test_morphology_registry_add_and_get() {
         let mut registry = MorphologyRegistry::new();
-        
+
         let morphology = Morphology {
             morphology_type: MorphologyType::Vectors,
             parameters: MorphologyParameters::Vectors {
@@ -316,14 +323,14 @@ mod tests {
             },
             class: "test".to_string(),
         };
-        
+
         registry.add_morphology("test_morph".to_string(), morphology);
-        
+
         assert_eq!(registry.count(), 1);
         assert!(registry.contains("test_morph"));
         assert!(registry.get("test_morph").is_some());
     }
-    
+
     #[test]
     fn test_physiology_config_default() {
         let config = PhysiologyConfig::default();
@@ -331,6 +338,3 @@ mod tests {
         assert_eq!(config.max_age, 10_000_000);
     }
 }
-
-
-

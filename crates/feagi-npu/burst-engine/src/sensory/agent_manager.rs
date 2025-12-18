@@ -17,19 +17,19 @@
 //! 4. Inject directly into FCL
 
 use super::{RateLimiter, ShmReader};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use tracing::{debug, info, warn, error};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use tracing::{debug, error, info, warn};
 
 /// Agent registration info
 #[derive(Debug, Clone)]
 pub struct AgentConfig {
     pub agent_id: String,
-    #[allow(dead_code)]  // In development - will be used for SHM-based agents
+    #[allow(dead_code)] // In development - will be used for SHM-based agents
     pub shm_path: PathBuf,
     pub rate_hz: f64,
     /// Cortical area ID → cortical_idx mapping (for coordinate lookup)
@@ -46,7 +46,7 @@ pub type FclInjectionCallback = Arc<dyn Fn(u32, Vec<(u32, u32, u32, f32)>) + Sen
 /// Migration status: Agent management being migrated from Python. The agent_id field
 /// will be used for logging and debugging once full agent lifecycle management is ported.
 /// Warning about unused field is expected during migration.
-#[allow(dead_code)]  // In development - agent_id will be used for logging
+#[allow(dead_code)] // In development - agent_id will be used for logging
 struct AgentThread {
     agent_id: String,
     handle: JoinHandle<()>,
@@ -408,12 +408,15 @@ fn agent_polling_loop(
             // Iterate over cortical areas
             for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
                 // OPTIMIZATION: Use CorticalID directly - no string allocation!
-                
+
                 // Get cortical_idx for this area
                 let cortical_idx = match config.area_mapping.get(cortical_id) {
                     Some(&idx) => idx,
                     None => {
-                        warn!("[SENSORY-{}] Unknown area '{}'", config.agent_id, cortical_id);
+                        warn!(
+                            "[SENSORY-{}] Unknown area '{}'",
+                            config.agent_id, cortical_id
+                        );
                         continue;
                     }
                 };
@@ -448,7 +451,7 @@ fn agent_polling_loop(
                 static FIRST_INJECTION_LOGGED: std::sync::atomic::AtomicBool =
                     std::sync::atomic::AtomicBool::new(false);
                 if !FIRST_INJECTION_LOGGED.load(Ordering::Relaxed) && !xyzp_data.is_empty() {
-                    info!("[SENSORY-{}] ✅ First injection: area='{}', cortical_area={}, neuron_count={}", 
+                    info!("[SENSORY-{}] ✅ First injection: area='{}', cortical_area={}, neuron_count={}",
                         config.agent_id, cortical_id, cortical_idx, xyzp_data.len());
                     info!(
                         "[SENSORY-{}]    First 3 XYZP: {:?}",
@@ -473,7 +476,6 @@ fn agent_polling_loop(
 mod tests {
     use super::*;
     use std::sync::Arc;
-    
 
     #[test]
     fn test_agent_manager_lifecycle() {

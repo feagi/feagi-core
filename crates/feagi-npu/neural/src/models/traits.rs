@@ -31,15 +31,15 @@
 ///
 /// impl NeuronModel for MyModel {
 ///     type Parameters = MyModelParameters;
-///     
+///
 ///     fn model_name(&self) -> &'static str {
 ///         "My Custom Model"
 ///     }
-///     
+///
 ///     fn compute_synaptic_contribution(&self, weight: f32, psp: f32, synapse_type: SynapseType) -> f32 {
 ///         // Your model's formula here
 ///     }
-///     
+///
 ///     // ... implement other required methods
 /// }
 /// ```
@@ -158,4 +158,3 @@ mod tests {
         // Actual implementations will be tested in their respective modules
     }
 }
-

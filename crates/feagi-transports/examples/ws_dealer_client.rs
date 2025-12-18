@@ -18,20 +18,20 @@ use std::time::Duration;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
     let _ = tracing_subscriber::fmt::try_init();
-    
+
     println!("🦀 Starting WebSocket Dealer Client");
-    
+
     // Create dealer client
     let mut dealer = WsDealer::with_address("ws://127.0.0.1:9053").await?;
     dealer.start_async().await?;
-    
+
     println!("✅ Connected to router server");
     println!("📤 Sending requests...");
-    
+
     for i in 0..10 {
         let request = format!("Request #{}", i);
         println!("📤 Sending: {}", request);
-        
+
         match dealer.request_async(request.as_bytes()).await {
             Ok(response) => {
                 println!("📥 Response: {}", String::from_utf8_lossy(&response));
@@ -41,12 +41,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
         }
-        
+
         tokio::time::sleep(Duration::from_secs(1)).await;
     }
-    
+
     println!("✅ Done sending requests");
-    
+
     Ok(())
 }
-

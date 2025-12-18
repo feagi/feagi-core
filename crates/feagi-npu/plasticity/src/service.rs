@@ -35,7 +35,7 @@ pub struct PlasticityConfig {
     /// STDP configuration
     pub stdp: Option<STDPConfig>,
 
-    /// Pattern detection configuration  
+    /// Pattern detection configuration
     pub pattern_config: PatternConfig,
 
     /// Memory neuron lifecycle configuration

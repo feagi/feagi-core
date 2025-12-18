@@ -27,8 +27,3 @@ pub struct EventChannel {
     // TODO: heapless::spsc implementation
     _phantom: std::marker::PhantomData<()>,
 }
-
-
-
-
-

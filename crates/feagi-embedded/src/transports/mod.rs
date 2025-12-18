@@ -44,7 +44,7 @@
 //!
 //! The protocol layer doesn't care if bytes arrive via:
 //! - Bluetooth notifications
-//! - USB CDC bulk transfers  
+//! - USB CDC bulk transfers
 //! - UART RX interrupts
 //! - WiFi TCP packets
 //!
@@ -67,7 +67,7 @@
 //!         // Protocol layer parses bytes
 //!         protocol.process_received_data(&buf[..len]);
 //!     }
-//!     
+//!
 //!     // Protocol layer extracts commands
 //!     if let Some(cmd) = protocol.receive_command() {
 //!         // Handle command (GPIO, LED, etc.)
@@ -92,7 +92,7 @@
 //!         // SAME protocol layer parses bytes
 //!         protocol.process_received_data(&buf[..len]);
 //!     }
-//!     
+//!
 //!     // SAME command extraction
 //!     if let Some(cmd) = protocol.receive_command() {
 //!         // Handle command (GPIO, LED, etc.)
@@ -106,5 +106,4 @@
 pub mod protocol;
 
 // Re-export for convenience
-pub use protocol::{Protocol, Command, PacketCommand};
-
+pub use protocol::{Command, PacketCommand, Protocol};

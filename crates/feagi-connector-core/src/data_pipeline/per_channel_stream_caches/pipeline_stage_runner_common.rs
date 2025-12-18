@@ -1,10 +1,12 @@
+use crate::data_pipeline::pipeline_stage::PipelineStage;
+use crate::data_pipeline::{
+    stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex,
+};
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data_structures::FeagiDataError;
+use serde::Serialize;
 use std::cmp::PartialEq;
 use std::time::Instant;
-use serde::Serialize;
-use feagi_data_structures::FeagiDataError;
-use crate::data_pipeline::{stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_pipeline::pipeline_stage::PipelineStage;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
 /// Represents the direction of data flow in the pipeline, which affects validation logic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,7 +52,7 @@ pub(crate) trait PipelineStageRunner {
     fn get_channel_index_override(&self) -> Option<usize>;
 
     fn set_channel_index_override(&mut self, channel_index_override: Option<usize>);
-    
+
     fn does_contain_stages(&self) -> bool {
         !self.get_stages().is_empty()
     }
@@ -58,13 +60,16 @@ pub(crate) trait PipelineStageRunner {
     fn get_postprocessed_cached_value(&self) -> &WrappedIOData {
         let stages = self.get_stages();
         if stages.is_empty() {
-            return self.get_preprocessed_cached_value()
+            return self.get_preprocessed_cached_value();
         }
         stages.last().unwrap().get_most_recent_output()
     }
 
     /// Retrieves the properties of a single stage in the pipeline.
-    fn try_get_single_stage_properties(&self, stage_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
+    fn try_get_single_stage_properties(
+        &self,
+        stage_index: PipelineStagePropertyIndex,
+    ) -> Result<PipelineStageProperties, FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(stage_index)?;
         Ok(self.get_stages()[*stage_index as usize].create_properties())
     }
@@ -89,9 +94,14 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If the properties were successfully updated
     /// * `Err(FeagiDataError)` - If the index is invalid or properties can't be loaded
-    fn try_update_single_stage_properties(&mut self, updating_stage_index: PipelineStagePropertyIndex, updated_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
+    fn try_update_single_stage_properties(
+        &mut self,
+        updating_stage_index: PipelineStagePropertyIndex,
+        updated_properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(updating_stage_index)?;
-        self.get_stages_mut_internal()[*updating_stage_index as usize].load_properties(updated_properties)?;
+        self.get_stages_mut_internal()[*updating_stage_index as usize]
+            .load_properties(updated_properties)?;
         Ok(())
     }
 
@@ -107,7 +117,10 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If all properties were successfully updated
     /// * `Err(FeagiDataError)` - if given pipeline is not compatible with current stages
-    fn try_update_all_stage_properties(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    fn try_update_all_stage_properties(
+        &mut self,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
         if new_pipeline_stage_properties.len() != self.get_stages().len() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Unable to update {} contained stages with {} properties!",
@@ -137,7 +150,11 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If the stage was successfully replaced
     /// * `Err(FeagiDataError)` - If index is invalid or types are incompatible
-    fn try_replace_single_stage(&mut self, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
+    fn try_replace_single_stage(
+        &mut self,
+        replacing_at_index: PipelineStagePropertyIndex,
+        new_pipeline_stage_properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
         self.verify_pipeline_stage_index_in_range(replacing_at_index)?;
         verify_replacing_stage_properties(
             self.get_stages(),
@@ -146,7 +163,8 @@ pub(crate) trait PipelineStageRunner {
             replacing_at_index,
             self.get_direction(),
         )?;
-        self.get_stages_mut_internal()[*replacing_at_index as usize] = new_pipeline_stage_properties.create_stage();
+        self.get_stages_mut_internal()[*replacing_at_index as usize] =
+            new_pipeline_stage_properties.create_stage();
         Ok(())
     }
 
@@ -162,14 +180,18 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If all stages were successfully replaced
     /// * `Err(FeagiDataError)` - If stages are incompatible or creation fails
-    fn try_replace_all_stages(&mut self, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
+    fn try_replace_all_stages(
+        &mut self,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
         let size = new_pipeline_stage_properties.len();
         verify_pipeline_stage_properties(
             &new_pipeline_stage_properties,
             self.get_fixed_type(),
             self.get_direction(),
         )?;
-        *self.get_stages_mut_internal() = stage_properties_to_stages(&new_pipeline_stage_properties)?;
+        *self.get_stages_mut_internal() =
+            stage_properties_to_stages(&new_pipeline_stage_properties)?;
         Ok(())
     }
 
@@ -193,9 +215,14 @@ pub(crate) trait PipelineStageRunner {
     /// # Returns
     /// * `Ok(())` - If the index is valid
     /// * `Err(FeagiDataError)` - If no stages exist or index is out of bounds
-    fn verify_pipeline_stage_index_in_range(&self, stage_index: PipelineStagePropertyIndex) -> Result<(), FeagiDataError> {
+    fn verify_pipeline_stage_index_in_range(
+        &self,
+        stage_index: PipelineStagePropertyIndex,
+    ) -> Result<(), FeagiDataError> {
         if self.get_stages().is_empty() {
-            return Err(FeagiDataError::BadParameters("No stages are defined, ergo no indexing is possible!".into()));
+            return Err(FeagiDataError::BadParameters(
+                "No stages are defined, ergo no indexing is possible!".into(),
+            ));
         }
 
         if *stage_index >= self.get_stages().len() as u32 {
@@ -210,30 +237,49 @@ pub(crate) trait PipelineStageRunner {
 
     fn export_as_json(&self) -> Result<serde_json::Value, FeagiDataError> {
         let mut output = serde_json::Map::new();
-        output.insert("friendly_name".to_string(), serde_json::Value::String(self.get_channel_friendly_name().to_string()));
-        output.insert("channel_index_override".to_string(), serde_json::to_value(self.get_channel_index_override()).unwrap());
+        output.insert(
+            "friendly_name".to_string(),
+            serde_json::Value::String(self.get_channel_friendly_name().to_string()),
+        );
+        output.insert(
+            "channel_index_override".to_string(),
+            serde_json::to_value(self.get_channel_index_override()).unwrap(),
+        );
 
         let mut json_stages: Vec<serde_json::Value> = Vec::new();
         let stages = self.get_stages();
         for stage in stages {
             let stage_properties = stage.create_properties();
-            json_stages.push(serde_json::to_value(&stage_properties).map_err(|err| FeagiDataError::InternalError(err.to_string()))?);
-        };
-        output.insert("pipeline_stages".to_string(), serde_json::Value::Array(json_stages));
-        Ok(serde_json::to_value(output).map_err(|err| FeagiDataError::InternalError(err.to_string()))?)
+            json_stages.push(
+                serde_json::to_value(&stage_properties)
+                    .map_err(|err| FeagiDataError::InternalError(err.to_string()))?,
+            );
+        }
+        output.insert(
+            "pipeline_stages".to_string(),
+            serde_json::Value::Array(json_stages),
+        );
+        Ok(serde_json::to_value(output)
+            .map_err(|err| FeagiDataError::InternalError(err.to_string()))?)
     }
 
-    fn import_from_json(&mut self, json: &serde_json::Map<String, serde_json::Value>) -> Result<(), FeagiDataError> {
-        let friendly_name = json.get("friendly_name")
+    fn import_from_json(
+        &mut self,
+        json: &serde_json::Map<String, serde_json::Value>,
+    ) -> Result<(), FeagiDataError> {
+        let friendly_name = json
+            .get("friendly_name")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
 
-        let channel_index_override = json.get("channel_index_override")
+        let channel_index_override = json
+            .get("channel_index_override")
             .and_then(|v| v.as_u64())
             .map(|v| v as usize);
 
-        let pipeline_stages_json = json.get("pipeline_stages")
+        let pipeline_stages_json = json
+            .get("pipeline_stages")
             .and_then(|v| v.as_array())
             .cloned()
             .unwrap_or_default();
@@ -281,14 +327,28 @@ pub(crate) fn verify_pipeline_stage_properties(
     match direction {
         PipelineDirection::Motor => {
             // For motor: first stage's input must match the fixed type
-            if &pipeline_stage_properties.first().unwrap().get_input_data_type() != fixed_type {
-                return Err(FeagiDataError::BadParameters("Given stages not compatible!".into()));
+            if &pipeline_stage_properties
+                .first()
+                .unwrap()
+                .get_input_data_type()
+                != fixed_type
+            {
+                return Err(FeagiDataError::BadParameters(
+                    "Given stages not compatible!".into(),
+                ));
             }
         }
         PipelineDirection::Sensory => {
             // For sensory: last stage's output must match the fixed type
-            if &pipeline_stage_properties.last().unwrap().get_output_data_type() != fixed_type {
-                return Err(FeagiDataError::BadParameters("Given stages not compatible!".into()));
+            if &pipeline_stage_properties
+                .last()
+                .unwrap()
+                .get_output_data_type()
+                != fixed_type
+            {
+                return Err(FeagiDataError::BadParameters(
+                    "Given stages not compatible!".into(),
+                ));
             }
         }
     }

@@ -23,4 +23,3 @@ pub mod v2;
 // Re-export commonly used types
 pub use common::{ApiError, ApiRequest, ApiResponse, EmptyResponse};
 pub use security::{AuthContext, Permission};
-

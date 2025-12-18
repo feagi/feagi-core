@@ -1,21 +1,25 @@
+use crate::data_pipeline::per_channel_stream_caches::MotorChannelStreamCaches;
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_types::descriptors::*;
+use crate::data_types::*;
+use crate::neuron_voxel_coding::xyzp::decoders::*;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data_serialization::FeagiByteContainer;
+use feagi_data_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
+};
+use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
+use feagi_data_structures::genomic::MotorCorticalUnit;
+use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_data_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
-use feagi_data_serialization::FeagiByteContainer;
-use feagi_data_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
-use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
-use feagi_data_structures::genomic::cortical_area::{CorticalID};
-use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex};
-use feagi_data_structures::genomic::MotorCorticalUnit;
-use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use crate::data_pipeline::per_channel_stream_caches::{MotorChannelStreamCaches};
-use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_types::*;
-use crate::data_types::descriptors::*;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::neuron_voxel_coding::xyzp::decoders::*;
-use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder};
 
 macro_rules! motor_unit_functions {
     (
@@ -56,7 +60,7 @@ macro_rules! motor_unit_functions {
         $wrapped_data_type:ident
     ) => {
         ::paste::paste! {
-            
+
 
             pub fn [<$snake_case_name _read_preprocessed_cache_value>](
                 &mut self,
@@ -348,7 +352,8 @@ macro_rules! motor_unit_functions {
 
 pub struct MotorDeviceCache {
     stream_caches: HashMap<(MotorCorticalUnit, CorticalGroupIndex), MotorChannelStreamCaches>,
-    agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(MotorCorticalUnit, CorticalGroupIndex)>>,
+    agent_device_key_lookup:
+        HashMap<AgentDeviceIndex, Vec<(MotorCorticalUnit, CorticalGroupIndex)>>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
@@ -358,7 +363,10 @@ impl std::fmt::Debug for MotorDeviceCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MotorDeviceCache")
             .field("stream_caches_count", &self.stream_caches.len())
-            .field("agent_device_key_lookup_count", &self.agent_device_key_lookup.len())
+            .field(
+                "agent_device_key_lookup_count",
+                &self.agent_device_key_lookup.len(),
+            )
             .field("neuron_data", &self.neuron_data)
             .field("byte_data", &self.byte_data)
             .field("previous_burst", &self.previous_burst)
@@ -367,7 +375,6 @@ impl std::fmt::Debug for MotorDeviceCache {
 }
 
 impl MotorDeviceCache {
-
     pub fn new() -> Self {
         MotorDeviceCache {
             stream_caches: HashMap::new(),
@@ -394,9 +401,13 @@ impl MotorDeviceCache {
         &self.neuron_data
     }
 
-    pub fn export_registered_motors_as_config_json(&self) -> Result<serde_json::Value, FeagiDataError> {
+    pub fn export_registered_motors_as_config_json(
+        &self,
+    ) -> Result<serde_json::Value, FeagiDataError> {
         let mut output = serde_json::Map::new();
-        for ((motor_cortical_unit, cortical_group_index), motor_channel_stream_caches) in &self.stream_caches {
+        for ((motor_cortical_unit, cortical_group_index), motor_channel_stream_caches) in
+            &self.stream_caches
+        {
             let motor_unit_name = motor_cortical_unit.get_snake_case_name().to_string();
             let cortical_group_name = cortical_group_index.to_string();
 
@@ -406,115 +417,163 @@ impl MotorDeviceCache {
                 .as_object_mut()
                 .expect("Just inserted an Object");
 
-            motor_units_map.insert(cortical_group_name, motor_channel_stream_caches.export_as_json()?);
+            motor_units_map.insert(
+                cortical_group_name,
+                motor_channel_stream_caches.export_as_json()?,
+            );
         }
         Ok(serde_json::Value::Object(output))
     }
 
     /// Import motor configurations from JSON
-    /// 
+    ///
     /// Updates pipeline stages and friendly names for already-registered motors.
     /// Motors must be registered first using the appropriate register functions.
-    /// 
+    ///
     /// # Arguments
     /// * `json` - JSON object containing motor configurations in new format
-    /// 
+    ///
     /// # Returns
     /// * `Ok(())` - If import succeeded
     /// * `Err(FeagiDataError)` - If motor not registered or JSON is malformed
-    pub fn import_motors_from_json(&mut self, json: &serde_json::Value) -> Result<(), FeagiDataError> {
-        let output_map = json.as_object()
-            .ok_or_else(|| FeagiDataError::DeserializationError("Expected output object for motors".to_string()))?;
-        
+    pub fn import_motors_from_json(
+        &mut self,
+        json: &serde_json::Value,
+    ) -> Result<(), FeagiDataError> {
+        let output_map = json.as_object().ok_or_else(|| {
+            FeagiDataError::DeserializationError("Expected output object for motors".to_string())
+        })?;
+
         for (motor_type_name, groups) in output_map {
             // Parse motor type from snake_case name
-            let motor_type = MotorCorticalUnit::from_snake_case_name(motor_type_name)
-                .ok_or_else(|| FeagiDataError::DeserializationError(
-                    format!("Unknown motor type: {}", motor_type_name)
-                ))?;
-            
-            let groups_map = groups.as_object()
-                .ok_or_else(|| FeagiDataError::DeserializationError(
-                    format!("Expected groups object for motor type: {}", motor_type_name)
-                ))?;
-            
+            let motor_type =
+                MotorCorticalUnit::from_snake_case_name(motor_type_name).ok_or_else(|| {
+                    FeagiDataError::DeserializationError(format!(
+                        "Unknown motor type: {}",
+                        motor_type_name
+                    ))
+                })?;
+
+            let groups_map = groups.as_object().ok_or_else(|| {
+                FeagiDataError::DeserializationError(format!(
+                    "Expected groups object for motor type: {}",
+                    motor_type_name
+                ))
+            })?;
+
             for (group_id_str, device_config) in groups_map {
-                let group_id: CorticalGroupIndex = group_id_str.parse::<u8>()
-                    .map_err(|e| FeagiDataError::DeserializationError(
-                        format!("Invalid group ID '{}': {}", group_id_str, e)
-                    ))?
+                let group_id: CorticalGroupIndex = group_id_str
+                    .parse::<u8>()
+                    .map_err(|e| {
+                        FeagiDataError::DeserializationError(format!(
+                            "Invalid group ID '{}': {}",
+                            group_id_str, e
+                        ))
+                    })?
                     .into();
-                
+
                 // Get the stream cache for this motor type + group
                 let stream_cache = self.stream_caches.get_mut(&(motor_type, group_id))
                     .ok_or_else(|| FeagiDataError::BadParameters(
-                        format!("Motor {}:{} not registered. Register the motor first before importing configuration.", 
+                        format!("Motor {}:{} not registered. Register the motor first before importing configuration.",
                             motor_type_name, group_id_str)
                     ))?;
-                
+
                 // Import configuration (pipelines, friendly names)
                 stream_cache.import_from_json(device_config)?;
             }
         }
         Ok(())
     }
-    
+
     // Returns true if data was retrieved
     pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
-        self.byte_data.try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)
+        self.byte_data
+            .try_update_struct_from_first_found_struct_of_type(&mut self.neuron_data)
     }
 
-    pub fn try_decode_neural_data_into_cache(&mut self, time_of_decode: Instant) -> Result<(), FeagiDataError> {
+    pub fn try_decode_neural_data_into_cache(
+        &mut self,
+        time_of_decode: Instant,
+    ) -> Result<(), FeagiDataError> {
         for motor_channel_stream_cache in self.stream_caches.values_mut() {
-            motor_channel_stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(&mut self.neuron_data, time_of_decode)?;
-        };
+            motor_channel_stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(
+                &mut self.neuron_data,
+                time_of_decode,
+            )?;
+        }
         Ok(())
     }
 
     //endregion
 
-
     //region Internal
 
     //region Cache Abstractions
 
-    fn register(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex,
-                neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
-                number_channels: CorticalChannelCount,
-                initial_cached_value: WrappedIOData)
-                -> Result<(), FeagiDataError> {
-
+    fn register(
+        &mut self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
+        number_channels: CorticalChannelCount,
+        initial_cached_value: WrappedIOData,
+    ) -> Result<(), FeagiDataError> {
         // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
 
         if self.stream_caches.contains_key(&(motor_type, group_index)) {
-            return Err(FeagiDataError::BadParameters(format!("Already registered motor {} of group index {}!", motor_type, group_index)))
+            return Err(FeagiDataError::BadParameters(format!(
+                "Already registered motor {} of group index {}!",
+                motor_type, group_index
+            )));
         }
 
         self.stream_caches.insert(
             (motor_type, group_index),
-            MotorChannelStreamCaches::new(neuron_decoder, number_channels, initial_cached_value)?);
+            MotorChannelStreamCaches::new(neuron_decoder, number_channels, initial_cached_value)?,
+        );
 
         Ok(())
     }
 
     //region Data
 
-    fn try_read_preprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+    fn try_read_preprocessed_cached_value(
+        &self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         Ok(motor_stream_caches.get_preprocessed_motor_value(channel_index)?)
     }
 
-    fn try_read_postprocessed_cached_value(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+    fn try_read_postprocessed_cached_value(
+        &self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         Ok(motor_stream_caches.get_postprocessed_motor_value(channel_index)?)
     }
 
-    fn try_register_motor_callback<F>(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, callback: F) -> Result<FeagiSignalIndex, FeagiDataError>
+    fn try_register_motor_callback<F>(
+        &mut self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        callback: F,
+    ) -> Result<FeagiSignalIndex, FeagiDataError>
     where
         F: Fn(&WrappedIOData) + Send + Sync + 'static,
     {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
-        let index = motor_stream_caches.try_connect_to_data_processed_signal(channel_index, callback)?;
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        let index =
+            motor_stream_caches.try_connect_to_data_processed_signal(channel_index, callback)?;
         Ok(index)
     }
 
@@ -522,42 +581,96 @@ impl MotorDeviceCache {
 
     //region Stages
 
-    fn try_get_single_stage_properties(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, stage_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+    fn try_get_single_stage_properties(
+        &self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        stage_index: PipelineStagePropertyIndex,
+    ) -> Result<PipelineStageProperties, FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         motor_stream_caches.try_get_single_stage_properties(channel_index, stage_index)
     }
 
-    fn try_get_all_stage_properties(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+    fn try_get_all_stage_properties(
+        &self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
         motor_stream_caches.get_all_stage_properties(channel_index)
     }
 
-    fn try_update_single_stage_properties(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex,
-                                          channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
-                                          replacing_property: PipelineStageProperties)
-                                          -> Result<(), FeagiDataError> {
-
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
-        motor_stream_caches.try_update_single_stage_properties(channel_index, pipeline_stage_property_index, replacing_property)
+    fn try_update_single_stage_properties(
+        &mut self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        pipeline_stage_property_index: PipelineStagePropertyIndex,
+        replacing_property: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        motor_stream_caches.try_update_single_stage_properties(
+            channel_index,
+            pipeline_stage_property_index,
+            replacing_property,
+        )
     }
 
-    fn try_update_all_stage_properties(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
-        motor_stream_caches.try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
+    fn try_update_all_stage_properties(
+        &mut self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        motor_stream_caches
+            .try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
     }
 
-    fn try_replace_single_stage(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
-        motor_stream_caches.try_replace_single_stage(channel_index, replacing_at_index, new_pipeline_stage_properties)
+    fn try_replace_single_stage(
+        &mut self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        replacing_at_index: PipelineStagePropertyIndex,
+        new_pipeline_stage_properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+        motor_stream_caches.try_replace_single_stage(
+            channel_index,
+            replacing_at_index,
+            new_pipeline_stage_properties,
+        )
     }
 
-    fn try_replace_all_stages(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
-        let motor_stream_caches = self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+    fn try_replace_all_stages(
+        &mut self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
+        let motor_stream_caches =
+            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
         motor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
     }
 
-    fn try_removing_all_stages(&mut self, sensor_type: MotorCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-        let motor_stream_cache = self.try_get_motor_channel_stream_caches_mut(sensor_type, group_index)?;
+    fn try_removing_all_stages(
+        &mut self,
+        sensor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<(), FeagiDataError> {
+        let motor_stream_cache =
+            self.try_get_motor_channel_stream_caches_mut(sensor_type, group_index)?;
         motor_stream_cache.try_removing_all_stages(channel_index)?;
         Ok(())
     }
@@ -566,13 +679,21 @@ impl MotorDeviceCache {
 
     //region Agent Devices
 
-    fn register_agent_device_key(&mut self, agent_device_index: AgentDeviceIndex, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex) -> Result<(), FeagiDataError> {
+    fn register_agent_device_key(
+        &mut self,
+        agent_device_index: AgentDeviceIndex,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+    ) -> Result<(), FeagiDataError> {
         let keys = {
             match self.agent_device_key_lookup.get_mut(&agent_device_index) {
                 Some(keys) => keys,
                 None => {
-                    self.agent_device_key_lookup.insert(agent_device_index, Vec::new());
-                    self.agent_device_key_lookup.get_mut(&agent_device_index).unwrap()
+                    self.agent_device_key_lookup
+                        .insert(agent_device_index, Vec::new());
+                    self.agent_device_key_lookup
+                        .get_mut(&agent_device_index)
+                        .unwrap()
                 }
             }
         };
@@ -580,21 +701,31 @@ impl MotorDeviceCache {
         Ok(())
     }
 
-    fn try_read_preprocessed_cached_values_by_agent_device(&self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
+    fn try_read_preprocessed_cached_values_by_agent_device(
+        &self,
+        agent_device_index: AgentDeviceIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
         let motor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
         let mut results = Vec::with_capacity(motor_group_pairs.len());
         for (motor_type, group_index) in motor_group_pairs {
-            let value = self.try_read_preprocessed_cached_value(*motor_type, *group_index, channel_index)?;
+            let value =
+                self.try_read_preprocessed_cached_value(*motor_type, *group_index, channel_index)?;
             results.push(value);
         }
         Ok(results)
     }
 
-    fn try_read_postprocessed_cached_values_by_agent_device(&self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
+    fn try_read_postprocessed_cached_values_by_agent_device(
+        &self,
+        agent_device_index: AgentDeviceIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
         let motor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
         let mut results = Vec::with_capacity(motor_group_pairs.len());
         for (motor_type, group_index) in motor_group_pairs {
-            let value = self.try_read_postprocessed_cached_value(*motor_type, *group_index, channel_index)?;
+            let value =
+                self.try_read_postprocessed_cached_value(*motor_type, *group_index, channel_index)?;
             results.push(value);
         }
         Ok(results)
@@ -602,50 +733,73 @@ impl MotorDeviceCache {
 
     //endregion
 
-
     //endregion
-
 
     //region Hashmap Interactions
 
-    fn try_get_motor_channel_stream_caches(&self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex) -> Result<&MotorChannelStreamCaches, FeagiDataError> {
+    fn try_get_motor_channel_stream_caches(
+        &self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+    ) -> Result<&MotorChannelStreamCaches, FeagiDataError> {
         let check = self.stream_caches.get(&(motor_type, group_index));
         if check.is_none() {
-            return Err(FeagiDataError::BadParameters(format!("Unable to find {} of cortical group index {} in registered motor's list!", motor_type, group_index)))
+            return Err(FeagiDataError::BadParameters(format!(
+                "Unable to find {} of cortical group index {} in registered motor's list!",
+                motor_type, group_index
+            )));
         }
         let check = check.unwrap();
         Ok(check)
     }
 
-    fn try_get_motor_channel_stream_caches_mut(&mut self, motor_type: MotorCorticalUnit, group_index: CorticalGroupIndex) -> Result<&mut MotorChannelStreamCaches, FeagiDataError> {
+    fn try_get_motor_channel_stream_caches_mut(
+        &mut self,
+        motor_type: MotorCorticalUnit,
+        group_index: CorticalGroupIndex,
+    ) -> Result<&mut MotorChannelStreamCaches, FeagiDataError> {
         let check = self.stream_caches.get_mut(&(motor_type, group_index));
         if check.is_none() {
-            return Err(FeagiDataError::BadParameters(format!("Unable to find {} of cortical group index {} in registered motor's list!", motor_type, group_index)))
+            return Err(FeagiDataError::BadParameters(format!(
+                "Unable to find {} of cortical group index {} in registered motor's list!",
+                motor_type, group_index
+            )));
         }
         let check = check.unwrap();
         Ok(check)
     }
 
-    fn try_get_agent_device_lookup(&self, agent_device_index: AgentDeviceIndex) -> Result<&[(MotorCorticalUnit, CorticalGroupIndex)], FeagiDataError> {
-        let val = self.agent_device_key_lookup.get(&agent_device_index).ok_or(
-            FeagiDataError::BadParameters(format!("No registered motor device found in agent's list for agent index {}!", *agent_device_index))
-        )?;
+    fn try_get_agent_device_lookup(
+        &self,
+        agent_device_index: AgentDeviceIndex,
+    ) -> Result<&[(MotorCorticalUnit, CorticalGroupIndex)], FeagiDataError> {
+        let val = self
+            .agent_device_key_lookup
+            .get(&agent_device_index)
+            .ok_or(FeagiDataError::BadParameters(format!(
+                "No registered motor device found in agent's list for agent index {}!",
+                *agent_device_index
+            )))?;
         Ok(val)
     }
 
-    fn try_get_agent_device_lookup_mut(&mut self, agent_device_index: AgentDeviceIndex) -> Result<&mut Vec<(MotorCorticalUnit, CorticalGroupIndex)>, FeagiDataError> {
-        let val = self.agent_device_key_lookup.get_mut(&agent_device_index).ok_or(
-            FeagiDataError::BadParameters(format!("No registered motor device found in agent's list for agent index {}!", *agent_device_index))
-        )?;
+    fn try_get_agent_device_lookup_mut(
+        &mut self,
+        agent_device_index: AgentDeviceIndex,
+    ) -> Result<&mut Vec<(MotorCorticalUnit, CorticalGroupIndex)>, FeagiDataError> {
+        let val = self
+            .agent_device_key_lookup
+            .get_mut(&agent_device_index)
+            .ok_or(FeagiDataError::BadParameters(format!(
+                "No registered motor device found in agent's list for agent index {}!",
+                *agent_device_index
+            )))?;
         Ok(val)
     }
 
     //endregion
 
     //endregion
-
-
-
 }
 
 impl Display for MotorDeviceCache {

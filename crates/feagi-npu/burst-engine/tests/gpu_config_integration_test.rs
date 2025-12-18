@@ -191,9 +191,8 @@ fn test_gpu_memory_fraction_range() {
 #[test]
 fn test_gpu_threshold_reasonable() {
     let config = GpuConfig::default();
-    
+
     // Threshold should be reasonable (not too low, not too high)
     assert!(config.gpu_threshold >= 100_000, "Threshold too low");
     assert!(config.gpu_threshold <= 100_000_000, "Threshold too high");
 }
-

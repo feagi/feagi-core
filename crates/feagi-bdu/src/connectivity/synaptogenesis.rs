@@ -368,7 +368,7 @@ pub fn apply_vectors_morphology(
                 if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
                     if rng.gen_range(0..100) < synapse_attractivity {
                         if npu
-        .add_synapse(
+                            .add_synapse(
                                 NeuronId(src_nid),
                                 NeuronId(dst_nid),
                                 SynapticWeight(weight),

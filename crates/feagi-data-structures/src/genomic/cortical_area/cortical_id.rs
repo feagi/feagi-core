@@ -1,16 +1,18 @@
-use std::fmt::{Display};
-use base64::{Engine as _, engine::general_purpose};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use crate::FeagiDataError;
-use crate::genomic::cortical_area::cortical_type::{CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType};
+use crate::genomic::cortical_area::cortical_type::{
+    CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType,
+};
 use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataFlag;
+use crate::FeagiDataError;
+use base64::{engine::general_purpose, Engine as _};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt::Display;
 
 macro_rules! match_bytes_by_cortical_type {
     ($cortical_id_bytes: expr,
         custom => $custom:block,
         memory => $memory:block,
         core => $core:block,
-    
+
         brain_input => $brain_input:block,
         brain_output => $brain_output:block,
         invalid => $invalid:block,
@@ -32,7 +34,6 @@ pub struct CorticalID {
 }
 
 impl CorticalID {
-
     pub const CORTICAL_ID_LENGTH: usize = 8; // 8 bytes -> 64 bit
     pub const CORTICAL_ID_LENGTH_BASE_64: usize = 4 * (Self::CORTICAL_ID_LENGTH + 3 - 1 / 3); // enforces rounding up
 
@@ -40,7 +41,9 @@ impl CorticalID {
 
     //region Constructors
 
-    pub fn try_from_bytes(bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH]) -> Result<Self, FeagiDataError> {
+    pub fn try_from_bytes(
+        bytes: &[u8; CorticalID::CORTICAL_ID_LENGTH],
+    ) -> Result<Self, FeagiDataError> {
         match_bytes_by_cortical_type!(bytes,
             custom => {
                 Ok(CorticalID {bytes: *bytes})
@@ -71,18 +74,21 @@ impl CorticalID {
     }
 
     pub fn try_from_base_64(str: &str) -> Result<Self, FeagiDataError> {
-        let decoded = general_purpose::STANDARD.decode(str)
-            .map_err(|e| FeagiDataError::DeserializationError(
-                format!("Failed to decode base64 string to cortical ID: {}", e)
-            ))?;
-        
+        let decoded = general_purpose::STANDARD.decode(str).map_err(|e| {
+            FeagiDataError::DeserializationError(format!(
+                "Failed to decode base64 string to cortical ID: {}",
+                e
+            ))
+        })?;
+
         if decoded.len() != Self::CORTICAL_ID_LENGTH {
-            return Err(FeagiDataError::DeserializationError(
-                format!("Invalid base64 cortical ID length: expected {} bytes, got {}", 
-                    Self::CORTICAL_ID_LENGTH, decoded.len())
-            ));
+            return Err(FeagiDataError::DeserializationError(format!(
+                "Invalid base64 cortical ID length: expected {} bytes, got {}",
+                Self::CORTICAL_ID_LENGTH,
+                decoded.len()
+            )));
         }
-        
+
         let mut bytes = [0u8; Self::CORTICAL_ID_LENGTH];
         bytes.copy_from_slice(&decoded);
         Self::try_from_bytes(&bytes)
@@ -91,7 +97,7 @@ impl CorticalID {
 
     //region export
 
-    pub fn write_id_to_bytes(&self, bytes: &mut[u8; Self::NUMBER_OF_BYTES]) {
+    pub fn write_id_to_bytes(&self, bytes: &mut [u8; Self::NUMBER_OF_BYTES]) {
         bytes.copy_from_slice(&self.bytes)
     }
 
@@ -143,7 +149,7 @@ impl CorticalID {
     pub fn as_base_64(&self) -> String {
         general_purpose::STANDARD.encode(&self.bytes)
     }
-    
+
     /// Extract subtype from cortical ID (e.g., "isvi0___" → "svi")
     /// Returns None for CORE areas or if bytes are invalid UTF-8
     pub fn extract_subtype(&self) -> Option<String> {
@@ -153,13 +159,17 @@ impl CorticalID {
             let subtype_bytes = &self.bytes[1..4];
             String::from_utf8(subtype_bytes.to_vec())
                 .ok()
-                .map(|s| s.trim_end_matches('_').trim_end_matches('\0').to_lowercase())
+                .map(|s| {
+                    s.trim_end_matches('_')
+                        .trim_end_matches('\0')
+                        .to_lowercase()
+                })
                 .filter(|s| !s.is_empty())
         } else {
             None
         }
     }
-    
+
     /// Extract unit ID from cortical ID (typically byte 4)
     /// Returns None for CORE/CUSTOM/MEMORY areas
     pub fn extract_unit_id(&self) -> Option<u8> {
@@ -177,7 +187,7 @@ impl CorticalID {
             None
         }
     }
-    
+
     /// Extract group ID from cortical ID (similar to unit ID, but may be in different byte)
     /// For now, returns the same as unit_id
     pub fn extract_group_id(&self) -> Option<u8> {
@@ -189,7 +199,6 @@ impl CorticalID {
     //region internal
 
     //endregion
-
 }
 
 impl Display for CorticalID {
@@ -231,13 +240,13 @@ mod tests {
     fn test_u64_round_trip() {
         // Create a cortical ID from a core type
         let original_id = CoreCorticalType::Power.to_cortical_id();
-        
+
         // Convert to u64
         let as_u64 = original_id.as_u64();
-        
+
         // Convert back from u64
         let restored_id = CorticalID::try_from_u64(as_u64).unwrap();
-        
+
         // Verify they're equal
         assert_eq!(original_id, restored_id);
         assert_eq!(original_id.as_bytes(), restored_id.as_bytes());
@@ -247,13 +256,13 @@ mod tests {
     fn test_base64_round_trip() {
         // Create a cortical ID from a core type
         let original_id = CoreCorticalType::Death.to_cortical_id();
-        
+
         // Convert to base64
         let as_base64 = original_id.as_base_64();
-        
+
         // Convert back from base64
         let restored_id = CorticalID::try_from_base_64(&as_base64).unwrap();
-        
+
         // Verify they're equal
         assert_eq!(original_id, restored_id);
         assert_eq!(original_id.as_bytes(), restored_id.as_bytes());
@@ -263,7 +272,7 @@ mod tests {
     fn test_base64_length() {
         let id = CoreCorticalType::Power.to_cortical_id();
         let base64_str = id.as_base_64();
-        
+
         // Base64 of 8 bytes should be 12 characters (with potential padding)
         // 8 bytes = 64 bits, base64 uses 6 bits per character
         // 64 / 6 = 10.67, rounded up to 11, but base64 padding rounds to multiple of 4 = 12
@@ -287,10 +296,7 @@ mod tests {
 
     #[test]
     fn test_u64_with_various_core_types() {
-        let core_types = [
-            CoreCorticalType::Power,
-            CoreCorticalType::Death,
-        ];
+        let core_types = [CoreCorticalType::Power, CoreCorticalType::Death];
 
         for core_type in &core_types {
             let id = core_type.to_cortical_id();
@@ -300,4 +306,3 @@ mod tests {
         }
     }
 }
-

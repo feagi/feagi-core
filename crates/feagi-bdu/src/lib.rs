@@ -36,11 +36,11 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub mod connectivity;
 pub mod connectome_manager;
+pub mod cortical_type_utils;
+pub mod neuroembryogenesis;
+mod rng;
 pub mod spatial;
 pub mod types;
-pub mod neuroembryogenesis;
-pub mod cortical_type_utils;
-mod rng;
 
 // Note: models/ and genome/ have been moved to feagi-types and feagi-evo respectively
 
@@ -56,12 +56,10 @@ pub use spatial::{morton_decode_3d, morton_encode_3d, MortonSpatialHash, Spatial
 pub use types::{AreaId, BduError, BduResult, Weight};
 
 // Re-export core types from feagi_data_structures (single source of truth)
-pub use feagi_data_structures::genomic::{
-    BrainRegion, RegionType
-};
 pub use feagi_data_structures::genomic::cortical_area::{
-    CorticalArea, CorticalID, CorticalAreaDimensions as Dimensions
+    CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
+pub use feagi_data_structures::genomic::{BrainRegion, RegionType};
 pub mod models;
 pub use models::{BrainRegionHierarchy, CorticalAreaExt};
 
@@ -69,19 +67,18 @@ pub use models::{BrainRegionHierarchy, CorticalAreaExt};
 pub use types::Position;
 
 // Re-export genome operations from feagi-evo
-pub use feagi_evo::{GenomeParser, ParsedGenome, GenomeSaver};
+pub use feagi_evo::{GenomeParser, GenomeSaver, ParsedGenome};
 
 // Re-export connectome manager
 pub use connectome_manager::{ConnectomeConfig, ConnectomeManager};
 
 // Re-export neuroembryogenesis
-pub use neuroembryogenesis::{Neuroembryogenesis, DevelopmentStage, DevelopmentProgress};
+pub use neuroembryogenesis::{DevelopmentProgress, DevelopmentStage, Neuroembryogenesis};
 
 // Re-export cortical type utilities (Phase 3)
 pub use cortical_type_utils::{
-    get_io_data_type, uses_absolute_frames, uses_incremental_frames,
-    uses_percentage_encoding, uses_cartesian_encoding, describe_cortical_type,
-    validate_connectivity,
+    describe_cortical_type, get_io_data_type, uses_absolute_frames, uses_cartesian_encoding,
+    uses_incremental_frames, uses_percentage_encoding, validate_connectivity,
 };
 
 #[cfg(test)]

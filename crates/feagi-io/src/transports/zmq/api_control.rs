@@ -12,13 +12,13 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::thread;
-use tracing::{info, error};
+use tracing::{error, info};
 
 /// API request from FastAPI process
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiRequest {
-    pub method: String,      // HTTP method: GET, POST, PUT, DELETE
-    pub path: String,         // Endpoint path: /v1/npu/...
+    pub method: String, // HTTP method: GET, POST, PUT, DELETE
+    pub path: String,   // Endpoint path: /v1/npu/...
     pub body: Option<serde_json::Value>,
     pub query_params: Option<serde_json::Value>,
 }
@@ -32,7 +32,13 @@ pub struct ApiResponse {
 }
 
 /// RPC callback type for Python CoreAPIService calls
-pub type RpcCallback = Arc<Mutex<Option<Box<dyn Fn(&str, serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync>>>>;
+pub type RpcCallback = Arc<
+    Mutex<
+        Option<
+            Box<dyn Fn(&str, serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync>,
+        >,
+    >,
+>;
 
 /// API Control stream managing API process communication
 #[derive(Clone)]
@@ -54,17 +60,17 @@ impl ApiControlStream {
             .base
             .with_recv_hwm(10000)
             .with_send_hwm(10000);
-        
+
         let server_config = ServerConfig {
             base: config,
             max_connections: 0,
             track_connections: true,
         };
-        
+
         // Create ZMQ router using feagi-transports
         let router = ZmqRouter::new(context, server_config)
             .map_err(|e| format!("Failed to create router: {}", e))?;
-        
+
         Ok(Self {
             router: Arc::new(Mutex::new(Some(router))),
             running: Arc::new(Mutex::new(false)),
@@ -116,13 +122,13 @@ impl ApiControlStream {
     /// Stop the API control stream
     pub fn stop(&self) -> Result<(), String> {
         *self.running.lock() = false;
-        
+
         let mut router_guard = self.router.lock();
         if let Some(router) = router_guard.as_mut() {
             router.stop().map_err(|e| e.to_string())?;
         }
         *router_guard = None;
-        
+
         Ok(())
     }
 
@@ -151,13 +157,23 @@ impl ApiControlStream {
                 match result {
                     Ok((request_data, reply_handle)) => {
                         let request_json = String::from_utf8_lossy(&request_data).to_string();
-                        
-                        info!("🦀 [ZMQ-API-CONTROL] 📨 Received request ({} bytes)", request_json.len());
-                        info!("🦀 [ZMQ-API-CONTROL] 📨 Request: {}", &request_json[..request_json.len().min(200)]);
 
-                        let response_json = Self::process_request(&npu, &rpc_callback, &request_json);
-                        
-                        info!("🦀 [ZMQ-API-CONTROL] 📤 Sending response ({} bytes)", response_json.len());
+                        info!(
+                            "🦀 [ZMQ-API-CONTROL] 📨 Received request ({} bytes)",
+                            request_json.len()
+                        );
+                        info!(
+                            "🦀 [ZMQ-API-CONTROL] 📨 Request: {}",
+                            &request_json[..request_json.len().min(200)]
+                        );
+
+                        let response_json =
+                            Self::process_request(&npu, &rpc_callback, &request_json);
+
+                        info!(
+                            "🦀 [ZMQ-API-CONTROL] 📤 Sending response ({} bytes)",
+                            response_json.len()
+                        );
 
                         if let Err(e) = reply_handle.send(response_json.as_bytes()) {
                             error!("🦀 [ZMQ-API-CONTROL] [ERR] Failed to send response: {}", e);
@@ -222,7 +238,10 @@ impl ApiControlStream {
         // Log high-level request (for debugging)
         static FIRST_LOG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         if !FIRST_LOG.load(std::sync::atomic::Ordering::Relaxed) {
-            info!("🦀 [API-CONTROL] First request: {} {}", request.method, request.path);
+            info!(
+                "🦀 [API-CONTROL] First request: {} {}",
+                request.method, request.path
+            );
             FIRST_LOG.store(true, std::sync::atomic::Ordering::Relaxed);
         }
 
@@ -254,9 +273,11 @@ impl ApiControlStream {
 
     // All handler methods below are domain logic - unchanged from original
 
-    fn handle_npu_stats(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_npu_stats(
+        npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
-        
+
         serde_json::json!({
             "status": 200,
             "body": {
@@ -267,10 +288,12 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_cortical_areas(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_cortical_areas(
+        npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         let area_count = npu_lock.get_registered_cortical_area_count();
-        
+
         serde_json::json!({
             "status": 200,
             "body": {
@@ -280,9 +303,12 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_cortical_area_info(_npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>, path: &str) -> serde_json::Value {
+    fn handle_cortical_area_info(
+        _npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+        path: &str,
+    ) -> serde_json::Value {
         let area_name = path.strip_prefix("/v1/npu/cortical_area/").unwrap_or("");
-        
+
         serde_json::json!({
             "status": 501,
             "body": {
@@ -291,7 +317,9 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_fire_queue(_npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_fire_queue(
+        _npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> serde_json::Value {
         serde_json::json!({
             "status": 501,
             "body": {"error": "Fire queue query not yet implemented"}
@@ -308,7 +336,9 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_brain_readiness(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_brain_readiness(
+        npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         let is_ready = npu_lock.get_burst_count() > 0 || npu_lock.get_neuron_count() > 0;
         serde_json::json!({
@@ -317,25 +347,39 @@ impl ApiControlStream {
         })
     }
 
-    fn handle_burst_engine_state(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_burst_engine_state(
+        npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
-        let state = if npu_lock.get_burst_count() > 0 || npu_lock.get_neuron_count() > 0 { 2 } else { 0 };
+        let state = if npu_lock.get_burst_count() > 0 || npu_lock.get_neuron_count() > 0 {
+            2
+        } else {
+            0
+        };
         serde_json::json!({
             "status": 200,
             "body": {"value": state}
         })
     }
 
-    fn handle_genome_state(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_genome_state(
+        npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
-        let state = if npu_lock.get_registered_cortical_area_count() > 0 { 2 } else { 0 };
+        let state = if npu_lock.get_registered_cortical_area_count() > 0 {
+            2
+        } else {
+            0
+        };
         serde_json::json!({
             "status": 200,
             "body": {"value": state}
         })
     }
 
-    fn handle_brain_stats(npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> serde_json::Value {
+    fn handle_brain_stats(
+        npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> serde_json::Value {
         let npu_lock = npu.lock().unwrap();
         serde_json::json!({
             "status": 200,
@@ -351,7 +395,7 @@ impl ApiControlStream {
 
     fn handle_rpc(rpc_callback: &RpcCallback, request: &ApiRequest) -> serde_json::Value {
         info!("🦀 [API-CONTROL-RPC] Received RPC request");
-        
+
         let rpc_payload = match &request.body {
             Some(body) => {
                 info!("🦀 [API-CONTROL-RPC] Request has body: {:?}", body);
@@ -395,7 +439,10 @@ impl ApiControlStream {
             }
         };
 
-        info!("🦀 [API-CONTROL-RPC] Invoking Python handler for method: {}", method_name);
+        info!(
+            "🦀 [API-CONTROL-RPC] Invoking Python handler for method: {}",
+            method_name
+        );
         match callback(&method_name, rpc_payload) {
             Ok(result) => {
                 info!("🦀 [API-CONTROL-RPC] Python handler returned success");
@@ -414,4 +461,3 @@ impl ApiControlStream {
         }
     }
 }
-

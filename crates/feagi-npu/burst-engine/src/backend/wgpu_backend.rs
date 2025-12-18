@@ -414,7 +414,7 @@ impl WGPUBackend {
         const MAX_BUFFER_SIZE: u64 = 256 * 1024 * 1024; // 256MB total buffer limit
         const MAX_BINDING_SIZE: u64 = 128 * 1024 * 1024; // 128MB binding size limit (Metal)
         let required_size = (synapse_data.len() * 4) as u64;
-        
+
         if required_size > MAX_BINDING_SIZE {
             return Err(Error::ComputationError(format!(
                 "Synapse buffer size ({} MB) exceeds GPU binding limit ({} MB). \
@@ -428,7 +428,7 @@ impl WGPUBackend {
                 required_size
             )));
         }
-        
+
         if required_size > MAX_BUFFER_SIZE {
             return Err(Error::ComputationError(format!(
                 "Synapse buffer size ({} MB) exceeds GPU total buffer limit ({} MB). \
@@ -665,7 +665,7 @@ impl WGPUBackend {
     }
 
     /// Dispatch neural dynamics shader (legacy - full neuron array)
-    /// 
+    ///
     /// Note: This method is for the legacy full-array shader.
     /// Production code uses dispatch_neural_dynamics_fcl() for sparse processing.
     #[allow(dead_code)]
@@ -1036,8 +1036,10 @@ impl WGPUBackend {
         use feagi_npu_neural::types::NeuronId;
 
         // Get the FCL atomic potentials buffer
-        let fcl_atomic_buffer = self.buffers.fcl_potentials_atomic.as_ref()
-            .ok_or_else(|| Error::ComputationError("FCL atomic buffer not created".to_string()))?;
+        let fcl_atomic_buffer =
+            self.buffers.fcl_potentials_atomic.as_ref().ok_or_else(|| {
+                Error::ComputationError("FCL atomic buffer not created".to_string())
+            })?;
 
         let buffer_size = fcl_atomic_buffer.size();
 
@@ -1069,7 +1071,9 @@ impl WGPUBackend {
         self.device.poll(wgpu::Maintain::Wait);
         receiver
             .recv()
-            .map_err(|_| Error::ComputationError("Failed to receive FCL buffer map result".to_string()))?
+            .map_err(|_| {
+                Error::ComputationError("Failed to receive FCL buffer map result".to_string())
+            })?
             .map_err(|e| Error::ComputationError(format!("Failed to map FCL buffer: {:?}", e)))?;
 
         // Read data and convert from i32 fixed-point to f32
@@ -1313,7 +1317,9 @@ impl WGPUBackend {
 
 // GPU backend currently only supports f32 (shaders are f32-based)
 // Future: Add f16 support for GPU optimization
-impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::SynapseStorage> ComputeBackend<f32, N, S> for WGPUBackend {
+impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::SynapseStorage>
+    ComputeBackend<f32, N, S> for WGPUBackend
+{
     fn backend_name(&self) -> &str {
         &self.name
     }
@@ -1416,11 +1422,7 @@ impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::Syn
         Ok((fired_neurons, fcl_count, 0))
     }
 
-    fn initialize_persistent_data(
-        &mut self,
-        neuron_array: &N,
-        synapse_array: &S,
-    ) -> Result<()> {
+    fn initialize_persistent_data(&mut self, neuron_array: &N, synapse_array: &S) -> Result<()> {
         // Upload all data to GPU
         self.upload_neuron_arrays(neuron_array)?;
         self.upload_synapse_arrays(synapse_array)?;

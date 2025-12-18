@@ -16,8 +16,8 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_data_structures::genomic::cortical_area::IOCorticalAreaDataFlag;
 use feagi_data_structures::genomic::cortical_area::CorticalArea;
+use feagi_data_structures::genomic::cortical_area::IOCorticalAreaDataFlag;
 // Note: CorticalTypeAdapter removed - use feagi_data_structures::CorticalID directly
 
 /// Validation result for agent-area compatibility
@@ -145,22 +145,34 @@ pub fn get_recommended_buffer_size(area: &CorticalArea) -> usize {
         return match io_type {
             IOCorticalAreaDataFlag::CartesianPlane(_) => {
                 // Vision typically needs larger buffers
-                (area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize) * 4 // 4 bytes per voxel
+                (area.dimensions.width as usize
+                    * area.dimensions.height as usize
+                    * area.dimensions.depth as usize)
+                    * 4 // 4 bytes per voxel
             }
             IOCorticalAreaDataFlag::Percentage(_, _)
             | IOCorticalAreaDataFlag::SignedPercentage(_, _) => {
                 // Percentage encoding is compact
-                (area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize) * 2 // 2 bytes per voxel
+                (area.dimensions.width as usize
+                    * area.dimensions.height as usize
+                    * area.dimensions.depth as usize)
+                    * 2 // 2 bytes per voxel
             }
             _ => {
                 // Default sizing
-                (area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize) * 2
+                (area.dimensions.width as usize
+                    * area.dimensions.height as usize
+                    * area.dimensions.depth as usize)
+                    * 2
             }
         };
     }
 
     // Fallback: Default buffer size
-    (area.dimensions.width as usize * area.dimensions.height as usize * area.dimensions.depth as usize) * 2
+    (area.dimensions.width as usize
+        * area.dimensions.height as usize
+        * area.dimensions.depth as usize)
+        * 2
 }
 
 /// Check if compression is recommended for this area type
@@ -195,17 +207,19 @@ pub fn should_use_compression(area: &CorticalArea) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::{CorticalID, CorticalAreaDimensions};
-    
-    
+    use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalID};
 
     #[test]
     fn test_validate_sensory_compatibility() {
         // Create BrainInput area (valid cortical ID with 'i' prefix for input)
-        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+        use feagi_data_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaDataFlag,
+        };
         let cortical_id = CorticalID::try_from_bytes(b"ivision1").unwrap();
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute));
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
+            FrameChangeHandling::Absolute,
+        ));
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -229,10 +243,17 @@ mod tests {
     #[test]
     fn test_validate_motor_compatibility() {
         // Create BrainOutput area (valid cortical ID with 'o' prefix for output)
-        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
-        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
+        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+            FrameChangeHandling, PercentageNeuronPositioning,
+        };
+        use feagi_data_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaDataFlag,
+        };
         let cortical_id = CorticalID::try_from_bytes(b"omotor01").unwrap();
-        let cortical_type = CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Percentage(FrameChangeHandling::Absolute, PercentageNeuronPositioning::Linear));
+        let cortical_type = CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Percentage(
+            FrameChangeHandling::Absolute,
+            PercentageNeuronPositioning::Linear,
+        ));
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -250,10 +271,14 @@ mod tests {
 
     #[test]
     fn test_get_recommended_buffer_size() {
-        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+        use feagi_data_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaDataFlag,
+        };
         let cortical_id = CorticalID::try_from_bytes(b"ivision2").unwrap();
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute));
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
+            FrameChangeHandling::Absolute,
+        ));
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -273,10 +298,14 @@ mod tests {
 
     #[test]
     fn test_should_use_compression() {
-        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+        use feagi_data_structures::genomic::cortical_area::{
+            CorticalAreaType, IOCorticalAreaDataFlag,
+        };
         let cortical_id = CorticalID::try_from_bytes(b"ivision3").unwrap();
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute));
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
+            FrameChangeHandling::Absolute,
+        ));
         let large_area = CorticalArea::new(
             cortical_id,
             0,
@@ -291,4 +320,3 @@ mod tests {
         assert!(should_use_compression(&large_area));
     }
 }
-

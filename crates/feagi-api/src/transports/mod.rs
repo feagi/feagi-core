@@ -11,9 +11,7 @@ pub mod http {
     // Minimal http module for ApiState when http feature is disabled
     pub mod server;
 }
-#[cfg(feature = "zmq")]
-pub mod zmq;
 #[cfg(not(feature = "http"))]
 pub mod wasm;
-
-
+#[cfg(feature = "zmq")]
+pub mod zmq;

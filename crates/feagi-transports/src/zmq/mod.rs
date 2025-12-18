@@ -59,4 +59,3 @@ pub use server::{ZmqPub, ZmqPull, ZmqRouter};
 
 #[cfg(feature = "zmq-client")]
 pub use client::{ZmqDealer, ZmqPush, ZmqSub};
-

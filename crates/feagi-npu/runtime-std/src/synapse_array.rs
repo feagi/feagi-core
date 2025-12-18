@@ -14,32 +14,32 @@
 
 use ahash::AHashMap;
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
-use feagi_npu_runtime::{SynapseStorage, Result};
+use feagi_npu_runtime::{Result, SynapseStorage};
 use rayon::prelude::*;
 
 /// Dynamic synapse array for desktop/server environments
 pub struct SynapseArray {
     /// Current number of synapses
     pub count: usize,
-    
+
     /// Source neuron IDs
     pub source_neurons: Vec<u32>,
-    
+
     /// Target neuron IDs
     pub target_neurons: Vec<u32>,
-    
+
     /// Synaptic weights (0-255)
     pub weights: Vec<u8>,
-    
+
     /// Postsynaptic potentials / Conductances (0-255)
     pub postsynaptic_potentials: Vec<u8>,
-    
+
     /// Synapse types (0=excitatory, 1=inhibitory)
     pub types: Vec<u8>,
-    
+
     /// Valid synapse mask
     pub valid_mask: Vec<bool>,
-    
+
     /// Source index for fast lookup
     pub source_index: AHashMap<u32, Vec<usize>>,
 }
@@ -58,7 +58,7 @@ impl SynapseArray {
             source_index: AHashMap::new(),
         }
     }
-    
+
     /// Add a synapse (simplified for backward compatibility)
     pub fn add_synapse_simple(
         &mut self,
@@ -71,7 +71,7 @@ impl SynapseArray {
         SynapseStorage::add_synapse(self, source, target, weight, psp, synapse_type as u8)
             .expect("Failed to add synapse");
     }
-    
+
     /// Propagate activity from fired neurons in parallel
     ///
     /// Returns target neuron index → accumulated contribution
@@ -83,7 +83,7 @@ impl SynapseArray {
             .flatten()
             .copied()
             .collect();
-        
+
         // Compute contributions in parallel (uses platform-agnostic function)
         let contributions: Vec<(u32, f32)> = synapse_indices
             .par_iter()
@@ -94,23 +94,23 @@ impl SynapseArray {
                 } else {
                     SynapseType::Inhibitory
                 };
-                
+
                 let contribution = compute_synaptic_contribution(
                     self.weights[syn_idx],
                     self.postsynaptic_potentials[syn_idx],
                     synapse_type,
                 );
-                
+
                 (target, contribution)
             })
             .collect();
-        
+
         // Accumulate by target neuron
         let mut result = AHashMap::new();
         for (target, contribution) in contributions {
             *result.entry(target).or_insert(0.0) += contribution;
         }
-        
+
         result
     }
 }
@@ -121,52 +121,52 @@ impl SynapseStorage for SynapseArray {
     fn source_neurons(&self) -> &[u32] {
         &self.source_neurons[..self.count]
     }
-    
+
     fn target_neurons(&self) -> &[u32] {
         &self.target_neurons[..self.count]
     }
-    
+
     fn weights(&self) -> &[u8] {
         &self.weights[..self.count]
     }
-    
+
     fn postsynaptic_potentials(&self) -> &[u8] {
         &self.postsynaptic_potentials[..self.count]
     }
-    
+
     fn types(&self) -> &[u8] {
         &self.types[..self.count]
     }
-    
+
     fn valid_mask(&self) -> &[bool] {
         &self.valid_mask[..self.count]
     }
-    
+
     // Mutable property accessors
     fn weights_mut(&mut self) -> &mut [u8] {
         let count = self.count;
         &mut self.weights[..count]
     }
-    
+
     fn postsynaptic_potentials_mut(&mut self) -> &mut [u8] {
         let count = self.count;
         &mut self.postsynaptic_potentials[..count]
     }
-    
+
     fn valid_mask_mut(&mut self) -> &mut [bool] {
         let count = self.count;
         &mut self.valid_mask[..count]
     }
-    
+
     // Metadata
     fn count(&self) -> usize {
         self.count
     }
-    
+
     fn capacity(&self) -> usize {
         self.source_neurons.capacity()
     }
-    
+
     // Synapse creation
     fn add_synapse(
         &mut self,
@@ -177,24 +177,24 @@ impl SynapseStorage for SynapseArray {
         synapse_type: u8,
     ) -> Result<usize> {
         let idx = self.count;
-        
+
         self.source_neurons.push(source);
         self.target_neurons.push(target);
         self.weights.push(weight);
         self.postsynaptic_potentials.push(psp);
         self.types.push(synapse_type);
         self.valid_mask.push(true);
-        
+
         // Update index
         self.source_index
             .entry(source)
             .or_insert_with(Vec::new)
             .push(idx);
-        
+
         self.count += 1;
         Ok(idx)
     }
-    
+
     fn add_synapses_batch(
         &mut self,
         sources: &[u32],
@@ -209,18 +209,24 @@ impl SynapseStorage for SynapseArray {
         }
         Ok(())
     }
-    
+
     fn remove_synapse(&mut self, idx: usize) -> feagi_npu_runtime::error::Result<()> {
         if idx >= self.count {
             return Err(feagi_npu_runtime::error::RuntimeError::InvalidParameters(
-                format!("Synapse index {} out of bounds (count: {})", idx, self.count)
+                format!(
+                    "Synapse index {} out of bounds (count: {})",
+                    idx, self.count
+                ),
             ));
         }
         self.valid_mask[idx] = false;
         Ok(())
     }
-    
-    fn remove_synapses_from_sources(&mut self, source_neurons: &[u32]) -> feagi_npu_runtime::error::Result<usize> {
+
+    fn remove_synapses_from_sources(
+        &mut self,
+        source_neurons: &[u32],
+    ) -> feagi_npu_runtime::error::Result<usize> {
         let mut removed = 0;
         for idx in 0..self.count {
             if self.valid_mask[idx] && source_neurons.contains(&self.source_neurons[idx]) {
@@ -230,12 +236,16 @@ impl SynapseStorage for SynapseArray {
         }
         Ok(removed)
     }
-    
-    fn remove_synapses_between(&mut self, source: u32, target: u32) -> feagi_npu_runtime::error::Result<usize> {
+
+    fn remove_synapses_between(
+        &mut self,
+        source: u32,
+        target: u32,
+    ) -> feagi_npu_runtime::error::Result<usize> {
         let mut removed = 0;
         for idx in 0..self.count {
-            if self.valid_mask[idx] 
-                && self.source_neurons[idx] == source 
+            if self.valid_mask[idx]
+                && self.source_neurons[idx] == source
                 && self.target_neurons[idx] == target
             {
                 self.valid_mask[idx] = false;
@@ -244,22 +254,29 @@ impl SynapseStorage for SynapseArray {
         }
         Ok(removed)
     }
-    
-    fn update_weight(&mut self, idx: usize, new_weight: u8) -> feagi_npu_runtime::error::Result<()> {
+
+    fn update_weight(
+        &mut self,
+        idx: usize,
+        new_weight: u8,
+    ) -> feagi_npu_runtime::error::Result<()> {
         if idx >= self.count {
             return Err(feagi_npu_runtime::error::RuntimeError::InvalidParameters(
-                format!("Synapse index {} out of bounds (count: {})", idx, self.count)
+                format!(
+                    "Synapse index {} out of bounds (count: {})",
+                    idx, self.count
+                ),
             ));
         }
         if !self.valid_mask[idx] {
             return Err(feagi_npu_runtime::error::RuntimeError::InvalidParameters(
-                format!("Synapse {} is not valid", idx)
+                format!("Synapse {} is not valid", idx),
             ));
         }
         self.weights[idx] = new_weight;
         Ok(())
     }
-    
+
     fn valid_count(&self) -> usize {
         self.valid_mask[..self.count].iter().filter(|&&v| v).count()
     }
@@ -268,27 +285,25 @@ impl SynapseStorage for SynapseArray {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_add_synapse() {
         let mut array = SynapseArray::new(10);
         array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
         assert_eq!(array.count, 1);
     }
-    
+
     #[test]
     fn test_propagate_parallel() {
         let mut array = SynapseArray::new(10);
         array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
         array.add_synapse_simple(0, 2, 128, 255, SynapseType::Excitatory);
-        
+
         let fired = vec![0];
         let contributions = array.propagate_parallel(&fired);
-        
+
         assert_eq!(contributions.len(), 2);
         assert!(contributions.contains_key(&1));
         assert!(contributions.contains_key(&2));
     }
 }
-
-

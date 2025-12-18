@@ -8,8 +8,8 @@ use crate::error::{Result, SdkError};
 use crate::heartbeat::HeartbeatService;
 use crate::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
-use tracing::{debug, error, info, warn};
 use std::sync::{Arc, Mutex};
+use tracing::{debug, error, info, warn};
 
 /// Main FEAGI Agent Client
 ///
@@ -166,8 +166,11 @@ impl AgentClient {
                 "[SDK-CONNECT] 🎮 Initializing motor socket for agent '{}' (type: {:?})",
                 self.config.agent_id, self.config.agent_type
             );
-            info!("[SDK-CONNECT] 🎮 Motor endpoint: {}", self.config.motor_endpoint);
-            
+            info!(
+                "[SDK-CONNECT] 🎮 Motor endpoint: {}",
+                self.config.motor_endpoint
+            );
+
             let motor_socket = self.context.socket(zmq::SUB)?;
             motor_socket.connect(&self.config.motor_endpoint)?;
             info!("[SDK-CONNECT] ✅ Motor socket connected");
@@ -179,7 +182,7 @@ impl AgentClient {
             );
             motor_socket.set_subscribe(self.config.agent_id.as_bytes())?;
             info!("[SDK-CONNECT] ✅ Motor subscription set");
-            
+
             self.motor_socket = Some(motor_socket);
             info!("[SDK-CONNECT] ✅ Motor socket initialized successfully");
         } else {
@@ -486,7 +489,7 @@ impl AgentClient {
             info!("[CLIENT] ❌ receive_motor_data() called but motor_socket is None!");
             SdkError::Other("Motor socket not initialized (not a motor agent?)".to_string())
         })?;
-        
+
         // Non-blocking receive (multipart: [topic/agent_id, data])
         // First frame is the topic (agent_id), second frame is the motor data
         match socket.recv_bytes(zmq::DONTWAIT) {
@@ -496,7 +499,7 @@ impl AgentClient {
                     topic.len(),
                     String::from_utf8_lossy(&topic)
                 );
-                
+
                 // Verify topic matches our agent_id (redundant due to SUB filter, but safe)
                 if topic != self.config.agent_id.as_bytes() {
                     info!(
@@ -506,24 +509,32 @@ impl AgentClient {
                     );
                     return Ok(None);
                 }
-                
+
                 // Check if more frames are available (should be for multipart)
                 let data = if socket.get_rcvmore().map_err(|e| SdkError::Zmq(e))? {
-                    info!("[CLIENT] 📥 More frames available, receiving second frame (motor data)...");
+                    info!(
+                        "[CLIENT] 📥 More frames available, receiving second frame (motor data)..."
+                    );
                     // Receive second frame (actual motor data)
                     let data = socket.recv_bytes(0).map_err(|e| {
                         info!("[CLIENT] ❌ Failed to receive second frame: {}", e);
                         SdkError::Zmq(e)
                     })?;
-                    info!("[CLIENT] 📥 Received motor data frame: {} bytes", data.len());
+                    info!(
+                        "[CLIENT] 📥 Received motor data frame: {} bytes",
+                        data.len()
+                    );
                     data
                 } else {
                     info!("[CLIENT] ⚠️ NO MORE FRAMES! Old FEAGI (single-part message)");
-                    info!("[CLIENT] 📥 Using first frame as motor data ({} bytes)", topic.len());
+                    info!(
+                        "[CLIENT] 📥 Using first frame as motor data ({} bytes)",
+                        topic.len()
+                    );
                     // Fallback: treat first frame as data (backward compatibility with old FEAGI)
                     topic
                 };
-                
+
                 // ARCHITECTURE COMPLIANCE: Deserialize binary XYZP motor data using FeagiByteContainer
                 let mut byte_container = feagi_data_serialization::FeagiByteContainer::new_empty();
                 let mut data_vec = data.to_vec();
@@ -691,7 +702,7 @@ impl AgentClient {
 impl Drop for AgentClient {
     fn drop(&mut self) {
         debug!("[CLIENT] Dropping AgentClient: {}", self.config.agent_id);
-        
+
         // Step 1: Stop heartbeat service first (this stops background threads)
         if let Some(mut heartbeat) = self.heartbeat.take() {
             debug!("[CLIENT] Stopping heartbeat service before cleanup");
@@ -707,9 +718,12 @@ impl Drop for AgentClient {
                 // Continue cleanup even if deregistration fails
             }
         }
-        
+
         // Step 3: Sockets will be dropped automatically
-        debug!("[CLIENT] AgentClient dropped cleanly: {}", self.config.agent_id);
+        debug!(
+            "[CLIENT] AgentClient dropped cleanly: {}",
+            self.config.agent_id
+        );
     }
 }
 

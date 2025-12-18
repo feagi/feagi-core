@@ -16,12 +16,12 @@ pub mod config;
 pub mod events;
 pub mod heartbeat;
 pub mod registration;
-pub mod types;
 pub mod type_validation;
+pub mod types;
 
 // Re-export commonly used types (all from feagi-services now)
 pub use agent_registry::{
-    AgentRegistry, AgentCapabilities, AgentInfo, AgentTransport, AgentType, MotorCapability,
+    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
     SensoryCapability, VisionCapability, VisualizationCapability,
 };
 pub use config::{IOConfig, TransportMode, WebSocketConfig};
@@ -30,9 +30,11 @@ pub use events::{
     VisualizationReadyEvent,
 };
 pub use heartbeat::HeartbeatTracker;
-pub use registration::{RegistrationHandler, RegistrationRequest, RegistrationResponse, TransportConfig};
-pub use types::{IOError, Result, SharedFBC, StreamType};
-pub use type_validation::{
-    validate_sensory_compatibility, validate_motor_compatibility,
-    get_recommended_buffer_size, should_use_compression, ValidationResult,
+pub use registration::{
+    RegistrationHandler, RegistrationRequest, RegistrationResponse, TransportConfig,
 };
+pub use type_validation::{
+    get_recommended_buffer_size, should_use_compression, validate_motor_compatibility,
+    validate_sensory_compatibility, ValidationResult,
+};
+pub use types::{IOError, Result, SharedFBC, StreamType};

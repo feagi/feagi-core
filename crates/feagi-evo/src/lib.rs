@@ -44,58 +44,42 @@ Licensed under the Apache License, Version 2.0
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // Core modules
-pub mod genome;
-pub mod types;
-pub mod runtime;
-pub mod validator;
 pub mod converter_flat;
 pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
-pub mod templates;
 pub mod cortical_type_parser;
+pub mod genome;
 pub mod random;
+pub mod runtime;
 pub mod storage;
+pub mod templates;
+pub mod types;
+pub mod validator;
 
 // Re-export commonly used types
-pub use types::{EvoError, EvoResult};
-pub use genome::parser::string_to_cortical_id;
-pub use genome::{
-    GenomeParser, GenomeSaver, ParsedGenome,
-    load_genome_from_file, load_genome_from_json,
-    save_genome_to_file, save_genome_to_json,
-    peek_quantization_precision,
-    migrate_genome, MigrationResult,
-};
-pub use runtime::{
-    RuntimeGenome, GenomeMetadata, MorphologyRegistry, Morphology, 
-    MorphologyType, MorphologyParameters, PatternElement,
-    PhysiologyConfig, GenomeSignatures, GenomeStats,
-};
-pub use validator::{validate_genome, ValidationResult};
 pub use converter_flat::convert_flat_to_hierarchical;
 pub use converter_flat_full::convert_flat_to_hierarchical_full;
 pub use converter_hierarchical_to_flat::convert_hierarchical_to_flat;
 pub use cortical_type_parser::{parse_cortical_type, validate_cortical_type};
-pub use templates::{
-    create_minimal_genome, 
-    create_genome_with_core_areas,
-    create_genome_with_core_morphologies, 
-    add_core_morphologies,
-    create_death_area,
-    create_power_area,
-    get_default_neural_properties,
-    ensure_core_components,
-    load_essential_genome,
-    load_barebones_genome,
-    load_test_genome,
-    load_vision_genome,
-    ESSENTIAL_GENOME_JSON,
-    BAREBONES_GENOME_JSON,
-    TEST_GENOME_JSON,
-    VISION_GENOME_JSON,
+pub use genome::parser::string_to_cortical_id;
+pub use genome::{
+    load_genome_from_file, load_genome_from_json, migrate_genome, peek_quantization_precision,
+    save_genome_to_file, save_genome_to_json, GenomeParser, GenomeSaver, MigrationResult,
+    ParsedGenome,
 };
-pub use storage::{GenomeStorage, StorageError};
+pub use runtime::{
+    GenomeMetadata, GenomeSignatures, GenomeStats, Morphology, MorphologyParameters,
+    MorphologyRegistry, MorphologyType, PatternElement, PhysiologyConfig, RuntimeGenome,
+};
 #[cfg(feature = "async-tokio")]
 pub use storage::fs_storage::FileSystemStorage;
-
-
+pub use storage::{GenomeStorage, StorageError};
+pub use templates::{
+    add_core_morphologies, create_death_area, create_genome_with_core_areas,
+    create_genome_with_core_morphologies, create_minimal_genome, create_power_area,
+    ensure_core_components, get_default_neural_properties, load_barebones_genome,
+    load_essential_genome, load_test_genome, load_vision_genome, BAREBONES_GENOME_JSON,
+    ESSENTIAL_GENOME_JSON, TEST_GENOME_JSON, VISION_GENOME_JSON,
+};
+pub use types::{EvoError, EvoResult};
+pub use validator::{validate_genome, ValidationResult};

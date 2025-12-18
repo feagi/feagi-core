@@ -11,8 +11,8 @@
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_bdu::ConnectomeManager;
 use feagi_npu_burst_engine::{BurstLoopRunner, RustNPU};
-use feagi_services::*;
 use feagi_services::SystemServiceImpl;
+use feagi_services::*;
 use parking_lot::{Mutex as ParkingLotMutex, RwLock};
 use std::sync::{Arc, Mutex as StdMutex};
 
@@ -38,7 +38,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // 1. Create and attach an NPU to the ConnectomeManager
     // 2. Create a BurstLoopRunner for runtime control
     // 3. Load a genome to populate the connectome
-    // 
+    //
     // For this demo, we're showing the API structure is working
 
     println!("✅ Core components initialized\n");
@@ -65,27 +65,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Create RuntimeService with a simple BurstLoopRunner
     // (For full functionality, configure with actual NPU and visualization publisher)
-    
+
     // Dummy publishers for testing
     struct DummyViz;
     impl feagi_npu_burst_engine::VisualizationPublisher for DummyViz {
-        fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> { Ok(()) }
+        fn publish_visualization(&self, _data: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
     }
     struct DummyMotor;
     impl feagi_npu_burst_engine::MotorPublisher for DummyMotor {
-        fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> { Ok(()) }
+        fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+            Ok(())
+        }
     }
-    
-    use feagi_npu_runtime_std::StdRuntime;
+
     use feagi_npu_burst_engine::backend::CPUBackend;
     use feagi_npu_burst_engine::DynamicNPU;
-    
+    use feagi_npu_runtime_std::StdRuntime;
+
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
-    let npu_result = RustNPU::new(runtime, backend, 10, 10, 10)
-        .expect("Failed to create NPU");
+    let npu_result = RustNPU::new(runtime, backend, 10, 10, 10).expect("Failed to create NPU");
     let npu_for_runtime = Arc::new(StdMutex::new(DynamicNPU::F32(npu_result))); // Minimal NPU
-    let burst_loop = BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
+    let burst_loop =
+        BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
     let burst_runner_for_runtime = Arc::new(ParkingLotMutex::new(burst_loop));
 
     let runtime_service = Arc::new(RuntimeServiceImpl::new(burst_runner_for_runtime))
@@ -93,10 +97,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // For examples, create basic version info
     let mut version_info = feagi_services::types::VersionInfo::default();
-    version_info.crates.insert("example".to_string(), "1.0.0".to_string());
+    version_info
+        .crates
+        .insert("example".to_string(), "1.0.0".to_string());
     version_info.rust_version = "1.75".to_string();
     version_info.build_timestamp = "example build".to_string();
-    
+
     let system_service = Arc::new(SystemServiceImpl::new(
         connectome.clone(),
         Some(burst_runner_for_runtime.clone()),
@@ -135,7 +141,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         feagi_session_timestamp,
     };
 
-    println!("✅ API state created (FEAGI session: {})\n", feagi_session_timestamp);
+    println!(
+        "✅ API state created (FEAGI session: {})\n",
+        feagi_session_timestamp
+    );
 
     // ========================================================================
     // STEP 4: Create and Start HTTP Server
@@ -151,9 +160,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("║                   FEAGI API SERVER READY                  ║");
     println!("╠═══════════════════════════════════════════════════════════╣");
     println!("║                                                           ║");
-    println!("║  HTTP API:       http://{}                 ║", bind_address);
-    println!("║  Swagger UI:     http://{}/swagger-ui/      ║", bind_address);
-    println!("║  OpenAPI Spec:   http://{}/openapi.json    ║", bind_address);
+    println!(
+        "║  HTTP API:       http://{}                 ║",
+        bind_address
+    );
+    println!(
+        "║  Swagger UI:     http://{}/swagger-ui/      ║",
+        bind_address
+    );
+    println!(
+        "║  OpenAPI Spec:   http://{}/openapi.json    ║",
+        bind_address
+    );
     println!("║                                                           ║");
     println!("║  Available Endpoints:                                     ║");
     println!("║    - GET  /health                                         ║");
@@ -173,4 +191,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-

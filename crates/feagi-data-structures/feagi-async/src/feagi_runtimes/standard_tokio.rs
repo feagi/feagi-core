@@ -12,7 +12,7 @@ use core::time::Duration;
 use tokio::runtime::{Handle, Runtime};
 
 /// The Tokio async runtime wrapper that OWNS a runtime.
-/// 
+///
 /// Use this when starting from a synchronous context (e.g., `main()`).
 /// Do NOT use inside `#[tokio::test]` or other async contexts - use `TokioHandle` instead.
 #[cfg(feature = "standard-tokio")]
@@ -23,7 +23,7 @@ pub struct TokioRuntime {
 #[cfg(feature = "standard-tokio")]
 impl TokioRuntime {
     /// Create a new multi-threaded Tokio runtime.
-    /// 
+    ///
     /// Use this from synchronous code (e.g., `main()`).
     /// If you're already inside an async context, use `TokioHandle::current()` instead.
     pub fn new() -> Self {
@@ -33,7 +33,7 @@ impl TokioRuntime {
     }
 
     /// Run a future to completion on this runtime.
-    /// 
+    ///
     /// This blocks the current thread until the future completes.
     pub fn block_on<F: Future>(&self, fut: F) -> F::Output {
         self.runtime.block_on(fut)
@@ -115,7 +115,7 @@ impl FeagiAsyncRuntime for TokioHandle {
         // However, this is tricky without blocking - for now, return an error
         // indicating that blocking requires TokioRuntime (not TokioHandle)
         Err(crate::BlockOnError::not_supported(
-            "TokioHandle does not support blocking. Use TokioRuntime::try_block_on() instead."
+            "TokioHandle does not support blocking. Use TokioRuntime::try_block_on() instead.",
         ))
     }
 
@@ -161,7 +161,7 @@ impl TokioHandle {
 }
 
 /// A wrapper around Tokio's `JoinHandle` that implements `Future<Output = T>`.
-/// 
+///
 /// Tokio's native `JoinHandle<T>` returns `Result<T, JoinError>`, but FeagiAsyncRuntime
 /// requires `Future<Output = T>`. This wrapper unwraps the result and panics
 /// if the spawned task panicked.

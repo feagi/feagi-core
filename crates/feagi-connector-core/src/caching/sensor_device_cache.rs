@@ -1,21 +1,25 @@
+use crate::data_pipeline::per_channel_stream_caches::SensoryChannelStreamCaches;
+use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_types::descriptors::*;
+use crate::data_types::*;
+use crate::neuron_voxel_coding::xyzp::encoders::*;
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use feagi_data_serialization::FeagiByteContainer;
+use feagi_data_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
+};
+use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
+use feagi_data_structures::genomic::SensoryCorticalUnit;
+use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
-use feagi_data_serialization::FeagiByteContainer;
-use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
-use feagi_data_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth};
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
-use feagi_data_structures::genomic::cortical_area::{CorticalID};
-use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex};
-use feagi_data_structures::genomic::SensoryCorticalUnit;
-use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use crate::data_pipeline::per_channel_stream_caches::SensoryChannelStreamCaches;
-use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_types::*;
-use crate::data_types::descriptors::*;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use crate::neuron_voxel_coding::xyzp::encoders::*;
-use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPEncoder};
 
 macro_rules! sensor_unit_functions {
     (
@@ -390,7 +394,8 @@ macro_rules! sensor_unit_functions {
 
 pub struct SensorDeviceCache {
     stream_caches: HashMap<(SensoryCorticalUnit, CorticalGroupIndex), SensoryChannelStreamCaches>,
-    agent_device_key_lookup: HashMap<AgentDeviceIndex, Vec<(SensoryCorticalUnit, CorticalGroupIndex)>>,
+    agent_device_key_lookup:
+        HashMap<AgentDeviceIndex, Vec<(SensoryCorticalUnit, CorticalGroupIndex)>>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
@@ -402,7 +407,10 @@ impl std::fmt::Debug for SensorDeviceCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SensorDeviceCache")
             .field("stream_caches_count", &self.stream_caches.len())
-            .field("agent_device_key_lookup_count", &self.agent_device_key_lookup.len())
+            .field(
+                "agent_device_key_lookup_count",
+                &self.agent_device_key_lookup.len(),
+            )
             .field("neuron_data", &self.neuron_data)
             .field("byte_data", &self.byte_data)
             .field("previous_burst", &self.previous_burst)
@@ -411,7 +419,6 @@ impl std::fmt::Debug for SensorDeviceCache {
 }
 
 impl SensorDeviceCache {
-
     pub fn new() -> Self {
         SensorDeviceCache {
             stream_caches: HashMap::new(),
@@ -452,7 +459,10 @@ impl SensorDeviceCache {
     /// # Returns
     /// * `Ok(())` - If encoding succeeded
     /// * `Err(FeagiDataError)` - If encoding fails
-    pub fn encode_all_sensors_to_neurons(&mut self, time_of_burst: Instant) -> Result<(), FeagiDataError> {
+    pub fn encode_all_sensors_to_neurons(
+        &mut self,
+        time_of_burst: Instant,
+    ) -> Result<(), FeagiDataError> {
         // Clear neuron data before encoding
         self.neuron_data.clear_neurons_only();
 
@@ -462,7 +472,10 @@ impl SensorDeviceCache {
         // Iterate over all registered sensor stream caches and encode them
         // CRITICAL: Pass previous_burst (not time_of_burst) so encoder can check if channels were updated since last encoding
         for ((_sensor_type, _group_index), stream_cache) in self.stream_caches.iter_mut() {
-            stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(&mut self.neuron_data, previous_burst)?;
+            stream_cache.update_neuron_data_with_recently_updated_cached_sensor_data(
+                &mut self.neuron_data,
+                previous_burst,
+            )?;
         }
 
         // Update previous_burst for next time
@@ -482,13 +495,22 @@ impl SensorDeviceCache {
     pub fn encode_neurons_to_bytes(&mut self) -> Result<(), FeagiDataError> {
         self.byte_data
             .overwrite_byte_data_with_single_struct_data(&self.neuron_data, 0)
-            .map_err(|e| FeagiDataError::BadParameters(format!("Failed to encode neuron data to bytes: {:?}", e)))?;
+            .map_err(|e| {
+                FeagiDataError::BadParameters(format!(
+                    "Failed to encode neuron data to bytes: {:?}",
+                    e
+                ))
+            })?;
         Ok(())
     }
 
-    pub fn export_registered_sensors_as_config_json(&self) -> Result<serde_json::Value, FeagiDataError> {
+    pub fn export_registered_sensors_as_config_json(
+        &self,
+    ) -> Result<serde_json::Value, FeagiDataError> {
         let mut output = serde_json::Map::new();
-        for ((sensor_cortical_unit, cortical_group_index), sensor_channel_stream_caches) in &self.stream_caches {
+        for ((sensor_cortical_unit, cortical_group_index), sensor_channel_stream_caches) in
+            &self.stream_caches
+        {
             let motor_unit_name = sensor_cortical_unit.get_snake_case_name().to_string();
             let cortical_group_name = cortical_group_index.to_string();
 
@@ -498,52 +520,68 @@ impl SensorDeviceCache {
                 .as_object_mut()
                 .expect("Just inserted an Object");
 
-            sensor_units_map.insert(cortical_group_name, sensor_channel_stream_caches.export_as_json()?);
+            sensor_units_map.insert(
+                cortical_group_name,
+                sensor_channel_stream_caches.export_as_json()?,
+            );
         }
         Ok(serde_json::Value::Object(output))
     }
 
     /// Import sensor configurations from JSON
-    /// 
+    ///
     /// Updates pipeline stages and friendly names for already-registered sensors.
     /// Sensors must be registered first using the appropriate register functions.
-    /// 
+    ///
     /// # Arguments
     /// * `json` - JSON object containing sensor configurations in new format
-    /// 
+    ///
     /// # Returns
     /// * `Ok(())` - If import succeeded
     /// * `Err(FeagiDataError)` - If sensor not registered or JSON is malformed
-    pub fn import_sensors_from_json(&mut self, json: &serde_json::Value) -> Result<(), FeagiDataError> {
-        let input_map = json.as_object()
-            .ok_or_else(|| FeagiDataError::DeserializationError("Expected input object for sensors".to_string()))?;
-        
+    pub fn import_sensors_from_json(
+        &mut self,
+        json: &serde_json::Value,
+    ) -> Result<(), FeagiDataError> {
+        let input_map = json.as_object().ok_or_else(|| {
+            FeagiDataError::DeserializationError("Expected input object for sensors".to_string())
+        })?;
+
         for (sensor_type_name, groups) in input_map {
             // Parse sensor type from snake_case name
             let sensor_type = SensoryCorticalUnit::from_snake_case_name(sensor_type_name)
-                .ok_or_else(|| FeagiDataError::DeserializationError(
-                    format!("Unknown sensor type: {}", sensor_type_name)
-                ))?;
-            
-            let groups_map = groups.as_object()
-                .ok_or_else(|| FeagiDataError::DeserializationError(
-                    format!("Expected groups object for sensor type: {}", sensor_type_name)
-                ))?;
-            
+                .ok_or_else(|| {
+                    FeagiDataError::DeserializationError(format!(
+                        "Unknown sensor type: {}",
+                        sensor_type_name
+                    ))
+                })?;
+
+            let groups_map = groups.as_object().ok_or_else(|| {
+                FeagiDataError::DeserializationError(format!(
+                    "Expected groups object for sensor type: {}",
+                    sensor_type_name
+                ))
+            })?;
+
             for (group_id_str, device_config) in groups_map {
-                let group_id: CorticalGroupIndex = group_id_str.parse::<u8>()
-                    .map_err(|e| FeagiDataError::DeserializationError(
-                        format!("Invalid group ID '{}': {}", group_id_str, e)
-                    ))?
+                let group_id: CorticalGroupIndex = group_id_str
+                    .parse::<u8>()
+                    .map_err(|e| {
+                        FeagiDataError::DeserializationError(format!(
+                            "Invalid group ID '{}': {}",
+                            group_id_str, e
+                        ))
+                    })?
                     .into();
-                
+
                 // Get the stream cache for this sensor type + group
                 let stream_cache = self.stream_caches.get_mut(&(sensor_type, group_id))
                     .ok_or_else(|| FeagiDataError::BadParameters(
-                        format!("Sensor {}:{} not registered. Register the sensor first before importing configuration.", 
+                        format!("Sensor {}:{} not registered. Register the sensor first before importing configuration.",
                             sensor_type_name, group_id_str)
                     ))?;
-                
+
                 // Import configuration (pipelines, friendly names)
                 stream_cache.import_from_json(device_config)?;
             }
@@ -557,40 +595,71 @@ impl SensorDeviceCache {
 
     //region Cache Abstractions
 
-    fn register(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex,
-                neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
-                number_channels: CorticalChannelCount,
-                initial_cached_value: WrappedIOData)
-                -> Result<(), FeagiDataError> {
-
+    fn register(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
+        number_channels: CorticalChannelCount,
+        initial_cached_value: WrappedIOData,
+    ) -> Result<(), FeagiDataError> {
         if self.stream_caches.contains_key(&(sensor_type, group_index)) {
-            return Err(FeagiDataError::BadParameters(format!("Already registered sensor {} of group index {}!", sensor_type, group_index)))
+            return Err(FeagiDataError::BadParameters(format!(
+                "Already registered sensor {} of group index {}!",
+                sensor_type, group_index
+            )));
         }
 
         self.stream_caches.insert(
             (sensor_type, group_index),
-            SensoryChannelStreamCaches::new(neuron_encoder,number_channels, initial_cached_value)?);
+            SensoryChannelStreamCaches::new(neuron_encoder, number_channels, initial_cached_value)?,
+        );
 
         Ok(())
     }
 
     //region Data
 
-    fn try_update_value(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, value: WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        sensor_stream_caches.try_replace_input_channel_cache_value_and_run_pipeline(channel_index, value, time_of_update)?; // Handles checking channel, value type
+    fn try_update_value(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        value: WrappedIOData,
+        time_of_update: Instant,
+    ) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches.try_replace_input_channel_cache_value_and_run_pipeline(
+            channel_index,
+            value,
+            time_of_update,
+        )?; // Handles checking channel, value type
         Ok(())
     }
 
-    fn try_read_preprocessed_cached_value(&self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
+    fn try_read_preprocessed_cached_value(
+        &self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
         let value = sensor_stream_caches.try_get_channel_preprocessed_value(channel_index)?;
         Ok(value)
     }
 
-    fn try_read_postprocessed_cached_value(&self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<&WrappedIOData, FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
-        let value = sensor_stream_caches.try_get_channel_recent_postprocessed_value(channel_index)?;
+    fn try_read_postprocessed_cached_value(
+        &self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<&WrappedIOData, FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
+        let value =
+            sensor_stream_caches.try_get_channel_recent_postprocessed_value(channel_index)?;
         Ok(value)
     }
 
@@ -598,44 +667,97 @@ impl SensorDeviceCache {
 
     //region Stages
 
-    fn try_get_single_stage_properties(&self, sensor_type: SensoryCorticalUnit,
-                                       group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex,
-                                       pipeline_stage_property_index: PipelineStagePropertyIndex) -> Result<PipelineStageProperties, FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
-        sensor_stream_caches.try_get_single_stage_properties(channel_index, pipeline_stage_property_index)
+    fn try_get_single_stage_properties(
+        &self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        pipeline_stage_property_index: PipelineStagePropertyIndex,
+    ) -> Result<PipelineStageProperties, FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
+        sensor_stream_caches
+            .try_get_single_stage_properties(channel_index, pipeline_stage_property_index)
     }
 
-    fn try_get_all_stage_properties(&self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
+    fn try_get_all_stage_properties(
+        &self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches(sensor_type, group_index)?;
         sensor_stream_caches.get_all_stage_properties(channel_index)
     }
 
-    fn try_update_single_stage_properties(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex,
-                                          channel_index: CorticalChannelIndex, pipeline_stage_property_index: PipelineStagePropertyIndex,
-                                          replacing_property: PipelineStageProperties)
-                                          -> Result<(), FeagiDataError> {
-
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        sensor_stream_caches.try_update_single_stage_properties(channel_index, pipeline_stage_property_index, replacing_property)
+    fn try_update_single_stage_properties(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        pipeline_stage_property_index: PipelineStagePropertyIndex,
+        replacing_property: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches.try_update_single_stage_properties(
+            channel_index,
+            pipeline_stage_property_index,
+            replacing_property,
+        )
     }
 
-    fn try_update_all_stage_properties(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        sensor_stream_caches.try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
+    fn try_update_all_stage_properties(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches
+            .try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
     }
 
-    fn try_replace_single_stage(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, replacing_at_index: PipelineStagePropertyIndex, new_pipeline_stage_properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
-        sensor_stream_caches.try_replace_single_stage(channel_index, replacing_at_index, new_pipeline_stage_properties)
+    fn try_replace_single_stage(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        replacing_at_index: PipelineStagePropertyIndex,
+        new_pipeline_stage_properties: PipelineStageProperties,
+    ) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+        sensor_stream_caches.try_replace_single_stage(
+            channel_index,
+            replacing_at_index,
+            new_pipeline_stage_properties,
+        )
     }
 
-    fn try_replace_all_stages(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex, new_pipeline_stage_properties: Vec<PipelineStageProperties>) -> Result<(), FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+    fn try_replace_all_stages(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+        new_pipeline_stage_properties: Vec<PipelineStageProperties>,
+    ) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
         sensor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
     }
 
-    fn try_removing_all_stages(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex, channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
-        let sensor_stream_caches = self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
+    fn try_removing_all_stages(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<(), FeagiDataError> {
+        let sensor_stream_caches =
+            self.try_get_sensory_channel_stream_caches_mut(sensor_type, group_index)?;
         sensor_stream_caches.try_removing_all_stages(channel_index)?;
         Ok(())
     }
@@ -644,13 +766,21 @@ impl SensorDeviceCache {
 
     //region Agent Device
 
-    fn register_agent_device_key(&mut self, agent_device_index: AgentDeviceIndex, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex) -> Result<(), FeagiDataError> {
+    fn register_agent_device_key(
+        &mut self,
+        agent_device_index: AgentDeviceIndex,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+    ) -> Result<(), FeagiDataError> {
         let keys = {
             match self.agent_device_key_lookup.get_mut(&agent_device_index) {
                 Some(keys) => keys,
                 None => {
-                    self.agent_device_key_lookup.insert(agent_device_index, Vec::new());
-                    self.agent_device_key_lookup.get_mut(&agent_device_index).unwrap()
+                    self.agent_device_key_lookup
+                        .insert(agent_device_index, Vec::new());
+                    self.agent_device_key_lookup
+                        .get_mut(&agent_device_index)
+                        .unwrap()
                 }
             }
         };
@@ -658,19 +788,41 @@ impl SensorDeviceCache {
         Ok(())
     }
 
-    fn try_update_value_by_agent_device(&mut self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex, value: WrappedIOData, time_of_update: Instant) -> Result<(), FeagiDataError> {
-        let sensor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?.to_vec();
+    fn try_update_value_by_agent_device(
+        &mut self,
+        agent_device_index: AgentDeviceIndex,
+        channel_index: CorticalChannelIndex,
+        value: WrappedIOData,
+        time_of_update: Instant,
+    ) -> Result<(), FeagiDataError> {
+        let sensor_group_pairs = self
+            .try_get_agent_device_lookup(agent_device_index)?
+            .to_vec();
         for (sensor_type, group_index) in sensor_group_pairs {
-            self.try_update_value(sensor_type, group_index, channel_index, value.clone(), time_of_update)?;
+            self.try_update_value(
+                sensor_type,
+                group_index,
+                channel_index,
+                value.clone(),
+                time_of_update,
+            )?;
         }
         Ok(())
     }
 
-    fn try_read_postprocessed_cached_values_by_agent_device(&self, agent_device_index: AgentDeviceIndex, channel_index: CorticalChannelIndex) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
+    fn try_read_postprocessed_cached_values_by_agent_device(
+        &self,
+        agent_device_index: AgentDeviceIndex,
+        channel_index: CorticalChannelIndex,
+    ) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
         let sensor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
         let mut results = Vec::with_capacity(sensor_group_pairs.len());
         for (sensor_type, group_index) in sensor_group_pairs {
-            let value = self.try_read_postprocessed_cached_value(*sensor_type, *group_index, channel_index)?;
+            let value = self.try_read_postprocessed_cached_value(
+                *sensor_type,
+                *group_index,
+                channel_index,
+            )?;
             results.push(value);
         }
         Ok(results)
@@ -682,44 +834,69 @@ impl SensorDeviceCache {
 
     //region Hashmap Interactions
 
-    fn try_get_sensory_channel_stream_caches(&self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex) -> Result<&SensoryChannelStreamCaches, FeagiDataError> {
+    fn try_get_sensory_channel_stream_caches(
+        &self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+    ) -> Result<&SensoryChannelStreamCaches, FeagiDataError> {
         let check = self.stream_caches.get(&(sensor_type, group_index));
         if check.is_none() {
-            return Err(FeagiDataError::BadParameters(format!("Unable to find {} of cortical group index {} in registered sensor's list!", sensor_type, group_index)))
+            return Err(FeagiDataError::BadParameters(format!(
+                "Unable to find {} of cortical group index {} in registered sensor's list!",
+                sensor_type, group_index
+            )));
         }
         let check = check.unwrap();
         Ok(check)
     }
 
-    fn try_get_sensory_channel_stream_caches_mut(&mut self, sensor_type: SensoryCorticalUnit, group_index: CorticalGroupIndex) -> Result<&mut SensoryChannelStreamCaches, FeagiDataError> {
+    fn try_get_sensory_channel_stream_caches_mut(
+        &mut self,
+        sensor_type: SensoryCorticalUnit,
+        group_index: CorticalGroupIndex,
+    ) -> Result<&mut SensoryChannelStreamCaches, FeagiDataError> {
         let check = self.stream_caches.get_mut(&(sensor_type, group_index));
         if check.is_none() {
-            return Err(FeagiDataError::BadParameters(format!("Unable to find {} of cortical group index {} in registered sensor's list!", sensor_type, group_index)))
+            return Err(FeagiDataError::BadParameters(format!(
+                "Unable to find {} of cortical group index {} in registered sensor's list!",
+                sensor_type, group_index
+            )));
         }
         let check = check.unwrap();
         Ok(check)
     }
 
-    fn try_get_agent_device_lookup(&self, agent_device_index: AgentDeviceIndex) -> Result<&[(SensoryCorticalUnit, CorticalGroupIndex)], FeagiDataError> {
-        let val = self.agent_device_key_lookup.get(&agent_device_index).ok_or(
-            FeagiDataError::BadParameters(format!("No registered sensor device found in agent's list for agent index {}!", *agent_device_index))
-        )?;
+    fn try_get_agent_device_lookup(
+        &self,
+        agent_device_index: AgentDeviceIndex,
+    ) -> Result<&[(SensoryCorticalUnit, CorticalGroupIndex)], FeagiDataError> {
+        let val = self
+            .agent_device_key_lookup
+            .get(&agent_device_index)
+            .ok_or(FeagiDataError::BadParameters(format!(
+                "No registered sensor device found in agent's list for agent index {}!",
+                *agent_device_index
+            )))?;
         Ok(val)
     }
 
-    fn try_get_agent_device_lookup_mut(&mut self, agent_device_index: AgentDeviceIndex) -> Result<&mut Vec<(SensoryCorticalUnit, CorticalGroupIndex)>, FeagiDataError> {
-        let val = self.agent_device_key_lookup.get_mut(&agent_device_index).ok_or(
-            FeagiDataError::BadParameters(format!("No registered sensor device found in agent's list for agent index {}!", *agent_device_index))
-        )?;
+    fn try_get_agent_device_lookup_mut(
+        &mut self,
+        agent_device_index: AgentDeviceIndex,
+    ) -> Result<&mut Vec<(SensoryCorticalUnit, CorticalGroupIndex)>, FeagiDataError> {
+        let val = self
+            .agent_device_key_lookup
+            .get_mut(&agent_device_index)
+            .ok_or(FeagiDataError::BadParameters(format!(
+                "No registered sensor device found in agent's list for agent index {}!",
+                *agent_device_index
+            )))?;
         Ok(val)
     }
 
-
     //endregion
 
-
     //endregion
-
 }
 
 impl fmt::Display for SensorDeviceCache {

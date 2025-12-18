@@ -26,10 +26,10 @@ use tokio::sync::mpsc::{self, Receiver, Sender};
 ///
 /// async fn example() {
 ///     let (tx, mut rx) = channels::create_bounded::<Vec<u8>>(100);
-///     
+///
 ///     // Send asynchronously
 ///     tx.send(vec![1, 2, 3]).await.unwrap();
-///     
+///
 ///     // Receive asynchronously
 ///     let data = rx.recv().await.unwrap();
 /// }

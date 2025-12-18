@@ -1,9 +1,11 @@
 use crate::FeagiDataError;
-use crate::{define_xyz_dimensions, define_xyz_coordinates, define_index, define_nonzero_count};
+use crate::{define_index, define_nonzero_count, define_xyz_coordinates, define_xyz_dimensions};
 
 //region Cortical Indexing
 
-define_index!(CorticalChannelIndex, u32,
+define_index!(
+    CorticalChannelIndex,
+    u32,
     "Index for addressing specific channels within an I/O cortical area.
 
 Cortical areas can contain multiple channels for processing different
@@ -11,7 +13,9 @@ aspects of data. This index addresses individual channels within a
 specific cortical area for fine-grained data routing."
 );
 
-define_index!(CorticalGroupIndex, u8,
+define_index!(
+    CorticalGroupIndex,
+    u8,
     "Index for grouping cortical areas of the same type within a genome.
 
 This index distinguishes between multiple instances of the same cortical type.
@@ -29,21 +33,29 @@ The index appears as the last two characters of a cortical ID:
 - \"omot0A\" = Motor output, grouping index 10 (hexadecimal A)"
 );
 
-
-define_index!(CorticalUnitIndex, u8,
-"Index for cortical areas within a cortical unit");
+define_index!(
+    CorticalUnitIndex,
+    u8,
+    "Index for cortical areas within a cortical unit"
+);
 
 //endregion
 
 //region Channels
 
-define_nonzero_count!(CorticalChannelCount, u32, "The number of Cortical Channels cannot be zero."
+define_nonzero_count!(
+    CorticalChannelCount,
+    u32,
+    "The number of Cortical Channels cannot be zero."
 );
 
-define_nonzero_count!(NeuronDepth, u32, "The number of Neurons cannot be zero." );
+define_nonzero_count!(NeuronDepth, u32, "The number of Neurons cannot be zero.");
 
-
-define_xyz_dimensions!(CorticalChannelDimensions, u32, "CorticalChannelDimensions", 0,
+define_xyz_dimensions!(
+    CorticalChannelDimensions,
+    u32,
+    "CorticalChannelDimensions",
+    0,
     "Dimensions of a channel within a cortical area.
 
 Defines the 3D size of an individual channel, which represents
@@ -59,7 +71,10 @@ data routing, processing allocation, and memory management."
 
 //region Spatial
 
-define_xyz_coordinates!(NeuronVoxelCoordinate, u32, "NeuronVoxelCoordinate",
+define_xyz_coordinates!(
+    NeuronVoxelCoordinate,
+    u32,
+    "NeuronVoxelCoordinate",
     "Coordinate local to a parent cortical area.
 
 Represents a position within the bounds of a specific cortical area,
@@ -71,7 +86,11 @@ Used for addressing specific locations within individual cortical areas
 for neuron placement, connectivity mapping, and spatial organization."
 );
 
-define_xyz_dimensions!(CorticalAreaDimensions, u32, "CorticalDimensions", 0,
+define_xyz_dimensions!(
+    CorticalAreaDimensions,
+    u32,
+    "CorticalDimensions",
+    0,
     "Dimensions of an entire cortical area.
 
 Defines the complete 3D spatial extent of a cortical area,

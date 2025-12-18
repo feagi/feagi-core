@@ -31,7 +31,7 @@ impl WsPull {
     /// Create a new WebSocket PULL socket
     pub fn new(config: ServerConfig) -> TransportResult<Self> {
         config.base.validate()?;
-        
+
         Ok(Self {
             config,
             running: Arc::new(RwLock::new(false)),
@@ -40,43 +40,44 @@ impl WsPull {
             message_tx: Arc::new(RwLock::new(None)),
         })
     }
-    
+
     /// Create with address
     pub async fn with_address(address: impl Into<String>) -> TransportResult<Self> {
         let config = ServerConfig::new(address);
         Self::new(config)
     }
-    
+
     /// Start the WebSocket server
     pub async fn start_async(&mut self) -> TransportResult<()> {
         if *self.running.read() {
             return Err(TransportError::AlreadyRunning);
         }
-        
+
         let addr = self.config.base.address.clone();
         let listener = TcpListener::bind(&addr)
             .await
             .map_err(|e| TransportError::BindFailed(e.to_string()))?;
-        
+
         info!("🦀 [WS-PULL] Listening on {}", addr);
-        
+
         let (message_tx, message_rx) = mpsc::unbounded_channel();
         *self.message_tx.write() = Some(message_tx.clone());
         *self.message_rx.write() = Some(message_rx);
         *self.running.write() = true;
-        
+
         let running = self.running.clone();
-        
+
         let handle = tokio::spawn(async move {
             while *running.read() {
                 match listener.accept().await {
                     Ok((stream, peer_addr)) => {
                         debug!("[WS-PULL] New connection from {}", peer_addr);
-                        
+
                         let message_tx_clone = message_tx.clone();
-                        
+
                         tokio::spawn(async move {
-                            if let Err(e) = handle_client(stream, peer_addr, message_tx_clone).await {
+                            if let Err(e) = handle_client(stream, peer_addr, message_tx_clone).await
+                            {
                                 warn!("[WS-PULL] Client {} error: {}", peer_addr, e);
                             }
                         });
@@ -87,9 +88,9 @@ impl WsPull {
                 }
             }
         });
-        
+
         *self.server_handle.write() = Some(handle);
-        
+
         Ok(())
     }
 }
@@ -100,23 +101,23 @@ impl Transport for WsPull {
             "Use start_async() for WebSocket transports".to_string(),
         ))
     }
-    
+
     fn stop(&mut self) -> TransportResult<()> {
         *self.running.write() = false;
         *self.message_tx.write() = None;
         *self.message_rx.write() = None;
-        
+
         if let Some(handle) = self.server_handle.write().take() {
             handle.abort();
         }
-        
+
         Ok(())
     }
-    
+
     fn is_running(&self) -> bool {
         *self.running.read()
     }
-    
+
     fn transport_type(&self) -> &str {
         "websocket-pull"
     }
@@ -125,25 +126,19 @@ impl Transport for WsPull {
 impl Pull for WsPull {
     fn pull(&self) -> TransportResult<Vec<u8>> {
         let mut rx_guard = self.message_rx.write();
-        let rx = rx_guard
-            .as_mut()
-            .ok_or(TransportError::NotRunning)?;
-        
+        let rx = rx_guard.as_mut().ok_or(TransportError::NotRunning)?;
+
         match rx.try_recv() {
             Ok(data) => Ok(data),
-            Err(mpsc::error::TryRecvError::Empty) => {
-                Err(TransportError::NoData)
-            }
+            Err(mpsc::error::TryRecvError::Empty) => Err(TransportError::NoData),
             Err(e) => Err(TransportError::ReceiveFailed(e.to_string())),
         }
     }
-    
+
     fn pull_timeout(&self, timeout_ms: u64) -> TransportResult<Vec<u8>> {
         let mut rx_guard = self.message_rx.write();
-        let rx = rx_guard
-            .as_mut()
-            .ok_or(TransportError::NotRunning)?;
-        
+        let rx = rx_guard.as_mut().ok_or(TransportError::NotRunning)?;
+
         // Use a different approach since tokio doesn't have blocking_recv_timeout
         let start = std::time::Instant::now();
         loop {
@@ -169,9 +164,9 @@ async fn handle_client(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let ws_stream = accept_async(stream).await?;
     let (_write, mut read) = ws_stream.split();
-    
+
     info!("[WS-PULL] Client {} connected", peer_addr);
-    
+
     while let Some(msg) = read.next().await {
         match msg {
             Ok(Message::Binary(data)) => {
@@ -192,33 +187,32 @@ async fn handle_client(
             _ => {}
         }
     }
-    
+
     info!("[WS-PULL] Client {} disconnected", peer_addr);
-    
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[tokio::test]
     async fn test_wspull_creation() {
         let config = ServerConfig::new("127.0.0.1:30022");
         let pull_socket = WsPull::new(config);
         assert!(pull_socket.is_ok());
     }
-    
+
     #[tokio::test]
     async fn test_wspull_start_stop() {
         let mut pull_socket = WsPull::with_address("127.0.0.1:30023").await.unwrap();
         assert!(!pull_socket.is_running());
-        
+
         pull_socket.start_async().await.unwrap();
         assert!(pull_socket.is_running());
-        
+
         pull_socket.stop().unwrap();
         assert!(!pull_socket.is_running());
     }
 }
-
