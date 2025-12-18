@@ -57,7 +57,7 @@ pub mod viz_shm_writer; // Rust visualization SHM writer // Rust motor SHM write
 
 pub use backend::*;
 pub use burst_loop_runner::*;
-pub use dynamic_npu::DynamicNPU;
+pub use dynamic_npu::{DynamicNPU, DynamicNPUGeneric};
 pub use fire_ledger::*;
 pub use fire_structures::*;
 pub use fq_sampler::*;

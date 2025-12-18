@@ -5,30 +5,48 @@
 //!
 //! Provides `DynamicNPU` enum for runtime selection between f32 and INT8 precision.
 
-use crate::backend::CPUBackend;
+use crate::backend::{CPUBackend, ComputeBackend};
 use crate::npu::RustNPU;
 use feagi_neural::types::*;
-use feagi_runtime::{NeuronStorage, SynapseStorage};
+use feagi_runtime::{Runtime, NeuronStorage, SynapseStorage};
+
+// Import StdRuntime for the default type alias
+#[cfg(feature = "std")]
 use feagi_runtime_std::StdRuntime;
 
 /// Dynamic NPU that dispatches to f32 or INT8 at runtime
 ///
 /// This enum allows the system to choose NPU precision based on genome configuration
 /// at runtime, while still using compile-time monomorphization for performance.
-pub enum DynamicNPU {
+///
+/// ## Generic Type Parameters
+/// - `R: Runtime`: The runtime implementation (StdRuntime, EmbeddedRuntime, etc.)
+/// - `B: ComputeBackend`: The compute backend (CPUBackend, CUDABackend, etc.)
+pub enum DynamicNPUGeneric<R: Runtime, B>
+where
+    B: ComputeBackend<f32, R::NeuronStorage<f32>, R::SynapseStorage>
+        + ComputeBackend<INT8Value, R::NeuronStorage<INT8Value>, R::SynapseStorage>,
+{
     /// 32-bit floating point NPU (highest precision)
-    F32(RustNPU<StdRuntime, f32, CPUBackend>),
+    F32(RustNPU<R, f32, B>),
     
     /// 8-bit integer NPU (42% memory reduction)
-    INT8(RustNPU<StdRuntime, INT8Value, CPUBackend>),
+    INT8(RustNPU<R, INT8Value, B>),
 }
+
+/// Default DynamicNPU type alias using StdRuntime and CPUBackend
+/// 
+/// This is the most common configuration for desktop/server deployments.
+/// For other platforms, use `DynamicNPUGeneric<YourRuntime, YourBackend>` directly.
+#[cfg(feature = "std")]
+pub type DynamicNPU = DynamicNPUGeneric<StdRuntime, CPUBackend>;
 
 /// Macro for dispatching methods to the correct NPU variant
 macro_rules! dispatch {
     ($self:expr, $method:ident($($args:expr),*)) => {
         match $self {
-            DynamicNPU::F32(npu) => npu.$method($($args),*),
-            DynamicNPU::INT8(npu) => npu.$method($($args),*),
+            DynamicNPUGeneric::F32(npu) => npu.$method($($args),*),
+            DynamicNPUGeneric::INT8(npu) => npu.$method($($args),*),
         }
     };
 }
@@ -37,35 +55,39 @@ macro_rules! dispatch {
 macro_rules! dispatch_mut {
     ($self:expr, $method:ident($($args:expr),*)) => {
         match $self {
-            DynamicNPU::F32(npu) => npu.$method($($args),*),
-            DynamicNPU::INT8(npu) => npu.$method($($args),*),
+            DynamicNPUGeneric::F32(npu) => npu.$method($($args),*),
+            DynamicNPUGeneric::INT8(npu) => npu.$method($($args),*),
         }
     };
 }
 
-impl DynamicNPU {
-    /// Create new f32 NPU
+impl<R: Runtime, B> DynamicNPUGeneric<R, B>
+where
+    B: ComputeBackend<f32, R::NeuronStorage<f32>, R::SynapseStorage>
+        + ComputeBackend<INT8Value, R::NeuronStorage<INT8Value>, R::SynapseStorage>,
+{
+    /// Create new f32 NPU with provided runtime and backend
     pub fn new_f32(
+        runtime: R,
+        backend: B,
         neuron_capacity: usize,
         synapse_capacity: usize,
         fire_ledger_window: usize,
     ) -> Result<Self> {
-        let runtime = StdRuntime::new();
-        let backend = CPUBackend::new();
         let npu = RustNPU::new(runtime, backend, neuron_capacity, synapse_capacity, fire_ledger_window)?;
-        Ok(DynamicNPU::F32(npu))
+        Ok(DynamicNPUGeneric::F32(npu))
     }
     
-    /// Create new INT8 NPU
+    /// Create new INT8 NPU with provided runtime and backend
     pub fn new_int8(
+        runtime: R,
+        backend: B,
         neuron_capacity: usize,
         synapse_capacity: usize,
         fire_ledger_window: usize,
     ) -> Result<Self> {
-        let runtime = StdRuntime::new();
-        let backend = CPUBackend::new();
         let npu = RustNPU::new(runtime, backend, neuron_capacity, synapse_capacity, fire_ledger_window)?;
-        Ok(DynamicNPU::INT8(npu))
+        Ok(DynamicNPUGeneric::INT8(npu))
     }
     
     // Common NPU methods (delegate to underlying implementation)
@@ -87,13 +109,13 @@ impl DynamicNPU {
         z: u32,
     ) -> Result<NeuronId> {
         match self {
-            DynamicNPU::F32(npu) => npu.add_neuron(
+            DynamicNPUGeneric::F32(npu) => npu.add_neuron(
                 threshold, leak_coefficient, resting_potential,
                 neuron_type, refractory_period, excitability,
                 consecutive_fire_limit, snooze_period, mp_charge_accumulation,
                 cortical_area, x, y, z
             ),
-            DynamicNPU::INT8(npu) => npu.add_neuron(
+            DynamicNPUGeneric::INT8(npu) => npu.add_neuron(
                 INT8Value::from_f32(threshold),
                 leak_coefficient,
                 INT8Value::from_f32(resting_potential),
@@ -121,13 +143,13 @@ impl DynamicNPU {
         z_coords: Vec<u32>,
     ) -> (u32, Vec<usize>) {
         match self {
-            DynamicNPU::F32(npu) => npu.add_neurons_batch(
+            DynamicNPUGeneric::F32(npu) => npu.add_neurons_batch(
                 thresholds, leak_coefficients, resting_potentials,
                 neuron_types, refractory_periods, excitabilities,
                 consecutive_fire_limits, snooze_periods, mp_charge_accumulations,
                 cortical_areas, x_coords, y_coords, z_coords
             ),
-            DynamicNPU::INT8(npu) => {
+            DynamicNPUGeneric::INT8(npu) => {
                 let thresholds_int8: Vec<INT8Value> = thresholds.into_iter().map(INT8Value::from_f32).collect();
                 let resting_int8: Vec<INT8Value> = resting_potentials.into_iter().map(INT8Value::from_f32).collect();
                 npu.add_neurons_batch(
@@ -213,13 +235,13 @@ impl DynamicNPU {
         default_mp_charge_accumulation: bool,
     ) -> Result<u32> {
         match self {
-            DynamicNPU::F32(npu) => npu.create_cortical_area_neurons(
+            DynamicNPUGeneric::F32(npu) => npu.create_cortical_area_neurons(
                 cortical_idx, width, height, depth, neurons_per_voxel,
                 default_threshold, default_leak_coefficient, default_resting_potential,
                 default_neuron_type, default_refractory_period, default_excitability,
                 default_consecutive_fire_limit, default_snooze_period, default_mp_charge_accumulation
             ),
-            DynamicNPU::INT8(npu) => npu.create_cortical_area_neurons(
+            DynamicNPUGeneric::INT8(npu) => npu.create_cortical_area_neurons(
                 cortical_idx, width, height, depth, neurons_per_voxel,
                 default_threshold, default_leak_coefficient, default_resting_potential,
                 default_neuron_type, default_refractory_period, default_excitability,
@@ -247,11 +269,11 @@ impl DynamicNPU {
     pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
         let idx = neuron_id as usize;
         match self {
-            DynamicNPU::F32(npu) => {
+            DynamicNPUGeneric::F32(npu) => {
                 let storage = npu.neuron_storage.read().unwrap();
                 idx < storage.count() && storage.valid_mask()[idx]
             },
-            DynamicNPU::INT8(npu) => {
+            DynamicNPUGeneric::INT8(npu) => {
                 let storage = npu.neuron_storage.read().unwrap();
                 idx < storage.count() && storage.valid_mask()[idx]
             },
@@ -260,8 +282,8 @@ impl DynamicNPU {
     
     pub fn update_neuron_threshold(&mut self, neuron_id: u32, threshold: f32) -> bool {
         match self {
-            DynamicNPU::F32(npu) => npu.update_neuron_threshold(neuron_id, threshold),
-            DynamicNPU::INT8(npu) => npu.update_neuron_threshold(neuron_id, INT8Value::from_f32(threshold)),
+            DynamicNPUGeneric::F32(npu) => npu.update_neuron_threshold(neuron_id, threshold),
+            DynamicNPUGeneric::INT8(npu) => npu.update_neuron_threshold(neuron_id, INT8Value::from_f32(threshold)),
         }
     }
     
@@ -276,22 +298,22 @@ impl DynamicNPU {
     // Single neuron update methods (by neuron_id)
     pub fn update_neuron_leak(&mut self, neuron_id: u32, leak: f32) -> bool {
         match self {
-            DynamicNPU::F32(npu) => npu.update_neuron_leak(neuron_id, leak),
-            DynamicNPU::INT8(npu) => npu.update_neuron_leak(neuron_id, leak),
+            DynamicNPUGeneric::F32(npu) => npu.update_neuron_leak(neuron_id, leak),
+            DynamicNPUGeneric::INT8(npu) => npu.update_neuron_leak(neuron_id, leak),
         }
     }
     
     pub fn update_neuron_excitability(&mut self, neuron_id: u32, excitability: f32) -> bool {
         match self {
-            DynamicNPU::F32(npu) => npu.update_neuron_excitability(neuron_id, excitability),
-            DynamicNPU::INT8(npu) => npu.update_neuron_excitability(neuron_id, excitability),
+            DynamicNPUGeneric::F32(npu) => npu.update_neuron_excitability(neuron_id, excitability),
+            DynamicNPUGeneric::INT8(npu) => npu.update_neuron_excitability(neuron_id, excitability),
         }
     }
     
     pub fn update_neuron_resting_potential(&mut self, neuron_id: u32, resting_potential: f32) -> bool {
         match self {
-            DynamicNPU::F32(npu) => npu.update_neuron_resting_potential(neuron_id, resting_potential),
-            DynamicNPU::INT8(npu) => npu.update_neuron_resting_potential(neuron_id, INT8Value::from_f32(resting_potential)),
+            DynamicNPUGeneric::F32(npu) => npu.update_neuron_resting_potential(neuron_id, resting_potential),
+            DynamicNPUGeneric::INT8(npu) => npu.update_neuron_resting_potential(neuron_id, INT8Value::from_f32(resting_potential)),
         }
     }
     
@@ -309,11 +331,11 @@ impl DynamicNPU {
     
     pub fn get_neuron_capacity(&self) -> usize {
         match self {
-            DynamicNPU::F32(npu) => {
+            DynamicNPUGeneric::F32(npu) => {
                 let storage = npu.neuron_storage.read().unwrap();
                 NeuronStorage::capacity(&*storage)
             },
-            DynamicNPU::INT8(npu) => {
+            DynamicNPUGeneric::INT8(npu) => {
                 let storage = npu.neuron_storage.read().unwrap();
                 NeuronStorage::capacity(&*storage)
             },
@@ -322,11 +344,11 @@ impl DynamicNPU {
     
     pub fn get_synapse_capacity(&self) -> usize {
         match self {
-            DynamicNPU::F32(npu) => {
+            DynamicNPUGeneric::F32(npu) => {
                 let storage = npu.synapse_storage.read().unwrap();
                 SynapseStorage::capacity(&*storage)
             },
-            DynamicNPU::INT8(npu) => {
+            DynamicNPUGeneric::INT8(npu) => {
                 let storage = npu.synapse_storage.read().unwrap();
                 SynapseStorage::capacity(&*storage)
             },
@@ -377,8 +399,8 @@ impl DynamicNPU {
     
     pub fn sample_fire_queue(&mut self) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
         match self {
-            DynamicNPU::F32(npu) => npu.sample_fire_queue(),
-            DynamicNPU::INT8(npu) => npu.sample_fire_queue(),
+            DynamicNPUGeneric::F32(npu) => npu.sample_fire_queue(),
+            DynamicNPUGeneric::INT8(npu) => npu.sample_fire_queue(),
         }
     }
     
@@ -392,22 +414,22 @@ impl DynamicNPU {
     
     pub fn inject_sensory_with_potentials(&mut self, neurons: &[(feagi_neural::types::NeuronId, f32)]) {
         match self {
-            DynamicNPU::F32(npu) => npu.inject_sensory_with_potentials(neurons),
-            DynamicNPU::INT8(npu) => npu.inject_sensory_with_potentials(neurons),
+            DynamicNPUGeneric::F32(npu) => npu.inject_sensory_with_potentials(neurons),
+            DynamicNPUGeneric::INT8(npu) => npu.inject_sensory_with_potentials(neurons),
         }
     }
     
     pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
         match self {
-            DynamicNPU::F32(npu) => npu.configure_fire_ledger_window(cortical_idx, window_size),
-            DynamicNPU::INT8(npu) => npu.configure_fire_ledger_window(cortical_idx, window_size),
+            DynamicNPUGeneric::F32(npu) => npu.configure_fire_ledger_window(cortical_idx, window_size),
+            DynamicNPUGeneric::INT8(npu) => npu.configure_fire_ledger_window(cortical_idx, window_size),
         }
     }
     
     pub fn get_all_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
         match self {
-            DynamicNPU::F32(npu) => npu.get_all_fire_ledger_configs(),
-            DynamicNPU::INT8(npu) => npu.get_all_fire_ledger_configs(),
+            DynamicNPUGeneric::F32(npu) => npu.get_all_fire_ledger_configs(),
+            DynamicNPUGeneric::INT8(npu) => npu.get_all_fire_ledger_configs(),
         }
     }
     
@@ -429,6 +451,42 @@ impl DynamicNPU {
     
     pub fn neuron_count(&self) -> usize {
         dispatch!(self, get_neuron_count())
+    }
+}
+
+// ============================================================================
+// Backward Compatibility: StdRuntime + CPUBackend Convenience Methods
+// ============================================================================
+
+#[cfg(test)]
+use feagi_runtime_std::StdRuntime;
+
+#[cfg(test)]
+impl DynamicNPUGeneric<StdRuntime, CPUBackend> {
+    /// Create new f32 NPU with StdRuntime and CPUBackend (backward compatible)
+    /// 
+    /// # Deprecation Notice
+    /// This is a convenience method for backward compatibility.
+    /// New code should use the generic `DynamicNPUGeneric::new_f32()` and pass runtime/backend explicitly.
+    pub fn new_f32_std_cpu(
+        neuron_capacity: usize,
+        synapse_capacity: usize,
+        fire_ledger_window: usize,
+    ) -> Result<Self> {
+        Self::new_f32(StdRuntime::new(), CPUBackend::new(), neuron_capacity, synapse_capacity, fire_ledger_window)
+    }
+    
+    /// Create new INT8 NPU with StdRuntime and CPUBackend (backward compatible)
+    /// 
+    /// # Deprecation Notice
+    /// This is a convenience method for backward compatibility.
+    /// New code should use the generic `DynamicNPUGeneric::new_int8()` and pass runtime/backend explicitly.
+    pub fn new_int8_std_cpu(
+        neuron_capacity: usize,
+        synapse_capacity: usize,
+        fire_ledger_window: usize,
+    ) -> Result<Self> {
+        Self::new_int8(StdRuntime::new(), CPUBackend::new(), neuron_capacity, synapse_capacity, fire_ledger_window)
     }
 }
 

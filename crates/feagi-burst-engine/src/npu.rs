@@ -40,8 +40,11 @@ use feagi_neural::types::*;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use tracing::{debug, error, info, trace, warn};
 
-// Import Runtime trait and StdRuntime for backward compatibility
+// Import Runtime trait for generic runtime abstraction
 use feagi_runtime::{Runtime, NeuronStorage, SynapseStorage};
+
+// Import StdRuntime only for backward compatibility and tests
+#[cfg(test)]
 use feagi_runtime_std::StdRuntime;
 
 /// Burst processing result
@@ -238,8 +241,23 @@ impl RustNPU<feagi_runtime_std::StdRuntime, INT8Value, crate::backend::CPUBacken
 }
 
 // Backward compatibility: StdRuntime with f32 and CPUBackend
+// This is DEPRECATED and only provided for backward compatibility.
+// New code should use the generic `RustNPU::new()` and pass the runtime explicitly.
+#[cfg(test)]
 impl RustNPU<StdRuntime, f32, crate::backend::CPUBackend> {
     /// Create a new Rust NPU with StdRuntime, f32, and CPU backend (backward compatible)
+    /// 
+    /// # Deprecation Notice
+    /// This method is DEPRECATED. Use the generic `RustNPU::new()` instead:
+    /// 
+    /// ```ignore
+    /// use feagi_runtime_std::StdRuntime;
+    /// use feagi_burst_engine::RustNPU;
+    /// 
+    /// let runtime = StdRuntime::new();
+    /// let backend = CPUBackend::new();
+    /// let npu = RustNPU::new(runtime, backend, 1000, 10000, 20)?;
+    /// ```
     pub fn new_std_cpu(
         neuron_capacity: usize,
         synapse_capacity: usize,
