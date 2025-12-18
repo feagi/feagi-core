@@ -63,7 +63,8 @@ jobs:
             CRATE_FAILED=true
           fi
           
-          if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
+          # Check version (direct or workspace inheritance)
+          if ! grep -qE '^version(\.workspace)? = ' "$crate_dir/Cargo.toml"; then
             echo "  ❌ Missing 'version' field"
             CRATE_FAILED=true
           fi
@@ -73,12 +74,14 @@ jobs:
             CRATE_FAILED=true
           fi
           
-          if ! grep -q '^license = ' "$crate_dir/Cargo.toml"; then
+          # Check license (direct or workspace inheritance)
+          if ! grep -qE '^license(\.workspace)? = ' "$crate_dir/Cargo.toml"; then
             echo "  ❌ Missing 'license' field (required for crates.io)"
             CRATE_FAILED=true
           fi
           
-          if ! grep -q '^authors = ' "$crate_dir/Cargo.toml"; then
+          # Check authors (direct or workspace inheritance)
+          if ! grep -qE '^authors(\.workspace)? = ' "$crate_dir/Cargo.toml"; then
             echo "  ❌ Missing 'authors' field (required for crates.io)"
             CRATE_FAILED=true
           fi
