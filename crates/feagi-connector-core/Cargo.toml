@@ -2,7 +2,7 @@
 authors.workspace = true
 name = "feagi-connector-core"
 edition.workspace = true
-version.workspace = true
+version = "0.0.50-beta.61"
 license.workspace = true
 description = "Adds Caching and Processing systems that are used by Feagi Connector"
 repository.workspace = true
