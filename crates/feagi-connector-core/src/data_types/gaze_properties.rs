@@ -65,8 +65,8 @@ impl GazeProperties {
     fn calculate_pixel_coordinates_of_center_corners(&self, source_frame_resolution: ImageXYResolution, destination_segmented_center_cortical_dimensions: CorticalAreaDimensions) -> Result<CornerPoints, FeagiDataError> {
 
         let source_frame_center_normal: (f32, f32) = (
-            0.5 + self.eccentricity_location_xy.a.get_as_0_1(),
-            0.5 - self.eccentricity_location_xy.b.get_as_0_1(), // Flip y eccentricity direction
+            self.eccentricity_location_xy.a.get_as_0_1(),
+            self.eccentricity_location_xy.b.get_as_0_1(),
         );
 
         let source_frame_max_off_center_normal: (f32, f32) = {
@@ -107,8 +107,8 @@ impl GazeProperties {
 
         let left_position_pixel: f32 = left_position_normal * source_frame_width_height_pixel.0;
         let top_position_pixel: f32 = top_position_normal * source_frame_width_height_pixel.1;
-        let right_position_pixel: f32 = right_position_normal + source_frame_width_height_pixel.0;
-        let bottom_position_pixel: f32 = bottom_position_normal + source_frame_width_height_pixel.1;
+        let right_position_pixel: f32 = right_position_normal * source_frame_width_height_pixel.0;
+        let bottom_position_pixel: f32 = bottom_position_normal * source_frame_width_height_pixel.1;
 
         let left_pixel = cmp::max(1, left_position_pixel.floor() as i32);
         let top_pixel = cmp::max(1, top_position_pixel.floor() as i32);

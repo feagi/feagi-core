@@ -231,7 +231,7 @@ mod test_image_segmentation_gaze_positions {
         }
     }
 
-    /*
+
     #[test]
     fn test_segment_with_bottom_right_gaze() {
         let cortical_group: CorticalGroupIndex = 0.into();
@@ -275,8 +275,7 @@ mod test_image_segmentation_gaze_positions {
                 .expect("Write should succeed");
         }
     }
-    
-     */
+
 
     #[test]
     fn test_segment_with_minimum_modulation_size() {
