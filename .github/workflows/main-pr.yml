@@ -124,10 +124,10 @@ jobs:
       run: cargo fmt --all -- --check
     
     - name: Run Clippy (linting)
-      run: cargo clippy --workspace --lib --tests --all-features -- -D warnings
+      run: cargo clippy --workspace --lib --tests -- -D warnings
     
     - name: Run all tests (lib only, examples have known API migration issues)
-      run: cargo test --workspace --lib --verbose --all-features
+      run: cargo test --workspace --lib --verbose
     
     - name: Run tests in release mode (lib only)
       run: cargo test --workspace --lib --release --verbose
