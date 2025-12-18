@@ -160,14 +160,14 @@ fn neural_dynamics_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // 5. Reset membrane potential
     membrane_potentials[neuron_id] = 0.0;
     
-    // 6. Update consecutive fire count
-    consecutive_fires = consecutive_fires + 1u;
+    // 6. Update consecutive fire count (saturating add to prevent overflow)
+    consecutive_fires = min(consecutive_fires + 1u, 65535u);
     u16_dynamic_state[u16_dyn_idx + 1u] = consecutive_fires;
     
     // 7. Apply refractory period (additive if hit consecutive fire limit)
     if (consecutive_limit > 0u && consecutive_fires >= consecutive_limit) {
-        // Hit burst limit → ADDITIVE extended refractory
-        refractory_countdown = refractory_period + snooze_period;
+        // Hit burst limit → ADDITIVE extended refractory (saturating add to prevent overflow)
+        refractory_countdown = min(refractory_period + snooze_period, 65535u);
         // Note: consecutive_fire_count will be reset when countdown expires
     } else {
         // Normal fire → normal refractory only

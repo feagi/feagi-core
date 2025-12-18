@@ -50,7 +50,7 @@ pub fn apply_refractory(
 ) {
     if consecutive_limit > 0 && consecutive_count >= consecutive_limit {
         // Hit consecutive fire limit → extended refractory
-        *refractory_countdown = refractory_period + snooze_period;
+        *refractory_countdown = refractory_period.saturating_add(snooze_period);
     } else {
         // Normal refractory
         *refractory_countdown = refractory_period;
@@ -77,7 +77,7 @@ pub fn check_consecutive_limit(
     }
 
     if did_fire {
-        *consecutive_count += 1;
+        *consecutive_count = consecutive_count.saturating_add(1);
         false // Not blocked (just incremented)
     } else {
         // Reset on non-firing

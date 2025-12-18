@@ -228,8 +228,9 @@ fn process_single_neuron<T: NeuralValue>(
             // Reset membrane potential
             neuron_array.membrane_potentials_mut()[idx] = T::zero();
 
-            // Increment consecutive fire count
-            neuron_array.consecutive_fire_counts_mut()[idx] += 1;
+            // Increment consecutive fire count (saturating to prevent overflow)
+            let old_count = neuron_array.consecutive_fire_counts()[idx];
+            neuron_array.consecutive_fire_counts_mut()[idx] = old_count.saturating_add(1);
             let new_count = neuron_array.consecutive_fire_counts()[idx];
 
             // Apply refractory period (additive if hit consecutive fire limit)
@@ -244,7 +245,7 @@ fn process_single_neuron<T: NeuralValue>(
                 // countdown = refrac + snooze (total bursts to skip)
                 // e.g., refrac=1, snooze=2, cfc_limit=3 → 1_1_1___1_1_1___
                 let snooze_period = neuron_array.snooze_periods()[idx];
-                let countdown = refractory_period + snooze_period;
+                let countdown = refractory_period.saturating_add(snooze_period);
                 neuron_array.refractory_countdowns_mut()[idx] = countdown;
                 // if neuron_id.0 == 16438 {
                 //     println!("[RUST-16438] → FIRED! count {} → {} (HIT LIMIT), extended refrac={}+{}={}",
