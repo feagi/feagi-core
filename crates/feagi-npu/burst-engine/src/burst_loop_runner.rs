@@ -19,6 +19,7 @@
 //! - Power neurons injected every burst
 //! - Sensory neurons injected by separate threads directly into FCL
 
+#[cfg(feature = "std")]
 use crate::DynamicNPU;
 use crate::sensory::AgentManager;
 use crate::parameter_update_queue::ParameterUpdateQueue;

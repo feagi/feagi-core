@@ -6,7 +6,6 @@ use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUni
 use crate::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, PercentageNeuronPositioning};
 use crate::genomic::sensory_cortical_unit::UnitTopology;
 use paste;
-use serde::{Deserialize, Serialize};
 
 macro_rules! define_motor_cortical_units_enum {
     (

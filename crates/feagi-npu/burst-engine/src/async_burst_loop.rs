@@ -11,6 +11,7 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
+#[cfg(feature = "std")]
 use crate::DynamicNPU;
 use crate::burst_loop_runner::{MotorPublisher, VisualizationPublisher};
 use feagi_async::FeagiAsyncRuntime;
