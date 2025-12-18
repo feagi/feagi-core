@@ -20,9 +20,9 @@ The workspace structure is good, but several critical issues must be resolved be
 
 The three merged crates from feagi-data-processing **lack README.md files**:
 
-- `crates/feagi_data_structures/` - **NO README**
-- `crates/feagi_data_serialization/` - **NO README**  
-- `crates/feagi_connector_core/` - **NO README**
+- `crates/feagi-data-structures/` - **NO README**
+- `crates/feagi-data-serialization/` - **NO README**  
+- `crates/feagi-connector-core/` - **NO README**
 
 **Impact:** Crates.io requires a README or will use the description field only.  
 **Action Required:** Create README.md files for each crate.
@@ -44,7 +44,7 @@ repository = "https://github.com/feagi/feagi-core"
 
 ### 3. Compilation Errors ❌
 
-The workspace currently has compilation errors in `feagi-bdu` due to API incompatibilities with the merged `feagi_data_structures` crate.
+The workspace currently has compilation errors in `feagi-bdu` due to API incompatibilities with the merged `feagi-data-structures` crate.
 
 **Impact:** `cargo publish` will fail if the code doesn't compile.  
 **Action Required:** Fix API compatibility issues (see FEAGI_EVO_COMPATIBILITY_FIXES.md).
@@ -105,19 +105,19 @@ documentation = "https://docs.rs/feagi-xxx"  # Individual crates
 Due to dependency relationships, crates must be published in this order:
 
 #### Phase 1: Foundation (No Dependencies)
-1. `feagi_data_structures`
+1. `feagi-data-structures`
 2. `feagi-neural`
 3. `feagi-runtime`
 
 #### Phase 2: Infrastructure  
-4. `feagi_data_serialization` (depends on feagi_data_structures)
+4. `feagi-data-serialization` (depends on feagi-data-structures)
 5. `feagi-state-manager`
 6. `feagi-runtime-std`
 7. `feagi-runtime-embedded`
 8. `feagi-observability`
 
 #### Phase 3: Core Algorithms
-9. `feagi_connector_core` (depends on data crates)
+9. `feagi-connector-core` (depends on data crates)
 10. `feagi-burst-engine`
 11. `feagi-bdu`
 12. `feagi-plasticity`
@@ -163,9 +163,9 @@ documentation = "https://docs.rs/feagi"  # ✅ Good
 
 ## Checklist Before Publication
 
-- [ ] Create README.md for feagi_data_structures
-- [ ] Create README.md for feagi_data_serialization  
-- [ ] Create README.md for feagi_connector_core
+- [ ] Create README.md for feagi-data-structures
+- [ ] Create README.md for feagi-data-serialization  
+- [ ] Create README.md for feagi-connector-core
 - [ ] Fix repository URLs (workspace + individual crates)
 - [ ] Fix compilation errors in feagi-bdu
 - [ ] Standardize package metadata inheritance
@@ -197,9 +197,9 @@ The current `feagi` umbrella crate is well-designed:
 **Current Pattern:** Mix of `feagi-xxx` (hyphenated) and `feagi_xxx` (underscored)
 
 **Crates with underscores:**
-- `feagi_data_structures` ✅ (library name convention)
-- `feagi_data_serialization` ✅ (library name convention)
-- `feagi_connector_core` ✅ (library name convention)
+- `feagi-data-structures` ✅ (library name convention)
+- `feagi-data-serialization` ✅ (library name convention)
+- `feagi-connector-core` ✅ (library name convention)
 
 **Recommendation:** Keep current naming - underscores are acceptable for library crates.
 

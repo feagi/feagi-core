@@ -23,10 +23,10 @@ This document outlines the compilation errors in `feagi-evo` that need to be fix
 **Line 50:**
 ```rust
 // Before:
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea, AreaType};
+use feagi-data-structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea, AreaType};
 
 // After:
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea};
+use feagi-data-structures::genomic::cortical_area::{CorticalAreaDimensions as Dimensions, CorticalArea};
 // Remove AreaType - it no longer exists
 ```
 
@@ -92,10 +92,10 @@ region.set_coordinate_2d(GenomeCoordinate2D::new(x, y));
 **Line 18:**
 ```rust
 // Before:
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalArea, AreaType};
+use feagi-data-structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalArea, AreaType};
 
 // After:
-use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalArea};
+use feagi-data-structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalArea};
 ```
 
 #### Fix 2: Convert Position Tuple
@@ -123,9 +123,9 @@ area.properties = props; // where props is HashMap<String, Value>
 
 ### Imports Needed
 ```rust
-use feagi_data_structures::genomic::descriptors::{GenomeCoordinate2D, GenomeCoordinate3D};
-use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalID, CorticalAreaType};
+use feagi-data-structures::genomic::descriptors::{GenomeCoordinate2D, GenomeCoordinate3D};
+use feagi-data-structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi-data-structures::genomic::cortical_area::{CorticalArea, CorticalID, CorticalAreaType};
 ```
 
 ### Type Conversions

@@ -108,9 +108,9 @@ members = [
     "crates/feagi-transports",         # Transport layer abstractions
     
     # === Data Processing (merged from feagi-data-processing) ===
-    "crates/feagi_connector_core",     # Connector agent core functionality
-    "crates/feagi_data_serialization", # Data serialization formats
-    "crates/feagi_data_structures",    # Core data structures
+    "crates/feagi-connector-core",     # Connector agent core functionality
+    "crates/feagi-data-serialization", # Data serialization formats
+    "crates/feagi-data-structures",    # Core data structures
 ]
 
 [workspace.package]
@@ -144,8 +144,8 @@ pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
 # FEAGI data crates (now internal to workspace)
-feagi_data_structures = { path = "crates/feagi_data_structures" }
-feagi_data_serialization = { path = "crates/feagi_data_serialization" }
+feagi-data-structures = { path = "crates/feagi-data-structures" }
+feagi-data-serialization = { path = "crates/feagi-data-serialization" }
 
 # Workspace-internal crates
 feagi-connectome-serialization = { path = "crates/feagi-connectome-serialization" }

@@ -14,7 +14,7 @@ name = "feagi_bdu"
 feagi-neural = { path = "../feagi-neural" }  # For types (CorticalArea, Dimensions, etc.)
 feagi-evo = { path = "../feagi-evo" }
 # feagi-burst-engine configured per-platform below
-feagi_data_structures = { workspace = true }
+feagi-data-structures = { workspace = true }
 
 # Performance (using workspace versions)
 rayon = { workspace = true, optional = true }  # Optional - not available in WASM

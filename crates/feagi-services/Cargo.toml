@@ -19,7 +19,7 @@ feagi-bdu = { path = "../feagi-bdu", default-features = false }
 feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false }
 # feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
-feagi_data_structures = { workspace = true }
+feagi-data-structures = { workspace = true }
 
 # Async runtime (optional for embedded)
 async-trait = "0.1"

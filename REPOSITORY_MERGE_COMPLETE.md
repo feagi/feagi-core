@@ -22,13 +22,13 @@ Successfully merged the `feagi-data-processing` repository into `feagi-core` whi
 **Method:** Git subtree merge with `--allow-unrelated-histories`
 
 **Merged Crates:**
-- `feagi_connector_core` → `crates/feagi_connector_core/`
-- `feagi_data_serialization` → `crates/feagi_data_serialization/`
-- `feagi_data_structures` → `crates/feagi_data_structures/`
+- `feagi-connector-core` → `crates/feagi-connector-core/`
+- `feagi-data-serialization` → `crates/feagi-data-serialization/`
+- `feagi-data-structures` → `crates/feagi-data-structures/`
 
 **Verification:**
 ```bash
-git log --follow crates/feagi_data_structures/src/lib.rs
+git log --follow crates/feagi-data-structures/src/lib.rs
 # Shows full history from original repository
 ```
 
@@ -39,9 +39,9 @@ All three FDP crates moved into standardized `crates/` directory:
 ```
 feagi-core/
 ├── crates/
-│   ├── feagi_connector_core/      # Data processing pipelines
-│   ├── feagi_data_serialization/  # Binary serialization formats
-│   ├── feagi_data_structures/     # Core data types
+│   ├── feagi-connector-core/      # Data processing pipelines
+│   ├── feagi-data-serialization/  # Binary serialization formats
+│   ├── feagi-data-structures/     # Core data types
 │   ├── feagi-agent/
 │   ├── feagi-api/
 │   ├── feagi-bdu/
@@ -67,9 +67,9 @@ feagi-core/
 ### 4. Documentation Updates
 
 **Created:**
-- README.md for `feagi_data_structures`
-- README.md for `feagi_data_serialization`
-- README.md for `feagi_connector_core`
+- README.md for `feagi-data-structures`
+- README.md for `feagi-data-serialization`
+- README.md for `feagi-connector-core`
 - `CRATES_IO_PUBLICATION_READINESS.md`
 - `REPOSITORY_MERGE_COMPLETE.md` (this file)
 
@@ -80,7 +80,7 @@ feagi-core/
 
 ### 5. API Compatibility Fixes
 
-Fixed compilation errors from API changes in `feagi_data_structures`:
+Fixed compilation errors from API changes in `feagi-data-structures`:
 
 **API Changes Addressed:**
 
@@ -161,9 +161,9 @@ cargo check --workspace
 - feagi-state-manager
 - feagi-services
 - feagi-connectome-serialization
-- feagi_data_structures
-- feagi_data_serialization
-- feagi_connector_core
+- feagi-data-structures
+- feagi-data-serialization
+- feagi-connector-core
 - And 10+ more crates
 
 **Still Have Compilation Issues:**
@@ -180,14 +180,14 @@ cargo check --workspace
 The following crates can be published NOW:
 
 **Phase 1 - Foundation (No Compilation Issues):**
-- `feagi_data_structures`
+- `feagi-data-structures`
 - `feagi-neural`
 - `feagi-runtime`
 - `feagi-config`
 - `feagi-state-manager`
 
 **Phase 2 - Infrastructure:**
-- `feagi_data_serialization`
+- `feagi-data-serialization`
 - `feagi-runtime-std`
 - `feagi-observability`
 - `feagi-connectome-serialization`
@@ -220,7 +220,7 @@ cargo check --workspace
 
 ### Verify Git History Preserved
 ```bash
-git log --follow --oneline crates/feagi_data_structures/src/lib.rs | head -20
+git log --follow --oneline crates/feagi-data-structures/src/lib.rs | head -20
 # Should show commits from original feagi-data-processing
 ```
 
@@ -260,8 +260,8 @@ grep -r "feagi-data-processing" crates/ --include="*.toml" | grep "path.*=.*feag
 
 3. Dry-run publish for each crate (in dependency order):
    ```bash
-   cargo publish --dry-run -p feagi_data_structures
-   cargo publish --dry-run -p feagi_data_serialization
+   cargo publish --dry-run -p feagi-data-structures
+   cargo publish --dry-run -p feagi-data-serialization
    # ... etc
    ```
 

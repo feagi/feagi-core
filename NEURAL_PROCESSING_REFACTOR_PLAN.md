@@ -496,7 +496,7 @@ impl<T: NeuralValue> ComputeBackend<T> for CUDABackend {
 - ✅ `NeuralValue` trait
 - ✅ `SynapseType`, `Synapse` (single item)
 - ✅ `Dimensions`, error types
-- ❌ `CorticalAreaId` (to be removed - use feagi_data_structures::CorticalID)
+- ❌ `CorticalAreaId` (to be removed - use feagi-data-structures::CorticalID)
 - ❌ `NeuronArray`, `SynapseArray` (moving to runtime crates)
 
 **Result**: Very small crate (~500 LOC) with just basic types and traits.
@@ -505,7 +505,7 @@ impl<T: NeuralValue> ComputeBackend<T> for CUDABackend {
 
 **Justification**:
 1. ✅ **Related content**: Types that define neurons + algorithms that process them belong together
-2. ✅ **Precedent**: feagi_data_structures does the same (types + processors)
+2. ✅ **Precedent**: feagi-data-structures does the same (types + processors)
 3. ✅ **Reduces crates**: 19 → 17 crates (cleaner)
 4. ✅ **Logical cohesion**: "All neural computation in one place"
 5. ✅ **no_std compatible**: Both are no_std, so no conflict
@@ -550,7 +550,7 @@ use feagi_neural::{
 
 **New Hierarchy**:
 ```
-feagi_data_structures (genome layer - external)
+feagi-data-structures (genome layer - external)
   ↓ used by
 feagi-neural (ALL neural computation: types + algorithms + models)
   ↓ used by
@@ -574,7 +574,7 @@ feagi-burst-engine (orchestration)
 
 ```
 ┌────────────────────────────────────────────────┐
-│ feagi_data_structures (Genome Layer - External)│
+│ feagi-data-structures (Genome Layer - External)│
 │  - CorticalID (authoritative)                  │
 │  - Genomic structures                          │
 │  - NeuronVoxelXYZP (for I/O)                   │
@@ -703,7 +703,7 @@ feagi-neural/
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ feagi_data_structures (GENOME LAYER - external)             │
+│ feagi-data-structures (GENOME LAYER - external)             │
 │   - CorticalID (authoritative, 8-byte)                      │
 │   - Genomic structures                                       │
 └─────────────────────────────────────────────────────────────┘
@@ -999,7 +999,7 @@ impl<R: Runtime, T: NeuralValue, M: NeuronModel> RustNPU<R, T, M> {
 **MAJOR CONSOLIDATION**: Merge 3 crates into 1
 
 - **Merge feagi-types**: Move `feagi-types/src/` to `feagi-neural/src/types/`
-  - Exclude: `CorticalAreaId` (remove - use feagi_data_structures::CorticalID)
+  - Exclude: `CorticalAreaId` (remove - use feagi-data-structures::CorticalID)
   - Exclude: `NeuronArray`, `SynapseArray` (moving to runtime crates)
   - Exclude: `cortical_id_decoder.rs`, `cortical_type_adapter.rs` (no longer needed)
   - Include: `NeuronId`, `SynapseId`, `NeuralValue`, `SynapseType`, `Dimensions`, error types
@@ -1010,7 +1010,7 @@ impl<R: Runtime, T: NeuralValue, M: NeuronModel> RustNPU<R, T, M> {
   - `feagi-synapse::*` → `feagi-neural::synapse::*`
   - `feagi-burst-engine::neuron_models::*` → `feagi-neural::models::*`
 - Update `feagi-neural/Cargo.toml`:
-  - Add feagi_data_structures dependency (for CorticalID)
+  - Add feagi-data-structures dependency (for CorticalID)
   - No other new dependencies
 - Ensure no_std compatibility for all merged code
 - Update tests
@@ -1034,7 +1034,7 @@ impl<R: Runtime, T: NeuralValue, M: NeuronModel> RustNPU<R, T, M> {
 - `feagi-neural/src/synapse/` (merge from feagi-synapse crate)
 - `feagi-neural/src/models/` (move from burst-engine)
 - `feagi-neural/src/lib.rs` (add types + synapse + models modules)
-- `feagi-neural/Cargo.toml` (add feagi_data_structures dependency)
+- `feagi-neural/Cargo.toml` (add feagi-data-structures dependency)
 - `feagi-burst-engine/src/lib.rs` (remove neuron_models, use feagi-neural::models)
 - `feagi-burst-engine/Cargo.toml` (replace feagi-types + feagi-synapse with feagi-neural)
 - `feagi-types/src/npu.rs` (move NeuronArray/SynapseArray to runtime crates, then delete crate)
@@ -1058,7 +1058,7 @@ impl<R: Runtime, T: NeuralValue, M: NeuronModel> RustNPU<R, T, M> {
 **Breaking Changes**: 
 1. Yes - `feagi-types` crate removed (merged into `feagi-neural`)
 2. Yes - `feagi-synapse` crate removed (merged into `feagi-neural`)
-3. Yes - `CorticalAreaId` removed (use `feagi_data_structures::CorticalID`)
+3. Yes - `CorticalAreaId` removed (use `feagi-data-structures::CorticalID`)
 
 **Migration Guide**: 
 ```rust
@@ -1090,7 +1090,7 @@ use feagi_neural::synapse::{compute_contribution, weight_scaling};
 use feagi_types::CorticalAreaId;
 
 // After
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi-data-structures::genomic::cortical_area::CorticalID;
 ```
 
 ---
