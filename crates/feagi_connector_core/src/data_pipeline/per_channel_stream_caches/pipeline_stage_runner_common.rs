@@ -223,6 +223,33 @@ pub(crate) trait PipelineStageRunner {
         Ok(serde_json::to_value(output).map_err(|err| FeagiDataError::InternalError(err.to_string()))?)
     }
 
+    fn import_from_json(&mut self, json: &serde_json::Map<String, serde_json::Value>) -> Result<(), FeagiDataError> {
+        // Validate json first
+
+        let friendly_name = json.get("friendly_name")
+            .unwrap_or_else(|| serde_json::Value::String(String::new()));
+        let friendly_name: String = friendly_name.to_string().clone();
+
+        let channel_index_override = json.get("channel_index_override")
+            .unwrap_or_else(|| &serde_json::Value::Null);
+        let channel_index_override: Option<usize> = channel_index_override.as_u64().map(|v| v as usize);
+
+        let pipeline_stages_json = json.get("pipeline_stages").unwrap_or_else(|| &serde_json::Value::Array(Vec::new()));
+        let pipeline_stages_json: Vec<serde_json::Value> = pipeline_stages_json.as_array().unwrap().clone();
+
+        // validate stage validity
+        let mut incoming_stage_properties: Vec<PipelineStageProperties> = Vec::new();
+        for pipeline_stage_json in pipeline_stages_json {
+            let pipeline_stage: PipelineStageProperties = serde_json::from_value(pipeline_stage_json).map_err(|err| FeagiDataError::DeserializationError(err.to_string()))?;
+            incoming_stage_properties.push(pipeline_stage);
+        }
+
+        self.try_replace_all_stages(incoming_stage_properties)?;
+        self.set_channel_friendly_name(friendly_name);
+        self.set_channel_index_override(channel_index_override);
+        Ok(())
+    }
+
     //endregion
 }
 
