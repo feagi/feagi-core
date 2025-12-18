@@ -5,12 +5,9 @@
 // These DTOs must match Python FastAPI response structures exactly for backward compatibility
 
 use serde::{Deserialize, Serialize};
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 
 /// Health check response (must match Python FastAPI format exactly)
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-// Schema example removed for WASM compatibility
-    // #[cfg_attr(feature = "openapi", schema(example = json!({
+#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct HealthCheckResponseV1 {
     /// Overall system status
     pub status: String,
@@ -57,16 +54,7 @@ pub struct HealthCheckResponseV1 {
 }
 
 /// Readiness check response
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
-// Schema example removed for WASM compatibility
-    // #[cfg_attr(feature = "openapi", schema(example = json!({
-    "ready": true,
-    "components": {
-        "api": true,
-        "burst_engine": true,
-        "state_manager": true,
-        "connectome": true
-    }
+#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ReadinessCheckResponseV1 {
     /// Is the system ready?
     pub ready: bool,
@@ -76,7 +64,7 @@ pub struct ReadinessCheckResponseV1 {
 }
 
 /// Component readiness status
-#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+#[derive(Clone, Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct ComponentReadiness {
     /// API server ready
     pub api: bool,

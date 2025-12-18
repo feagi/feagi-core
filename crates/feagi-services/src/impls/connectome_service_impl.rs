@@ -20,7 +20,7 @@ use feagi_bdu::models::CorticalAreaExt;
 use parking_lot::RwLock;
 use std::sync::Arc;
 use std::collections::HashMap;
-use tracing::{info, debug, warn};
+use tracing::{debug, info, trace, warn};
 
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
@@ -176,7 +176,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
-        debug!(target: "feagi-services","Getting cortical area: {}", cortical_id);
+        trace!(target: "feagi-services", "Getting cortical area: {}", cortical_id);
         
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
@@ -245,7 +245,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn list_cortical_areas(&self) -> ServiceResult<Vec<CorticalAreaInfo>> {
-        debug!(target: "feagi-services","Listing all cortical areas");
+        trace!(target: "feagi-services", "Listing all cortical areas");
         
         let cortical_ids: Vec<String> = {
             let manager = self.connectome.read();
@@ -382,7 +382,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn get_brain_region(&self, region_id: &str) -> ServiceResult<BrainRegionInfo> {
-        debug!(target: "feagi-services","Getting brain region: {}", region_id);
+        trace!(target: "feagi-services", "Getting brain region: {}", region_id);
         
         let manager = self.connectome.read();
         
@@ -413,31 +413,36 @@ impl ConnectomeService for ConnectomeServiceImpl {
     }
 
     async fn list_brain_regions(&self) -> ServiceResult<Vec<BrainRegionInfo>> {
-        debug!(target: "feagi-services","Listing all brain regions");
+        trace!(target: "feagi-services", "Listing all brain regions");
         
         let region_ids: Vec<String> = {
             let manager = self.connectome.read();
             let ids = manager.get_brain_region_ids();
-            debug!(target: "feagi-services","  Found {} brain region IDs from ConnectomeManager", ids.len());
+            trace!(target: "feagi-services", "Found {} brain region IDs from ConnectomeManager", ids.len());
             ids.into_iter().map(|s| s.to_string()).collect()
         };
         
-        debug!(target: "feagi-services","  Processing {} regions...", region_ids.len());
+        trace!(target: "feagi-services", "Processing {} regions...", region_ids.len());
         let mut regions = Vec::new();
         for region_id in region_ids {
-            debug!(target: "feagi-services","    Getting region: {}", region_id);
+            trace!(target: "feagi-services", "Getting region: {}", region_id);
             match self.get_brain_region(&region_id).await {
                 Ok(region_info) => {
-                    debug!(target: "feagi-services","      ✓ Got region: {} with {} areas", region_info.name, region_info.cortical_areas.len());
+                    trace!(
+                        target: "feagi-services",
+                        "Got region: {} with {} areas",
+                        region_info.name,
+                        region_info.cortical_areas.len()
+                    );
                     regions.push(region_info);
                 }
                 Err(e) => {
-                    warn!(target: "feagi-services","      ✗ Failed to get region {}: {}", region_id, e);
+                    warn!(target: "feagi-services", "Failed to get region {}: {}", region_id, e);
                 }
             }
         }
         
-        debug!(target: "feagi-services","  Returning {} brain regions", regions.len());
+        trace!(target: "feagi-services", "Returning {} brain regions", regions.len());
         Ok(regions)
     }
 
@@ -468,7 +473,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             );
         }
         
-        debug!(target: "feagi-services", "Retrieved {} morphologies", result.len());
+        trace!(target: "feagi-services", "Retrieved {} morphologies", result.len());
         Ok(result)
     }
     

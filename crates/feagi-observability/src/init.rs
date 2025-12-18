@@ -6,13 +6,16 @@
 //! Provides file logging with rotation, per-crate log files, and configurable retention.
 
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, Utc};
+#[cfg(feature = "file-logging")]
+use chrono::Utc;
 #[cfg(feature = "file-logging")]
 use tracing_appender::rolling;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::{EnvFilter, Layer, Registry};
-use anyhow::{Context, Result};
+#[cfg(feature = "file-logging")]
+use anyhow::Context;
+use anyhow::Result;
 
 use crate::cli::CrateDebugFlags;
 

@@ -6,17 +6,17 @@
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
 use crate::common::ApiResult;
-use crate::common::{State, Json, Path, Query};
+use crate::common::{State, Json, Path};
 use crate::common::ApiState;
 
-/// GET /v1/neuroplasticity/plasticity_queue_depth
+/// Get the current plasticity queue depth (number of pending plasticity operations).
 #[utoipa::path(get, path = "/v1/neuroplasticity/plasticity_queue_depth", tag = "neuroplasticity")]
 pub async fn get_plasticity_queue_depth(State(_state): State<ApiState>) -> ApiResult<Json<i32>> {
     // TODO: Get from plasticity service
     Ok(Json(0))
 }
 
-/// PUT /v1/neuroplasticity/plasticity_queue_depth
+/// Set the plasticity queue depth to control how many operations can be pending.
 #[utoipa::path(put, path = "/v1/neuroplasticity/plasticity_queue_depth", tag = "neuroplasticity")]
 pub async fn put_plasticity_queue_depth(
     State(_state): State<ApiState>,
@@ -29,8 +29,7 @@ pub async fn put_plasticity_queue_depth(
     ])))
 }
 
-/// GET /v1/neuroplasticity/status
-/// Get neuroplasticity status across all areas
+/// Get neuroplasticity status across all cortical areas including enabled state and queue depth.
 #[utoipa::path(
     get,
     path = "/v1/neuroplasticity/status",
@@ -48,8 +47,7 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     Ok(Json(response))
 }
 
-/// GET /v1/neuroplasticity/transforming
-/// Get list of cortical areas currently undergoing plasticity transformation
+/// Get list of cortical areas currently undergoing plasticity transformation.
 #[utoipa::path(
     get,
     path = "/v1/neuroplasticity/transforming",
@@ -63,8 +61,7 @@ pub async fn get_transforming(State(_state): State<ApiState>) -> ApiResult<Json<
     Ok(Json(Vec::new()))
 }
 
-/// POST /v1/neuroplasticity/configure
-/// Configure neuroplasticity parameters
+/// Configure neuroplasticity parameters including learning rates and plasticity rules.
 #[utoipa::path(
     post,
     path = "/v1/neuroplasticity/configure",
@@ -83,8 +80,7 @@ pub async fn post_configure(
     ])))
 }
 
-/// POST /v1/neuroplasticity/enable/{area_id}
-/// Enable plasticity for specific cortical area
+/// Enable neuroplasticity for a specific cortical area.
 #[utoipa::path(
     post,
     path = "/v1/neuroplasticity/enable/{area_id}",
@@ -107,8 +103,7 @@ pub async fn post_enable_area(
     ])))
 }
 
-/// POST /v1/neuroplasticity/disable/{area_id}
-/// Disable plasticity for specific cortical area
+/// Disable neuroplasticity for a specific cortical area.
 #[utoipa::path(
     post,
     path = "/v1/neuroplasticity/disable/{area_id}",

@@ -11,10 +11,12 @@ pub mod genome;
 pub mod analytics;
 pub mod runtime;
 pub mod neuron;
+pub mod system;
 
 pub use connectome::WasmConnectomeService;
 pub use genome::WasmGenomeService;
 pub use analytics::WasmAnalyticsService;
 pub use runtime::WasmRuntimeService;
 pub use neuron::WasmNeuronService;
+pub use system::WasmSystemService;
 

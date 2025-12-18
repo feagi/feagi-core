@@ -44,8 +44,8 @@ bdu = ["feagi-bdu"]
 plasticity = ["feagi-plasticity"]
 state-manager = ["feagi-state-manager"]
 serialization = ["feagi-connectome-serialization"]
-pns = ["feagi-pns"]
-agent-sdk = ["feagi-agent-sdk"]
+pns = ["feagi-io"]
+agent-sdk = ["feagi-agent"]
 
 [dependencies]
 # Foundation (vendored into feagi-core when published)
@@ -63,8 +63,8 @@ feagi-plasticity = { version = "2.0.0", path = "crates/feagi-plasticity", option
 feagi-connectome-serialization = { version = "2.0.0", path = "crates/feagi-connectome-serialization", optional = true }
 
 # I/O (vendored)
-feagi-pns = { version = "2.0.0", path = "crates/feagi-pns", optional = true }
-feagi-agent-sdk = { version = "2.0.0", path = "crates/feagi-agent-sdk", optional = true }
+feagi-io = { version = "2.0.0", path = "crates/feagi-io", optional = true }
+feagi-agent = { version = "2.0.0", path = "crates/feagi-agent", optional = true }
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
@@ -101,16 +101,16 @@ members = [
     "crates/feagi-connectome-serialization",  # Connectome persistence
     
     # === I/O Layer (TODO: Move to feagi-io repo) ===
-    "crates/feagi-pns",                # Peripheral Nervous System (ZMQ/UDP transport)
-    "crates/feagi-agent-sdk",          # Agent SDK (Rust client library)
+    "crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
+    "crates/feagi-agent",              # Agent library (Rust client library)
     
     # === Applications ===
     "crates/feagi-transports",         # Transport layer abstractions
     
     # === Data Processing (merged from feagi-data-processing) ===
-    "crates/feagi_connector_core",     # Connector agent core functionality
-    "crates/feagi_data_serialization", # Data serialization formats
-    "crates/feagi_data_structures",    # Core data structures
+    "crates/feagi-connector-core",     # Connector agent core functionality
+    "crates/feagi-data-serialization", # Data serialization formats
+    "crates/feagi-data-structures",    # Core data structures
 ]
 
 [workspace.package]
@@ -144,8 +144,8 @@ pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
 # FEAGI data crates (now internal to workspace)
-feagi_data_structures = { path = "crates/feagi_data_structures" }
-feagi_data_serialization = { path = "crates/feagi_data_serialization" }
+feagi-data-structures = { path = "crates/feagi-data-structures" }
+feagi-data-serialization = { path = "crates/feagi-data-serialization" }
 
 # Workspace-internal crates
 feagi-connectome-serialization = { path = "crates/feagi-connectome-serialization" }

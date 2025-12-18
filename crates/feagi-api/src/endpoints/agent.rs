@@ -8,16 +8,14 @@
 
 use std::collections::HashMap;
 
-use crate::common::{ApiError, ApiResult, State, Json, Query, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json, Query, Path};
 use crate::common::ApiState;
 use crate::v1::agent_dtos::*;
 use feagi_services::traits::agent_service::{
     AgentRegistration, HeartbeatRequest as ServiceHeartbeatRequest,
 };
 
-/// POST /v1/agent/register
-/// 
-/// Register a new agent with FEAGI
+/// Register a new agent with FEAGI and receive connection details including transport configuration and ports.
 #[utoipa::path(
     post,
     path = "/v1/agent/register",
@@ -88,9 +86,7 @@ pub async fn register_agent(
     }
 }
 
-/// POST /v1/agent/heartbeat
-///
-/// Record a heartbeat to keep agent registered
+/// Send a heartbeat to keep the agent registered and prevent timeout disconnection.
 #[utoipa::path(
     post,
     path = "/v1/agent/heartbeat",
@@ -124,9 +120,7 @@ pub async fn heartbeat(
     }
 }
 
-/// GET /v1/agent/list
-///
-/// List all registered agents
+/// Get a list of all currently registered agent IDs.
 #[utoipa::path(
     get,
     path = "/v1/agent/list",
@@ -153,9 +147,7 @@ pub async fn list_agents(
     }
 }
 
-/// GET /v1/agent/properties
-///
-/// Get properties for a specific agent (query parameter version)
+/// Get agent properties including type, capabilities, version, and connection details. Uses query parameter ?agent_id=xxx.
 #[utoipa::path(
     get,
     path = "/v1/agent/properties",
@@ -197,9 +189,7 @@ pub async fn get_agent_properties(
     }
 }
 
-/// GET /v1/agent/shared_mem
-///
-/// Get shared memory information for all agents
+/// Get shared memory configuration and paths for all registered agents using shared memory transport.
 #[utoipa::path(
     get,
     path = "/v1/agent/shared_mem",
@@ -226,9 +216,7 @@ pub async fn get_shared_memory(
     }
 }
 
-/// DELETE /v1/agent/deregister
-///
-/// Deregister an agent (body-based, not query parameter)
+/// Deregister an agent from FEAGI and clean up its resources.
 #[utoipa::path(
     delete,
     path = "/v1/agent/deregister",
@@ -257,9 +245,7 @@ pub async fn deregister_agent(
     }
 }
 
-/// POST /v1/agent/manual_stimulation
-///
-/// Trigger manual neural stimulation across multiple cortical areas
+/// Manually stimulate neurons at specific coordinates across multiple cortical areas for testing and debugging.
 #[utoipa::path(
     post,
     path = "/v1/agent/manual_stimulation",
@@ -326,9 +312,7 @@ pub async fn manual_stimulation(
     }
 }
 
-/// GET /v1/agent/fq_sampler_status
-///
-/// Get comprehensive FQ sampler coordination status
+/// Get Fire Queue (FQ) sampler coordination status including visualization and motor sampling configuration.
 #[utoipa::path(
     get,
     path = "/v1/agent/fq_sampler_status",
@@ -411,9 +395,7 @@ pub async fn get_fq_sampler_status(
     Ok(Json(response))
 }
 
-/// GET /v1/agent/capabilities
-///
-/// List all supported agent capabilities
+/// Get list of all supported agent types and capability types (sensory, motor, visualization, etc.).
 #[utoipa::path(
     get,
     path = "/v1/agent/capabilities",
@@ -444,9 +426,7 @@ pub async fn get_capabilities(
     Ok(Json(response))
 }
 
-/// GET /v1/agent/info/{agent_id}
-///
-/// Get detailed agent information
+/// Get comprehensive agent information including status, capabilities, version, and connection details.
 #[utoipa::path(
     get,
     path = "/v1/agent/info/{agent_id}",
@@ -488,9 +468,7 @@ pub async fn get_agent_info(
     Ok(Json(response))
 }
 
-/// GET /v1/agent/properties/{agent_id}
-///
-/// Get agent properties (path parameter version)
+/// Get agent properties using path parameter. Same as /v1/agent/properties but with agent_id in the URL path.
 #[utoipa::path(
     get,
     path = "/v1/agent/properties/{agent_id}",
@@ -528,9 +506,7 @@ pub async fn get_agent_properties_path(
     }
 }
 
-/// POST /v1/agent/configure
-///
-/// Configure agent parameters
+/// Configure agent parameters and settings. (Not yet implemented)
 #[utoipa::path(
     post,
     path = "/v1/agent/configure",

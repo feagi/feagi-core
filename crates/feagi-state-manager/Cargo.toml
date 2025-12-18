@@ -22,8 +22,8 @@ atomic-polyfill = "1.0"
 ahash = { version = "0.8", default-features = false, features = ["std", "compile-time-rng"] }
 
 # feagi-data-processing for efficient data structures (TODO: Add when published to crates.io)
-# feagi_data_structures = "0.0.50-beta.50"
-# feagi_data_serialization = "0.0.50-beta.50"
+# feagi-data-structures = "0.0.50-beta.50"
+# feagi-data-serialization = "0.0.50-beta.50"
 
 # Standard Rust (desktop/server)
 parking_lot = { version = "0.12", optional = true }

@@ -7,12 +7,12 @@
 ## Repository Structure
 
 This repository is a dedicated workspace for core FEAGI components, maintained separately from:
-- **feagi-io** (I/O layer with feagi-pns, separate repo)
+- **feagi-io** (I/O layer with feagi-io, separate repo)
 - **feagi-py** (Python bindings and orchestration, separate repo)
 - **feagi-connector** (agent SDK, separate repo)
 - **brain-visualizer** (3D visualization, separate repo)
 
-**Note**: The `feagi-data-processing` crates (`feagi_data_structures`, `feagi_data_serialization`, `feagi_connector_core`) have been merged into this repository as workspace members under `crates/`.
+**Note**: The `feagi-data-processing` crates (`feagi-data-structures`, `feagi-data-serialization`, `feagi-connector-core`) have been merged into this repository as workspace members under `crates/`.
 
 ## Crate Hierarchy
 
@@ -26,7 +26,7 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
   - **NEW**: Multi-platform state management (std, no_std, wasm)
   - Lock-free atomic operations for high-frequency access
   - Agent registry, cortical locking, FCL window cache
-  - Depends on: `feagi-types`, `feagi_data_structures`
+  - Depends on: `feagi-types`, `feagi-data-structures`
 
 ### Algorithm Layer (Core Neural Computation)
 - **`feagi-burst-engine`**: NPU execution & inference
@@ -56,13 +56,13 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
   - Depends on: `feagi-types`
 
 ### I/O Layer (TODO: Move to `feagi-io` repo)
-- **`feagi-pns`**: Peripheral Nervous System
+- **`feagi-io`**: Peripheral Nervous System
   - ZMQ/UDP transport for agent communication
   - Agent registry & heartbeat
   - Sensory injection, motor output, visualization streaming
   - **Status**: Should be moved to separate `feagi-io` repository
 
-- **`feagi-agent-sdk`**: Rust agent SDK
+- **`feagi-agent`**: Rust agent SDK
   - Client library for building agents in Rust
   - ZMQ connection management
   - Sensory/motor data structures
@@ -78,7 +78,7 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
 ## Dependency Graph
 
 ```
-feagi_data_structures (merged workspace crate)
+feagi-data-structures (merged workspace crate)
         ↓
     feagi-types
         ↓
@@ -90,12 +90,12 @@ feagi-burst-engine  feagi-bdu        feagi-plasticity  feagi-connectome-serializ
     ↓                   ↓                    ↓                  ↓
     └───────────────────┴────────────────────┴──────────────────┘
                             ↓
-                    feagi-pns (I/O layer)
-                    feagi-agent-sdk (I/O layer)
+                    feagi-io (I/O layer)
+                    feagi-agent (I/O layer)
                             ↓
                     feagi-inference-engine (application)
 
-Note: feagi_data_serialization and feagi_connector_core are also workspace members.
+Note: feagi-data-serialization and feagi-connector-core are also workspace members.
 ```
 
 ## Platform Support
@@ -131,7 +131,7 @@ use wasm_sync::Mutex;    // Multi-threaded WASM
 - ✅ feagi-bdu (algorithm)
 - ✅ feagi-plasticity (algorithm)
 - ✅ feagi-connectome-serialization (persistence)
-- ✅ feagi-pns (I/O, needs migration)
+- ✅ feagi-io (I/O, needs migration)
 - ✅ feagi-inference-engine (application)
 
 ### In Progress
@@ -141,8 +141,8 @@ use wasm_sync::Mutex;    // Multi-threaded WASM
   - Implementation in progress
 
 ### Planned
-- 📋 Move `feagi-pns` to `feagi-io` repository
-- 📋 Move `feagi-agent-sdk` to `feagi-io` or `feagi-connector` repository
+- 📋 Move `feagi-io` to `feagi-io` repository
+- 📋 Move `feagi-agent` to `feagi-io` or `feagi-connector` repository
 - 📋 Publish all crates to crates.io with synchronized versions
 
 ## Design Principles
@@ -199,7 +199,7 @@ feagi-burst-engine
 feagi-bdu
 feagi-plasticity
 feagi-connectome-serialization
-feagi-pns (after migration to feagi-io)
+feagi-io (after migration to feagi-io)
 ```
 
 ### Publishing Order

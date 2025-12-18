@@ -19,11 +19,10 @@ fn main() {
     
     // Only compile CUDA kernels if cuda feature is enabled
     if !cfg!(feature = "cuda") {
-        println!("cargo:warning=CUDA feature not enabled, skipping PTX compilation");
         return;
     }
     
-    println!("cargo:warning=CUDA feature enabled, attempting PTX compilation...");
+    println!("CUDA feature enabled, attempting PTX compilation...");
     
     // Check if nvcc is available
     let nvcc_available = Command::new("nvcc")
@@ -32,9 +31,9 @@ fn main() {
         .is_ok();
     
     if !nvcc_available {
-        println!("cargo:warning=nvcc not found in PATH. CUDA kernels will not be compiled.");
-        println!("cargo:warning=Install CUDA Toolkit to enable CUDA support.");
-        println!("cargo:warning=Build will continue but CUDA backend will fail at runtime.");
+        eprintln!("nvcc not found in PATH. CUDA kernels will not be compiled.");
+        eprintln!("Install CUDA Toolkit to enable CUDA support.");
+        eprintln!("Build will continue but CUDA backend will fail at runtime.");
         return;
     }
     
@@ -52,12 +51,12 @@ fn main() {
         &out_dir.join("neural_dynamics_fcl.ptx")
     );
     
-    println!("cargo:warning=CUDA PTX compilation complete");
+    println!("CUDA PTX compilation complete");
 }
 
 fn compile_kernel(input: &str, output: &PathBuf) {
     println!("cargo:rerun-if-changed={}", input);
-    println!("cargo:warning=Compiling {} to PTX...", input);
+    println!("Compiling {} to PTX...", input);
     
     let status = Command::new("nvcc")
         .arg("--ptx")                    // Compile to PTX
@@ -70,7 +69,7 @@ fn compile_kernel(input: &str, output: &PathBuf) {
     
     match status {
         Ok(status) if status.success() => {
-            println!("cargo:warning=✅ Compiled {} successfully", input);
+            println!("Compiled {} successfully", input);
         }
         Ok(status) => {
             panic!("nvcc failed with status: {}", status);

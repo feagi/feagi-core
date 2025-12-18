@@ -64,7 +64,7 @@ pub const KNOWN_CRATES: &[&str] = &[
     "feagi-services",
     "feagi-evo",
     "feagi-config",
-    "feagi-pns",
+    "feagi-io",
     "feagi-transports",
     "feagi-agent-sdk",
     "feagi-state-manager",

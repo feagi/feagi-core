@@ -138,7 +138,7 @@ use crate::{
         crate::endpoints::cortical_area::get_opu_list,
         crate::endpoints::cortical_area::put_coordinates_3d,
         crate::endpoints::cortical_area::delete_bulk,
-        crate::endpoints::cortical_area::post_clone_area,
+        crate::endpoints::cortical_area::post_clone,
         crate::endpoints::cortical_area::post_resize,
         crate::endpoints::cortical_area::post_reposition,
         crate::endpoints::cortical_area::post_voxel_neurons,
@@ -371,13 +371,14 @@ use crate::{
         crate::endpoints::evolution::post_config,
         
         // Snapshot endpoints
-        crate::endpoints::snapshot::post_create,
-        crate::endpoints::snapshot::post_restore,
-        crate::endpoints::snapshot::get_list,
-        crate::endpoints::snapshot::delete_snapshot,
-        crate::endpoints::snapshot::get_artifact,
-        crate::endpoints::snapshot::post_compare,
-        crate::endpoints::snapshot::post_upload,
+        // TODO: Implement snapshot endpoints
+        // crate::endpoints::snapshot::post_create,
+        // crate::endpoints::snapshot::post_restore,
+        // crate::endpoints::snapshot::get_list,
+        // crate::endpoints::snapshot::delete_snapshot,
+        // crate::endpoints::snapshot::get_artifact,
+        // crate::endpoints::snapshot::post_compare,
+        // crate::endpoints::snapshot::post_upload,
         
         // Network endpoints
         crate::endpoints::network::get_status,

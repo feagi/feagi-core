@@ -5,7 +5,7 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json, Path};
 use crate::common::ApiState;
 
 /// GET /v1/region/regions_members
@@ -38,14 +38,20 @@ use crate::common::ApiState;
     )
 )]
 pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use tracing::debug;
+    use tracing::trace;
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_brain_regions().await {
         Ok(regions) => {
-            debug!(target: "feagi-api", "📋 Found {} brain regions to return", regions.len());
+            trace!(target: "feagi-api", "Found {} brain regions to return", regions.len());
             let mut result = HashMap::new();
             for region in regions {
-                debug!(target: "feagi-api", "  - Region: {} ({}) with {} areas", region.region_id, region.name, region.cortical_areas.len());
+                trace!(
+                    target: "feagi-api",
+                    "Region: {} ({}) with {} areas",
+                    region.region_id,
+                    region.name,
+                    region.cortical_areas.len()
+                );
                 
                 // Extract inputs/outputs from region properties if they exist
                 let inputs = region.properties.get("inputs")
@@ -58,7 +64,12 @@ pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Jso
                     .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<String>>())
                     .unwrap_or_default();
                 
-                debug!(target: "feagi-api", "    - Inputs: {} areas, Outputs: {} areas", inputs.len(), outputs.len());
+                trace!(
+                    target: "feagi-api",
+                    "Inputs: {} areas, Outputs: {} areas",
+                    inputs.len(),
+                    outputs.len()
+                );
                 
                 // Extract coordinate_3d from properties (set by smart positioning in neuroembryogenesis)
                 let coordinate_3d = region.properties.get("coordinate_3d")
@@ -99,7 +110,7 @@ pub async fn get_regions_members(State(state): State<ApiState>) -> ApiResult<Jso
                     })
                 );
             }
-            debug!(target: "feagi-api", "📋 Returning {} regions in response", result.len());
+            trace!(target: "feagi-api", "Returning {} regions in response", result.len());
             Ok(Json(result))
         },
         Err(e) => Err(ApiError::internal(format!("Failed to get regions: {}", e))),

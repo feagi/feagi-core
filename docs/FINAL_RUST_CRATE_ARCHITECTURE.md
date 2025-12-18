@@ -4,9 +4,9 @@
 **Status:** Post-migration architecture (after comprehensive Rust migration)
 
 > **⚠️ IMPORTANT UPDATE (December 2025):** The `feagi-data-processing` repository has been merged into `feagi-core` as workspace members:
-> - `feagi_data_structures` → `crates/feagi_data_structures`
-> - `feagi_data_serialization` → `crates/feagi_data_serialization`
-> - `feagi_connector_core` → `crates/feagi_connector_core`
+> - `feagi-data-structures` → `crates/feagi-data-structures`
+> - `feagi-data-serialization` → `crates/feagi-data-serialization`
+> - `feagi-connector-core` → `crates/feagi-connector-core`
 > 
 > This document retains historical references to `feagi-data-processing` as a separate entity for architectural context.
 
@@ -24,7 +24,7 @@ feagi-data-processing (foundational, peer-level)
 │  │ Full Stack Subcrates (server only):                     │    │
 │  │  • feagi-api         (REST API - Axum)                  │    │
 │  │  • feagi-services    (Service layer)                    │    │
-│  │  • feagi-pns         (I/O - ZMQ)                        │    │
+│  │  • feagi-io         (I/O - ZMQ)                        │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                   │
 │  ┌─────────────────────────────────────────────────────────┐    │
@@ -165,7 +165,7 @@ feagi-core/
 │   │       ├── state_manager.rs   # Already migrated to Rust
 │   │       └── atomic_state.rs
 │   │
-│   ├── feagi-pns/                 # I/O Streams - Full Stack Only
+│   ├── feagi-io/                 # I/O Streams - Full Stack Only
 │   │   ├── Cargo.toml             # ZMQ, not WASM compatible
 │   │   └── src/
 │   │       ├── lib.rs
@@ -203,7 +203,7 @@ members = [
     "crates/feagi-bdu",
     "crates/feagi-npu",
     "crates/feagi-state",
-    "crates/feagi-pns",
+    "crates/feagi-io",
     "crates/feagi-config",
 ]
 
@@ -214,7 +214,7 @@ feagi-services = { path = "crates/feagi-services" }
 feagi-bdu = { path = "crates/feagi-bdu", features = ["full"] }
 feagi-npu = { path = "crates/feagi-npu", features = ["gpu"] }
 feagi-state = { path = "crates/feagi-state" }
-feagi-pns = { path = "crates/feagi-pns" }
+feagi-io = { path = "crates/feagi-io" }
 feagi-config = { path = "crates/feagi-config" }
 
 # Async runtime
@@ -294,7 +294,7 @@ std = ["parking_lot"]
 no_std = []
 ```
 
-**feagi-pns/Cargo.toml:**
+**feagi-io/Cargo.toml:**
 ```toml
 [dependencies]
 feagi-npu = { path = "../feagi-npu" }
@@ -372,7 +372,7 @@ feagi-config = { path = "../feagi-core/crates/feagi-config", default-features = 
 
 # NO feagi-api (not needed)
 # NO feagi-services (not needed)
-# NO feagi-pns (ZMQ incompatible with embedded)
+# NO feagi-io (ZMQ incompatible with embedded)
 
 # Embedded-specific
 heapless = "0.8"  # Fixed-size collections for no_std
@@ -442,7 +442,7 @@ feagi-state = { path = "../feagi-core/crates/feagi-state" }
 
 # NO feagi-api (browser uses wasm-bindgen instead)
 # NO feagi-services (not needed for inference)
-# NO feagi-pns (ZMQ incompatible with WASM)
+# NO feagi-io (ZMQ incompatible with WASM)
 # NO feagi-config (config passed via JS)
 
 # WASM-specific
@@ -605,7 +605,7 @@ SDK for building FEAGI agents (sensors/motors).
 |----------|------|---------|---------|------|
 | **feagi-api** | Full Stack | REST API (Axum) | feagi-core only | 8K LOC |
 | **feagi-services** | Full Stack | Service layer | feagi-core only | 10K LOC |
-| **feagi-pns** | Full Stack | I/O (ZMQ, WebSocket) | feagi-core only | 3K LOC |
+| **feagi-io** | Full Stack | I/O (ZMQ, WebSocket) | feagi-core only | 3K LOC |
 | **feagi-bdu** | Core (Reusable) | Business logic | ALL projects | 10K LOC |
 | **feagi-npu** | Core (Reusable) | Burst engine | ALL projects | 5K LOC |
 | **feagi-state** | Core (Reusable) | State manager | ALL projects | 2K LOC |
@@ -684,7 +684,7 @@ SDK for building FEAGI agents (sensors/motors).
 │   │   │   ├── Cargo.toml
 │   │   │   └── src/
 │   │   │
-│   │   ├── feagi-pns/         # I/O streams (ZMQ)
+│   │   ├── feagi-io/         # I/O streams (ZMQ)
 │   │   │   ├── Cargo.toml
 │   │   │   └── src/
 │   │   │
@@ -728,7 +728,7 @@ members = [
     "feagi-core/crates/feagi-bdu",
     "feagi-core/crates/feagi-npu",
     "feagi-core/crates/feagi-state",
-    "feagi-core/crates/feagi-pns",
+    "feagi-core/crates/feagi-io",
     "feagi-core/crates/feagi-config",
     "feagi-inference-engine",
     "feagi-py",
@@ -822,7 +822,7 @@ feagi-state = { path = "../feagi-core/crates/feagi-state", features = ["no_std"]
 feagi-bdu = { path = "../feagi-core/crates/feagi-bdu", features = ["minimal"] }
 feagi-config = { path = "../feagi-core/crates/feagi-config" }
 
-# Excludes: feagi-api, feagi-services, feagi-pns (not needed for embedded)
+# Excludes: feagi-api, feagi-services, feagi-io (not needed for embedded)
 ```
 
 ### 2. **Feature Flag Flexibility**
@@ -878,7 +878,7 @@ Need a new deployment target? Just pick the subcrates you need:
 5. `feagi-web` (WASM - future)
 
 **`feagi-core` Subcrates (7):**
-- **Full Stack (3):** feagi-api, feagi-services, feagi-pns
+- **Full Stack (3):** feagi-api, feagi-services, feagi-io
 - **Core/Reusable (4):** feagi-bdu, feagi-npu, feagi-state, feagi-config
 
 **Supporting (3):**

@@ -34,7 +34,7 @@
 | **feagi-bdu** | ✅ 100% | ConnectomeManager (62/62 methods), Neuroembryogenesis (4 stages), NPU integration, all CRUD operations complete | - | ✅ Production Ready |
 | **feagi-services** | ✅ 100% | All 6 core services (Genome, Connectome, System, Analytics, Runtime, Neuron) - fully functional | AgentService, NetworkService (deferred - infra only) | ✅ Production Ready |
 | **feagi-api** | ✅ 100% | All 60 endpoints fully wired to services, HTTP/Axum server, OpenAPI/Swagger, error handling | ZMQ adapter (optional) | ✅ Production Ready |
-| **feagi-pns** | ✅ 95% | ZMQ streams, sensory/motor, feagi-transports integration | Minor cleanup | ✅ Yes |
+| **feagi-io** | ✅ 95% | ZMQ streams, sensory/motor, feagi-transports integration | Minor cleanup | ✅ Yes |
 | **feagi-transports** | ✅ Complete | ZMQ client/server, traits | UDP, SHM (future) | ✅ Yes |
 | **feagi-evo** | ✅ Complete | Genome parser/saver, validator, signatures, templates, flat-to-hierarchical converter | - | ✅ Yes |
 | **feagi-plasticity** | ❌ 0% | - | Everything (synaptic learning) | ❌ No |
@@ -301,7 +301,7 @@
 │  │ Full Stack Subcrates (server only):                     │    │
 │  │  • feagi-api         (REST API - Axum)                  │    │
 │  │  • feagi-services    (Service layer)                    │    │
-│  │  • feagi-pns         (I/O - ZMQ)                        │    │
+│  │  • feagi-io         (I/O - ZMQ)                        │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                   │
 │  ┌─────────────────────────────────────────────────────────┐    │
@@ -1428,7 +1428,7 @@ feagi-core/
 │   │       ├── state_manager.rs
 │   │       └── atomic_state.rs
 │   │
-│   ├── feagi-pns/                   # I/O Streams - Full Stack Only
+│   ├── feagi-io/                   # I/O Streams - Full Stack Only
 │   │   ├── Cargo.toml               # ZMQ, not WASM compatible
 │   │   └── src/
 │   │       ├── lib.rs

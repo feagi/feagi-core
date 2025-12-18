@@ -255,15 +255,22 @@ impl AgentService for AgentServiceImpl {
     }
     
     async fn list_agents(&self) -> AgentResult<Vec<String>> {
-        tracing::info!(target: "feagi-services", "📋 list_agents() called - acquiring registry read lock...");
+        tracing::trace!(target: "feagi-services", "list_agents() called - acquiring registry read lock...");
         let registry = self.agent_registry.read();
         let agents = registry.get_all();
         let agent_ids: Vec<String> = agents.iter().map(|a| a.agent_id.clone()).collect();
         
-        tracing::info!(target: "feagi-services", 
-            "📋 list_agents() found {} agents: {:?}", agent_ids.len(), agent_ids);
-        tracing::info!(target: "feagi-services",
-            "📋 Registry pointer: {:p}", &*self.agent_registry as *const _);
+        tracing::trace!(
+            target: "feagi-services",
+            "list_agents() found {} agents: {:?}",
+            agent_ids.len(),
+            agent_ids
+        );
+        tracing::trace!(
+            target: "feagi-services",
+            "AgentRegistry pointer: {:p}",
+            &*self.agent_registry as *const _
+        );
         
         Ok(agent_ids)
     }

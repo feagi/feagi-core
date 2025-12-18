@@ -1,10 +1,10 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// ZMQ server implementation (thin wrapper over feagi-pns infrastructure)
+// ZMQ server implementation (thin wrapper over feagi-io infrastructure)
 //
 // This adapter translates ZMQ messages to endpoint calls, leveraging the
-// existing api_control infrastructure in feagi-pns.
+// existing api_control infrastructure in feagi-io.
 
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ use crate::{
 };
 use feagi_services::AnalyticsService;
 
-/// ZMQ request format (matches feagi-pns api_control format)
+/// ZMQ request format (matches feagi-io api_control format)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ZmqRequest {
     /// HTTP method (GET, POST, PUT, DELETE, etc.)
@@ -129,13 +129,13 @@ async fn handle_readiness_check(
     }
 }
 
-/// Integration point with feagi-pns api_control
+/// Integration point with feagi-io api_control
 ///
-/// This function can be called from feagi-pns::api_control when it receives
+/// This function can be called from feagi-io::api_control when it receives
 /// a REST-like request over ZMQ. It provides the business logic while
-/// feagi-pns handles the transport.
+/// feagi-io handles the transport.
 ///
-/// Example usage in feagi-pns:
+/// Example usage in feagi-io:
 /// ```ignore
 /// let response = feagi_api::transports::zmq::handle_api_control_request(
 ///     method, path, body, &api_state

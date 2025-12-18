@@ -5,10 +5,10 @@
 
 // Removed - using crate::common::State instead
 use std::collections::HashMap;
-use crate::common::{ApiError, ApiResult, State, Json, Query, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json, Query, Path};
 use crate::common::ApiState;
 
-/// GET /v1/burst_engine/simulation_timestep
+/// Get the current simulation timestep in seconds.
 #[utoipa::path(get, path = "/v1/burst_engine/simulation_timestep", tag = "burst_engine")]
 pub async fn get_simulation_timestep(State(state): State<ApiState>) -> ApiResult<Json<f64>> {
     let runtime_service = state.runtime_service.as_ref();
@@ -26,7 +26,7 @@ pub async fn get_simulation_timestep(State(state): State<ApiState>) -> ApiResult
     }
 }
 
-/// POST /v1/burst_engine/simulation_timestep
+/// Set the simulation timestep in seconds (converted to burst frequency).
 #[utoipa::path(post, path = "/v1/burst_engine/simulation_timestep", tag = "burst_engine")]
 pub async fn post_simulation_timestep(
     State(state): State<ApiState>,
@@ -51,8 +51,7 @@ pub async fn post_simulation_timestep(
 // FCL (Fire Candidate List) ENDPOINTS
 // ============================================================================
 
-/// GET /v1/burst_engine/fcl
-/// Get the Fire Candidate List content at the current timestep
+/// Get the Fire Candidate List (FCL) content showing neurons ready to fire.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fcl",
@@ -125,8 +124,7 @@ pub async fn get_fcl(State(state): State<ApiState>) -> ApiResult<Json<HashMap<St
     Ok(Json(response))
 }
 
-/// GET /v1/burst_engine/fire_queue
-/// Get the Fire Queue content (neurons that actually fired)
+/// Get the Fire Queue (FQ) showing neurons that actually fired this timestep.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fire_queue",
@@ -184,8 +182,7 @@ pub async fn get_fire_queue(State(state): State<ApiState>) -> ApiResult<Json<Has
     Ok(Json(response))
 }
 
-/// POST /v1/burst_engine/fcl_reset
-/// Reset the Fire Candidate List
+/// Reset the Fire Candidate List, clearing all pending fire candidates.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/fcl_reset",
@@ -206,8 +203,7 @@ pub async fn post_fcl_reset(State(_state): State<ApiState>) -> ApiResult<Json<Ha
     ])))
 }
 
-/// GET /v1/burst_engine/fcl_status
-/// Get detailed FCL manager status
+/// Get Fire Candidate List sampler status including frequency and consumer state.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fcl_status",
@@ -251,7 +247,7 @@ pub async fn get_fire_ledger_default_window_size(State(_state): State<ApiState>)
     Ok(Json(20))
 }
 
-/// PUT /v1/burst_engine/fire_ledger/default_window_size
+/// Set the default fire history window size for all cortical areas.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/fire_ledger/default_window_size",
@@ -282,7 +278,7 @@ pub async fn put_fire_ledger_default_window_size(
     Ok(Json(response))
 }
 
-/// GET /v1/burst_engine/fire_ledger/areas_window_config
+/// Get fire history window configuration for all cortical areas.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fire_ledger/areas_window_config",
@@ -331,7 +327,7 @@ pub async fn get_fire_ledger_areas_window_config(State(state): State<ApiState>) 
 // BURST ENGINE CONTROL & STATUS ENDPOINTS
 // ============================================================================
 
-/// GET /v1/burst_engine/stats
+/// Get burst engine statistics including burst count, frequency, and performance metrics.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/stats",
@@ -358,7 +354,7 @@ pub async fn get_stats(State(state): State<ApiState>) -> ApiResult<Json<HashMap<
     }
 }
 
-/// GET /v1/burst_engine/status
+/// Get burst engine status including active state, pause state, and burst count.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/status",
@@ -385,7 +381,7 @@ pub async fn get_status(State(state): State<ApiState>) -> ApiResult<Json<HashMap
     }
 }
 
-/// POST /v1/burst_engine/control
+/// Control burst engine with actions: start, pause, stop, or resume.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/control",
@@ -426,8 +422,7 @@ pub async fn post_control(
 // FCL SAMPLER CONFIGURATION ENDPOINTS
 // ============================================================================
 
-/// GET /v1/burst_engine/fcl_sampler/config
-/// Get FCL/FQ sampler configuration (frequency, consumer)
+/// Get FCL/FQ sampler configuration including frequency and consumer settings.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fcl_sampler/config",
@@ -450,8 +445,7 @@ pub async fn get_fcl_sampler_config(State(state): State<ApiState>) -> ApiResult<
     Ok(Json(response))
 }
 
-/// POST /v1/burst_engine/fcl_sampler/config
-/// Update FCL/FQ sampler configuration
+/// Update FCL/FQ sampler configuration including frequency and consumer settings.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/fcl_sampler/config",
@@ -485,8 +479,7 @@ pub async fn post_fcl_sampler_config(
     Ok(Json(response))
 }
 
-/// GET /v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate
-/// Get FCL sample rate for a specific cortical area
+/// Get FCL sample rate for a specific cortical area.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate",
@@ -514,8 +507,7 @@ pub async fn get_area_fcl_sample_rate(
     Ok(Json(response))
 }
 
-/// POST /v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate
-/// Set FCL sample rate for a specific cortical area
+/// Set FCL sample rate for a specific cortical area.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/fcl_sampler/area/{area_id}/sample_rate",
@@ -556,8 +548,7 @@ pub async fn post_area_fcl_sample_rate(
 // BURST ENGINE RUNTIME CONTROL ENDPOINTS
 // ============================================================================
 
-/// GET /v1/burst_engine/burst_counter
-/// Get the total number of bursts executed since start
+/// Get the total number of bursts executed since start.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/burst_counter",
@@ -576,8 +567,7 @@ pub async fn get_burst_counter(State(state): State<ApiState>) -> ApiResult<Json<
     Ok(Json(burst_count))
 }
 
-/// POST /v1/burst_engine/start
-/// Start the burst engine
+/// Start the burst engine to begin neural processing.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/start",
@@ -599,8 +589,7 @@ pub async fn post_start(State(state): State<ApiState>) -> ApiResult<Json<HashMap
     ])))
 }
 
-/// POST /v1/burst_engine/stop
-/// Stop the burst engine
+/// Stop the burst engine and halt neural processing.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/stop",
@@ -621,8 +610,7 @@ pub async fn post_stop(State(state): State<ApiState>) -> ApiResult<Json<HashMap<
     ])))
 }
 
-/// POST /v1/burst_engine/hold
-/// Pause the burst engine (alias for pause)
+/// Pause the burst engine temporarily (alias for pause).
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/hold",
@@ -644,8 +632,7 @@ pub async fn post_hold(State(state): State<ApiState>) -> ApiResult<Json<HashMap<
     ])))
 }
 
-/// POST /v1/burst_engine/resume
-/// Resume the burst engine after pause
+/// Resume the burst engine after pause to continue neural processing.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/resume",
@@ -667,8 +654,7 @@ pub async fn post_resume(State(state): State<ApiState>) -> ApiResult<Json<HashMa
     ])))
 }
 
-/// GET /v1/burst_engine/config
-/// Get burst engine configuration
+/// Get burst engine configuration including frequency and timing settings.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/config",
@@ -694,8 +680,7 @@ pub async fn get_config(State(state): State<ApiState>) -> ApiResult<Json<HashMap
     Ok(Json(response))
 }
 
-/// PUT /v1/burst_engine/config
-/// Update burst engine configuration
+/// Update burst engine configuration including frequency and timing parameters.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/config",
@@ -730,8 +715,7 @@ pub async fn put_config(
 // FIRE LEDGER ENDPOINTS
 // ============================================================================
 
-/// GET /v1/burst_engine/fire_ledger/area/{area_id}/window_size
-/// Get fire ledger window size for specific cortical area
+/// Get fire ledger window size for a specific cortical area.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fire_ledger/area/{area_id}/window_size",
@@ -764,8 +748,7 @@ pub async fn get_fire_ledger_area_window_size(
     Ok(Json(20))
 }
 
-/// PUT /v1/burst_engine/fire_ledger/area/{area_id}/window_size
-/// Set fire ledger window size for specific cortical area
+/// Set fire ledger window size for a specific cortical area.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/fire_ledger/area/{area_id}/window_size",
@@ -804,8 +787,7 @@ pub async fn put_fire_ledger_area_window_size(
     Ok(Json(response))
 }
 
-/// GET /v1/burst_engine/fire_ledger/area/{area_id}/history
-/// Get fire ledger historical data for specific cortical area
+/// Get fire ledger historical data for a specific cortical area.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/fire_ledger/area/{area_id}/history",
@@ -849,8 +831,7 @@ pub async fn get_fire_ledger_history(
 // MEMBRANE POTENTIALS ENDPOINTS
 // ============================================================================
 
-/// GET /v1/burst_engine/membrane_potentials
-/// Get membrane potentials for specific neurons
+/// Get membrane potentials for specific neurons.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/membrane_potentials",
@@ -878,8 +859,7 @@ pub async fn get_membrane_potentials(
     Ok(Json(HashMap::new()))
 }
 
-/// PUT /v1/burst_engine/membrane_potentials
-/// Update membrane potentials for specific neurons
+/// Update membrane potentials for specific neurons.
 #[utoipa::path(
     put,
     path = "/v1/burst_engine/membrane_potentials",
@@ -906,8 +886,7 @@ pub async fn put_membrane_potentials(
 // FREQUENCY MEASUREMENT ENDPOINTS
 // ============================================================================
 
-/// GET /v1/burst_engine/frequency_status
-/// Get current frequency measurement status
+/// Get current burst frequency measurement status.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/frequency_status",
@@ -932,8 +911,7 @@ pub async fn get_frequency_status(State(state): State<ApiState>) -> ApiResult<Js
     Ok(Json(response))
 }
 
-/// POST /v1/burst_engine/measure_frequency
-/// Trigger frequency measurement
+/// Trigger burst frequency measurement to analyze current processing rate.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/measure_frequency",
@@ -961,8 +939,7 @@ pub async fn post_measure_frequency(
     Ok(Json(response))
 }
 
-/// GET /v1/burst_engine/frequency_history
-/// Get frequency measurement history
+/// Get burst frequency measurement history over time.
 #[utoipa::path(
     get,
     path = "/v1/burst_engine/frequency_history",
@@ -989,8 +966,7 @@ pub async fn get_frequency_history(
     Ok(Json(response))
 }
 
-/// POST /v1/burst_engine/force_connectome_integration
-/// Force connectome integration (rebuild neural connections)
+/// Force connectome integration to rebuild neural connections immediately.
 #[utoipa::path(
     post,
     path = "/v1/burst_engine/force_connectome_integration",

@@ -6,7 +6,7 @@
 // Removed - using crate::common::State instead
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, BTreeMap};
-use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json, Path};
 use crate::common::ApiState;
 
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
@@ -14,7 +14,7 @@ pub struct MorphologyListResponse {
     pub morphology_list: Vec<String>,
 }
 
-/// GET /v1/morphology/morphology_list
+/// Get list of all morphology names in alphabetical order.
 #[utoipa::path(get, path = "/v1/morphology/morphology_list", tag = "morphology")]
 pub async fn get_morphology_list(State(state): State<ApiState>) -> ApiResult<Json<MorphologyListResponse>> {
     let connectome_service = state.connectome_service.as_ref();
@@ -29,13 +29,13 @@ pub async fn get_morphology_list(State(state): State<ApiState>) -> ApiResult<Jso
     Ok(Json(MorphologyListResponse { morphology_list: names }))
 }
 
-/// GET /v1/morphology/morphology_types
+/// Get available morphology types (vectors, patterns, projector).
 #[utoipa::path(get, path = "/v1/morphology/morphology_types", tag = "morphology")]
 pub async fn get_morphology_types(State(_state): State<ApiState>) -> ApiResult<Json<Vec<String>>> {
     Ok(Json(vec!["vectors".to_string(), "patterns".to_string(), "projector".to_string()]))
 }
 
-/// GET /v1/morphology/list/types
+/// Get morphologies categorized by type.
 #[utoipa::path(get, path = "/v1/morphology/list/types", tag = "morphology")]
 pub async fn get_list_types(State(_state): State<ApiState>) -> ApiResult<Json<BTreeMap<String, Vec<String>>>> {
     // TODO: Get actual morphology categorization
@@ -43,7 +43,7 @@ pub async fn get_list_types(State(_state): State<ApiState>) -> ApiResult<Json<BT
     Ok(Json(BTreeMap::new()))
 }
 
-/// GET /v1/morphology/morphologies
+/// Get all morphology definitions with their complete configurations.
 #[utoipa::path(
     get, 
     path = "/v1/morphology/morphologies",
@@ -79,25 +79,25 @@ pub async fn get_morphologies(State(state): State<ApiState>) -> ApiResult<Json<B
     Ok(Json(result))
 }
 
-/// POST /v1/morphology/morphology
+/// Create a new morphology definition.
 #[utoipa::path(post, path = "/v1/morphology/morphology", tag = "morphology")]
 pub async fn post_morphology(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// PUT /v1/morphology/morphology
+/// Update an existing morphology definition.
 #[utoipa::path(put, path = "/v1/morphology/morphology", tag = "morphology")]
 pub async fn put_morphology(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, serde_json::Value>>) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// DELETE /v1/morphology/morphology (by request body)
+/// Delete a morphology by name provided in request body.
 #[utoipa::path(delete, path = "/v1/morphology/morphology", tag = "morphology")]
 pub async fn delete_morphology_by_name(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, String>>) -> ApiResult<Json<HashMap<String, String>>> {
     Err(ApiError::internal("Not yet implemented"))
 }
 
-/// POST /v1/morphology/morphology_properties
+/// Get detailed properties for a specific morphology by name.
 #[utoipa::path(
     post, 
     path = "/v1/morphology/morphology_properties", 
@@ -138,7 +138,7 @@ pub async fn post_morphology_properties(
     Ok(Json(result))
 }
 
-/// POST /v1/morphology/morphology_usage
+/// Get all cortical area pairs that use a specific morphology.
 #[utoipa::path(
     post, 
     path = "/v1/morphology/morphology_usage", 
@@ -196,8 +196,7 @@ pub async fn post_morphology_usage(
     Ok(Json(usage_pairs))
 }
 
-/// GET /v1/morphology/list
-/// Get list of all morphology names
+/// Get list of all morphology names.
 #[utoipa::path(
     get,
     path = "/v1/morphology/list",
@@ -218,8 +217,7 @@ pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<Strin
     Ok(Json(names))
 }
 
-/// GET /v1/morphology/info/{morphology_id}
-/// Get detailed information about a specific morphology
+/// Get detailed information about a specific morphology using path parameter.
 #[utoipa::path(
     get,
     path = "/v1/morphology/info/{morphology_id}",
@@ -241,8 +239,7 @@ pub async fn get_info(
     ]))).await
 }
 
-/// POST /v1/morphology/create
-/// Create a new morphology
+/// Create a new morphology with specified parameters.
 #[utoipa::path(
     post,
     path = "/v1/morphology/create",
@@ -261,8 +258,7 @@ pub async fn post_create(
     ])))
 }
 
-/// PUT /v1/morphology/update
-/// Update an existing morphology
+/// Update an existing morphology's parameters.
 #[utoipa::path(
     put,
     path = "/v1/morphology/update",
@@ -281,8 +277,7 @@ pub async fn put_update(
     ])))
 }
 
-/// DELETE /v1/morphology/delete/{morphology_id}
-/// Delete a morphology
+/// Delete a morphology using path parameter.
 #[utoipa::path(
     delete,
     path = "/v1/morphology/delete/{morphology_id}",

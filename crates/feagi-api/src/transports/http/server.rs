@@ -39,6 +39,7 @@ pub struct ApiState {
     pub genome_service: Arc<dyn GenomeService + Send + Sync>,
     pub neuron_service: Arc<dyn NeuronService + Send + Sync>,
     pub runtime_service: Arc<dyn RuntimeService + Send + Sync>,
+    pub system_service: Arc<dyn SystemService + Send + Sync>,
     pub snapshot_service: Option<Arc<dyn feagi_services::SnapshotService + Send + Sync>>,
     /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
     /// This is a unique identifier for each FEAGI instance/session
@@ -64,7 +65,7 @@ pub fn create_http_server(state: ApiState) -> Router {
         
         // Catch-all route for debugging unmatched requests
         .fallback(|| async {
-            tracing::warn!(target: "feagi-api", "⚠️ Unmatched request - 404 Not Found");
+            tracing::warn!(target: "feagi-api", "Unmatched request - 404 Not Found");
             (StatusCode::NOT_FOUND, "404 Not Found")
         })
         
@@ -79,7 +80,7 @@ pub fn create_http_server(state: ApiState) -> Router {
                 .make_span_with(|request: &axum::http::Request<_>| {
                     tracing::span!(
                         target: "feagi-api",
-                        tracing::Level::DEBUG,
+                        tracing::Level::TRACE,
                         "request",
                         method = %request.method(),
                         uri = %request.uri(),
@@ -87,12 +88,12 @@ pub fn create_http_server(state: ApiState) -> Router {
                     )
                 })
                 .on_request(|request: &axum::http::Request<_>, _span: &tracing::Span| {
-                    tracing::debug!(target: "feagi-api", "📥 Incoming request: {} {}", request.method(), request.uri());
+                    tracing::trace!(target: "feagi-api", "Incoming request: {} {}", request.method(), request.uri());
                 })
                 .on_response(|response: &axum::http::Response<_>, latency: std::time::Duration, span: &tracing::Span| {
-                    tracing::debug!(
+                    tracing::trace!(
                         target: "feagi-api",
-                        "📤 Response: status={}, latency={:?}",
+                        "Response: status={}, latency={:?}",
                         response.status(),
                         latency
                     );
@@ -106,7 +107,7 @@ pub fn create_http_server(state: ApiState) -> Router {
                     tracing::trace!(target: "feagi-api", "Stream ended, duration={:?}", stream_duration);
                 })
                 .on_failure(|_error: tower_http::classify::ServerErrorsFailureClass, latency: std::time::Duration, _span: &tracing::Span| {
-                    tracing::error!(target: "feagi-api", "❌ Request failed, latency={:?}", latency);
+                    tracing::error!(target: "feagi-api", "Request failed, latency={:?}", latency);
                 })
         )
 }
@@ -133,7 +134,6 @@ fn create_v1_router() -> Router<ApiState> {
     use crate::endpoints::visualization;
     use crate::endpoints::monitoring;
     use crate::endpoints::evolution;
-    use crate::endpoints::snapshot;
     use crate::endpoints::network;
     
     Router::new()
@@ -201,7 +201,7 @@ fn create_v1_router() -> Router<ApiState> {
             .put(cortical_area::put_cortical_area)
             .delete(cortical_area::delete_cortical_area))
         .route("/cortical_area/custom_cortical_area", axum::routing::post(cortical_area::post_custom_cortical_area))
-        .route("/cortical_area/clone", axum::routing::post(cortical_area::post_clone_area))
+        .route("/cortical_area/clone", axum::routing::post(cortical_area::post_clone))
         .route("/cortical_area/multi/cortical_area",
             put(cortical_area::put_multi_cortical_area).delete(cortical_area::delete_multi_cortical_area))
         .route("/cortical_area/coord_2d", put(cortical_area::put_coord_2d))
@@ -416,7 +416,6 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/simulation/status", get(simulation::get_status))
         .route("/simulation/stats", get(simulation::get_stats))
         .route("/simulation/config", axum::routing::post(simulation::post_config))
-        .route("/simulation/configure", axum::routing::post(simulation::post_configure))
         
         // ===== TRAINING MODULE (25 endpoints) =====
         .route("/training/shock", axum::routing::post(training::post_shock))
@@ -438,7 +437,6 @@ fn create_v1_router() -> Router<ApiState> {
         .route("/training/status", get(training::get_status))
         .route("/training/stats", get(training::get_stats))
         .route("/training/config", axum::routing::post(training::post_config))
-        .route("/training/configure", axum::routing::post(training::post_configure))
         
         // ===== VISUALIZATION MODULE (4 endpoints) =====
         .route("/visualization/register_client", axum::routing::post(visualization::post_register_client))
@@ -455,27 +453,26 @@ fn create_v1_router() -> Router<ApiState> {
         // ===== EVOLUTION MODULE (3 endpoints) =====
         .route("/evolution/status", get(evolution::get_status))
         .route("/evolution/config", axum::routing::post(evolution::post_config))
-        .route("/evolution/configure", axum::routing::post(evolution::post_configure))
         
         // ===== SNAPSHOT MODULE (12 endpoints) =====
-        .route("/snapshot/create", axum::routing::post(snapshot::post_create))
-        .route("/snapshot/restore", axum::routing::post(snapshot::post_restore))
-        .route("/snapshot/", get(snapshot::get_list))
-        .route("/snapshot/:snapshot_id", axum::routing::delete(snapshot::delete_snapshot))
-        .route("/snapshot/:snapshot_id/artifact/:fmt", get(snapshot::get_artifact))
-        .route("/snapshot/compare", axum::routing::post(snapshot::post_compare))
-        .route("/snapshot/upload", axum::routing::post(snapshot::post_upload))
-        // Python uses /v1/snapshots/* (note the S)
-        .route("/snapshots/connectome", axum::routing::post(snapshot::post_snapshots_connectome))
-        .route("/snapshots/connectome/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_connectome_restore))
-        .route("/snapshots/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_restore))
-        .route("/snapshots/:snapshot_id", axum::routing::delete(snapshot::delete_snapshots_by_id))
-        .route("/snapshots/:snapshot_id/artifact/:fmt", get(snapshot::get_snapshots_artifact))
+        // TODO: Implement snapshot endpoints
+        // .route("/snapshot/create", axum::routing::post(snapshot::post_create))
+        // .route("/snapshot/restore", axum::routing::post(snapshot::post_restore))
+        // .route("/snapshot/", get(snapshot::get_list))
+        // .route("/snapshot/:snapshot_id", axum::routing::delete(snapshot::delete_snapshot))
+        // .route("/snapshot/:snapshot_id/artifact/:fmt", get(snapshot::get_artifact))
+        // .route("/snapshot/compare", axum::routing::post(snapshot::post_compare))
+        // .route("/snapshot/upload", axum::routing::post(snapshot::post_upload))
+        // // Python uses /v1/snapshots/* (note the S)
+        // .route("/snapshots/connectome", axum::routing::post(snapshot::post_snapshots_connectome))
+        // .route("/snapshots/connectome/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_connectome_restore))
+        // .route("/snapshots/:snapshot_id/restore", axum::routing::post(snapshot::post_snapshots_restore))
+        // .route("/snapshots/:snapshot_id", axum::routing::delete(snapshot::delete_snapshots_by_id))
+        // .route("/snapshots/:snapshot_id/artifact/:fmt", get(snapshot::get_snapshots_artifact))
         
         // ===== NETWORK MODULE (3 endpoints) =====
         .route("/network/status", get(network::get_status))
         .route("/network/config", axum::routing::post(network::post_config))
-        .route("/network/configure", axum::routing::post(network::post_configure))
 }
 
 /// OpenAPI spec handler
@@ -522,7 +519,7 @@ async fn log_request_response_bodies(
                 // Log request body if it's JSON
                 if let Ok(body_str) = String::from_utf8(bytes.to_vec()) {
                     if !body_str.is_empty() {
-                        tracing::debug!(target: "feagi-api", "📥 Request body: {}", body_str);
+                        tracing::trace!(target: "feagi-api", "Request body: {}", body_str);
                     }
                 }
                 bytes
@@ -551,7 +548,7 @@ async fn log_request_response_bodies(
             if bytes.len() < 10000 {  // Only log responses < 10KB
                 if let Ok(body_str) = String::from_utf8(bytes.to_vec()) {
                     if !body_str.is_empty() && body_str.starts_with('{') {
-                        tracing::debug!(target: "feagi-api", "📤 Response body: {}", body_str);
+                        tracing::trace!(target: "feagi-api", "Response body: {}", body_str);
                     }
                 }
             }

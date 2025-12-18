@@ -4,9 +4,9 @@
 //! WASM Neuron Service (stub - read-only)
 
 use async_trait::async_trait;
-#[cfg(feature = "services")]::::traits::neuron_service::NeuronService;
-#[cfg(feature = "services")]::::types::errors::{ServiceError, ServiceResult};
-#[cfg(feature = "services")]::::types::*;
+use feagi_services::traits::neuron_service::NeuronService;
+use feagi_services::types::errors::{ServiceError, ServiceResult};
+use feagi_services::types::*;
 
 pub struct WasmNeuronService;
 

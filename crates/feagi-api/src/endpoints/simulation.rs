@@ -8,7 +8,7 @@
  * Maps to Python: feagi/api/v1/simulation.py
  */
 
-use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json};
 use crate::common::ApiState;
 // Removed - using crate::common::State instead
 use serde_json::{json, Value};
@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // SIMULATION CONTROL
 // ============================================================================
 
-/// POST /v1/simulation/upload/string
-/// Upload stimulation script
+/// Upload a stimulation script for neural activity simulation.
 #[utoipa::path(
     post,
     path = "/v1/simulation/upload/string",
@@ -45,8 +44,7 @@ pub async fn post_stimulation_upload(
     ])))
 }
 
-/// POST /v1/simulation/reset
-/// Reset simulation state
+/// Reset simulation state to initial conditions.
 #[utoipa::path(
     post,
     path = "/v1/simulation/reset",
@@ -64,8 +62,7 @@ pub async fn post_reset(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     ])))
 }
 
-/// GET /v1/simulation/status
-/// Get simulation status
+/// Get simulation status including active state and running scripts.
 #[utoipa::path(
     get,
     path = "/v1/simulation/status",
@@ -84,8 +81,7 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     Ok(Json(response))
 }
 
-/// GET /v1/simulation/stats
-/// Get simulation statistics
+/// Get simulation statistics including total stimulations and active scripts.
 #[utoipa::path(
     get,
     path = "/v1/simulation/stats",
@@ -104,8 +100,7 @@ pub async fn get_stats(State(_state): State<ApiState>) -> ApiResult<Json<HashMap
     Ok(Json(response))
 }
 
-/// POST /v1/simulation/config
-/// Configure simulation parameters
+/// Configure simulation parameters and behavior settings.
 #[utoipa::path(
     post,
     path = "/v1/simulation/config",
@@ -124,11 +119,5 @@ pub async fn post_config(
     Ok(Json(HashMap::from([
         ("message".to_string(), "Simulation configured successfully".to_string())
     ])))
-}
-
-/// POST /v1/simulation/configure
-#[utoipa::path(post, path = "/v1/simulation/configure", tag = "simulation")]
-pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Simulation configured".to_string())])))
 }
 

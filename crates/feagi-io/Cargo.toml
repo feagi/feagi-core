@@ -1,0 +1,50 @@
+[package]
+name = "feagi-io"
+version = "2.0.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "FEAGI I/O System - Agent I/O, registration, ZMQ & SHM"
+
+[features]
+default = ["zmq-transport", "udp-transport"]  # Most deployments need both
+zmq-transport = ["dep:zmq"]                   # Blocking, TCP-based transport
+udp-transport = ["dep:tokio", "dep:async-trait", "dep:num_cpus"]  # Async, best-effort transport
+shm-transport = []                            # Shared memory (no extra deps, future)
+websocket-transport = ["udp-transport"]       # WebSocket requires tokio (shares with UDP)
+all-transports = ["zmq-transport", "udp-transport", "shm-transport", "websocket-transport"]
+
+[dependencies]
+feagi-burst-engine = { path = "../feagi-burst-engine" }
+feagi-bdu = { path = "../feagi-bdu" }  # For CorticalAreaExt
+feagi-services = { path = "../feagi-services" }  # For GenomeService and ConnectomeService
+feagi-transports = { path = "../feagi-transports", features = ["zmq-server", "websocket-server"] }
+feagi-neural = { path = "../feagi-neural" }  # For types
+# FEAGI data structures and serialization (for binary XYZP format)
+feagi-data-structures.workspace = true
+feagi-data-serialization = { workspace = true }
+
+# Core dependencies (always required)
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+base64 = "0.22"
+crossbeam = "0.8"
+parking_lot = "0.12"
+ahash.workspace = true
+thiserror = "1.0"
+lz4 = "1.28"  # LZ4 compression (used by multiple transports)
+tracing = { workspace = true }  # Structured logging
+
+# Optional transport-specific dependencies (now via feagi-transports)
+zmq = { version = "0.10", optional = true }  # Still needed for context creation
+tokio = { version = "1.0", features = ["full"], optional = true }
+async-trait = { version = "0.1", optional = true }
+num_cpus = { version = "1.16", optional = true }
+
+[dev-dependencies]
+tokio-test = "0.4"
+
+[lib]
+name = "feagi_io"
+path = "src/lib.rs"
+

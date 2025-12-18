@@ -8,7 +8,7 @@
  * Maps to Python: feagi/api/v1/physiology.py
  */
 
-use crate::common::{ApiError, ApiResult, State, Json, Path, Query};
+use crate::common::{ApiError, ApiResult, State, Json};
 use crate::common::ApiState;
 // Removed - using crate::common::State instead
 use serde_json::{json, Value};
@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // PHYSIOLOGY CONFIGURATION
 // ============================================================================
 
-/// GET /v1/physiology/
-/// Get current physiology parameters from genome
+/// Get current physiology parameters including simulation timestep and neural aging settings.
 #[utoipa::path(
     get,
     path = "/v1/physiology/",
@@ -62,8 +61,7 @@ pub async fn get_physiology(State(state): State<ApiState>) -> ApiResult<Json<Has
     Ok(Json(response))
 }
 
-/// PUT /v1/physiology/
-/// Update physiology parameters in active genome
+/// Update physiology parameters in the active genome including timestep and aging settings.
 #[utoipa::path(
     put,
     path = "/v1/physiology/",
