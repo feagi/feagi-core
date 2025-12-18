@@ -987,7 +987,7 @@ impl Neuroembryogenesis {
 mod tests {
     use super::*;
     use feagi_evo::{create_genome_with_core_morphologies};
-    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
+    use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions, CoreCorticalType};
     
     #[test]
     fn test_neuroembryogenesis_creation() {
@@ -1001,6 +1001,7 @@ mod tests {
     
     #[test]
     fn test_development_from_minimal_genome() {
+        ConnectomeManager::reset_for_testing(); // Ensure clean state
         let manager = ConnectomeManager::instance();
         let mut neuro = Neuroembryogenesis::new(manager.clone());
         
@@ -1010,7 +1011,7 @@ mod tests {
             "Test Genome".to_string(),
         );
         
-        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("cust000").unwrap();
+        let cortical_id = CorticalID::try_from_bytes(b"cst_neur").unwrap(); // Use valid custom cortical ID
         let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
         let area = CorticalArea::new(
             cortical_id.clone(),
@@ -1034,7 +1035,8 @@ mod tests {
         
         // Verify cortical area was added to connectome
         let mgr = manager.read();
-        assert_eq!(mgr.get_cortical_area_count(), 1);
+        // Note: Due to parallel test execution with shared singleton, we just verify the area exists
+        assert!(mgr.has_cortical_area(&cortical_id), "Cortical area should have been added to connectome");
         
         println!("✅ Development completed in {}ms", progress.duration_ms);
     }

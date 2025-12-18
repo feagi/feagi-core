@@ -163,6 +163,7 @@ impl Default for ConnectomeMetadata {
 /// - Magic: "FEAGI" (5 bytes)
 /// - Version: u32 (4 bytes)
 /// - Flags: u8 (1 byte) - bit 0: compressed
+/// - Uncompressed Size: u64 (8 bytes, original size before compression)
 /// - Checksum: u64 (8 bytes, CRC64 of data)
 /// [Data]
 /// - Bincode-serialized ConnectomeSnapshot (optionally LZ4 compressed)
@@ -180,17 +181,21 @@ pub fn save_connectome<P: AsRef<Path>>(snapshot: &ConnectomeSnapshot, path: P) -
 
     // Compress if feature enabled
     #[cfg(feature = "compression")]
-    let (final_data, flags) = {
+    let (final_data, flags, uncompressed_size) = {
+        let original_size = data.len();
         let compressed = lz4::block::compress(&data, None, false)
             .map_err(|e| ConnectomeError::Compression(e.to_string()))?;
-        (compressed, 1u8) // Flag bit 0 = compressed
+        (compressed, 1u8, original_size as u64) // Flag bit 0 = compressed
     };
 
     #[cfg(not(feature = "compression"))]
-    let (final_data, flags) = (data, 0u8);
+    let (final_data, flags, uncompressed_size) = (data, 0u8, 0u64);
 
     // Write flags
     file.write_all(&[flags])?;
+
+    // Write uncompressed size (only meaningful if compressed)
+    file.write_all(&uncompressed_size.to_le_bytes())?;
 
     // Calculate checksum
     let checksum = calculate_checksum(&final_data);
@@ -233,12 +238,19 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
     }
 
     // Read flags (only in version 2)
-    let is_compressed = if version == 2 {
+    let (is_compressed, uncompressed_size) = if version == 2 {
         let mut flags = [0u8; 1];
         file.read_exact(&mut flags)?;
-        (flags[0] & 1) != 0
+        let compressed = (flags[0] & 1) != 0;
+        
+        // Read uncompressed size
+        let mut size_bytes = [0u8; 8];
+        file.read_exact(&mut size_bytes)?;
+        let size = u64::from_le_bytes(size_bytes);
+        
+        (compressed, size as usize)
     } else {
-        false // Version 1 files are never compressed
+        (false, 0) // Version 1 files are never compressed
     };
 
     // Read checksum
@@ -260,7 +272,7 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
     let data = if is_compressed {
         #[cfg(feature = "compression")]
         {
-            lz4::block::decompress(&compressed_data, None)
+            lz4::block::decompress(&compressed_data, Some(uncompressed_size as i32))
                 .map_err(|e| ConnectomeError::Compression(format!("Decompression failed: {}", e)))?
         }
         #[cfg(not(feature = "compression"))]

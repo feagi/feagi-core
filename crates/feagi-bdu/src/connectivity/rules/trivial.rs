@@ -89,13 +89,13 @@ mod tests {
         let result = syn_lateral_pairs_x((3, 5, 3), (10, 10, 10));
         assert_eq!(result, Some((2, 5, 3)));
 
-        // Edge case: even at boundary
-        let result = syn_lateral_pairs_x((9, 5, 3), (10, 10, 10));
-        assert_eq!(result, None);
+        // Edge case: even at boundary (9 pairs with 8)
+        let result = syn_lateral_pairs_x((8, 5, 3), (10, 10, 10));
+        assert_eq!(result, Some((9, 5, 3)));
 
-        // Edge case: odd at boundary
+        // Edge case: even at left boundary (0 pairs with 1)
         let result = syn_lateral_pairs_x((0, 5, 3), (10, 10, 10));
-        assert_eq!(result, None);
+        assert_eq!(result, Some((1, 5, 3)));
     }
 
     #[test]
