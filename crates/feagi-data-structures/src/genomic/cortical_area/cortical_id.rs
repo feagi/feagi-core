@@ -195,7 +195,6 @@ impl CorticalID {
 impl Display for CorticalID {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Use base64 encoding for display instead of UTF-8 to avoid control characters
-        // Cortical IDs are 8-byte binary structures where only the first 4 bytes are ASCII
         write!(f, "{}", self.as_base_64())
     }
 }
