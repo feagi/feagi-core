@@ -114,7 +114,7 @@ Fixed compilation errors from API changes in `feagi_data_structures`:
 
 **Fixed Tests In:**
 - `feagi-bdu` - All unit tests now compile
-- `feagi-pns` - All unit tests now compile
+- `feagi-io` - All unit tests now compile
 - Test files updated: 11 files
 
 **Remaining Test Issues:**
@@ -155,7 +155,7 @@ cargo check --workspace
 
 **Compiling Successfully:**
 - feagi-bdu (unit tests)
-- feagi-pns (unit tests)  
+- feagi-io (unit tests)  
 - feagi-config
 - feagi-neural
 - feagi-state-manager
@@ -202,7 +202,7 @@ The following crates can be published NOW:
 1. **feagi-burst-engine tests** - Need runtime storage API fixes
 2. **feagi-evo tests** - Need similar fixes
 3. **feagi-bdu** - Depends on burst-engine (transitive blocker)
-4. **feagi-pns** - Depends on burst-engine (transitive blocker)
+4. **feagi-io** - Depends on burst-engine (transitive blocker)
 5. **feagi-api** - Depends on services (may work)
 
 **Recommendation:** Publish foundation crates first, fix remaining test issues for algorithm crates.

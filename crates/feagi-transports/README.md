@@ -322,7 +322,7 @@ Apache-2.0
 
 ## Related Crates
 
-- `feagi-pns`: Peripheral Nervous System (uses server features)
+- `feagi-io`: Peripheral Nervous System (uses server features)
 - `feagi-api`: REST API layer (uses server features)
 - `feagi-agent-sdk`: Rust agent library (uses client features)
 

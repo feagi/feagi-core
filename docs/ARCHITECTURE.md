@@ -7,7 +7,7 @@
 ## Repository Structure
 
 This repository is a dedicated workspace for core FEAGI components, maintained separately from:
-- **feagi-io** (I/O layer with feagi-pns, separate repo)
+- **feagi-io** (I/O layer with feagi-io, separate repo)
 - **feagi-py** (Python bindings and orchestration, separate repo)
 - **feagi-connector** (agent SDK, separate repo)
 - **brain-visualizer** (3D visualization, separate repo)
@@ -56,7 +56,7 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
   - Depends on: `feagi-types`
 
 ### I/O Layer (TODO: Move to `feagi-io` repo)
-- **`feagi-pns`**: Peripheral Nervous System
+- **`feagi-io`**: Peripheral Nervous System
   - ZMQ/UDP transport for agent communication
   - Agent registry & heartbeat
   - Sensory injection, motor output, visualization streaming
@@ -90,7 +90,7 @@ feagi-burst-engine  feagi-bdu        feagi-plasticity  feagi-connectome-serializ
     ↓                   ↓                    ↓                  ↓
     └───────────────────┴────────────────────┴──────────────────┘
                             ↓
-                    feagi-pns (I/O layer)
+                    feagi-io (I/O layer)
                     feagi-agent-sdk (I/O layer)
                             ↓
                     feagi-inference-engine (application)
@@ -131,7 +131,7 @@ use wasm_sync::Mutex;    // Multi-threaded WASM
 - ✅ feagi-bdu (algorithm)
 - ✅ feagi-plasticity (algorithm)
 - ✅ feagi-connectome-serialization (persistence)
-- ✅ feagi-pns (I/O, needs migration)
+- ✅ feagi-io (I/O, needs migration)
 - ✅ feagi-inference-engine (application)
 
 ### In Progress
@@ -141,7 +141,7 @@ use wasm_sync::Mutex;    // Multi-threaded WASM
   - Implementation in progress
 
 ### Planned
-- 📋 Move `feagi-pns` to `feagi-io` repository
+- 📋 Move `feagi-io` to `feagi-io` repository
 - 📋 Move `feagi-agent-sdk` to `feagi-io` or `feagi-connector` repository
 - 📋 Publish all crates to crates.io with synchronized versions
 
@@ -199,7 +199,7 @@ feagi-burst-engine
 feagi-bdu
 feagi-plasticity
 feagi-connectome-serialization
-feagi-pns (after migration to feagi-io)
+feagi-io (after migration to feagi-io)
 ```
 
 ### Publishing Order

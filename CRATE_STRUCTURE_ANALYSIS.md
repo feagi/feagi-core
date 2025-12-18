@@ -121,7 +121,7 @@
 
 | Crate | LOC | Deps | Recommendation |
 |-------|-----|------|----------------|
-| feagi-pns | 7,540 | 3 | **MOVE to feagi-io repo** |
+| feagi-io | 7,540 | 3 | **I/O system** |
 | feagi-agent-sdk | 1,978 | 2 | **MOVE to feagi-io repo** |
 | feagi-transports | 3,701 | 0 | **MOVE to feagi-io repo** |
 
@@ -197,7 +197,7 @@
 15. feagi-embedded
 
 ### Move to feagi-io repository (3):
-- feagi-pns
+- feagi-io
 - feagi-agent-sdk
 - feagi-transports
 

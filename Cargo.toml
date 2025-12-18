@@ -44,7 +44,7 @@ bdu = ["feagi-bdu"]
 plasticity = ["feagi-plasticity"]
 state-manager = ["feagi-state-manager"]
 serialization = ["feagi-connectome-serialization"]
-pns = ["feagi-pns"]
+pns = ["feagi-io"]
 agent-sdk = ["feagi-agent-sdk"]
 
 [dependencies]
@@ -63,7 +63,7 @@ feagi-plasticity = { version = "2.0.0", path = "crates/feagi-plasticity", option
 feagi-connectome-serialization = { version = "2.0.0", path = "crates/feagi-connectome-serialization", optional = true }
 
 # I/O (vendored)
-feagi-pns = { version = "2.0.0", path = "crates/feagi-pns", optional = true }
+feagi-io = { version = "2.0.0", path = "crates/feagi-io", optional = true }
 feagi-agent-sdk = { version = "2.0.0", path = "crates/feagi-agent-sdk", optional = true }
 
 # ============================================================================
@@ -101,7 +101,7 @@ members = [
     "crates/feagi-connectome-serialization",  # Connectome persistence
     
     # === I/O Layer (TODO: Move to feagi-io repo) ===
-    "crates/feagi-pns",                # Peripheral Nervous System (ZMQ/UDP transport)
+    "crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
     "crates/feagi-agent-sdk",          # Agent SDK (Rust client library)
     
     # === Applications ===

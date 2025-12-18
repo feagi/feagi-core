@@ -7,7 +7,6 @@ use rayon::prelude::*;
 use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
-use crate::data_pipeline::stage_properties::ImagePixelValueCountThresholdStageProperties;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::{ImageFrame, Percentage};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
@@ -55,37 +54,41 @@ impl PipelineStage for ImagePixelValueCountThresholdStage {
         self
     }
 
-    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send> {
-        ImagePixelValueCountThresholdStageProperties::new_box(
-            self.input_definition.clone(),
-            self.inclusive_pixel_range.clone(),
-            self.acceptable_amount_of_activity_in_image.clone(),
-        )
+    fn create_properties(&self) -> PipelineStageProperties {
+        PipelineStageProperties::ImagePixelValueCountThreshold {
+            input_definition: self.input_definition,
+            inclusive_pixel_range: self.inclusive_pixel_range.clone(),
+            acceptable_amount_of_activity_in_image: self.acceptable_amount_of_activity_in_image.clone(),
+        }
     }
 
-    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> {
-        // Extract ImageQuickDiffStageProperties from the trait object
-        let props = properties.as_any()
-            .downcast_ref::<ImagePixelValueCountThresholdStage>()
-            .ok_or_else(|| FeagiDataError::BadParameters(
+    fn load_properties(&mut self, properties: PipelineStageProperties) -> Result<(), FeagiDataError> {
+        match properties {
+            PipelineStageProperties::ImagePixelValueCountThreshold {
+                inclusive_pixel_range,
+                acceptable_amount_of_activity_in_image,
+                ..
+            } => {
+                if inclusive_pixel_range.is_empty() {
+                    return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+                }
+
+                if acceptable_amount_of_activity_in_image.is_empty() {
+                    return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
+                }
+
+                self.inclusive_pixel_range = inclusive_pixel_range;
+                self.acceptable_amount_of_activity_in_image = acceptable_amount_of_activity_in_image;
+
+                let sample_count_bounds = get_sample_count_lower_upper_bounds(&self.acceptable_amount_of_activity_in_image, self.input_definition.get_number_of_channels());
+                self.samples_count_lower_bound = sample_count_bounds.0;
+                self.samples_count_upper_bound = sample_count_bounds.1;
+                Ok(())
+            }
+            _ => Err(FeagiDataError::BadParameters(
                 "load_properties called with incompatible properties type for ImagePixelValueCountThresholdStage".into()
-            ))?;
-
-        if props.inclusive_pixel_range.is_empty() {
-            return Err(FeagiDataError::BadParameters("per_pixel_allowed_range appears to be empty! Are your bounds correct?".into()));
+            ))
         }
-
-        if props.acceptable_amount_of_activity_in_image.is_empty() {
-            return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
-        }
-
-        self.inclusive_pixel_range = props.inclusive_pixel_range.clone();
-        self.acceptable_amount_of_activity_in_image = props.acceptable_amount_of_activity_in_image.clone();
-
-        let sample_count_bounds = get_sample_count_lower_upper_bounds(&self.acceptable_amount_of_activity_in_image, self.input_definition.get_number_of_channels());
-        self.samples_count_lower_bound = sample_count_bounds.0;
-        self.samples_count_upper_bound = sample_count_bounds.1;
-        Ok(())
     }
 }
 

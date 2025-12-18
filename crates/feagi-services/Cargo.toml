@@ -17,7 +17,7 @@ feagi-neural = { path = "../feagi-neural" }  # For types
 feagi-evo = { path = "../feagi-evo" }
 feagi-bdu = { path = "../feagi-bdu", default-features = false }
 feagi-burst-engine = { path = "../feagi-burst-engine", default-features = false }
-# feagi-pns dependency removed to break circular dependency
+# feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
 feagi_data_structures = { workspace = true }
 

@@ -31,7 +31,7 @@ use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
 
-/// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-pns)
+/// Trait for visualization publishing (abstraction to avoid circular dependency with feagi-io)
 /// Any component that can publish visualization data implements this trait.
 /// Raw fire queue data for a single cortical area
 /// This is the unencoded data that will be serialized by PNS
@@ -81,7 +81,7 @@ pub struct BurstLoopRunner {
     /// Motor SHM writer (optional, None if not configured)
     pub motor_shm_writer: Arc<Mutex<Option<crate::motor_shm_writer::MotorSHMWriter>>>,
     /// Visualization publisher for direct Rust-to-Rust publishing (NO PYTHON IN HOT PATH)
-    /// Uses trait abstraction to avoid circular dependency with feagi-pns
+    /// Uses trait abstraction to avoid circular dependency with feagi-io
     pub viz_publisher: Option<Arc<dyn VisualizationPublisher>>,
     /// Motor publisher for agent-specific motor command publishing
     pub motor_publisher: Option<Arc<dyn MotorPublisher>>,

@@ -2,7 +2,7 @@
 
 **Date**: November 4, 2025  
 **Phase**: Phase 6 - Generic Integration  
-**Status**: ✅ COMPLETE (with 1 unrelated issue in feagi-pns)
+**Status**: ✅ COMPLETE (with 1 unrelated issue in feagi-io)
 
 ---
 
@@ -42,15 +42,15 @@ test result: ok. 66 passed; 0 failed; 0 ignored ✅
 
 ## ⚠️ What's NOT Working (1 issue)
 
-### feagi-pns: Pre-existing Compilation Errors
+### feagi-io: Pre-existing Compilation Errors
 
-**Package**: `feagi-pns` (Peripheral Nervous System)  
+**Package**: `feagi-io` (Peripheral Nervous System)  
 **Status**: **NOT RELATED TO QUANTIZATION WORK**  
 **Errors**: 7 type annotation errors in closure callbacks
 
 #### Error Details
 
-**File**: `crates/feagi-pns/src/lib.rs`
+**File**: `crates/feagi-io/src/lib.rs`
 
 **Line 960**:
 ```rust
@@ -75,8 +75,8 @@ error[E0282]: type annotations needed for `Arc<_, _>`
 These errors are **pre-existing** and unrelated to our generic integration:
 
 1. **Not caused by generics**: These are closure type inference issues in ZMQ transport layer
-2. **Not in quantization scope**: feagi-pns handles external I/O (sensors, motors, API)
-3. **Isolated**: Errors are contained to feagi-pns, don't affect core NPU
+2. **Not in quantization scope**: feagi-io handles external I/O (sensors, motors, API)
+3. **Isolated**: Errors are contained to feagi-io, don't affect core NPU
 
 #### Impact Assessment
 
@@ -89,17 +89,17 @@ These errors are **pre-existing** and unrelated to our generic integration:
 
 **Does block:**
 - ❌ Full application build (`cargo build --workspace`)
-- ❌ Running FEAGI process (depends on feagi-pns for I/O)
+- ❌ Running FEAGI process (depends on feagi-io for I/O)
 
 ---
 
 ## 🔧 Recommended Actions
 
-### Option 1: Fix feagi-pns Errors (Separate Task)
+### Option 1: Fix feagi-io Errors (Separate Task)
 
 **Scope**: Not part of quantization work  
 **Estimated time**: 1-2 hours  
-**Files**: `feagi-pns/src/lib.rs`
+**Files**: `feagi-io/src/lib.rs`
 
 **Fixes needed**:
 1. Add type annotations to closure parameters
@@ -127,12 +127,12 @@ cargo build --package feagi-types --package feagi-burst-engine \
 
 **All of these work perfectly!** ✅
 
-### Option 3: Skip feagi-pns for Now
+### Option 3: Skip feagi-io for Now
 
 Build without the problematic package:
 
 ```bash
-cargo build --workspace --exclude feagi-pns --release
+cargo build --workspace --exclude feagi-io --release
 ```
 
 ---
@@ -162,7 +162,7 @@ cargo build --workspace --exclude feagi-pns --release
 
 ---
 
-## 🎯 Next Steps (After feagi-pns Fix)
+## 🎯 Next Steps (After feagi-io Fix)
 
 ### Step 6b: Wire Full INT8 Dispatch
 
@@ -220,7 +220,7 @@ FEAGI can now:
 
 ### What Remains
 
-1. **Fix feagi-pns** (separate issue, 1-2 hours)
+1. **Fix feagi-io** (separate issue, 1-2 hours)
 2. **Wire INT8 dispatch** (2-3 hours)
 3. **Test end-to-end** (1 day)
 4. **Tune accuracy** (1 day)
@@ -247,7 +247,7 @@ All 66 tests pass with generic types.
 **"Does this work on ESP32?"**  
 ✅ Yes! Generics work in `no_std`. Cross-compile testing pending.
 
-**"What about the feagi-pns errors?"**  
+**"What about the feagi-io errors?"**  
 ⚠️ Separate pre-existing issue. Does not block quantization work.
 
 ---

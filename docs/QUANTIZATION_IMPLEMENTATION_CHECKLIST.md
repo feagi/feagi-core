@@ -195,7 +195,7 @@ Completed subphases:
 - [x] Keep singleton as f32 for backward compatibility
 - [x] Compile check ✅
 
-#### Step 5: Update feagi-pns (Peripheral Nervous System) ✅ COMPLETE
+#### Step 5: Update feagi-io (Peripheral Nervous System) ✅ COMPLETE
 - [x] Update all RustNPU references to `RustNPU<f32>`
 - [x] API/transport layer always uses f32 (external interface)
 - [x] Compile check ✅

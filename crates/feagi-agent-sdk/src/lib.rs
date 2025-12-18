@@ -78,8 +78,8 @@ pub use config::AgentConfig;
 pub use error::{Result, SdkError};
 pub use transport::{RegistrationResponse, TransportConfig as TransportInfo};
 
-// Re-export types from feagi-pns
-pub use feagi_pns::{AgentCapabilities, AgentType, MotorCapability, VisionCapability};
+// Re-export types from feagi-io
+pub use feagi_io::{AgentCapabilities, AgentType, MotorCapability, VisionCapability};
 
 #[cfg(test)]
 mod tests {

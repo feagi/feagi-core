@@ -35,7 +35,7 @@ macro_rules! define_sensory_cortical_units_enum {
             ),* $(,)?
         }
     ) => {
-        #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy)]
+        #[derive(Debug, Hash, PartialEq, Eq, Clone, Copy, serde::Serialize, serde::Deserialize)]
         pub enum SensoryCorticalUnit {
             $(
                 $(#[doc = $doc])?

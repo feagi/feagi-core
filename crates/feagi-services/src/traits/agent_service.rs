@@ -4,7 +4,7 @@
 //! Agent management service trait
 //!
 //! This service manages agent registration, heartbeats, and properties.
-//! It interfaces with the Registration Manager in feagi-pns for actual
+//! It interfaces with the Registration Manager in feagi-io for actual
 //! agent lifecycle management and coordination.
 
 use async_trait::async_trait;

@@ -1,7 +1,7 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! Registration DTOs - Shared between feagi-services and feagi-pns
+//! Registration DTOs - Shared between feagi-services and feagi-io
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

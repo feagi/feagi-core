@@ -116,7 +116,7 @@ FEAGI Core is organized as a workspace of focused crates:
 - **feagi-observability**: Logging, telemetry, and profiling
 
 ### I/O and Integration
-- **feagi-pns**: Peripheral nervous system (sensory input, motor output)
+- **feagi-io**: I/O system (sensory input, motor output)
 - **feagi-agent-sdk**: Client library for agent integration
 - **feagi-api**: REST API server
 - **feagi-transports**: Network transport abstractions (ZMQ, UDP, HTTP)

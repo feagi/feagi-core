@@ -69,7 +69,7 @@ RustNPU<T: NeuralValue>
 - `ComputeBackend<T>` trait made generic
 - `CPUBackend` implements `ComputeBackend<T>`
 - `WGPUBackend` implements `ComputeBackend<T>`
-- feagi-pns updated to use `RustNPU<f32>`
+- feagi-io updated to use `RustNPU<f32>`
 - **Build**: Core packages successful ✅
 
 ---
@@ -89,7 +89,7 @@ cargo test --package feagi-burst-engine --lib
 ```
 **Result**: ✅ 66/66 tests passing
 
-### ⚠️ feagi-pns (Pre-existing Issues)
+### ⚠️ feagi-io (Pre-existing Issues)
 **Status**: 7 type annotation errors in callback closures  
 **Cause**: Unrelated to generic integration  
 **Impact**: Does not block quantization work  
@@ -181,7 +181,7 @@ fn develop_with_type<T: NeuralValue>(
 
 ## 🐛 Issues Documented
 
-### 1. feagi-pns Compilation Errors
+### 1. feagi-io Compilation Errors
 **File**: `PHASE_6_FEAGI_PNS_ISSUES.md` (needs creation)  
 **Status**: Pre-existing, not related to generics  
 **Errors**: 7 type annotation errors in closures (lines 960, 966, 1028, 1041, 1059)  
@@ -290,7 +290,7 @@ backend.process_burst(...); // Virtual call (acceptable overhead)
 ✅ feagi-burst-engine: Compiles clean (1 cosmetic warning)
 ✅ feagi-bdu: Compiles clean
 ✅ feagi-evo: Compiles clean
-⚠️ feagi-pns: Pre-existing errors (unrelated)
+⚠️ feagi-io: Pre-existing errors (unrelated)
 ```
 
 ### Tests ✅
@@ -398,13 +398,13 @@ fn develop_int8(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
 
 ## 🐛 Known Issues (Non-Blocking)
 
-### 1. feagi-pns Pre-existing Errors
+### 1. feagi-io Pre-existing Errors
 **Severity**: Medium  
 **Impact**: Does not block quantization work  
 **Description**: 7 type annotation errors in callback closures  
-**Files**: `feagi-pns/src/lib.rs` (lines 960, 966, 1028, 1041, 1059)  
+**Files**: `feagi-io/src/lib.rs` (lines 960, 966, 1028, 1041, 1059)  
 **Status**: Separate issue, requires investigation  
-**Workaround**: Build without feagi-pns
+**Workaround**: Build without feagi-io
 
 ### 2. INT8 Feature Flag Warnings
 **Severity**: Low (cosmetic only)  
@@ -473,7 +473,7 @@ fn develop_int8(&mut self, genome: &RuntimeGenome) -> BduResult<()> {
 ## 🎯 Next Actions
 
 ### Immediate (Today/Tomorrow)
-1. Fix feagi-pns pre-existing errors (separate from quantization)
+1. Fix feagi-io pre-existing errors (separate from quantization)
 2. Wire full INT8 dispatch in neuroembryogenesis (Step 6)
 3. Test end-to-end INT8 genome → connectome → burst
 

@@ -119,7 +119,7 @@
 //! └─────────────────────────────────────────────────────────┘
 //!                         ↓
 //! ┌─────────────────────────────────────────────────────────┐
-//! │  I/O: feagi-pns, feagi-agent-sdk                        │
+//! │  I/O: feagi-io, feagi-agent-sdk                         │
 //! │  (ZMQ/UDP transport, agent communication)               │
 //! └─────────────────────────────────────────────────────────┘
 //! ```
@@ -176,7 +176,7 @@ pub use feagi_connectome_serialization as serialization;
 
 // Re-export I/O layer
 #[cfg(feature = "pns")]
-pub use feagi_pns as pns;
+pub use feagi_io as io;
 
 #[cfg(feature = "agent-sdk")]
 pub use feagi_agent_sdk as agent_sdk;

@@ -64,7 +64,7 @@ feagi-bdu::ConnectomeManager<T>
 - **Build**: Successful ✅
 
 ### Step 6: Peripheral Systems ✅
-- `feagi-pns` updated to use `RustNPU<f32>`
+- `feagi-io` updated to use `RustNPU<f32>`
 - `feagi-api` has no RustNPU references (clean)
 - API layer always uses f32 (external interface)
 
@@ -90,9 +90,9 @@ feagi-bdu::ConnectomeManager<T>
 - `feagi-burst-engine/src/neural_dynamics.rs`: ~15 lines
 - `feagi-bdu/src/connectivity/synaptogenesis.rs`: ~6 lines
 - `feagi-bdu/src/connectome_manager.rs`: ~20 lines
-- `feagi-pns/src/lib.rs`: ~3 lines
-- `feagi-pns/src/transports/zmq/api_control.rs`: ~8 lines
-- `feagi-pns/src/transports/zmq/sensory.rs`: ~5 lines
+- `feagi-io/src/lib.rs`: ~3 lines
+- `feagi-io/src/transports/zmq/api_control.rs`: ~8 lines
+- `feagi-io/src/transports/zmq/sensory.rs`: ~5 lines
 - **Total**: ~230 lines (in a 10,000+ line codebase)
 
 ---
@@ -200,7 +200,7 @@ pub type RustNPUINT8 = RustNPU<INT8Value>;
 - **Future GPU**: `RustNPU<f16>` ready to implement
 
 ### 🔄 API Layer (Always f32)
-- **feagi-pns**: Always uses `RustNPU<f32>` (external interface)
+- **feagi-io**: Always uses `RustNPU<f32>` (external interface)
 - **feagi-api**: No direct RustNPU references
 - **Python bindings**: Will expose f32 and INT8 variants separately
 
@@ -349,7 +349,7 @@ let potential_t = neuron_array.get_potential_quantized(neuron_id);
 | feagi-types | ✅ Complete | 3/3 passing | NeuronArray<T> |
 | feagi-burst-engine | ✅ Complete | 66/66 passing | RustNPU<T> |
 | feagi-bdu | ✅ Complete | Build OK | ConnectomeManager<T> |
-| feagi-pns | ✅ Complete | Build OK | Uses RustNPU<f32> |
+| feagi-io | ✅ Complete | Build OK | Uses RustNPU<f32> |
 | feagi-api | ✅ Complete | Build OK | No changes needed |
 
 ---

@@ -4,7 +4,7 @@ REST API layer for FEAGI with HTTP and ZMQ transport adapters.
 
 ## Architecture Overview
 
-**feagi-api** is responsible for **business logic** of API endpoints, while **feagi-pns** handles **transport infrastructure**.
+**feagi-api** is responsible for **business logic** of API endpoints, while **feagi-io** handles **transport infrastructure**.
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -18,13 +18,13 @@ REST API layer for FEAGI with HTTP and ZMQ transport adapters.
 │  └────────────────────────────────────────┘ │
 │              ↓ Called by ↓                   │
 │  ┌──────────────────┬──────────────────────┐│
-│  │ HTTP (Axum)      │ ZMQ (feagi-pns)      ││
+│  │ HTTP (Axum)      │ ZMQ (feagi-io)      ││
 │  │ transports/http/ │ transports/zmq/      ││
 │  └──────────────────┴──────────────────────┘│
 └─────────────────────────────────────────────┘
                      ↓
 ┌─────────────────────────────────────────────┐
-│ feagi-pns (Transport Infrastructure)        │
+│ feagi-io (Transport Infrastructure)        │
 │  • api_control.rs (ZMQ ROUTER/DEALER)      │
 │  • sensory.rs (PUSH/PULL)                   │
 │  • motor.rs (PUB/SUB)                       │
@@ -42,7 +42,7 @@ REST API layer for FEAGI with HTTP and ZMQ transport adapters.
 - ✅ Provides thin transport adapters (HTTP + ZMQ)
 - ❌ Does NOT implement ZMQ infrastructure
 
-**feagi-pns:**
+**feagi-io:**
 - ✅ Owns ALL ZMQ code (data + control plane)
 - ✅ Provides `api_control` for REST-over-ZMQ
 - ✅ Handles real-time streaming (sensory, motor, viz)
@@ -71,24 +71,24 @@ async fn http_health_handler(State(state): State<ApiState>) -> Json<ApiResponse<
     endpoints::health::health_check(&auth_ctx, state.analytics).await
 }
 
-// ZMQ adapter (feagi-pns integration)
+// ZMQ adapter (feagi-io integration)
 async fn zmq_health_handler(state: &ZmqApiState) -> ZmqResponse {
     endpoints::health::health_check(&auth_ctx, state.analytics).await
 }
 ```
 
-## Integration with feagi-pns
+## Integration with feagi-io
 
-The ZMQ transport adapter in `feagi-api` **uses** `feagi-pns` infrastructure:
+The ZMQ transport adapter in `feagi-api` **uses** `feagi-io` infrastructure:
 
 ```rust
-// feagi-pns provides the ZMQ transport
-use feagi_pns::api_control::ApiControlStream;
+// feagi-io provides the ZMQ transport
+use feagi_io::api_control::ApiControlStream;
 
 // feagi-api provides the business logic
 use feagi_api::transports::zmq::handle_api_control_request;
 
-// In feagi-pns::api_control, when a REST request arrives:
+// In feagi-io::api_control, when a REST request arrives:
 let response = handle_api_control_request(
     method,
     path,
@@ -99,7 +99,7 @@ let response = handle_api_control_request(
 
 ## Why Keep Them Separate?
 
-| Concern | feagi-pns | feagi-api |
+| Concern | feagi-io | feagi-api |
 |---------|-----------|-----------|
 | **Responsibility** | How to move data | What operations are available |
 | **Deployment** | Main FEAGI process (hot path) | Could be separate process |
@@ -133,7 +133,7 @@ POST /api/v1/cortical-areas  → Create cortical area
 - CORS support
 - Request/response logging
 
-### ZMQ (via feagi-pns)
+### ZMQ (via feagi-io)
 
 Same endpoints available over ZMQ ROUTER/DEALER:
 
@@ -190,7 +190,7 @@ Authorizer::authorize(&auth_ctx, Permission::CorticalAreaRead)?;
 - ✅ Common types (ApiRequest, ApiResponse, ApiError)
 - ✅ Security stubs (AuthContext, Permission)
 - ✅ HTTP server (Axum) with basic routing
-- ✅ ZMQ server (feagi-pns integration)
+- ✅ ZMQ server (feagi-io integration)
 - ✅ Middleware (CORS, logging)
 - ✅ Health endpoint (working for HTTP + ZMQ)
 
@@ -211,7 +211,7 @@ Authorizer::authorize(&auth_ctx, Permission::CorticalAreaRead)?;
 ```toml
 feagi-services = { path = "../feagi-services" }  # Service layer
 feagi-types = { path = "../feagi-types" }        # Core types
-feagi-pns = { path = "../feagi-pns" }            # ZMQ infrastructure
+feagi-io = { path = "../feagi-io" }            # ZMQ infrastructure
 
 axum = "0.7"              # HTTP server
 utoipa = "4.0"            # OpenAPI generation
@@ -237,10 +237,10 @@ axum::Server::bind(&"0.0.0.0:8080".parse().unwrap())
     .unwrap();
 ```
 
-### Integrating with feagi-pns (ZMQ)
+### Integrating with feagi-io (ZMQ)
 
 ```rust
-// In feagi-pns::api_control when REST request arrives
+// In feagi-io::api_control when REST request arrives
 use feagi_api::transports::zmq;
 
 let api_state = zmq::ZmqApiState {

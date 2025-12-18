@@ -7,7 +7,7 @@ use crate::config::AgentConfig;
 use crate::error::{Result, SdkError};
 use crate::heartbeat::HeartbeatService;
 use crate::reconnect::{retry_with_backoff, ReconnectionStrategy};
-use feagi_pns::AgentType;
+use feagi_io::AgentType;
 use tracing::{debug, error, info, warn};
 use std::sync::{Arc, Mutex};
 
@@ -716,7 +716,7 @@ impl Drop for AgentClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_pns::AgentType;
+    use feagi_io::AgentType;
 
     #[test]
     fn test_client_creation() {

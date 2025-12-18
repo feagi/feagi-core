@@ -1665,7 +1665,7 @@ main();
 | **feagi-bdu** | Runtime neuron creation | ⚠️  Optional |
 | **feagi-plasticity** | Learning/STDP | ⚠️  Optional |
 | **feagi-evo** | Genome editing | ❌ Skip |
-| **feagi-pns** | I/O layer | ❌ Skip (browser has own I/O) |
+| **feagi-io** | I/O layer | ❌ Skip (browser has own I/O) |
 
 ### Benefits of WASM Runtime vs Std
 

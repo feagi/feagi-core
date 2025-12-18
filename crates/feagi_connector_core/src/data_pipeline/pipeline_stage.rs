@@ -12,7 +12,7 @@ use feagi_data_structures::FeagiDataError;
 use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 
-pub(crate) trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
+pub trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// Returns the data type this processor expects as input.
     ///
     /// This is used by `ProcessorRunner` to validate that processing can be chained
@@ -54,8 +54,9 @@ pub(crate) trait PipelineStage: fmt::Display + Debug + Sync + Send + Any {
     /// Provide access to `Any` trait for downcasting
     fn as_any(&self) -> &dyn Any;
 
-    fn create_properties(&self) -> Box<dyn PipelineStageProperties + Sync + Send>;
+    /// Creates a properties enum variant representing this stage's current configuration
+    fn create_properties(&self) -> PipelineStageProperties;
 
-    fn load_properties(&mut self, properties: Box<dyn PipelineStageProperties + Sync + Send>) -> Result<(), FeagiDataError> ;
-    
+    /// Loads properties into this stage, updating its configuration
+    fn load_properties(&mut self, properties: PipelineStageProperties) -> Result<(), FeagiDataError>;
 }

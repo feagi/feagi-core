@@ -168,7 +168,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 The `feagi-config` crate is production-ready and can now be:
 1. ✅ Used by all Rust components (already integrated into `feagi-inference-engine`)
 2. 🚧 Integrated into `feagi-api` (replace hardcoded values)
-3. 🚧 Integrated into `feagi-pns` (replace ZMQ hardcoded endpoints)
+3. 🚧 Integrated into `feagi-io` (replace ZMQ hardcoded endpoints)
 4. 🚧 Integrated into `feagi-burst-engine` (use burst_engine config section)
 5. 🚧 Published to crates.io as part of FEAGI 2.0 release
 
