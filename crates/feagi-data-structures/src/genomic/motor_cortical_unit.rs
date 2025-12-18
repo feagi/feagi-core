@@ -69,6 +69,23 @@ macro_rules! define_motor_cortical_units_enum {
                 }
             }
 
+            /// Parse a motor cortical unit from its snake_case name
+            /// 
+            /// # Arguments
+            /// * `name` - The snake_case name (e.g., "positional_servo", "led_matrix")
+            /// 
+            /// # Returns
+            /// * `Some(MotorCorticalUnit)` - If name matches a known type
+            /// * `None` - If name is not recognized
+            pub fn from_snake_case_name(name: &str) -> Option<MotorCorticalUnit> {
+                match name {
+                    $(
+                        $snake_case_name => Some(MotorCorticalUnit::$variant_name),
+                    )*
+                    _ => None,
+                }
+            }
+
             /// Returns all available motor cortical unit types.
             /// This is useful for enumerating all possible motor types in the system.
             pub const fn list_all() -> &'static [MotorCorticalUnit] {

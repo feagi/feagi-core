@@ -43,6 +43,56 @@ impl ConnectorAgent {
         output.insert("capabilities".to_string(), serde_json::Value::Object(capabilities));
         Ok(serde_json::Value::Object(output))
     }
+
+    /// Import device registrations from JSON configuration string
+    /// 
+    /// Parses JSON and updates pipeline configurations and friendly names for already-registered devices.
+    /// Devices must be registered first using the appropriate registration functions.
+    /// 
+    /// # Arguments
+    /// * `json_str` - JSON string in the new capabilities format
+    /// 
+    /// # Returns
+    /// * `Ok(())` - If import succeeded
+    /// * `Err(FeagiDataError)` - If JSON is malformed or devices not registered
+    /// 
+    /// # Example JSON Format
+    /// ```json
+    /// {
+    ///   "capabilities": {
+    ///     "input": {
+    ///       "simple_vision": {
+    ///         "0": {
+    ///           "friendly_name": "Main Camera",
+    ///           "channels": [...]
+    ///         }
+    ///       }
+    ///     },
+    ///     "output": {}
+    ///   }
+    /// }
+    /// ```
+    pub fn import_device_registrations_from_config_json(&mut self, json_str: &str) -> Result<(), FeagiDataError> {
+        let json: serde_json::Value = serde_json::from_str(json_str)
+            .map_err(|e| FeagiDataError::DeserializationError(format!("Failed to parse JSON: {}", e)))?;
+        
+        let capabilities = json.get("capabilities")
+            .ok_or_else(|| FeagiDataError::DeserializationError(
+                "Missing 'capabilities' key in JSON. Expected format: {\"capabilities\": {\"input\": {...}, \"output\": {...}}}".to_string()
+            ))?;
+        
+        // Import sensors (input)
+        if let Some(input) = capabilities.get("input") {
+            self.get_sensor_cache().import_sensors_from_json(input)?;
+        }
+        
+        // Import motors (output)
+        if let Some(output) = capabilities.get("output") {
+            self.get_motor_cache().import_motors_from_json(output)?;
+        }
+        
+        Ok(())
+    }
 }
 
 impl fmt::Display for ConnectorAgent {

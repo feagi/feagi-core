@@ -75,6 +75,23 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
+            /// Parse a sensory cortical unit from its snake_case name
+            /// 
+            /// # Arguments
+            /// * `name` - The snake_case name (e.g., "simple_vision", "accelerometer")
+            /// 
+            /// # Returns
+            /// * `Some(SensoryCorticalUnit)` - If name matches a known type
+            /// * `None` - If name is not recognized
+            pub fn from_snake_case_name(name: &str) -> Option<SensoryCorticalUnit> {
+                match name {
+                    $(
+                        $snake_case_name => Some(SensoryCorticalUnit::$variant_name),
+                    )*
+                    _ => None,
+                }
+            }
+
             /// Returns all available sensory cortical unit types.
             /// This is useful for enumerating all possible sensor types in the system.
             pub const fn list_all() -> &'static [SensoryCorticalUnit] {

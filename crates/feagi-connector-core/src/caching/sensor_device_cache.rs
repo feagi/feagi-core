@@ -503,6 +503,54 @@ impl SensorDeviceCache {
         Ok(serde_json::Value::Object(output))
     }
 
+    /// Import sensor configurations from JSON
+    /// 
+    /// Updates pipeline stages and friendly names for already-registered sensors.
+    /// Sensors must be registered first using the appropriate register functions.
+    /// 
+    /// # Arguments
+    /// * `json` - JSON object containing sensor configurations in new format
+    /// 
+    /// # Returns
+    /// * `Ok(())` - If import succeeded
+    /// * `Err(FeagiDataError)` - If sensor not registered or JSON is malformed
+    pub fn import_sensors_from_json(&mut self, json: &serde_json::Value) -> Result<(), FeagiDataError> {
+        let input_map = json.as_object()
+            .ok_or_else(|| FeagiDataError::DeserializationError("Expected input object for sensors".to_string()))?;
+        
+        for (sensor_type_name, groups) in input_map {
+            // Parse sensor type from snake_case name
+            let sensor_type = SensoryCorticalUnit::from_snake_case_name(sensor_type_name)
+                .ok_or_else(|| FeagiDataError::DeserializationError(
+                    format!("Unknown sensor type: {}", sensor_type_name)
+                ))?;
+            
+            let groups_map = groups.as_object()
+                .ok_or_else(|| FeagiDataError::DeserializationError(
+                    format!("Expected groups object for sensor type: {}", sensor_type_name)
+                ))?;
+            
+            for (group_id_str, device_config) in groups_map {
+                let group_id: CorticalGroupIndex = group_id_str.parse::<u8>()
+                    .map_err(|e| FeagiDataError::DeserializationError(
+                        format!("Invalid group ID '{}': {}", group_id_str, e)
+                    ))?
+                    .into();
+                
+                // Get the stream cache for this sensor type + group
+                let stream_cache = self.stream_caches.get_mut(&(sensor_type, group_id))
+                    .ok_or_else(|| FeagiDataError::BadParameters(
+                        format!("Sensor {}:{} not registered. Register the sensor first before importing configuration.", 
+                            sensor_type_name, group_id_str)
+                    ))?;
+                
+                // Import configuration (pipelines, friendly names)
+                stream_cache.import_from_json(device_config)?;
+            }
+        }
+        Ok(())
+    }
+
     //endregion
 
     //region Internal

@@ -410,6 +410,54 @@ impl MotorDeviceCache {
         }
         Ok(serde_json::Value::Object(output))
     }
+
+    /// Import motor configurations from JSON
+    /// 
+    /// Updates pipeline stages and friendly names for already-registered motors.
+    /// Motors must be registered first using the appropriate register functions.
+    /// 
+    /// # Arguments
+    /// * `json` - JSON object containing motor configurations in new format
+    /// 
+    /// # Returns
+    /// * `Ok(())` - If import succeeded
+    /// * `Err(FeagiDataError)` - If motor not registered or JSON is malformed
+    pub fn import_motors_from_json(&mut self, json: &serde_json::Value) -> Result<(), FeagiDataError> {
+        let output_map = json.as_object()
+            .ok_or_else(|| FeagiDataError::DeserializationError("Expected output object for motors".to_string()))?;
+        
+        for (motor_type_name, groups) in output_map {
+            // Parse motor type from snake_case name
+            let motor_type = MotorCorticalUnit::from_snake_case_name(motor_type_name)
+                .ok_or_else(|| FeagiDataError::DeserializationError(
+                    format!("Unknown motor type: {}", motor_type_name)
+                ))?;
+            
+            let groups_map = groups.as_object()
+                .ok_or_else(|| FeagiDataError::DeserializationError(
+                    format!("Expected groups object for motor type: {}", motor_type_name)
+                ))?;
+            
+            for (group_id_str, device_config) in groups_map {
+                let group_id: CorticalGroupIndex = group_id_str.parse::<u8>()
+                    .map_err(|e| FeagiDataError::DeserializationError(
+                        format!("Invalid group ID '{}': {}", group_id_str, e)
+                    ))?
+                    .into();
+                
+                // Get the stream cache for this motor type + group
+                let stream_cache = self.stream_caches.get_mut(&(motor_type, group_id))
+                    .ok_or_else(|| FeagiDataError::BadParameters(
+                        format!("Motor {}:{} not registered. Register the motor first before importing configuration.", 
+                            motor_type_name, group_id_str)
+                    ))?;
+                
+                // Import configuration (pipelines, friendly names)
+                stream_cache.import_from_json(device_config)?;
+            }
+        }
+        Ok(())
+    }
     
     // Returns true if data was retrieved
     pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
