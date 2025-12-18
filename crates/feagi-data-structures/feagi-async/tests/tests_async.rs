@@ -88,25 +88,25 @@ async fn run_delay_test<R: FeagiAsyncRuntime>(runtime: &R) {
 
 //region Call tests per platform
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(all(feature = "standard-tokio", not(feature = "wasm")))]
 #[tokio::test]
 async fn test_spawn_and_await() {
     feagi_async::run_async!(run_test_logic);
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", not(feature = "standard-tokio")))]
 #[wasm_bindgen_test::wasm_bindgen_test]
 async fn test_spawn_and_await() {
     feagi_async::run_async!(run_test_logic);
 }
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(all(feature = "standard-tokio", not(feature = "wasm")))]
 #[tokio::test]
 async fn test_delay() {
     feagi_async::run_async!(run_delay_test);
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", not(feature = "standard-tokio")))]
 #[wasm_bindgen_test::wasm_bindgen_test]
 async fn test_delay() {
     feagi_async::run_async!(run_delay_test);
@@ -158,25 +158,25 @@ async fn run_timeout_test<R: FeagiAsyncRuntime>(runtime: &R) {
     println!("Timeout test passed!");
 }
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(all(feature = "standard-tokio", not(feature = "wasm")))]
 #[tokio::test]
 async fn test_block_on() {
     feagi_async::run_async!(run_block_on_test);
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", not(feature = "standard-tokio")))]
 #[wasm_bindgen_test::wasm_bindgen_test]
 async fn test_block_on() {
     feagi_async::run_async!(run_block_on_test);
 }
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(all(feature = "standard-tokio", not(feature = "wasm")))]
 #[tokio::test]
 async fn test_timeout() {
     feagi_async::run_async!(run_timeout_test);
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(all(feature = "wasm", not(feature = "standard-tokio")))]
 #[wasm_bindgen_test::wasm_bindgen_test]
 async fn test_timeout() {
     feagi_async::run_async!(run_timeout_test);
