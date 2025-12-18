@@ -3008,10 +3008,11 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
-        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("iav001").unwrap();
-        let cortical_type = cortical_id.as_cortical_type().expect("Failed to get cortical type");
+        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
-            cortical_id,
+            cortical_id.clone(),
             0,
             "Visual Input".to_string(),
             CorticalAreaDimensions::new(128, 128, 20).unwrap(),
@@ -3020,11 +3021,11 @@ mod tests {
         )
         .unwrap();
         
+        let initial_count = manager.get_cortical_area_count();
         let cortical_idx = manager.add_cortical_area(area).unwrap();
         
-        assert_eq!(cortical_idx, 0);
-        assert_eq!(manager.get_cortical_area_count(), 1);
-        assert!(manager.has_cortical_area(&feagi_evo::genome::parser::string_to_cortical_id("iav001").unwrap()));
+        assert_eq!(manager.get_cortical_area_count(), initial_count + 1);
+        assert!(manager.has_cortical_area(&cortical_id));
         assert!(manager.is_initialized());
     }
     
@@ -3035,28 +3036,29 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
-        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
+        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
-            cortical_id,
+            cortical_id.clone(),
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0).into(),
-            cortical_id.as_cortical_type().expect("Failed to get cortical type"),
+            cortical_type,
         )
         .unwrap();
         
-        manager.add_cortical_area(area).unwrap();
+        let cortical_idx = manager.add_cortical_area(area).unwrap();
         
         // ID -> idx lookup
-        assert_eq!(manager.get_cortical_idx(&feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap()), Some(0));
+        assert_eq!(manager.get_cortical_idx(&cortical_id), Some(cortical_idx));
         
         // idx -> ID lookup
-        let expected_id = CoreCorticalType::Power.to_cortical_id();
-        assert_eq!(manager.get_cortical_id(0), Some(&expected_id));
+        assert_eq!(manager.get_cortical_id(cortical_idx), Some(&cortical_id));
         
         // Get area
-        let retrieved_area = manager.get_cortical_area(&CoreCorticalType::Power.to_cortical_id()).unwrap();
+        let retrieved_area = manager.get_cortical_area(&cortical_id).unwrap();
         assert_eq!(retrieved_area.name, "Test Area");
     }
     
@@ -3067,23 +3069,26 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
-        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap();
+        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
-            cortical_id,
+            cortical_id.clone(),
             0,
             "Test".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0).into(),
-            cortical_id.as_cortical_type().expect("Failed to get cortical type"),
+            cortical_type,
         )
         .unwrap();
         
+        let initial_count = manager.get_cortical_area_count();
         manager.add_cortical_area(area).unwrap();
-        assert_eq!(manager.get_cortical_area_count(), 1);
+        assert_eq!(manager.get_cortical_area_count(), initial_count + 1);
         
-        manager.remove_cortical_area(&feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap()).unwrap();
-        assert_eq!(manager.get_cortical_area_count(), 0);
-        assert!(!manager.has_cortical_area(&feagi_evo::genome::parser::string_to_cortical_id("test02").unwrap()));
+        manager.remove_cortical_area(&cortical_id).unwrap();
+        assert_eq!(manager.get_cortical_area_count(), initial_count);
+        assert!(!manager.has_cortical_area(&cortical_id));
     }
     
     #[test]
@@ -3093,8 +3098,9 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
-        let cortical_id1 = feagi_evo::genome::parser::string_to_cortical_id("cust000").unwrap();
-        let cortical_type1 = cortical_id1.as_cortical_type().expect("Failed to get cortical type");
+        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        let cortical_id1 = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type1 = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area1 = CorticalArea::new(
             cortical_id1.clone(),
             0,
@@ -3105,8 +3111,8 @@ mod tests {
         )
         .unwrap();
         
-        let cortical_id2 = feagi_evo::genome::parser::string_to_cortical_id("cust000").unwrap();
-        let cortical_type2 = cortical_id2.as_cortical_type().expect("Failed to get cortical type");
+        let cortical_id2 = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type2 = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area2 = CorticalArea::new(
             cortical_id2, // Same ID
             1,
@@ -3130,8 +3136,10 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
         
+        let region_id = feagi_data_structures::genomic::brain_regions::RegionID::new();
+        let region_id_str = region_id.to_string();
         let root = BrainRegion::new(
-            feagi_data_structures::genomic::brain_regions::RegionID::new(),
+            region_id,
             "Root".to_string(),
             feagi_data_structures::genomic::brain_regions::RegionType::Undefined,
         )
@@ -3140,7 +3148,7 @@ mod tests {
         manager.add_brain_region(root, None).unwrap();
         
         assert_eq!(manager.get_brain_region_ids().len(), 1);
-        assert!(manager.get_brain_region("root").is_some());
+        assert!(manager.get_brain_region(&region_id_str).is_some());
     }
     
     #[test]
@@ -3244,14 +3252,16 @@ mod tests {
         let mut manager = manager_arc.write();
         
         // First create a cortical area to add neurons to
-        let cortical_id = feagi_evo::genome::parser::string_to_cortical_id("test01").unwrap();
+        use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        let cortical_id = CoreCorticalType::Power.to_cortical_id();
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
             cortical_id.clone(),
             0, // cortical_idx
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             (0, 0, 0).into(), // position
-            cortical_id.as_cortical_type().expect("Failed to get cortical type"),
+            cortical_type,
         ).unwrap();
         manager.add_cortical_area(area).unwrap();
         
