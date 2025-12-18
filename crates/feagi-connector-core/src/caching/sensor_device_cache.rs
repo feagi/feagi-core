@@ -486,6 +486,23 @@ impl SensorDeviceCache {
         Ok(())
     }
 
+    pub fn export_registered_sensors_as_config_json(&self) -> Result<serde_json::Value, FeagiDataError> {
+        let mut output = serde_json::Map::new();
+        for ((sensor_cortical_unit, cortical_group_index), sensor_channel_stream_caches) in &self.stream_caches {
+            let motor_unit_name = sensor_cortical_unit.get_snake_case_name().to_string();
+            let cortical_group_name = cortical_group_index.to_string();
+
+            let sensor_units_map = output
+                .entry(motor_unit_name)
+                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()))
+                .as_object_mut()
+                .expect("Just inserted an Object");
+
+            sensor_units_map.insert(cortical_group_name, sensor_channel_stream_caches.export_as_json()?);
+        }
+        Ok(serde_json::Value::Object(output))
+    }
+
     //endregion
 
     //region Internal

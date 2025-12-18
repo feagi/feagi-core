@@ -1,5 +1,6 @@
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::fmt;
+use feagi_data_structures::FeagiDataError;
 use crate::caching::MotorDeviceCache;
 use crate::caching::SensorDeviceCache;
 
@@ -32,6 +33,15 @@ impl ConnectorAgent {
 
     pub fn get_motor_cache_ref(&self) -> Arc<Mutex<MotorDeviceCache>> {
         self.motor_cache.clone()
+    }
+
+    pub fn export_device_registrations_as_config_json(&self) -> Result<serde_json::Value, FeagiDataError> {
+        let mut capabilities = serde_json::Map::new();
+        capabilities.insert("input".to_string(), self.get_sensor_cache().export_registered_sensors_as_config_json()?);
+        capabilities.insert("output".to_string(), self.get_motor_cache().export_registered_motors_as_config_json()?);
+        let mut output = serde_json::Map::new();
+        output.insert("capabilities".to_string(), serde_json::Value::Object(capabilities));
+        Ok(serde_json::Value::Object(output))
     }
 }
 

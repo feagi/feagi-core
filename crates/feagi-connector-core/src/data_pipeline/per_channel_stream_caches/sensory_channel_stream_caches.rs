@@ -23,8 +23,7 @@ pub(crate) struct SensoryChannelStreamCaches {
     neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
     pipeline_runners: Vec<SensoryPipelineStageRunner>,
     last_update_time: Instant,
-    friendly_name: String,
-    channel_index_override: Option<CorticalChannelIndex>
+    device_friendly_name: String,
 }
 
 impl SensoryChannelStreamCaches {
@@ -38,8 +37,7 @@ impl SensoryChannelStreamCaches {
             neuron_encoder,
             pipeline_runners,
             last_update_time: Instant::now(),
-            friendly_name: String::new(),
-            channel_index_override: None
+            device_friendly_name: String::new(),
         })
     }
 
@@ -236,6 +234,47 @@ impl SensoryChannelStreamCaches {
     pub fn try_removing_all_stages(&mut self, cortical_channel_index: CorticalChannelIndex) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_removing_all_stages()?;
+        Ok(())
+    }
+
+    pub(crate) fn export_as_json(&self) -> Result<serde_json::Value, FeagiDataError> {
+        let mut output = serde_json::Map::new();
+        output.insert("friendly_name".to_string(), serde_json::Value::String(self.device_friendly_name.clone()));
+
+        let mut channels_data: Vec<serde_json::Value> = Vec::new();
+        for pipeline_stage_runner in &self.pipeline_runners {
+            let channel_data = pipeline_stage_runner.export_as_json()?;
+            channels_data.push(channel_data);
+        }
+        output.insert("channels".to_string(), serde_json::Value::Array(channels_data));
+        Ok(output.into())
+    }
+
+    pub(crate) fn import_from_json(&mut self, json: &serde_json::Value) -> Result<(), FeagiDataError> {
+        let json_map = json.as_object().ok_or_else(||
+            FeagiDataError::DeserializationError("Expected JSON object for SensoryChannelStreamCaches".to_string())
+        )?;
+
+        // Get friendly name
+        if let Some(friendly_name) = json_map.get("friendly_name") {
+            self.device_friendly_name = friendly_name.as_str().unwrap_or("").to_string();
+        }
+
+        // Get channels array
+        let channels = json_map.get("channels")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| FeagiDataError::DeserializationError("Expected 'channels' array".to_string()))?;
+
+        self.pipeline_runners.clear();
+
+        // Import each channel
+        for (runner, channel_json) in self.pipeline_runners.iter_mut().zip(channels.iter()) {
+            let channel_map = channel_json.as_object().ok_or_else(||
+                FeagiDataError::DeserializationError("Expected channel to be JSON object".to_string())
+            )?;
+            runner.import_from_json(channel_map)?;
+        }
+
         Ok(())
     }
 
