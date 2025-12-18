@@ -133,9 +133,37 @@ impl MotorChannelStreamCaches {
         for pipeline_stage_runner in &self.pipeline_runners {
             let channel_data = pipeline_stage_runner.export_as_json()?;
             channels_data.push(channel_data);
-        };
+        }
         output.insert("channels".to_string(), serde_json::Value::Array(channels_data));
         Ok(output.into())
+    }
+
+    pub(crate) fn import_from_json(&mut self, json: &serde_json::Value) -> Result<(), FeagiDataError> {
+        let json_map = json.as_object().ok_or_else(||
+            FeagiDataError::DeserializationError("Expected JSON object for MotorChannelStreamCaches".to_string())
+        )?;
+
+        // Get friendly name
+        if let Some(friendly_name) = json_map.get("friendly_name") {
+            self.device_friendly_name = friendly_name.as_str().unwrap_or("").to_string();
+        }
+
+        // Get channels array
+        let channels = json_map.get("channels")
+            .and_then(|v| v.as_array())
+            .ok_or_else(|| FeagiDataError::DeserializationError("Expected 'channels' array".to_string()))?;
+
+        self.pipeline_runners.clear();
+
+        // Import each channel
+        for (runner, channel_json) in self.pipeline_runners.iter_mut().zip(channels.iter()) {
+            let channel_map = channel_json.as_object().ok_or_else(||
+                FeagiDataError::DeserializationError("Expected channel to be JSON object".to_string())
+            )?;
+            runner.import_from_json(channel_map)?;
+        }
+
+        Ok(())
     }
 
     //endregion
