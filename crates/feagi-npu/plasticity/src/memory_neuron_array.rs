@@ -163,7 +163,7 @@ impl MemoryNeuronArray {
         // Add to area tracking
         self.area_neuron_indices
             .entry(cortical_area_id)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(neuron_idx);
 
         Some(neuron_idx)

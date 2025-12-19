@@ -162,10 +162,7 @@ pub fn group_synapses_by_area_pairs(
 
         if let (Some(&s_area), Some(&t_area)) = (neuron_to_area.get(&src), neuron_to_area.get(&tgt))
         {
-            groups
-                .entry((s_area, t_area))
-                .or_insert_with(Vec::new)
-                .push(i);
+            groups.entry((s_area, t_area)).or_default().push(i);
         }
     }
 

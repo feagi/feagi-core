@@ -276,11 +276,11 @@ impl BatchPatternDetector {
     pub fn get_detector(&self, memory_area_idx: u32, temporal_depth: u32) -> PatternDetector {
         let mut detectors = self.detectors.lock().unwrap();
 
-        if !detectors.contains_key(&memory_area_idx) {
+        detectors.entry(memory_area_idx).or_insert_with(|| {
             let detector = PatternDetector::new(self.base_config.clone());
             detector.configure_area_temporal_depth(memory_area_idx, temporal_depth);
-            detectors.insert(memory_area_idx, detector);
-        }
+            detector
+        });
 
         // Clone the detector for thread-safe access
         detectors.get(&memory_area_idx).unwrap().clone()
