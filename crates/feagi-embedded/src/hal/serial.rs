@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Serial I/O abstraction for embedded platforms
 pub trait SerialIO {
     /// Platform-specific error type

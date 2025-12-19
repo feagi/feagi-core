@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Non-blocking I/O infrastructure for async/await transports
 //!
 //! This module provides reusable infrastructure for transports that use

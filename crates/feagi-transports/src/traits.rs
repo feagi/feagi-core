@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Transport trait definitions
 //!
 //! These traits define the common interface for all transport implementations.

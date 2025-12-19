@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! FCL (Fire Candidate List) window size cache
 //!
 //! Stores per-cortical-area FCL window sizes for the burst engine

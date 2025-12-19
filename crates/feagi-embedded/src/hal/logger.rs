@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Logging abstraction for embedded platforms
 pub trait Logger {
     /// Log a message with specified level

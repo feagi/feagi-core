@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Endpoint implementations
 // Each endpoint file implements specific Python API module routes
 

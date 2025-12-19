@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! # feagi-observability
 //!
 //! Unified observability infrastructure for FEAGI (logging, telemetry, profiling).

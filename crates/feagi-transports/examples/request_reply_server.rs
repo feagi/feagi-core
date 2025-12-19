@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Example: Request-Reply Server (ROUTER)
 //!
 //! This example demonstrates how to create a simple request-reply server

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Mapping (Connectome) DTOs for V1 API
 //
 // These DTOs must match Python FastAPI response structures exactly.

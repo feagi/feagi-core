@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Contract tests for health endpoints
 //
 // These tests verify that the Rust API responses match the Python FastAPI format exactly.

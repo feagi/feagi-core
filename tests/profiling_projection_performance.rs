@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Profiling test for projection performance bottleneck analysis
 ///
 /// This test creates a minimal genome with:

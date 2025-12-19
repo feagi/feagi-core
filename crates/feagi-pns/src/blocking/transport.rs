@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Blocking transport trait for thread-based I/O
 //!
 //! Transports implementing this trait use blocking I/O operations with dedicated

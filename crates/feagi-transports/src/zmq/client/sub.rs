@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! ZMQ SUB pattern (client-side publish-subscribe)
 //!
 //! SUB sockets are used for receiving broadcast messages from PUB servers.

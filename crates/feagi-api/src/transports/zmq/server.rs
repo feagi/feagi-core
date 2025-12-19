@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // ZMQ server implementation (thin wrapper over feagi-pns infrastructure)
 //
 // This adapter translates ZMQ messages to endpoint calls, leveraging the

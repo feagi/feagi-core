@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Platform implementations for embedded systems
 /// 
 /// Each platform module implements the HAL traits defined in `crate::hal`.

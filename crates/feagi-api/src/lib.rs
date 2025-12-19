@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // FEAGI REST API Layer
 //
 // This crate provides a unified, transport-agnostic API layer for FEAGI.

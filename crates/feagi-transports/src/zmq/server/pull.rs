@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! ZMQ PULL pattern (server-side push-pull)
 //!
 //! PULL sockets are used for receiving data from multiple PUSH clients.

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Time and delay abstraction for embedded platforms
 pub trait TimeProvider {
     /// Get current time in microseconds since system boot

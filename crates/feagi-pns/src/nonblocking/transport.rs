@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Non-blocking transport trait for async/await transports
 //!
 //! PLACEHOLDER: This will be implemented in Phase 3 when adding UDP support.

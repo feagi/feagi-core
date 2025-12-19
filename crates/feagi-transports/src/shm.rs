@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Shared Memory (SHM) transport implementations
 //!
 //! This module provides high-performance shared memory transport for IPC

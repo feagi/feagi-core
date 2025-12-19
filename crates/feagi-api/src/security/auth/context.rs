@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Authentication method (stub)
 #[derive(Debug, Clone)]
 pub enum AuthMethod {

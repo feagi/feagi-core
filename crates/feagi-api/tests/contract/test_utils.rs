@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Contract testing utilities
 //
 // Helper functions for comparing Rust API responses with Python API snapshots.

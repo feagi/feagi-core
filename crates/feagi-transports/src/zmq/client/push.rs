@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! ZMQ PUSH pattern (client-side push-pull)
 //!
 //! PUSH sockets are used for distributing data to PULL servers.

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Async LZ4 compression utilities for nonblocking transports
 
 use crate::core::{PNSError, Result};

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Common configuration types for transports
 
 use serde::{Deserialize, Serialize};

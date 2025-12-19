@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Test program to validate OpenAPI spec
 use feagi_api::openapi::ApiDoc;
 use utoipa::OpenApi;

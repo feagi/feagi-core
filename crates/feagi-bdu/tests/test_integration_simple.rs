@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Simple Integration Tests for BDU
 ///
 /// Tests basic functionality without complex genome loading

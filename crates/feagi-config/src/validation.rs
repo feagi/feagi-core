@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Configuration validation
 //!
 //! This module provides validation logic to ensure configuration values are

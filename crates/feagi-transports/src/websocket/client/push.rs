@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket PUSH pattern (client-side send)
 //!
 //! Sends messages to a WebSocket pull server.

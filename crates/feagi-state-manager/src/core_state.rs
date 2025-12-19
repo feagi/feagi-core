@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Memory-mapped core state with lock-free atomic operations
 //!
 //! This module provides a 64-byte cache-line aligned atomic state structure

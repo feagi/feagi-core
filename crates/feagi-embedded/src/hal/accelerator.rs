@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Neural accelerator abstraction for hardware acceleration (Hailo, TPU, etc.)
 pub trait NeuralAccelerator {
     /// Platform-specific error type

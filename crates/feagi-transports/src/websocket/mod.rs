@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket transport implementation for FEAGI
 //!
 //! Provides WebSocket-based transport for all FEAGI communication patterns:

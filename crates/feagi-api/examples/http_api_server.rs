@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! FEAGI HTTP API Server Example
 //!
 //! This example demonstrates how to start a fully functional FEAGI HTTP API server

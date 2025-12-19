@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Event types for signal-based communication between burst engine and PNS
 //!
 //! This module defines events that flow through FeagiSignal for decoupling:

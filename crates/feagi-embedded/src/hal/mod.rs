@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Hardware Abstraction Layer (HAL) trait definitions for embedded platforms
 /// 
 /// This module defines platform-agnostic traits that must be implemented

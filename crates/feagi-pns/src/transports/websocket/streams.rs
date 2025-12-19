@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket stream implementations for PNS
 
 use crate::core::{PNSConfig, Result, PNSError};

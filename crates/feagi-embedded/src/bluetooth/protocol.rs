@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! FEAGI Bluetooth Protocol Layer (Platform-Agnostic)
 //!
 //! This module defines the binary protocol for FEAGI→Embodiment communication over BLE.

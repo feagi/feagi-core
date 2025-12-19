@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Integration Tests for BDU Full Pipeline
 ///
 /// These tests verify that the entire BDU stack works end-to-end:

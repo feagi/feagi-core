@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! ZMQ DEALER pattern (client-side request-reply)
 //!
 //! DEALER sockets are used for asynchronous request-reply patterns where the client

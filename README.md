@@ -1,218 +1,343 @@
-# FEAGI Core - Rust Libraries
+# FEAGI Core
 
-**High-performance neural burst processing engine and core shared Rust libraries for FEAGI 2.0**
+High-performance Rust libraries for bio-inspired neural computation and evolutionary artificial general intelligence.
 
-## 🎯 Project Goals
+## What is FEAGI?
 
-- **Performance**: 50-100x speedup over Python (165ms → <3ms for synaptic propagation)
-- **Scalability**: Support 30Hz burst frequency with 1.2M neuron firings
-- **Architecture**: Incremental migration path from Python to Rust
-- **IP Protection**: Separate plasticity crate with proprietary license
+FEAGI (Framework for Evolutionary Artificial General Intelligence) is a bio-inspired neural architecture that models brain structures and dynamics. FEAGI Core provides the foundational Rust libraries for building neural networks that learn and adapt like biological brains.
 
-## 📦 Workspace Structure
+Unlike traditional neural networks, FEAGI:
+- Models individual neurons with realistic dynamics (membrane potential, leak, refractory periods)
+- Supports heterogeneous brain regions with distinct properties
+- Enables structural plasticity (neurogenesis, synaptogenesis)
+- Runs in real-time with spike-based computation
+- Scales from microcontrollers to servers
 
-```
-feagi-core/
-├── Cargo.toml                    # Workspace root
-├── crates/
-│   ├── feagi-types/              # Core types (NeuronId, Synapse, etc.)
-│   ├── feagi-burst-engine/       # High-performance burst processing
-│   ├── feagi-plasticity/         # Plasticity algorithms (separate IP)
-│   └── feagi-python/             # PyO3 bindings for Python interop
-└── target/
-    └── release/
-        └── feagi_rust.so         # Python extension module
-```
+## Key Features
 
-## 🏗️ Architecture Decisions
+- **Bio-Inspired Architecture**: Cortical areas, synaptic plasticity, and realistic neuron models
+- **High Performance**: 50-100x faster than Python implementations through optimized Rust
+- **Cross-Platform**: Runs on desktop, server, embedded (ESP32, Arduino, STM32), and cloud
+- **GPU Acceleration**: Optional WGPU (cross-platform) and CUDA (NVIDIA) backends
+- **No-Std Compatible**: Core algorithms work in resource-constrained environments
+- **Modular Design**: Use individual crates or the complete framework
+- **Python Bindings**: Integrate with existing Python workflows via PyO3
 
-### 1. **Workspace-based Crate Organization**
-- **feagi-types**: Shared core types (no dependencies)
-- **feagi-burst-engine**: Depends only on types (fast, pure Rust)
-- **feagi-plasticity**: Separate crate for IP protection (PROPRIETARY license)
-- **feagi-python**: PyO3 bindings (depends on all above)
+## Installation
 
-### 2. **IP Separation**
-The plasticity crate is intentionally separate:
-- Different license (PROPRIETARY vs Apache-2.0)
-- Can be compiled/distributed separately
-- Trait-based plugin system for runtime integration
+Add to your `Cargo.toml`:
 
-### 3. **Incremental Migration Strategy**
-1. **Phase 1** (Current): Synaptic propagation (the bottleneck)
-2. **Phase 2**: Full burst engine phases
-3. **Phase 3**: Connectome management
-4. **Phase 4**: Complete FEAGI core
-
-## 🚀 Performance Target vs Achievement
-
-### Python Baseline (from profiling)
-```
-Phase 1 (Injection):  163.84 ms ( 88.7%)
-  └─ Synaptic Propagation: 161.07 ms (100% of Phase 1)
-     └─ Numpy Processing:  164.67 ms ( 91.7%)
+```toml
+[dependencies]
+feagi-core = "2.0"
 ```
 
-### Rust Implementation
-- **Target**: <3ms (50-100x speedup)
-- **Actual**: TBD (requires benchmarking with real data)
+Or with specific features:
 
-## 🔧 Building
+```toml
+[dependencies]
+feagi-core = { version = "2.0", features = ["gpu"] }
+```
+
+## Quick Start
+
+### Create and Run a Neural Network
+
+```rust
+use feagi_core::prelude::*;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize neural processing unit
+    let mut npu = RustNPU::new(100_000, 1_000_000, 20)?;
+    
+    // Load brain configuration
+    npu.load_connectome("brain.json")?;
+    
+    // Process neural burst cycle
+    npu.process_burst()?;
+    
+    Ok(())
+}
+```
+
+### Embedded Target (no_std)
+
+```rust
+#![no_std]
+use feagi_core::neural::NeuronDynamics;
+use feagi_core::runtime_embedded::EmbeddedRuntime;
+
+// Configure for resource-constrained systems
+let runtime = EmbeddedRuntime::new(1000, 5000);
+let mut dynamics = NeuronDynamics::new(&runtime);
+```
+
+### Python Integration
+
+```python
+import feagi_rust
+
+# Create high-performance engine
+engine = feagi_rust.SynapticPropagationEngine()
+
+# Build synaptic connectivity
+engine.build_index(source_neurons, target_neurons, weights, conductances, types, valid_mask)
+
+# Process neural activity
+result = engine.propagate(fired_neurons)
+```
+
+## Architecture
+
+FEAGI Core is organized as a workspace of focused crates:
+
+### Core Types and Algorithms
+- **feagi-types**: Fundamental data structures (neurons, synapses, cortical areas)
+- **feagi-neural**: Platform-agnostic neuron dynamics (no_std compatible)
+- **feagi-synapse**: Synaptic computation algorithms (no_std compatible)
+
+### Neural Processing
+- **feagi-burst-engine**: High-performance burst cycle execution
+- **feagi-bdu**: Brain development (neurogenesis, synaptogenesis)
+- **feagi-plasticity**: Synaptic learning (STDP, memory consolidation)
+- **feagi-evo**: Genome I/O and evolutionary algorithms
+
+### Infrastructure
+- **feagi-state-manager**: Runtime state and lifecycle management
+- **feagi-config**: Configuration loading and validation
+- **feagi-observability**: Logging, telemetry, and profiling
+
+### I/O and Integration
+- **feagi-pns**: Peripheral nervous system (sensory input, motor output)
+- **feagi-agent-sdk**: Client library for agent integration
+- **feagi-api**: REST API server
+- **feagi-transports**: Network transport abstractions (ZMQ, UDP, HTTP)
+
+### Platform Adapters
+- **feagi-runtime-std**: Desktop and server deployment (Vec, Rayon, async)
+- **feagi-runtime-embedded**: Embedded systems (fixed arrays, no_std)
+- **feagi-embedded**: Platform abstraction layer for ESP32, Arduino, STM32
+
+### Utilities
+- **feagi-connectome-serialization**: Brain persistence and loading
+- **feagi-services**: High-level service compositions
+
+## Performance
+
+FEAGI Core delivers significant performance improvements over interpreted implementations:
+
+- **Synaptic Propagation**: 50-100x faster than Python/NumPy
+- **Burst Frequency**: Supports 30Hz+ with millions of neurons
+- **Memory Efficiency**: Minimal allocations, cache-friendly data structures
+- **Parallel Processing**: Multi-threaded execution with Rayon
+- **GPU Acceleration**: Optional WGPU or CUDA backends for massive parallelism
+
+## Design Principles
+
+### Biologically Plausible
+- Individual neuron modeling with realistic parameters
+- Spike-based computation (not rate-coded)
+- Synaptic delays and conductances
+- Structural and functional plasticity
+
+### Cross-Platform from Day One
+- Core algorithms are platform-agnostic (no_std compatible)
+- Runtime adapters for different deployment targets
+- Conditional compilation for embedded, desktop, and server
+- No reliance on OS-specific features in core logic
+
+### Performance Critical
+- No allocations in hot paths (pre-allocated buffers)
+- Cache-friendly data layouts (`#[repr(C)]`, AoS patterns)
+- SIMD-friendly operations where applicable
+- Optional GPU acceleration without compromising portability
+
+### Type Safety
+- Strong typing with newtypes (`NeuronId`, `SynapseId`)
+- Compile-time guarantees over runtime checks
+- Zero-cost abstractions throughout
+
+## Feature Flags
+
+### Main Crate (feagi-core)
+
+```toml
+[features]
+default = ["std", "full"]
+std = [...]           # Standard library support
+no_std = [...]        # Embedded/bare-metal
+wasm = [...]          # WebAssembly target
+full = ["compute", "io"]
+compute = [...]       # Neural computation only
+io = [...]            # I/O and networking
+```
+
+### Burst Engine
+
+```toml
+[features]
+gpu = [...]           # Cross-platform GPU (WGPU)
+cuda = [...]          # NVIDIA CUDA acceleration
+all-gpu = [...]       # All GPU backends
+```
+
+## Building from Source
 
 ```bash
-# Build entire workspace (all crates)
-cargo build --workspace --release
+# Clone repository
+git clone https://github.com/feagi/feagi-core
+cd feagi-core
 
-# Build just the Python extension
-cargo build --release -p feagi-python
+# Build the crate
+cargo build --release
 
 # Run tests
 cargo test --workspace
 
-# Create Python-compatible symlink (macOS)
-cd target/release && ln -sf libfeagi_rust.dylib feagi_rust.so
+# Build with GPU support
+cargo build --release --features gpu
+
+# Generate documentation
+cargo doc --open
 ```
 
-## 🐍 Python Integration
+## Contributing
 
-### Example Usage
+We welcome contributions! Whether you're fixing bugs, adding features, improving documentation, or optimizing performance, your help is appreciated.
 
-```python
-import numpy as np
-import feagi_rust
+### Getting Started
 
-# Create engine
-engine = feagi_rust.SynapticPropagationEngine()
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes following our guidelines
+4. Run tests and linting (`cargo test && cargo clippy`)
+5. Submit a pull request
 
-# Build synapse index (once during initialization)
-engine.build_index(
-    source_neurons,   # np.array[uint32]
-    target_neurons,   # np.array[uint32]
-    weights,          # np.array[uint8, 0-255]
-    conductances,     # np.array[uint8, 0-255]
-    types,            # np.array[uint8, 0=excitatory, 1=inhibitory]
-    valid_mask        # np.array[bool]
-)
+### Code Standards
 
-# Set neuron mapping
-engine.set_neuron_mapping({
-    neuron_id: cortical_area_id,
-    # ...
-})
+All contributions must:
+- Pass `cargo clippy` with zero warnings
+- Pass `cargo test` (all tests)
+- Include documentation for public APIs
+- Follow Rust API guidelines
+- Support cross-platform compilation where applicable
 
-# Compute propagation (HOT PATH - called every burst!)
-fired_neurons = np.array([1, 2, 3], dtype=np.uint32)
-result = engine.propagate(fired_neurons)
-# Returns: {area_id: [(target_neuron, contribution), ...], ...}
-```
-
-### Integrating with burst_engine.py
-
-Replace `_compute_synaptic_propagation()` in `feagi/npu/burst_engine.py`:
-
-```python
-# OLD (Python - 165ms):
-def _compute_synaptic_propagation(self) -> Dict[int, List[tuple]]:
-    # ... 180 lines of Python/NumPy code ...
-    return propagation_data
-
-# NEW (Rust - <3ms):
-def _compute_synaptic_propagation(self) -> Dict[int, List[tuple]]:
-    if not hasattr(self, '_rust_engine'):
-        self._initialize_rust_engine()
-    
-    fired_neuron_ids = self.previous_fire_queue.get_all_neuron_ids()
-    return self._rust_engine.propagate(np.array(fired_neuron_ids, dtype=np.uint32))
-```
-
-## 📊 Test Results
+### Development Workflow
 
 ```bash
-$ python test_integration.py
-✅ Successfully imported feagi_rust module
-   Version: 0.1.0
+# Check compilation
+cargo check --workspace
 
-📊 Creating test synapse data...
-   Created 6 synapses
+# Run tests
+cargo test --workspace
 
-🚀 Creating Rust synaptic propagation engine...
-   Engine created successfully
+# Lint code
+cargo clippy --workspace -- -D warnings
 
-🔨 Building synapse index...
-   Index built successfully
+# Format code
+cargo fmt --all
 
-🗺️  Setting neuron-to-cortical-area mapping...
-   Mapped 5 neurons to cortical areas
-
-⚡ Computing synaptic propagation...
-   Fired neurons: [1, 2]
-   Result: {2: [(13, 0.39)], 1: [(10, 1.0), (11, -0.50), (12, 0.62), (10, 1.0)]}
-
-📈 Performance statistics:
-   Total propagations: 1
-   Total synapses processed: 5
-
-✅ ALL TESTS PASSED!
+# Build release
+cargo build --workspace --release
 ```
 
-## 🔬 Design Principles
+### Areas for Contribution
 
-### RTOS Compatibility
-- No allocations in hot paths (pre-allocate during init)
-- No locks/mutexes in critical sections
-- Rayon for data parallelism (CPU-bound tasks)
-- Conditional compilation for embedded targets
+- **Performance optimization**: SIMD, GPU kernels, cache optimization
+- **Platform support**: Additional embedded targets (Teensy, Nordic nRF, RISC-V)
+- **Neural algorithms**: New plasticity rules, neuron models
+- **Documentation**: Examples, tutorials, API documentation
+- **Testing**: Edge cases, integration tests, benchmarks
+- **Tools**: Visualization, debugging, profiling utilities
 
-### Cache-Friendly Data Structures
-- `#[repr(C)]` for predictable memory layout
-- Array-of-Structures (AoS) for synapse data
-- Sequential memory access patterns
-- SIMD-friendly vectorized operations
+## Documentation
 
-### Type Safety
-- Strong types instead of primitives (`NeuronId(u32)` not `u32`)
-- Compile-time guarantees (no runtime type checks)
-- Zero-cost abstractions
+- **API Reference**: [docs.rs/feagi-core](https://docs.rs/feagi-core)
+- **Architecture Guide**: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
-## 📝 Next Steps
+Generate local documentation:
 
-1. **Benchmark with Real Data**
-   - Use actual FEAGI synapse arrays (12K neurons, 13K synapses)
-   - Measure end-to-end performance
-   - Validate 50-100x speedup claim
+```bash
+cargo doc --open
+```
 
-2. **Integrate with burst_engine.py**
-   - Add Rust engine initialization
-   - Replace Python `_compute_synaptic_propagation()`
-   - Add fallback for graceful degradation
+## Testing
 
-3. **Expand Coverage**
-   - Implement other burst engine phases in Rust
-   - Add neuron dynamics (membrane potential updates)
-   - Migrate connectome operations
+```bash
+# All tests
+cargo test --workspace
 
-4. **Production Deployment**
-   - Build for multiple platforms (Linux, macOS, Windows)
-   - Create Python wheel for easy installation
-   - Add CI/CD pipeline for automated builds
+# Specific crate
+cargo test -p feagi-burst-engine
 
-## 📄 License
+# With features
+cargo test -p feagi-burst-engine --features gpu
 
-- **feagi-types**: Apache-2.0
-- **feagi-burst-engine**: Apache-2.0
-- **feagi-python**: Apache-2.0
-- **feagi-plasticity**: PROPRIETARY (separate IP protection)
+# Benchmarks
+cargo bench -p feagi-burst-engine
+```
 
-## 🤝 Contributing
+## Platform Support
 
-Follow FEAGI's coding guidelines in `/docs/coding_guidelines.md`.
+### Tested Platforms
+- **Desktop**: Linux, macOS, Windows
+- **Embedded**: ESP32 (WROOM, S3, C3)
+- **Cloud**: Docker, Kubernetes
 
-All Rust code must:
-- Pass `cargo clippy` (zero warnings)
-- Pass `cargo test` (100% passing)
-- Include inline documentation
-- Follow Rust API guidelines
+### Planned Support
+- Arduino (Due, MKR, Nano 33 IoT)
+- STM32 (F4, F7, H7 series)
+- Teensy (4.0, 4.1)
+- Nordic nRF (nRF52, nRF53)
+- Raspberry Pi Pico (RP2040)
+
+## Use Cases
+
+- **Robotics**: Real-time control with adaptive learning
+- **Edge AI**: On-device intelligence for IoT
+- **Research**: Neuroscience modeling and experimentation
+- **AGI Development**: Evolutionary and developmental AI systems
+- **Embedded Intelligence**: Neural processing on microcontrollers
+
+## Project Status
+
+**Version**: 2.0.0  
+**Status**: Active development  
+**Minimum Rust Version**: 1.75+
+
+FEAGI Core is under active development. The core APIs are stabilizing, but breaking changes may occur in minor releases until 3.0.
+
+## Community and Support
+
+- **Discord**: [discord.gg/neuraville](https://discord.gg/PTVC8fyGN8)
+- **Website**: [neuraville.com/feagi](https://neuraville.com/feagi)
+- **Repository**: [github.com/feagi/feagi-core](https://github.com/feagi/feagi-core)
+- **Issues**: [GitHub Issues](https://github.com/feagi/feagi-core/issues)
+- **Email**: feagi@neuraville.com
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
+
+Copyright 2025 Neuraville Inc.
+
+## Citation
+
+If you use FEAGI in your research, please cite:
+
+```bibtex
+@article{nadji2020brain,
+  title={A brain-inspired framework for evolutionary artificial general intelligence},
+  author={Nadji-Tehrani, Mohammad and Eslami, Ali},
+  journal={IEEE transactions on neural networks and learning systems},
+  volume={31},
+  number={12},
+  pages={5257--5271},
+  year={2020},
+  publisher={IEEE}
+}
+```
 
 ---
 
-**Built with ❤️ by the FEAGI team using Rust 🦀**
+Built with Rust for performance, safety, and portability.

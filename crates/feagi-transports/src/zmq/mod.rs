@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! ZMQ transport implementations
 //!
 //! This module provides both client and server implementations of common ZMQ socket patterns:

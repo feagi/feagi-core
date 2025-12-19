@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /// Contract Tests for FEAGI Rust API
 ///
 /// These tests ensure that the Rust API produces correct responses

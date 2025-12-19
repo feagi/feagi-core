@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 // Registration Handler - processes agent registration requests
 
 use super::agent_registry::{

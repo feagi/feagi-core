@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Configuration for FEAGI Agent SDK
 
 use crate::error::{Result, SdkError};

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! CLI argument parsing for per-crate debug flags
 //!
 //! Supports flags like `--debug-feagi-api`, `--debug-feagi-burst-engine`, etc.

@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! WebSocket PULL pattern (server-side receive)
 //!
 //! Receives messages from multiple WebSocket clients.

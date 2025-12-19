@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! # FEAGI State Manager
 //!
 //! Runtime state management for FEAGI - cross-platform, RTOS-compatible, and WASM-ready.

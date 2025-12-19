@@ -1,0 +1,122 @@
+# Copyright 2025 Neuraville Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+name: Staging Merge - Prerelease
+
+on:
+  pull_request:
+    branches: [ staging ]
+    types: [ closed ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  prerelease:
+    runs-on: ubuntu-latest
+    # Only run if the PR was actually merged (not just closed)
+    if: github.event.pull_request.merged == true
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: staging  # Ensure we're on the staging branch after merge
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: stable
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    
+    - name: Get version
+      id: version
+      run: |
+        VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Version: $VERSION"
+    
+    - name: Run tests
+      run: cargo test --workspace --verbose
+    
+    - name: Build release
+      run: cargo build --release --verbose
+    
+    # TEMPORARILY DISABLED: Publish to crates.io
+    # - name: Publish to crates.io
+    #   run: |
+    #     echo "📦 Publishing feagi-core v${{ steps.version.outputs.version }} (beta)..."
+    #     
+    #     # Package the crate first to verify it's ready
+    #     cargo package --verbose
+    #     
+    #     # Publish to crates.io
+    #     cargo publish --token ${{ secrets.CARGO_PUSH_TOKEN }}
+    #     
+    #     echo "✅ Successfully published feagi-core"
+    #   continue-on-error: false
+    #   env:
+    #     CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+    - name: Publish to crates.io (DISABLED - Version update only)
+      run: |
+        echo "⚠️  Publishing temporarily disabled for version update"
+        echo "📦 Would publish feagi-core v${{ steps.version.outputs.version }} (beta)..."
+    
+    - name: Create prerelease tag
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        TAG_NAME="v${{ steps.version.outputs.version }}"
+        echo "Creating prerelease tag: $TAG_NAME"
+        
+        git tag "$TAG_NAME"
+        git push origin "$TAG_NAME"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Create GitHub Prerelease
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: v${{ steps.version.outputs.version }}
+        release_name: Prerelease v${{ steps.version.outputs.version }}
+        body: |
+          🚀 **Beta release of FEAGI Core v${{ steps.version.outputs.version }}**
+          
+          This is a beta version from the staging branch. ⚠️ **Publishing to crates.io is temporarily disabled for version update.**
+          
+          ## Release Information
+          
+          - **Version:** ${{ steps.version.outputs.version }}
+          - **Branch:** staging
+          - **Commit:** ${{ github.sha }}
+          
+          ## Testing Status
+          
+          - ✅ All workspace tests passed
+          - ✅ Package builds successfully
+          - ⚠️ Publishing to crates.io is disabled (version update in progress)
+          - ✅ Ready for testing and integration
+          
+          **Note:** This is a version update release. Publishing will be re-enabled after version migration is complete.
+        draft: false
+        prerelease: true
+    
+    - name: Notify success
+      run: |
+        echo "🎉 Prerelease v${{ steps.version.outputs.version }} completed successfully!"
+        echo "⚠️  Publishing to crates.io is disabled (version update in progress)"
+        echo "🏷️ Tagged as: v${{ steps.version.outputs.version }}"
+

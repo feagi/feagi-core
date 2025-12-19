@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 /*!
 **COMPLETE** flat genome format (2.0) to hierarchical format converter.
 

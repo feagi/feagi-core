@@ -1,3 +1,6 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 //! Cortical area locking for concurrent operations
 //!
 //! Allows locking specific cortical areas for neurogenesis or plasticity
