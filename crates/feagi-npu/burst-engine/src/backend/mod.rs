@@ -28,7 +28,6 @@ pub use wgpu_backend::WGPUBackend;
 
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::{NeuronStorage, SynapseStorage};
-use tracing::info;
 
 /// Result of processing a burst on any backend
 #[derive(Debug, Clone)]
@@ -195,13 +194,8 @@ pub enum BackendType {
     CUDA,
 
     /// Auto-select based on genome size and hardware availability
+    #[default]
     Auto,
-}
-
-impl Default for BackendType {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl std::fmt::Display for BackendType {

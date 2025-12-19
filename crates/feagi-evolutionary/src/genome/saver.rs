@@ -14,10 +14,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 use crate::types::{EvoError, EvoResult};
-use feagi_data_structures::genomic::brain_regions::RegionID;
-use feagi_data_structures::genomic::cortical_area::{
-    CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaDataFlag,
-};
+use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalID};
 use feagi_data_structures::genomic::BrainRegion;
 
 /// Genome saver

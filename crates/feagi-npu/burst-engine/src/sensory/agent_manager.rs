@@ -272,7 +272,7 @@ fn agent_polling_loop(
                 static NO_DATA_COUNT: std::sync::atomic::AtomicU64 =
                     std::sync::atomic::AtomicU64::new(0);
                 let count = NO_DATA_COUNT.fetch_add(1, Ordering::Relaxed);
-                if count < 5 || count % 1000 == 0 {
+                if count < 5 || count.is_multiple_of(1000) {
                     info!(
                         "[SENSORY-{}] read_latest() returned None (count={})",
                         config.agent_id, count

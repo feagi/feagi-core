@@ -592,7 +592,7 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
             for (dest_area, rules) in dstmap {
                 // Check if destination area exists (convert string to CorticalID)
                 if let Ok(dest_cortical_id) =
-                    crate::genome::parser::string_to_cortical_id(&dest_area)
+                    crate::genome::parser::string_to_cortical_id(dest_area)
                 {
                     if !genome.cortical_areas.contains_key(&dest_cortical_id) {
                         result.add_error(format!(

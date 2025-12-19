@@ -47,7 +47,7 @@ const MAGIC: &[u8; 8] = b"FEAGIVIS"; // Ring buffer magic (BV expects this!)
 const VERSION: u32 = 1;
 const HEADER_SIZE: usize = 256;
 const DEFAULT_NUM_SLOTS: u32 = 64;
-const DEFAULT_SLOT_SIZE: usize = 1 * 1024 * 1024; // 1 MB per slot
+const DEFAULT_SLOT_SIZE: usize = 1024 * 1024; // 1 MB per slot
 
 /// Visualization SHM Writer (Ring Buffer Format)
 pub struct VizSHMWriter {
@@ -101,6 +101,7 @@ impl VizSHMWriter {
             .read(true)
             .write(true)
             .create(true)
+            .truncate(true)
             .mode(0o666) // rw-rw-rw-
             .open(&shm_path)?;
 
@@ -183,7 +184,7 @@ impl VizSHMWriter {
         let mmap = self
             .mmap
             .as_mut()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::Other, "SHM not mapped"))?;
+            .ok_or_else(|| std::io::Error::other("SHM not mapped"))?;
 
         // Calculate slot offset: HEADER_SIZE + (write_index * slot_size)
         let slot_offset = HEADER_SIZE + (self.write_index as usize * self.slot_size);

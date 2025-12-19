@@ -47,6 +47,9 @@ use feagi_npu_runtime::{NeuronStorage, Runtime, SynapseStorage};
 #[cfg(test)]
 use feagi_npu_runtime::StdRuntime;
 
+/// Type alias for fire queue sample data structure
+type FireQueueSample = AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
+
 /// Burst processing result
 #[derive(Debug, Clone)]
 pub struct BurstResult {
@@ -321,6 +324,7 @@ impl<
     }
 
     /// Add a neuron to the NPU (LIF model with genome leak only)
+    #[allow(clippy::too_many_arguments)]
     pub fn add_neuron(
         &mut self,
         threshold: T,          // Quantized threshold
@@ -401,6 +405,7 @@ impl<
     /// - Batch propagation engine updates
     ///
     /// Returns: (neuron_ids, failed_indices)
+    #[allow(clippy::too_many_arguments)]
     pub fn add_neurons_batch(
         &mut self,
         thresholds: Vec<T>,          // Quantized thresholds
@@ -530,6 +535,7 @@ impl<
     /// # Returns
     /// * `Ok(count)` - Number of neurons created
     /// * `Err` - If capacity exceeded or other error
+    #[allow(clippy::too_many_arguments)]
     pub fn create_cortical_area_neurons(
         &mut self,
         cortical_idx: u32,
@@ -1237,44 +1243,42 @@ impl<
         // IMPORTANT: NPU is performance-sensitive. Any extra diagnostics must be gated behind
         // tracing level checks so we don't do O(n) work (min/max scans, neuron counts, allocations)
         // on every missed injection when TRACE isn't enabled.
-        if found_count == 0 {
-            if tracing::enabled!(tracing::Level::TRACE) {
-                // Root-cause diagnostics: report coordinate ranges so callers can compare against genome bbx/bby/bbz.
-                let (min_x, max_x, min_y, max_y, min_z, max_z) = coords.iter().fold(
-                    (u32::MAX, 0u32, u32::MAX, 0u32, u32::MAX, 0u32),
-                    |(min_x, max_x, min_y, max_y, min_z, max_z), &(x, y, z)| {
-                        (
-                            min_x.min(x),
-                            max_x.max(x),
-                            min_y.min(y),
-                            max_y.max(y),
-                            min_z.min(z),
-                            max_z.max(z),
-                        )
-                    },
-                );
-                let area_neuron_count = self
-                    .neuron_storage
-                    .read()
-                    .unwrap()
-                    .get_neuron_count(cortical_area);
-                let coord_sample: Vec<(u32, u32, u32)> = coords.iter().copied().take(5).collect();
+        if found_count == 0 && tracing::enabled!(tracing::Level::TRACE) {
+            // Root-cause diagnostics: report coordinate ranges so callers can compare against genome bbx/bby/bbz.
+            let (min_x, max_x, min_y, max_y, min_z, max_z) = coords.iter().fold(
+                (u32::MAX, 0u32, u32::MAX, 0u32, u32::MAX, 0u32),
+                |(min_x, max_x, min_y, max_y, min_z, max_z), &(x, y, z)| {
+                    (
+                        min_x.min(x),
+                        max_x.max(x),
+                        min_y.min(y),
+                        max_y.max(y),
+                        min_z.min(z),
+                        max_z.max(z),
+                    )
+                },
+            );
+            let area_neuron_count = self
+                .neuron_storage
+                .read()
+                .unwrap()
+                .get_neuron_count(cortical_area);
+            let coord_sample: Vec<(u32, u32, u32)> = coords.iter().copied().take(5).collect();
 
-                trace!(
-                    "[NPU] No neurons found for injection! Area: '{}', cortical_area_idx={}, coords={}, x=[{}..{}], y=[{}..{}], z=[{}..{}], area_neurons={}, sample={:?}",
-                    cortical_id_str,
-                    cortical_area,
-                    coords.len(),
-                    min_x,
-                    max_x,
-                    min_y,
-                    max_y,
-                    min_z,
-                    max_z,
-                    area_neuron_count,
-                    coord_sample
-                );
-            }
+            trace!(
+                "[NPU] No neurons found for injection! Area: '{}', cortical_area_idx={}, coords={}, x=[{}..{}], y=[{}..{}], z=[{}..{}], area_neurons={}, sample={:?}",
+                cortical_id_str,
+                cortical_area,
+                coords.len(),
+                min_x,
+                max_x,
+                min_y,
+                max_y,
+                min_z,
+                max_z,
+                area_neuron_count,
+                coord_sample
+            );
         }
 
         found_count
@@ -1410,14 +1414,14 @@ impl<
         }
     }
 
-    /// Import connectome snapshot (for loading from file)
-    ///
-    /// This replaces the entire NPU state with data from a saved connectome.
     // TODO: import_connectome needs refactoring for trait-based storage
     // Currently commented out - requires bulk load API in Storage traits
     // See issue: Direct field assignment doesn't work with trait-based storage
 
     /*
+    /// Import connectome snapshot (for loading from file)
+    ///
+    /// This replaces the entire NPU state with data from a saved connectome.
     /// Import a connectome from a snapshot
     ///
     /// # Arguments
@@ -2507,9 +2511,7 @@ impl<
     ///
     /// ⚠️ DEPRECATED: This method triggers deduplication and may return None if burst already sampled.
     /// Use `get_latest_fire_queue_sample()` instead for non-consuming reads.
-    pub fn sample_fire_queue(
-        &mut self,
-    ) -> Option<AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn sample_fire_queue(&mut self) -> Option<FireQueueSample> {
         let mut fire_structures = self.fire_structures.lock().unwrap();
         let current_fq_clone = fire_structures.current_fire_queue.clone();
         let sample_result = fire_structures.fq_sampler.sample(&current_fq_clone)?;
@@ -2539,9 +2541,7 @@ impl<
     /// Perfect for Python wrappers and SHM writers that need to read the same burst multiple times.
     ///
     /// Returns None if no sample has been taken yet (no bursts processed).
-    pub fn get_latest_fire_queue_sample(
-        &self,
-    ) -> Option<AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn get_latest_fire_queue_sample(&self) -> Option<FireQueueSample> {
         let fire_structures = self.fire_structures.lock().unwrap();
         let sample_result = fire_structures.fq_sampler.get_latest_sample()?;
 
@@ -2567,18 +2567,14 @@ impl<
     ///
     /// This is used by the burst loop to sample on every burst, regardless of the FQ sampler's
     /// configured rate limit. The rate limiting is meant for external consumers, not the burst loop itself.
-    pub fn force_sample_fire_queue(
-        &mut self,
-    ) -> Option<AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn force_sample_fire_queue(&mut self) -> Option<FireQueueSample> {
         // FIXED: Use get_current_fire_queue() instead of accessing private fields
         Some(self.get_current_fire_queue())
     }
 
     /// Get current Fire Queue directly (bypasses FQ Sampler rate limiting)
     /// Used by FCL endpoint to get real-time firing data without sampling delays
-    pub fn get_current_fire_queue(
-        &self,
-    ) -> AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)> {
+    pub fn get_current_fire_queue(&self) -> FireQueueSample {
         let mut result = AHashMap::new();
 
         // Convert current Fire Queue to the same format as sample_fire_queue

@@ -41,6 +41,9 @@ where
 #[cfg(feature = "std")]
 pub type DynamicNPU = DynamicNPUGeneric<StdRuntime, CPUBackend>;
 
+/// Type alias for fire queue sample data structure
+type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
+
 /// Macro for dispatching methods to the correct NPU variant
 macro_rules! dispatch {
     ($self:expr, $method:ident($($args:expr),*)) => {
@@ -104,6 +107,7 @@ where
 
     // Common NPU methods (delegate to underlying implementation)
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_neuron(
         &mut self,
         threshold: f32,
@@ -154,6 +158,7 @@ where
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_neurons_batch(
         &mut self,
         thresholds: Vec<f32>,
@@ -270,6 +275,7 @@ where
         dispatch!(self, get_burst_count())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn create_cortical_area_neurons(
         &mut self,
         cortical_idx: u32,
@@ -524,18 +530,14 @@ where
         )
     }
 
-    pub fn sample_fire_queue(
-        &mut self,
-    ) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn sample_fire_queue(&mut self) -> Option<FireQueueSample> {
         match self {
             DynamicNPUGeneric::F32(npu) => npu.sample_fire_queue(),
             DynamicNPUGeneric::INT8(npu) => npu.sample_fire_queue(),
         }
     }
 
-    pub fn force_sample_fire_queue(
-        &mut self,
-    ) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn force_sample_fire_queue(&mut self) -> Option<FireQueueSample> {
         dispatch_mut!(self, force_sample_fire_queue())
     }
 

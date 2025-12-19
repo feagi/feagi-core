@@ -28,6 +28,9 @@ use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+/// Type alias for fire queue sample data structure
+type FireQueueSample = ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
 use tracing::{debug, error, info, trace, warn};
 
 use std::thread;
@@ -206,8 +209,7 @@ impl BurstLoopRunner {
                     && !neuron_potential_pairs.is_empty()
                 {
                     info!("[FCL-INJECT]    First 5 potentials from data:");
-                    for (_idx, (neuron_id, p)) in neuron_potential_pairs.iter().take(5).enumerate()
-                    {
+                    for (neuron_id, p) in neuron_potential_pairs.iter().take(5) {
                         info!("[FCL-INJECT]      [{:?}] p={:.3}", neuron_id, p);
                     }
                     FIRST_POTENTIALS_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
@@ -483,9 +485,7 @@ impl BurstLoopRunner {
 
     /// Get current fire queue for monitoring
     /// Returns the last sampled fire queue data
-    pub fn get_fire_queue_sample(
-        &mut self,
-    ) -> Option<ahash::AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn get_fire_queue_sample(&mut self) -> Option<FireQueueSample> {
         self.npu.lock().unwrap().sample_fire_queue()
     }
 
@@ -705,6 +705,7 @@ fn get_timestamp() -> String {
 /// This is the HOT PATH - zero Python involvement!
 /// Power neurons are read directly from RustNPU's internal state.
 /// Burst count is tracked by NPU - single source of truth!
+#[allow(clippy::too_many_arguments)]
 fn burst_loop(
     npu: Arc<Mutex<DynamicNPU>>,
     frequency_hz: Arc<Mutex<f64>>, // Shared frequency - can be updated while running
@@ -739,7 +740,7 @@ fn burst_loop(
         let burst_start = Instant::now();
 
         // DIAGNOSTIC: Log that we're alive
-        if burst_num % 100 == 0 {
+        if burst_num.is_multiple_of(100) {
             trace!("[BURST-LOOP] Burst {} starting (loop is alive)", burst_num);
         }
 
@@ -767,7 +768,7 @@ fn burst_loop(
         }
 
         let lock_start = Instant::now();
-        if burst_num < 5 || burst_num % 100 == 0 {
+        if burst_num < 5 || burst_num.is_multiple_of(100) {
             trace!(
                 "[BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...",
                 burst_num
@@ -777,7 +778,7 @@ fn burst_loop(
         let should_exit = {
             let mut npu_lock = npu.lock().unwrap();
             let lock_acquired = Instant::now();
-            if burst_num < 5 || burst_num % 100 == 0 {
+            if burst_num < 5 || burst_num.is_multiple_of(100) {
                 trace!(
                     "[BURST-TIMING] Burst {}: NPU lock acquired in {:?}",
                     burst_num,
@@ -914,7 +915,7 @@ fn burst_loop(
                         let process_done = Instant::now();
                         let duration = process_done.duration_since(process_start);
 
-                        if burst_num < 5 || burst_num % 100 == 0 {
+                        if burst_num < 5 || burst_num.is_multiple_of(100) {
                             trace!(
                                 "[BURST-TIMING] Burst {}: process_burst() completed in {:?}, {} neurons fired",
                                 burst_num,
@@ -943,7 +944,7 @@ fn burst_loop(
             }
         };
 
-        if burst_num < 5 || burst_num % 100 == 0 {
+        if burst_num < 5 || burst_num.is_multiple_of(100) {
             trace!("[BURST-TIMING] Burst {}: NPU lock RELEASED", burst_num);
         }
 
@@ -988,7 +989,7 @@ fn burst_loop(
         let needs_motor = has_motor_publisher || has_motor_shm;
         let needs_fire_data = has_shm_writer || should_publish_viz || needs_motor;
 
-        if burst_num % 100 == 0 {
+        if burst_num.is_multiple_of(100) {
             trace!(
                 "[BURST-LOOP] Sampling conditions: needs_fire_data={} (shm={}, viz={}, motor={})",
                 needs_fire_data,
@@ -1009,7 +1010,7 @@ fn burst_loop(
                 sample_done.duration_since(sample_start)
             );
 
-            if burst_num % 100 == 0 {
+            if burst_num.is_multiple_of(100) {
                 trace!(
                     "[BURST-LOOP] Fire queue sample result: has_data={}",
                     fire_data_opt.is_some()
@@ -1073,7 +1074,7 @@ fn burst_loop(
                 }
 
                 if total_neurons > 0 {
-                    if burst_num % 100 == 0 || total_neurons > 1000 {
+                    if burst_num.is_multiple_of(100) || total_neurons > 1000 {
                         debug!(
                             "[BURST-LOOP] 🔍 Sampled {} neurons from {} areas for viz",
                             total_neurons,
@@ -1091,7 +1092,7 @@ fn burst_loop(
 
                         let count =
                             PUBLISH_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                        if count % 30 == 0 {
+                        if count.is_multiple_of(30) {
                             trace!(
                                 "[BURST-LOOP] Viz handoff #{}: {} neurons -> PNS (serialization off-thread)",
                                 count,
@@ -1126,7 +1127,7 @@ fn burst_loop(
 
             fire_data_arc_opt // Return Arc for motor reuse
         } else {
-            if burst_num % 100 == 0 {
+            if burst_num.is_multiple_of(100) {
                 trace!("[BURST-LOOP] Fire queue sampling skipped (no consumers need data)");
             }
             None // No fire data needed
@@ -1136,7 +1137,7 @@ fn burst_loop(
         // NOTE: has_motor_publisher and has_motor_shm already computed above for shared_fire_data_opt
 
         // CRITICAL: Log motor publisher state every 100 bursts (using INFO to guarantee visibility)
-        if burst_num % 100 == 0 {
+        if burst_num.is_multiple_of(100) {
             trace!(
                 "[BURST-LOOP] MOTOR PUBLISHER STATE: has_publisher={}, has_shm={}",
                 has_motor_publisher,
@@ -1198,7 +1199,7 @@ fn burst_loop(
                 let subscriptions = motor_subscriptions.read();
 
                 // DEBUG: Log subscription state every 30 bursts
-                if burst_num % 30 == 0 {
+                if burst_num.is_multiple_of(30) {
                     if subscriptions.is_empty() {
                         trace!("[BURST-LOOP] No motor subscriptions");
                     } else {

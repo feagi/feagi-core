@@ -85,10 +85,7 @@ impl SynapticPropagationEngine {
         for i in 0..synapse_storage.count() {
             if synapse_storage.valid_mask()[i] {
                 let source = NeuronId(synapse_storage.source_neurons()[i]);
-                self.synapse_index
-                    .entry(source)
-                    .or_insert_with(Vec::new)
-                    .push(i);
+                self.synapse_index.entry(source).or_default().push(i);
             }
         }
     }
@@ -171,7 +168,7 @@ impl SynapticPropagationEngine {
         for (target_neuron, cortical_area, contribution) in contributions {
             result
                 .entry(cortical_area)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push((target_neuron, contribution));
         }
 

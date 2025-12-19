@@ -55,7 +55,7 @@ impl FireQueue {
     pub fn add_neuron(&mut self, neuron: FiringNeuron) {
         self.neurons_by_area
             .entry(neuron.cortical_idx)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(neuron);
         self.total_count += 1;
     }
