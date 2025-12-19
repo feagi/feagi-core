@@ -182,7 +182,6 @@ pub fn validate_connectivity(
 mod tests {
     use super::*;
     use feagi_data_structures::genomic::cortical_area::descriptors::CorticalAreaDimensions;
-    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
 
     #[test]
     fn test_get_io_data_type() {

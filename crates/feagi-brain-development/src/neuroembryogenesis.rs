@@ -1038,7 +1038,7 @@ impl Neuroembryogenesis {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::{CoreCorticalType, CorticalAreaDimensions};
+    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
     use feagi_evolutionary::create_genome_with_core_morphologies;
 
     #[test]
