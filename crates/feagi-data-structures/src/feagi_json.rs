@@ -1,5 +1,4 @@
 use crate::FeagiDataError;
-use serde_json;
 
 /// A wrapper around serde_json::Value for handling JSON data in FEAGI.
 ///
