@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn test_base64_wrong_length() {
         // Test with valid base64 but wrong length (only 4 bytes encoded)
-        let short_base64 = general_purpose::STANDARD.encode(&[1u8, 2, 3, 4]);
+        let short_base64 = general_purpose::STANDARD.encode([1u8, 2, 3, 4]);
         let result = CorticalID::try_from_base_64(&short_base64);
         assert!(result.is_err());
     }

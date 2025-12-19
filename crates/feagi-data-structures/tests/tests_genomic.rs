@@ -422,7 +422,7 @@ mod test_cortical_id {
         #[test]
         fn test_cortical_id_clone() {
             let cortical_id1 = CoreCorticalType::Power.to_cortical_id();
-            let cortical_id2 = cortical_id1.clone();
+            let cortical_id2 = cortical_id1;
 
             assert_eq!(cortical_id1, cortical_id2);
             assert_eq!(format!("{}", cortical_id1), format!("{}", cortical_id2));
