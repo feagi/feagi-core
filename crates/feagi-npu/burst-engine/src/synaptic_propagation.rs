@@ -217,7 +217,7 @@ mod tests {
             synapse_storage
                 .source_index
                 .entry(source)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(i);
         }
 

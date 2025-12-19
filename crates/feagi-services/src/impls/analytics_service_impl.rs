@@ -282,7 +282,7 @@ impl AnalyticsService for AnalyticsServiceImpl {
             if let Some(area) = manager.get_cortical_area(cortical_id) {
                 let cortical_group = area.get_cortical_group();
                 if cortical_group.as_deref() == Some("MEMORY") {
-                    memory_count += manager.get_neuron_count_in_area(&cortical_id);
+                    memory_count += manager.get_neuron_count_in_area(cortical_id);
                 }
             }
         }
