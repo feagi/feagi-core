@@ -353,8 +353,8 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         mp_charge_accumulation: bool,
         cortical_area: u32,
         x: u32,
-        y: u32,
-        z: u32,
+        _y: u32,
+        _z: u32,
     ) -> Result<usize> {
         if self.count >= N {
             return Err(RuntimeError::CapacityExceeded {
