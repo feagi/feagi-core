@@ -214,7 +214,7 @@ impl AgentService for AgentServiceImpl {
             .map_err(|e| {
                 AgentError::RegistrationFailed(format!("Registration task panicked: {:?}", e))
             })?
-            .map_err(|e| AgentError::RegistrationFailed(e))?;
+            .map_err(AgentError::RegistrationFailed)?;
 
             // Convert PNS transport configs to service transport configs
             let transports = pns_response.transports.map(|ts| {
@@ -287,7 +287,7 @@ impl AgentService for AgentServiceImpl {
         self.agent_registry
             .write()
             .heartbeat(&request.agent_id)
-            .map_err(|e| AgentError::NotFound(e))?;
+            .map_err(AgentError::NotFound)?;
         Ok(())
     }
 
@@ -411,7 +411,7 @@ impl AgentService for AgentServiceImpl {
         self.agent_registry
             .write()
             .deregister(agent_id)
-            .map_err(|e| AgentError::NotFound(e))?;
+            .map_err(AgentError::NotFound)?;
 
         info!(
             "✅ [AGENT-SERVICE] Agent '{}' deregistered successfully",
