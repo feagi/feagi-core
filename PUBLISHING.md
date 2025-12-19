@@ -18,7 +18,7 @@
 ```toml
 # Cargo.toml
 [dependencies]
-feagi = "0.0.1"  # ← Users import this
+feagi = "0.0.1-beta.1"  # ← Users import this (beta release)
 ```
 
 ```rust
@@ -126,7 +126,7 @@ cargo publish --dry-run  # Main crate
 
 ```toml
 [dependencies]
-feagi = "0.0.1"
+feagi = "0.0.1-beta.1"
 ```
 
 ```rust
@@ -153,7 +153,7 @@ use feagi::state_manager::StateManager;
 
 ```toml
 [dependencies]
-feagi-burst-engine = "0.0.1"  # Direct dependency (bypass facade)
+feagi-npu-burst-engine = "0.0.1-beta.1"  # Direct dependency (bypass facade)
 ```
 
 ```rust
@@ -165,7 +165,7 @@ use feagi_burst_engine::RustNPU;
 When users run:
 ```toml
 [dependencies]
-feagi = "0.0.1"
+feagi = "0.0.1-beta.1"
 ```
 
 Cargo automatically resolves:
@@ -253,7 +253,7 @@ feagi-core/
     └── ...
 ```
 **Benefits**:
-- Users get simple `feagi = "0.0.1"` import
+- Users get simple `feagi = "0.0.1-beta.1"` import
 - Advanced users can cherry-pick components
 - Single repository for maintenance
 - Synchronized versions

@@ -2,7 +2,7 @@
 authors.workspace = true
 name = "feagi-sensorimotor"
 edition.workspace = true
-version = "0.0.1"
+version.workspace = true
 license.workspace = true
 description = "Sensorimotor System - Data processing, caching, and neuron voxel encoding for FEAGI agents (sensory input and motor output)"
 repository.workspace = true

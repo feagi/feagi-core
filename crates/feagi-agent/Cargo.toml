@@ -1,6 +1,6 @@
 [package]
 name = "feagi-agent"
-version = "0.0.1"
+version.workspace = true
 edition = "2021"
 authors.workspace = true
 description = "Client library for building FEAGI agents in Rust"

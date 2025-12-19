@@ -2,7 +2,7 @@
 authors.workspace = true
 name = "feagi-data-serialization"
 edition.workspace = true
-version = "0.0.1"
+version.workspace = true
 license.workspace = true
 description = "Adds serialization and deserialization to select Feagi Data Structures."
 repository.workspace = true
