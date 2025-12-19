@@ -11,7 +11,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use super::cortical_area_dtos::CorticalTypeInfo;
-use feagi_bdu::models::CorticalAreaExt;
+use feagi_brain_development::models::CorticalAreaExt;
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_data_structures::genomic::cortical_area::CorticalArea;
 use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
@@ -156,7 +156,7 @@ fn positioning_to_string(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_bdu::{CorticalArea, CorticalID, Dimensions};
+    use feagi_brain_development::{CorticalArea, CorticalID, Dimensions};
     use feagi_data_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
 
     #[test]

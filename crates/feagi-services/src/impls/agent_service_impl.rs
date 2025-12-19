@@ -20,7 +20,7 @@ use crate::types::agent_registry::{
     SensoryCapability, VisualizationCapability,
 };
 use crate::types::registration::RegistrationRequest;
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Implementation of the Agent service

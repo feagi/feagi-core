@@ -36,7 +36,7 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
   - Fire structures (FCL, Fire Queue, Fire Ledger)
   - Depends on: `feagi-types`, `feagi-state-manager`
 
-- **`feagi-bdu`**: Neurogenesis (Brain Development Unit)
+- **`feagi-brain-development`**: Neurogenesis (Brain Development Unit)
   - Cortical area creation
   - Synaptogenesis (connectivity rules)
   - Morphology patterns (projector, expander, etc.)
@@ -86,7 +86,7 @@ feagi-data-structures (merged workspace crate)
         ↓
     ┌───────────────────┬────────────────────┬──────────────────┐
     ↓                   ↓                    ↓                  ↓
-feagi-burst-engine  feagi-bdu        feagi-plasticity  feagi-connectome-serialization
+feagi-burst-engine  feagi-brain-development        feagi-plasticity  feagi-connectome-serialization
     ↓                   ↓                    ↓                  ↓
     └───────────────────┴────────────────────┴──────────────────┘
                             ↓
@@ -128,7 +128,7 @@ use wasm_sync::Mutex;    // Multi-threaded WASM
 ### Completed
 - ✅ feagi-types (foundation)
 - ✅ feagi-burst-engine (algorithm)
-- ✅ feagi-bdu (algorithm)
+- ✅ feagi-brain-development (algorithm)
 - ✅ feagi-plasticity (algorithm)
 - ✅ feagi-connectome-serialization (persistence)
 - ✅ feagi-io (I/O, needs migration)
@@ -196,7 +196,7 @@ All crates will be published with synchronized versions:
 feagi-types
 feagi-state-manager
 feagi-burst-engine
-feagi-bdu
+feagi-brain-development
 feagi-plasticity
 feagi-connectome-serialization
 feagi-io (after migration to feagi-io)

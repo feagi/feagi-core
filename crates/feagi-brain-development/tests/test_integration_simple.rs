@@ -4,7 +4,7 @@
 /// Simple Integration Tests for BDU
 ///
 /// Tests basic functionality without complex genome loading
-use feagi_bdu::{ConnectomeManager, CorticalArea, CorticalID};
+use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
 use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};

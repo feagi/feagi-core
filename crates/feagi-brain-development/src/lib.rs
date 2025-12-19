@@ -12,8 +12,8 @@ This crate implements high-performance brain development operations including:
 ## Architecture
 
 Mirrors the Python structure:
-- `feagi/bdu/connectivity/` → `feagi_bdu::connectivity`
-- `feagi/bdu/morton_spatial_hash.py` → `feagi_bdu::spatial`
+- `feagi/bdu/connectivity/` → `feagi_brain_development::connectivity`
+- `feagi/bdu/morton_spatial_hash.py` → `feagi_brain_development::spatial`
 
 ## Performance Goals
 

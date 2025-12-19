@@ -11,8 +11,8 @@ Licensed under the Apache License, Version 2.0
 use crate::traits::ConnectomeService;
 use crate::types::*;
 use async_trait::async_trait;
-use feagi_bdu::models::CorticalAreaExt;
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::models::CorticalAreaExt;
+use feagi_brain_development::ConnectomeManager;
 use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};

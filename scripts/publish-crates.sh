@@ -45,7 +45,7 @@ CRATES=(
     
     # Layer 7: Evolutionary and development
     "crates/feagi-evolutionary"
-    "crates/feagi-bdu"
+    "crates/feagi-brain-development"
     
     # Layer 8: I/O Layer
     "crates/feagi-io"

@@ -28,7 +28,7 @@
 //!
 //! ### Individual Components
 //! - **`burst-engine`**: NPU execution
-//! - **`bdu`**: Neurogenesis
+//! - **`brain-development`**: Neurogenesis
 //! - **`plasticity`**: Synaptic learning
 //! - **`state-manager`**: Runtime state
 //! - **`serialization`**: Connectome I/O
@@ -114,7 +114,7 @@
 //! └─────────────────────────────────────────────────────────┘
 //!                         ↓
 //! ┌─────────────────────────────────────────────────────────┐
-//! │  Algorithms: burst-engine, bdu, plasticity              │
+//! │  Algorithms: burst-engine, brain-development, plasticity │
 //! │  (Pure neural computation, no I/O)                      │
 //! └─────────────────────────────────────────────────────────┘
 //!                         ↓
@@ -165,8 +165,8 @@ pub use feagi_state_manager as state_manager;
 #[cfg(feature = "burst-engine")]
 pub use feagi_npu_burst_engine as burst_engine;
 
-#[cfg(feature = "bdu")]
-pub use feagi_bdu as bdu;
+#[cfg(feature = "brain-development")]
+pub use feagi_brain_development as bdu;
 
 #[cfg(feature = "plasticity")]
 pub use feagi_npu_plasticity as plasticity;
@@ -191,7 +191,7 @@ pub mod prelude {
     #[cfg(feature = "state-manager")]
     pub use crate::state_manager::{BurstEngineState, GenomeState, StateManager};
 
-    #[cfg(feature = "bdu")]
+    #[cfg(feature = "brain-development")]
     pub use crate::bdu::connectivity::synaptogenesis::*;
 
     #[cfg(feature = "plasticity")]

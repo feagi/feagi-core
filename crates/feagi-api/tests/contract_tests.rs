@@ -8,7 +8,7 @@ use axum::http::{Request, StatusCode};
 /// These tests ensure that the Rust API produces correct responses
 /// and handles errors properly.
 use feagi_api::transports::http::server::{create_http_server, ApiState};
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_runtime::StdRuntime;

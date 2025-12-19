@@ -395,7 +395,7 @@ fn py_syn_last_to_first(
 
 /// Python module initialization (PyO3 0.22 API with Bound)
 #[pymodule]
-fn feagi_bdu(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn feagi_brain_development(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Projector functions
     m.add_function(wrap_pyfunction!(py_syn_projector, m)?)?;
     m.add_function(wrap_pyfunction!(py_syn_projector_batch, m)?)?;

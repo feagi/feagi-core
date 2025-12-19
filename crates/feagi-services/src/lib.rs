@@ -67,7 +67,7 @@ Implementations use domain logic (BDU, NPU, Evo):
 
 ```rust
 use feagi_services::{NeuronService, ServiceResult};
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 
 struct NeuronServiceImpl {
     connectome: Arc<ConnectomeManager>,

@@ -1,4 +1,4 @@
-# feagi-bdu
+# feagi-brain-development
 
 Brain Development Unit - Neurogenesis and synaptogenesis for FEAGI.
 
@@ -14,13 +14,13 @@ Handles structural development of neural networks:
 
 ```toml
 [dependencies]
-feagi-bdu = "2.0"
+feagi-brain-development = "2.0"
 ```
 
 ## Usage
 
 ```rust
-use feagi_bdu::connectivity::synaptogenesis::apply_synaptogenesis_rules;
+use feagi_brain_development::connectivity::synaptogenesis::apply_synaptogenesis_rules;
 
 // Create new cortical areas and connections during development
 ```

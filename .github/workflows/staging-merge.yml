@@ -178,7 +178,6 @@ jobs:
           All workspace crates published with version **${{ steps.version.outputs.version }}**:
           
           - 📦 `feagi-observability`
-          - 📦 `feagi-async`
           - 📦 `feagi-data-structures`
           - 📦 `feagi-config`
           - 📦 `feagi-npu-neural`
@@ -187,8 +186,8 @@ jobs:
           - 📦 `feagi-state-manager`
           - 📦 `feagi-npu-burst-engine`
           - 📦 `feagi-npu-plasticity`
-          - 📦 `feagi-evo`
-          - 📦 `feagi-bdu`
+          - 📦 `feagi-evolutionary`
+          - 📦 `feagi-brain-development`
           - 📦 `feagi-io`
           - 📦 `feagi-pns`
           - 📦 `feagi-services`

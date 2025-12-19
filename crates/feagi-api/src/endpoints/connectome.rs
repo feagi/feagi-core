@@ -402,7 +402,7 @@ pub async fn get_area_synapses(
 
     // Collect all outgoing synapses from neurons in this area
     // Access NPU through ConnectomeManager singleton
-    let manager = feagi_bdu::ConnectomeManager::instance();
+    let manager = feagi_brain_development::ConnectomeManager::instance();
     let manager_lock = manager.read();
     let npu_arc = manager_lock
         .get_npu()

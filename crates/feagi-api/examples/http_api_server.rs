@@ -9,7 +9,7 @@
 //! Run with: cargo run --example http_api_server --package feagi-api
 
 use feagi_api::transports::http::server::{create_http_server, ApiState};
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::{BurstLoopRunner, RustNPU};
 use feagi_services::SystemServiceImpl;
 use feagi_services::*;

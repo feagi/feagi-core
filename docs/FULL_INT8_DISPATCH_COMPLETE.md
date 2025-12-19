@@ -191,7 +191,7 @@ neuro.develop_from_genome(&genome)?;
 ### Build Results ✅
 ```bash
 $ cargo build --package feagi-types --package feagi-burst-engine \
-  --package feagi-bdu --package feagi-evolutionary --release
+  --package feagi-brain-development --package feagi-evolutionary --release
 
 Finished `release` profile [optimized] target(s) in 2.11s ✅
 ```
@@ -235,7 +235,7 @@ Finished `release` profile [optimized] target(s) in 2.11s ✅
 
 ```rust
 use feagi_burst_engine::RustNPU;
-use feagi_bdu::{ConnectomeManager, Neuroembryogenesis};
+use feagi_brain_development::{ConnectomeManager, Neuroembryogenesis};
 use feagi_types::INT8Value;
 
 // Create INT8 NPU

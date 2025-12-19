@@ -160,7 +160,7 @@ impl ConnectomeManager {
     /// # Example
     ///
     /// ```ignore
-    /// use feagi_bdu::ConnectomeManager;
+    /// use feagi_brain_development::ConnectomeManager;
     ///
     /// let manager = ConnectomeManager::instance();
     /// let read_lock = manager.read();
@@ -1757,7 +1757,7 @@ impl ConnectomeManager {
     /// # Example
     ///
     /// ```ignore
-    /// use feagi_bdu::ConnectomeManager;
+    /// use feagi_brain_development::ConnectomeManager;
     ///
     /// let manager = ConnectomeManager::instance();
     /// let mut mgr = manager.write();

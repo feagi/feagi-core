@@ -1,5 +1,5 @@
 [package]
-name = "feagi-bdu"
+name = "feagi-brain-development"
 version = "0.0.1"
 edition.workspace = true
 authors.workspace = true
@@ -8,7 +8,7 @@ description = "Brain Development Utilities - Synaptogenesis and Connectivity"
 
 [lib]
 crate-type = ["rlib"]
-name = "feagi_bdu"
+name = "feagi_brain_development"
 
 [dependencies]
 # Core types from existing FEAGI crates

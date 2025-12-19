@@ -106,7 +106,7 @@ FEAGI Core is organized as a workspace of focused crates:
 
 ### Neural Processing
 - **feagi-burst-engine**: High-performance burst cycle execution
-- **feagi-bdu**: Brain development (neurogenesis, synaptogenesis)
+- **feagi-brain-development**: Brain development (neurogenesis, synaptogenesis)
 - **feagi-plasticity**: Synaptic learning (STDP, memory consolidation)
 - **feagi-evolutionary**: Genome I/O and evolutionary algorithms
 

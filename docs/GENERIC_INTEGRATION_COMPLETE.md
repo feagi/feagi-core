@@ -116,7 +116,7 @@ Final:           0 errors (-100%) ✅
 | feagi-runtime-std | ✅ | 5/5 ✅ | Generic runtime |
 | feagi-runtime-embedded | ✅ | 10/10 ✅ | Generic runtime |
 | feagi-burst-engine | ✅ | 66/66 ✅ | RustNPU<T> |
-| feagi-bdu | ✅ | Build OK | ConnectomeManager<T> |
+| feagi-brain-development | ✅ | Build OK | ConnectomeManager<T> |
 | feagi-evolutionary | ✅ | Build OK | Genome parsing |
 | feagi-io | ⚠️  | Pre-existing errors | Not related to generics |
 
@@ -399,9 +399,9 @@ impl<T: NeuralValue> ConnectomeManager<T> {
 - ✅ `feagi-burst-engine/src/burst_loop_runner.rs` - Uses RustNPU<f32>
 
 ### BDU Layer (Generic)
-- ✅ `feagi-bdu/src/connectome_manager.rs` - ConnectomeManager<T>
-- ✅ `feagi-bdu/src/connectivity/synaptogenesis.rs` - All functions generic
-- ✅ `feagi-bdu/src/neuroembryogenesis.rs` - Uses ConnectomeManager<f32>
+- ✅ `feagi-brain-development/src/connectome_manager.rs` - ConnectomeManager<T>
+- ✅ `feagi-brain-development/src/connectivity/synaptogenesis.rs` - All functions generic
+- ✅ `feagi-brain-development/src/neuroembryogenesis.rs` - Uses ConnectomeManager<f32>
 
 ### Peripheral Systems (f32)
 - ✅ `feagi-io/src/lib.rs` - Uses RustNPU<f32>

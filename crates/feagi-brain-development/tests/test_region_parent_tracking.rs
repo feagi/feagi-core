@@ -9,7 +9,7 @@
 //! - Parent lookup works correctly with UUID keys
 //! - Regression test for "Parent region does not exist" bug
 
-use feagi_bdu::models::brain_region_hierarchy::BrainRegionHierarchy;
+use feagi_brain_development::models::brain_region_hierarchy::BrainRegionHierarchy;
 use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 

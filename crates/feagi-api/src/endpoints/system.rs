@@ -149,7 +149,7 @@ pub async fn get_health_check(
 
     // Get root region ID from ConnectomeManager (only available when services feature is enabled)
     #[cfg(feature = "services")]
-    let brain_regions_root = feagi_bdu::ConnectomeManager::instance()
+    let brain_regions_root = feagi_brain_development::ConnectomeManager::instance()
         .read()
         .get_root_region_id();
     #[cfg(not(feature = "services"))]

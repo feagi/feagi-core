@@ -11,7 +11,7 @@ Licensed under the Apache License, Version 2.0
 use crate::traits::SystemService;
 use crate::types::*;
 use async_trait::async_trait;
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;

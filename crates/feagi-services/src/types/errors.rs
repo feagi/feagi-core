@@ -86,12 +86,12 @@ impl From<feagi_data_structures::FeagiDataError> for ServiceError {
     }
 }
 
-impl From<feagi_bdu::BduError> for ServiceError {
-    fn from(err: feagi_bdu::BduError) -> Self {
+impl From<feagi_brain_development::BduError> for ServiceError {
+    fn from(err: feagi_brain_development::BduError) -> Self {
         match err {
-            feagi_bdu::BduError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
-            feagi_bdu::BduError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
-            feagi_bdu::BduError::InvalidMorphology(msg) => ServiceError::InvalidInput(msg),
+            feagi_brain_development::BduError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
+            feagi_brain_development::BduError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
+            feagi_brain_development::BduError::InvalidMorphology(msg) => ServiceError::InvalidInput(msg),
             _ => ServiceError::Backend(err.to_string()),
         }
     }

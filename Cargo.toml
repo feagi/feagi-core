@@ -35,12 +35,12 @@ wasm = [
 
 # Component features (selective compilation)
 full = ["compute", "io"]
-compute = ["burst-engine", "bdu", "plasticity", "serialization", "state-manager"]
+compute = ["burst-engine", "brain-development", "plasticity", "serialization", "state-manager"]
 io = ["pns", "agent-sdk"]
 
 # Individual components
 burst-engine = ["feagi-npu-burst-engine"]
-bdu = ["feagi-bdu"]
+brain-development = ["feagi-brain-development"]
 plasticity = ["feagi-npu-plasticity"]
 state-manager = ["feagi-state-manager"]
 serialization = ["feagi-io/connectome-serialization"]
@@ -58,7 +58,7 @@ feagi-state-manager = { version = "0.0.1", path = "crates/feagi-state-manager", 
 
 # Algorithms (vendored)
 feagi-npu-burst-engine = { version = "0.0.1", path = "crates/feagi-npu/burst-engine", optional = true }
-feagi-bdu = { version = "0.0.1", path = "crates/feagi-bdu", optional = true }
+feagi-brain-development = { version = "0.0.1", path = "crates/feagi-brain-development", optional = true }
 feagi-npu-plasticity = { version = "0.0.1", path = "crates/feagi-npu/plasticity", optional = true }
 
 # I/O (vendored)
@@ -93,7 +93,7 @@ members = [
     "crates/feagi-observability",      # Unified observability (logging, telemetry, profiling)
     
     # === Algorithm Layer ===
-    "crates/feagi-bdu",                # Neurogenesis (brain development)
+    "crates/feagi-brain-development",                # Neurogenesis (brain development)
     "crates/feagi-npu/plasticity",     # Synaptic learning (STDP, memory)
     
     # === I/O Layer ===

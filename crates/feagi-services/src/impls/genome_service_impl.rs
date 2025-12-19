@@ -11,9 +11,9 @@ Licensed under the Apache License, Version 2.0
 use crate::traits::GenomeService;
 use crate::types::*;
 use async_trait::async_trait;
-use feagi_bdu::models::CorticalAreaExt;
-use feagi_bdu::neuroembryogenesis::Neuroembryogenesis;
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::models::CorticalAreaExt;
+use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
+use feagi_brain_development::ConnectomeManager;
 use feagi_data_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalID,
 };
@@ -106,7 +106,7 @@ impl GenomeService for GenomeServiceImpl {
         // This prevents deadlock when neuroembryogenesis tries to acquire its own write locks
         let connectome_clone = self.connectome.clone();
         let blocking_handle = tokio::task::spawn_blocking(
-            move || -> Result<feagi_bdu::neuroembryogenesis::DevelopmentProgress, ServiceError> {
+            move || -> Result<feagi_brain_development::neuroembryogenesis::DevelopmentProgress, ServiceError> {
                 // Acquire write lock only for prepare/resize operations
                 let mut genome_clone = genome;
                 let (prepare_result, resize_result) = {
@@ -126,7 +126,7 @@ impl GenomeService for GenomeServiceImpl {
 
                 // Now call develop_from_genome without holding the lock
                 // It will acquire its own locks internally
-                let manager_arc = feagi_bdu::ConnectomeManager::instance();
+                let manager_arc = feagi_brain_development::ConnectomeManager::instance();
                 let mut neuro = Neuroembryogenesis::new(manager_arc.clone());
                 neuro.develop_from_genome(&genome_clone).map_err(|e| {
                     ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e))

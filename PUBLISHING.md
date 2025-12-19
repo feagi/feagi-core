@@ -49,7 +49,7 @@ These are **also published separately** for advanced use cases:
 | `feagi-observability` | 2.0.0 | Logging & telemetry | Production deployments |
 | `feagi-embedded` | 2.0.0 | Platform HALs | Embedded platforms |
 | **Algorithms** ||||
-| `feagi-bdu` | 2.0.0 | Neurogenesis | Training/development tools |
+| `feagi-brain-development` | 2.0.0 | Neurogenesis | Training/development tools |
 | `feagi-connectome-serialization` | 2.0.0 | Persistence | Model management tools |
 | **I/O & Agent** ||||
 | `feagi-io` | 2.0.0 | I/O layer | Agent bridges |
@@ -92,7 +92,7 @@ cargo publish -p feagi-connectome-serialization
 # Phase 4: Core algorithms
 cargo publish -p feagi-npu-burst-engine
 cargo publish -p feagi-npu-plasticity
-cargo publish -p feagi-bdu
+cargo publish -p feagi-brain-development
 cargo publish -p feagi-evolutionary
 
 # Phase 5: I/O & Transport
@@ -174,7 +174,7 @@ feagi 2.0.0
 ├── feagi-types 2.0.0
 ├── feagi-state-manager 2.0.0
 ├── feagi-burst-engine 2.0.0
-├── feagi-bdu 2.0.0
+├── feagi-brain-development 2.0.0
 ├── feagi-plasticity 2.0.0
 ├── feagi-connectome-serialization 2.0.0
 ├── feagi-io 2.0.0

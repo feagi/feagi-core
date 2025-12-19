@@ -54,7 +54,7 @@ async-tokio = ["tokio"]
 [dev-dependencies]
 # Testing
 env_logger = "0.11"
-feagi-bdu = { version = "0.0.1", path = "../feagi-bdu" }
+feagi-brain-development = { version = "0.0.1", path = "../feagi-brain-development" }
 tempfile = "3.10"
 
 # Profile configuration is inherited from workspace root

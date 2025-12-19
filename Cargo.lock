@@ -1789,7 +1789,7 @@ name = "feagi"
 version = "0.0.1"
 dependencies = [
  "feagi-agent",
- "feagi-bdu",
+ "feagi-brain-development",
  "feagi-evolutionary",
  "feagi-io",
  "feagi-npu-burst-engine",
@@ -1828,7 +1828,7 @@ dependencies = [
  "base64 0.21.7",
  "chacha20poly1305",
  "chrono",
- "feagi-bdu",
+ "feagi-brain-development",
  "feagi-data-structures",
  "feagi-evolutionary",
  "feagi-io",
@@ -1864,7 +1864,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-bdu"
+name = "feagi-brain-development"
 version = "0.0.1"
 dependencies = [
  "ahash",
@@ -1959,7 +1959,7 @@ version = "0.0.1"
 dependencies = [
  "chrono",
  "env_logger",
- "feagi-bdu",
+ "feagi-brain-development",
  "feagi-data-structures",
  "feagi-npu-neural",
  "feagi-observability",
@@ -1986,7 +1986,7 @@ dependencies = [
  "base64 0.22.1",
  "bincode",
  "crossbeam",
- "feagi-bdu",
+ "feagi-brain-development",
  "feagi-data-serialization",
  "feagi-data-structures",
  "feagi-npu-burst-engine",
@@ -2108,7 +2108,7 @@ version = "0.0.1"
 dependencies = [
  "async-trait",
  "chrono",
- "feagi-bdu",
+ "feagi-brain-development",
  "feagi-data-structures",
  "feagi-evolutionary",
  "feagi-npu-burst-engine",

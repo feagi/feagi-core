@@ -29,7 +29,7 @@ feagi-data-processing (foundational, peer-level)
 │                                                                   │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ Core Subcrates (reusable, modular):                     │    │
-│  │  • feagi-bdu         (Business logic)                   │    │
+│  │  • feagi-brain-development         (Business logic)                   │    │
 │  │  • feagi-npu         (Burst engine)                     │    │
 │  │  • feagi-state       (State manager)                    │    │
 │  │  • feagi-config      (Config loader)                    │    │
@@ -140,7 +140,7 @@ feagi-core/
 │   │       ├── network_service.rs
 │   │       └── npu_service.rs
 │   │
-│   ├── feagi-bdu/                 # Business Logic - CORE (Reusable)
+│   ├── feagi-brain-development/                 # Business Logic - CORE (Reusable)
 │   │   ├── Cargo.toml             # Features: std, minimal, full, wasm
 │   │   └── src/
 │   │       ├── lib.rs
@@ -200,7 +200,7 @@ feagi-core/
 members = [
     "crates/feagi-api",
     "crates/feagi-services",
-    "crates/feagi-bdu",
+    "crates/feagi-brain-development",
     "crates/feagi-npu",
     "crates/feagi-state",
     "crates/feagi-io",
@@ -211,7 +211,7 @@ members = [
 # All subcrates (full stack)
 feagi-api = { path = "crates/feagi-api" }
 feagi-services = { path = "crates/feagi-services" }
-feagi-bdu = { path = "crates/feagi-bdu", features = ["full"] }
+feagi-brain-development = { path = "crates/feagi-brain-development", features = ["full"] }
 feagi-npu = { path = "crates/feagi-npu", features = ["gpu"] }
 feagi-state = { path = "crates/feagi-state" }
 feagi-io = { path = "crates/feagi-io" }
@@ -239,13 +239,13 @@ validator = "0.16"
 **feagi-services/Cargo.toml:**
 ```toml
 [dependencies]
-feagi-bdu = { path = "../feagi-bdu" }
+feagi-brain-development = { path = "../feagi-brain-development" }
 feagi-npu = { path = "../feagi-npu" }
 feagi-state = { path = "../feagi-state" }
 parking_lot = "0.12"
 ```
 
-**feagi-bdu/Cargo.toml:**
+**feagi-brain-development/Cargo.toml:**
 ```toml
 [dependencies]
 feagi-data-processing = { path = "../../feagi-data-processing" }
@@ -367,7 +367,7 @@ feagi-data-processing = { path = "../feagi-data-processing", default-features = 
 # Core subcrates from feagi-core (SELECTIVE)
 feagi-npu = { path = "../feagi-core/crates/feagi-npu", default-features = false, features = ["no_std"] }
 feagi-state = { path = "../feagi-core/crates/feagi-state", default-features = false, features = ["no_std"] }
-feagi-bdu = { path = "../feagi-core/crates/feagi-bdu", default-features = false, features = ["minimal"] }
+feagi-brain-development = { path = "../feagi-core/crates/feagi-brain-development", default-features = false, features = ["minimal"] }
 feagi-config = { path = "../feagi-core/crates/feagi-config", default-features = false }
 
 # NO feagi-api (not needed)
@@ -437,7 +437,7 @@ feagi-data-processing = { path = "../feagi-data-processing", default-features = 
 
 # Core subcrates from feagi-core (SELECTIVE)
 feagi-npu = { path = "../feagi-core/crates/feagi-npu", features = ["wasm"] }
-feagi-bdu = { path = "../feagi-core/crates/feagi-bdu", features = ["wasm", "minimal"] }
+feagi-brain-development = { path = "../feagi-core/crates/feagi-brain-development", features = ["wasm", "minimal"] }
 feagi-state = { path = "../feagi-core/crates/feagi-state" }
 
 # NO feagi-api (browser uses wasm-bindgen instead)
@@ -606,7 +606,7 @@ SDK for building FEAGI agents (sensors/motors).
 | **feagi-api** | Full Stack | REST API (Axum) | feagi-core only | 8K LOC |
 | **feagi-services** | Full Stack | Service layer | feagi-core only | 10K LOC |
 | **feagi-io** | Full Stack | I/O (ZMQ, WebSocket) | feagi-core only | 3K LOC |
-| **feagi-bdu** | Core (Reusable) | Business logic | ALL projects | 10K LOC |
+| **feagi-brain-development** | Core (Reusable) | Business logic | ALL projects | 10K LOC |
 | **feagi-npu** | Core (Reusable) | Burst engine | ALL projects | 5K LOC |
 | **feagi-state** | Core (Reusable) | State manager | ALL projects | 2K LOC |
 | **feagi-config** | Core (Reusable) | Config loader | feagi-core, inference-engine | 2K LOC |
@@ -672,7 +672,7 @@ SDK for building FEAGI agents (sensors/motors).
 │   │   │   ├── Cargo.toml
 │   │   │   └── src/
 │   │   │
-│   │   ├── feagi-bdu/         # Business logic (CORE - reusable)
+│   │   ├── feagi-brain-development/         # Business logic (CORE - reusable)
 │   │   │   ├── Cargo.toml
 │   │   │   └── src/
 │   │   │
@@ -696,7 +696,7 @@ SDK for building FEAGI agents (sensors/motors).
 │   └── benches/
 │
 ├── feagi-inference-engine/    # Embedded inference
-│   ├── Cargo.toml             # Uses: feagi-npu, feagi-state, feagi-bdu, feagi-config
+│   ├── Cargo.toml             # Uses: feagi-npu, feagi-state, feagi-brain-development, feagi-config
 │   └── src/
 │
 ├── feagi-py/                   # Python bindings
@@ -706,7 +706,7 @@ SDK for building FEAGI agents (sensors/motors).
 │   └── python/                # Python wrapper code
 │
 ├── feagi-web/                  # WASM (future)
-│   ├── Cargo.toml             # Uses: feagi-npu, feagi-bdu, feagi-state
+│   ├── Cargo.toml             # Uses: feagi-npu, feagi-brain-development, feagi-state
 │   ├── src/
 │   └── www/                   # JS/HTML demo
 │
@@ -725,7 +725,7 @@ members = [
     "feagi-core",
     "feagi-core/crates/feagi-api",
     "feagi-core/crates/feagi-services",
-    "feagi-core/crates/feagi-bdu",
+    "feagi-core/crates/feagi-brain-development",
     "feagi-core/crates/feagi-npu",
     "feagi-core/crates/feagi-state",
     "feagi-core/crates/feagi-io",
@@ -819,7 +819,7 @@ wasm-pack build --target web
 # feagi-inference-engine only needs 4 subcrates
 feagi-npu = { path = "../feagi-core/crates/feagi-npu", features = ["no_std"] }
 feagi-state = { path = "../feagi-core/crates/feagi-state", features = ["no_std"] }
-feagi-bdu = { path = "../feagi-core/crates/feagi-bdu", features = ["minimal"] }
+feagi-brain-development = { path = "../feagi-core/crates/feagi-brain-development", features = ["minimal"] }
 feagi-config = { path = "../feagi-core/crates/feagi-config" }
 
 # Excludes: feagi-api, feagi-services, feagi-io (not needed for embedded)
@@ -833,7 +833,7 @@ feagi-config = { path = "../feagi-core/crates/feagi-config" }
 ### 3. **Faster Incremental Builds**
 - Change `feagi-api` → only rebuild API layer
 - Change `feagi-npu` → rebuild NPU + dependents (services, main binary)
-- Change `feagi-bdu` → rebuild BDU + all consumers
+- Change `feagi-brain-development` → rebuild BDU + all consumers
 
 ### 4. **Clear Boundaries**
 - **Full Stack subcrates** (api, services, pns) → Server-only
@@ -860,8 +860,8 @@ use wasm_bindgen::prelude::*;
 
 ### 7. **Future-Proof Extensibility**
 Need a new deployment target? Just pick the subcrates you need:
-- ✅ Mobile app? Use `feagi-npu` + `feagi-bdu`
-- ✅ CLI tool? Use `feagi-config` + `feagi-bdu`
+- ✅ Mobile app? Use `feagi-npu` + `feagi-brain-development`
+- ✅ CLI tool? Use `feagi-config` + `feagi-brain-development`
 - ✅ Distributed cluster? Use `feagi-npu` + custom orchestration
 
 ---
@@ -879,7 +879,7 @@ Need a new deployment target? Just pick the subcrates you need:
 
 **`feagi-core` Subcrates (7):**
 - **Full Stack (3):** feagi-api, feagi-services, feagi-io
-- **Core/Reusable (4):** feagi-bdu, feagi-npu, feagi-state, feagi-config
+- **Core/Reusable (4):** feagi-brain-development, feagi-npu, feagi-state, feagi-config
 
 **Supporting (3):**
 6. `brain-visualizer` (Godot+Rust - keep)

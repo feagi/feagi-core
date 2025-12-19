@@ -120,8 +120,8 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-observability`
 - **Purpose:** Genome management, evolution, validation
 
-#### `feagi-bdu`
-- **Path:** `crates/feagi-bdu`
+#### `feagi-brain-development`
+- **Path:** `crates/feagi-brain-development`
 - **Dependencies:**
   - `feagi-npu-neural`
   - `feagi-npu-burst-engine`
@@ -138,7 +138,7 @@ If you must publish manually, follow the layer order below exactly.
 - **Path:** `crates/feagi-io`
 - **Dependencies:**
   - `feagi-npu-burst-engine`
-  - `feagi-bdu`
+  - `feagi-brain-development`
   - `feagi-services`
   - `feagi-npu-neural`
   - `feagi-data-structures`
@@ -163,7 +163,7 @@ If you must publish manually, follow the layer order below exactly.
 - **Dependencies:**
   - `feagi-state-manager`
   - `feagi-npu-burst-engine`
-  - `feagi-bdu`
+  - `feagi-brain-development`
   - `feagi-evolutionary`
   - `feagi-npu-neural`
   - `feagi-observability`
@@ -176,7 +176,7 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-io`
   - `feagi-npu-neural`
   - `feagi-evolutionary`
-  - `feagi-bdu`
+  - `feagi-brain-development`
   - `feagi-npu-burst-engine`
   - `feagi-npu-runtime`
 - **Purpose:** REST API, WebSocket API, OpenAPI spec

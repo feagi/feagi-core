@@ -12,10 +12,10 @@ Successfully integrated `feagi-observability` into all feagi-core crates that re
 - Added crate-specific target: `target: "feagi-services"`
 - All logging calls now use structured tracing
 
-### ✅ feagi-bdu
+### ✅ feagi-brain-development
 - Added `feagi-observability` dependency
 - Replaced all `log::*!` macros with `tracing::*!` macros
-- Added crate-specific target: `target: "feagi-bdu"`
+- Added crate-specific target: `target: "feagi-brain-development"`
 - Updated files:
   - `connectome_manager.rs`
   - `neuroembryogenesis.rs`
@@ -50,7 +50,7 @@ Successfully integrated `feagi-observability` into all feagi-core crates that re
 
 All integrated crates compile successfully:
 - ✅ feagi-services
-- ✅ feagi-bdu
+- ✅ feagi-brain-development
 - ✅ feagi-evolutionarylutionary
 - ✅ feagi-agent
 - ✅ feagi-api
@@ -62,13 +62,13 @@ Now you can use per-crate debug flags:
 
 ```bash
 # Enable debug for specific crates
-./feagi --debug feagi-services --debug feagi-bdu
+./feagi --debug feagi-services --debug feagi-brain-development
 
 # Enable debug for all crates
 ./feagi --debug-all
 
 # Or use environment variable
-FEAGI_DEBUG=feagi-services,feagi-bdu ./feagi
+FEAGI_DEBUG=feagi-services,feagi-brain-development ./feagi
 ```
 
 ## Notes

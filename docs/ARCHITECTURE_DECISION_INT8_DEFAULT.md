@@ -73,7 +73,7 @@ impl Default for QuantizationSpec {
 
 **4. Error Handling**:
 ```rust
-// feagi-bdu/src/neuroembryogenesis.rs
+// feagi-brain-development/src/neuroembryogenesis.rs
 // Parse errors now default to INT8 (was FP32)
 ```
 

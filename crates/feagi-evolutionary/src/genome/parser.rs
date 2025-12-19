@@ -797,7 +797,7 @@ mod tests {
             );
 
             // Verify cortical type is valid
-            use feagi_bdu::models::CorticalAreaExt;
+            use feagi_brain_development::models::CorticalAreaExt;
             let cortical_group_opt = area.get_cortical_group();
             if let Some(cortical_group) = cortical_group_opt {
                 let group_from_prop = area

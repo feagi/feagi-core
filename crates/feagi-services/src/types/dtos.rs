@@ -352,7 +352,7 @@ pub struct SystemStatus {
 /// This is populated by the application (e.g., feagi-rust) at startup
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct VersionInfo {
-    /// Map of crate name to version (e.g., "feagi_bdu" -> "2.0.0")
+    /// Map of crate name to version (e.g., "feagi_brain_development" -> "2.0.0")
     /// Only includes crates actually linked into this binary
     pub crates: std::collections::HashMap<String, String>,
 
