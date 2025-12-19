@@ -51,7 +51,6 @@ impl Default for CorticalMappedXYZPNeuronVoxels {
 }
 
 impl CorticalMappedXYZPNeuronVoxels {
-
     //region HashMap like implementation
     /// Creates a new neuron data collection with pre-allocated capacity.
     ///
@@ -566,12 +565,7 @@ impl std::fmt::Display for CorticalMappedXYZPNeuronVoxels {
         let mut inner: String = String::new();
         for cortical_id_and_data in self {
             inner.push_str(
-                format!(
-                    "[{}, {}],",
-                    cortical_id_and_data.0,
-                    cortical_id_and_data.1
-                )
-                .as_str(),
+                format!("[{}, {}],", cortical_id_and_data.0, cortical_id_and_data.1).as_str(),
             );
         }
         _ = inner.pop(); // Remove the last comma

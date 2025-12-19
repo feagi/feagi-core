@@ -54,7 +54,6 @@ impl Default for NeuronVoxelXYZPArrays {
 }
 
 impl NeuronVoxelXYZPArrays {
-
     /// Creates a new NeuronVoxelXYZPArrays instance from four separate vectors of equal length.
     ///
     /// # Arguments

@@ -188,10 +188,7 @@ impl SynapseStorage for SynapseArray {
         self.valid_mask.push(true);
 
         // Update index
-        self.source_index
-            .entry(source)
-            .or_default()
-            .push(idx);
+        self.source_index.entry(source).or_default().push(idx);
 
         self.count += 1;
         Ok(idx)
