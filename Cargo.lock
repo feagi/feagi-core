@@ -1790,7 +1790,6 @@ version = "0.1.0-beta.1"
 dependencies = [
  "feagi-agent",
  "feagi-bdu",
- "feagi-connectome-serialization",
  "feagi-evo",
  "feagi-io",
  "feagi-npu-burst-engine",
@@ -1830,7 +1829,6 @@ dependencies = [
  "chacha20poly1305",
  "chrono",
  "feagi-bdu",
- "feagi-connectome-serialization",
  "feagi-data-structures",
  "feagi-evo",
  "feagi-io",
@@ -1916,18 +1914,6 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "toml",
-]
-
-[[package]]
-name = "feagi-connectome-serialization"
-version = "0.0.0"
-dependencies = [
- "ahash",
- "bincode",
- "lz4",
- "serde",
- "tempfile",
- "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2021,6 +2007,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "bincode",
  "crossbeam",
  "feagi-bdu",
  "feagi-data-serialization",
@@ -2034,6 +2021,7 @@ dependencies = [
  "parking_lot",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tokio-test",
@@ -2051,7 +2039,6 @@ dependencies = [
  "criterion",
  "cudarc",
  "feagi-async",
- "feagi-connectome-serialization",
  "feagi-data-serialization",
  "feagi-data-structures",
  "feagi-npu-neural",
@@ -2129,7 +2116,6 @@ dependencies = [
  "async-trait",
  "chrono",
  "feagi-bdu",
- "feagi-connectome-serialization",
  "feagi-data-structures",
  "feagi-evo",
  "feagi-npu-burst-engine",

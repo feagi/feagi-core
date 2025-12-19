@@ -172,7 +172,7 @@ pub use feagi_bdu as bdu;
 pub use feagi_npu_plasticity as plasticity;
 
 #[cfg(feature = "serialization")]
-pub use feagi_connectome_serialization as serialization;
+pub use feagi_io::connectome as serialization;
 
 // Re-export I/O layer
 #[cfg(feature = "pns")]

@@ -1334,8 +1334,8 @@ impl<
     /// This captures the complete NPU state including all neurons, synapses,
     /// and runtime state for serialization.
     #[cfg(feature = "connectome-io")]
-    pub fn export_connectome(&self) -> feagi_connectome_serialization::ConnectomeSnapshot {
-        use feagi_connectome_serialization::{
+    pub fn export_connectome(&self) -> feagi_npu_neural::types::connectome::ConnectomeSnapshot {
+        use feagi_npu_neural::types::connectome::{
             ConnectomeMetadata, ConnectomeSnapshot, SerializableNeuronArray,
             SerializableSynapseArray,
         };
@@ -1429,7 +1429,7 @@ impl<
     #[cfg(feature = "connectome-io")]
     pub fn import_connectome(
         runtime: R,
-        snapshot: feagi_connectome_serialization::ConnectomeSnapshot
+        snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot
     ) -> Result<Self, FeagiError> {
         Self::import_connectome_with_config(runtime, snapshot, None)
     }
@@ -1447,7 +1447,7 @@ impl<
     #[cfg(feature = "connectome-io")]
     pub fn import_connectome_with_config(
         runtime: R,
-        snapshot: feagi_connectome_serialization::ConnectomeSnapshot,
+        snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
         gpu_config: Option<&crate::backend::GpuConfig>,
     ) -> Result<Self, FeagiError> {
         use tracing::info;

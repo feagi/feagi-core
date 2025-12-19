@@ -607,7 +607,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     #[cfg(feature = "connectome-io")]
     async fn export_connectome(
         &self,
-    ) -> ServiceResult<feagi_connectome_serialization::ConnectomeSnapshot> {
+    ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot> {
         info!(target: "feagi-services", "Exporting connectome via service layer");
 
         // Get NPU from ConnectomeManager (which has reference to NPU)
@@ -647,7 +647,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
     #[cfg(feature = "connectome-io")]
     async fn import_connectome(
         &self,
-        snapshot: feagi_connectome_serialization::ConnectomeSnapshot,
+        snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
     ) -> ServiceResult<()> {
         info!(target: "feagi-services", "Importing connectome via service layer: {} neurons, {} synapses",
             snapshot.neurons.count, snapshot.synapses.count);

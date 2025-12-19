@@ -477,6 +477,12 @@ pub mod nonblocking;
 
 pub mod transports;
 
+// Connectome I/O (file I/O and future network transport)
+// Types are in feagi-npu-neural::types::connectome
+// File I/O functions are here in feagi-io
+#[cfg(feature = "connectome-serialization")]
+pub mod connectome;
+
 // Re-export commonly used types from core
 pub use core::{
     AgentCapabilities, AgentDisconnectedEvent, AgentInfo, AgentRegisteredEvent, AgentRegistry,

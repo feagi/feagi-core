@@ -13,6 +13,8 @@
 //! Core type definitions for FEAGI neural processing (merged from feagi-types).
 
 pub mod brain;
+#[cfg(feature = "std")]
+pub mod connectome;
 pub mod error;
 pub mod fire;
 pub mod id_manager;
@@ -35,3 +37,10 @@ pub use id_manager::NeuronArrayType;
 // Note: SynapseType is in crate::synapse module (shared with algorithms)
 // Import it here for convenience
 pub use crate::synapse::SynapseType;
+
+// Re-export connectome types when std feature is enabled
+#[cfg(feature = "std")]
+pub use connectome::{
+    ConnectomeMetadata, ConnectomeSnapshot, ConnectomeStatistics, SerializableNeuronArray,
+    SerializableSynapseArray,
+};

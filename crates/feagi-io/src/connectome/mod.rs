@@ -1,53 +1,33 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/*
- * Copyright 2025 Neuraville Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- */
-
-//! # FEAGI Connectome Serialization
+//! # FEAGI Connectome I/O
 //!
-//! Serialization and deserialization of complete brain connectomes for the FEAGI inference engine.
+//! File I/O and serialization for connectome snapshots.
+//! Types are defined in `feagi-npu-neural::types::connectome`.
 //!
-//! ## Design Goals
-//! - **Fast**: Binary format optimized for speed
-//! - **Compact**: Optional compression for storage/network transfer
-//! - **Complete**: Captures entire NPU state including runtime data
-//! - **Version-safe**: Format versioning for backward compatibility
+//! This module provides:
+//! - File I/O (`save_connectome`, `load_connectome`)
+//! - Future: Network transport (ZMQ, WebSocket) for connectome transfer
 //!
 //! ## Usage
 //! ```ignore
-//! use feagi_connectome_serialization::{save_connectome, load_connectome};
-//! use feagi_npu_burst_engine::RustNPU;
+//! use feagi_io::connectome::{save_connectome, load_connectome};
+//! use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
 //!
 //! // Save connectome
-//! let npu = RustNPU::new(10000, 100000, 20);
-//! save_connectome(&npu, "brain.connectome")?;
+//! let snapshot = ConnectomeSnapshot { /* ... */ };
+//! save_connectome(&snapshot, "brain.connectome")?;
 //!
 //! // Load connectome
-//! let npu = load_connectome("brain.connectome")?;
+//! let snapshot = load_connectome("brain.connectome")?;
 //! ```
 
-/// Crate version from Cargo.toml
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-use ahash::AHashMap;
-use serde::{Deserialize, Serialize};
+use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::Path;
 use thiserror::Error;
-
-mod format;
-mod neuron_array;
-mod synapse_array;
-
-pub use format::*;
-pub use neuron_array::*;
-pub use synapse_array::*;
 
 /// Connectome I/O errors
 #[derive(Error, Debug)]
@@ -87,70 +67,6 @@ const MAGIC: &[u8; 5] = b"FEAGI";
 /// Version 2: Added flags byte for compression support
 const FORMAT_VERSION: u32 = 2;
 
-/// Complete connectome snapshot
-///
-/// This structure captures the entire state of a RustNPU, including:
-/// - All neurons and their properties
-/// - All synapses and their weights
-/// - Cortical area metadata
-/// - Runtime state (burst count, etc.)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectomeSnapshot {
-    /// Format version (for backward compatibility)
-    pub version: u32,
-
-    /// Neuron data
-    pub neurons: SerializableNeuronArray,
-
-    /// Synapse data
-    pub synapses: SerializableSynapseArray,
-
-    /// Cortical area ID to name mapping (for visualization)
-    pub cortical_area_names: AHashMap<u32, String>,
-
-    /// Burst count (runtime state)
-    pub burst_count: u64,
-
-    /// Power injection amount
-    pub power_amount: f32,
-
-    /// Fire ledger window size
-    pub fire_ledger_window: usize,
-
-    /// Metadata (optional, for debugging/tracking)
-    pub metadata: ConnectomeMetadata,
-}
-
-/// Connectome metadata (for tracking and debugging)
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConnectomeMetadata {
-    /// When this connectome was saved
-    pub timestamp: u64,
-
-    /// Human-readable description
-    pub description: String,
-
-    /// Source (e.g., "genome: essential_genome.json", "checkpoint: burst_12345")
-    pub source: String,
-
-    /// Custom tags for organization
-    pub tags: AHashMap<String, String>,
-}
-
-impl Default for ConnectomeMetadata {
-    fn default() -> Self {
-        Self {
-            timestamp: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-            description: String::new(),
-            source: String::from("unknown"),
-            tags: AHashMap::new(),
-        }
-    }
-}
-
 /// Save a connectome to a file with optional LZ4 compression
 ///
 /// # Arguments
@@ -180,7 +96,7 @@ pub fn save_connectome<P: AsRef<Path>>(snapshot: &ConnectomeSnapshot, path: P) -
         bincode::serialize(snapshot).map_err(|e| ConnectomeError::Serialization(e.to_string()))?;
 
     // Compress if feature enabled
-    #[cfg(feature = "compression")]
+    #[cfg(feature = "connectome-compression")]
     let (final_data, flags, uncompressed_size) = {
         let original_size = data.len();
         let compressed = lz4::block::compress(&data, None, false)
@@ -188,7 +104,7 @@ pub fn save_connectome<P: AsRef<Path>>(snapshot: &ConnectomeSnapshot, path: P) -
         (compressed, 1u8, original_size as u64) // Flag bit 0 = compressed
     };
 
-    #[cfg(not(feature = "compression"))]
+    #[cfg(not(feature = "connectome-compression"))]
     let (final_data, flags, uncompressed_size) = (data, 0u8, 0u64);
 
     // Write flags
@@ -270,12 +186,12 @@ pub fn load_connectome<P: AsRef<Path>>(path: P) -> Result<ConnectomeSnapshot> {
 
     // Decompress if needed
     let data = if is_compressed {
-        #[cfg(feature = "compression")]
+        #[cfg(feature = "connectome-compression")]
         {
             lz4::block::decompress(&compressed_data, Some(uncompressed_size as i32))
                 .map_err(|e| ConnectomeError::Compression(format!("Decompression failed: {}", e)))?
         }
-        #[cfg(not(feature = "compression"))]
+        #[cfg(not(feature = "connectome-compression"))]
         {
             return Err(ConnectomeError::Compression(
                 "File is compressed but compression feature is not enabled".to_string(),
@@ -309,6 +225,9 @@ fn calculate_checksum(data: &[u8]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use feagi_npu_neural::types::connectome::{
+        ConnectomeMetadata, SerializableNeuronArray, SerializableSynapseArray,
+    };
     use tempfile::NamedTempFile;
 
     #[test]
@@ -318,7 +237,7 @@ mod tests {
             version: FORMAT_VERSION,
             neurons: SerializableNeuronArray::default(),
             synapses: SerializableSynapseArray::default(),
-            cortical_area_names: AHashMap::new(),
+            cortical_area_names: ahash::AHashMap::new(),
             burst_count: 42,
             power_amount: 1.0,
             fire_ledger_window: 20,

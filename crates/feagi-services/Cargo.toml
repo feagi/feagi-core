@@ -17,7 +17,6 @@ feagi-npu-neural = { version = "0.0.0", path = "../feagi-npu/neural" }  # For ty
 feagi-evo = { version = "0.0.0", path = "../feagi-evo" }
 feagi-bdu = { version = "0.0.0", path = "../feagi-bdu", default-features = false }
 feagi-npu-burst-engine = { version = "0.0.0", path = "../feagi-npu/burst-engine", default-features = false, optional = true }
-feagi-connectome-serialization = { version = "0.0.0", path = "../feagi-connectome-serialization", optional = true }
 # feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
 feagi-data-structures = { workspace = true }
@@ -52,7 +51,7 @@ default = ["std", "connectome-io"]
 std = ["tokio", "feagi-bdu/async-tokio", "feagi-npu-burst-engine/async-tokio"]  # Enable async for server deployments
 no_std = []      # Disable async for embedded/RTOS
 wasm = ["feagi-bdu/wasm", "feagi-npu-burst-engine/wasm"]  # WASM builds without tokio
-connectome-io = ["feagi-connectome-serialization", "feagi-npu-burst-engine/connectome-io"]  # Connectome export/import functionality
+connectome-io = ["feagi-npu-burst-engine/connectome-io"]  # Connectome export/import functionality (types in feagi-npu-neural)
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

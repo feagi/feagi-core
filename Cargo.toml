@@ -43,7 +43,7 @@ burst-engine = ["feagi-npu-burst-engine"]
 bdu = ["feagi-bdu"]
 plasticity = ["feagi-npu-plasticity"]
 state-manager = ["feagi-state-manager"]
-serialization = ["feagi-connectome-serialization"]
+serialization = ["feagi-io/connectome-serialization"]
 pns = ["feagi-io"]
 agent-sdk = ["feagi-agent"]
 
@@ -60,7 +60,6 @@ feagi-state-manager = { version = "0.0.0", path = "crates/feagi-state-manager", 
 feagi-npu-burst-engine = { version = "0.0.0", path = "crates/feagi-npu/burst-engine", optional = true }
 feagi-bdu = { version = "0.0.0", path = "crates/feagi-bdu", optional = true }
 feagi-npu-plasticity = { version = "0.0.0", path = "crates/feagi-npu/plasticity", optional = true }
-feagi-connectome-serialization = { version = "0.0.0", path = "crates/feagi-connectome-serialization", optional = true }
 
 # I/O (vendored)
 feagi-io = { version = "0.0.0", path = "crates/feagi-io", optional = true }
@@ -94,7 +93,6 @@ members = [
     # === Algorithm Layer ===
     "crates/feagi-bdu",                # Neurogenesis (brain development)
     "crates/feagi-npu/plasticity",     # Synaptic learning (STDP, memory)
-    "crates/feagi-connectome-serialization",  # Connectome persistence
     
     # === I/O Layer ===
     "crates/feagi-io",                 # I/O System (ZMQ/UDP transport)
@@ -144,7 +142,6 @@ feagi-data-structures = { path = "crates/feagi-data-structures" }
 feagi-data-serialization = { path = "crates/feagi-data-serialization" }
 
 # Workspace-internal crates
-feagi-connectome-serialization = { path = "crates/feagi-connectome-serialization" }
 feagi-observability = { path = "crates/feagi-observability" }
 
 # PyO3 for Python bindings

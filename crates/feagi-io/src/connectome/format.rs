@@ -7,7 +7,7 @@
 
 //! Connectome format utilities and helpers
 
-use crate::ConnectomeSnapshot;
+use crate::connectome::ConnectomeSnapshot;
 
 impl ConnectomeSnapshot {
     /// Get human-readable summary of the connectome
@@ -121,3 +121,4 @@ impl std::fmt::Display for ConnectomeStatistics {
         )
     }
 }
+

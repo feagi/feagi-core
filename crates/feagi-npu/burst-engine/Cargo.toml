@@ -22,7 +22,6 @@ feagi-async = { version = "0.0.50-beta.61", path = "../../feagi-data-structures/
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
 feagi-data-serialization = { workspace = true }  # For decoding sensory data
 feagi-data-structures.workspace = true  # For CorticalMappedXYZPNeuronVoxels
-feagi-connectome-serialization = { workspace = true, optional = true }  # Optional for WASM builds
 thiserror.workspace = true
 rayon.workspace = true
 ndarray.workspace = true
@@ -50,7 +49,7 @@ default = ["connectome-io", "async-tokio", "std"]
 # Standard library support (includes StdRuntime for DynamicNPU type alias)
 std = ["feagi-npu-runtime/std"]
 # Enable connectome serialization/deserialization (requires native dependencies)
-connectome-io = ["feagi-connectome-serialization"]
+connectome-io = []  # Types are in feagi-npu-neural (always available with std feature)
 # Async runtime features
 async-tokio = ["feagi-async/standard-tokio"]
 wasm = ["feagi-async/wasm"]  # Explicitly enable wasm feature on feagi-async (no tokio)
