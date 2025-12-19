@@ -158,6 +158,7 @@ jobs:
     
     - name: Verify crate packaging (dry-run publish check)
       run: |
+        set +e  # Don't exit on error - we handle errors manually
         echo "📦 Verifying each crate can be packaged for publication..."
         echo ""
         echo "Note: This verifies package structure. Dependencies must be published"
