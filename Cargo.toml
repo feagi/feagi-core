@@ -8,7 +8,7 @@
 
 [package]
 name = "feagi-core"
-version = "2.0.0"
+version = "0.0.1"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
@@ -50,22 +50,22 @@ agent-sdk = ["feagi-agent-sdk"]
 
 [dependencies]
 # Foundation
-feagi-types = { version = "2.0", path = "crates/feagi-types" }
-feagi-evo = { version = "2.0", path = "crates/feagi-evo" }
+feagi-types = { version = "0.0.1", path = "crates/feagi-types" }
+feagi-evo = { version = "0.0.1", path = "crates/feagi-evo" }
 serde_json = "1.0"
 
 # Infrastructure
-feagi-state-manager = { version = "2.0", path = "crates/feagi-state-manager", optional = true }
+feagi-state-manager = { version = "0.0.1", path = "crates/feagi-state-manager", optional = true }
 
 # Algorithms
-feagi-burst-engine = { version = "2.0", path = "crates/feagi-burst-engine", optional = true }
-feagi-bdu = { version = "2.0", path = "crates/feagi-bdu", optional = true }
-feagi-plasticity = { version = "2.0", path = "crates/feagi-plasticity", optional = true }
-feagi-connectome-serialization = { version = "2.0", path = "crates/feagi-connectome-serialization", optional = true }
+feagi-burst-engine = { version = "0.0.1", path = "crates/feagi-burst-engine", optional = true }
+feagi-bdu = { version = "0.0.1", path = "crates/feagi-bdu", optional = true }
+feagi-plasticity = { version = "0.0.1", path = "crates/feagi-plasticity", optional = true }
+feagi-connectome-serialization = { version = "0.0.1", path = "crates/feagi-connectome-serialization", optional = true }
 
 # I/O (will move to feagi-io later)
-feagi-pns = { version = "2.0", path = "crates/feagi-pns", optional = true }
-feagi-agent-sdk = { version = "2.0", path = "crates/feagi-agent-sdk", optional = true }
+feagi-pns = { version = "0.0.1", path = "crates/feagi-pns", optional = true }
+feagi-agent-sdk = { version = "0.0.1", path = "crates/feagi-agent-sdk", optional = true }
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
@@ -109,7 +109,7 @@ members = [
 ]
 
 [workspace.package]
-version = "2.0.0"
+version = "0.0.1"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
