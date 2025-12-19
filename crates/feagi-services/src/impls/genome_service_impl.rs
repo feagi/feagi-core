@@ -753,9 +753,10 @@ impl GenomeServiceImpl {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
 
         // Convert cortical_id to CorticalID
-        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
-        })?;
+        let cortical_id_typed =
+            feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
+                ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
+            })?;
 
         // Update RuntimeGenome if available
         if let Some(genome) = self.current_genome.write().as_mut() {
@@ -892,9 +893,10 @@ impl GenomeServiceImpl {
         );
 
         // Convert cortical_id to CorticalID
-        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
-        })?;
+        let cortical_id_typed =
+            feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
+                ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
+            })?;
 
         // Step 1: Update RuntimeGenome dimensions/density
         let (old_dimensions, old_density, new_dimensions, new_density) = {

@@ -30,8 +30,10 @@ fn test_load_barebones_genome() {
         genome.cortical_areas.len()
     );
 
-    let death_id = feagi_evolutionary::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
-    let power_id = feagi_evolutionary::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+    let death_id =
+        feagi_evolutionary::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
+    let power_id =
+        feagi_evolutionary::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
     assert!(
         genome.cortical_areas.contains_key(&death_id),
         "Missing _death cortical area"

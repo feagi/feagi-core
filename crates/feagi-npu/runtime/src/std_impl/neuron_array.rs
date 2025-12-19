@@ -12,10 +12,10 @@
 //!
 //! Uses `Vec` for dynamic growth and Rayon for parallel processing.
 
+use crate::traits::{NeuronStorage, Result, RuntimeError};
 use ahash::AHashMap;
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_neural::{is_refractory, update_neuron_lif};
-use crate::traits::{NeuronStorage, Result, RuntimeError};
 use rayon::prelude::*; // Faster hash map (already a dependency)
 use std::vec::Vec;
 

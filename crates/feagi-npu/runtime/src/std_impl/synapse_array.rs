@@ -12,9 +12,9 @@
 //!
 //! Uses `Vec` and `HashMap` for dynamic growth and fast lookups.
 
+use crate::traits::{Result, SynapseStorage};
 use ahash::AHashMap;
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
-use crate::traits::{Result, SynapseStorage};
 use rayon::prelude::*;
 use std::format;
 use std::vec::Vec;
@@ -214,12 +214,10 @@ impl SynapseStorage for SynapseArray {
 
     fn remove_synapse(&mut self, idx: usize) -> crate::traits::Result<()> {
         if idx >= self.count {
-            return Err(crate::traits::RuntimeError::InvalidParameters(
-                format!(
-                    "Synapse index {} out of bounds (count: {})",
-                    idx, self.count
-                ),
-            ));
+            return Err(crate::traits::RuntimeError::InvalidParameters(format!(
+                "Synapse index {} out of bounds (count: {})",
+                idx, self.count
+            )));
         }
         self.valid_mask[idx] = false;
         Ok(())
@@ -257,23 +255,18 @@ impl SynapseStorage for SynapseArray {
         Ok(removed)
     }
 
-    fn update_weight(
-        &mut self,
-        idx: usize,
-        new_weight: u8,
-    ) -> crate::traits::Result<()> {
+    fn update_weight(&mut self, idx: usize, new_weight: u8) -> crate::traits::Result<()> {
         if idx >= self.count {
-            return Err(crate::traits::RuntimeError::InvalidParameters(
-                format!(
-                    "Synapse index {} out of bounds (count: {})",
-                    idx, self.count
-                ),
-            ));
+            return Err(crate::traits::RuntimeError::InvalidParameters(format!(
+                "Synapse index {} out of bounds (count: {})",
+                idx, self.count
+            )));
         }
         if !self.valid_mask[idx] {
-            return Err(crate::traits::RuntimeError::InvalidParameters(
-                format!("Synapse {} is not valid", idx),
-            ));
+            return Err(crate::traits::RuntimeError::InvalidParameters(format!(
+                "Synapse {} is not valid",
+                idx
+            )));
         }
         self.weights[idx] = new_weight;
         Ok(())

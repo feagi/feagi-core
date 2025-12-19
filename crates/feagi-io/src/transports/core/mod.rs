@@ -49,4 +49,3 @@ pub mod prelude {
     #[cfg(feature = "websocket-transport")]
     pub use crate::transports::core::websocket::client::{WsDealer, WsPush, WsSub};
 }
-

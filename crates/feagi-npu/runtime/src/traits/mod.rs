@@ -16,13 +16,12 @@
 //! - **Platform-Agnostic**: Same burst engine code works everywhere
 //! - **Type-Safe**: Compile-time guarantees for platform compatibility
 
-pub mod runtime;
 pub mod error;
+pub mod runtime;
 
 // Re-export key types
-pub use runtime::{NeuronStorage, Runtime, SynapseStorage};
 pub use error::{Result, RuntimeError};
+pub use runtime::{NeuronStorage, Runtime, SynapseStorage};
 
 // Re-export NeuralValue from feagi-neural
 pub use feagi_npu_neural::types::NeuralValue;
-

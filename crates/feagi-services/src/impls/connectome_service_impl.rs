@@ -629,12 +629,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let snapshot = {
             let npu_lock = npu_arc.lock().unwrap();
             match &*npu_lock {
-                feagi_npu_burst_engine::DynamicNPU::F32(npu_f32) => {
-                    npu_f32.export_connectome()
-                }
-                feagi_npu_burst_engine::DynamicNPU::INT8(npu_int8) => {
-                    npu_int8.export_connectome()
-                }
+                feagi_npu_burst_engine::DynamicNPU::F32(npu_f32) => npu_f32.export_connectome(),
+                feagi_npu_burst_engine::DynamicNPU::INT8(npu_int8) => npu_int8.export_connectome(),
             }
         };
 
@@ -662,12 +658,12 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // This is a complex operation that requires coordination across multiple components.
         // For now, we return NotImplemented and recommend using the NPU constructor directly
         // during application initialization, or implementing a higher-level "replace NPU" operation.
-        
+
         warn!(target: "feagi-services", "⚠️ Connectome import via service layer not yet fully implemented");
         warn!(target: "feagi-services", "   NPU.import_connectome_with_config() creates a new NPU instance");
         warn!(target: "feagi-services", "   This requires stopping burst engine, replacing NPU, and restarting");
         warn!(target: "feagi-services", "   Recommendation: Use NPU.import_connectome_with_config() during initialization");
-        
+
         Err(ServiceError::NotImplemented(
             "Connectome import via service layer requires NPU replacement coordination. Use NPU.import_connectome_with_config() during application initialization, or implement a 'replace NPU' operation that coordinates with BurstLoopRunner.".to_string(),
         ))

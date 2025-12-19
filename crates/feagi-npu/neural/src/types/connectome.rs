@@ -18,7 +18,7 @@ use ahash::AHashMap;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "std")]
-use std::prelude::rust_2021::*;  // Import Vec, String, etc. from std prelude
+use std::prelude::rust_2021::*; // Import Vec, String, etc. from std prelude
 
 /// Serializable version of NeuronArray
 ///
@@ -317,17 +317,19 @@ impl ConnectomeSnapshot {
             let target = self.synapses.target_neurons[i] as usize;
 
             if source >= self.neurons.count {
-            return Err(std::format!(
-                "Synapse {} has invalid source neuron: {}",
-                i, source
-            ));
+                return Err(std::format!(
+                    "Synapse {} has invalid source neuron: {}",
+                    i,
+                    source
+                ));
             }
 
             if target >= self.neurons.count {
-            return Err(std::format!(
-                "Synapse {} has invalid target neuron: {}",
-                i, target
-            ));
+                return Err(std::format!(
+                    "Synapse {} has invalid target neuron: {}",
+                    i,
+                    target
+                ));
             }
         }
 
@@ -362,4 +364,3 @@ impl ConnectomeSnapshot {
         stats
     }
 }
-

@@ -834,7 +834,10 @@ impl Neuroembryogenesis {
 /// Estimate synapse count for an area (fallback when NPU not connected)
 ///
 /// This is only used when NPU is not available for actual synapse creation.
-fn estimate_synapses_for_area(src_area: &CorticalArea, genome: &feagi_evolutionary::RuntimeGenome) -> usize {
+fn estimate_synapses_for_area(
+    src_area: &CorticalArea,
+    genome: &feagi_evolutionary::RuntimeGenome,
+) -> usize {
     let dstmap = match src_area.properties.get("cortical_mapping_dst") {
         Some(serde_json::Value::Object(map)) => map,
         _ => return 0,

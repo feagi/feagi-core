@@ -1992,7 +1992,10 @@ impl ConnectomeManager {
     ///
     /// * `genome` - Genome to analyze for memory requirements
     ///
-    pub fn resize_for_genome(&mut self, genome: &feagi_evolutionary::RuntimeGenome) -> BduResult<()> {
+    pub fn resize_for_genome(
+        &mut self,
+        genome: &feagi_evolutionary::RuntimeGenome,
+    ) -> BduResult<()> {
         // Store morphologies from genome
         self.morphology_registry = genome.morphologies.clone();
         info!(target: "feagi-bdu", "Stored {} morphologies from genome", self.morphology_registry.count());

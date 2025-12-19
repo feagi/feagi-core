@@ -16,16 +16,16 @@ fn load_bird_image() -> ImageFrame {
 #[cfg(test)]
 mod test_connector_cache_sensor_load_image {
     use crate::load_bird_image;
-    use feagi_sensorimotor::data_types::descriptors::{
-        SegmentedImageFrameProperties, SegmentedXYImageResolutions,
-    };
-    use feagi_sensorimotor::data_types::{GazeProperties, MiscData};
-    use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
     use feagi_data_structures::genomic::cortical_area::descriptors::{
         CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
     };
     use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
     use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_sensorimotor::data_types::descriptors::{
+        SegmentedImageFrameProperties, SegmentedXYImageResolutions,
+    };
+    use feagi_sensorimotor::data_types::{GazeProperties, MiscData};
+    use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
     use std::time::Instant;
 
     #[test]
@@ -125,7 +125,7 @@ mod test_connector_cache_sensor_load_image {
             // let bytes = sensor_cache.sensor_copy_feagi_byte_container();
         }
     }
-    
+
     /*
     #[test]
     fn test_segment_bird_image_with_moving_gaze() {
@@ -167,8 +167,6 @@ mod test_connector_cache_sensor_load_image {
         }
     }
     */
-    
-
 
     #[test]
     fn test_encode_of_misc_then_reencode() {
@@ -226,8 +224,6 @@ mod test_connector_cache_sensor_load_image {
             // assert_eq!(misc_data, new_misc_data);
         }
     }
-    
-
 
     #[test]
     fn test_expanding_encode() {

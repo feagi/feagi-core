@@ -43,7 +43,11 @@ impl GazeProperties {
         )
     }
 
-    pub fn calculate_source_corner_points_for_segmented_video_frame(&self, source_frame_resolution: ImageXYResolution, destination_segmented_center_cortical_dimensions: CorticalAreaDimensions) -> Result<[CornerPoints; 9], FeagiDataError> {
+    pub fn calculate_source_corner_points_for_segmented_video_frame(
+        &self,
+        source_frame_resolution: ImageXYResolution,
+        destination_segmented_center_cortical_dimensions: CorticalAreaDimensions,
+    ) -> Result<[CornerPoints; 9], FeagiDataError> {
         if source_frame_resolution.width < 3 || source_frame_resolution.height < 3 {
             return Err(FeagiDataError::BadParameters(
                 "Source frame width and height must be at least 3!".into(),
@@ -51,8 +55,10 @@ impl GazeProperties {
             .into());
         }
 
-
-        let center_corner_points = self.calculate_pixel_coordinates_of_center_corners(source_frame_resolution, destination_segmented_center_cortical_dimensions)?;
+        let center_corner_points = self.calculate_pixel_coordinates_of_center_corners(
+            source_frame_resolution,
+            destination_segmented_center_cortical_dimensions,
+        )?;
         Ok([
             CornerPoints::new(
                 ImageXYPoint::new(0, center_corner_points.lower_right.y),
@@ -102,48 +108,62 @@ impl GazeProperties {
         ])
     }
 
-    fn calculate_pixel_coordinates_of_center_corners(&self, source_frame_resolution: ImageXYResolution, destination_segmented_center_cortical_dimensions: CorticalAreaDimensions) -> Result<CornerPoints, FeagiDataError> {
-
+    fn calculate_pixel_coordinates_of_center_corners(
+        &self,
+        source_frame_resolution: ImageXYResolution,
+        destination_segmented_center_cortical_dimensions: CorticalAreaDimensions,
+    ) -> Result<CornerPoints, FeagiDataError> {
         let source_frame_center_normal: (f32, f32) = (
             self.eccentricity_location_xy.a.get_as_0_1(),
             self.eccentricity_location_xy.b.get_as_0_1(),
         );
 
         let source_frame_max_off_center_normal: (f32, f32) = {
-
             // To keep aspect ratio to the center cortical area XY, but also not allow the size to grow past it
             let source_frame_max_offset_normal: (f32, f32) = {
-                if destination_segmented_center_cortical_dimensions.width > destination_segmented_center_cortical_dimensions.height {
+                if destination_segmented_center_cortical_dimensions.width
+                    > destination_segmented_center_cortical_dimensions.height
+                {
                     // widescreen
-                    let max_cortical_length = destination_segmented_center_cortical_dimensions.width;
-                    let min_cortical_length = destination_segmented_center_cortical_dimensions.height;
-                    let max_offset = ((min_cortical_length as f32) / (max_cortical_length as f32)) * 0.5;
-                    (
-                        max_offset,
-                        0.5
-                    )
+                    let max_cortical_length =
+                        destination_segmented_center_cortical_dimensions.width;
+                    let min_cortical_length =
+                        destination_segmented_center_cortical_dimensions.height;
+                    let max_offset =
+                        ((min_cortical_length as f32) / (max_cortical_length as f32)) * 0.5;
+                    (max_offset, 0.5)
                 } else {
                     // portrait / square
-                    let max_cortical_length = destination_segmented_center_cortical_dimensions.height;
-                    let min_cortical_length = destination_segmented_center_cortical_dimensions.width;
-                    let max_offset = ((min_cortical_length as f32) / (max_cortical_length as f32)) * 0.5;
-                    (
-                        0.5,
-                        max_offset
-                    )
+                    let max_cortical_length =
+                        destination_segmented_center_cortical_dimensions.height;
+                    let min_cortical_length =
+                        destination_segmented_center_cortical_dimensions.width;
+                    let max_offset =
+                        ((min_cortical_length as f32) / (max_cortical_length as f32)) * 0.5;
+                    (0.5, max_offset)
                 }
             };
 
-            (source_frame_max_offset_normal.0 * self.modulation_size.get_as_0_1(), source_frame_max_offset_normal.1 * self.modulation_size.get_as_0_1())
+            (
+                source_frame_max_offset_normal.0 * self.modulation_size.get_as_0_1(),
+                source_frame_max_offset_normal.1 * self.modulation_size.get_as_0_1(),
+            )
         };
 
         // Remember that in an image, Y increases downward
-        let left_position_normal: f32 = source_frame_center_normal.0 - source_frame_max_off_center_normal.0;
-        let top_position_normal: f32 = source_frame_center_normal.1 - source_frame_max_off_center_normal.1;
-        let right_position_normal: f32 = source_frame_center_normal.0 + source_frame_max_off_center_normal.0;
-        let bottom_position_normal: f32 = source_frame_center_normal.1 + source_frame_max_off_center_normal.1;
+        let left_position_normal: f32 =
+            source_frame_center_normal.0 - source_frame_max_off_center_normal.0;
+        let top_position_normal: f32 =
+            source_frame_center_normal.1 - source_frame_max_off_center_normal.1;
+        let right_position_normal: f32 =
+            source_frame_center_normal.0 + source_frame_max_off_center_normal.0;
+        let bottom_position_normal: f32 =
+            source_frame_center_normal.1 + source_frame_max_off_center_normal.1;
 
-        let source_frame_width_height_pixel: (f32, f32) = (source_frame_resolution.width as f32, source_frame_resolution.height as f32);
+        let source_frame_width_height_pixel: (f32, f32) = (
+            source_frame_resolution.width as f32,
+            source_frame_resolution.height as f32,
+        );
 
         let left_position_pixel: f32 = left_position_normal * source_frame_width_height_pixel.0;
         let top_position_pixel: f32 = top_position_normal * source_frame_width_height_pixel.1;
@@ -152,8 +172,14 @@ impl GazeProperties {
 
         let left_pixel = cmp::max(1, left_position_pixel.floor() as i32);
         let top_pixel = cmp::max(1, top_position_pixel.floor() as i32);
-        let right_pixel = cmp::min(source_frame_resolution.width as i32 - 1, right_position_pixel.floor() as i32);
-        let bottom_pixel = cmp::min(source_frame_resolution.height as i32 - 1, bottom_position_pixel.floor() as i32);
+        let right_pixel = cmp::min(
+            source_frame_resolution.width as i32 - 1,
+            right_position_pixel.floor() as i32,
+        );
+        let bottom_pixel = cmp::min(
+            source_frame_resolution.height as i32 - 1,
+            bottom_position_pixel.floor() as i32,
+        );
 
         let top_left = ImageXYPoint::new(left_pixel as u32, top_pixel as u32);
         let bottom_right = ImageXYPoint::new(right_pixel as u32, bottom_pixel as u32);

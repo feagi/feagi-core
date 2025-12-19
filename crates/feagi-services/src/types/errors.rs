@@ -90,8 +90,12 @@ impl From<feagi_brain_development::BduError> for ServiceError {
     fn from(err: feagi_brain_development::BduError) -> Self {
         match err {
             feagi_brain_development::BduError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
-            feagi_brain_development::BduError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
-            feagi_brain_development::BduError::InvalidMorphology(msg) => ServiceError::InvalidInput(msg),
+            feagi_brain_development::BduError::InvalidGenome(msg) => {
+                ServiceError::InvalidInput(msg)
+            }
+            feagi_brain_development::BduError::InvalidMorphology(msg) => {
+                ServiceError::InvalidInput(msg)
+            }
             _ => ServiceError::Backend(err.to_string()),
         }
     }

@@ -12,9 +12,9 @@
 //!
 //! Uses stack-allocated arrays for predictable memory usage.
 
+use crate::traits::{NeuronStorage, Result, RuntimeError};
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_neural::{is_refractory, update_neuron_lif};
-use crate::traits::{NeuronStorage, Result, RuntimeError};
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;

@@ -12,8 +12,8 @@
 //!
 //! Uses stack-allocated arrays for predictable memory usage.
 
-use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
 use crate::traits::{Result, RuntimeError, SynapseStorage};
+use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
 
 /// Fixed-size synapse array for embedded systems
 ///

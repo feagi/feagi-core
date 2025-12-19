@@ -22,7 +22,7 @@ use std::mem::discriminant;
 ///
 /// # Examples
 /// ```
-    /// use feagi_sensorimotor::wrapped_io_data::WrappedIOType;
+/// use feagi_sensorimotor::wrapped_io_data::WrappedIOType;
 ///
 /// let io_type = WrappedIOType::Percentage;
 /// let blank_data = io_type.create_blank_data_of_type().unwrap();

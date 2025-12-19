@@ -570,8 +570,10 @@ pub async fn post_upload_connectome(
     Json(data): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // Deserialize snapshot from JSON
-    let snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot = serde_json::from_value(data)
-        .map_err(|e| ApiError::invalid_input(format!("Invalid connectome snapshot format: {}", e)))?;
+    let snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot =
+        serde_json::from_value(data).map_err(|e| {
+            ApiError::invalid_input(format!("Invalid connectome snapshot format: {}", e))
+        })?;
 
     // Import connectome via service layer (architecture-compliant)
     state

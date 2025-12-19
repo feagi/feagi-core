@@ -3,31 +3,28 @@
 //! These tests verify image segmentation through the ConnectorAgent and sensor cache,
 //! testing various gaze positions, resolutions, and color channel configurations.
 
+use feagi_data_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
+};
+use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_sensorimotor::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
 use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_sensorimotor::ConnectorAgent;
-use feagi_data_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
-};
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 
 //region Helper Functions
 
 fn load_bird_image() -> ImageFrame {
-    let bird_bytes =
-        std::fs::read("tests/images/bird.jpg").expect("Bird image should exist at tests/images/bird.jpg");
+    let bird_bytes = std::fs::read("tests/images/bird.jpg")
+        .expect("Bird image should exist at tests/images/bird.jpg");
     ImageFrame::new_from_jpeg_bytes(&bird_bytes, &ColorSpace::Gamma)
         .expect("Bird image should load correctly")
 }
 
 fn create_default_gaze() -> GazeProperties {
-    GazeProperties::new(
-        (0.5, 0.5).try_into().unwrap(),
-        0.5.try_into().unwrap(),
-    )
+    GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap())
 }
 
 fn create_gaze(x: f32, y: f32, size: f32) -> GazeProperties {
@@ -207,7 +204,7 @@ mod test_image_segmentation_gaze_positions {
             bird_properties.get_color_channel_layout(),
             bird_properties.get_color_space(),
         );
-        
+
         // Gaze towards top-left (negative eccentricity)
         let gaze = create_gaze(0.2, 0.8, 0.3);
 
@@ -231,7 +228,6 @@ mod test_image_segmentation_gaze_positions {
         }
     }
 
-
     #[test]
     fn test_segment_with_bottom_right_gaze() {
         let cortical_group: CorticalGroupIndex = 0.into();
@@ -251,7 +247,7 @@ mod test_image_segmentation_gaze_positions {
             bird_properties.get_color_channel_layout(),
             bird_properties.get_color_space(),
         );
-        
+
         // Gaze towards bottom-right
         let gaze = create_gaze(0.8, 0.2, 0.4);
 
@@ -276,7 +272,6 @@ mod test_image_segmentation_gaze_positions {
         }
     }
 
-
     #[test]
     fn test_segment_with_minimum_modulation_size() {
         let cortical_group: CorticalGroupIndex = 0.into();
@@ -296,7 +291,7 @@ mod test_image_segmentation_gaze_positions {
             bird_properties.get_color_channel_layout(),
             bird_properties.get_color_space(),
         );
-        
+
         // Very small modulation size (zoomed in)
         let gaze = create_gaze(0.5, 0.5, 0.1);
 
@@ -339,7 +334,7 @@ mod test_image_segmentation_gaze_positions {
             bird_properties.get_color_channel_layout(),
             bird_properties.get_color_space(),
         );
-        
+
         // Maximum modulation size (zoomed out)
         let gaze = create_gaze(0.5, 0.5, 1.0);
 
@@ -381,12 +376,12 @@ mod test_image_segmentation_color_channels {
 
         let bird_image = load_bird_image();
         let bird_properties = bird_image.get_image_frame_properties();
-        
+
         // RGB center, grayscale peripheral
         let segmented_properties = SegmentedImageFrameProperties::new(
             segmented_resolutions,
             bird_properties.get_color_channel_layout(), // RGB center
-            ColorChannelLayout::GrayScale,               // Grayscale peripheral
+            ColorChannelLayout::GrayScale,              // Grayscale peripheral
             bird_properties.get_color_space(),
         );
         let initial_gaze = create_default_gaze();
@@ -424,7 +419,7 @@ mod test_image_segmentation_color_channels {
 
         let bird_image = load_bird_image();
         let bird_properties = bird_image.get_image_frame_properties();
-        
+
         // Both center and peripheral as grayscale
         let segmented_properties = SegmentedImageFrameProperties::new(
             segmented_resolutions,
@@ -532,7 +527,7 @@ mod test_image_segmentation_multiple_channels {
             bird_properties.get_color_channel_layout(),
             bird_properties.get_color_space(),
         );
-        
+
         let gaze_center = create_gaze(0.5, 0.5, 0.5);
         let gaze_left = create_gaze(0.2, 0.5, 0.3);
         let gaze_right = create_gaze(0.8, 0.5, 0.3);
@@ -540,7 +535,7 @@ mod test_image_segmentation_multiple_channels {
         let connector_agent = ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
-            
+
             // Register multiple cortical groups with different gazes
             sensor_cache
                 .segmented_vision_register(
@@ -552,7 +547,7 @@ mod test_image_segmentation_multiple_channels {
                     gaze_center,
                 )
                 .expect("Registration for group 0 should succeed");
-            
+
             sensor_cache
                 .segmented_vision_register(
                     group_1,
@@ -563,7 +558,7 @@ mod test_image_segmentation_multiple_channels {
                     gaze_left,
                 )
                 .expect("Registration for group 1 should succeed");
-            
+
             sensor_cache
                 .segmented_vision_register(
                     group_2,
@@ -603,8 +598,8 @@ mod test_image_segmentation_resolutions {
 
         // Non-square resolutions
         let segmented_resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-            (256, 128).try_into().unwrap(),  // Wide center
-            (64, 32).try_into().unwrap(),    // Wide peripheral
+            (256, 128).try_into().unwrap(), // Wide center
+            (64, 32).try_into().unwrap(),   // Wide peripheral
         );
 
         let bird_image = load_bird_image();
@@ -645,8 +640,8 @@ mod test_image_segmentation_resolutions {
 
         // Tall (portrait) resolutions
         let segmented_resolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-            (128, 256).try_into().unwrap(),  // Tall center
-            (32, 64).try_into().unwrap(),    // Tall peripheral
+            (128, 256).try_into().unwrap(), // Tall center
+            (32, 64).try_into().unwrap(),   // Tall peripheral
         );
 
         let bird_image = load_bird_image();
@@ -773,4 +768,3 @@ mod test_image_segmentation_frame_change_handling {
         }
     }
 }
-
