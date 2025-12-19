@@ -22,23 +22,23 @@ use utoipa::ToSchema;
 pub struct GenomeInfoResponse {
     /// Genome ID
     pub genome_id: Option<String>,
-    
+
     /// Human-readable title
     pub title: Option<String>,
-    
+
     /// Genome version
     pub version: Option<String>,
-    
+
     /// Number of cortical areas
     pub cortical_area_count: usize,
-    
+
     /// Number of brain regions
     pub brain_region_count: usize,
-    
+
     /// Creation timestamp (ISO 8601)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_at: Option<String>,
-    
+
     /// Last modification timestamp (ISO 8601)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub modified_at: Option<String>,
@@ -49,7 +49,7 @@ pub struct GenomeInfoResponse {
 pub struct LoadGenomeRequest {
     /// Genome JSON string
     pub genome_json: String,
-    
+
     /// Whether to reset connectome before loading
     #[serde(default)]
     pub reset_before_load: bool,
@@ -61,7 +61,7 @@ pub struct SaveGenomeRequest {
     /// Optional: Genome ID to assign
     #[serde(default)]
     pub genome_id: Option<String>,
-    
+
     /// Optional: Human-readable title
     #[serde(default)]
     pub title: Option<String>,
@@ -72,7 +72,7 @@ pub struct SaveGenomeRequest {
 pub struct SaveGenomeResponse {
     /// Genome JSON string
     pub genome_json: String,
-    
+
     /// Genome metadata
     pub genome_info: GenomeInfoResponse,
 }
@@ -89,12 +89,8 @@ pub struct ValidateGenomeRequest {
 pub struct ValidateGenomeResponse {
     /// Whether the genome is valid
     pub is_valid: bool,
-    
+
     /// Validation errors (if any)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub errors: Option<Vec<String>>,
 }
-
-
-
-

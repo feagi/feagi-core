@@ -80,7 +80,7 @@ RustNPU<T: NeuralValue>
 - Singleton remains f32 (backward compatible)
 
 #### Step 5: Peripheral Systems ✅
-- feagi-pns updated to `RustNPU<f32>`
+- feagi-io updated to `RustNPU<f32>`
 - feagi-api no changes needed
 - GPU backend (wgpu) updated
 
@@ -116,9 +116,9 @@ Final:           0 errors (-100%) ✅
 | feagi-runtime-std | ✅ | 5/5 ✅ | Generic runtime |
 | feagi-runtime-embedded | ✅ | 10/10 ✅ | Generic runtime |
 | feagi-burst-engine | ✅ | 66/66 ✅ | RustNPU<T> |
-| feagi-bdu | ✅ | Build OK | ConnectomeManager<T> |
-| feagi-evo | ✅ | Build OK | Genome parsing |
-| feagi-pns | ⚠️  | Pre-existing errors | Not related to generics |
+| feagi-brain-development | ✅ | Build OK | ConnectomeManager<T> |
+| feagi-evolutionary | ✅ | Build OK | Genome parsing |
+| feagi-io | ⚠️  | Pre-existing errors | Not related to generics |
 
 **69 tests passing, zero regressions!** ✅
 
@@ -351,7 +351,7 @@ impl<T: NeuralValue> ConnectomeManager<T> {
 
 ## 🐛 Known Issues
 
-### 1. feagi-pns Pre-existing Errors ⚠️
+### 1. feagi-io Pre-existing Errors ⚠️
 **Status**: Not related to generic integration  
 **Errors**: 7 type annotation errors in callback closures  
 **Impact**: Does not block generic quantization work  
@@ -399,19 +399,19 @@ impl<T: NeuralValue> ConnectomeManager<T> {
 - ✅ `feagi-burst-engine/src/burst_loop_runner.rs` - Uses RustNPU<f32>
 
 ### BDU Layer (Generic)
-- ✅ `feagi-bdu/src/connectome_manager.rs` - ConnectomeManager<T>
-- ✅ `feagi-bdu/src/connectivity/synaptogenesis.rs` - All functions generic
-- ✅ `feagi-bdu/src/neuroembryogenesis.rs` - Uses ConnectomeManager<f32>
+- ✅ `feagi-brain-development/src/connectome_manager.rs` - ConnectomeManager<T>
+- ✅ `feagi-brain-development/src/connectivity/synaptogenesis.rs` - All functions generic
+- ✅ `feagi-brain-development/src/neuroembryogenesis.rs` - Uses ConnectomeManager<f32>
 
 ### Peripheral Systems (f32)
-- ✅ `feagi-pns/src/lib.rs` - Uses RustNPU<f32>
-- ✅ `feagi-pns/src/transports/zmq/api_control.rs` - Uses RustNPU<f32>
-- ✅ `feagi-pns/src/transports/zmq/sensory.rs` - Uses RustNPU<f32>
+- ✅ `feagi-io/src/lib.rs` - Uses RustNPU<f32>
+- ✅ `feagi-io/src/transports/zmq/api_control.rs` - Uses RustNPU<f32>
+- ✅ `feagi-io/src/transports/zmq/sensory.rs` - Uses RustNPU<f32>
 
 ### Genome & Config
-- ✅ `feagi-evo/src/runtime.rs` - Default quantization_precision = "int8"
-- ✅ `feagi-evo/src/validator.rs` - Validation & auto-fix
-- ✅ `feagi-evo/src/genome/converter.rs` - Genome parsing
+- ✅ `feagi-evolutionary/src/runtime.rs` - Default quantization_precision = "int8"
+- ✅ `feagi-evolutionary/src/validator.rs` - Validation & auto-fix
+- ✅ `feagi-evolutionary/src/genome/converter.rs` - Genome parsing
 
 ---
 

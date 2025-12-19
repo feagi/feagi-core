@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Burst Engine API DTOs
-//! 
+//!
 //! Request/response types for FCL, Fire Queue, and burst engine control
 
 use serde::{Deserialize, Serialize};
@@ -14,19 +14,19 @@ use utoipa::ToSchema;
 pub struct FCLResponse {
     /// Current timestep
     pub timestep: u64,
-    
+
     /// Total neurons in FCL
     pub total_neurons: usize,
-    
+
     /// Global FCL (all neuron IDs across areas)
     pub global_fcl: Vec<u64>,
-    
+
     /// FCL organized by cortical area
     pub cortical_areas: HashMap<String, Vec<u64>>,
-    
+
     /// Default fire ledger window size
     pub default_window_size: u32,
-    
+
     /// Number of cortical areas with active neurons
     pub active_cortical_count: usize,
 }
@@ -36,10 +36,10 @@ pub struct FCLResponse {
 pub struct FireQueueResponse {
     /// Current timestep
     pub timestep: u64,
-    
+
     /// Total neurons that fired
     pub total_fired: usize,
-    
+
     /// Fired neurons organized by cortical area
     pub cortical_areas: HashMap<String, Vec<u64>>,
 }
@@ -84,5 +84,3 @@ pub struct BurstEngineControlRequest {
     /// Action to perform: "start", "pause", "stop", "resume"
     pub action: String,
 }
-
-

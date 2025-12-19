@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Evolution API DTOs
-//! 
+//!
 //! Request/response types for evolutionary algorithms
 
 use serde::{Deserialize, Serialize};
@@ -29,5 +29,3 @@ pub struct EvolutionSuccessResponse {
     pub message: String,
     pub success: bool,
 }
-
-

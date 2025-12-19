@@ -12,13 +12,13 @@
 
 **Name**: `feagi`  
 **Path**: Root of repository (`/Users/nadji/code/FEAGI-2.0/feagi-core/`)  
-**Version**: `2.0.0`  
+**Version**: `0.0.1`  
 **Usage**: Primary import for most users
 
 ```toml
 # Cargo.toml
 [dependencies]
-feagi = "2.0"  # ← Users import this
+feagi = "0.0.1"  # ← Users import this
 ```
 
 ```rust
@@ -36,21 +36,33 @@ These are **also published separately** for advanced use cases:
 
 | Crate | Version | Description | Users Who Need It |
 |-------|---------|-------------|------------------|
-| `feagi-types` | 2.0.0 | Core data structures | Library authors |
-| `feagi-state-manager` | 2.0.0 | Runtime state | Advanced integrations |
-| `feagi-burst-engine` | 2.0.0 | NPU execution | Inference-only apps |
-| `feagi-bdu` | 2.0.0 | Neurogenesis | Training/development tools |
-| `feagi-plasticity` | 2.0.0 | Synaptic learning | Research implementations |
-| `feagi-connectome-serialization` | 2.0.0 | Persistence | Model management tools |
-| `feagi-pns` | 2.0.0 | I/O layer | Agent bridges |
-| `feagi-agent-sdk` | 2.0.0 | Client SDK | Agent developers |
+| **NPU Subsystem** ||||
+| `feagi-npu-neural` | 0.0.1 | Core neural types & algorithms | Library authors, embedded |
+| `feagi-npu-runtime` | 0.0.1 | Runtime trait definitions | Platform implementers |
+| `feagi-npu-runtime-std` | 0.0.1 | Desktop/server runtime | Standard applications |
+| `feagi-npu-runtime-embedded` | 0.0.1 | Embedded runtime | ESP32, RTOS, no_std |
+| `feagi-npu-burst-engine` | 0.0.1 | NPU execution engine | Inference-only apps |
+| `feagi-npu-plasticity` | 0.0.1 | Synaptic learning (STDP) | Training, research |
+| **Infrastructure** ||||
+| `feagi-config` | 0.0.1 | Configuration loader | All applications |
+| `feagi-state-manager` | 0.0.1 | Runtime state | Advanced integrations |
+| `feagi-observability` | 0.0.1 | Logging & telemetry | Production deployments |
+| `feagi-hal` | 0.0.1 | Platform HALs | Embedded platforms |
+| **Algorithms** ||||
+| `feagi-brain-development` | 0.0.1 | Neurogenesis | Training/development tools |
+| `feagi-connectome-serialization` | 0.0.1 | Persistence | Model management tools |
+| **I/O & Agent** ||||
+| `feagi-io` | 0.0.1 | I/O layer | Agent bridges |
+| `feagi-agent` | 0.0.1 | Client SDK | Agent developers |
 
 **Advanced usage**:
 ```toml
 # For inference-only application (minimal dependencies)
 [dependencies]
-feagi-burst-engine = "2.0"
-feagi-connectome-serialization = "2.0"
+feagi-npu-neural = "0.0.1"
+feagi-npu-runtime-std = "0.0.1"
+feagi-npu-burst-engine = "0.0.1"
+feagi-connectome-serialization = "0.0.1"
 ```
 
 ## Publishing Commands
@@ -60,31 +72,50 @@ feagi-connectome-serialization = "2.0"
 ```bash
 cd /Users/nadji/code/FEAGI-2.0/feagi-core
 
-# 1. Foundation (no dependencies)
-cargo publish -p feagi-types
+# Phase 1: Foundation (no internal dependencies)
+cargo publish -p feagi-npu-neural
+cargo publish -p feagi-npu-runtime
+cargo publish -p feagi-config
+cargo publish -p feagi-observability
+cargo publish -p feagi-data-structures
 
-# 2. Infrastructure (depends on types)
+# Phase 2: Runtime implementations
+cargo publish -p feagi-npu-runtime-std
+cargo publish -p feagi-npu-runtime-embedded
+cargo publish -p feagi-hal
 cargo publish -p feagi-state-manager
 
-# 3. Algorithms (depend on state-manager)
-cargo publish -p feagi-burst-engine
-cargo publish -p feagi-bdu
-cargo publish -p feagi-plasticity
+# Phase 3: Data & Serialization
+cargo publish -p feagi-data-serialization
 cargo publish -p feagi-connectome-serialization
 
-# 4. I/O layer (depends on algorithms)
-cargo publish -p feagi-pns
-cargo publish -p feagi-agent-sdk
+# Phase 4: Core algorithms
+cargo publish -p feagi-npu-burst-engine
+cargo publish -p feagi-npu-plasticity
+cargo publish -p feagi-brain-development
+cargo publish -p feagi-evolutionary
 
-# 5. Main facade crate (re-exports everything)
+# Phase 5: I/O & Transport
+cargo publish -p feagi-transports
+cargo publish -p feagi-io
+cargo publish -p feagi-connector-core
+
+# Phase 6: Services & API
+cargo publish -p feagi-services
+cargo publish -p feagi-agent
+cargo publish -p feagi-api
+
+# Phase 7: Main facade crate (re-exports everything)
 cargo publish
 ```
 
 ### Dry Run (Test Before Publishing)
 
 ```bash
-cargo publish --dry-run -p feagi-types
-cargo publish --dry-run -p feagi-state-manager
+cargo publish --dry-run -p feagi-npu-neural
+cargo publish --dry-run -p feagi-npu-runtime
+cargo publish --dry-run -p feagi-npu-runtime-std
+cargo publish --dry-run -p feagi-npu-burst-engine
 # ... etc
 cargo publish --dry-run  # Main crate
 ```
@@ -95,7 +126,7 @@ cargo publish --dry-run  # Main crate
 
 ```toml
 [dependencies]
-feagi = "2.0"
+feagi = "0.0.1"
 ```
 
 ```rust
@@ -109,7 +140,7 @@ npu.process_burst()?;
 
 ```toml
 [dependencies]
-feagi = { version = "2.0", features = ["compute"], default-features = false }
+feagi = { version = "0.0.1", features = ["compute"], default-features = false }
 ```
 
 ```rust
@@ -122,7 +153,7 @@ use feagi::state_manager::StateManager;
 
 ```toml
 [dependencies]
-feagi-burst-engine = "2.0"  # Direct dependency (bypass facade)
+feagi-burst-engine = "0.0.1"  # Direct dependency (bypass facade)
 ```
 
 ```rust
@@ -134,34 +165,36 @@ use feagi_burst_engine::RustNPU;
 When users run:
 ```toml
 [dependencies]
-feagi = "2.0"
+feagi = "0.0.1"
 ```
 
 Cargo automatically resolves:
 ```
-feagi 2.0.0
-├── feagi-types 2.0.0
-├── feagi-state-manager 2.0.0
-├── feagi-burst-engine 2.0.0
-├── feagi-bdu 2.0.0
-├── feagi-plasticity 2.0.0
-├── feagi-connectome-serialization 2.0.0
-├── feagi-pns 2.0.0
-└── feagi-agent-sdk 2.0.0
+feagi 0.0.1
+├── feagi-types 0.0.1
+├── feagi-state-manager 0.0.1
+├── feagi-burst-engine 0.0.1
+├── feagi-brain-development 0.0.1
+├── feagi-plasticity 0.0.1
+├── feagi-connectome-serialization 0.0.1
+├── feagi-io 0.0.1
+└── feagi-agent 0.0.1
 ```
 
 ## Version Synchronization
 
 **All crates MUST have synchronized versions**:
-- Main crate: `2.0.0`
-- All sub-crates: `2.0.0`
+- Main crate: `0.0.1`
+- All sub-crates: `0.0.1` (inherited from workspace)
 
 **Update script**:
 ```bash
 # Update all versions at once
 cd /Users/nadji/code/FEAGI-2.0/feagi-core
-find crates -name Cargo.toml -exec sed -i 's/version = "2.0.0"/version = "2.1.0"/' {} \;
-sed -i 's/version = "2.0.0"/version = "2.1.0"/' Cargo.toml
+# Update workspace version (most crates inherit from this)
+sed -i 's/version = "0.0.1"/version = "0.0.2"/' Cargo.toml
+# Update any crates with explicit versions
+find crates -name Cargo.toml -exec sed -i 's/version = "0.0.1"/version = "0.0.2"/' {} \;
 ```
 
 ## Verification
@@ -220,7 +253,7 @@ feagi-core/
     └── ...
 ```
 **Benefits**:
-- Users get simple `feagi = "2.0"` import
+- Users get simple `feagi = "0.0.1"` import
 - Advanced users can cherry-pick components
 - Single repository for maintenance
 - Synchronized versions
@@ -282,7 +315,7 @@ All crates will automatically have documentation at:
 ### Q: Why not publish as a single crate?
 **A**: We want to support both:
 - Simple import: `use feagi::prelude::*;`
-- Selective dependencies: `feagi-burst-engine = "2.0"`
+- Selective dependencies: `feagi-burst-engine = "0.0.1"`
 
 ### Q: Will users accidentally get duplicate dependencies?
 **A**: No. Cargo deduplicates. Whether they use `feagi` or `feagi-burst-engine`, they get the same binary.
@@ -300,8 +333,8 @@ feagi = { git = "https://github.com/Neuraville/FEAGI-2.0", branch = "main" }
 ---
 
 **Status**: ✅ Structure verified, ready for publishing  
-**Last Updated**: 2025-10-28  
-**Version**: 2.0.0
+**Last Updated**: 2025-01-27  
+**Version**: 0.0.1
 
 
 

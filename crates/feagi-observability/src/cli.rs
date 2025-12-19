@@ -140,7 +140,7 @@ pub fn debug_flags_help() -> String {
 
 Available crates:
   {}
-  
+
 Environment Variable:
   FEAGI_DEBUG={{crate-name}}[,{{crate-name}}]  Enable debug for crates (comma-separated)
   FEAGI_DEBUG=all                               Enable debug for all crates
@@ -180,7 +180,11 @@ mod tests {
     fn test_debug_all() {
         let flags = CrateDebugFlags::from_args(vec!["--debug-all".to_string()]);
         for crate_name in KNOWN_CRATES {
-            assert!(flags.is_enabled(crate_name), "{} should be enabled", crate_name);
+            assert!(
+                flags.is_enabled(crate_name),
+                "{} should be enabled",
+                crate_name
+            );
         }
     }
 
@@ -198,4 +202,3 @@ mod tests {
         assert_eq!(flags.log_level("feagi-burst-engine"), tracing::Level::INFO);
     }
 }
-

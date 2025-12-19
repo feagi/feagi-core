@@ -13,14 +13,8 @@ pub enum StateEvent {
 }
 
 /// Event channel
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(target_family = "wasm")))]
 pub type EventChannel = crossbeam::channel::Sender<StateEvent>;
-
-#[cfg(feature = "no_std")]
-pub struct EventChannel {
-    // TODO: heapless::spsc implementation
-    _phantom: std::marker::PhantomData<()>,
-}
 
 #[cfg(target_family = "wasm")]
 pub struct EventChannel {
@@ -28,7 +22,8 @@ pub struct EventChannel {
     _phantom: std::marker::PhantomData<()>,
 }
 
-
-
-
-
+#[cfg(all(feature = "no_std", not(target_family = "wasm")))]
+pub struct EventChannel {
+    // TODO: heapless::spsc implementation
+    _phantom: std::marker::PhantomData<()>,
+}

@@ -10,42 +10,59 @@ Licensed under the Apache License, Version 2.0
 
 use crate::traits::ConnectomeService;
 use crate::types::*;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
-use feagi_bdu::ConnectomeManager;
-use feagi_types::{BrainRegion, CorticalArea, Dimensions, RegionType, decode_cortical_id};
+use feagi_brain_development::models::CorticalAreaExt;
+use feagi_brain_development::ConnectomeManager;
+use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
+// Note: decode_cortical_id removed - use feagi_data_structures::CorticalID directly
 use parking_lot::RwLock;
-use std::sync::Arc;
 use std::collections::HashMap;
-use tracing::{info, debug, warn};
+use std::sync::Arc;
+use tracing::{debug, info, trace, warn};
 
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
+    /// Optional reference to RuntimeService for accessing NPU (for connectome I/O)
+    #[cfg(feature = "connectome-io")]
+    runtime_service: Arc<RwLock<Option<Arc<dyn crate::traits::RuntimeService + Send + Sync>>>>,
 }
 
 impl ConnectomeServiceImpl {
     pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
-        Self { connectome }
+        Self {
+            connectome,
+            #[cfg(feature = "connectome-io")]
+            runtime_service: Arc::new(RwLock::new(None)),
+        }
     }
-    
+
+    /// Set the runtime service (required for connectome export/import)
+    ///
+    /// This must be called after creating ConnectomeServiceImpl to enable
+    /// connectome I/O operations.
+    #[cfg(feature = "connectome-io")]
+    pub fn set_runtime_service(
+        &self,
+        runtime_service: Arc<dyn crate::traits::RuntimeService + Send + Sync>,
+    ) {
+        *self.runtime_service.write() = Some(runtime_service);
+        info!(target: "feagi-services", "RuntimeService connected to ConnectomeService for connectome I/O");
+    }
+
     /// Convert RegionType enum to string
     fn region_type_to_string(region_type: &RegionType) -> String {
         match region_type {
-            RegionType::Sensory => "Sensory".to_string(),
-            RegionType::Motor => "Motor".to_string(),
-            RegionType::Memory => "Memory".to_string(),
-            RegionType::Custom => "Custom".to_string(),
+            RegionType::Undefined => "Undefined".to_string(),
         }
     }
-    
+
     /// Convert string to RegionType enum
     fn string_to_region_type(s: &str) -> Result<RegionType, ServiceError> {
         match s {
-            "Sensory" => Ok(RegionType::Sensory),
-            "Motor" => Ok(RegionType::Motor),
-            "Memory" => Ok(RegionType::Memory),
-            "Custom" => Ok(RegionType::Custom),
+            "Undefined" | "Sensory" | "Motor" | "Memory" | "Custom" => Ok(RegionType::Undefined),
             _ => Err(ServiceError::InvalidInput(format!(
                 "Invalid region type: {}",
                 s
@@ -65,100 +82,141 @@ impl ConnectomeService for ConnectomeServiceImpl {
         params: CreateCorticalAreaParams,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services","Creating cortical area: {}", params.cortical_id);
-        
-        // Parse cortical type from params.area_type
-        use feagi_types::CorticalTypeAdapter;
-        let cortical_type_new = CorticalTypeAdapter::parse_from_cortical_group(&params.area_type)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical type: {}", e)))?;
-        
+
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(&params.cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
-        
+
+        // Get cortical area type from the cortical ID
+        let area_type = cortical_id_typed.as_cortical_type().map_err(|e| {
+            ServiceError::InvalidInput(format!("Failed to determine cortical area type: {}", e))
+        })?;
+
         // Create CorticalArea
         let mut area = CorticalArea::new(
             cortical_id_typed,
-            0,  // Auto-assigned by ConnectomeManager
+            0, // Auto-assigned by ConnectomeManager
             params.name.clone(),
-            Dimensions::new(params.dimensions.0, params.dimensions.1, params.dimensions.2),
-            params.position,
-        ).map_err(ServiceError::from)?;
-        
+            CorticalAreaDimensions::new(
+                params.dimensions.0 as u32,
+                params.dimensions.1 as u32,
+                params.dimensions.2 as u32,
+            )?,
+            params.position.into(), // Convert (i32, i32, i32) to GenomeCoordinate3D
+            area_type,
+        )?;
+
         // Set the cortical type
-        area.cortical_type_new = Some(cortical_type_new);
-        
-        // Apply all neural parameters from params (direct field assignment)
+        // Note: cortical_type_new field removed - type is encoded in CorticalID
+
+        // Apply all neural parameters from params
         if let Some(visible) = params.visible {
-            area.visible = visible;
+            area.add_property_mut("visible".to_string(), serde_json::json!(visible));
         }
         if let Some(sub_group) = params.sub_group {
-            area.sub_group = Some(sub_group);
+            area.add_property_mut("sub_group".to_string(), serde_json::json!(sub_group));
         }
         if let Some(neurons_per_voxel) = params.neurons_per_voxel {
-            area.neurons_per_voxel = neurons_per_voxel;
+            area.add_property_mut(
+                "neurons_per_voxel".to_string(),
+                serde_json::json!(neurons_per_voxel),
+            );
         }
         if let Some(postsynaptic_current) = params.postsynaptic_current {
-            area.postsynaptic_current = postsynaptic_current;
+            area.add_property_mut(
+                "postsynaptic_current".to_string(),
+                serde_json::json!(postsynaptic_current),
+            );
         }
         if let Some(plasticity_constant) = params.plasticity_constant {
-            area.plasticity_constant = plasticity_constant;
+            area.add_property_mut(
+                "plasticity_constant".to_string(),
+                serde_json::json!(plasticity_constant),
+            );
         }
         if let Some(degeneration) = params.degeneration {
-            area.degeneration = degeneration;
+            area.add_property_mut("degeneration".to_string(), serde_json::json!(degeneration));
         }
         if let Some(psp_uniform_distribution) = params.psp_uniform_distribution {
-            area.psp_uniform_distribution = psp_uniform_distribution;
+            area.add_property_mut(
+                "psp_uniform_distribution".to_string(),
+                serde_json::json!(psp_uniform_distribution),
+            );
         }
         if let Some(firing_threshold_increment) = params.firing_threshold_increment {
-            area.firing_threshold_increment = firing_threshold_increment;
+            area.add_property_mut(
+                "firing_threshold_increment".to_string(),
+                serde_json::json!(firing_threshold_increment),
+            );
         }
         if let Some(firing_threshold_limit) = params.firing_threshold_limit {
-            area.firing_threshold_limit = firing_threshold_limit;
+            area.add_property_mut(
+                "firing_threshold_limit".to_string(),
+                serde_json::json!(firing_threshold_limit),
+            );
         }
         if let Some(consecutive_fire_count) = params.consecutive_fire_count {
-            area.consecutive_fire_count = consecutive_fire_count;
+            area.add_property_mut(
+                "consecutive_fire_limit".to_string(),
+                serde_json::json!(consecutive_fire_count),
+            );
         }
         if let Some(snooze_period) = params.snooze_period {
-            area.snooze_period = snooze_period;
+            area.add_property_mut(
+                "snooze_period".to_string(),
+                serde_json::json!(snooze_period),
+            );
         }
         if let Some(refractory_period) = params.refractory_period {
-            area.refractory_period = refractory_period;
+            area.add_property_mut(
+                "refractory_period".to_string(),
+                serde_json::json!(refractory_period),
+            );
         }
         if let Some(leak_coefficient) = params.leak_coefficient {
-            area.leak_coefficient = leak_coefficient;
+            area.add_property_mut(
+                "leak_coefficient".to_string(),
+                serde_json::json!(leak_coefficient),
+            );
         }
         if let Some(leak_variability) = params.leak_variability {
-            area.leak_variability = leak_variability;
+            area.add_property_mut(
+                "leak_variability".to_string(),
+                serde_json::json!(leak_variability),
+            );
         }
         if let Some(burst_engine_active) = params.burst_engine_active {
-            area.burst_engine_active = burst_engine_active;
+            area.add_property_mut(
+                "burst_engine_active".to_string(),
+                serde_json::json!(burst_engine_active),
+            );
         }
         if let Some(properties) = params.properties {
             area.properties = properties;
         }
-        
+
         // Add to connectome
         self.connectome
             .write()
             .add_cortical_area(area)
             .map_err(ServiceError::from)?;
-        
+
         // Return info
         self.get_cortical_area(&params.cortical_id).await
     }
 
     async fn delete_cortical_area(&self, cortical_id: &str) -> ServiceResult<()> {
         info!(target: "feagi-services","Deleting cortical area: {}", cortical_id);
-        
+
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
-        
+
         self.connectome
             .write()
             .remove_cortical_area(&cortical_id_typed)
             .map_err(ServiceError::from)?;
-        
+
         Ok(())
     }
 
@@ -168,110 +226,123 @@ impl ConnectomeService for ConnectomeServiceImpl {
         _params: UpdateCorticalAreaParams,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services","Updating cortical area: {}", cortical_id);
-        
+
         // TODO: This should be routed through GenomeService for proper genome update
         // and change classification (PARAMETER vs STRUCTURAL vs METADATA)
         // Currently this is a stub - needs architecture alignment with Python implementation
-        
+
         Err(ServiceError::NotImplemented(
-            "Cortical area updates must go through GenomeService for proper genome synchronization".to_string()
+            "Cortical area updates must go through GenomeService for proper genome synchronization"
+                .to_string(),
         ))
     }
 
     async fn get_cortical_area(&self, cortical_id: &str) -> ServiceResult<CorticalAreaInfo> {
-        debug!(target: "feagi-services","Getting cortical area: {}", cortical_id);
-        
+        trace!(target: "feagi-services", "Getting cortical area: {}", cortical_id);
+
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
-        
+
         let manager = self.connectome.read();
-        
+
         let area = manager
             .get_cortical_area(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
-        
+
         let cortical_idx = manager
             .get_cortical_idx(&cortical_id_typed)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "CorticalArea".to_string(),
                 id: cortical_id.to_string(),
             })?;
-        
-        let neuron_count = manager.get_neuron_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
-        let synapse_count = manager.get_synapse_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
-        
+
+        let neuron_count = manager.get_neuron_count_in_area(
+            &CorticalID::try_from_base_64(cortical_id)
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
+        );
+        let synapse_count = manager.get_synapse_count_in_area(
+            &CorticalID::try_from_base_64(cortical_id)
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
+        );
+
         // Get cortical_group from the area (uses cortical_type_new if available)
         let cortical_group = area.get_cortical_group();
-        
-        // Decode cortical ID for IPU/OPU areas to extract additional metadata
-        let decoded_id = if cortical_group == "IPU" || cortical_group == "OPU" {
-            decode_cortical_id(cortical_id)
-        } else {
-            None
-        };
-        
+
+        // Note: decode_cortical_id removed - IPU/OPU metadata now in CorticalID
+
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
             cortical_id_s: area.cortical_id.to_string(), // Human-readable ASCII string
             cortical_idx,
             name: area.name.clone(),
-            dimensions: area.dimensions.to_tuple(),
-            position: area.position,
-            area_type: cortical_group.clone(),
-            cortical_group,
+            dimensions: (
+                area.dimensions.width as usize,
+                area.dimensions.height as usize,
+                area.dimensions.depth as usize,
+            ),
+            position: area.position.into(), // Convert GenomeCoordinate3D to (i32, i32, i32)
+            area_type: cortical_group
+                .clone()
+                .unwrap_or_else(|| "CUSTOM".to_string()),
+            cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
             neuron_count,
             synapse_count,
             // All neural parameters come from the actual CorticalArea struct
-            visible: area.visible,
-            sub_group: area.sub_group.clone(),
-            neurons_per_voxel: area.neurons_per_voxel,
-            postsynaptic_current: area.postsynaptic_current,
-            plasticity_constant: area.plasticity_constant,
-            degeneration: area.degeneration,
-            psp_uniform_distribution: area.psp_uniform_distribution,
-            firing_threshold_increment: area.firing_threshold_increment,
-            firing_threshold_limit: area.firing_threshold_limit,
-            consecutive_fire_count: area.consecutive_fire_count,
-            snooze_period: area.snooze_period,
-            refractory_period: area.refractory_period,
-            leak_coefficient: area.leak_coefficient,
-            leak_variability: area.leak_variability,
-            burst_engine_active: area.burst_engine_active,
+            visible: area.visible(),
+            sub_group: area.sub_group(),
+            neurons_per_voxel: area.neurons_per_voxel(),
+            postsynaptic_current: area.postsynaptic_current() as f64,
+            plasticity_constant: area.plasticity_constant() as f64,
+            degeneration: area.degeneration() as f64,
+            psp_uniform_distribution: area.psp_uniform_distribution() != 0.0,
+            firing_threshold_increment: area.firing_threshold_increment() as f64,
+            firing_threshold_limit: area.firing_threshold_limit() as f64,
+            consecutive_fire_count: area.consecutive_fire_count(),
+            snooze_period: area.snooze_period() as u32,
+            refractory_period: area.refractory_period() as u32,
+            leak_coefficient: area.leak_coefficient() as f64,
+            leak_variability: area.leak_variability() as f64,
+            burst_engine_active: area.burst_engine_active(),
             properties: area.properties.clone(),
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
-            cortical_subtype: decoded_id.as_ref().map(|d| d.cortical_subtype.clone()),
-            encoding_type: decoded_id.as_ref().map(|d| d.encoding_type.clone()),
-            encoding_format: decoded_id.as_ref().map(|d| d.encoding_format.clone()),
-            unit_id: decoded_id.as_ref().map(|d| d.unit_id),
-            group_id: decoded_id.as_ref().map(|d| d.group_id),
+            cortical_subtype: None, // Note: decode_cortical_id removed
+            encoding_type: None,
+            encoding_format: None,
+            unit_id: None,
+            group_id: None,
+            parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
         })
     }
 
     async fn list_cortical_areas(&self) -> ServiceResult<Vec<CorticalAreaInfo>> {
-        debug!(target: "feagi-services","Listing all cortical areas");
-        
+        trace!(target: "feagi-services", "Listing all cortical areas");
+
         let cortical_ids: Vec<String> = {
             let manager = self.connectome.read();
-            manager.get_cortical_area_ids().into_iter().map(|id| id.as_base_64()).collect()
+            manager
+                .get_cortical_area_ids()
+                .into_iter()
+                .map(|id| id.as_base_64())
+                .collect()
         };
-        
+
         let mut areas = Vec::new();
         for cortical_id in cortical_ids {
             if let Ok(area_info) = self.get_cortical_area(&cortical_id).await {
                 areas.push(area_info);
             }
         }
-        
+
         Ok(areas)
     }
 
     async fn get_cortical_area_ids(&self) -> ServiceResult<Vec<String>> {
         debug!(target: "feagi-services","Getting cortical area IDs");
-        
+
         // CRITICAL: Use try_read() instead of read() to avoid blocking forever
         // If write lock is held (e.g., during genome loading), return error instead of hanging
         let ids: Vec<String> = {
@@ -282,7 +353,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     return Err(ServiceError::Backend("ConnectomeManager is currently being modified (e.g., genome loading in progress). Please try again in a moment.".to_string()));
                 }
             };
-            
+
             let area_count = manager.get_cortical_area_count();
             let ids_refs = manager.get_cortical_area_ids();
             info!(target: "feagi-services", "Found {} cortical areas in ConnectomeManager", area_count);
@@ -295,11 +366,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
     async fn cortical_area_exists(&self, cortical_id: &str) -> ServiceResult<bool> {
         debug!(target: "feagi-services","Checking if cortical area exists: {}", cortical_id);
-        
+
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
-        
+
         Ok(self.connectome.read().has_cortical_area(&cortical_id_typed))
     }
 
@@ -308,11 +379,11 @@ impl ConnectomeService for ConnectomeServiceImpl {
         cortical_id: &str,
     ) -> ServiceResult<std::collections::HashMap<String, serde_json::Value>> {
         debug!(target: "feagi-services","Getting cortical area properties: {}", cortical_id);
-        
+
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
-        
+
         let manager = self.connectome.read();
         manager
             .get_cortical_area_properties(&cortical_id_typed)
@@ -326,7 +397,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
         &self,
     ) -> ServiceResult<Vec<std::collections::HashMap<String, serde_json::Value>>> {
         debug!(target: "feagi-services","Getting all cortical area properties");
-        
+
         let manager = self.connectome.read();
         Ok(manager.get_all_cortical_area_properties())
     }
@@ -340,35 +411,37 @@ impl ConnectomeService for ConnectomeServiceImpl {
         params: CreateBrainRegionParams,
     ) -> ServiceResult<BrainRegionInfo> {
         info!(target: "feagi-services","Creating brain region: {}", params.region_id);
-        
+
         // Convert string to RegionType
         let region_type = Self::string_to_region_type(&params.region_type)?;
-        
+
         // Create BrainRegion
         let region = BrainRegion::new(
-            params.region_id.clone(),
+            RegionID::from_string(&params.region_id)
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid region ID: {}", e)))?,
             params.name.clone(),
             region_type,
-        ).map_err(ServiceError::from)?;
-        
+        )
+        .map_err(ServiceError::from)?;
+
         // Add to connectome
         self.connectome
             .write()
             .add_brain_region(region, params.parent_id.clone())
             .map_err(ServiceError::from)?;
-        
+
         // Return info
         self.get_brain_region(&params.region_id).await
     }
 
     async fn delete_brain_region(&self, region_id: &str) -> ServiceResult<()> {
         info!(target: "feagi-services","Deleting brain region: {}", region_id);
-        
+
         self.connectome
             .write()
             .remove_brain_region(region_id)
             .map_err(ServiceError::from)?;
-        
+
         Ok(())
     }
 
@@ -378,28 +451,28 @@ impl ConnectomeService for ConnectomeServiceImpl {
         properties: std::collections::HashMap<String, serde_json::Value>,
     ) -> ServiceResult<BrainRegionInfo> {
         info!(target: "feagi-services", "Updating brain region: {}", region_id);
-        
+
         self.connectome
             .write()
             .update_brain_region_properties(region_id, properties)
             .map_err(ServiceError::from)?;
-        
+
         // Return updated info
         self.get_brain_region(region_id).await
     }
 
     async fn get_brain_region(&self, region_id: &str) -> ServiceResult<BrainRegionInfo> {
-        debug!(target: "feagi-services","Getting brain region: {}", region_id);
-        
+        trace!(target: "feagi-services", "Getting brain region: {}", region_id);
+
         let manager = self.connectome.read();
-        
+
         let region = manager
             .get_brain_region(region_id)
             .ok_or_else(|| ServiceError::NotFound {
                 resource: "BrainRegion".to_string(),
                 id: region_id.to_string(),
             })?;
-        
+
         let hierarchy = manager.get_brain_region_hierarchy();
         let parent_id = hierarchy.get_parent(region_id).map(|s| s.to_string());
         let child_regions: Vec<String> = hierarchy
@@ -407,61 +480,76 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .into_iter()
             .cloned()
             .collect();
-        
+
         Ok(BrainRegionInfo {
             region_id: region_id.to_string(),
             name: region.name.clone(),
             region_type: Self::region_type_to_string(&region.region_type),
             parent_id,
-            cortical_areas: region.cortical_areas.iter().cloned().collect(),
+            cortical_areas: region
+                .cortical_areas
+                .iter()
+                .map(|id| id.as_base_64())
+                .collect(), // Use base64 to match cortical area API
             child_regions,
             properties: region.properties.clone(),
         })
     }
 
     async fn list_brain_regions(&self) -> ServiceResult<Vec<BrainRegionInfo>> {
-        debug!(target: "feagi-services","Listing all brain regions");
-        
+        trace!(target: "feagi-services", "Listing all brain regions");
+
         let region_ids: Vec<String> = {
             let manager = self.connectome.read();
             let ids = manager.get_brain_region_ids();
-            debug!(target: "feagi-services","  Found {} brain region IDs from ConnectomeManager", ids.len());
+            trace!(target: "feagi-services", "Found {} brain region IDs from ConnectomeManager", ids.len());
             ids.into_iter().map(|s| s.to_string()).collect()
         };
-        
-        debug!(target: "feagi-services","  Processing {} regions...", region_ids.len());
+
+        trace!(target: "feagi-services", "Processing {} regions...", region_ids.len());
         let mut regions = Vec::new();
         for region_id in region_ids {
-            debug!(target: "feagi-services","    Getting region: {}", region_id);
+            trace!(target: "feagi-services", "Getting region: {}", region_id);
             match self.get_brain_region(&region_id).await {
                 Ok(region_info) => {
-                    debug!(target: "feagi-services","      ✓ Got region: {} with {} areas", region_info.name, region_info.cortical_areas.len());
+                    trace!(
+                        target: "feagi-services",
+                        "Got region: {} with {} areas",
+                        region_info.name,
+                        region_info.cortical_areas.len()
+                    );
                     regions.push(region_info);
                 }
                 Err(e) => {
-                    warn!(target: "feagi-services","      ✗ Failed to get region {}: {}", region_id, e);
+                    warn!(target: "feagi-services", "Failed to get region {}: {}", region_id, e);
                 }
             }
         }
-        
-        debug!(target: "feagi-services","  Returning {} brain regions", regions.len());
+
+        trace!(target: "feagi-services", "Returning {} brain regions", regions.len());
         Ok(regions)
     }
 
     async fn get_brain_region_ids(&self) -> ServiceResult<Vec<String>> {
         debug!(target: "feagi-services","Getting brain region IDs");
-        Ok(self.connectome.read().get_brain_region_ids().into_iter().map(|s| s.to_string()).collect())
+        Ok(self
+            .connectome
+            .read()
+            .get_brain_region_ids()
+            .into_iter()
+            .map(|s| s.to_string())
+            .collect())
     }
 
     async fn brain_region_exists(&self, region_id: &str) -> ServiceResult<bool> {
         debug!(target: "feagi-services","Checking if brain region exists: {}", region_id);
         Ok(self.connectome.read().get_brain_region(region_id).is_some())
     }
-    
+
     async fn get_morphologies(&self) -> ServiceResult<HashMap<String, MorphologyInfo>> {
         let manager = self.connectome.read();
         let registry = manager.get_morphologies();
-        
+
         let mut result = HashMap::new();
         for (id, morphology) in registry.iter() {
             result.insert(
@@ -471,14 +559,14 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     class: morphology.class.clone(),
                     parameters: serde_json::to_value(&morphology.parameters)
                         .unwrap_or(serde_json::json!({})),
-                }
+                },
             );
         }
-        
-        debug!(target: "feagi-services", "Retrieved {} morphologies", result.len());
+
+        trace!(target: "feagi-services", "Retrieved {} morphologies", result.len());
         Ok(result)
     }
-    
+
     async fn update_cortical_mapping(
         &self,
         src_area_id: String,
@@ -487,25 +575,101 @@ impl ConnectomeService for ConnectomeServiceImpl {
     ) -> ServiceResult<usize> {
         info!(target: "feagi-services", "Updating cortical mapping: {} -> {} with {} connections",
               src_area_id, dst_area_id, mapping_data.len());
-        
+
         // Convert String to CorticalID
         use feagi_data_structures::genomic::cortical_area::CorticalID;
-        let src_id = CorticalID::try_from_base_64(&src_area_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e)))?;
-        let dst_id = CorticalID::try_from_base_64(&dst_area_id)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e)))?;
-        
+        let src_id = CorticalID::try_from_base_64(&src_area_id).map_err(|e| {
+            ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e))
+        })?;
+        let dst_id = CorticalID::try_from_base_64(&dst_area_id).map_err(|e| {
+            ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e))
+        })?;
+
         // Update the cortical_mapping_dst property in ConnectomeManager
         let mut manager = self.connectome.write();
-        manager.update_cortical_mapping(&src_id, &dst_id, mapping_data.clone())
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, mapping_data.clone())
             .map_err(|e| ServiceError::Backend(format!("Failed to update mapping: {}", e)))?;
-        
+
         // Regenerate synapses for this mapping
-        let synapse_count = manager.regenerate_synapses_for_mapping(&src_id, &dst_id)
+        let synapse_count = manager
+            .regenerate_synapses_for_mapping(&src_id, &dst_id)
             .map_err(|e| ServiceError::Backend(format!("Failed to regenerate synapses: {}", e)))?;
-        
+
         info!(target: "feagi-services", "Cortical mapping updated: {} synapses created", synapse_count);
         Ok(synapse_count)
     }
-}
 
+    // ========================================================================
+    // CONNECTOME I/O OPERATIONS
+    // ========================================================================
+
+    #[cfg(feature = "connectome-io")]
+    async fn export_connectome(
+        &self,
+    ) -> ServiceResult<feagi_npu_neural::types::connectome::ConnectomeSnapshot> {
+        info!(target: "feagi-services", "Exporting connectome via service layer");
+
+        // Get NPU from ConnectomeManager (which has reference to NPU)
+        // Note: get_npu() returns Option<&Arc<...>>, so we need to clone the Arc
+        // to use it outside the lock scope
+        let npu_arc = {
+            let connectome = self.connectome.read();
+            let npu_opt = connectome.get_npu();
+            npu_opt
+                .ok_or_else(|| {
+                    ServiceError::Backend("NPU not connected to ConnectomeManager".to_string())
+                })?
+                .clone()
+        };
+
+        // Export connectome from NPU
+        // Note: export_connectome() is on RustNPU, but we have DynamicNPU
+        // We need to handle both F32 and INT8 variants
+        let snapshot = {
+            let npu_lock = npu_arc.lock().unwrap();
+            match &*npu_lock {
+                feagi_npu_burst_engine::DynamicNPU::F32(npu_f32) => {
+                    npu_f32.export_connectome()
+                }
+                feagi_npu_burst_engine::DynamicNPU::INT8(npu_int8) => {
+                    npu_int8.export_connectome()
+                }
+            }
+        };
+
+        info!(target: "feagi-services", "✅ Connectome exported: {} neurons, {} synapses",
+            snapshot.neurons.count, snapshot.synapses.count);
+
+        Ok(snapshot)
+    }
+
+    #[cfg(feature = "connectome-io")]
+    async fn import_connectome(
+        &self,
+        snapshot: feagi_npu_neural::types::connectome::ConnectomeSnapshot,
+    ) -> ServiceResult<()> {
+        info!(target: "feagi-services", "Importing connectome via service layer: {} neurons, {} synapses",
+            snapshot.neurons.count, snapshot.synapses.count);
+
+        // NOTE: NPU.import_connectome_with_config() is a constructor that creates a NEW NPU.
+        // This means importing requires replacing the entire NPU instance, which involves:
+        // 1. Stopping the burst engine
+        // 2. Creating a new NPU from the snapshot
+        // 3. Replacing the NPU in ConnectomeManager and BurstLoopRunner
+        // 4. Restarting the burst engine
+        //
+        // This is a complex operation that requires coordination across multiple components.
+        // For now, we return NotImplemented and recommend using the NPU constructor directly
+        // during application initialization, or implementing a higher-level "replace NPU" operation.
+        
+        warn!(target: "feagi-services", "⚠️ Connectome import via service layer not yet fully implemented");
+        warn!(target: "feagi-services", "   NPU.import_connectome_with_config() creates a new NPU instance");
+        warn!(target: "feagi-services", "   This requires stopping burst engine, replacing NPU, and restarting");
+        warn!(target: "feagi-services", "   Recommendation: Use NPU.import_connectome_with_config() during initialization");
+        
+        Err(ServiceError::NotImplemented(
+            "Connectome import via service layer requires NPU replacement coordination. Use NPU.import_connectome_with_config() during application initialization, or implement a 'replace NPU' operation that coordinates with BurstLoopRunner.".to_string(),
+        ))
+    }
+}

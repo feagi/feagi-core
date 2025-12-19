@@ -73,7 +73,7 @@ pub trait GenomeService: Send + Sync {
     /// * `ServiceError::Backend` - Failed to reset connectome
     ///
     async fn reset_connectome(&self) -> ServiceResult<()>;
-    
+
     /// Update a cortical area with intelligent routing for optimal performance
     ///
     /// ARCHITECTURE: This is the proper entry point for cortical area updates.
@@ -101,7 +101,7 @@ pub trait GenomeService: Send + Sync {
         cortical_id: &str,
         changes: std::collections::HashMap<String, serde_json::Value>,
     ) -> ServiceResult<CorticalAreaInfo>;
-    
+
     /// Create new cortical areas and add them to the genome
     ///
     /// ARCHITECTURE: This is the proper entry point for creating new cortical areas.
@@ -126,7 +126,3 @@ pub trait GenomeService: Send + Sync {
         params: Vec<CreateCorticalAreaParams>,
     ) -> ServiceResult<Vec<CorticalAreaInfo>>;
 }
-
-
-
-

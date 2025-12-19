@@ -6,7 +6,6 @@ authors.workspace = true
 license.workspace = true
 repository.workspace = true
 description = "FEAGI Service Layer - Stable application boundary for transport adapters"
-publish = false
 
 [lib]
 crate-type = ["rlib"]
@@ -14,16 +13,17 @@ name = "feagi_services"
 
 [dependencies]
 # Core FEAGI crates (backend)
-feagi-types = { path = "../feagi-types" }
-feagi-evo = { path = "../feagi-evo" }
-feagi-bdu = { path = "../feagi-bdu" }
-feagi-burst-engine = { path = "../feagi-burst-engine" }
-feagi-pns = { path = "../feagi-pns" }
-feagi_data_structures = { workspace = true }
+feagi-npu-neural = { version = "0.0.1", path = "../feagi-npu/neural" }  # For types
+feagi-evolutionary = { version = "0.0.1", path = "../feagi-evolutionary" }
+feagi-brain-development = { version = "0.0.1", path = "../feagi-brain-development", default-features = false }
+feagi-npu-burst-engine = { version = "0.0.1", path = "../feagi-npu/burst-engine", default-features = false, optional = true }
+# feagi-io dependency removed to break circular dependency
+# AgentRegistry and types moved to feagi-services
+feagi-data-structures = { workspace = true }
 
 # Async runtime (optional for embedded)
 async-trait = "0.1"
-tokio = { version = "1.0", features = ["sync", "rt", "time"], optional = true }
+tokio = { version = "1.0", features = ["sync", "rt", "time", "rt-multi-thread"], optional = true }
 
 # Synchronization
 parking_lot = "0.12"
@@ -47,9 +47,11 @@ chrono = "0.4"
 uuid = { version = "1.0", features = ["v4", "serde"] }
 
 [features]
-default = ["std"]
-std = ["tokio"]  # Enable async for server deployments
+default = ["std", "connectome-io"]
+std = ["tokio", "feagi-brain-development/async-tokio", "feagi-npu-burst-engine/async-tokio"]  # Enable async for server deployments
 no_std = []      # Disable async for embedded/RTOS
+wasm = ["feagi-brain-development/wasm", "feagi-npu-burst-engine/wasm"]  # WASM builds without tokio
+connectome-io = ["feagi-npu-burst-engine/connectome-io"]  # Connectome export/import functionality (types in feagi-npu-neural)
 
 [dev-dependencies]
 tokio = { version = "1.0", features = ["full"] }

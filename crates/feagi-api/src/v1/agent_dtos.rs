@@ -12,30 +12,30 @@ use utoipa::ToSchema;
 pub struct AgentRegistrationRequest {
     /// Type of agent (e.g., "brain_visualizer", "video_agent")
     pub agent_type: String,
-    
+
     /// Unique identifier for the agent
     pub agent_id: String,
-    
+
     /// Port the agent is listening on for data
     pub agent_data_port: u16,
-    
+
     /// Version of the agent software
     pub agent_version: String,
-    
+
     /// Version of the controller
     pub controller_version: String,
-    
+
     /// Agent capabilities (sensory, motor, visualization, etc.)
     pub capabilities: HashMap<String, serde_json::Value>,
-    
+
     /// Optional: Agent IP address (extracted from request if not provided)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agent_ip: Option<String>,
-    
+
     /// Optional: Additional metadata
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
-    
+
     /// Optional: Transport the agent chose to use ("zmq", "websocket", "shm", etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chosen_transport: Option<String>,
@@ -56,25 +56,28 @@ pub struct AgentRegistrationResponse {
     pub status: String,
     pub message: String,
     pub success: bool,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub transport: Option<HashMap<String, serde_json::Value>>,  // Legacy field
-    
+    pub transport: Option<HashMap<String, serde_json::Value>>,
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rates: Option<HashMap<String, HashMap<String, f64>>>,
-    
+
     // FEAGI 2.0: Multi-transport support
     #[serde(skip_serializing_if = "Option::is_none")]
     pub transports: Option<Vec<TransportConfig>>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recommended_transport: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub zmq_ports: Option<HashMap<String, u16>>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shm_paths: Option<HashMap<String, String>>,
+
+    /// Cortical area availability status for agent operations
+    pub cortical_areas: serde_json::Value,
 }
 
 /// Heartbeat request
@@ -143,7 +146,3 @@ pub struct ManualStimulationResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
 }
-
-
-
-

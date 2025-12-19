@@ -1,0 +1,148 @@
+// Copyright 2025 Neuraville Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+//! Fire structures for tracking neural activity
+//!
+//! Moved from feagi-types/src/fire_structures.rs (Phase 2c)
+
+use super::ids::NeuronId;
+
+#[cfg(feature = "std")]
+extern crate std;
+
+#[cfg(feature = "std")]
+use std::{collections::VecDeque, vec::Vec};
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
+
+/// Fire Candidate List (FCL) - neurons that might fire this burst
+#[cfg(feature = "std")]
+#[derive(Debug, Clone)]
+pub struct FireCandidateList {
+    candidates: ahash::AHashMap<u32, f32>,
+}
+
+#[cfg(feature = "std")]
+impl FireCandidateList {
+    pub fn new() -> Self {
+        Self {
+            candidates: ahash::AHashMap::with_capacity(100_000),
+        }
+    }
+
+    #[inline]
+    pub fn add_candidate(&mut self, neuron_id: NeuronId, potential: f32) {
+        *self.candidates.entry(neuron_id.0).or_insert(0.0) += potential;
+    }
+
+    pub fn clear(&mut self) {
+        self.candidates.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.candidates.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.candidates.is_empty()
+    }
+
+    pub fn get(&self, neuron_id: NeuronId) -> Option<f32> {
+        self.candidates.get(&neuron_id.0).copied()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (NeuronId, f32)> + '_ {
+        self.candidates
+            .iter()
+            .map(|(&id, &pot)| (NeuronId(id), pot))
+    }
+}
+
+/// Fire Queue (FQ) - neurons that actually fired this burst
+#[cfg(feature = "std")]
+#[derive(Debug, Clone)]
+pub struct FireQueue {
+    neurons: Vec<NeuronId>,
+}
+
+#[cfg(feature = "std")]
+impl FireQueue {
+    pub fn new() -> Self {
+        Self {
+            neurons: Vec::with_capacity(10_000),
+        }
+    }
+
+    pub fn add(&mut self, neuron_id: NeuronId) {
+        self.neurons.push(neuron_id);
+    }
+
+    pub fn clear(&mut self) {
+        self.neurons.clear();
+    }
+
+    pub fn len(&self) -> usize {
+        self.neurons.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.neurons.is_empty()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = NeuronId> + '_ {
+        self.neurons.iter().copied()
+    }
+
+    pub fn as_slice(&self) -> &[NeuronId] {
+        &self.neurons
+    }
+}
+
+/// Fire Ledger - historical record of firing activity
+#[cfg(feature = "std")]
+#[derive(Debug, Clone)]
+pub struct FireLedger {
+    history: VecDeque<Vec<NeuronId>>,
+    window_size: usize,
+}
+
+#[cfg(feature = "std")]
+impl FireLedger {
+    pub fn new(window_size: usize) -> Self {
+        Self {
+            history: VecDeque::with_capacity(window_size),
+            window_size,
+        }
+    }
+
+    pub fn record(&mut self, fired_neurons: Vec<NeuronId>) {
+        if self.history.len() >= self.window_size {
+            self.history.pop_front();
+        }
+        self.history.push_back(fired_neurons);
+    }
+
+    pub fn get_recent(&self, bursts_ago: usize) -> Option<&[NeuronId]> {
+        let len = self.history.len();
+        if bursts_ago < len {
+            self.history.get(len - 1 - bursts_ago).map(|v| v.as_slice())
+        } else {
+            None
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.history.clear();
+    }
+}
+
+// Placeholder types for no_std (will be implemented with heapless or similar)
+#[cfg(not(feature = "std"))]
+pub struct FireCandidateList;
+
+#[cfg(not(feature = "std"))]
+pub struct FireQueue;
+
+#[cfg(not(feature = "std"))]
+pub struct FireLedger;

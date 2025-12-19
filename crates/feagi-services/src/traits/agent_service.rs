@@ -4,7 +4,7 @@
 //! Agent management service trait
 //!
 //! This service manages agent registration, heartbeats, and properties.
-//! It interfaces with the Registration Manager in feagi-pns for actual
+//! It interfaces with the Registration Manager in feagi-io for actual
 //! agent lifecycle management and coordination.
 
 use async_trait::async_trait;
@@ -19,16 +19,16 @@ pub type AgentResult<T> = Result<T, AgentError>;
 pub enum AgentError {
     #[error("Agent not found: {0}")]
     NotFound(String),
-    
+
     #[error("Registration service unavailable: {0}")]
     ServiceUnavailable(String),
-    
+
     #[error("Registration failed: {0}")]
     RegistrationFailed(String),
-    
+
     #[error("Invalid agent data: {0}")]
     InvalidData(String),
-    
+
     #[error("Internal error: {0}")]
     Internal(String),
 }
@@ -76,6 +76,8 @@ pub struct AgentRegistrationResponse {
     pub zmq_ports: Option<HashMap<String, u16>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shm_paths: Option<HashMap<String, String>>,
+    /// Cortical area availability status for agent operations
+    pub cortical_areas: serde_json::Value,
 }
 
 /// Agent properties
@@ -106,35 +108,36 @@ pub trait AgentService: Send + Sync {
         &self,
         registration: AgentRegistration,
     ) -> AgentResult<AgentRegistrationResponse>;
-    
+
     /// Record a heartbeat for an agent
     async fn heartbeat(&self, request: HeartbeatRequest) -> AgentResult<()>;
-    
+
     /// List all registered agents
     async fn list_agents(&self) -> AgentResult<Vec<String>>;
-    
+
     /// Get properties for a specific agent
     async fn get_agent_properties(&self, agent_id: &str) -> AgentResult<AgentProperties>;
-    
+
     /// Get shared memory information for all agents
-    async fn get_shared_memory_info(&self) -> AgentResult<HashMap<String, HashMap<String, serde_json::Value>>>;
-    
+    async fn get_shared_memory_info(
+        &self,
+    ) -> AgentResult<HashMap<String, HashMap<String, serde_json::Value>>>;
+
     /// Deregister an agent
     async fn deregister_agent(&self, agent_id: &str) -> AgentResult<()>;
-    
+
     /// Trigger manual stimulation for specific cortical areas
     async fn manual_stimulation(
         &self,
         stimulation_payload: HashMap<String, Vec<Vec<i32>>>,
     ) -> AgentResult<HashMap<String, serde_json::Value>>;
-    
+
     /// Set runtime service for sensory injection (optional, implementations can ignore if not needed)
     /// This allows runtime service to be connected after AgentService is wrapped in Arc
-    fn try_set_runtime_service(&self, _runtime_service: std::sync::Arc<dyn crate::traits::RuntimeService + Send + Sync>) {
+    fn try_set_runtime_service(
+        &self,
+        _runtime_service: std::sync::Arc<dyn crate::traits::RuntimeService + Send + Sync>,
+    ) {
         // Default implementation: no-op (for implementations that don't need runtime service)
     }
 }
-
-
-
-

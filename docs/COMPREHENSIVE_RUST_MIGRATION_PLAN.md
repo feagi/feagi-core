@@ -31,12 +31,12 @@
 | **feagi-types** | ✅ Complete | All models (Neuron, Synapse, CorticalArea) | - | ✅ Yes |
 | **feagi-burst-engine** | ✅ Complete | RustNPU, SIMD batch neuron/synapse creation | Minor features | ✅ Yes |
 | **feagi-state-manager** | ✅ Complete | State tracking, atomic ops | - | ✅ Yes |
-| **feagi-bdu** | ✅ 100% | ConnectomeManager (62/62 methods), Neuroembryogenesis (4 stages), NPU integration, all CRUD operations complete | - | ✅ Production Ready |
+| **feagi-brain-development** | ✅ 100% | ConnectomeManager (62/62 methods), Neuroembryogenesis (4 stages), NPU integration, all CRUD operations complete | - | ✅ Production Ready |
 | **feagi-services** | ✅ 100% | All 6 core services (Genome, Connectome, System, Analytics, Runtime, Neuron) - fully functional | AgentService, NetworkService (deferred - infra only) | ✅ Production Ready |
 | **feagi-api** | ✅ 100% | All 60 endpoints fully wired to services, HTTP/Axum server, OpenAPI/Swagger, error handling | ZMQ adapter (optional) | ✅ Production Ready |
-| **feagi-pns** | ✅ 95% | ZMQ streams, sensory/motor, feagi-transports integration | Minor cleanup | ✅ Yes |
+| **feagi-io** | ✅ 95% | ZMQ streams, sensory/motor, feagi-transports integration | Minor cleanup | ✅ Yes |
 | **feagi-transports** | ✅ Complete | ZMQ client/server, traits | UDP, SHM (future) | ✅ Yes |
-| **feagi-evo** | ✅ Complete | Genome parser/saver, validator, signatures, templates, flat-to-hierarchical converter | - | ✅ Yes |
+| **feagi-evolutionary** | ✅ Complete | Genome parser/saver, validator, signatures, templates, flat-to-hierarchical converter | - | ✅ Yes |
 | **feagi-plasticity** | ❌ 0% | - | Everything (synaptic learning) | ❌ No |
 
 ### BDU Methods Status (62 active, 86 dead)
@@ -132,7 +132,7 @@
 | **TOTAL** | 20 weeks | **~16 weeks done (Phases 1, 2, 3, 4 complete!)** | **4 weeks remaining** |
 
 **Major Progress Update (2025-10-30):**
-- ✅ **feagi-evo complete**: Full genome pipeline (parser, saver, validator, flat converter)
+- ✅ **feagi-evolutionary complete**: Full genome pipeline (parser, saver, validator, flat converter)
 - ✅ **Neuroembryogenesis complete**: All 4 stages (corticogenesis, voxelogenesis, neurogenesis, synaptogenesis) with SIMD batch operations
 - ✅ **🎉 PHASE 2 COMPLETE: ALL 62 BDU METHODS DONE! (P1-P6 100%)**: Every single ConnectomeManager method migrated and functional!
 - ✅ **NPU integration**: ConnectomeManager properly delegates to NPU for all neuron/synapse operations
@@ -301,12 +301,12 @@
 │  │ Full Stack Subcrates (server only):                     │    │
 │  │  • feagi-api         (REST API - Axum)                  │    │
 │  │  • feagi-services    (Service layer)                    │    │
-│  │  • feagi-pns         (I/O - ZMQ)                        │    │
+│  │  • feagi-io         (I/O - ZMQ)                        │    │
 │  └─────────────────────────────────────────────────────────┘    │
 │                                                                   │
 │  ┌─────────────────────────────────────────────────────────┐    │
 │  │ Core Subcrates (reusable, modular):                     │    │
-│  │  • feagi-bdu         (Business logic)                   │    │
+│  │  • feagi-brain-development         (Business logic)                   │    │
 │  │  • feagi-npu         (Burst engine)                     │    │
 │  │  • feagi-state       (State manager)                    │    │
 │  │  • feagi-config      (Config loader)                    │    │
@@ -363,7 +363,7 @@
 #### 1.1 Core Data Structures
 
 ```rust
-// feagi-core/crates/feagi-bdu/src/models/mod.rs
+// feagi-core/crates/feagi-brain-development/src/models/mod.rs
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -427,7 +427,7 @@ pub struct BiDirectionalCorticalMap {
 #### 2.1 ConnectomeManager Singleton
 
 ```rust
-// feagi-core/crates/feagi-bdu/src/connectome_manager.rs
+// feagi-core/crates/feagi-brain-development/src/connectome_manager.rs
 
 use once_cell::sync::Lazy;
 use parking_lot::RwLock;
@@ -578,7 +578,7 @@ impl ConnectomeManager {
 #### 2.4 Genome Loading (Week 6)
 
 ```rust
-// feagi-core/crates/feagi-bdu/src/embryogenesis/neuroembryogenesis.rs
+// feagi-core/crates/feagi-brain-development/src/embryogenesis/neuroembryogenesis.rs
 
 pub struct Neuroembryogenesis {
     morphology_registry: HashMap<String, Box<dyn MorphologyFunction>>,
@@ -1393,7 +1393,7 @@ feagi-core/
 │   │       ├── npu_service.rs
 │   │       └── error.rs
 │   │
-│   ├── feagi-bdu/                   # Business Logic - CORE (Reusable)
+│   ├── feagi-brain-development/                   # Business Logic - CORE (Reusable)
 │   │   ├── Cargo.toml               # Features: std, minimal, full, wasm
 │   │   └── src/
 │   │       ├── lib.rs
@@ -1428,7 +1428,7 @@ feagi-core/
 │   │       ├── state_manager.rs
 │   │       └── atomic_state.rs
 │   │
-│   ├── feagi-pns/                   # I/O Streams - Full Stack Only
+│   ├── feagi-io/                   # I/O Streams - Full Stack Only
 │   │   ├── Cargo.toml               # ZMQ, not WASM compatible
 │   │   └── src/
 │   │       ├── lib.rs

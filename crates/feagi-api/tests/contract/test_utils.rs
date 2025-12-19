@@ -18,17 +18,17 @@ pub fn assert_json_structure_matches(actual: &Value, expected: &Value, path: &st
                 } else {
                     format!("{}.{}", path, key)
                 };
-                
+
                 // Skip dynamic fields
                 if is_dynamic_field(key) {
                     continue;
                 }
-                
+
                 let actual_value = actual_map.get(key).expect(&format!(
                     "Missing field '{}' in actual response at path '{}'",
                     key, current_path
                 ));
-                
+
                 assert_json_structure_matches(actual_value, expected_value, &current_path);
             }
         }
@@ -39,7 +39,7 @@ pub fn assert_json_structure_matches(actual: &Value, expected: &Value, path: &st
                 "Array length mismatch at path '{}'",
                 path
             );
-            
+
             for (i, (actual_item, expected_item)) in
                 actual_arr.iter().zip(expected_arr.iter()).enumerate()
             {
@@ -96,7 +96,7 @@ fn is_dynamic_field(field: &str) -> bool {
         "synapse_count",     // May vary based on loaded genome
         "cortical_area_count", // May vary based on loaded genome
     ];
-    
+
     dynamic_fields.iter().any(|f| field.contains(f))
 }
 
@@ -107,12 +107,12 @@ pub fn assert_success_response(response: &Value) {
         Some(true),
         "Response should have success: true"
     );
-    
+
     assert!(
         response.get("data").is_some(),
         "Successful response should have 'data' field"
     );
-    
+
     assert!(
         response.get("timestamp").is_some(),
         "Response should have 'timestamp' field"
@@ -126,7 +126,7 @@ pub fn assert_error_response(response: &Value, expected_code: u16) {
         Some(expected_code as u64),
         "Error response should have correct status code"
     );
-    
+
     assert!(
         response.get("message").is_some(),
         "Error response should have 'message' field"

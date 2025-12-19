@@ -1,7 +1,7 @@
 # Integration Test Results - FINAL ✅
 
 **Date:** 2025-10-30  
-**Test File:** `feagi-bdu/tests/test_integration_simple.rs`  
+**Test File:** `feagi-brain-development/tests/test_integration_simple.rs`  
 **Total Tests:** 8  
 **Passing:** 8 ✅  
 **Failing:** 0 ❌  
@@ -58,7 +58,7 @@ pub fn is_neuron_valid(&self, neuron_id: u32) -> bool {
 ```
 
 **Files Modified:**
-- `feagi-bdu/src/connectome_manager.rs` - Updated `has_neuron()`
+- `feagi-brain-development/src/connectome_manager.rs` - Updated `has_neuron()`
 - `feagi-burst-engine/src/npu.rs` - Added `is_neuron_valid()`
 
 ---
@@ -89,7 +89,7 @@ for i in 0..neurons_created {
 ```
 
 **Files Modified:**
-- `feagi-bdu/src/connectome_manager.rs` - Fixed `batch_create_neurons()`
+- `feagi-brain-development/src/connectome_manager.rs` - Fixed `batch_create_neurons()`
 
 ---
 
@@ -121,7 +121,7 @@ assert_float_eq(props["leak_coefficient"].as_f64().unwrap(), 0.2, "leak_coeffici
 ```
 
 **Files Modified:**
-- `feagi-bdu/tests/test_integration_simple.rs` - Updated test assertions
+- `feagi-brain-development/tests/test_integration_simple.rs` - Updated test assertions
 
 **Note:** This is expected behavior. NPU stores properties as `f32` for SIMD optimization. All precision-sensitive tests should use epsilon comparison.
 
@@ -150,11 +150,11 @@ assert_float_eq(props["leak_coefficient"].as_f64().unwrap(), 0.2, "leak_coeffici
 1. **`feagi-burst-engine/src/npu.rs`**:
    - Added `is_neuron_valid()` method (5 lines)
 
-2. **`feagi-bdu/src/connectome_manager.rs`**:
+2. **`feagi-brain-development/src/connectome_manager.rs`**:
    - Fixed `has_neuron()` to use `is_neuron_valid()` (simplified from 12 lines to 8 lines)
    - Fixed `batch_create_neurons()` to get first_neuron_id before batch creation (added 1 line, fixed logic)
 
-3. **`feagi-bdu/tests/test_integration_simple.rs`**:
+3. **`feagi-brain-development/tests/test_integration_simple.rs`**:
    - Updated float comparisons to use epsilon (added epsilon comparison helper)
 
 ### Lines of Code

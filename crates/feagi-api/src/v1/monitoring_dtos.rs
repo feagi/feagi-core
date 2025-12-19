@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Monitoring API DTOs
-//! 
+//!
 //! Request/response types for system monitoring and metrics
 
 use serde::{Deserialize, Serialize};
@@ -44,5 +44,3 @@ pub struct MonitoringDataResponse {
     pub data: MonitoringData,
     pub timestamp: String,
 }
-
-

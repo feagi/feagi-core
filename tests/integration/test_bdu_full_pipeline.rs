@@ -9,15 +9,26 @@
 /// No HTTP/API layer - direct testing of business logic.
 
 use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::RustNPU;
-use feagi_evo::{load_genome_from_file, validate_genome};
-use feagi_types::{CorticalArea, Dimensions, AreaType};
+use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
+use feagi_evolutionary::{load_genome_from_file, validate_genome};
+use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, AreaType};
+use feagi_npu_runtime::StdRuntime;
+use feagi_npu_burst_engine::backend::CPUBackend;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;
 
 /// Helper to create an isolated test manager with NPU
 fn create_test_manager() -> ConnectomeManager {
-    let npu = Arc::new(Mutex::new(RustNPU::new(1_000_000, 10_000_000, 10)));
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu_result = RustNPU::new(
+        runtime,
+        backend,
+        1_000_000,
+        10_000_000,
+        10,
+    ).expect("Failed to create NPU");
+    let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
     ConnectomeManager::new_for_testing_with_npu(npu)
 }
 

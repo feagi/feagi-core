@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Simulation API DTOs
-//! 
+//!
 //! Request/response types for simulation control and stimulation
 
 use serde::{Deserialize, Serialize};
@@ -41,5 +41,3 @@ pub struct SimulationSuccessResponse {
     pub message: String,
     pub success: bool,
 }
-
-

@@ -1,34 +1,33 @@
 [package]
 name = "feagi-api"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
-authors = ["FEAGI Team"]
+authors.workspace = true
 license = "Apache-2.0"
 description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
-publish = false
 
 [dependencies]
 # Core FEAGI
-feagi-services = { path = "../feagi-services" }
-feagi-types = { path = "../feagi-types" }
-feagi-evo = { path = "../feagi-evo" }  # For embedded default genomes
-feagi-transports = { path = "../feagi-transports", features = ["zmq-server"] }
-feagi-pns = { path = "../feagi-pns" }  # For registration and domain logic
-feagi-bdu = { path = "../feagi-bdu" }  # For examples
-feagi-burst-engine = { path = "../feagi-burst-engine" }  # For examples
-feagi_data_structures = { workspace = true }
+# feagi-services is always needed (for trait definitions), but can work without tokio
+feagi-services = { version = "0.0.1", path = "../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
+feagi-npu-neural = { version = "0.0.1", path = "../feagi-npu/neural", default-features = false }  # For types
+feagi-evolutionary = { version = "0.0.1", path = "../feagi-evolutionary" }  # For embedded default genomes
+feagi-io = { version = "0.0.1", path = "../feagi-io", optional = true, features = ["zmq-transport"] }  # For transport primitives and domain logic
+feagi-brain-development = { version = "0.0.1", path = "../feagi-brain-development", optional = true }  # For examples
+feagi-npu-burst-engine = { version = "0.0.1", path = "../feagi-npu/burst-engine", default-features = false, optional = true }  # For examples
+feagi-data-structures = { workspace = true }
 
-# HTTP/REST
-axum = "0.7"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
-hyper = "1.0"
-http-body-util = "0.1"
+# HTTP/REST (optional - not needed for WASM)
+axum = { version = "0.7", optional = true }
+tower = { version = "0.4", optional = true }
+tower-http = { version = "0.5", features = ["cors", "trace", "fs"], optional = true }
+hyper = { version = "1.0", optional = true }
+http-body-util = { version = "0.1", optional = true }
 
-# Note: ZMQ provided by feagi-transports
+# Note: ZMQ provided by feagi-io transport primitives
 
-# Async runtime
-tokio = { version = "1.0", features = ["full"] }
+# Async runtime (optional - not needed for WASM)
+tokio = { version = "1.0", features = ["full"], optional = true }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -39,8 +38,9 @@ base64 = "0.21"
 validator = { version = "0.18", features = ["derive"] }
 
 # OpenAPI (utoipa - compile-time, full OpenAPI 3.0 support)
-utoipa = { version = "4.0", features = ["axum_extras"] }
-utoipa-swagger-ui = { version = "6.0", features = ["axum"] }
+# Available even without http feature (for endpoint documentation)
+utoipa = { version = "4.0", features = ["axum_extras"], default-features = false }
+utoipa-swagger-ui = { version = "6.0", features = ["axum"], optional = true }
 
 # Observability
 feagi-observability = { workspace = true }
@@ -71,8 +71,14 @@ reqwest = { version = "0.11", features = ["json"] }
 # Concurrency
 parking_lot = "0.12"
 
+# Async traits
+async-trait = "0.1"
+
 # UUID generation
 uuid = { version = "1.0", features = ["v4", "serde"] }
+
+# ZMQ (for context creation, transport primitives from feagi-io)
+zmq = { version = "0.10", optional = true }
 
 [dev-dependencies]
 # Contract testing
@@ -80,9 +86,13 @@ insta = "1.34"
 wiremock = "0.6"
 assert-json-diff = "2.0"
 tokio-test = "0.4"
+feagi-npu-runtime = { version = "0.0.1", path = "../feagi-npu/runtime", features = ["std"] }
 
 [features]
-default = []
+default = ["http", "services"]
+http = ["axum", "tower", "tower-http", "hyper", "http-body-util", "tokio", "utoipa-swagger-ui", "services"]
+services = ["feagi-services/std", "feagi-io", "feagi-brain-development", "feagi-npu-burst-engine"]
+zmq = ["feagi-io", "dep:zmq", "services"]  # feagi-io provides transport primitives, zmq for context
 security = ["chacha20poly1305", "x25519-dalek", "jsonwebtoken", "argon2"]
 tls = ["rustls", "tokio-rustls"]
 

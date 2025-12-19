@@ -101,7 +101,7 @@ use feagi_services::impls::{
     NeuronServiceImpl,
 };
 use feagi_services::types::RuntimeStatus; // Or whatever the actual DTO is
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_burst_engine::RustNPU;
 use tower::util::ServiceExt; // ✅ Correct path
 use std::sync::{Arc, Mutex};
@@ -145,7 +145,7 @@ Here's a working template once imports are fixed:
 ```rust
 use feagi_api::transports::http::server::{create_http_server, ApiState};
 use feagi_services::impls::*; // Import all service impls
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_burst_engine::RustNPU;
 use tower::util::ServiceExt;
 use std::sync::{Arc, Mutex};
@@ -187,9 +187,9 @@ Instead of fixing contract tests, we could start with **integration tests** whic
 ```rust
 // feagi-core/tests/integration/test_full_pipeline.rs
 
-use feagi_bdu::ConnectomeManager;
+use feagi_brain_development::ConnectomeManager;
 use feagi_burst_engine::RustNPU;
-use feagi_evo::load_genome_from_file;
+use feagi_evolutionary::load_genome_from_file;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;
 

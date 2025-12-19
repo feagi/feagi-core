@@ -21,16 +21,16 @@ use utoipa::ToSchema;
 pub struct SystemHealthResponse {
     /// Whether the burst engine is active
     pub burst_engine_active: bool,
-    
+
     /// Whether the brain is ready (initialized)
     pub brain_readiness: bool,
-    
+
     /// Total neuron count
     pub neuron_count: usize,
-    
+
     /// Total cortical area count
     pub cortical_area_count: usize,
-    
+
     /// Total burst count
     pub burst_count: u64,
 }
@@ -47,16 +47,16 @@ pub struct SystemHealthResponse {
 pub struct CorticalAreaStatsResponse {
     /// Cortical area ID
     pub cortical_id: String,
-    
+
     /// Number of neurons
     pub neuron_count: usize,
-    
+
     /// Number of synapses
     pub synapse_count: usize,
-    
+
     /// Neuron density (0.0 to 1.0)
     pub density: f32,
-    
+
     /// Whether area has neurons
     pub populated: bool,
 }
@@ -74,19 +74,19 @@ pub struct CorticalAreaStatsResponse {
 pub struct ConnectivityStatsResponse {
     /// Source cortical area ID
     pub source_area: String,
-    
+
     /// Target cortical area ID
     pub target_area: String,
-    
+
     /// Number of synapses
     pub synapse_count: usize,
-    
+
     /// Average synaptic weight
     pub avg_weight: f32,
-    
+
     /// Excitatory synapse count
     pub excitatory_count: usize,
-    
+
     /// Inhibitory synapse count
     pub inhibitory_count: usize,
 }
@@ -104,19 +104,19 @@ pub struct ConnectivityStatsResponse {
 pub struct ConnectomeAnalyticsResponse {
     /// Total number of neurons
     pub total_neurons: usize,
-    
+
     /// Total number of synapses
     pub total_synapses: usize,
-    
+
     /// Total number of cortical areas
     pub total_cortical_areas: usize,
-    
+
     /// Number of populated areas
     pub populated_areas: usize,
-    
+
     /// Average neuron density across all areas
     pub avg_density: f32,
-    
+
     /// Per-area statistics
     pub per_area_stats: HashMap<String, CorticalAreaStatsResponse>,
 }
@@ -126,7 +126,7 @@ pub struct ConnectomeAnalyticsResponse {
 pub struct PopulatedAreasResponse {
     /// List of populated areas with neuron counts
     pub areas: Vec<PopulatedAreaInfo>,
-    
+
     /// Total populated area count
     pub total_count: usize,
 }
@@ -140,7 +140,7 @@ pub struct PopulatedAreasResponse {
 pub struct PopulatedAreaInfo {
     /// Cortical area ID
     pub cortical_id: String,
-    
+
     /// Number of neurons
     pub neuron_count: usize,
 }
@@ -154,8 +154,7 @@ pub struct PopulatedAreaInfo {
 pub struct NeuronDensityResponse {
     /// Cortical area ID
     pub cortical_id: String,
-    
+
     /// Neuron density (0.0 to 1.0)
     pub density: f32,
 }
-

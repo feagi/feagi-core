@@ -9,18 +9,18 @@ use std::collections::HashMap;
 pub struct ApiRequest {
     /// HTTP method (GET, POST, PUT, DELETE, etc.)
     pub method: String,
-    
+
     /// Request path (e.g., "/v1/cortical_area/ipu")
     pub path: String,
-    
+
     /// Query parameters
     #[serde(default)]
     pub query: HashMap<String, String>,
-    
+
     /// Request headers (optional)
     #[serde(default)]
     pub headers: HashMap<String, String>,
-    
+
     /// Request body as JSON string (optional)
     pub body: Option<String>,
 }
@@ -55,7 +55,7 @@ impl ApiRequest {
     pub fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T, serde_json::Error> {
         match &self.body {
             Some(body) => serde_json::from_str(body),
-            None => serde_json::from_str("{}"),  // Return empty object if no body
+            None => serde_json::from_str("{}"), // Return empty object if no body
         }
     }
 
@@ -69,4 +69,3 @@ impl ApiRequest {
         self.headers.get(key)
     }
 }
-

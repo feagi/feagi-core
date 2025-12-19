@@ -53,7 +53,7 @@ With 15+ crates in the feagi-core workspace, ensuring consistent logging, error 
         ┌────────────────┴────────────────┐
         ↓                                  ↓
 ┌─────────────────┐              ┌─────────────────┐
-│  feagi-api      │              │  feagi-bdu      │
+│  feagi-api      │              │  feagi-brain-development      │
 │  feagi-services │              │  feagi-burst-...│
 │  ...            │              │  ...            │
 └─────────────────┘              └─────────────────┘
@@ -815,7 +815,7 @@ fn load_genome(path: &Path) -> FeagiResult<Genome> {
 1. Update `feagi-api` to use `feagi-observability`
 2. Update `feagi-services` to use `feagi-observability`
 3. Update `feagi-burst-engine` to use `feagi-observability`
-4. Update `feagi-bdu` to use `feagi-observability`
+4. Update `feagi-brain-development` to use `feagi-observability`
 
 ### Phase 3: Migrate Remaining Crates (Week 3)
 1. Update all other crates

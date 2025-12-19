@@ -16,4 +16,3 @@ pub mod parameter_updater;
 
 pub use change_classifier::{ChangeType, CorticalChangeClassifier};
 pub use parameter_updater::CorticalParameterUpdater;
-

@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Visualization API DTOs
-//! 
+//!
 //! Request/response types for visualization client management
 
 use serde::{Deserialize, Serialize};
@@ -14,7 +14,7 @@ use utoipa::ToSchema;
 pub struct VisualizationClientRequest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_id: Option<String>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
@@ -48,5 +48,3 @@ pub struct VisualizationSuccessResponse {
     pub message: String,
     pub success: bool,
 }
-
-

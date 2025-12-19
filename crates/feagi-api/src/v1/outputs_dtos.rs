@@ -2,7 +2,7 @@
 // Licensed under the Apache License, Version 2.0
 
 //! Outputs API DTOs
-//! 
+//!
 //! Request/response types for motor and output target management
 
 use serde::{Deserialize, Serialize};
@@ -29,5 +29,3 @@ pub struct OutputConfigResponse {
     pub message: String,
     pub success: bool,
 }
-
-

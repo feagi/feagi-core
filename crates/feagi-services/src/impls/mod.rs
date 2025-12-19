@@ -28,5 +28,3 @@ pub use neuron_service_impl::NeuronServiceImpl;
 pub use runtime_service_impl::RuntimeServiceImpl;
 pub use snapshot_service_impl::SnapshotServiceImpl;
 pub use system_service_impl::SystemServiceImpl;
-
-

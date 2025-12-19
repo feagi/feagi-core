@@ -3,14 +3,14 @@
 
 /*!
  * FEAGI v1 Network API
- * 
+ *
  * Endpoints for network configuration and status
  * Maps to Python: feagi/api/v1/network.py
  */
 
-use crate::common::{ApiError, ApiResult};
-use crate::transports::http::server::ApiState;
-use axum::{extract::State, Json};
+use crate::common::ApiState;
+use crate::common::{ApiError, ApiResult, Json, State};
+// Removed - using crate::common::State instead
 use serde_json::{json, Value};
 use std::collections::HashMap;
 
@@ -18,8 +18,7 @@ use std::collections::HashMap;
 // NETWORK CONFIGURATION
 // ============================================================================
 
-/// GET /v1/network/status
-/// Get network configuration status
+/// Get network configuration status including ZMQ, HTTP, and WebSocket states.
 #[utoipa::path(
     get,
     path = "/v1/network/status",
@@ -35,12 +34,11 @@ pub async fn get_status(State(_state): State<ApiState>) -> ApiResult<Json<HashMa
     response.insert("zmq_enabled".to_string(), json!(false));
     response.insert("http_enabled".to_string(), json!(true));
     response.insert("websocket_enabled".to_string(), json!(false));
-    
+
     Ok(Json(response))
 }
 
-/// POST /v1/network/config
-/// Configure network parameters
+/// Configure network parameters including transport protocols and ports.
 #[utoipa::path(
     post,
     path = "/v1/network/config",
@@ -55,20 +53,15 @@ pub async fn post_config(
     Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
     // Validate config is provided
-    let _config = request.get("config")
+    let _config = request
+        .get("config")
         .ok_or_else(|| ApiError::invalid_input("Missing 'config' field"))?;
-    
+
     // TODO: Apply network configuration
     tracing::info!(target: "feagi-api", "Network configuration updated");
-    
-    Ok(Json(HashMap::from([
-        ("message".to_string(), "Network configured successfully".to_string())
-    ])))
-}
 
-/// POST /v1/network/configure
-#[utoipa::path(post, path = "/v1/network/configure", tag = "network")]
-pub async fn post_configure(State(_state): State<ApiState>, Json(_req): Json<HashMap<String, Value>>) -> ApiResult<Json<HashMap<String, String>>> {
-    Ok(Json(HashMap::from([("message".to_string(), "Network configured".to_string())])))
+    Ok(Json(HashMap::from([(
+        "message".to_string(),
+        "Network configured successfully".to_string(),
+    )])))
 }
-

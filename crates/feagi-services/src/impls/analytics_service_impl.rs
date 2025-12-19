@@ -10,13 +10,14 @@ Licensed under the Apache License, Version 2.0
 
 use crate::traits::AnalyticsService;
 use crate::types::*;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use async_trait::async_trait;
-use feagi_bdu::ConnectomeManager;
-use feagi_burst_engine::BurstLoopRunner;
+use feagi_brain_development::models::CorticalAreaExt;
+use feagi_brain_development::ConnectomeManager;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_npu_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;
-use tracing::debug;
+use tracing::trace;
 
 /// Default implementation of AnalyticsService
 pub struct AnalyticsServiceImpl {
@@ -39,14 +40,14 @@ impl AnalyticsServiceImpl {
 #[async_trait]
 impl AnalyticsService for AnalyticsServiceImpl {
     async fn get_system_health(&self) -> ServiceResult<SystemHealth> {
-        debug!(target: "feagi-services","Getting system health");
-        
+        trace!(target: "feagi-services", "Getting system health");
+
         let neuron_count = self.get_total_neuron_count().await?;
         let manager = self.connectome.read();
         let cortical_area_count = manager.get_cortical_area_count();
         let neuron_capacity = manager.get_neuron_capacity();
         let synapse_capacity = manager.get_synapse_capacity();
-        
+
         // Get burst engine status from BurstLoopRunner
         let (burst_engine_active, burst_count) = if let Some(ref runner) = self.burst_runner {
             let runner_lock = runner.read();
@@ -54,11 +55,11 @@ impl AnalyticsService for AnalyticsServiceImpl {
         } else {
             (false, 0)
         };
-        
+
         // Brain is ready ONLY if genome is loaded AND burst engine is actively running
         // This prevents the Brain Visualizer from exiting loading screen prematurely
         let brain_readiness = cortical_area_count > 0 && burst_engine_active;
-        
+
         Ok(SystemHealth {
             burst_engine_active,
             brain_readiness,
@@ -70,18 +71,24 @@ impl AnalyticsService for AnalyticsServiceImpl {
         })
     }
 
-    async fn get_cortical_area_stats(
-        &self,
-        cortical_id: &str,
-    ) -> ServiceResult<CorticalAreaStats> {
-        debug!(target: "feagi-services","Getting cortical area stats: {}", cortical_id);
-        
+    async fn get_cortical_area_stats(&self, cortical_id: &str) -> ServiceResult<CorticalAreaStats> {
+        trace!(target: "feagi-services", "Getting cortical area stats: {}", cortical_id);
+
         let manager = self.connectome.read();
-        let neuron_count = manager.get_neuron_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
-        let synapse_count = manager.get_synapse_count_in_area(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
-        let density = manager.get_neuron_density(&CorticalID::try_from_base_64(cortical_id).map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?);
+        let neuron_count = manager.get_neuron_count_in_area(
+            &CorticalID::try_from_base_64(cortical_id)
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
+        );
+        let synapse_count = manager.get_synapse_count_in_area(
+            &CorticalID::try_from_base_64(cortical_id)
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
+        );
+        let density = manager.get_neuron_density(
+            &CorticalID::try_from_base_64(cortical_id)
+                .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?,
+        );
         let populated = neuron_count > 0;
-        
+
         Ok(CorticalAreaStats {
             cortical_id: cortical_id.to_string(),
             neuron_count,
@@ -92,21 +99,23 @@ impl AnalyticsService for AnalyticsServiceImpl {
     }
 
     async fn get_all_cortical_area_stats(&self) -> ServiceResult<Vec<CorticalAreaStats>> {
-        debug!(target: "feagi-services","Getting all cortical area stats");
-        
+        trace!(target: "feagi-services", "Getting all cortical area stats");
+
         let all_stats = self.connectome.read().get_all_area_stats();
-        
+
         let stats: Vec<CorticalAreaStats> = all_stats
             .into_iter()
-            .map(|(cortical_id, neuron_count, synapse_count, density)| CorticalAreaStats {
-                cortical_id,
-                neuron_count,
-                synapse_count,
-                density,
-                populated: neuron_count > 0,
-            })
+            .map(
+                |(cortical_id, neuron_count, synapse_count, density)| CorticalAreaStats {
+                    cortical_id,
+                    neuron_count,
+                    synapse_count,
+                    density,
+                    populated: neuron_count > 0,
+                },
+            )
             .collect();
-        
+
         Ok(stats)
     }
 
@@ -115,20 +124,22 @@ impl AnalyticsService for AnalyticsServiceImpl {
         source_area: &str,
         target_area: &str,
     ) -> ServiceResult<ConnectivityStats> {
-        debug!(target: "feagi-services",
+        trace!(target: "feagi-services",
             "Getting connectivity stats: {} -> {}",
             source_area,
             target_area
         );
-        
+
         // Convert String to CorticalID
-        let source_id = CorticalID::try_from_base_64(source_area)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e)))?;
-        let target_id = CorticalID::try_from_base_64(target_area)
-            .map_err(|e| ServiceError::InvalidInput(format!("Invalid target cortical ID: {}", e)))?;
-        
+        let source_id = CorticalID::try_from_base_64(source_area).map_err(|e| {
+            ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e))
+        })?;
+        let target_id = CorticalID::try_from_base_64(target_area).map_err(|e| {
+            ServiceError::InvalidInput(format!("Invalid target cortical ID: {}", e))
+        })?;
+
         let manager = self.connectome.read();
-        
+
         // Verify both areas exist
         if !manager.has_cortical_area(&source_id) {
             return Err(ServiceError::NotFound {
@@ -142,27 +153,29 @@ impl AnalyticsService for AnalyticsServiceImpl {
                 id: target_area.to_string(),
             });
         }
-        
+
         // Get all neurons in source area
         let source_neurons = manager.get_neurons_in_area(&source_id);
-        
+
         // Count synapses going from source to target
         let mut synapse_count = 0;
         let mut total_weight: u64 = 0;
         let mut excitatory_count = 0;
         let mut inhibitory_count = 0;
-        
+
         for source_neuron_id in source_neurons {
             // Get outgoing synapses from this neuron
             let outgoing = manager.get_outgoing_synapses(source_neuron_id);
-            
+
             for (target_neuron_id, weight, _conductance, synapse_type) in outgoing {
                 // Check if target neuron is in target area
-                if let Some(target_cortical_id) = manager.get_neuron_cortical_id(target_neuron_id as u64) {
+                if let Some(target_cortical_id) =
+                    manager.get_neuron_cortical_id(target_neuron_id as u64)
+                {
                     if target_cortical_id.as_base_64() == target_area {
                         synapse_count += 1;
                         total_weight += weight as u64;
-                        
+
                         // synapse_type: 0 = excitatory, 1 = inhibitory (from feagi-types)
                         if synapse_type == 0 {
                             excitatory_count += 1;
@@ -173,13 +186,13 @@ impl AnalyticsService for AnalyticsServiceImpl {
                 }
             }
         }
-        
+
         let avg_weight = if synapse_count > 0 {
             (total_weight as f64 / synapse_count as f64) as f32
         } else {
             0.0
         };
-        
+
         Ok(ConnectivityStats {
             source_area: source_area.to_string(),
             target_area: target_area.to_string(),
@@ -191,87 +204,89 @@ impl AnalyticsService for AnalyticsServiceImpl {
     }
 
     async fn get_total_neuron_count(&self) -> ServiceResult<usize> {
-        debug!(target: "feagi-services","Getting total neuron count");
-        
+        trace!(target: "feagi-services", "Getting total neuron count");
+
         let count = self.connectome.read().get_neuron_count();
         Ok(count)
     }
 
     async fn get_total_synapse_count(&self) -> ServiceResult<usize> {
-        debug!(target: "feagi-services","Getting total synapse count");
-        
+        trace!(target: "feagi-services", "Getting total synapse count");
+
         let count = self.connectome.read().get_synapse_count();
         Ok(count)
     }
 
     async fn get_populated_areas(&self) -> ServiceResult<Vec<(String, usize)>> {
-        debug!(target: "feagi-services","Getting populated areas");
-        
+        trace!(target: "feagi-services", "Getting populated areas");
+
         let areas = self.connectome.read().get_populated_areas();
         Ok(areas)
     }
 
     async fn get_neuron_density(&self, cortical_id: &str) -> ServiceResult<f32> {
-        debug!(target: "feagi-services","Getting neuron density for area: {}", cortical_id);
-        
+        trace!(target: "feagi-services", "Getting neuron density for area: {}", cortical_id);
+
         // Convert String to CorticalID
         let cortical_id_typed = CorticalID::try_from_base_64(cortical_id)
             .map_err(|e| ServiceError::InvalidInput(format!("Invalid cortical ID: {}", e)))?;
-        
-        let density = self.connectome.read().get_neuron_density(&cortical_id_typed);
+
+        let density = self
+            .connectome
+            .read()
+            .get_neuron_density(&cortical_id_typed);
         Ok(density)
     }
 
     async fn is_brain_initialized(&self) -> ServiceResult<bool> {
-        debug!(target: "feagi-services","Checking if brain is initialized");
-        
+        trace!(target: "feagi-services", "Checking if brain is initialized");
+
         let initialized = self.connectome.read().is_initialized();
         Ok(initialized)
     }
 
     async fn is_burst_engine_ready(&self) -> ServiceResult<bool> {
-        debug!(target: "feagi-services","Checking if burst engine is ready");
-        
+        trace!(target: "feagi-services", "Checking if burst engine is ready");
+
         let ready = self.connectome.read().has_npu();
         Ok(ready)
     }
 
     async fn get_regular_neuron_count(&self) -> ServiceResult<usize> {
-        debug!(target: "feagi-services","Getting regular (non-memory) neuron count");
-        
+        trace!(target: "feagi-services", "Getting regular (non-memory) neuron count");
+
         let manager = self.connectome.read();
         let mut regular_count = 0;
-        
+
         // Iterate through all cortical areas and sum neurons from non-memory areas
         for cortical_id in manager.get_cortical_area_ids() {
             if let Some(area) = manager.get_cortical_area(&cortical_id) {
                 let cortical_group = area.get_cortical_group();
-                if cortical_group != "MEMORY" {
+                if cortical_group.as_deref() != Some("MEMORY") {
                     regular_count += manager.get_neuron_count_in_area(&cortical_id);
                 }
             }
         }
-        
+
         Ok(regular_count)
     }
 
     async fn get_memory_neuron_count(&self) -> ServiceResult<usize> {
-        debug!(target: "feagi-services","Getting memory neuron count");
-        
+        trace!(target: "feagi-services", "Getting memory neuron count");
+
         let manager = self.connectome.read();
         let mut memory_count = 0;
-        
+
         // Iterate through all cortical areas and sum neurons from memory areas
         for cortical_id in manager.get_cortical_area_ids() {
             if let Some(area) = manager.get_cortical_area(&cortical_id) {
                 let cortical_group = area.get_cortical_group();
-                if cortical_group == "MEMORY" {
+                if cortical_group.as_deref() == Some("MEMORY") {
                     memory_count += manager.get_neuron_count_in_area(&cortical_id);
                 }
             }
         }
-        
+
         Ok(memory_count)
     }
 }
-

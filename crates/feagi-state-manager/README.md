@@ -217,7 +217,7 @@ Apache-2.0
 
 - [`feagi-types`](../feagi-types): Core data structures
 - [`feagi-burst-engine`](../feagi-burst-engine): NPU execution
-- [`feagi-bdu`](../feagi-bdu): Neurogenesis
+- [`feagi-brain-development`](../feagi-brain-development): Neurogenesis
 - [`feagi-plasticity`](../feagi-plasticity): Synaptic learning
 
 

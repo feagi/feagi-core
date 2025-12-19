@@ -11,27 +11,27 @@ pub enum Permission {
     NeuronRead,
     NeuronCreate,
     NeuronDelete,
-    
+
     // Cortical area permissions
     CorticalAreaRead,
     CorticalAreaCreate,
     CorticalAreaUpdate,
     CorticalAreaDelete,
-    
+
     // Brain region permissions
     BrainRegionRead,
     BrainRegionCreate,
     BrainRegionUpdate,
     BrainRegionDelete,
-    
+
     // Genome permissions
     GenomeLoad,
     GenomeSave,
     GenomeValidate,
-    
+
     // Analytics permissions
     AnalyticsRead,
-    
+
     // System permissions
     SystemAdmin,
     SystemRead,
@@ -43,7 +43,7 @@ pub struct Authorizer;
 impl Authorizer {
     /// Authorize a permission (stub - always allows)
     pub fn authorize(_ctx: &AuthContext, _perm: Permission) -> Result<(), AuthzError> {
-        Ok(())  // Stub: always allow
+        Ok(()) // Stub: always allow
     }
 }
 
@@ -68,8 +68,3 @@ impl std::fmt::Display for AuthzError {
 }
 
 impl std::error::Error for AuthzError {}
-
-
-
-
-
