@@ -115,22 +115,27 @@ jobs:
     - name: Build release
       run: cargo build --release --lib --verbose
     
-    - name: Publish all workspace crates to crates.io (beta)
+    # TEMPORARILY DISABLED: Publish to crates.io
+    # - name: Publish all workspace crates to crates.io (beta)
+    #   run: |
+    #     BETA_VERSION="${{ steps.version.outputs.version }}"
+    #     echo "📦 Publishing all feagi-core workspace crates (v$BETA_VERSION)..."
+    #     echo "This will publish 19 crates in dependency order with delays for indexing."
+    #     echo ""
+    #     
+    #     # Run the multi-crate publish script
+    #     chmod +x scripts/publish-crates.sh
+    #     ./scripts/publish-crates.sh
+    #     
+    #     echo ""
+    #     echo "✅ Successfully published all workspace crates (beta v$BETA_VERSION)"
+    #   continue-on-error: false
+    #   env:
+    #     CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+    - name: Publish to crates.io (DISABLED - Version update only)
       run: |
-        BETA_VERSION="${{ steps.version.outputs.version }}"
-        echo "📦 Publishing all feagi-core workspace crates (v$BETA_VERSION)..."
-        echo "This will publish 19 crates in dependency order with delays for indexing."
-        echo ""
-        
-        # Run the multi-crate publish script
-        chmod +x scripts/publish-crates.sh
-        ./scripts/publish-crates.sh
-        
-        echo ""
-        echo "✅ Successfully published all workspace crates (beta v$BETA_VERSION)"
-      continue-on-error: false
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+        echo "⚠️  Publishing temporarily disabled for version update"
+        echo "📦 Would publish all workspace crates (beta v${{ steps.version.outputs.version }})..."
     
     - name: Commit version updates
       run: |
@@ -171,45 +176,8 @@ jobs:
         body: |
           🚀 **Beta release of FEAGI Core v${{ steps.version.outputs.version }}**
           
-          This is a beta version from the staging branch. All 19 workspace crates have been published to crates.io with the `-beta.${{ steps.version.outputs.beta_number }}` suffix.
+          This is a beta version from the staging branch. ⚠️ **Publishing to crates.io is temporarily disabled for version update.**
           
-          ## Published Crates
-          
-          All workspace crates published with version **${{ steps.version.outputs.version }}**:
-          
-          - 📦 `feagi-observability`
-          - 📦 `feagi-data-structures`
-          - 📦 `feagi-config`
-          - 📦 `feagi-npu-neural`
-          - 📦 `feagi-npu-runtime`
-          - 📦 `feagi-data-serialization`
-          - 📦 `feagi-state-manager`
-          - 📦 `feagi-npu-burst-engine`
-          - 📦 `feagi-npu-plasticity`
-          - 📦 `feagi-evolutionary`
-          - 📦 `feagi-brain-development`
-          - 📦 `feagi-io`
-          - 📦 `feagi-sensorimotor`
-          - 📦 `feagi-services`
-          - 📦 `feagi-api`
-          - 📦 `feagi-agent`
-          - 📦 `feagi-hal`
-          - 📦 `feagi` (root meta-crate)
-          
-          ## Installation
-          
-          ```toml
-          [dependencies]
-          feagi = "${{ steps.version.outputs.version }}"
-          ```
-          
-          Or install individual crates:
-          
-          ```toml
-          [dependencies]
-          feagi-npu-neural = "${{ steps.version.outputs.version }}"
-          feagi-npu-burst-engine = "${{ steps.version.outputs.version }}"
-          ```
           
           ## Release Information
           
@@ -223,10 +191,10 @@ jobs:
           
           - ✅ All workspace tests passed
           - ✅ Package builds successfully
-          - ✅ All 19 crates published to crates.io with beta suffix
+          - ⚠️ Publishing to crates.io is disabled (version update in progress)
           - ✅ Ready for testing and integration
           
-          **Note:** This beta version is available on crates.io for testing. The next staging merge will increment the beta number.
+          **Note:** This is a version update release. Publishing will be re-enabled after version migration is complete.
         draft: false
         prerelease: true
     
