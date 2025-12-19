@@ -170,6 +170,8 @@ pub fn apply_expander_morphology(
 
         let dst_pos = syn_expander("", "", src_pos, src_dimensions, dst_dimensions)?;
 
+        // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
+        #[allow(clippy::collapsible_if)]
         if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
             if rng.gen_range(0..100) < synapse_attractivity
                 && npu
@@ -235,6 +237,8 @@ pub fn apply_block_connection_morphology(
             scaling_factor,
         )?;
 
+        // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
+        #[allow(clippy::collapsible_if)]
         if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
             if rng.gen_range(0..100) < synapse_attractivity
                 && npu
@@ -300,6 +304,8 @@ pub fn apply_patterns_morphology(
             match_patterns_batch(src_pos, &patterns, src_dimensions, dst_dimensions);
 
         for dst_pos in dst_positions {
+            // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
+            #[allow(clippy::collapsible_if)]
             if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
                 if rng.gen_range(0..100) < synapse_attractivity
                     && npu
@@ -363,6 +369,8 @@ pub fn apply_vectors_morphology(
         // Apply all vectors
         for &vector in &vectors {
             if let Ok(dst_pos) = apply_vector_offset(src_pos, vector, 1.0, dst_dimensions) {
+                // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
+                #[allow(clippy::collapsible_if)]
                 if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
                     if rng.gen_range(0..100) < synapse_attractivity
                         && npu
