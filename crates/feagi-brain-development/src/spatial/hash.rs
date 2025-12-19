@@ -13,6 +13,11 @@ use std::sync::{Arc, RwLock};
 
 use super::morton::{morton_encode_3d, morton_encode_region_3d};
 
+/// Type alias for neuron map key: (cortical_area, morton_code)
+type NeuronMapKey = (String, u64);
+/// Type alias for coordinate map value: (area, x, y, z)
+type CoordinateMapValue = (String, u32, u32, u32);
+
 /// Spatial hash system using Morton encoding + Roaring bitmaps
 pub struct MortonSpatialHash {
     /// Per-cortical-area bitmaps of occupied positions
