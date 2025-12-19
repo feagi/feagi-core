@@ -65,10 +65,7 @@ impl MortonSpatialHash {
         {
             let mut neuron_map = self.neuron_map.write().unwrap();
             let key = (cortical_area.clone(), morton_code);
-            neuron_map
-                .entry(key)
-                .or_default()
-                .push(neuron_id);
+            neuron_map.entry(key).or_default().push(neuron_id);
         }
 
         // Add to coordinate map
@@ -143,10 +140,7 @@ impl MortonSpatialHash {
         // Get neurons
         let neuron_map = self.neuron_map.read().unwrap();
         let key = (cortical_area.to_string(), morton_code);
-        neuron_map
-            .get(&key)
-            .cloned()
-            .unwrap_or_default()
+        neuron_map.get(&key).cloned().unwrap_or_default()
     }
 
     /// Get all neurons in a 3D region
