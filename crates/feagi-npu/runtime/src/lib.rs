@@ -102,6 +102,7 @@ pub use embedded_impl::{
 };
 
 // Convenience module for embedded (re-exports from embedded_impl)
+/// Embedded runtime implementations for no_std environments
 #[cfg(feature = "embedded")]
 pub mod embedded {
     pub use super::embedded_impl::{EmbeddedRuntime, NeuronArray, SynapseArray};

@@ -45,6 +45,15 @@ impl NeuronVoxelXYZPArrays {
             p: Vec::new(),
         }
     }
+}
+
+impl Default for NeuronVoxelXYZPArrays {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl NeuronVoxelXYZPArrays {
 
     /// Creates a new NeuronVoxelXYZPArrays instance from four separate vectors of equal length.
     ///
@@ -332,8 +341,7 @@ impl NeuronVoxelXYZPArrays {
                 "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
                 index,
                 self.len()
-            ))
-            .into());
+            )));
         }
         let x = self.x[index];
         let y = self.y[index];
@@ -352,8 +360,7 @@ impl NeuronVoxelXYZPArrays {
                 "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
                 index,
                 self.len()
-            ))
-            .into());
+            )));
         }
         Ok(self.x[index])
     }
@@ -365,8 +372,7 @@ impl NeuronVoxelXYZPArrays {
                 "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
                 index,
                 self.len()
-            ))
-            .into());
+            )));
         }
         Ok(self.y[index])
     }
@@ -378,8 +384,7 @@ impl NeuronVoxelXYZPArrays {
                 "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
                 index,
                 self.len()
-            ))
-            .into());
+            )));
         }
         Ok(self.z[index])
     }
@@ -391,8 +396,7 @@ impl NeuronVoxelXYZPArrays {
                 "Given index {} is exceeds NeuronVoxelXYZPArray length of {}!",
                 index,
                 self.len()
-            ))
-            .into());
+            )));
         }
         Ok(self.p[index])
     }
@@ -417,13 +421,10 @@ impl NeuronVoxelXYZPArrays {
         let y = self.y.pop();
         let z = self.z.pop();
         let p = self.p.pop();
-        match x {
-            Some(x) => Some(NeuronVoxelXYZP {
-                neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y.unwrap(), z.unwrap()),
-                potential: p.unwrap(),
-            }),
-            None => None,
-        }
+        x.map(|x| NeuronVoxelXYZP {
+            neuron_voxel_coordinate: NeuronVoxelCoordinate::new(x, y.unwrap(), z.unwrap()),
+            potential: p.unwrap(),
+        })
     }
 
     /// Clears all vectors by truncating them to zero length without deallocating its memory.
@@ -716,8 +717,7 @@ impl NeuronVoxelXYZPArrays {
         if !((self.y.len() == len) && (self.x.len() == len) && (self.z.len() == len)) {
             return Err(FeagiDataError::InternalError(
                 "Internal XYCP Arrays do not have equal lengths!".into(),
-            )
-            .into());
+            ));
         }
         Ok(())
     }

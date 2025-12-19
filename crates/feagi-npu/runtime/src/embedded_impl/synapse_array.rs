@@ -55,7 +55,15 @@ impl<const N: usize> SynapseArray<N> {
             valid_mask: [false; N],
         }
     }
+}
 
+impl<const N: usize> Default for SynapseArray<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize> SynapseArray<N> {
     /// Add a synapse (simplified for backward compatibility)
     ///
     /// Returns true if successful, false if array is full.

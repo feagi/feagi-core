@@ -38,8 +38,7 @@ impl FeagiJSON {
             Err(e) => Err(FeagiDataError::BadParameters(format!(
                 "Failed to parse JSON string: {}",
                 e
-            ))
-            .into()),
+            ))),
         }
     }
 

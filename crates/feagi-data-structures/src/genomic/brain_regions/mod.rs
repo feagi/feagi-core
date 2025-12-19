@@ -22,15 +22,11 @@ use std::collections::{HashMap, HashSet};
 /// for future extensions when functional or anatomical classification is implemented.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RegionType {
     /// Generic/undefined region type (placeholder)
+    #[default]
     Undefined,
-}
-
-impl Default for RegionType {
-    fn default() -> Self {
-        Self::Undefined
-    }
 }
 
 impl std::fmt::Display for RegionType {

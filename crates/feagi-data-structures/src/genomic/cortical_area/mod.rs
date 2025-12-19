@@ -1,3 +1,4 @@
+#[allow(clippy::module_inception)]
 mod cortical_area;
 mod cortical_id;
 mod cortical_type;

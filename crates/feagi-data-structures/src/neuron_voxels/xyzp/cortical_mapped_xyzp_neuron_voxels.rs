@@ -42,6 +42,15 @@ impl CorticalMappedXYZPNeuronVoxels {
             mappings: HashMap::new(),
         }
     }
+}
+
+impl Default for CorticalMappedXYZPNeuronVoxels {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CorticalMappedXYZPNeuronVoxels {
 
     //region HashMap like implementation
     /// Creates a new neuron data collection with pre-allocated capacity.
@@ -178,7 +187,7 @@ impl CorticalMappedXYZPNeuronVoxels {
         &mut self,
         cortical_id: &CorticalID,
     ) -> Option<&mut NeuronVoxelXYZPArrays> {
-        self.mappings.get_mut(&cortical_id)
+        self.mappings.get_mut(cortical_id)
     }
 
     /// Checks if a cortical area has neuron data.
@@ -349,7 +358,7 @@ impl CorticalMappedXYZPNeuronVoxels {
         }
         _ = self
             .mappings
-            .insert(cortical_id.clone(), NeuronVoxelXYZPArrays::new());
+            .insert(*cortical_id, NeuronVoxelXYZPArrays::new());
         self.mappings.get_mut(cortical_id).unwrap()
     }
 }
@@ -559,8 +568,8 @@ impl std::fmt::Display for CorticalMappedXYZPNeuronVoxels {
             inner.push_str(
                 format!(
                     "[{}, {}],",
-                    cortical_id_and_data.0.to_string(),
-                    cortical_id_and_data.1.to_string()
+                    cortical_id_and_data.0,
+                    cortical_id_and_data.1
                 )
                 .as_str(),
             );

@@ -190,7 +190,7 @@ impl SynapseStorage for SynapseArray {
         // Update index
         self.source_index
             .entry(source)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(idx);
 
         self.count += 1;
