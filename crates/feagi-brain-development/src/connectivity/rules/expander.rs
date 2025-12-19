@@ -59,7 +59,7 @@ pub fn syn_expander_batch(
 
     #[cfg(not(feature = "parallel"))]
     {
-        Ok(neuron_locations
+        neuron_locations
             .iter()
             .map(|&loc| {
                 syn_expander(
@@ -70,7 +70,7 @@ pub fn syn_expander_batch(
                     dst_dimensions,
                 )
             })
-            .collect::<Result<Vec<_>, _>>()?)
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 
