@@ -601,7 +601,7 @@ mod tests {
             let detector = batch_detector.get_detector(area_idx, 3);
             let mut bitmap = HashSet::new();
             bitmap.insert(area_idx);
-            detector.detect_pattern(area_idx, &vec![1], 10, vec![bitmap], None);
+            detector.detect_pattern(area_idx, &[1], 10, vec![bitmap], None);
         }
 
         let stats = batch_detector.get_batch_stats();

@@ -3238,7 +3238,7 @@ impl std::fmt::Debug for ConnectomeManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use super::*;
+    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
 
     #[test]
     fn test_singleton_instance() {
