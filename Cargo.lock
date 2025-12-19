@@ -1795,6 +1795,7 @@ dependencies = [
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
  "feagi-npu-plasticity",
+ "feagi-sensorimotor",
  "feagi-state-manager",
  "serde_json",
 ]
@@ -2087,7 +2088,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-pns"
+name = "feagi-sensorimotor"
 version = "0.0.1"
 dependencies = [
  "clap",

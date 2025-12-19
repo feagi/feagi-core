@@ -146,8 +146,8 @@ If you must publish manually, follow the layer order below exactly.
 - **Purpose:** Agent I/O, registration, ZMQ/UDP/WebSocket transports, connectome file I/O
 - **Note:** Includes consolidated transport primitives (formerly feagi-transports)
 
-#### `feagi-pns`
-- **Path:** `crates/feagi-pns`
+#### `feagi-sensorimotor`
+- **Path:** `crates/feagi-sensorimotor`
 - **Dependencies:**
   - `feagi-data-structures`
   - `feagi-data-serialization`

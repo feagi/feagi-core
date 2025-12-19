@@ -36,7 +36,7 @@ wasm = [
 # Component features (selective compilation)
 full = ["compute", "io"]
 compute = ["burst-engine", "brain-development", "plasticity", "serialization", "state-manager"]
-io = ["pns", "agent-sdk"]
+io = ["sensorimotor", "agent-sdk"]
 
 # Individual components
 burst-engine = ["feagi-npu-burst-engine"]
@@ -44,7 +44,7 @@ brain-development = ["feagi-brain-development"]
 plasticity = ["feagi-npu-plasticity"]
 state-manager = ["feagi-state-manager"]
 serialization = ["feagi-io/connectome-serialization"]
-pns = ["feagi-io"]
+sensorimotor = ["dep:feagi-sensorimotor"]
 agent-sdk = ["feagi-agent"]
 
 [dependencies]
@@ -59,6 +59,7 @@ feagi-state-manager = { version = "0.0.1", path = "crates/feagi-state-manager", 
 # Algorithms (vendored)
 feagi-npu-burst-engine = { version = "0.0.1", path = "crates/feagi-npu/burst-engine", optional = true }
 feagi-brain-development = { version = "0.0.1", path = "crates/feagi-brain-development", optional = true }
+feagi-sensorimotor = { version = "0.0.1", path = "crates/feagi-sensorimotor", optional = true }
 feagi-npu-plasticity = { version = "0.0.1", path = "crates/feagi-npu/plasticity", optional = true }
 
 # I/O (vendored)
@@ -103,7 +104,7 @@ members = [
     # === Applications ===
     
     # === Data Processing ===
-    "crates/feagi-pns",                # Peripheral Nervous System (PNS) - data processing & encoding
+    "crates/feagi-sensorimotor",                # Sensorimotor System - data processing & encoding (sensory & motor)
     "crates/feagi-data-serialization", # Data serialization formats
     "crates/feagi-data-structures",    # Core data structures
 ]

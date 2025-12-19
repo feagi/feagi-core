@@ -3,12 +3,12 @@
 //! These tests verify image segmentation through the ConnectorAgent and sensor cache,
 //! testing various gaze positions, resolutions, and color channel configurations.
 
-use feagi_pns::data_types::descriptors::{
+use feagi_sensorimotor::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
-use feagi_pns::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
-use feagi_pns::wrapped_io_data::WrappedIOData;
-use feagi_pns::ConnectorAgent;
+use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
+use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
+use feagi_sensorimotor::ConnectorAgent;
 use feagi_data_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
 };

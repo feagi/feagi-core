@@ -189,7 +189,7 @@ jobs:
           - 📦 `feagi-evolutionary`
           - 📦 `feagi-brain-development`
           - 📦 `feagi-io`
-          - 📦 `feagi-pns`
+          - 📦 `feagi-sensorimotor`
           - 📦 `feagi-services`
           - 📦 `feagi-api`
           - 📦 `feagi-agent`

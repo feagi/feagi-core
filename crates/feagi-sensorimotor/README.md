@@ -1,14 +1,14 @@
-# feagi-pns
+# feagi-sensorimotor
 
 **Peripheral Nervous System (PNS) - Data processing, caching, and neuron voxel encoding for FEAGI agents**
 
-[![Crates.io](https://img.shields.io/crates/v/feagi-pns.svg)](https://crates.io/crates/feagi-pns)
-[![Documentation](https://docs.rs/feagi-pns/badge.svg)](https://docs.rs/feagi-pns)
-[![License](https://img.shields.io/crates/l/feagi-pns.svg)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/feagi-sensorimotor.svg)](https://crates.io/crates/feagi-sensorimotor)
+[![Documentation](https://docs.rs/feagi-sensorimotor/badge.svg)](https://docs.rs/feagi-sensorimotor)
+[![License](https://img.shields.io/crates/l/feagi-sensorimotor.svg)](LICENSE)
 
 ## Overview
 
-`feagi-pns` provides the foundational components for building FEAGI connector agents. This crate includes data processing pipelines, caching mechanisms, and neuron voxel encoding/decoding for various data types. It serves as the "Peripheral Nervous System" layer, handling sensory input processing and motor output encoding.
+`feagi-sensorimotor` provides the foundational components for building FEAGI connector agents. This crate includes data processing pipelines, caching mechanisms, and neuron voxel encoding/decoding for various data types. It serves as the "Peripheral Nervous System" layer, handling sensory input processing and motor output encoding.
 
 ## Features
 
@@ -25,7 +25,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi-pns = "2.0.0"
+feagi-sensorimotor = "2.0.0"
 feagi-data-structures = "2.0.0"
 feagi-data-serialization = "2.0.0"
 ```
@@ -35,7 +35,7 @@ feagi-data-serialization = "2.0.0"
 ### Data Processing Pipeline
 
 ```rust
-use feagi_pns::data_pipeline::PipelineStage;
+use feagi_sensorimotor::data_pipeline::PipelineStage;
 
 // Create a pipeline for image processing
 let pipeline = vec![
@@ -52,8 +52,8 @@ for stage in &pipeline {
 ### XYZP Encoding
 
 ```rust
-use feagi_pns::neuron_voxel_coding::xyzp::encoders::Percentage1DLinear;
-use feagi_pns::data_types::percentages::Percentage;
+use feagi_sensorimotor::neuron_voxel_coding::xyzp::encoders::Percentage1DLinear;
+use feagi_sensorimotor::data_types::percentages::Percentage;
 
 // Encode a percentage value as neuron voxels
 let encoder = Percentage1DLinear::new(100);
@@ -64,7 +64,7 @@ let voxels = encoder.encode(&percentage);
 ### Sensory Device Cache
 
 ```rust
-use feagi_pns::caching::SensoryChannelStreamCaches;
+use feagi_sensorimotor::caching::SensoryChannelStreamCaches;
 
 // Create a cache for sensory data streams
 let mut cache = SensoryChannelStreamCaches::new();
@@ -79,7 +79,7 @@ let data = cache.get("camera_01")?;
 ### Image Segmentation
 
 ```rust
-use feagi_pns::data_types::SegmentedImageFrame;
+use feagi_sensorimotor::data_types::SegmentedImageFrame;
 
 // Segment an image into regions
 let segmented = SegmentedImageFrame::from_image_frame(
@@ -125,7 +125,7 @@ Available pipeline stages:
 
 ## Documentation
 
-For detailed API documentation, visit [docs.rs/feagi-pns](https://docs.rs/feagi-pns).
+For detailed API documentation, visit [docs.rs/feagi-sensorimotor](https://docs.rs/feagi-sensorimotor).
 
 ## Examples
 
@@ -154,6 +154,6 @@ Contributions are welcome! Please see the [main repository](https://github.com/f
 
 - **Homepage**: https://feagi.org
 - **Repository**: https://github.com/feagi/feagi-core
-- **Documentation**: https://docs.rs/feagi-pns
+- **Documentation**: https://docs.rs/feagi-sensorimotor
 - **Issue Tracker**: https://github.com/feagi/feagi-core/issues
 

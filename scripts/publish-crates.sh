@@ -49,7 +49,7 @@ CRATES=(
     
     # Layer 8: I/O Layer
     "crates/feagi-io"
-    "crates/feagi-pns"
+    "crates/feagi-sensorimotor"
     
     # Layer 9: Services & API
     "crates/feagi-services"

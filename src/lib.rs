@@ -175,7 +175,7 @@ pub use feagi_npu_plasticity as plasticity;
 pub use feagi_io::connectome as serialization;
 
 // Re-export I/O layer
-#[cfg(feature = "pns")]
+#[cfg(feature = "sensorimotor")]
 pub use feagi_io as io;
 
 #[cfg(feature = "agent-sdk")]

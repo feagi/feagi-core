@@ -12,7 +12,7 @@ use ndarray::{s, Array3, Zip};
 ///
 /// # Example
 /// ```
-/// use feagi_pns::data_types::{MiscData, descriptors::MiscDataDimensions};
+/// use feagi_sensorimotor::data_types::{MiscData, descriptors::MiscDataDimensions};
 ///
 /// let dims = MiscDataDimensions::new(10, 10, 5).unwrap();
 /// let misc_data = MiscData::new(&dims).unwrap();
