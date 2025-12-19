@@ -58,7 +58,7 @@ impl BrainRegionHierarchy {
     /// Create a hierarchy with a root region
     pub fn with_root(root: BrainRegion) -> Self {
         let mut hierarchy = Self::new();
-        let root_id = root.region_id.clone();
+        let root_id = root.region_id;
         hierarchy.regions.insert(root_id.to_string(), root);
         hierarchy.root_id = Some(root_id.to_string());
         hierarchy
@@ -79,7 +79,7 @@ impl BrainRegionHierarchy {
     /// - Adding would create a cycle
     ///
     pub fn add_region(&mut self, region: BrainRegion, parent_id: Option<String>) -> BduResult<()> {
-        let region_id = region.region_id.clone();
+        let region_id = region.region_id;
 
         // Check if region already exists
         if self.regions.contains_key(&region_id.to_string()) {
@@ -109,7 +109,7 @@ impl BrainRegionHierarchy {
                 .insert(region_id_str.clone(), parent.clone());
             self.children_map
                 .entry(parent)
-                .or_insert_with(HashSet::new)
+                .or_default()
                 .insert(region_id_str.clone());
         } else if self.root_id.is_none() {
             // First region without parent becomes root
@@ -159,7 +159,7 @@ impl BrainRegionHierarchy {
                 self.parent_map.insert(child.clone(), parent.clone());
                 self.children_map
                     .entry(parent.clone())
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(child.clone());
             }
         }

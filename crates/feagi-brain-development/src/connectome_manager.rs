@@ -38,7 +38,7 @@ use tracing::{debug, info, trace, warn};
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
-use feagi_data_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_npu_neural::types::NeuronId;
 
 // NPU integration (optional dependency)
@@ -131,6 +131,9 @@ pub struct ConnectomeManager {
     /// Is the connectome initialized (has cortical areas)?
     initialized: bool,
 }
+
+/// Type alias for neuron batch data: (x, y, z, threshold, leak, resting, neuron_type, refractory_period, excitability, consecutive_fire_limit, snooze_period, mp_charge_accumulation)
+type NeuronData = (u32, u32, u32, f32, f32, f32, i32, u16, f32, u16, u16, bool);
 
 impl ConnectomeManager {
     /// Create a new ConnectomeManager (private - use `instance()`)
@@ -281,8 +284,8 @@ impl ConnectomeManager {
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
 
-        let is_death_area = &area.cortical_id == &death_id;
-        let is_power_area = &area.cortical_id == &power_id;
+        let is_death_area = area.cortical_id == death_id;
+        let is_power_area = area.cortical_id == power_id;
 
         if is_death_area {
             trace!(
@@ -335,17 +338,15 @@ impl ConnectomeManager {
             }
         }
 
-        let cortical_id = area.cortical_id.clone();
+        let cortical_id = area.cortical_id;
         let cortical_idx = area.cortical_idx;
 
         // Update lookup maps
-        self.cortical_id_to_idx
-            .insert(cortical_id.clone(), cortical_idx);
-        self.cortical_idx_to_id
-            .insert(cortical_idx, cortical_id.clone());
+        self.cortical_id_to_idx.insert(cortical_id, cortical_idx);
+        self.cortical_idx_to_id.insert(cortical_idx, cortical_id);
 
         // Store area
-        self.cortical_areas.insert(cortical_id.clone(), area);
+        self.cortical_areas.insert(cortical_id, area);
 
         // CRITICAL: Register cortical area in NPU during corticogenesis
         // This must happen BEFORE neurogenesis so neurons can look up their cortical IDs
@@ -467,12 +468,12 @@ impl ConnectomeManager {
         region: BrainRegion,
         parent_id: Option<String>,
     ) -> BduResult<()> {
-        Ok(self.brain_regions.add_region(region, parent_id)?)
+        self.brain_regions.add_region(region, parent_id)
     }
 
     /// Remove a brain region
     pub fn remove_brain_region(&mut self, region_id: &str) -> BduResult<()> {
-        Ok(self.brain_regions.remove_region(region_id)?)
+        self.brain_regions.remove_region(region_id)
     }
 
     /// Get a brain region by ID
@@ -687,7 +688,7 @@ impl ConnectomeManager {
     ) -> BduResult<usize> {
         // Extract morphology_id from rule (array or dict format)
         let morphology_id = if let Some(arr) = rule.as_array() {
-            arr.get(0).and_then(|v| v.as_str()).unwrap_or("")
+            arr.first().and_then(|v| v.as_str()).unwrap_or("")
         } else if let Some(obj) = rule.as_object() {
             obj.get("morphology_id")
                 .and_then(|v| v.as_str())
@@ -965,9 +966,9 @@ impl ConnectomeManager {
         let neuron_count = npu_lock
             .create_cortical_area_neurons(
                 *cortical_idx,
-                area.dimensions.width as u32,
-                area.dimensions.height as u32,
-                area.dimensions.depth as u32,
+                area.dimensions.width,
+                area.dimensions.height,
+                area.dimensions.depth,
                 per_voxel_cnt,
                 firing_threshold,
                 leak_coefficient,
@@ -1013,6 +1014,7 @@ impl ConnectomeManager {
     ///
     /// The newly created neuron ID
     ///
+    #[allow(clippy::too_many_arguments)]
     pub fn add_neuron(
         &mut self,
         cortical_id: &CorticalID,
@@ -1215,7 +1217,7 @@ impl ConnectomeManager {
                 let synapse_count = match morphology_id {
                     "projector" => {
                         crate::connectivity::synaptogenesis::apply_projector_morphology(
-                            &mut *npu_lock,
+                            &mut npu_lock,
                             src_cortical_idx,
                             dst_cortical_idx,
                             None, // transpose
@@ -1227,7 +1229,7 @@ impl ConnectomeManager {
                     }
                     "block_to_block" => {
                         crate::connectivity::synaptogenesis::apply_block_connection_morphology(
-                            &mut *npu_lock,
+                            &mut npu_lock,
                             src_cortical_idx,
                             dst_cortical_idx,
                             scalar, // scaling_factor
@@ -1793,7 +1795,7 @@ impl ConnectomeManager {
 
         // Add brain regions (hierarchy)
         for (region, parent_id) in parsed.brain_regions {
-            let region_id = region.region_id.clone();
+            let region_id = region.region_id;
             self.brain_regions.add_region(region, parent_id.clone())?;
             debug!(target: "feagi-bdu","  ✅ Added brain region {} (parent: {:?})",
                 region_id, parent_id);
@@ -2244,7 +2246,7 @@ impl ConnectomeManager {
     pub fn batch_create_neurons(
         &mut self,
         cortical_id: &CorticalID,
-        neurons: Vec<(u32, u32, u32, f32, f32, f32, i32, u16, f32, u16, u16, bool)>,
+        neurons: Vec<NeuronData>,
     ) -> BduResult<Vec<u64>> {
         // Get NPU
         let npu = self
@@ -2853,9 +2855,7 @@ impl ConnectomeManager {
         properties.insert("neuron_id".to_string(), serde_json::json!(neuron_id));
 
         // Get coordinates
-        let Some((x, y, z)) = npu_lock.get_neuron_coordinates(neuron_id_u32) else {
-            return None;
-        };
+        let (x, y, z) = npu_lock.get_neuron_coordinates(neuron_id_u32)?;
         properties.insert("x".to_string(), serde_json::json!(x));
         properties.insert("y".to_string(), serde_json::json!(y));
         properties.insert("z".to_string(), serde_json::json!(z));
@@ -3103,7 +3103,7 @@ impl ConnectomeManager {
         self.brain_regions
             .get_all_region_ids()
             .into_iter()
-            .map(|s| s.clone())
+            .cloned()
             .collect()
     }
 

@@ -411,18 +411,18 @@ impl Neuroembryogenesis {
                 // Assign to appropriate list
                 match category {
                     "IPU" => {
-                        ipu_areas.push(area_id.clone());
-                        auto_inputs.push(area_id.clone());
+                        ipu_areas.push(*area_id);
+                        auto_inputs.push(*area_id);
                     }
                     "OPU" => {
-                        opu_areas.push(area_id.clone());
-                        auto_outputs.push(area_id.clone());
+                        opu_areas.push(*area_id);
+                        auto_outputs.push(*area_id);
                     }
                     "CORE" => {
-                        core_areas.push(area_id.clone());
+                        core_areas.push(*area_id);
                     }
                     "MEMORY" | "CUSTOM" => {
-                        custom_memory_areas.push(area_id.clone());
+                        custom_memory_areas.push(*area_id);
                     }
                     _ => {}
                 }
@@ -888,7 +888,7 @@ fn estimate_synapses_for_area(
             let dst_voxels =
                 dst_area.dimensions.width * dst_area.dimensions.height * dst_area.dimensions.depth;
 
-            let src_neurons = src_voxels as usize * src_per_voxel as usize;
+            let src_neurons = src_voxels as usize * src_per_voxel;
             let dst_neurons = dst_voxels as usize * dst_per_voxel as usize;
 
             // Basic estimation by morphology type
