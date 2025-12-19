@@ -125,11 +125,10 @@ mod test_connector_cache_sensor_load_image {
             // let bytes = sensor_cache.sensor_copy_feagi_byte_container();
         }
     }
-
+    
     /*
     #[test]
     fn test_segment_bird_image_with_moving_gaze() {
-        return; // TODO temp
         let time_of_previous_burst: Instant = Instant::now(); // Pretend
 
         let cortical_group: CorticalGroupIndex = 0.into();
@@ -143,11 +142,10 @@ mod test_connector_cache_sensor_load_image {
         let bird_image = load_bird_image();
         let bird_image_properties = bird_image.get_image_frame_properties();
         let segmented_bird_properties = SegmentedImageFrameProperties::new(
-            &segmented_image_resolutions,
-            &bird_image_properties.get_color_ch
-            annel_layout(),
-            &bird_image_properties.get_color_channel_layout(),
-            &bird_image_properties.get_color_space());
+            segmented_image_resolutions,
+            bird_image_properties.get_color_channel_layout(),
+            bird_image_properties.get_color_channel_layout(),
+            bird_image_properties.get_color_space());
         let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
         let second_gaze = GazeProperties::new((0.3, 0.3).try_into().unwrap(), 0.2.try_into().unwrap());
 
@@ -168,8 +166,9 @@ mod test_connector_cache_sensor_load_image {
             let motor_data = motor_cache.gaze_control_read_postprocessed_cache_value(cortical_group, channel_index).unwrap();
         }
     }
+    */
+    
 
-     */
 
     #[test]
     fn test_encode_of_misc_then_reencode() {
@@ -227,6 +226,8 @@ mod test_connector_cache_sensor_load_image {
             // assert_eq!(misc_data, new_misc_data);
         }
     }
+    
+
 
     #[test]
     fn test_expanding_encode() {
