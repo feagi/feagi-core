@@ -226,7 +226,7 @@ jobs:
           - ✅ All 19 crates published to crates.io with beta suffix
           - ✅ Ready for testing and integration
           
-          **Note:** This beta version is available on crates.io for testing. The next staging merge will increment to `-beta.${{ steps.version.outputs.beta_number + 1 }}`.
+          **Note:** This beta version is available on crates.io for testing. The next staging merge will increment the beta number.
         draft: false
         prerelease: true
     
