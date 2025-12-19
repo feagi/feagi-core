@@ -194,6 +194,7 @@ pub enum BackendType {
     CUDA,
 
     /// Auto-select based on genome size and hardware availability
+    #[default]
     Auto,
 }
 

@@ -233,7 +233,7 @@ impl ImageFrame {
     /// # Returns
     ///
     /// An ArrayView3<f32> containing the pixel data.
-    pub fn get_pixels_view(&self) -> ArrayView3<u8> {
+    pub fn get_pixels_view(&self) -> ArrayView3<'_, u8> {
         self.pixels.view()
     }
 
