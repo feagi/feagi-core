@@ -123,7 +123,6 @@ mod tests {
             total_neurons_fired: 10000,
             total_synapses_processed: 50000,
             total_processing_time_us: 1000000,
-            ..Default::default()
         };
 
         assert_eq!(stats.avg_neurons_per_burst(), 100.0);
