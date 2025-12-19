@@ -46,7 +46,6 @@ impl std::str::FromStr for Precision {
 }
 
 impl Precision {
-
     /// Convert to canonical string representation
     pub fn as_str(&self) -> &'static str {
         match self {

@@ -67,7 +67,6 @@ pub struct SerializableNeuronArray {
     pub valid_mask: Vec<bool>,
 }
 
-
 #[cfg(feature = "std")]
 impl SerializableNeuronArray {
     /// Create a new empty neuron array

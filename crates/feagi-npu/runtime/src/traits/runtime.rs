@@ -199,6 +199,7 @@ pub trait NeuronStorage: Send + Sync {
     // === Neuron Creation ===
 
     /// Add a single neuron
+    #[allow(clippy::too_many_arguments)] // Trait method - cannot refactor without breaking API
     fn add_neuron(
         &mut self,
         threshold: Self::Value,
@@ -220,6 +221,7 @@ pub trait NeuronStorage: Send + Sync {
     ///
     /// Note: Return type uses Vec which requires either std or alloc feature.
     /// For no_std without alloc, implementations should use a fixed-size approach.
+    #[allow(clippy::too_many_arguments)] // Trait method - cannot refactor without breaking API
     fn add_neurons_batch(
         &mut self,
         thresholds: &[Self::Value],
@@ -362,10 +364,13 @@ mod tests {
     // These are trait contract tests to ensure the traits are well-defined
 
     // Test that traits have required bounds
+    #[allow(dead_code)] // Compile-time assertions for trait bounds
     fn assert_runtime_bounds<R: Runtime>() {}
 
+    #[allow(dead_code)] // Compile-time assertions for trait bounds
     fn assert_neuron_storage_bounds<T: NeuralValue, N: NeuronStorage<Value = T>>() {}
 
+    #[allow(dead_code)] // Compile-time assertions for trait bounds
     fn assert_synapse_storage_bounds<S: SynapseStorage>() {}
 
     #[test]

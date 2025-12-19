@@ -15,6 +15,7 @@ use crate::{MorphologyParameters, RuntimeGenome};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use serde_json::Value;
 use std::collections::HashSet;
+use std::str::FromStr;
 
 /// Validation result
 #[derive(Debug, Clone)]
