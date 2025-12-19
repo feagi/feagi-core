@@ -58,18 +58,10 @@ pub struct GenomeMetadata {
 }
 
 /// Neuron morphology registry
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MorphologyRegistry {
     /// All morphologies by morphology_id
     morphologies: HashMap<String, Morphology>,
-}
-
-impl Default for MorphologyRegistry {
-    fn default() -> Self {
-        Self {
-            morphologies: HashMap::new(),
-        }
-    }
 }
 
 impl MorphologyRegistry {

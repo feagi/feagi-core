@@ -180,7 +180,7 @@ pub trait ComputeBackend<T: NeuralValue, N: NeuronStorage<Value = T>, S: Synapse
 }
 
 /// Backend type enum for construction
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BackendType {
     /// CPU with SIMD optimization (current implementation)
     CPU,
@@ -194,13 +194,8 @@ pub enum BackendType {
     CUDA,
 
     /// Auto-select based on genome size and hardware availability
+    #[default]
     Auto,
-}
-
-impl Default for BackendType {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl std::fmt::Display for BackendType {
