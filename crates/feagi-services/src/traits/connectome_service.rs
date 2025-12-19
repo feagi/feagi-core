@@ -280,4 +280,44 @@ pub trait ConnectomeService: Send + Sync {
         dst_area_id: String,
         mapping_data: Vec<serde_json::Value>,
     ) -> ServiceResult<usize>;
+
+    // ========================================================================
+    // CONNECTOME I/O OPERATIONS
+    // ========================================================================
+
+    /// Export the current connectome as a snapshot
+    ///
+    /// Captures the complete state of the NPU including all neurons, synapses,
+    /// and runtime state. This is the service layer interface for connectome export.
+    ///
+    /// # Returns
+    /// * `ConnectomeSnapshot` - Complete connectome state snapshot
+    ///
+    /// # Errors
+    /// * `ServiceError::Backend` - Failed to export connectome from NPU
+    /// * `ServiceError::NotImplemented` - Connectome I/O not available (feature disabled)
+    ///
+    #[cfg(feature = "connectome-io")]
+    async fn export_connectome(
+        &self,
+    ) -> ServiceResult<feagi_connectome_serialization::ConnectomeSnapshot>;
+
+    /// Import a connectome snapshot
+    ///
+    /// Replaces the entire NPU state with data from a saved connectome.
+    /// This is the service layer interface for connectome import.
+    ///
+    /// # Arguments
+    /// * `snapshot` - The connectome snapshot to import
+    ///
+    /// # Errors
+    /// * `ServiceError::Backend` - Failed to import connectome into NPU
+    /// * `ServiceError::InvalidInput` - Invalid snapshot data
+    /// * `ServiceError::NotImplemented` - Connectome I/O not available (feature disabled)
+    ///
+    #[cfg(feature = "connectome-io")]
+    async fn import_connectome(
+        &self,
+        snapshot: feagi_connectome_serialization::ConnectomeSnapshot,
+    ) -> ServiceResult<()>;
 }

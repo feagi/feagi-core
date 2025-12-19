@@ -534,10 +534,20 @@ pub async fn get_path_query(
 /// GET /v1/connectome/download
 #[utoipa::path(get, path = "/v1/connectome/download", tag = "connectome")]
 pub async fn get_download_connectome(
-    State(_state): State<ApiState>,
-) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    // TODO: Implement proper connectome export from genome service
-    Ok(Json(HashMap::new()))
+    State(state): State<ApiState>,
+) -> ApiResult<Json<serde_json::Value>> {
+    // Export connectome via service layer (architecture-compliant)
+    let snapshot = state
+        .connectome_service
+        .export_connectome()
+        .await
+        .map_err(|e| ApiError::from(e))?;
+
+    // Serialize snapshot to JSON
+    let json_value = serde_json::to_value(&snapshot)
+        .map_err(|e| ApiError::internal(format!("Failed to serialize connectome: {}", e)))?;
+
+    Ok(Json(json_value))
 }
 
 /// GET /v1/connectome/download-cortical-area/{cortical_area}
@@ -556,12 +566,23 @@ pub async fn get_download_cortical_area(
 /// POST /v1/connectome/upload
 #[utoipa::path(post, path = "/v1/connectome/upload", tag = "connectome")]
 pub async fn post_upload_connectome(
-    State(_state): State<ApiState>,
-    Json(_data): Json<serde_json::Value>,
+    State(state): State<ApiState>,
+    Json(data): Json<serde_json::Value>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
+    // Deserialize snapshot from JSON
+    let snapshot: feagi_connectome_serialization::ConnectomeSnapshot = serde_json::from_value(data)
+        .map_err(|e| ApiError::invalid_input(format!("Invalid connectome snapshot format: {}", e)))?;
+
+    // Import connectome via service layer (architecture-compliant)
+    state
+        .connectome_service
+        .import_connectome(snapshot)
+        .await
+        .map_err(|e| ApiError::from(e))?;
+
     Ok(Json(HashMap::from([(
         "message".to_string(),
-        "Upload not yet implemented".to_string(),
+        "Connectome imported successfully".to_string(),
     )])))
 }
 

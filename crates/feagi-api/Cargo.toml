@@ -9,9 +9,10 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 [dependencies]
 # Core FEAGI
 # feagi-services is always needed (for trait definitions), but can work without tokio
-feagi-services = { version = "0.0.0", path = "../feagi-services", default-features = false, features = ["wasm"] }
+feagi-services = { version = "0.0.0", path = "../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
 feagi-npu-neural = { version = "0.0.0", path = "../feagi-npu/neural", default-features = false }  # For types
 feagi-evo = { version = "0.0.0", path = "../feagi-evo" }  # For embedded default genomes
+feagi-connectome-serialization = { version = "0.0.0", path = "../feagi-connectome-serialization", optional = true }
 feagi-transports = { version = "0.0.0", path = "../feagi-transports", features = ["zmq-server"], optional = true }
 feagi-io = { version = "0.0.0", path = "../feagi-io", optional = true }  # For registration and domain logic
 feagi-bdu = { version = "0.0.0", path = "../feagi-bdu", optional = true }  # For examples
@@ -89,7 +90,7 @@ feagi-npu-runtime = { version = "0.0.0", path = "../feagi-npu/runtime", features
 [features]
 default = ["http", "services"]
 http = ["axum", "tower", "tower-http", "hyper", "http-body-util", "tokio", "utoipa-swagger-ui", "services"]
-services = ["feagi-services/std", "feagi-io", "feagi-bdu", "feagi-npu-burst-engine"]
+services = ["feagi-services/std", "feagi-io", "feagi-bdu", "feagi-npu-burst-engine", "feagi-connectome-serialization"]
 zmq = ["feagi-transports", "services"]
 security = ["chacha20poly1305", "x25519-dalek", "jsonwebtoken", "argon2"]
 tls = ["rustls", "tokio-rustls"]

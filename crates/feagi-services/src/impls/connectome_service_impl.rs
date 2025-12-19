@@ -25,11 +25,31 @@ use tracing::{debug, info, trace, warn};
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
+    /// Optional reference to RuntimeService for accessing NPU (for connectome I/O)
+    #[cfg(feature = "connectome-io")]
+    runtime_service: Arc<RwLock<Option<Arc<dyn crate::traits::RuntimeService + Send + Sync>>>>,
 }
 
 impl ConnectomeServiceImpl {
     pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
-        Self { connectome }
+        Self {
+            connectome,
+            #[cfg(feature = "connectome-io")]
+            runtime_service: Arc::new(RwLock::new(None)),
+        }
+    }
+
+    /// Set the runtime service (required for connectome export/import)
+    ///
+    /// This must be called after creating ConnectomeServiceImpl to enable
+    /// connectome I/O operations.
+    #[cfg(feature = "connectome-io")]
+    pub fn set_runtime_service(
+        &self,
+        runtime_service: Arc<dyn crate::traits::RuntimeService + Send + Sync>,
+    ) {
+        *self.runtime_service.write() = Some(runtime_service);
+        info!(target: "feagi-services", "RuntimeService connected to ConnectomeService for connectome I/O");
     }
 
     /// Convert RegionType enum to string
@@ -578,5 +598,78 @@ impl ConnectomeService for ConnectomeServiceImpl {
 
         info!(target: "feagi-services", "Cortical mapping updated: {} synapses created", synapse_count);
         Ok(synapse_count)
+    }
+
+    // ========================================================================
+    // CONNECTOME I/O OPERATIONS
+    // ========================================================================
+
+    #[cfg(feature = "connectome-io")]
+    async fn export_connectome(
+        &self,
+    ) -> ServiceResult<feagi_connectome_serialization::ConnectomeSnapshot> {
+        info!(target: "feagi-services", "Exporting connectome via service layer");
+
+        // Get NPU from ConnectomeManager (which has reference to NPU)
+        // Note: get_npu() returns Option<&Arc<...>>, so we need to clone the Arc
+        // to use it outside the lock scope
+        let npu_arc = {
+            let connectome = self.connectome.read();
+            let npu_opt = connectome.get_npu();
+            npu_opt
+                .ok_or_else(|| {
+                    ServiceError::Backend("NPU not connected to ConnectomeManager".to_string())
+                })?
+                .clone()
+        };
+
+        // Export connectome from NPU
+        // Note: export_connectome() is on RustNPU, but we have DynamicNPU
+        // We need to handle both F32 and INT8 variants
+        let snapshot = {
+            let npu_lock = npu_arc.lock().unwrap();
+            match &*npu_lock {
+                feagi_npu_burst_engine::DynamicNPU::F32(npu_f32) => {
+                    npu_f32.export_connectome()
+                }
+                feagi_npu_burst_engine::DynamicNPU::INT8(npu_int8) => {
+                    npu_int8.export_connectome()
+                }
+            }
+        };
+
+        info!(target: "feagi-services", "✅ Connectome exported: {} neurons, {} synapses",
+            snapshot.neurons.count, snapshot.synapses.count);
+
+        Ok(snapshot)
+    }
+
+    #[cfg(feature = "connectome-io")]
+    async fn import_connectome(
+        &self,
+        snapshot: feagi_connectome_serialization::ConnectomeSnapshot,
+    ) -> ServiceResult<()> {
+        info!(target: "feagi-services", "Importing connectome via service layer: {} neurons, {} synapses",
+            snapshot.neurons.count, snapshot.synapses.count);
+
+        // NOTE: NPU.import_connectome_with_config() is a constructor that creates a NEW NPU.
+        // This means importing requires replacing the entire NPU instance, which involves:
+        // 1. Stopping the burst engine
+        // 2. Creating a new NPU from the snapshot
+        // 3. Replacing the NPU in ConnectomeManager and BurstLoopRunner
+        // 4. Restarting the burst engine
+        //
+        // This is a complex operation that requires coordination across multiple components.
+        // For now, we return NotImplemented and recommend using the NPU constructor directly
+        // during application initialization, or implementing a higher-level "replace NPU" operation.
+        
+        warn!(target: "feagi-services", "⚠️ Connectome import via service layer not yet fully implemented");
+        warn!(target: "feagi-services", "   NPU.import_connectome_with_config() creates a new NPU instance");
+        warn!(target: "feagi-services", "   This requires stopping burst engine, replacing NPU, and restarting");
+        warn!(target: "feagi-services", "   Recommendation: Use NPU.import_connectome_with_config() during initialization");
+        
+        Err(ServiceError::NotImplemented(
+            "Connectome import via service layer requires NPU replacement coordination. Use NPU.import_connectome_with_config() during application initialization, or implement a 'replace NPU' operation that coordinates with BurstLoopRunner.".to_string(),
+        ))
     }
 }
