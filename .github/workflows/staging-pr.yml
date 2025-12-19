@@ -118,9 +118,12 @@ jobs:
         # Check that PR semantic version is > main semantic version
         # NOTE: Allow transition from Python 2.x.x to Rust 0.x.x series
         # Main branch still has Python 2.x.x version, Rust starts at 0.x.x
-        # TODO: Re-enable strict version check once main branch is updated to Rust versioning
+        # Also allow same semantic version if PR has beta suffix (for staging beta releases)
         if [[ "$MAIN_SEMANTIC" =~ ^2\. ]] && [[ "$CURRENT_SEMANTIC" =~ ^0\. ]]; then
           echo "ℹ️  Allowing transition from Python version ($MAIN_SEMANTIC) to Rust version ($CURRENT_SEMANTIC)"
+        elif [ "$CURRENT_SEMANTIC" = "$MAIN_SEMANTIC" ] && [ "$CURRENT_BETA" -ge 1 ]; then
+          # Same semantic version with beta suffix is allowed (for staging beta releases)
+          echo "ℹ️  Allowing same semantic version with beta suffix: $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
         else
           HIGHER_SEMANTIC=$(printf '%s\n%s\n' "$MAIN_SEMANTIC" "$CURRENT_SEMANTIC" | sort -V | tail -n1)
           if [ "$HIGHER_SEMANTIC" != "$CURRENT_SEMANTIC" ] || [ "$CURRENT_SEMANTIC" = "$MAIN_SEMANTIC" ]; then
