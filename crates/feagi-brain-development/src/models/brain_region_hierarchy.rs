@@ -225,7 +225,7 @@ impl BrainRegionHierarchy {
         // Add to new parent's children
         self.children_map
             .entry(new_parent_id.to_string())
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(region_id.to_string());
 
         Ok(())
