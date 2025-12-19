@@ -11,7 +11,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi = "2.0"  # Umbrella crate (default: std + full features)
+//! feagi = "0.0.1"  # Umbrella crate (default: std + full features)
 //! ```
 //!
 //! ## Feature Flags
@@ -41,7 +41,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi = "2.0"
+//! feagi = "0.0.1"
 //! ```
 //!
 //! ```rust,no_run
@@ -74,7 +74,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi = { version = "2.0", features = ["burst-engine", "serialization"] }
+//! feagi = { version = "0.0.1", features = ["burst-engine", "serialization"] }
 //! ```
 //!
 //! ```rust,no_run
@@ -97,7 +97,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! feagi = { version = "2.0", features = ["wasm", "compute"], default-features = false }
+//! feagi = { version = "0.0.1", features = ["wasm", "compute"], default-features = false }
 //! ```
 //!
 //! ## Architecture

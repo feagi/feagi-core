@@ -29,22 +29,22 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi = "2.0"  # Umbrella crate (includes everything)
+feagi = "0.0.1"  # Umbrella crate (includes everything)
 ```
 
 Or use individual building blocks:
 
 ```toml
 [dependencies]
-feagi-burst-engine = "2.0"  # Just the NPU
-feagi-types = "2.0"          # Just core types
+feagi-npu-burst-engine = "0.0.1"  # Just the NPU
+feagi-npu-neural = "0.0.1"        # Just core types
 ```
 
 Or umbrella with specific features:
 
 ```toml
 [dependencies]
-feagi = { version = "2.0", features = ["gpu"] }
+feagi = { version = "0.0.1", features = ["gpu"] }
 ```
 
 ## Quick Start
@@ -309,11 +309,11 @@ cargo bench -p feagi-burst-engine
 
 ## Project Status
 
-**Version**: 2.0.0  
+**Version**: 0.0.1  
 **Status**: Active development  
 **Minimum Rust Version**: 1.75+
 
-FEAGI Core is under active development. The core APIs are stabilizing, but breaking changes may occur in minor releases until 3.0.
+FEAGI Core is under active development. The core APIs are stabilizing, but breaking changes may occur in minor releases.
 
 ## Community and Support
 
