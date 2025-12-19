@@ -238,7 +238,7 @@ impl ImageFrame {
     }
 
     /// Returns a mutable view of the pixel data as a 3D array.
-    pub fn get_pixels_view_mut(&mut self) -> ArrayViewMut3<u8> {
+    pub fn get_pixels_view_mut(&mut self) -> ArrayViewMut3<'_, u8> {
         self.pixels.view_mut()
     }
 
