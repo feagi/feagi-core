@@ -176,8 +176,7 @@ impl CorticalID {
         if self.bytes[0] == b'i' || self.bytes[0] == b'o' {
             // Byte 4 typically contains unit ID (0-9 as ASCII)
             let byte = self.bytes[4];
-            #[allow(clippy::manual_range_contains)]
-            if (b'0'..=b'9').contains(&byte) {
+            if byte.is_ascii_digit() {
                 Some(byte - b'0')
             } else if byte == b'_' || byte == 0 {
                 Some(0)
