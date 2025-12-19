@@ -52,20 +52,25 @@ jobs:
     - name: Build release
       run: cargo build --release --verbose
     
-    - name: Publish to crates.io
+    # TEMPORARILY DISABLED: Publish to crates.io
+    # - name: Publish to crates.io
+    #   run: |
+    #     echo "📦 Publishing feagi-core v${{ steps.version.outputs.version }} (beta)..."
+    #     
+    #     # Package the crate first to verify it's ready
+    #     cargo package --verbose
+    #     
+    #     # Publish to crates.io
+    #     cargo publish --token ${{ secrets.CARGO_PUSH_TOKEN }}
+    #     
+    #     echo "✅ Successfully published feagi-core"
+    #   continue-on-error: false
+    #   env:
+    #     CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+    - name: Publish to crates.io (DISABLED - Version update only)
       run: |
-        echo "📦 Publishing feagi-core v${{ steps.version.outputs.version }} (beta)..."
-        
-        # Package the crate first to verify it's ready
-        cargo package --verbose
-        
-        # Publish to crates.io
-        cargo publish --token ${{ secrets.CARGO_PUSH_TOKEN }}
-        
-        echo "✅ Successfully published feagi-core"
-      continue-on-error: false
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+        echo "⚠️  Publishing temporarily disabled for version update"
+        echo "📦 Would publish feagi-core v${{ steps.version.outputs.version }} (beta)..."
     
     - name: Create prerelease tag
       run: |
@@ -90,18 +95,7 @@ jobs:
         body: |
           🚀 **Beta release of FEAGI Core v${{ steps.version.outputs.version }}**
           
-          This is a beta version from the staging branch. The crate has been published to crates.io.
-          
-          ## Published Crate
-          
-          - 📦 [`feagi-core`](https://crates.io/crates/feagi-core) v${{ steps.version.outputs.version }}
-          
-          ## Installation
-          
-          ```toml
-          [dependencies]
-          feagi-core = "${{ steps.version.outputs.version }}"
-          ```
+          This is a beta version from the staging branch. ⚠️ **Publishing to crates.io is temporarily disabled for version update.**
           
           ## Release Information
           
@@ -113,16 +107,16 @@ jobs:
           
           - ✅ All workspace tests passed
           - ✅ Package builds successfully
-          - ✅ Published to crates.io as beta version
+          - ⚠️ Publishing to crates.io is disabled (version update in progress)
           - ✅ Ready for testing and integration
           
-          **Note:** This beta version is available on crates.io for testing.
+          **Note:** This is a version update release. Publishing will be re-enabled after version migration is complete.
         draft: false
         prerelease: true
     
     - name: Notify success
       run: |
         echo "🎉 Prerelease v${{ steps.version.outputs.version }} completed successfully!"
-        echo "📦 Published: https://crates.io/crates/feagi-core"
+        echo "⚠️  Publishing to crates.io is disabled (version update in progress)"
         echo "🏷️ Tagged as: v${{ steps.version.outputs.version }}"
 
