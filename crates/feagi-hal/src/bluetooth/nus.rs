@@ -32,7 +32,7 @@
 //! ## Usage
 //!
 //! ```rust
-//! use feagi_embedded::bluetooth::nus::*;
+//! use feagi_hal::bluetooth::nus::*;
 //!
 //! // Use NUS for simple communication
 //! let service_uuid = NUS_SERVICE_UUID;

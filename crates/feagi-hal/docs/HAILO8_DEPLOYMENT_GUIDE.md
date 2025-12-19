@@ -241,7 +241,7 @@ pub mod safe {
 
 ## Step 4: Implement Hailo8Accelerator (2-3 days)
 
-### 4.1 Update feagi-embedded/Cargo.toml
+### 4.1 Update feagi-hal/Cargo.toml
 
 ```toml
 [dependencies]
@@ -253,7 +253,7 @@ hailo = ["libhailort-sys"]
 
 ### 4.2 Complete Hailo Implementation
 
-Update `feagi-embedded/src/platforms/hailo.rs`:
+Update `feagi-hal/src/platforms/hailo.rs`:
 
 ```rust
 use libhailort_sys::safe as hailo;
@@ -307,7 +307,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-feagi-embedded = { git = "https://github.com/feagi/FEAGI-2.0", features = ["hailo"] }
+feagi-hal = { git = "https://github.com/feagi/FEAGI-2.0", features = ["hailo"] }
 feagi-types = { git = "https://github.com/feagi/FEAGI-2.0" }
 feagi-runtime-embedded = { git = "https://github.com/feagi/FEAGI-2.0" }
 anyhow = "1.0"
@@ -316,7 +316,7 @@ anyhow = "1.0"
 ### 5.3 Write Million-Neuron Network
 
 ```rust
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 use feagi_types::INT8Value;
 
 fn main() -> Result<(), HailoError> {
@@ -488,7 +488,7 @@ fn serialize_for_hailo(neurons: &[Neuron]) -> Vec<u8> {
 
 **Code**:
 ```rust
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 
 fn main() -> Result<(), HailoError> {
     // Create hybrid engine
@@ -840,7 +840,7 @@ Burst 3000: 19234 neurons fired in 18μs
 - [HailoRT API Reference](https://hailo.ai/developer-zone/documentation/)
 
 ### FEAGI Resources
-- [feagi-embedded README](../README.md)
+- [feagi-hal README](../README.md)
 - [Platform Comparison](PLATFORM_COMPARISON.md)
 - [Hailo Integration Details](HAILO_INTEGRATION.md)
 

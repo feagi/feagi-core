@@ -124,7 +124,7 @@ FEAGI Core is organized as a workspace of focused crates:
 ### Platform Adapters
 - **feagi-runtime-std**: Desktop and server deployment (Vec, Rayon, async)
 - **feagi-runtime-embedded**: Embedded systems (fixed arrays, no_std)
-- **feagi-embedded**: Platform abstraction layer for ESP32, Arduino, STM32
+- **feagi-hal**: Platform abstraction layer for ESP32, Arduino, STM32
 
 ### Utilities
 - **feagi-connectome-serialization**: Brain persistence and loading

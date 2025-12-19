@@ -84,7 +84,7 @@ members = [
     "crates/feagi-npu/burst-engine",   # NPU execution & inference
     
     # === Platform HALs ===
-    "crates/feagi-embedded",           # Platform abstraction + implementations (ESP32, Arduino, etc.)
+    "crates/feagi-hal",                # Hardware Abstraction Layer (HAL) - platform abstraction + implementations (ESP32, Arduino, etc.)
     
     # === Infrastructure Layer (Cross-Cutting) ===
     "crates/feagi-state-manager",      # Runtime state management

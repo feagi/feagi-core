@@ -1,7 +1,7 @@
 # Platform Comparison Guide
 
 **Date**: November 4, 2025  
-**feagi-embedded Version**: 2.0
+**feagi-hal Version**: 2.0
 
 ---
 
@@ -317,7 +317,7 @@ Full peripheral support would need:
 
 ## Conclusion
 
-**feagi-embedded now supports 6 platforms!** 🎉
+**feagi-hal now supports 6 platforms!** 🎉
 
 - ✅ **ESP32 family**: Production-ready
 - ✅ **Arduino Due**: Architecture ready

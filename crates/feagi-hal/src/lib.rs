@@ -4,9 +4,10 @@
 #![no_std]
 #![warn(missing_docs)]
 
-//! # FEAGI Embedded
+//! # FEAGI HAL
 //!
-//! Platform abstraction and implementations for FEAGI embedded neural networks.
+//! Hardware Abstraction Layer (HAL) for FEAGI embedded neural networks.
+//! Platform abstraction and implementations for embedded systems.
 //!
 //! This crate provides:
 //! - **HAL traits** (`hal` module) - Platform-agnostic hardware abstractions
@@ -16,7 +17,7 @@
 //!
 //! ### Advanced Users (Direct HAL Usage)
 //! ```no_run
-//! use feagi_embedded::prelude::*;
+//! use feagi_hal::prelude::*;
 //! use feagi_npu_runtime::embedded::{NeuronArray, SynapseArray};
 //! use feagi_npu_neural::types::INT8Value;
 //!
@@ -91,7 +92,7 @@ pub use feagi_npu_runtime::embedded::{NeuronArray, SynapseArray};
 /// Prelude module for convenient imports
 ///
 /// ```no_run
-/// use feagi_embedded::prelude::*;
+/// use feagi_hal::prelude::*;
 /// ```
 pub mod prelude {
     pub use crate::hal::*;

@@ -1,4 +1,4 @@
-# BLE Code Extraction to feagi-embedded - Status Report
+# BLE Code Extraction to feagi-hal - Status Report
 
 **Date**: Current session  
 **Status**: ✅ Phase 1 Complete - Protocol Layer Extracted
@@ -10,7 +10,7 @@
 ### 1. Created BLE Module Structure ✅
 
 ```
-feagi-embedded/
+feagi-hal/
 ├── src/
 │   ├── bluetooth/
 │   │   ├── mod.rs          ← Module overview and documentation
@@ -160,15 +160,15 @@ pub struct BluetoothService {
 }
 ```
 
-### After (using feagi-embedded):
+### After (using feagi-hal):
 ```rust
 // Cargo.toml
 [dependencies]
-feagi-embedded = { path = "../../../feagi-core/crates/feagi-embedded", features = ["bluetooth-nrf52"] }
+feagi-hal = { path = "../../../feagi-core/crates/feagi-hal", features = ["bluetooth-nrf52"] }
 
 // src/main.rs
-use feagi_embedded::bluetooth::protocol::BluetoothProtocol;
-use feagi_embedded::platforms::Nrf52Bluetooth; // When implemented
+use feagi_hal::bluetooth::protocol::BluetoothProtocol;
+use feagi_hal::platforms::Nrf52Bluetooth; // When implemented
 
 let mut ble = Nrf52Bluetooth::new("FEAGI-microbit")?;
 let mut protocol = BluetoothProtocol::new("FEAGI-microbit");
@@ -241,7 +241,7 @@ fn test_esp32_ble_advertise_and_connect() {
 ## Benefits of This Extraction
 
 ### For Developers:
-✅ **Discoverability**: BLE code is in `feagi-embedded`, where it belongs  
+✅ **Discoverability**: BLE code is in `feagi-hal`, where it belongs  
 ✅ **Reusability**: Write once, use on ESP32, nRF52, STM32WB, etc.  
 ✅ **Maintainability**: Single source of truth for FEAGI BLE protocol  
 ✅ **Testability**: Protocol layer is platform-agnostic and fully tested  
@@ -263,15 +263,15 @@ fn test_esp32_ble_advertise_and_connect() {
 ## Files Changed
 
 ### New Files (5):
-1. `feagi-embedded/src/bluetooth/mod.rs`
-2. `feagi-embedded/src/bluetooth/protocol.rs`
-3. `feagi-embedded/src/bluetooth/nus.rs`
-4. `feagi-embedded/src/hal/bluetooth.rs`
-5. `feagi-embedded/BLE_EXTRACTION_STATUS.md` (this file)
+1. `feagi-hal/src/bluetooth/mod.rs`
+2. `feagi-hal/src/bluetooth/protocol.rs`
+3. `feagi-hal/src/bluetooth/nus.rs`
+4. `feagi-hal/src/hal/bluetooth.rs`
+5. `feagi-hal/BLE_EXTRACTION_STATUS.md` (this file)
 
 ### Modified Files (2):
-1. `feagi-embedded/src/hal/mod.rs` - Added bluetooth module export
-2. `feagi-embedded/src/lib.rs` - Added bluetooth re-exports
+1. `feagi-hal/src/hal/mod.rs` - Added bluetooth module export
+2. `feagi-hal/src/lib.rs` - Added bluetooth re-exports
 
 ### Total Lines Added: ~1,200 LOC
 - Protocol: ~400 LOC
@@ -283,7 +283,7 @@ fn test_esp32_ble_advertise_and_connect() {
 
 ## Conclusion
 
-✅ **Phase 1 Complete**: BLE protocol layer successfully extracted from micro:bit firmware and moved to `feagi-embedded` as a reusable, platform-agnostic component.
+✅ **Phase 1 Complete**: BLE protocol layer successfully extracted from micro:bit firmware and moved to `feagi-hal` as a reusable, platform-agnostic component.
 
 🎯 **Next Recommended Action**: Implement ESP32 BLE backend to validate the architecture and provide a working BLE embodiment (4-6 hours).
 

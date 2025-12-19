@@ -193,7 +193,7 @@ jobs:
           - 📦 `feagi-services`
           - 📦 `feagi-api`
           - 📦 `feagi-agent`
-          - 📦 `feagi-embedded`
+          - 📦 `feagi-hal`
           - 📦 `feagi` (root meta-crate)
           
           ## Installation

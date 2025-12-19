@@ -194,8 +194,8 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-observability`
 - **Purpose:** Agent connection lifecycle, reconnection, heartbeat
 
-#### `feagi-embedded`
-- **Path:** `crates/feagi-embedded`
+#### `feagi-hal`
+- **Path:** `crates/feagi-hal`
 - **Dependencies:**
   - `feagi-npu-runtime` (embedded feature)
   - `feagi-npu-neural`

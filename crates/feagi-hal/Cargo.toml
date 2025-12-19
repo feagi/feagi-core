@@ -1,14 +1,14 @@
 [package]
-name = "feagi-embedded"
+name = "feagi-hal"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Platform abstraction and implementations for FEAGI embedded systems"
+description = "Hardware Abstraction Layer (HAL) for FEAGI embedded systems - platform abstraction and implementations"
 
 [lib]
-name = "feagi_embedded"
+name = "feagi_hal"
 path = "src/lib.rs"
 
 [dependencies]

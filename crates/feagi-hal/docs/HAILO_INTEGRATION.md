@@ -74,7 +74,7 @@ pub struct HybridCpuHailo<const CPU_NEURONS: usize, const CPU_SYNAPSES: usize> {
 ### Basic Hailo-8 Usage
 
 ```rust
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 
 fn main() -> Result<(), HailoError> {
     // Initialize Hailo-8
@@ -105,7 +105,7 @@ fn main() -> Result<(), HailoError> {
 ### Hybrid CPU+Hailo Execution
 
 ```rust
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 
 fn main() -> Result<(), HailoError> {
     // Create hybrid engine
@@ -339,7 +339,7 @@ Hailo: Lower frequency, higher complexity (30-100 Hz)
 ## Example: 1M Neuron Network on Hailo-8
 
 ```rust
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 
 fn main() -> Result<(), HailoError> {
     let mut hailo = Hailo8Accelerator::init()?;

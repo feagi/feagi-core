@@ -21,7 +21,7 @@ We've successfully created a **transport-agnostic architecture** where the same 
 ### New File Structure
 
 ```
-feagi-embedded/
+feagi-hal/
 ├── src/
 │   ├── hal/
 │   │   ├── bluetooth.rs        ← BluetoothProvider trait (300 LOC)
@@ -58,7 +58,7 @@ let mut ble_service = BluetoothService::new();
 
 ```rust
 // SAME protocol works with ANY transport!
-use feagi_embedded::transports::Protocol;
+use feagi_hal::transports::Protocol;
 
 let mut protocol = Protocol::new("FEAGI-robot");
 
@@ -163,10 +163,10 @@ impl Protocol {
 **Backward Compatibility**:
 ```rust
 // Old code still works:
-use feagi_embedded::bluetooth::BluetoothProtocol;
+use feagi_hal::bluetooth::BluetoothProtocol;
 
 // New code uses shared protocol:
-use feagi_embedded::transports::Protocol;
+use feagi_hal::transports::Protocol;
 ```
 
 ---
@@ -176,9 +176,9 @@ use feagi_embedded::transports::Protocol;
 ### Example 1: micro:bit with BLE
 
 ```rust
-use feagi_embedded::hal::BluetoothProvider;
-use feagi_embedded::transports::Protocol;
-use feagi_embedded::platforms::Nrf52Bluetooth;
+use feagi_hal::hal::BluetoothProvider;
+use feagi_hal::transports::Protocol;
+use feagi_hal::platforms::Nrf52Bluetooth;
 
 let mut ble = Nrf52Bluetooth::new("FEAGI-microbit")?;
 let mut protocol = Protocol::new("FEAGI-microbit");
@@ -198,9 +198,9 @@ loop {
 ### Example 2: micro:bit with USB CDC
 
 ```rust
-use feagi_embedded::hal::UsbCdcProvider;
-use feagi_embedded::transports::Protocol;
-use feagi_embedded::platforms::Nrf52UsbCdc;
+use feagi_hal::hal::UsbCdcProvider;
+use feagi_hal::transports::Protocol;
+use feagi_hal::platforms::Nrf52UsbCdc;
 
 let mut usb = Nrf52UsbCdc::new()?;
 let mut protocol = Protocol::new("FEAGI-microbit");
@@ -221,7 +221,7 @@ loop {
 ### Example 3: ESP32 with Both BLE and USB
 
 ```rust
-use feagi_embedded::transports::Protocol;
+use feagi_hal::transports::Protocol;
 
 let mut protocol = Protocol::new("FEAGI-esp32");
 

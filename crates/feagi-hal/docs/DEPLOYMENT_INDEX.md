@@ -187,7 +187,7 @@ cargo flash --chip STM32F407VGTx
 ## Documentation Structure
 
 ```
-feagi-embedded/docs/
+feagi-hal/docs/
 ├── DEPLOYMENT_INDEX.md           ← YOU ARE HERE (master guide)
 │
 ├── Platform-Specific Guides:
@@ -530,8 +530,8 @@ See individual platform guides for detailed troubleshooting.
 
 **Documentation**:
 - Platform guides (this directory)
-- [feagi-embedded README](../README.md)
-- [API Documentation](https://docs.rs/feagi-embedded)
+- [feagi-hal README](../README.md)
+- [API Documentation](https://docs.rs/feagi-hal)
 
 **Community**:
 - [FEAGI Discord](https://discord.gg/feagi) - Ask questions, share projects
@@ -618,7 +618,7 @@ Share your results in [FEAGI Discord](https://discord.gg/feagi)!
 
 ## Conclusion
 
-**feagi-embedded supports 7 platforms from $4 to $500!**
+**feagi-hal supports 7 platforms from $4 to $500!**
 
 ✅ **Beginners**: Start with ESP32 (1 hour to deployment)  
 ✅ **Makers**: Use Raspberry Pi Pico (best $/neuron)  

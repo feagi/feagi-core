@@ -32,8 +32,8 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use feagi_embedded::hal::BluetoothProvider;
-//! # use feagi_embedded::platforms::Esp32Bluetooth;
+//! use feagi_hal::hal::BluetoothProvider;
+//! # use feagi_hal::platforms::Esp32Bluetooth;
 //!
 //! // Platform layer provides the implementation
 //! let mut ble: Esp32Bluetooth = /* platform init */;

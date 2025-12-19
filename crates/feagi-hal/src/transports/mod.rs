@@ -53,9 +53,9 @@
 //! ## Usage with BLE
 //!
 //! ```rust,no_run
-//! use feagi_embedded::transports::protocol::Protocol;
-//! use feagi_embedded::hal::BluetoothProvider;
-//! # use feagi_embedded::platforms::Esp32Bluetooth;
+//! use feagi_hal::transports::protocol::Protocol;
+//! use feagi_hal::hal::BluetoothProvider;
+//! # use feagi_hal::platforms::Esp32Bluetooth;
 //!
 //! let mut ble: Esp32Bluetooth = /* init */;
 //! let mut protocol = Protocol::new("FEAGI-robot");
@@ -78,9 +78,9 @@
 //! ## Usage with USB CDC
 //!
 //! ```rust,no_run
-//! use feagi_embedded::transports::protocol::Protocol;
-//! use feagi_embedded::hal::UsbCdcProvider;
-//! # use feagi_embedded::platforms::Nrf52UsbCdc;
+//! use feagi_hal::transports::protocol::Protocol;
+//! use feagi_hal::hal::UsbCdcProvider;
+//! # use feagi_hal::platforms::Nrf52UsbCdc;
 //!
 //! let mut usb: Nrf52UsbCdc = /* init */;
 //! let mut protocol = Protocol::new("FEAGI-robot");

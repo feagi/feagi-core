@@ -1,6 +1,8 @@
-# feagi-embedded
+# feagi-hal
 
-**Platform abstraction and implementations for FEAGI embedded neural networks**
+**Hardware Abstraction Layer (HAL) for FEAGI embedded neural networks**
+
+Platform abstraction and implementations for embedded systems.
 
 Part of [FEAGI 2.0](https://github.com/feagi/feagi) - Framework for Evolutionary AGI
 
@@ -8,7 +10,7 @@ Part of [FEAGI 2.0](https://github.com/feagi/feagi) - Framework for Evolutionary
 
 ## Overview
 
-`feagi-embedded` provides low-level platform abstractions and implementations for running FEAGI neural networks on embedded systems. It sits between the platform-agnostic neural processing core and platform-specific hardware.
+`feagi-hal` provides a Hardware Abstraction Layer (HAL) with platform-agnostic traits and concrete implementations for running FEAGI neural networks on embedded systems. It sits between the platform-agnostic neural processing core and platform-specific hardware.
 
 ### Architecture
 
@@ -18,7 +20,7 @@ Part of [FEAGI 2.0](https://github.com/feagi/feagi) - Framework for Evolutionary
 └─────────────────────────────────────────────────────────┘
                         ↓ uses
 ┌─────────────────────────────────────────────────────────┐
-│  feagi-embedded (THIS CRATE)                            │
+│  feagi-hal (THIS CRATE)                            │
 │  ├── hal/         Platform Abstraction Layer (traits)   │
 │  └── platforms/   Platform Implementations              │
 └─────────────────────────────────────────────────────────┘
@@ -71,7 +73,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi-embedded = { version = "2.0", features = ["esp32"] }
+feagi-hal = { version = "2.0", features = ["esp32"] }
 ```
 
 ### Feature Flags
@@ -96,7 +98,7 @@ all-esp32 = ["esp32", "esp32-s3", "esp32-c3"]
 ### Quick Start (ESP32)
 
 ```rust
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 
 fn main() -> ! {
     // Initialize platform
@@ -208,7 +210,7 @@ See [PORTING_GUIDE.md](docs/PORTING_GUIDE.md) for step-by-step instructions.
 
 ## Documentation
 
-- [API Documentation](https://docs.rs/feagi-embedded)
+- [API Documentation](https://docs.rs/feagi-hal)
 - [Porting Guide](docs/PORTING_GUIDE.md)
 - [Platform Comparison](docs/PLATFORM_COMPARISON.md)
 - [feagi-nano SDK](../../../feagi-nano/README.md) - High-level application framework
@@ -233,11 +235,11 @@ See [PORTING_GUIDE.md](docs/PORTING_GUIDE.md) for step-by-step instructions.
 
 ### Why Separate from feagi-nano?
 
-- **feagi-embedded**: Low-level, stable API for platform abstraction
+- **feagi-hal**: Low-level, stable API for platform abstraction
 - **feagi-nano**: High-level SDK with NetworkBuilder, templates, etc.
 
 This separation allows:
-- Other projects to use `feagi-embedded` directly
+- Other projects to use `feagi-hal` directly
 - Independent evolution of SDK features
 - Reusable platform implementations
 

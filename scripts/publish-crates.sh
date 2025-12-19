@@ -57,7 +57,7 @@ CRATES=(
     
     # Layer 10: Agent & Platform
     "crates/feagi-agent"
-    "crates/feagi-embedded"
+    "crates/feagi-hal"
     
     # Root workspace (meta-crate, publishes last)
     "."

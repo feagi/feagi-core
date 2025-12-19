@@ -120,7 +120,7 @@ edition = "2021"
 
 [dependencies]
 # FEAGI embedded platform abstraction
-feagi-embedded = { git = "https://github.com/feagi/FEAGI-2.0", features = ["arduino-due"] }
+feagi-hal = { git = "https://github.com/feagi/FEAGI-2.0", features = ["arduino-due"] }
 feagi-types = { git = "https://github.com/feagi/FEAGI-2.0" }
 feagi-runtime-embedded = { git = "https://github.com/feagi/FEAGI-2.0" }
 
@@ -170,7 +170,7 @@ MEMORY
 
 use panic_halt as _;
 use cortex_m_rt::entry;
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 use feagi_types::INT8Value;
 
 // Network size (conservative for 96 KB SRAM)
@@ -269,7 +269,7 @@ cargo build --release --target thumbv7m-none-eabi
 ```
    Compiling cortex-m v0.7.7
    Compiling feagi-types v2.0.0
-   Compiling feagi-embedded v2.0.0
+   Compiling feagi-hal v2.0.0
    Compiling my-feagi-due v0.1.0
     Finished release [optimized] target(s) in 45s
 ```

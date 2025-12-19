@@ -47,7 +47,7 @@ These are **also published separately** for advanced use cases:
 | `feagi-config` | 2.0.0 | Configuration loader | All applications |
 | `feagi-state-manager` | 2.0.0 | Runtime state | Advanced integrations |
 | `feagi-observability` | 2.0.0 | Logging & telemetry | Production deployments |
-| `feagi-embedded` | 2.0.0 | Platform HALs | Embedded platforms |
+| `feagi-hal` | 2.0.0 | Platform HALs | Embedded platforms |
 | **Algorithms** ||||
 | `feagi-brain-development` | 2.0.0 | Neurogenesis | Training/development tools |
 | `feagi-connectome-serialization` | 2.0.0 | Persistence | Model management tools |
@@ -82,7 +82,7 @@ cargo publish -p feagi-data-structures
 # Phase 2: Runtime implementations
 cargo publish -p feagi-npu-runtime-std
 cargo publish -p feagi-npu-runtime-embedded
-cargo publish -p feagi-embedded
+cargo publish -p feagi-hal
 cargo publish -p feagi-state-manager
 
 # Phase 3: Data & Serialization

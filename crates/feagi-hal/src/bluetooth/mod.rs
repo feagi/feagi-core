@@ -38,13 +38,13 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use feagi_embedded::bluetooth::protocol::BluetoothService;
-//! use feagi_embedded::bluetooth::nus::FEAGI_DEVICE_NAME;
+//! use feagi_hal::bluetooth::protocol::BluetoothService;
+//! use feagi_hal::bluetooth::nus::FEAGI_DEVICE_NAME;
 //!
 //! // Initialize BLE stack (platform-specific)
 //! # #[cfg(feature = "bluetooth-esp32")]
 //! # {
-//! use feagi_embedded::platforms::Esp32Bluetooth;
+//! use feagi_hal::platforms::Esp32Bluetooth;
 //! let mut ble = Esp32Bluetooth::new("FEAGI-robot").expect("BLE init failed");
 //! # }
 //!

@@ -129,7 +129,7 @@ path = "src/main.rs"
 
 [dependencies]
 # FEAGI embedded platform abstraction
-feagi-embedded = { git = "https://github.com/feagi/FEAGI-2.0", features = ["esp32"] }
+feagi-hal = { git = "https://github.com/feagi/FEAGI-2.0", features = ["esp32"] }
 feagi-types = { git = "https://github.com/feagi/FEAGI-2.0" }
 feagi-runtime-embedded = { git = "https://github.com/feagi/FEAGI-2.0" }
 feagi-synapse = { git = "https://github.com/feagi/FEAGI-2.0" }
@@ -163,7 +163,7 @@ fn main() {
 ### 3.1 Create src/main.rs
 
 ```rust
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 use feagi_types::INT8Value;
 
 // Network configuration
@@ -328,7 +328,7 @@ cargo build --release --target riscv32imc-esp-espidf
    Compiling feagi-types v2.0.0
    Compiling feagi-neural v2.0.0
    Compiling feagi-runtime-embedded v2.0.0
-   Compiling feagi-embedded v2.0.0
+   Compiling feagi-hal v2.0.0
    Compiling my-feagi-robot v0.1.0
     Finished release [optimized] target(s) in 2m 30s
 ```
@@ -785,7 +785,7 @@ espflash flash --monitor --serial-target http://esp32.local
 - [espflash Documentation](https://github.com/esp-rs/espflash)
 
 ### FEAGI Documentation
-- [feagi-embedded README](../README.md)
+- [feagi-hal README](../README.md)
 - [Platform Comparison](PLATFORM_COMPARISON.md)
 - [Porting Guide](PORTING_GUIDE.md)
 

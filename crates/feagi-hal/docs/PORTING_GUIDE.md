@@ -7,7 +7,7 @@
 
 ## Overview
 
-This guide shows how to add a new platform to `feagi-embedded` in 2-3 days.
+This guide shows how to add a new platform to `feagi-hal` in 2-3 days.
 
 **Effort Estimate**:
 - HAL trait implementation: 4-6 hours
@@ -265,7 +265,7 @@ cargo check --features all-arm-cortex-m
 Create a test application:
 
 ```rust
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 use feagi_runtime_embedded::{NeuronArray, SynapseArray};
 use feagi_types::INT8Value;
 
@@ -365,7 +365,7 @@ RISC-V platforms vary more:
 - Use existing platform-hal crates when available
 - Test compilation frequently
 - Document limitations clearly
-- Ask questions in feagi-embedded issues
+- Ask questions in feagi-hal issues
 
 ### ❌ DON'T:
 - Try to implement everything at once
@@ -380,7 +380,7 @@ RISC-V platforms vary more:
 
 See `src/platforms/esp32.rs` for a complete, production-ready implementation:
 
-```1:140:feagi-core/crates/feagi-embedded/src/platforms/esp32.rs
+```1:140:feagi-core/crates/feagi-hal/src/platforms/esp32.rs
 /// ESP32 platform implementation
 /// 
 /// Supports ESP32, ESP32-S3, ESP32-C3 (RISC-V) variants

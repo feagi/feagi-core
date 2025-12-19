@@ -1934,27 +1934,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-embedded"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "cortex-m",
- "cortex-m-rt",
- "embedded-hal 1.0.0",
- "esp-idf-hal",
- "esp-idf-svc",
- "esp-idf-sys",
- "feagi-npu-neural",
- "feagi-npu-runtime",
- "heapless",
- "log",
- "panic-halt",
- "rp2040-boot2",
- "rp2040-hal",
- "stm32f4xx-hal",
-]
-
-[[package]]
 name = "feagi-evolutionary"
 version = "0.0.1"
 dependencies = [
@@ -1975,6 +1954,27 @@ dependencies = [
  "tracing",
  "wasm-bindgen",
  "web-sys",
+]
+
+[[package]]
+name = "feagi-hal"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "cortex-m",
+ "cortex-m-rt",
+ "embedded-hal 1.0.0",
+ "esp-idf-hal",
+ "esp-idf-svc",
+ "esp-idf-sys",
+ "feagi-npu-neural",
+ "feagi-npu-runtime",
+ "heapless",
+ "log",
+ "panic-halt",
+ "rp2040-boot2",
+ "rp2040-hal",
+ "stm32f4xx-hal",
 ]
 
 [[package]]

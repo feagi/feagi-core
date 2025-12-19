@@ -132,7 +132,7 @@ edition = "2021"
 
 [dependencies]
 # FEAGI embedded
-feagi-embedded = { git = "https://github.com/feagi/FEAGI-2.0", features = ["stm32f4"] }
+feagi-hal = { git = "https://github.com/feagi/FEAGI-2.0", features = ["stm32f4"] }
 feagi-types = { git = "https://github.com/feagi/FEAGI-2.0" }
 feagi-runtime-embedded = { git = "https://github.com/feagi/FEAGI-2.0" }
 
@@ -204,7 +204,7 @@ continue
 
 use panic_halt as _;
 use cortex_m_rt::entry;
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 use feagi_types::INT8Value;
 
 // Network configuration for STM32F4
@@ -312,7 +312,7 @@ cargo build --release --target thumbv7em-none-eabihf
 **Expected output**:
 ```
    Compiling stm32f4xx-hal v0.21.0
-   Compiling feagi-embedded v2.0.0
+   Compiling feagi-hal v2.0.0
    Compiling my-feagi-stm32 v0.1.0
     Finished release [optimized] target(s) in 1m 15s
 ```
@@ -743,7 +743,7 @@ openocd -f board/stm32f4discovery.cfg -c "reset_config srst_only"
 - [Awesome Embedded Rust](https://github.com/rust-embedded/awesome-embedded-rust)
 
 ### FEAGI
-- [feagi-embedded README](../README.md)
+- [feagi-hal README](../README.md)
 - [Platform Comparison](PLATFORM_COMPARISON.md)
 
 ---

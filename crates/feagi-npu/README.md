@@ -141,7 +141,7 @@ use feagi_npu_neural::types::NeuronId;
 use feagi_npu_runtime_embedded::EmbeddedRuntime;
 
 let runtime = EmbeddedRuntime::new();
-// Use with feagi-embedded for platform-specific HALs
+// Use with feagi-hal for platform-specific HALs
 ```
 
 ## Versioning

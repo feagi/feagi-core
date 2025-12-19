@@ -49,8 +49,8 @@
 //! ## Usage
 //!
 //! ```rust,no_run
-//! use feagi_embedded::hal::UsbCdcProvider;
-//! # use feagi_embedded::platforms::Nrf52UsbCdc;
+//! use feagi_hal::hal::UsbCdcProvider;
+//! # use feagi_hal::platforms::Nrf52UsbCdc;
 //!
 //! // Platform layer provides the implementation
 //! let mut usb: Nrf52UsbCdc = /* platform init */;

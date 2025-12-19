@@ -1,4 +1,4 @@
-# feagi-embedded - Implementation Status
+# feagi-hal - Implementation Status
 
 **Date**: November 4, 2025  
 **Status**: ✅ 6 PLATFORMS SUPPORTED - Production and Foundation Ready
@@ -107,7 +107,7 @@
 
 ## Status: ✅ 7 PLATFORMS READY! (Including 1M+ Neuron Accelerator!)
 
-**feagi-embedded v2.0.0 supports 7 platforms!**
+**feagi-hal v2.0.0 supports 7 platforms!**
 
 - **3 Production-Ready**: ESP32, ESP32-S3, ESP32-C3 (up to 40K neurons)
 - **3 Foundation-Ready**: Arduino Due, STM32F4, Raspberry Pi Pico (up to 3.5K neurons)
@@ -181,7 +181,7 @@ cargo build --features all-platforms
 ✅ **Extensible** - 2-3 days to add new platforms  
 ✅ **Well-documented** - Comprehensive guides and examples
 
-**feagi-embedded is the foundation for universal embedded neural processing!** 🚀
+**feagi-hal is the foundation for universal embedded neural processing!** 🚀
 
 ---
 

@@ -115,7 +115,7 @@ edition = "2021"
 
 [dependencies]
 # FEAGI embedded
-feagi-embedded = { git = "https://github.com/feagi/FEAGI-2.0", features = ["rpi-pico"] }
+feagi-hal = { git = "https://github.com/feagi/FEAGI-2.0", features = ["rpi-pico"] }
 feagi-types = { git = "https://github.com/feagi/FEAGI-2.0" }
 feagi-runtime-embedded = { git = "https://github.com/feagi/FEAGI-2.0" }
 
@@ -168,7 +168,7 @@ use hal::pac;
 use cortex_m_rt::entry;
 use rp2040_boot2;
 
-use feagi_embedded::prelude::*;
+use feagi_hal::prelude::*;
 use feagi_types::INT8Value;
 
 // Provide boot2 for RP2040
@@ -261,7 +261,7 @@ cargo build --release --target thumbv6m-none-eabi
 **Expected output**:
 ```
    Compiling rp2040-hal v0.10.2
-   Compiling feagi-embedded v2.0.0
+   Compiling feagi-hal v2.0.0
    Compiling my-feagi-pico v0.1.0
     Finished release [optimized] target(s) in 50s
 ```
@@ -713,7 +713,7 @@ rp2040-boot2 = "0.3"
 - [Awesome RP2040](https://github.com/raspberrypi/pico-sdk)
 
 ### FEAGI Resources
-- [feagi-embedded README](../README.md)
+- [feagi-hal README](../README.md)
 - [Platform Comparison](PLATFORM_COMPARISON.md)
 - [FEAGI Discord](https://discord.gg/feagi)
 
