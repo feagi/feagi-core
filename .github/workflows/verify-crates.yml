@@ -10,6 +10,7 @@ on:
       - 'crates/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.github/workflows/verify-crates.yml'
 
 env:
   CARGO_TERM_COLOR: always
