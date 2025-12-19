@@ -18,6 +18,12 @@ pub struct HeartbeatTracker {
     poll_interval: Duration,
 }
 
+impl Default for HeartbeatTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl HeartbeatTracker {
     pub fn new() -> Self {
         Self {
@@ -151,13 +157,15 @@ mod tests {
         tracker.set_poll_interval(Duration::from_millis(20));
 
         // Register a test agent
-        let mut capabilities = AgentCapabilities::default();
-        capabilities.visualization = Some(VisualizationCapability {
-            visualization_type: "test_viz".to_string(),
-            resolution: None,
-            refresh_rate: Some(30.0),
-            bridge_proxy: false,
-        });
+        let capabilities = AgentCapabilities {
+            visualization: Some(VisualizationCapability {
+                visualization_type: "test_viz".to_string(),
+                resolution: None,
+                refresh_rate: Some(30.0),
+                bridge_proxy: false,
+            }),
+            ..Default::default()
+        };
 
         let mut agent_info = AgentInfo::new(
             "test-agent".to_string(),

@@ -260,7 +260,7 @@ impl SensoryStream {
 
                 if !poll_items[0].is_readable() {
                     // Log periodically that we're polling but no messages
-                    if message_count == 0 || message_count % 1000 == 0 {
+                    if message_count == 0 || message_count.is_multiple_of(1000) {
                         debug!("🦀 [ZMQ-SENSORY] 🔍 Polling for messages (no data yet, message_count: {})", message_count);
                     }
                     drop(sock_guard);
@@ -297,7 +297,7 @@ impl SensoryStream {
                                 *total_neurons.lock() += neuron_count as u64;
 
                                 // Log stats periodically (every 100 messages)
-                                if message_count % 100 == 0 {
+                                if message_count.is_multiple_of(100) {
                                     let t_zmq_total = t_zmq_receive_start.elapsed();
                                     let total_msg = *total_messages.lock();
                                     let total_n = *total_neurons.lock();
@@ -309,7 +309,7 @@ impl SensoryStream {
                             }
                             Err(e) => {
                                 // Always log first few errors, then periodically
-                                if message_count <= 10 || message_count % 100 == 0 {
+                                if message_count <= 10 || message_count.is_multiple_of(100) {
                                     error!(
                                         "🦀 [ZMQ-SENSORY] [ERR] Failed to process sensory data (message #{}): {}",
                                         message_count, e
@@ -370,7 +370,7 @@ impl SensoryStream {
             if !npu.is_genome_loaded() {
                 *rejected_no_genome.lock() += 1;
                 let count = *rejected_no_genome.lock();
-                if count == 1 || count % 100 == 0 {
+                if count == 1 || count.is_multiple_of(100) {
                     warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No genome loaded (rejected {} total)", count);
                 }
                 return Err("Security: No genome loaded".to_string());
@@ -385,7 +385,7 @@ impl SensoryStream {
                 if !registry.has_sensory_agents() {
                     *rejected_no_agents.lock() += 1;
                     let count = *rejected_no_agents.lock();
-                    if count == 1 || count % 100 == 0 {
+                    if count == 1 || count.is_multiple_of(100) {
                         warn!("🚫 [ZMQ-SENSORY] [SECURITY] Rejected sensory data: No registered sensory agents (rejected {} total)", count);
                     }
                     return Err("Security: No registered sensory agents".to_string());
@@ -447,7 +447,7 @@ impl SensoryStream {
             let mut npu = npu_arc.lock().unwrap();
 
             // NPU handles: CorticalID → cortical_idx lookup, coordinates → neuron IDs, injection
-            let injected = npu.inject_sensory_xyzp_by_id(&cortical_id, &xyzp_data);
+            let injected = npu.inject_sensory_xyzp_by_id(cortical_id, &xyzp_data);
             total_injected += injected;
 
             drop(npu);

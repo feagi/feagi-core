@@ -13,18 +13,13 @@ use std::time::Duration;
 use tracing::{debug, error, info, warn};
 
 /// Overflow handling strategy when the visualization queue is saturated.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum VisualizationOverflowStrategy {
     /// Remove the oldest frame in the queue (preserves most recent activity).
+    #[default]
     DropOldest,
     /// Drop the newest frame (preserves historical ordering).
     DropNewest,
-}
-
-impl Default for VisualizationOverflowStrategy {
-    fn default() -> Self {
-        VisualizationOverflowStrategy::DropOldest
-    }
 }
 
 /// Runtime configuration for the visualization send pipeline.
@@ -261,7 +256,7 @@ impl VisualizationStream {
                     pending = Some(returned);
                     let backpressure_count = self.stats.record_backpressure_wait();
 
-                    if backpressure_count == 1 || backpressure_count % 100 == 0 {
+                    if backpressure_count == 1 || backpressure_count.is_multiple_of(100) {
                         warn!(
                             "⚠️  [ZMQ-VIZ] Backpressure active - queue full (waits: {})",
                             backpressure_count
@@ -458,7 +453,7 @@ impl VisualizationStream {
                     // DIAGNOSTIC: Track actual ZMQ send rate
                     static SEND_COUNTER: AtomicU64 = AtomicU64::new(0);
                     let count = SEND_COUNTER.fetch_add(1, Ordering::Relaxed);
-                    if count % 30 == 0 {
+                    if count.is_multiple_of(30) {
                         // Log every 30 sends
                         debug!(
                             "[ZMQ-VIZ] 📊 SENT #{}: {} bytes (compressed)",
@@ -470,7 +465,7 @@ impl VisualizationStream {
                 }
                 Err(zmq::Error::EAGAIN) => {
                     let waits = stats.record_backpressure_wait();
-                    if waits == 1 || waits % 100 == 0 {
+                    if waits == 1 || waits.is_multiple_of(100) {
                         warn!(
                             "⚠️  [ZMQ-VIZ] Send backpressure from ZMQ socket (waits: {})",
                             waits

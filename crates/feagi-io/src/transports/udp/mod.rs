@@ -129,7 +129,7 @@ impl UdpTransport {
 
     /// Chunk a large payload into UDP-sized packets
     fn chunk_payload(&self, data: &[u8], message_id: u32) -> Vec<Vec<u8>> {
-        let total_chunks = (data.len() + MAX_CHUNK_DATA - 1) / MAX_CHUNK_DATA;
+        let total_chunks = data.len().div_ceil(MAX_CHUNK_DATA);
         let mut chunks = Vec::with_capacity(total_chunks);
 
         for (chunk_index, chunk_data) in data.chunks(MAX_CHUNK_DATA).enumerate() {

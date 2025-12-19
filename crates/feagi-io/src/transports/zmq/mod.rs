@@ -32,6 +32,7 @@ pub struct ZmqStreams {
 }
 
 impl ZmqStreams {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         rest_address: &str,
         api_control_address: &str,

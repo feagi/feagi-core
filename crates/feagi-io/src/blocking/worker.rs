@@ -105,7 +105,7 @@ impl<T: Send + 'static> WorkerThread<T> {
     /// Check if the worker is still running
     pub fn is_running(&self) -> bool {
         !self.shutdown.load(Ordering::Relaxed)
-            && self.handle.as_ref().map_or(false, |h| !h.is_finished())
+            && self.handle.as_ref().is_some_and(|h| !h.is_finished())
     }
 }
 

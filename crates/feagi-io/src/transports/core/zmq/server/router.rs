@@ -163,7 +163,7 @@ impl ReplyHandle for ZmqRouterReplyHandle {
 
         // Send multipart reply: [identity, delimiter, response_data]
         sock.send(&self.identity, zmq::SNDMORE)?;
-        sock.send(&Vec::<u8>::new(), zmq::SNDMORE)?;
+        sock.send(Vec::<u8>::new(), zmq::SNDMORE)?;
         sock.send(data, 0)?;
 
         Ok(())

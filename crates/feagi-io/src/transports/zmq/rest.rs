@@ -273,7 +273,7 @@ impl RestStream {
                     agent_id, now, count
                 );
 
-                if count == 1 || count % 30 == 0 {
+                if count == 1 || count.is_multiple_of(30) {
                     info!(
                         "🦀 [PNS] 💓 Heartbeat #{} received from {} (timestamp: {})",
                         count, agent_id, now
@@ -333,7 +333,7 @@ impl RestStream {
 
         sock.send(&identity, zmq::SNDMORE)
             .map_err(|e| e.to_string())?;
-        sock.send(&Vec::<u8>::new(), zmq::SNDMORE)
+        sock.send(Vec::<u8>::new(), zmq::SNDMORE)
             .map_err(|e| e.to_string())?;
         sock.send(response_json.as_bytes(), 0)
             .map_err(|e| e.to_string())?;

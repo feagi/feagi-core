@@ -107,7 +107,7 @@ impl RequestReplyClient for ZmqDealer {
         }
 
         // Send request: [delimiter, request_data]
-        sock.send(&Vec::<u8>::new(), zmq::SNDMORE)
+        sock.send(Vec::<u8>::new(), zmq::SNDMORE)
             .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         sock.send(data, 0)
             .map_err(|e| TransportError::SendFailed(e.to_string()))?;
@@ -148,7 +148,7 @@ impl RequestReplyClient for ZmqDealer {
         let sock = sock_guard.as_ref().ok_or(TransportError::NotRunning)?;
 
         // Send without waiting for reply
-        sock.send(&Vec::<u8>::new(), zmq::SNDMORE)
+        sock.send(Vec::<u8>::new(), zmq::SNDMORE)
             .map_err(|e| TransportError::SendFailed(e.to_string()))?;
         sock.send(data, 0)
             .map_err(|e| TransportError::SendFailed(e.to_string()))?;
