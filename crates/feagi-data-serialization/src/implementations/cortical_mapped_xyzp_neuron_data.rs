@@ -196,13 +196,11 @@ fn write_neuron_array_to_bytes(
     let number_of_neurons_to_write: usize = neuron_array.len();
     let number_bytes_needed = neuron_array.get_size_in_number_of_bytes();
     if bytes_to_write_to.len() != number_bytes_needed {
-        return Err(FeagiDataError::SerializationError(
-            format!(
-                "Need exactly {} bytes to write xyzp neuron data, but given a space of {} bytes!",
-                bytes_to_write_to.len(),
-                number_bytes_needed
-            ),
-        ));
+        return Err(FeagiDataError::SerializationError(format!(
+            "Need exactly {} bytes to write xyzp neuron data, but given a space of {} bytes!",
+            bytes_to_write_to.len(),
+            number_bytes_needed
+        )));
     }
 
     let x_offset: usize = 0;
