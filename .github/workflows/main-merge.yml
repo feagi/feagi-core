@@ -49,19 +49,24 @@ jobs:
     - name: Build release
       run: cargo build --release --verbose
     
-    - name: Publish to crates.io
+    # TEMPORARILY DISABLED: Publish to crates.io
+    # - name: Publish to crates.io
+    #   run: |
+    #     echo "📦 Publishing feagi-core v${{ steps.version.outputs.version }}..."
+    #     
+    #     # Package the crate first to verify it's ready
+    #     cargo package --verbose
+    #     
+    #     # Publish to crates.io
+    #     cargo publish --token ${{ secrets.CARGO_PUSH_TOKEN }}
+    #     
+    #     echo "✅ Successfully published feagi-core"
+    #   env:
+    #     CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+    - name: Publish to crates.io (DISABLED - Version update only)
       run: |
-        echo "📦 Publishing feagi-core v${{ steps.version.outputs.version }}..."
-        
-        # Package the crate first to verify it's ready
-        cargo package --verbose
-        
-        # Publish to crates.io
-        cargo publish --token ${{ secrets.CARGO_PUSH_TOKEN }}
-        
-        echo "✅ Successfully published feagi-core"
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+        echo "⚠️  Publishing temporarily disabled for version update"
+        echo "📦 Would publish feagi v${{ steps.version.outputs.version }}..."
     
     - name: Create release tag
       run: |
@@ -107,22 +112,20 @@ jobs:
           
           High-performance Rust libraries for bio-inspired neural computation and evolutionary artificial general intelligence.
           
-          ## Published Crate
+          ⚠️ **Publishing to crates.io is temporarily disabled for version update.**
           
-          - 📦 [`feagi-core`](https://crates.io/crates/feagi-core) v${{ steps.version.outputs.version }}
-          
-          ## Installation
+          ## Installation (when published)
           
           ```toml
           [dependencies]
-          feagi-core = "${{ steps.version.outputs.version }}"
+          feagi = "${{ steps.version.outputs.version }}"
           ```
           
           Or with specific features:
           
           ```toml
           [dependencies]
-          feagi-core = { version = "${{ steps.version.outputs.version }}", features = ["gpu"] }
+          feagi = { version = "${{ steps.version.outputs.version }}", features = ["gpu"] }
           ```
           
           ## Quick Start
@@ -157,7 +160,7 @@ jobs:
           - ✅ Linting passed (Clippy)
           - ✅ Documentation generated
           - ✅ Package built successfully
-          - ✅ Published to crates.io
+          - ⚠️ Publishing to crates.io is disabled (version update in progress)
           
           ## Platform Support
           
@@ -196,8 +199,8 @@ jobs:
     - name: Notify success
       run: |
         echo "🎉 Release v${{ steps.version.outputs.version }} completed successfully!"
-        echo "📦 Published: https://crates.io/crates/feagi-core"
-        echo "📚 Docs: https://docs.rs/feagi-core"
+        echo "⚠️  Publishing to crates.io is disabled (version update in progress)"
+        echo "📚 Docs: https://docs.rs/feagi"
         echo "🏷️ Tagged as: v${{ steps.version.outputs.version }}"
         echo "🔄 Staging branch updated with latest release"
 
