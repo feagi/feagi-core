@@ -158,6 +158,9 @@ jobs:
       run: |
         echo "📦 Verifying each crate can be packaged for publication..."
         echo ""
+        echo "Note: This verifies package structure. Dependencies must be published"
+        echo "in order (see PUBLISHING_ORDER.md) before dependent crates can be published."
+        echo ""
         
         FAILED_PACKAGES=()
         
@@ -167,21 +170,35 @@ jobs:
           fi
           
           crate_name=$(basename "$crate_dir")
+          # Extract package name from Cargo.toml (in case it differs from directory name)
+          package_name=$(grep '^name = ' "$crate_dir/Cargo.toml" | head -1 | sed 's/name = "\(.*\)"/\1/')
+          
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "📦 Packaging: $crate_name"
+          echo "📦 Packaging: $crate_name (package: $package_name)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           
-          if (cd "$crate_dir" && cargo package --quiet --allow-dirty 2>&1); then
+          # Attempt to create the package (this will fail if dependencies aren't on crates.io,
+          # but that's expected for unpublished workspace dependencies)
+          # We use --no-verify to skip the build since we already built them
+          PACKAGE_OUTPUT=$(cargo package --package "$package_name" --allow-dirty --no-verify 2>&1)
+          PACKAGE_EXIT=$?
+          
+          if [ $PACKAGE_EXIT -eq 0 ]; then
             echo "  ✅ $crate_name packages successfully"
           else
-            echo "  ❌ $crate_name failed to package"
-            FAILED_PACKAGES+=("$crate_name")
-            
-            # Show detailed error
-            echo ""
-            echo "Detailed error:"
-            (cd "$crate_dir" && cargo package --allow-dirty 2>&1) || true
-            echo ""
+            # Check if the error is about missing dependencies on crates.io
+            # This is expected for crates that depend on unpublished workspace members
+            if echo "$PACKAGE_OUTPUT" | grep -qE "no matching package|location searched: crates.io"; then
+              echo "  ⚠️  $crate_name has unpublished workspace dependencies"
+              echo "     This is expected - dependencies must be published first (see PUBLISHING_ORDER.md)"
+            else
+              echo "  ❌ $crate_name failed to package (non-dependency issue)"
+              FAILED_PACKAGES+=("$crate_name")
+              echo ""
+              echo "Detailed error:"
+              echo "$PACKAGE_OUTPUT"
+              echo ""
+            fi
           fi
         done
         

@@ -62,24 +62,20 @@ jobs:
         CURRENT_SEMANTIC=""
         CURRENT_BETA="0"
         
-        # Check if version contains beta suffix
-        if [[ "$CURRENT_VERSION" == *"-beta."* ]]; then
+        # Use grep to validate format instead of bash regex (more reliable)
+        # Check if version matches X.Y.Z-beta.N pattern
+        if echo "$CURRENT_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$'; then
           # Extract semantic and beta parts
           CURRENT_SEMANTIC=$(echo "$CURRENT_VERSION" | sed -E 's/-beta\.[0-9]+$//')
           CURRENT_BETA=$(echo "$CURRENT_VERSION" | sed -E 's/.*-beta\.([0-9]+)$/\1/')
-          # Validate semantic part
-          if [[ ! "$CURRENT_SEMANTIC" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Error: Invalid semantic version in beta format: $CURRENT_SEMANTIC"
-            echo "Full version: $CURRENT_VERSION"
-            exit 1
-          fi
           # Validate beta number
-          if [[ ! "$CURRENT_BETA" =~ ^[0-9]+$ ]] || [ "$CURRENT_BETA" -lt 1 ]; then
-            echo "❌ Error: Beta version must be a positive integer, got: $CURRENT_BETA"
+          if [ "$CURRENT_BETA" -lt 1 ] 2>/dev/null; then
+            echo "❌ Error: Beta version must be at least 1, got: $CURRENT_BETA"
             exit 1
           fi
           echo "PR semantic version: $CURRENT_SEMANTIC, beta: $CURRENT_BETA"
-        elif [[ "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        # Check if version matches X.Y.Z pattern (base version)
+        elif echo "$CURRENT_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
           # Base version without beta (will be converted to -beta.1 on merge)
           CURRENT_SEMANTIC="$CURRENT_VERSION"
           CURRENT_BETA="0"
@@ -87,6 +83,8 @@ jobs:
         else
           echo "❌ Error: PR version must be in format X.Y.Z or X.Y.Z-beta.N (e.g., 0.0.1 or 0.0.1-beta.1)"
           echo "Current version: '$CURRENT_VERSION'"
+          echo "Version length: ${#CURRENT_VERSION}"
+          echo "Hex dump: $(echo -n "$CURRENT_VERSION" | xxd | head -1)"
           exit 1
         fi
         
@@ -133,7 +131,13 @@ jobs:
         fi
         
         # Check beta version requirements
-        if [ "$CURRENT_SEMANTIC" = "$STAGING_SEMANTIC" ]; then
+        # Special case: Allow transition from Python 2.x to Rust 0.x
+        if [[ "$STAGING_SEMANTIC" =~ ^2\. ]] && [[ "$CURRENT_SEMANTIC" =~ ^0\. ]]; then
+          echo "ℹ️  Allowing transition from Python staging ($STAGING_SEMANTIC) to Rust version ($CURRENT_SEMANTIC)"
+          if [ "$CURRENT_BETA" = "0" ]; then
+            echo "✅ PR has base version, merge will convert to: $CURRENT_SEMANTIC-beta.1"
+          fi
+        elif [ "$CURRENT_SEMANTIC" = "$STAGING_SEMANTIC" ]; then
           # Same semantic version
           if [ "$CURRENT_BETA" = "0" ]; then
             # PR has base version, merge workflow will convert to -beta.(staging_beta + 1)
