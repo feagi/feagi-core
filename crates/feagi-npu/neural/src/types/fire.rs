@@ -24,11 +24,18 @@ pub struct FireCandidateList {
 }
 
 #[cfg(feature = "std")]
-impl FireCandidateList {
-    pub fn new() -> Self {
+impl Default for FireCandidateList {
+    fn default() -> Self {
         Self {
             candidates: ahash::AHashMap::with_capacity(100_000),
         }
+    }
+}
+
+#[cfg(feature = "std")]
+impl FireCandidateList {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     #[inline]
@@ -67,11 +74,18 @@ pub struct FireQueue {
 }
 
 #[cfg(feature = "std")]
-impl FireQueue {
-    pub fn new() -> Self {
+impl Default for FireQueue {
+    fn default() -> Self {
         Self {
             neurons: Vec::with_capacity(10_000),
         }
+    }
+}
+
+#[cfg(feature = "std")]
+impl FireQueue {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn add(&mut self, neuron_id: NeuronId) {

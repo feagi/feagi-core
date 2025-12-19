@@ -25,7 +25,7 @@ use std::prelude::rust_2021::*; // Import Vec, String, etc. from std prelude
 /// This captures all neuron data from the RustNPU in a format
 /// that can be efficiently serialized.
 #[cfg(feature = "std")]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct SerializableNeuronArray {
     /// Number of valid neurons
     pub count: usize,
@@ -67,26 +67,6 @@ pub struct SerializableNeuronArray {
     pub valid_mask: Vec<bool>,
 }
 
-#[cfg(feature = "std")]
-impl Default for SerializableNeuronArray {
-    fn default() -> Self {
-        Self {
-            count: 0,
-            capacity: 0,
-            membrane_potentials: Vec::new(),
-            thresholds: Vec::new(),
-            leak_coefficients: Vec::new(),
-            resting_potentials: Vec::new(),
-            neuron_types: Vec::new(),
-            refractory_periods: Vec::new(),
-            refractory_countdowns: Vec::new(),
-            excitabilities: Vec::new(),
-            cortical_areas: Vec::new(),
-            coordinates: Vec::new(),
-            valid_mask: Vec::new(),
-        }
-    }
-}
 
 #[cfg(feature = "std")]
 impl SerializableNeuronArray {
@@ -338,17 +318,19 @@ impl ConnectomeSnapshot {
 
     /// Get statistics about the connectome
     pub fn statistics(&self) -> ConnectomeStatistics {
-        let mut stats = ConnectomeStatistics::default();
-
-        stats.neuron_count = self.neurons.count;
-        stats.synapse_count = self.synapses.count;
-        stats.cortical_area_count = self.cortical_area_names.len();
-
         // Count active synapses
-        stats.active_synapse_count = self.synapses.valid_mask[..self.synapses.count]
+        let active_synapse_count = self.synapses.valid_mask[..self.synapses.count]
             .iter()
             .filter(|&&v| v)
             .count();
+
+        let mut stats = ConnectomeStatistics {
+            neuron_count: self.neurons.count,
+            synapse_count: self.synapses.count,
+            cortical_area_count: self.cortical_area_names.len(),
+            active_synapse_count,
+            ..Default::default()
+        };
 
         // Calculate average synaptic weight
         let total_weight: u32 = self.synapses.weights[..self.synapses.count]
