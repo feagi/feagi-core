@@ -10,6 +10,13 @@ pub mod neuron_voxels;
 pub mod shared_enums;
 mod templates;
 
+// Async runtime abstraction (optional, behind "async" feature)
+#[cfg(feature = "async")]
+pub mod r#async;
+
 pub use error::FeagiDataError;
 pub use feagi_json::FeagiJSON;
 pub use feagi_signal::{FeagiSignal, FeagiSignalIndex};
+
+// Re-export async macros for convenience
+// Note: Macros are exported at crate root via #[macro_export], so we don't need to re-export them here

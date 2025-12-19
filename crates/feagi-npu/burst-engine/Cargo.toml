@@ -15,13 +15,10 @@ feagi-npu-neural = { version = "0.0.1", path = "../neural" }
 # Standard runtime implementation available via "std" feature
 feagi-npu-runtime = { version = "0.0.1", path = "../runtime", optional = true }
 feagi-state-manager = { version = "0.0.1", path = "../../feagi-state-manager" }  # For BurstEngineState enum
-# Async runtime abstraction for WASM compatibility
-# Note: default-features = false prevents pulling in standard-tokio by default
-feagi-async = { version = "0.0.1", path = "../../feagi-data-structures/feagi-async", default-features = false }
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
 feagi-data-serialization = { workspace = true }  # For decoding sensory data
-feagi-data-structures.workspace = true  # For CorticalMappedXYZPNeuronVoxels
+feagi-data-structures = { workspace = true, features = ["async"] }  # For CorticalMappedXYZPNeuronVoxels and async runtime
 thiserror.workspace = true
 rayon.workspace = true
 ndarray.workspace = true
@@ -51,8 +48,8 @@ std = ["feagi-npu-runtime/std"]
 # Enable connectome serialization/deserialization (requires native dependencies)
 connectome-io = []  # Types are in feagi-npu-neural (always available with std feature)
 # Async runtime features
-async-tokio = ["feagi-async/standard-tokio"]
-wasm = ["feagi-async/wasm"]  # Explicitly enable wasm feature on feagi-async (no tokio)
+async-tokio = ["feagi-data-structures/async-tokio"]
+wasm = ["feagi-data-structures/async-wasm"]  # Explicitly enable wasm feature (no tokio)
 # Enable GPU acceleration via WGPU (cross-platform)
 gpu = ["wgpu", "pollster", "bytemuck"]
 # Enable CUDA acceleration (NVIDIA only, highest performance)

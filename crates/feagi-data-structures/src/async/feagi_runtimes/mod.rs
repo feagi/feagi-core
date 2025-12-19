@@ -1,11 +1,12 @@
 mod embedded_esp_32;
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 mod standard_tokio;
 mod wasi;
+#[cfg(feature = "async-wasm")]
 mod wasm;
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 pub use standard_tokio::{TokioHandle, TokioRuntime};
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 pub use wasm::WasmRuntime;

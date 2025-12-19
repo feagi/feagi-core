@@ -26,7 +26,6 @@ CRATES=(
     "crates/feagi-observability"
     
     # Layer 2: Core data structures
-    "crates/feagi-data-structures/feagi-async"  # feagi-async must come before feagi-data-structures
     "crates/feagi-data-structures"
     "crates/feagi-config"
     

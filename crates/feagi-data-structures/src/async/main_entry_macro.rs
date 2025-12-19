@@ -6,7 +6,7 @@
 /// # Usage
 ///
 /// ```ignore
-/// use feagi_async::FeagiAsyncRuntime;
+/// use feagi_data_structures::async::FeagiAsyncRuntime;
 ///
 /// // Your application logic - platform agnostic
 /// async fn run_application<R: FeagiAsyncRuntime>(runtime: &R) {
@@ -15,35 +15,36 @@
 /// }
 ///
 /// // Generate the main entry point
-/// feagi_async::feagi_main!(run_application);
+/// feagi_data_structures::feagi_main!(run_application);
 /// ```
+#[cfg(feature = "async")]
 #[macro_export]
 macro_rules! feagi_main {
     ($app_func:expr) => {
         // Check for conflicting features
-        #[cfg(all(feature = "standard-tokio", feature = "wasm"))]
-        compile_error!("Do not enable both standard-tokio and wasm features!");
+        #[cfg(all(feature = "async-tokio", feature = "async-wasm"))]
+        compile_error!("Do not enable both async-tokio and async-wasm features!");
 
-        #[cfg(all(feature = "standard-tokio", feature = "wasi"))]
-        compile_error!("Do not enable both standard-tokio and wasi features!");
+        #[cfg(all(feature = "async-tokio", feature = "async-wasi"))]
+        compile_error!("Do not enable both async-tokio and async-wasi features!");
 
-        #[cfg(all(feature = "wasm", feature = "wasi"))]
-        compile_error!("Do not enable both wasm and wasi features!");
+        #[cfg(all(feature = "async-wasm", feature = "async-wasi"))]
+        compile_error!("Do not enable both async-wasm and async-wasi features!");
 
-        #[cfg(not(any(feature = "standard-tokio", feature = "wasm", feature = "wasi")))]
+        #[cfg(not(any(feature = "async-tokio", feature = "async-wasm", feature = "async-wasi")))]
         compile_error!(
-            "No async runtime feature enabled! Enable one of: standard-tokio, wasm, wasi"
+            "No async runtime feature enabled! Enable one of: async-tokio, async-wasm, async-wasi"
         );
 
         // Tokio entry point
-        #[cfg(feature = "standard-tokio")]
+        #[cfg(feature = "async-tokio")]
         #[tokio::main]
         async fn main() {
-            $crate::run_async!($app_func);
+            $crate::async::run_async!($app_func);
         }
 
         // WASM entry point - must be sync, spawns async work
-        #[cfg(feature = "wasm")]
+        #[cfg(feature = "async-wasm")]
         #[wasm_bindgen::prelude::wasm_bindgen(start)]
         pub fn main() {
             // Spawn the async application on the WASM event loop
@@ -53,7 +54,7 @@ macro_rules! feagi_main {
         }
 
         // WASI entry point (if/when implemented)
-        #[cfg(feature = "wasi")]
+        #[cfg(feature = "async-wasi")]
         fn main() {
             // WASI may need different handling - placeholder for now
             compile_error!("WASI main entry not yet implemented");

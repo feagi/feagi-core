@@ -1789,7 +1789,6 @@ name = "feagi"
 version = "0.0.1"
 dependencies = [
  "feagi-agent",
- "feagi-async",
  "feagi-bdu",
  "feagi-evo",
  "feagi-io",
@@ -1865,21 +1864,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-async"
-version = "0.0.1"
-dependencies = [
- "futures-channel",
- "futures-util",
- "js-sys",
- "tokio",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wasm-rs-async-executor",
- "web-sys",
-]
-
-[[package]]
 name = "feagi-bdu"
 version = "0.0.1"
 dependencies = [
@@ -1931,13 +1915,21 @@ name = "feagi-data-structures"
 version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
- "feagi-async",
+ "futures-channel",
+ "futures-util",
+ "js-sys",
  "ndarray",
  "paste",
  "rayon",
  "serde",
  "serde_json",
+ "tokio",
  "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "wasm-rs-async-executor",
+ "web-sys",
 ]
 
 [[package]]
@@ -2024,7 +2016,6 @@ dependencies = [
  "chrono",
  "criterion",
  "cudarc",
- "feagi-async",
  "feagi-data-serialization",
  "feagi-data-structures",
  "feagi-npu-neural",

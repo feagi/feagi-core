@@ -41,16 +41,11 @@ If you must publish manually, follow the layer order below exactly.
 
 ### **Layer 2: Core Data Structures**
 
-#### `feagi-async`
-- **Path:** `crates/feagi-data-structures/feagi-async`
-- **Dependencies:** `feagi-observability`
-- **Purpose:** Platform-agnostic async runtime traits (Tokio, WASM)
-- **Note:** Must be published before `feagi-data-structures`
-
 #### `feagi-data-structures`
 - **Path:** `crates/feagi-data-structures`
-- **Dependencies:** `feagi-observability`, `feagi-async`
+- **Dependencies:** `feagi-observability`
 - **Purpose:** Neurons, synapses, cortical areas, genome structures
+- **Features:** `async` (platform-agnostic async runtime abstraction with `async-tokio`, `async-wasm`, `async-wasi` sub-features)
 
 #### `feagi-config`
 - **Path:** `crates/feagi-config`
@@ -105,7 +100,6 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-data-serialization`
   - `feagi-data-structures`
   - `feagi-state-manager`
-  - `feagi-async`
 - **Purpose:** Neural burst processing engine (CPU/GPU)
 
 #### `feagi-npu-plasticity`

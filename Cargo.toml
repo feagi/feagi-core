@@ -65,8 +65,7 @@ feagi-npu-plasticity = { version = "0.0.1", path = "crates/feagi-npu/plasticity"
 feagi-io = { version = "0.0.1", path = "crates/feagi-io", optional = true }
 feagi-agent = { version = "0.0.1", path = "crates/feagi-agent", optional = true }
 
-# Async runtime
-feagi-async = { version = "0.0.1", path = "crates/feagi-data-structures/feagi-async" }
+# Async runtime is now a feature of feagi-data-structures
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
@@ -142,7 +141,6 @@ bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU b
 # FEAGI data crates (now internal to workspace)
 feagi-data-structures = { version = "0.0.1", path = "crates/feagi-data-structures" }
 feagi-data-serialization = { version = "0.0.1", path = "crates/feagi-data-serialization" }
-feagi-async = { version = "0.0.1", path = "crates/feagi-data-structures/feagi-async" }
 
 # Workspace-internal crates
 feagi-observability = { version = "0.0.1", path = "crates/feagi-observability" }

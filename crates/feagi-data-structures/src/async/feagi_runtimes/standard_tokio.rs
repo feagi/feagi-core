@@ -1,26 +1,26 @@
-use crate::FeagiAsyncRuntime;
+use super::super::FeagiAsyncRuntime;
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 use core::future::Future;
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 use core::pin::Pin;
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 use core::task::{Context, Poll};
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 use core::time::Duration;
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 use tokio::runtime::{Handle, Runtime};
 
 /// The Tokio async runtime wrapper that OWNS a runtime.
 ///
 /// Use this when starting from a synchronous context (e.g., `main()`).
 /// Do NOT use inside `#[tokio::test]` or other async contexts - use `TokioHandle` instead.
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 pub struct TokioRuntime {
     runtime: Runtime,
 }
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 impl TokioRuntime {
     /// Create a new multi-threaded Tokio runtime.
     ///
@@ -40,14 +40,14 @@ impl TokioRuntime {
     }
 }
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 impl Default for TokioRuntime {
     fn default() -> Self {
         Self::new()
     }
 }
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 impl FeagiAsyncRuntime for TokioRuntime {
     type TaskHandle<T: Send + 'static> = TokioTaskHandle<T>;
 
@@ -63,7 +63,7 @@ impl FeagiAsyncRuntime for TokioRuntime {
         Box::pin(tokio::time::sleep(duration))
     }
 
-    fn try_block_on<F, T>(&self, future: F) -> Result<T, crate::BlockOnError>
+    fn try_block_on<F, T>(&self, future: F) -> Result<T, super::super::BlockOnError>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
@@ -75,7 +75,7 @@ impl FeagiAsyncRuntime for TokioRuntime {
         &self,
         future: F,
         timeout: Duration,
-    ) -> Pin<Box<dyn Future<Output = Result<T, crate::TimeoutError>> + Send + 'static>>
+    ) -> Pin<Box<dyn Future<Output = Result<T, super::super::TimeoutError>> + Send + 'static>>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
@@ -83,13 +83,13 @@ impl FeagiAsyncRuntime for TokioRuntime {
         Box::pin(async move {
             tokio::select! {
                 result = future => Ok(result),
-                _ = tokio::time::sleep(timeout) => Err(crate::TimeoutError),
+                _ = tokio::time::sleep(timeout) => Err(super::super::TimeoutError),
             }
         })
     }
 }
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 impl FeagiAsyncRuntime for TokioHandle {
     type TaskHandle<T: Send + 'static> = TokioTaskHandle<T>;
 
@@ -105,7 +105,7 @@ impl FeagiAsyncRuntime for TokioHandle {
         Box::pin(tokio::time::sleep(duration))
     }
 
-    fn try_block_on<F, T>(&self, _future: F) -> Result<T, crate::BlockOnError>
+    fn try_block_on<F, T>(&self, _future: F) -> Result<T, super::super::BlockOnError>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
@@ -114,7 +114,7 @@ impl FeagiAsyncRuntime for TokioHandle {
         // We need to spawn the future and wait for it
         // However, this is tricky without blocking - for now, return an error
         // indicating that blocking requires TokioRuntime (not TokioHandle)
-        Err(crate::BlockOnError::not_supported(
+        Err(super::super::BlockOnError::not_supported(
             "TokioHandle does not support blocking. Use TokioRuntime::try_block_on() instead.",
         ))
     }
@@ -123,7 +123,7 @@ impl FeagiAsyncRuntime for TokioHandle {
         &self,
         future: F,
         timeout: Duration,
-    ) -> Pin<Box<dyn Future<Output = Result<T, crate::TimeoutError>> + Send + 'static>>
+    ) -> Pin<Box<dyn Future<Output = Result<T, super::super::TimeoutError>> + Send + 'static>>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
@@ -131,7 +131,7 @@ impl FeagiAsyncRuntime for TokioHandle {
         Box::pin(async move {
             tokio::select! {
                 result = future => Ok(result),
-                _ = tokio::time::sleep(timeout) => Err(crate::TimeoutError),
+                _ = tokio::time::sleep(timeout) => Err(super::super::TimeoutError),
             }
         })
     }
@@ -141,12 +141,12 @@ impl FeagiAsyncRuntime for TokioHandle {
 ///
 /// Use this when you're already inside a tokio async context
 /// (e.g., inside `#[tokio::test]` or `#[tokio::main]`).
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 pub struct TokioHandle {
     handle: Handle,
 }
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 impl TokioHandle {
     /// Get a handle to the current tokio runtime.
     ///
@@ -165,10 +165,10 @@ impl TokioHandle {
 /// Tokio's native `JoinHandle<T>` returns `Result<T, JoinError>`, but FeagiAsyncRuntime
 /// requires `Future<Output = T>`. This wrapper unwraps the result and panics
 /// if the spawned task panicked.
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 pub struct TokioTaskHandle<T>(tokio::task::JoinHandle<T>);
 
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 impl<T> Future for TokioTaskHandle<T> {
     type Output = T;
 
@@ -185,5 +185,5 @@ impl<T> Future for TokioTaskHandle<T> {
 }
 
 // TokioTaskHandle is Send if T is Send, which matches tokio::task::JoinHandle's behavior
-#[cfg(feature = "standard-tokio")]
+#[cfg(feature = "async-tokio")]
 unsafe impl<T: Send> Send for TokioTaskHandle<T> {} // lol

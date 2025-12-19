@@ -1,34 +1,34 @@
-use crate::FeagiAsyncRuntime;
+use super::super::FeagiAsyncRuntime;
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use core::future::Future;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use core::pin::Pin;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use core::task::{Context, Poll};
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use core::time::Duration;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use futures_channel::oneshot;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use futures_util::future::select;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use futures_util::FutureExt;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use js_sys::Promise;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use wasm_bindgen::prelude::*;
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 
 /// The WASM async runtime using wasm-bindgen-futures.
 ///
 /// This is a single-threaded runtime suitable for browser and web environments.
 /// Note: There is no `block_on` equivalent in WASM - everything must be async.
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 pub struct WasmRuntime;
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 impl WasmRuntime {
     /// Create a new WASM runtime.
     pub fn new() -> Self {
@@ -36,7 +36,7 @@ impl WasmRuntime {
     }
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 impl Default for WasmRuntime {
     fn default() -> Self {
         Self::new()
@@ -47,10 +47,10 @@ impl Default for WasmRuntime {
 ///
 /// Since `spawn_local` doesn't return a handle, we use a channel internally
 /// to communicate the result back to the caller.
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 pub struct WasmTaskHandle<T>(oneshot::Receiver<T>);
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 impl<T> Future for WasmTaskHandle<T> {
     type Output = T;
 
@@ -66,19 +66,19 @@ impl<T> Future for WasmTaskHandle<T> {
 
 // SAFETY: In WASM single-threaded environment, Send is satisfied trivially.
 // The oneshot channel from futures-channel is Send when T is Send.
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 unsafe impl<T: Send> Send for WasmTaskHandle<T> {}
 
 /// A Send-safe wrapper for WASM delay future
 ///
 /// In WASM, everything runs on a single thread, so Send is trivially satisfied.
 /// This wrapper makes JsFuture Send-safe for use in the trait.
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 struct WasmDelayFuture {
     inner: JsFuture,
 }
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 impl Future for WasmDelayFuture {
     type Output = ();
 
@@ -92,10 +92,10 @@ impl Future for WasmDelayFuture {
 }
 
 // SAFETY: In WASM single-threaded environment, Send is satisfied trivially.
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 unsafe impl Send for WasmDelayFuture {}
 
-#[cfg(feature = "wasm")]
+#[cfg(feature = "async-wasm")]
 impl FeagiAsyncRuntime for WasmRuntime {
     type TaskHandle<T: Send + 'static> = WasmTaskHandle<T>;
 
@@ -142,12 +142,12 @@ impl FeagiAsyncRuntime for WasmRuntime {
         Box::pin(delay_future)
     }
 
-    fn try_block_on<F, T>(&self, _future: F) -> Result<T, crate::BlockOnError>
+    fn try_block_on<F, T>(&self, _future: F) -> Result<T, super::super::BlockOnError>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
     {
-        Err(crate::BlockOnError::not_supported(
+        Err(super::super::BlockOnError::not_supported(
             "WASM does not support blocking operations. All operations must be async.",
         ))
     }
@@ -156,7 +156,7 @@ impl FeagiAsyncRuntime for WasmRuntime {
         &self,
         future: F,
         timeout: Duration,
-    ) -> Pin<Box<dyn Future<Output = Result<T, crate::TimeoutError>> + Send + 'static>>
+    ) -> Pin<Box<dyn Future<Output = Result<T, super::super::TimeoutError>> + Send + 'static>>
     where
         F: Future<Output = T> + Send + 'static,
         T: Send + 'static,
@@ -166,7 +166,7 @@ impl FeagiAsyncRuntime for WasmRuntime {
         Box::pin(async move {
             match select(future.boxed(), delay).await {
                 futures_util::future::Either::Left((result, _)) => Ok(result),
-                futures_util::future::Either::Right((_, _)) => Err(crate::TimeoutError),
+                futures_util::future::Either::Right((_, _)) => Err(super::super::TimeoutError),
             }
         })
     }
