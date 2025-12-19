@@ -1917,22 +1917,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-connector-core"
-version = "0.0.50-beta.61"
-dependencies = [
- "clap",
- "feagi-data-serialization",
- "feagi-data-structures",
- "image",
- "ndarray",
- "paste",
- "rayon",
- "serde",
- "serde_json",
- "tracing",
-]
-
-[[package]]
 name = "feagi-data-serialization"
 version = "0.0.50-beta.61"
 dependencies = [
@@ -2108,6 +2092,22 @@ dependencies = [
  "tracing-chrome",
  "tracing-opentelemetry",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "feagi-pns"
+version = "0.0.50-beta.61"
+dependencies = [
+ "clap",
+ "feagi-data-serialization",
+ "feagi-data-structures",
+ "image",
+ "ndarray",
+ "paste",
+ "rayon",
+ "serde",
+ "serde_json",
+ "tracing",
 ]
 
 [[package]]

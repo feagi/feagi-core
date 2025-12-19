@@ -1,10 +1,10 @@
 [package]
 authors.workspace = true
-name = "feagi-connector-core"
+name = "feagi-pns"
 edition.workspace = true
 version = "0.0.50-beta.61"
 license.workspace = true
-description = "Adds Caching and Processing systems that are used by Feagi Connector"
+description = "Peripheral Nervous System (PNS) - Data processing, caching, and neuron voxel encoding for FEAGI agents"
 repository.workspace = true
 homepage.workspace = true
 

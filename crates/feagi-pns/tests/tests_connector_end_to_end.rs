@@ -1,7 +1,7 @@
 //! Tests for the data pipeline module - focusing on end -> end tests
 
-use feagi_connector_core::data_types::descriptors::ColorSpace;
-use feagi_connector_core::data_types::{ImageFrame, SegmentedImageFrame};
+use feagi_pns::data_types::descriptors::ColorSpace;
+use feagi_pns::data_types::{ImageFrame, SegmentedImageFrame};
 
 //region Helpers
 
@@ -16,11 +16,11 @@ fn load_bird_image() -> ImageFrame {
 #[cfg(test)]
 mod test_connector_cache_sensor_load_image {
     use crate::load_bird_image;
-    use feagi_connector_core::data_types::descriptors::{
+    use feagi_pns::data_types::descriptors::{
         SegmentedImageFrameProperties, SegmentedXYImageResolutions,
     };
-    use feagi_connector_core::data_types::{GazeProperties, MiscData};
-    use feagi_connector_core::wrapped_io_data::WrappedIOData;
+    use feagi_pns::data_types::{GazeProperties, MiscData};
+    use feagi_pns::wrapped_io_data::WrappedIOData;
     use feagi_data_structures::genomic::cortical_area::descriptors::{
         CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
     };
@@ -52,7 +52,7 @@ mod test_connector_cache_sensor_load_image {
         let initial_gaze =
             GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
-        let connector_agent = feagi_connector_core::ConnectorAgent::new();
+        let connector_agent = feagi_pns::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -96,7 +96,7 @@ mod test_connector_cache_sensor_load_image {
         let initial_gaze =
             GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
-        let connector_agent = feagi_connector_core::ConnectorAgent::new();
+        let connector_agent = feagi_pns::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -150,7 +150,7 @@ mod test_connector_cache_sensor_load_image {
         let second_gaze = GazeProperties::new((0.3, 0.3).try_into().unwrap(), 0.2.try_into().unwrap());
 
 
-        let connector_agent = feagi_connector_core::ConnectorAgent::new();
+        let connector_agent = feagi_pns::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache.segmented_vision_register(cortical_group, number_channels, FrameChangeHandling::Absolute, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
@@ -181,7 +181,7 @@ mod test_connector_cache_sensor_load_image {
         let bird_image = load_bird_image();
         let misc_data = MiscData::new_from_image_frame(&bird_image).unwrap();
 
-        let connector_agent = feagi_connector_core::ConnectorAgent::new();
+        let connector_agent = feagi_pns::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -253,7 +253,7 @@ mod test_connector_cache_sensor_load_image {
             data.fill(10.0);
         }
 
-        let connector_agent = feagi_connector_core::ConnectorAgent::new();
+        let connector_agent = feagi_pns::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache

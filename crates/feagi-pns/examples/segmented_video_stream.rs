@@ -1,5 +1,5 @@
 use clap::{Parser, ValueEnum};
-use feagi_connector_core as feagi_connector;
+use feagi_pns as feagi_connector;
 use image::{DynamicImage, ImageBuffer, Rgb};
 use std::path::PathBuf;
 

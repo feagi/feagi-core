@@ -10,7 +10,7 @@ use feagi_data_structures::FeagiDataError;
 ///
 /// # Examples
 /// ```
-/// use feagi_connector_core::data_types::Percentage;
+/// use feagi_pns::data_types::Percentage;
 ///
 /// let p = Percentage::new_from_0_1(0.75).unwrap();
 /// assert_eq!(p.get_as_0_1(), 0.75);

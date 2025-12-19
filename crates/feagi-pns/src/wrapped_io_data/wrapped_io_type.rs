@@ -22,7 +22,7 @@ use std::mem::discriminant;
 ///
 /// # Examples
 /// ```
-/// use feagi_connector_core::wrapped_io_data::WrappedIOType;
+    /// use feagi_pns::wrapped_io_data::WrappedIOType;
 ///
 /// let io_type = WrappedIOType::Percentage;
 /// let blank_data = io_type.create_blank_data_of_type().unwrap();
@@ -53,7 +53,7 @@ impl WrappedIOType {
     ///
     /// # Example
     /// ```
-    /// use feagi_connector_core::wrapped_io_data::WrappedIOType;
+    /// use feagi_pns::wrapped_io_data::WrappedIOType;
     ///
     /// let a = WrappedIOType::Percentage;
     /// let b = WrappedIOType::Percentage;

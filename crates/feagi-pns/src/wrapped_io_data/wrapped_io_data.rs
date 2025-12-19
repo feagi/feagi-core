@@ -19,8 +19,8 @@ macro_rules! define_wrapped_io_data_enum {
         ///
         /// # Examples
         /// ```
-        /// use feagi_connector_core::wrapped_io_data::WrappedIOData;
-        /// use feagi_connector_core::data_types::Percentage;
+        /// use feagi_pns::wrapped_io_data::WrappedIOData;
+        /// use feagi_pns::data_types::Percentage;
         ///
         /// let percentage = Percentage::new_from_0_1(0.75).unwrap();
         /// let wrapped: WrappedIOData = percentage.into();
