@@ -304,11 +304,11 @@ fn process_single_neuron<T: NeuralValue>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_npu_runtime::NeuronArray; // OK: dev-dependency for tests
+    use feagi_npu_runtime::StdNeuronArray; // OK: dev-dependency for tests
 
     #[test]
     fn test_neuron_fires_when_above_threshold() {
-        let mut neurons = NeuronArray::new(10);
+        let mut neurons = StdNeuronArray::new(10);
 
         // Add a neuron with threshold 1.0
         let id = neurons
@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn test_neuron_does_not_fire_below_threshold() {
-        let mut neurons = NeuronArray::new(10);
+        let mut neurons = StdNeuronArray::new(10);
 
         let id = neurons
             .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -360,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_refractory_period_blocks_firing() {
-        let mut neurons = NeuronArray::new(10);
+        let mut neurons = StdNeuronArray::new(10);
 
         let id = neurons
             .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -380,7 +380,7 @@ mod tests {
 
     #[test]
     fn test_leak_decay() {
-        let mut neurons = NeuronArray::new(10);
+        let mut neurons = StdNeuronArray::new(10);
 
         let id = neurons
             .add_neuron(
@@ -413,7 +413,7 @@ mod tests {
 
     #[test]
     fn test_multiple_neurons_firing() {
-        let mut neurons = NeuronArray::new(100);
+        let mut neurons = StdNeuronArray::new(100);
 
         // Add 10 neurons
         let mut ids = Vec::new();

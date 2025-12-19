@@ -78,7 +78,7 @@ impl SynapticPropagationEngine {
     /// Build the synapse index from a synapse array (Structure-of-Arrays)
     /// This should be called once during initialization or when connectome changes
     ///
-    /// ZERO-COPY: Works directly with SynapseArray without allocating intermediate structures
+    /// ZERO-COPY: Works directly with StdSynapseArray without allocating intermediate structures
     pub fn build_synapse_index<S: SynapseStorage>(&mut self, synapse_storage: &S) {
         self.synapse_index.clear();
 
@@ -105,7 +105,7 @@ impl SynapticPropagationEngine {
     /// # Performance Notes
     /// - Uses Rayon for parallel processing
     /// - SIMD-friendly vectorized calculations
-    /// - ZERO-COPY: Works directly with SynapseArray (no allocation overhead)
+    /// - ZERO-COPY: Works directly with StdSynapseArray (no allocation overhead)
     /// - Cache-friendly data access patterns
     pub fn propagate(
         &mut self,
@@ -135,7 +135,7 @@ impl SynapticPropagationEngine {
 
         // PHASE 2: COMPUTE - Calculate contributions in parallel (TRUE SIMD!)
         // This is where Python spent 165ms doing inefficient numpy ops
-        // ZERO-COPY: Access SynapseArray fields directly (Structure-of-Arrays)
+        // ZERO-COPY: Access StdSynapseArray fields directly (Structure-of-Arrays)
         let contributions: Vec<(NeuronId, CorticalID, SynapticContribution)> = synapse_indices
             .par_iter()
             .filter_map(|&syn_idx| {
@@ -200,10 +200,10 @@ impl Default for SynapticPropagationEngine {
 mod tests {
     use super::*;
 
-    use feagi_npu_runtime::SynapseArray;
+    use feagi_npu_runtime::StdSynapseArray;
 
-    fn create_test_synapses() -> SynapseArray {
-        let mut synapse_storage = SynapseArray {
+    fn create_test_synapses() -> StdSynapseArray {
+        let mut synapse_storage = StdSynapseArray {
             count: 3,
             source_neurons: vec![1, 1, 2],    // Raw u32 values
             target_neurons: vec![10, 11, 10], // Raw u32 values

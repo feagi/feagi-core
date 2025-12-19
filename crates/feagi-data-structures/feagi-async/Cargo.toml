@@ -2,7 +2,7 @@
 
 [package]
 name = "feagi-async"
-version = "0.0.50-beta.61"
+version = "0.0.1"
 edition = "2021"
 
 [features]

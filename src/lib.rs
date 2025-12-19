@@ -198,7 +198,9 @@ pub mod prelude {
     pub use crate::plasticity::service::{PlasticityConfig, PlasticityService};
 
     #[cfg(feature = "serialization")]
-    pub use crate::serialization::{load_connectome, save_connectome, ConnectomeSnapshot};
+    pub use crate::serialization::{load_connectome, save_connectome};
+    #[cfg(feature = "serialization")]
+    pub use feagi_npu_neural::types::connectome::ConnectomeSnapshot;
 }
 
 #[cfg(test)]

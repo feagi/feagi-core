@@ -15,7 +15,7 @@
 
 use super::ComputeBackend;
 use feagi_npu_neural::types::*;
-use feagi_npu_runtime::{NeuronArray, SynapseArray};
+use feagi_npu_runtime::{StdNeuronArray, StdSynapseArray};
 use tracing::info;
 
 /// WGPU backend for GPU acceleration
@@ -239,7 +239,7 @@ impl WGPUBackend {
     }
 
     /// Upload neuron array data to GPU
-    fn upload_neuron_arrays(&mut self, neuron_array: &NeuronArray<f32>) -> Result<()> {
+    fn upload_neuron_arrays(&mut self, neuron_array: &StdNeuronArray<f32>) -> Result<()> {
         let neuron_count = neuron_array.count;
         self.current_neuron_count = neuron_count;
 
@@ -373,7 +373,7 @@ impl WGPUBackend {
     }
 
     /// Upload synapse array data to GPU
-    fn upload_synapse_arrays(&mut self, synapse_array: &SynapseArray) -> Result<()> {
+    fn upload_synapse_arrays(&mut self, synapse_array: &StdSynapseArray) -> Result<()> {
         let synapse_count = synapse_array.count;
 
         info!(
@@ -1222,12 +1222,12 @@ impl WGPUBackend {
         Ok(fired_neurons)
     }
 
-    /// Download neuron state updates from GPU back to CPU NeuronArray
+    /// Download neuron state updates from GPU back to CPU StdNeuronArray
     ///
     /// Updates refractory countdowns and consecutive fire counts for FCL neurons
     fn download_neuron_state_updates(
         &mut self,
-        neuron_array: &mut NeuronArray<f32>,
+        neuron_array: &mut StdNeuronArray<f32>,
         fcl_candidates: &[(u32, f32)],
     ) -> Result<()> {
         // TODO: Download u16_dynamic_state buffer for FCL neurons

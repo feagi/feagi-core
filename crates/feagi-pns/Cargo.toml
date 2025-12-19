@@ -2,7 +2,7 @@
 authors.workspace = true
 name = "feagi-pns"
 edition.workspace = true
-version = "0.0.50-beta.61"
+version = "0.0.1"
 license.workspace = true
 description = "Peripheral Nervous System (PNS) - Data processing, caching, and neuron voxel encoding for FEAGI agents"
 repository.workspace = true
@@ -11,8 +11,8 @@ homepage.workspace = true
 
 [dependencies]
 ndarray = { workspace = true, features = ["rayon"] }
-feagi-data-structures = { workspace = true }
-feagi-data-serialization = { workspace = true }
+feagi-data-structures = { version = "0.0.1", path = "../feagi-data-structures" }
+feagi-data-serialization = { version = "0.0.1", path = "../feagi-data-serialization" }
 image = {workspace = true}
 rayon = { workspace = true}
 paste = { workspace = true}

@@ -1,6 +1,6 @@
 [package]
 name = "feagi-state-manager"
-version = "0.0.0"
+version.workspace = true
 edition = "2021"
 license = "Apache-2.0"
 description = "Runtime state management for FEAGI - cross-platform, RTOS-compatible"

@@ -2,9 +2,9 @@
 
 This document defines the correct dependency order for publishing all crates in the `feagi-core` workspace to crates.io.
 
-**Last Updated:** December 18, 2024  
-**Workspace Version:** 2.0.0-beta.1  
-**Total Crates:** 23
+**Last Updated:** January 2025  
+**Workspace Version:** 0.0.1  
+**Total Crates:** 19
 
 ---
 
@@ -41,9 +41,15 @@ If you must publish manually, follow the layer order below exactly.
 
 ### **Layer 2: Core Data Structures**
 
+#### `feagi-async`
+- **Path:** `crates/feagi-data-structures/feagi-async`
+- **Dependencies:** `feagi-observability`
+- **Purpose:** Platform-agnostic async runtime traits (Tokio, WASM)
+- **Note:** Must be published before `feagi-data-structures`
+
 #### `feagi-data-structures`
 - **Path:** `crates/feagi-data-structures`
-- **Dependencies:** `feagi-observability`
+- **Dependencies:** `feagi-observability`, `feagi-async`
 - **Purpose:** Neurons, synapses, cortical areas, genome structures
 
 #### `feagi-config`
@@ -70,31 +76,16 @@ If you must publish manually, follow the layer order below exactly.
 - **Package Name:** `feagi-npu-runtime`
 - **Dependencies:** `feagi-npu-neural`
 - **Purpose:** Platform-agnostic runtime traits (NeuronStorage, SynapseStorage)
+- **Note:** Includes both std and embedded implementations via features
 
 ---
 
-### **Layer 5: Runtime Implementations**
+### **Layer 5: Serialization & State**
 
-#### `feagi-npu-runtime-std`
-- **Path:** `crates/feagi-npu/runtime-std`
-- **Package Name:** `feagi-npu-runtime-std`
-- **Dependencies:** `feagi-npu-runtime`, `feagi-npu-neural`
-- **Purpose:** Standard library runtime (desktop/server)
-
-#### `feagi-npu-runtime-embedded`
-- **Path:** `crates/feagi-npu/runtime-embedded`
-- **Package Name:** `feagi-npu-runtime-embedded`
-- **Dependencies:** `feagi-npu-runtime`, `feagi-npu-neural`
-- **Purpose:** Embedded/no_std runtime (ESP32, STM32, etc.)
-
----
-
-### **Layer 6: Serialization & State**
-
-#### `feagi-connectome-serialization`
-- **Path:** `crates/feagi-connectome-serialization`
+#### `feagi-data-serialization`
+- **Path:** `crates/feagi-data-serialization`
 - **Dependencies:** `feagi-data-structures`
-- **Purpose:** Connectome save/load (MessagePack, JSON)
+- **Purpose:** FEAGI Byte Container (FBC) format for binary serialization
 
 #### `feagi-state-manager`
 - **Path:** `crates/feagi-state-manager`
@@ -103,17 +94,18 @@ If you must publish manually, follow the layer order below exactly.
 
 ---
 
-### **Layer 7: High-Performance Processing**
+### **Layer 6: High-Performance Processing**
 
 #### `feagi-npu-burst-engine`
 - **Path:** `crates/feagi-npu/burst-engine`
 - **Package Name:** `feagi-npu-burst-engine`
 - **Dependencies:** 
   - `feagi-npu-neural`
-  - `feagi-npu-runtime`
-  - `feagi-npu-runtime-std` (optional, via `std` feature)
-  - `feagi-connectome-serialization` (optional)
+  - `feagi-npu-runtime` (optional, via `std` feature)
+  - `feagi-data-serialization`
   - `feagi-data-structures`
+  - `feagi-state-manager`
+  - `feagi-async`
 - **Purpose:** Neural burst processing engine (CPU/GPU)
 
 #### `feagi-npu-plasticity`
@@ -124,7 +116,7 @@ If you must publish manually, follow the layer order below exactly.
 
 ---
 
-### **Layer 8: Evolutionary & Development**
+### **Layer 7: Evolutionary & Development**
 
 #### `feagi-evo`
 - **Path:** `crates/feagi-evo`
@@ -146,53 +138,31 @@ If you must publish manually, follow the layer order below exactly.
 
 ---
 
-### **Layer 9: Async Runtime**
-
-#### `feagi-async`
-- **Path:** `crates/feagi-async`
-- **Dependencies:** `feagi-observability`
-- **Purpose:** Platform-agnostic async runtime traits (Tokio, WASM)
-
----
-
-### **Layer 10: Transport & I/O**
-
-#### `feagi-transports`
-- **Path:** `crates/feagi-transports`
-- **Dependencies:** 
-  - `feagi-observability`
-  - `feagi-async`
-- **Purpose:** ZMQ, WebSocket transports
+### **Layer 8: I/O Layer**
 
 #### `feagi-io`
 - **Path:** `crates/feagi-io`
 - **Dependencies:**
+  - `feagi-npu-burst-engine`
+  - `feagi-bdu`
+  - `feagi-services`
+  - `feagi-npu-neural`
   - `feagi-data-structures`
-  - `feagi-observability`
-  - `feagi-transports`
-- **Purpose:** I/O type validation, sensory/motor data processing
+  - `feagi-data-serialization`
+- **Purpose:** Agent I/O, registration, ZMQ/UDP/WebSocket transports, connectome file I/O
+- **Note:** Includes consolidated transport primitives (formerly feagi-transports)
 
-#### `feagi-connector-core`
-- **Path:** `crates/feagi-connector-core`
+#### `feagi-pns`
+- **Path:** `crates/feagi-pns`
 - **Dependencies:**
   - `feagi-data-structures`
-  - `feagi-io`
-  - `feagi-transports`
-  - `feagi-observability`
-- **Purpose:** Agent connection, data pipelines, caching
+  - `feagi-data-serialization`
+- **Purpose:** Peripheral Nervous System - data processing, caching, neuron voxel encoding
+- **Note:** Renamed from feagi-connector-core
 
 ---
 
-### **Layer 11: Agent & Services**
-
-#### `feagi-agent`
-- **Path:** `crates/feagi-agent`
-- **Dependencies:**
-  - `feagi-connector-core`
-  - `feagi-transports`
-  - `feagi-data-structures`
-  - `feagi-observability`
-- **Purpose:** Agent connection lifecycle, reconnection, heartbeat
+### **Layer 9: Services & API**
 
 #### `feagi-services`
 - **Path:** `crates/feagi-services`
@@ -201,38 +171,45 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-npu-burst-engine`
   - `feagi-bdu`
   - `feagi-evo`
+  - `feagi-npu-neural`
   - `feagi-observability`
 - **Purpose:** Service trait definitions, runtime services
-
----
-
-### **Layer 12: API Server**
 
 #### `feagi-api`
 - **Path:** `crates/feagi-api`
 - **Dependencies:**
   - `feagi-services`
-  - `feagi-state-manager`
+  - `feagi-io`
+  - `feagi-npu-neural`
+  - `feagi-evo`
   - `feagi-bdu`
-  - `feagi-transports`
-  - `feagi-data-structures`
-  - `feagi-observability`
+  - `feagi-npu-burst-engine`
+  - `feagi-npu-runtime`
 - **Purpose:** REST API, WebSocket API, OpenAPI spec
 
 ---
 
-### **Layer 13: Platform-Specific**
+### **Layer 10: Agent & Platform**
+
+#### `feagi-agent`
+- **Path:** `crates/feagi-agent`
+- **Dependencies:**
+  - `feagi-io`
+  - `feagi-data-structures`
+  - `feagi-data-serialization`
+  - `feagi-observability`
+- **Purpose:** Agent connection lifecycle, reconnection, heartbeat
 
 #### `feagi-embedded`
 - **Path:** `crates/feagi-embedded`
 - **Dependencies:**
-  - `feagi-npu-runtime-embedded`
+  - `feagi-npu-runtime` (embedded feature)
   - `feagi-npu-neural`
 - **Purpose:** Platform HAL abstractions (ESP32, Arduino, STM32)
 
 ---
 
-### **Layer 14: Root Meta-Crate** (Publish Last)
+### **Layer 11: Root Meta-Crate** (Publish Last)
 
 #### `feagi` (workspace root)
 - **Path:** `.` (root)
@@ -251,23 +228,23 @@ If you must publish manually, follow the layer order below exactly.
 - **Automated:** The `publish-crates.sh` script handles this automatically
 
 ### Total Publish Time
-- **23 crates** × 30 seconds = ~12 minutes minimum
+- **19 crates** × 30 seconds = ~9.5 minutes minimum
 - Add 2-3 minutes for actual publish operations
-- **Total:** ~15 minutes for complete workspace publication
+- **Total:** ~12-15 minutes for complete workspace publication
 
 ---
 
 ## 🔄 Version Synchronization
 
-### Current Strategy: Hybrid Versioning
-- **Major version:** Synchronized across all crates (`2.x.x`)
-- **Minor/Patch:** Can vary independently
-- **Beta suffix:** Applied to all crates during staging releases
+### Current Strategy: Unified Versioning
+- **All crates:** Use `0.0.1` for first publication
+- **Workspace inheritance:** Most crates use `version.workspace = true`
+- **Future versions:** Can increment independently (e.g., `0.0.2`, `0.0.3`)
 
 ### Example:
 ```
-Staging:  2.0.0-beta.1, 2.0.0-beta.2, ...
-Main:     2.0.0 (production)
+First Publication:  0.0.1 (all crates)
+Future Updates:     0.0.2, 0.0.3, etc. (can vary per crate)
 ```
 
 ---

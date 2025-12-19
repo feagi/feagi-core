@@ -89,9 +89,7 @@ pub mod std_impl;
 
 // Re-export std module contents for convenience (backward compatibility)
 #[cfg(feature = "std")]
-pub use std_impl::{NeuronArray, StdRuntime, SynapseArray};
-#[cfg(feature = "std")]
-pub use std_impl::{NeuronArray as StdNeuronArray, SynapseArray as StdSynapseArray};
+pub use std_impl::{StdRuntime, NeuronArray as StdNeuronArray, SynapseArray as StdSynapseArray};
 
 // Embedded implementation (behind "embedded" feature)
 #[cfg(feature = "embedded")]
@@ -99,9 +97,7 @@ pub mod embedded_impl;
 
 // Re-export embedded module contents for convenience
 #[cfg(feature = "embedded")]
-pub use embedded_impl::{EmbeddedRuntime, NeuronArray, SynapseArray};
-#[cfg(feature = "embedded")]
-pub use embedded_impl::{NeuronArray as EmbeddedNeuronArray, SynapseArray as EmbeddedSynapseArray};
+pub use embedded_impl::{EmbeddedRuntime, NeuronArray as EmbeddedNeuronArray, SynapseArray as EmbeddedSynapseArray};
 
 // Convenience module for embedded (re-exports from embedded_impl)
 #[cfg(feature = "embedded")]

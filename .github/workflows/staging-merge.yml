@@ -39,12 +39,75 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
     
-    - name: Get version
+    - name: Get base version and increment beta
       id: version
       run: |
-        VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "Version: $VERSION"
+        # Get base version from workspace Cargo.toml
+        BASE_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        
+        # Remove any existing beta suffix if present
+        BASE_VERSION=$(echo "$BASE_VERSION" | sed 's/-beta\.[0-9]*$//')
+        
+        echo "Base version: $BASE_VERSION"
+        
+        # Check for existing beta versions on crates.io for the first crate (feagi-observability)
+        # This gives us the highest beta number
+        HIGHEST_BETA=0
+        if cargo search feagi-observability --limit 100 2>/dev/null | grep -q "^feagi-observability = \"$BASE_VERSION-beta\."; then
+          # Get all beta versions for this base version
+          BETA_VERSIONS=$(cargo search feagi-observability --limit 100 2>/dev/null | \
+            grep "^feagi-observability = \"$BASE_VERSION-beta\." | \
+            sed "s/.*\"$BASE_VERSION-beta\.\([0-9]*\)\".*/\1/" | \
+            sort -n)
+          
+          if [ -n "$BETA_VERSIONS" ]; then
+            HIGHEST_BETA=$(echo "$BETA_VERSIONS" | tail -1)
+          fi
+        fi
+        
+        # Increment beta number
+        NEW_BETA=$((HIGHEST_BETA + 1))
+        BETA_VERSION="${BASE_VERSION}-beta.${NEW_BETA}"
+        
+        echo "Highest existing beta: $HIGHEST_BETA"
+        echo "New beta version: $BETA_VERSION"
+        echo "version=$BETA_VERSION" >> $GITHUB_OUTPUT
+        echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
+        echo "beta_number=$NEW_BETA" >> $GITHUB_OUTPUT
+    
+    - name: Update all crate versions to beta
+      run: |
+        BETA_VERSION="${{ steps.version.outputs.version }}"
+        BASE_VERSION="${{ steps.version.outputs.base_version }}"
+        
+        echo "📝 Updating all crate versions to $BETA_VERSION..."
+        echo ""
+        
+        # Update workspace version in root Cargo.toml
+        sed -i "s/^version = \".*\"/version = \"$BETA_VERSION\"/" Cargo.toml
+        echo "✅ Updated workspace version to $BETA_VERSION"
+        
+        # Update all crate versions (both explicit and workspace-inherited)
+        # For crates with explicit versions
+        find crates -name "Cargo.toml" -exec sed -i "s/^version = \"$BASE_VERSION\"/version = \"$BETA_VERSION\"/" {} \;
+        
+        # Update workspace dependencies that reference versions
+        sed -i "s/version = \"$BASE_VERSION\"/version = \"$BETA_VERSION\"/g" Cargo.toml
+        
+        # Also update feagi-async (nested)
+        if [ -f "crates/feagi-data-structures/feagi-async/Cargo.toml" ]; then
+          sed -i "s/^version = \"$BASE_VERSION\"/version = \"$BETA_VERSION\"/" crates/feagi-data-structures/feagi-async/Cargo.toml
+        fi
+        
+        # Update nested crates in feagi-npu
+        find crates/feagi-npu -name "Cargo.toml" -exec sed -i "s/^version = \"$BASE_VERSION\"/version = \"$BETA_VERSION\"/" {} \;
+        
+        echo ""
+        echo "✅ All crate versions updated to $BETA_VERSION"
+        echo ""
+        echo "Verifying version updates:"
+        grep -h "^version = " Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml 2>/dev/null | head -5
+        echo "..."
     
     - name: Run tests (lib only, examples have known API migration issues)
       run: cargo test --workspace --lib --verbose
@@ -54,8 +117,9 @@ jobs:
     
     - name: Publish all workspace crates to crates.io (beta)
       run: |
-        echo "📦 Publishing all feagi-core workspace crates (v${{ steps.version.outputs.version }} - beta)..."
-        echo "This will publish 23+ crates in dependency order with delays for indexing."
+        BETA_VERSION="${{ steps.version.outputs.version }}"
+        echo "📦 Publishing all feagi-core workspace crates (v$BETA_VERSION)..."
+        echo "This will publish 19 crates in dependency order with delays for indexing."
         echo ""
         
         # Run the multi-crate publish script
@@ -63,10 +127,26 @@ jobs:
         ./scripts/publish-crates.sh
         
         echo ""
-        echo "✅ Successfully published all workspace crates (beta)"
+        echo "✅ Successfully published all workspace crates (beta v$BETA_VERSION)"
       continue-on-error: false
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
+    
+    - name: Commit version updates
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        BETA_VERSION="${{ steps.version.outputs.version }}"
+        
+        # Commit the version updates
+        git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml crates/feagi-data-structures/feagi-async/Cargo.toml
+        git commit -m "chore: bump version to $BETA_VERSION for staging release" || echo "No changes to commit"
+        git push origin staging || echo "Push failed (may already be up to date)"
+        
+        echo "✅ Version updates committed to staging branch"
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Create prerelease tag
       run: |
@@ -87,26 +167,56 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: v${{ steps.version.outputs.version }}
-        release_name: Prerelease v${{ steps.version.outputs.version }}
+        release_name: Beta Release v${{ steps.version.outputs.version }}
         body: |
           🚀 **Beta release of FEAGI Core v${{ steps.version.outputs.version }}**
           
-          This is a beta version from the staging branch. The crate has been published to crates.io.
+          This is a beta version from the staging branch. All 19 workspace crates have been published to crates.io with the `-beta.${{ steps.version.outputs.beta_number }}` suffix.
           
-          ## Published Crate
+          ## Published Crates
           
-          - 📦 [`feagi-core`](https://crates.io/crates/feagi-core) v${{ steps.version.outputs.version }}
+          All workspace crates published with version **${{ steps.version.outputs.version }}**:
+          
+          - 📦 `feagi-observability`
+          - 📦 `feagi-async`
+          - 📦 `feagi-data-structures`
+          - 📦 `feagi-config`
+          - 📦 `feagi-npu-neural`
+          - 📦 `feagi-npu-runtime`
+          - 📦 `feagi-data-serialization`
+          - 📦 `feagi-state-manager`
+          - 📦 `feagi-npu-burst-engine`
+          - 📦 `feagi-npu-plasticity`
+          - 📦 `feagi-evo`
+          - 📦 `feagi-bdu`
+          - 📦 `feagi-io`
+          - 📦 `feagi-pns`
+          - 📦 `feagi-services`
+          - 📦 `feagi-api`
+          - 📦 `feagi-agent`
+          - 📦 `feagi-embedded`
+          - 📦 `feagi` (root meta-crate)
           
           ## Installation
           
           ```toml
           [dependencies]
-          feagi-core = "${{ steps.version.outputs.version }}"
+          feagi = "${{ steps.version.outputs.version }}"
+          ```
+          
+          Or install individual crates:
+          
+          ```toml
+          [dependencies]
+          feagi-npu-neural = "${{ steps.version.outputs.version }}"
+          feagi-npu-burst-engine = "${{ steps.version.outputs.version }}"
           ```
           
           ## Release Information
           
           - **Version:** ${{ steps.version.outputs.version }}
+          - **Base Version:** ${{ steps.version.outputs.base_version }}
+          - **Beta Number:** ${{ steps.version.outputs.beta_number }}
           - **Branch:** staging
           - **Commit:** ${{ github.sha }}
           
@@ -114,10 +224,10 @@ jobs:
           
           - ✅ All workspace tests passed
           - ✅ Package builds successfully
-          - ✅ Published to crates.io as beta version
+          - ✅ All 19 crates published to crates.io with beta suffix
           - ✅ Ready for testing and integration
           
-          **Note:** This beta version is available on crates.io for testing.
+          **Note:** This beta version is available on crates.io for testing. The next staging merge will increment to `-beta.${{ steps.version.outputs.beta_number + 1 }}`.
         draft: false
         prerelease: true
     

@@ -26,6 +26,7 @@ CRATES=(
     "crates/feagi-observability"
     
     # Layer 2: Core data structures
+    "crates/feagi-data-structures/feagi-async"  # feagi-async must come before feagi-data-structures
     "crates/feagi-data-structures"
     "crates/feagi-config"
     
@@ -35,38 +36,28 @@ CRATES=(
     # Layer 4: Runtime abstractions
     "crates/feagi-npu/runtime"
     
-    # Layer 5: Runtime implementations
-    "crates/feagi-npu/runtime-std"
-    "crates/feagi-npu/runtime-embedded"
-    
-    # Layer 6: Serialization and state
-    "crates/feagi-connectome-serialization"
+    # Layer 5: Serialization and state
+    "crates/feagi-data-serialization"
     "crates/feagi-state-manager"
     
-    # Layer 7: High-performance processing
+    # Layer 6: High-performance processing
     "crates/feagi-npu/burst-engine"
     "crates/feagi-npu/plasticity"
     
-    # Layer 8: Evolutionary and development
+    # Layer 7: Evolutionary and development
     "crates/feagi-evo"
     "crates/feagi-bdu"
     
-    # Layer 9: Async runtime
-    "crates/feagi-async"
-    
-    # Layer 10: Transport and I/O
-    "crates/feagi-transports"
+    # Layer 8: I/O Layer
     "crates/feagi-io"
-    "crates/feagi-connector-core"
+    "crates/feagi-pns"
     
-    # Layer 11: Agent and services
-    "crates/feagi-agent"
+    # Layer 9: Services & API
     "crates/feagi-services"
-    
-    # Layer 12: API server
     "crates/feagi-api"
     
-    # Layer 13: Platform-specific
+    # Layer 10: Agent & Platform
+    "crates/feagi-agent"
     "crates/feagi-embedded"
     
     # Root workspace (meta-crate, publishes last)

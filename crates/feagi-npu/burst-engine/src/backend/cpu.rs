@@ -129,10 +129,10 @@ mod tests {
 
     #[test]
     fn test_cpu_backend_creation() {
-        use feagi_npu_runtime::{NeuronArray, SynapseArray};
+        use feagi_npu_runtime::{StdNeuronArray, StdSynapseArray};
         let backend = CPUBackend::new();
         assert_eq!(
-            <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::backend_name(
+            <CPUBackend as ComputeBackend<f32, StdNeuronArray<f32>, StdSynapseArray>>::backend_name(
                 &backend
             ),
             "CPU (SIMD) - LIF"
@@ -145,12 +145,12 @@ mod tests {
 
         // Create minimal test data
         let fired_neurons = vec![0, 1];
-        let synapse_storage = SynapseArray::new(100);
+        let synapse_storage = StdSynapseArray::new(100);
         let mut fcl = FireCandidateList::new();
 
         // Should not panic
-        use feagi_npu_runtime::{NeuronArray, SynapseArray};
-        let result = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_synaptic_propagation(
+        use feagi_npu_runtime::{StdNeuronArray, StdSynapseArray};
+        let result = <CPUBackend as ComputeBackend<f32, StdNeuronArray<f32>, StdSynapseArray>>::process_synaptic_propagation(
             &mut backend, &fired_neurons, &synapse_storage, &mut fcl
         );
 

@@ -301,7 +301,7 @@ mod tests {
         array.add_synapse_simple(0, 1, 255, 255, SynapseType::Excitatory);
         array.add_synapse_simple(0, 2, 128, 255, SynapseType::Excitatory);
 
-        let fired = vec![0];
+        let fired = std::vec![0];
         let contributions = array.propagate_parallel(&fired);
 
         assert_eq!(contributions.len(), 2);

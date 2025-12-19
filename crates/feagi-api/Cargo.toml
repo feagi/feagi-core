@@ -1,6 +1,6 @@
 [package]
 name = "feagi-api"
-version = "0.0.0"
+version = "0.0.1"
 edition = "2021"
 authors.workspace = true
 license = "Apache-2.0"
@@ -9,12 +9,12 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 [dependencies]
 # Core FEAGI
 # feagi-services is always needed (for trait definitions), but can work without tokio
-feagi-services = { version = "0.0.0", path = "../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
-feagi-npu-neural = { version = "0.0.0", path = "../feagi-npu/neural", default-features = false }  # For types
-feagi-evo = { version = "0.0.0", path = "../feagi-evo" }  # For embedded default genomes
-feagi-io = { version = "0.0.0", path = "../feagi-io", optional = true, features = ["zmq-transport"] }  # For transport primitives and domain logic
-feagi-bdu = { version = "0.0.0", path = "../feagi-bdu", optional = true }  # For examples
-feagi-npu-burst-engine = { version = "0.0.0", path = "../feagi-npu/burst-engine", default-features = false, optional = true }  # For examples
+feagi-services = { version = "0.0.1", path = "../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
+feagi-npu-neural = { version = "0.0.1", path = "../feagi-npu/neural", default-features = false }  # For types
+feagi-evo = { version = "0.0.1", path = "../feagi-evo" }  # For embedded default genomes
+feagi-io = { version = "0.0.1", path = "../feagi-io", optional = true, features = ["zmq-transport"] }  # For transport primitives and domain logic
+feagi-bdu = { version = "0.0.1", path = "../feagi-bdu", optional = true }  # For examples
+feagi-npu-burst-engine = { version = "0.0.1", path = "../feagi-npu/burst-engine", default-features = false, optional = true }  # For examples
 feagi-data-structures = { workspace = true }
 
 # HTTP/REST (optional - not needed for WASM)
@@ -86,7 +86,7 @@ insta = "1.34"
 wiremock = "0.6"
 assert-json-diff = "2.0"
 tokio-test = "0.4"
-feagi-npu-runtime = { version = "0.0.0", path = "../feagi-npu/runtime", features = ["std"] }
+feagi-npu-runtime = { version = "0.0.1", path = "../feagi-npu/runtime", features = ["std"] }
 
 [features]
 default = ["http", "services"]

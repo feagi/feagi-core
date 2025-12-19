@@ -8,7 +8,7 @@
 
 [package]
 name = "feagi"
-version = "0.1.0-beta.1"
+version = "0.0.1"
 edition = "2021"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
 license = "Apache-2.0"
@@ -49,21 +49,24 @@ agent-sdk = ["feagi-agent"]
 
 [dependencies]
 # Foundation (vendored into feagi-core when published)
-feagi-evo = { version = "0.0.0", path = "crates/feagi-evo" }
-feagi-npu-neural = { version = "0.0.0", path = "crates/feagi-npu/neural" }
+feagi-evo = { version = "0.0.1", path = "crates/feagi-evo" }
+feagi-npu-neural = { version = "0.0.1", path = "crates/feagi-npu/neural" }
 serde_json = "1.0"
 
 # Infrastructure (vendored)
-feagi-state-manager = { version = "0.0.0", path = "crates/feagi-state-manager", optional = true }
+feagi-state-manager = { version = "0.0.1", path = "crates/feagi-state-manager", optional = true }
 
 # Algorithms (vendored)
-feagi-npu-burst-engine = { version = "0.0.0", path = "crates/feagi-npu/burst-engine", optional = true }
-feagi-bdu = { version = "0.0.0", path = "crates/feagi-bdu", optional = true }
-feagi-npu-plasticity = { version = "0.0.0", path = "crates/feagi-npu/plasticity", optional = true }
+feagi-npu-burst-engine = { version = "0.0.1", path = "crates/feagi-npu/burst-engine", optional = true }
+feagi-bdu = { version = "0.0.1", path = "crates/feagi-bdu", optional = true }
+feagi-npu-plasticity = { version = "0.0.1", path = "crates/feagi-npu/plasticity", optional = true }
 
 # I/O (vendored)
-feagi-io = { version = "0.0.0", path = "crates/feagi-io", optional = true }
-feagi-agent = { version = "0.0.0", path = "crates/feagi-agent", optional = true }
+feagi-io = { version = "0.0.1", path = "crates/feagi-io", optional = true }
+feagi-agent = { version = "0.0.1", path = "crates/feagi-agent", optional = true }
+
+# Async runtime
+feagi-async = { version = "0.0.1", path = "crates/feagi-data-structures/feagi-async" }
 
 # ============================================================================
 # WORKSPACE CONFIGURATION
@@ -107,7 +110,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.0"
+version = "0.0.1"
 edition = "2021"
 rust-version = "1.75"
 authors = ["Neuraville Inc. <feagi@neuraville.com>"]
@@ -137,11 +140,12 @@ pollster = "0.3"  # Async/await executor for GPU operations
 bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU buffers
 
 # FEAGI data crates (now internal to workspace)
-feagi-data-structures = { path = "crates/feagi-data-structures" }
-feagi-data-serialization = { path = "crates/feagi-data-serialization" }
+feagi-data-structures = { version = "0.0.1", path = "crates/feagi-data-structures" }
+feagi-data-serialization = { version = "0.0.1", path = "crates/feagi-data-serialization" }
+feagi-async = { version = "0.0.1", path = "crates/feagi-data-structures/feagi-async" }
 
 # Workspace-internal crates
-feagi-observability = { path = "crates/feagi-observability" }
+feagi-observability = { version = "0.0.1", path = "crates/feagi-observability" }
 
 # PyO3 for Python bindings
 pyo3 = { version = "0.22", features = ["extension-module"] }

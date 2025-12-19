@@ -2,7 +2,7 @@
 authors.workspace = true
 name = "feagi-data-structures"
 edition.workspace = true
-version = "0.0.50-beta.61"
+version = "0.0.1"
 license.workspace = true
 description = "The most core library, defines the basic data types used by FEAGI, as well as some processors to modify them"
 repository.workspace = true
@@ -11,7 +11,7 @@ homepage.workspace = true
 [dependencies]
 # Disable default features to avoid pulling in tokio
 # Features should be enabled by dependents based on their needs
-feagi-async = { version = "0.0.50-beta.61", path = "feagi-async", default-features = false}
+feagi-async = { version = "0.0.1", path = "feagi-async", default-features = false}
 serde = { workspace = true }
 serde_json = { workspace = true}
 ndarray = { workspace = true}

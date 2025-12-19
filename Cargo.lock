@@ -1786,9 +1786,10 @@ dependencies = [
 
 [[package]]
 name = "feagi"
-version = "0.1.0-beta.1"
+version = "0.0.1"
 dependencies = [
  "feagi-agent",
+ "feagi-async",
  "feagi-bdu",
  "feagi-evo",
  "feagi-io",
@@ -1801,7 +1802,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-agent"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "criterion",
  "env_logger",
@@ -1819,7 +1820,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-api"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "argon2",
  "assert-json-diff",
@@ -1865,7 +1866,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-async"
-version = "0.0.50-beta.61"
+version = "0.0.1"
 dependencies = [
  "futures-channel",
  "futures-util",
@@ -1880,7 +1881,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-bdu"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "ahash",
  "chrono",
@@ -1907,7 +1908,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-config"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1918,7 +1919,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-data-serialization"
-version = "0.0.50-beta.61"
+version = "0.0.1"
 dependencies = [
  "byteorder",
  "feagi-data-structures",
@@ -1927,7 +1928,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-data-structures"
-version = "0.0.50-beta.61"
+version = "0.0.1"
 dependencies = [
  "base64 0.22.1",
  "feagi-async",
@@ -1941,7 +1942,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-embedded"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "cortex-m",
@@ -1962,7 +1963,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-evo"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "chrono",
  "env_logger",
@@ -1985,7 +1986,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-io"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2016,7 +2017,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-burst-engine"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "ahash",
  "bytemuck",
@@ -2044,7 +2045,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-neural"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "ahash",
  "serde",
@@ -2054,7 +2055,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-plasticity"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "ahash",
  "feagi-npu-neural",
@@ -2065,7 +2066,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-npu-runtime"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "ahash",
  "feagi-npu-neural",
@@ -2076,7 +2077,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-observability"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2096,7 +2097,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-pns"
-version = "0.0.50-beta.61"
+version = "0.0.1"
 dependencies = [
  "clap",
  "feagi-data-serialization",
@@ -2112,7 +2113,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-services"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -2133,7 +2134,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-state-manager"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "ahash",
  "atomic-polyfill",
