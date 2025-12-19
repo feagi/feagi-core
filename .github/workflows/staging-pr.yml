@@ -47,15 +47,26 @@ jobs:
         rm main_cargo.toml staging_cargo.toml
         
         # Parse current PR version
-        if [[ ! "$CURRENT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]]; then
-          echo "❌ Error: PR version must be in format X.Y.Z-beta.N (e.g., 2.0.1-beta.1)"
+        # Allow both base version (X.Y.Z) and beta version (X.Y.Z-beta.N)
+        # The merge workflow will automatically add -beta.x if not present
+        CURRENT_SEMANTIC=""
+        CURRENT_BETA="0"
+        
+        if [[ "$CURRENT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-beta\.([0-9]+)$ ]]; then
+          # Already has beta suffix
+          CURRENT_SEMANTIC="${BASH_REMATCH[1]}"
+          CURRENT_BETA="${BASH_REMATCH[2]}"
+          echo "PR semantic version: $CURRENT_SEMANTIC, beta: $CURRENT_BETA"
+        elif [[ "$CURRENT_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+          # Base version without beta (will be converted to -beta.1 on merge)
+          CURRENT_SEMANTIC="$CURRENT_VERSION"
+          CURRENT_BETA="0"
+          echo "PR semantic version: $CURRENT_SEMANTIC (no beta - will be converted to -beta.1 on merge)"
+        else
+          echo "❌ Error: PR version must be in format X.Y.Z or X.Y.Z-beta.N (e.g., 0.0.1 or 0.0.1-beta.1)"
           echo "Current version: $CURRENT_VERSION"
           exit 1
         fi
-        
-        CURRENT_SEMANTIC="${BASH_REMATCH[1]}"
-        CURRENT_BETA="${BASH_REMATCH[2]}"
-        echo "PR semantic version: $CURRENT_SEMANTIC, beta: $CURRENT_BETA"
         
         # Parse main version (should be semantic only)
         if [[ ! "$MAIN_VERSION" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
@@ -98,21 +109,32 @@ jobs:
         
         # Check beta version requirements
         if [ "$CURRENT_SEMANTIC" = "$STAGING_SEMANTIC" ]; then
-          # Same semantic version, beta must be higher
-          if [ "$CURRENT_BETA" -le "$STAGING_BETA" ]; then
+          # Same semantic version
+          if [ "$CURRENT_BETA" = "0" ]; then
+            # PR has base version, merge workflow will convert to -beta.(staging_beta + 1)
+            EXPECTED_BETA=$((STAGING_BETA + 1))
+            echo "✅ PR has base version, merge will convert to: $CURRENT_SEMANTIC-beta.$EXPECTED_BETA"
+            echo "   (Staging: $STAGING_SEMANTIC-beta.$STAGING_BETA → PR: $CURRENT_SEMANTIC-beta.$EXPECTED_BETA)"
+          elif [ "$CURRENT_BETA" -le "$STAGING_BETA" ]; then
             echo "❌ Error: For same semantic version, beta must be higher than staging"
             echo "PR: $CURRENT_SEMANTIC-beta.$CURRENT_BETA, Staging: $STAGING_SEMANTIC-beta.$STAGING_BETA"
             exit 1
+          else
+            echo "✅ Beta version incremented: $STAGING_SEMANTIC-beta.$STAGING_BETA → $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
           fi
-          echo "✅ Beta version incremented: $STAGING_SEMANTIC-beta.$STAGING_BETA → $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
         else
-          # Different semantic version, any beta >= 1 is fine
-          if [ "$CURRENT_BETA" -lt "1" ]; then
+          # Different semantic version
+          if [ "$CURRENT_BETA" = "0" ]; then
+            # PR has base version, merge workflow will convert to -beta.1
+            echo "✅ New semantic version, merge will convert to: $CURRENT_SEMANTIC-beta.1"
+            echo "   (Main: $MAIN_SEMANTIC → PR: $CURRENT_SEMANTIC-beta.1)"
+          elif [ "$CURRENT_BETA" -lt "1" ]; then
             echo "❌ Error: Beta version must be at least 1"
             echo "PR: $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
             exit 1
+          else
+            echo "✅ New semantic version with beta: $MAIN_SEMANTIC → $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
           fi
-          echo "✅ New semantic version with beta: $MAIN_SEMANTIC → $CURRENT_SEMANTIC-beta.$CURRENT_BETA"
         fi
         
         echo "✅ Version check passed: $STAGING_VERSION → $CURRENT_VERSION"
