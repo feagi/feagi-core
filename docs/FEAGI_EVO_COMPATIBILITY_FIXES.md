@@ -1,6 +1,6 @@
 # Feagi-EVO Compatibility Fixes Needed
 
-This document outlines the compilation errors in `feagi-evo` that need to be fixed to work with the updated `feagi-data-processing` API.
+This document outlines the compilation errors in `feagi-evolutionary` that need to be fixed to work with the updated `feagi-data-processing` API.
 
 ## Summary of Changes in feagi-data-processing
 
@@ -15,7 +15,7 @@ This document outlines the compilation errors in `feagi-evo` that need to be fix
    - ✅ Changed `cortical_areas: HashSet<String>` → `HashSet<CorticalID>`
    - ✅ Properties now use struct instead of HashMap
 
-## Required Fixes in feagi-evo
+## Required Fixes in feagi-evolutionary
 
 ### File: `src/genome/parser.rs`
 

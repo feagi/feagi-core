@@ -7,7 +7,7 @@
 
 use crate::transports::http::server::ApiState;
 use crate::transports::wasm::services::*;
-use feagi_evo::RuntimeGenome;
+use feagi_evolutionary::RuntimeGenome;
 use std::sync::Arc;
 
 /// Create ApiState from RuntimeGenome

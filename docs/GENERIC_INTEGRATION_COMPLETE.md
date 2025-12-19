@@ -117,7 +117,7 @@ Final:           0 errors (-100%) ✅
 | feagi-runtime-embedded | ✅ | 10/10 ✅ | Generic runtime |
 | feagi-burst-engine | ✅ | 66/66 ✅ | RustNPU<T> |
 | feagi-bdu | ✅ | Build OK | ConnectomeManager<T> |
-| feagi-evo | ✅ | Build OK | Genome parsing |
+| feagi-evolutionary | ✅ | Build OK | Genome parsing |
 | feagi-io | ⚠️  | Pre-existing errors | Not related to generics |
 
 **69 tests passing, zero regressions!** ✅
@@ -409,9 +409,9 @@ impl<T: NeuralValue> ConnectomeManager<T> {
 - ✅ `feagi-io/src/transports/zmq/sensory.rs` - Uses RustNPU<f32>
 
 ### Genome & Config
-- ✅ `feagi-evo/src/runtime.rs` - Default quantization_precision = "int8"
-- ✅ `feagi-evo/src/validator.rs` - Validation & auto-fix
-- ✅ `feagi-evo/src/genome/converter.rs` - Genome parsing
+- ✅ `feagi-evolutionary/src/runtime.rs` - Default quantization_precision = "int8"
+- ✅ `feagi-evolutionary/src/validator.rs` - Validation & auto-fix
+- ✅ `feagi-evolutionary/src/genome/converter.rs` - Genome parsing
 
 ---
 

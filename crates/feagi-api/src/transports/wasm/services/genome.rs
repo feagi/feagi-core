@@ -4,7 +4,7 @@
 //! WASM Genome Service (stub - read-only)
 
 use async_trait::async_trait;
-use feagi_evo::RuntimeGenome;
+use feagi_evolutionary::RuntimeGenome;
 use feagi_services::traits::genome_service::GenomeService;
 use feagi_services::types::errors::{ServiceError, ServiceResult};
 use feagi_services::types::*;

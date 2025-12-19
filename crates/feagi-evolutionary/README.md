@@ -1,4 +1,4 @@
-# feagi-evo
+# feagi-evolutionary
 
 Evolution and genome management for FEAGI - genotype operations.
 
@@ -14,13 +14,13 @@ Handles genome (brain definition) I/O and manipulation:
 
 ```toml
 [dependencies]
-feagi-evo = "2.0"
+feagi-evolutionary = "2.0"
 ```
 
 ## Usage
 
 ```rust
-use feagi_evo::genome::{load_genome, save_genome};
+use feagi_evolutionary::genome::{load_genome, save_genome};
 
 // Load brain definition from JSON
 let genome = load_genome("path/to/genome.json")?;

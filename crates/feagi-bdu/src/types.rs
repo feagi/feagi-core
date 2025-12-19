@@ -78,12 +78,12 @@ impl From<feagi_data_structures::FeagiDataError> for BduError {
     }
 }
 
-// Convert from feagi_evo::EvoError
-impl From<feagi_evo::EvoError> for BduError {
-    fn from(err: feagi_evo::EvoError) -> Self {
+// Convert from feagi_evolutionary::EvoError
+impl From<feagi_evolutionary::EvoError> for BduError {
+    fn from(err: feagi_evolutionary::EvoError) -> Self {
         match &err {
-            feagi_evo::EvoError::InvalidGenome(msg) => BduError::InvalidGenome(msg.clone()),
-            feagi_evo::EvoError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
+            feagi_evolutionary::EvoError::InvalidGenome(msg) => BduError::InvalidGenome(msg.clone()),
+            feagi_evolutionary::EvoError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
             _ => BduError::Internal(err.to_string()),
         }
     }

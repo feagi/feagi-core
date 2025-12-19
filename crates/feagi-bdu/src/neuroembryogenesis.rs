@@ -21,7 +21,7 @@ Licensed under the Apache License, Version 2.0
 use crate::connectome_manager::ConnectomeManager;
 use crate::models::{CorticalArea, CorticalID};
 use crate::types::BduResult;
-use feagi_evo::RuntimeGenome;
+use feagi_evolutionary::RuntimeGenome;
 use feagi_npu_neural::types::{Precision, QuantizationSpec};
 use parking_lot::RwLock;
 use std::sync::Arc;
@@ -834,7 +834,7 @@ impl Neuroembryogenesis {
 /// Estimate synapse count for an area (fallback when NPU not connected)
 ///
 /// This is only used when NPU is not available for actual synapse creation.
-fn estimate_synapses_for_area(src_area: &CorticalArea, genome: &feagi_evo::RuntimeGenome) -> usize {
+fn estimate_synapses_for_area(src_area: &CorticalArea, genome: &feagi_evolutionary::RuntimeGenome) -> usize {
     let dstmap = match src_area.properties.get("cortical_mapping_dst") {
         Some(serde_json::Value::Object(map)) => map,
         _ => return 0,
@@ -844,7 +844,7 @@ fn estimate_synapses_for_area(src_area: &CorticalArea, genome: &feagi_evo::Runti
 
     for (dst_id, rules) in dstmap {
         // Convert string dst_id to CorticalID for lookup
-        let dst_cortical_id = match feagi_evo::string_to_cortical_id(dst_id) {
+        let dst_cortical_id = match feagi_evolutionary::string_to_cortical_id(dst_id) {
             Ok(id) => id,
             Err(_) => continue,
         };
@@ -907,7 +907,7 @@ impl Neuroembryogenesis {
     /// Calculate position for autogen region based on root region's bounding box
     fn calculate_autogen_region_position(
         root_area_ids: &[CorticalID],
-        genome: &feagi_evo::RuntimeGenome,
+        genome: &feagi_evolutionary::RuntimeGenome,
     ) -> [i32; 3] {
         if root_area_ids.is_empty() {
             return [100, 0, 0];
@@ -980,7 +980,7 @@ impl Neuroembryogenesis {
                 // Convert destination strings to CorticalID for comparison
                 let external_destinations: Vec<_> = destinations
                     .iter()
-                    .filter_map(|dest| feagi_evo::string_to_cortical_id(dest).ok())
+                    .filter_map(|dest| feagi_evolutionary::string_to_cortical_id(dest).ok())
                     .filter(|dest_id| !area_set.contains(dest_id))
                     .collect();
 
@@ -999,7 +999,7 @@ impl Neuroembryogenesis {
 
             let destinations = extract_destinations(source_area);
             for dest_str in destinations {
-                if let Ok(dest_id) = feagi_evo::string_to_cortical_id(&dest_str) {
+                if let Ok(dest_id) = feagi_evolutionary::string_to_cortical_id(&dest_str) {
                     if area_set.contains(&dest_id) {
                         let dest_string = dest_id.as_base_64();
                         if !inputs.contains(&dest_string) {
@@ -1036,7 +1036,7 @@ impl Neuroembryogenesis {
 mod tests {
     use super::*;
     use feagi_data_structures::genomic::cortical_area::{CoreCorticalType, CorticalAreaDimensions};
-    use feagi_evo::create_genome_with_core_morphologies;
+    use feagi_evolutionary::create_genome_with_core_morphologies;
 
     #[test]
     fn test_neuroembryogenesis_creation() {

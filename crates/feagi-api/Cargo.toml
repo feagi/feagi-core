@@ -11,7 +11,7 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 # feagi-services is always needed (for trait definitions), but can work without tokio
 feagi-services = { version = "0.0.1", path = "../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
 feagi-npu-neural = { version = "0.0.1", path = "../feagi-npu/neural", default-features = false }  # For types
-feagi-evo = { version = "0.0.1", path = "../feagi-evo" }  # For embedded default genomes
+feagi-evolutionary = { version = "0.0.1", path = "../feagi-evolutionary" }  # For embedded default genomes
 feagi-io = { version = "0.0.1", path = "../feagi-io", optional = true, features = ["zmq-transport"] }  # For transport primitives and domain logic
 feagi-bdu = { version = "0.0.1", path = "../feagi-bdu", optional = true }  # For examples
 feagi-npu-burst-engine = { version = "0.0.1", path = "../feagi-npu/burst-engine", default-features = false, optional = true }  # For examples

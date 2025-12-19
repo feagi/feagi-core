@@ -191,7 +191,7 @@ neuro.develop_from_genome(&genome)?;
 ### Build Results ✅
 ```bash
 $ cargo build --package feagi-types --package feagi-burst-engine \
-  --package feagi-bdu --package feagi-evo --release
+  --package feagi-bdu --package feagi-evolutionary --release
 
 Finished `release` profile [optimized] target(s) in 2.11s ✅
 ```

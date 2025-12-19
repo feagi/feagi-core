@@ -32,7 +32,7 @@ pub struct GenomeServiceImpl {
     parameter_queue: Option<ParameterUpdateQueue>,
     /// Currently loaded genome (source of truth for structural changes)
     /// This is updated when genome is loaded or when cortical areas are modified
-    current_genome: Arc<RwLock<Option<feagi_evo::RuntimeGenome>>>,
+    current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
     /// Counter tracking how many genomes have been loaded (increments on each load)
     genome_load_counter: Arc<RwLock<i32>>,
     /// Timestamp of when the current genome was loaded
@@ -70,7 +70,7 @@ impl GenomeService for GenomeServiceImpl {
         info!(target: "feagi-services", "Loading genome from JSON");
 
         // Parse genome using feagi-evo (this is CPU-bound, but relatively fast)
-        let genome = feagi_evo::load_genome_from_json(&params.json_str)
+        let genome = feagi_evolutionary::load_genome_from_json(&params.json_str)
             .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
 
         // Extract simulation_timestep from genome physiology (will be returned in GenomeInfo)
@@ -244,7 +244,7 @@ impl GenomeService for GenomeServiceImpl {
         }
 
         // Use the full RuntimeGenome saver (produces flat format v3.0)
-        let json_str = feagi_evo::save_genome_to_json(&genome)
+        let json_str = feagi_evolutionary::save_genome_to_json(&genome)
             .map_err(|e| ServiceError::Internal(format!("Failed to save genome: {}", e)))?;
 
         info!(target: "feagi-services", "✅ Genome exported successfully (flat format v3.0)");
@@ -311,11 +311,11 @@ impl GenomeService for GenomeServiceImpl {
         trace!(target: "feagi-services", "Validating genome JSON");
 
         // Parse genome
-        let genome = feagi_evo::load_genome_from_json(&json_str)
+        let genome = feagi_evolutionary::load_genome_from_json(&json_str)
             .map_err(|e| ServiceError::InvalidInput(format!("Failed to parse genome: {}", e)))?;
 
         // Validate genome structure
-        let validation = feagi_evo::validate_genome(&genome);
+        let validation = feagi_evolutionary::validate_genome(&genome);
 
         if !validation.errors.is_empty() {
             return Err(ServiceError::InvalidInput(format!(
@@ -753,7 +753,7 @@ impl GenomeServiceImpl {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
 
         // Convert cortical_id to CorticalID
-        let cortical_id_typed = feagi_evo::string_to_cortical_id(cortical_id).map_err(|e| {
+        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
             ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
         })?;
 
@@ -884,7 +884,7 @@ impl GenomeServiceImpl {
         cortical_id: &str,
         changes: HashMap<String, Value>,
         connectome: Arc<RwLock<ConnectomeManager>>,
-        genome_store: Arc<RwLock<Option<feagi_evo::RuntimeGenome>>>,
+        genome_store: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(
             "[STRUCTURAL-REBUILD] Starting localized rebuild for {}",
@@ -892,7 +892,7 @@ impl GenomeServiceImpl {
         );
 
         // Convert cortical_id to CorticalID
-        let cortical_id_typed = feagi_evo::string_to_cortical_id(cortical_id).map_err(|e| {
+        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
             ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
         })?;
 

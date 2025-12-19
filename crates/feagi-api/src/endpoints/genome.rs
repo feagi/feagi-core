@@ -107,10 +107,10 @@ async fn load_default_genome(
 
     // Load genome from embedded Rust templates (no file I/O!)
     let genome_json = match genome_name {
-        "barebones" => feagi_evo::BAREBONES_GENOME_JSON,
-        "essential" => feagi_evo::ESSENTIAL_GENOME_JSON,
-        "test" => feagi_evo::TEST_GENOME_JSON,
-        "vision" => feagi_evo::VISION_GENOME_JSON,
+        "barebones" => feagi_evolutionary::BAREBONES_GENOME_JSON,
+        "essential" => feagi_evolutionary::ESSENTIAL_GENOME_JSON,
+        "test" => feagi_evolutionary::TEST_GENOME_JSON,
+        "vision" => feagi_evolutionary::VISION_GENOME_JSON,
         _ => {
             return Err(ApiError::invalid_input(&format!(
                 "Unknown genome name '{}'. Available: barebones, essential, test, vision",

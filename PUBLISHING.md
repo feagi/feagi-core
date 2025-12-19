@@ -93,7 +93,7 @@ cargo publish -p feagi-connectome-serialization
 cargo publish -p feagi-npu-burst-engine
 cargo publish -p feagi-npu-plasticity
 cargo publish -p feagi-bdu
-cargo publish -p feagi-evo
+cargo publish -p feagi-evolutionary
 
 # Phase 5: I/O & Transport
 cargo publish -p feagi-transports

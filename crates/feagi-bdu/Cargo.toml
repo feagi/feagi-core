@@ -13,7 +13,7 @@ name = "feagi_bdu"
 [dependencies]
 # Core types from existing FEAGI crates
 feagi-npu-neural = { version = "0.0.1", path = "../feagi-npu/neural" }  # For types (CorticalArea, Dimensions, etc.)
-feagi-evo = { version = "0.0.1", path = "../feagi-evo" }
+feagi-evolutionary = { version = "0.0.1", path = "../feagi-evolutionary" }
 # feagi-burst-engine configured per-platform below
 feagi-data-structures = { workspace = true }
 

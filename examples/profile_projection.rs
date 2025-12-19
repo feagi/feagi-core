@@ -21,7 +21,7 @@ use feagi_bdu::Neuroembryogenesis;
 use feagi_data_structures::genomic::cortical_area::{
     AreaType, CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
-use feagi_evo::{templates, RuntimeGenome};
+use feagi_evolutionary::{templates, RuntimeGenome};
 use feagi_npu_burst_engine::DynamicNPU;
 
 // Configuration - edit these to change test parameters

@@ -119,7 +119,7 @@ FEAGI_DEBUG=all ./feagi
 - `feagi-burst-engine`
 - `feagi-bdu`
 - `feagi-services`
-- `feagi-evo`
+- `feagi-evolutionarylutionary`
 - `feagi-config`
 - `feagi-io`
 - `feagi-transports`

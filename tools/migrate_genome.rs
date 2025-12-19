@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Perform migration
     println!("🔄 Migrating cortical IDs...");
-    let migration_result = feagi_evo::migrate_genome(&genome_json)?;
+    let migration_result = feagi_evolutionary::migrate_genome(&genome_json)?;
 
     println!(
         "   ✅ Migrated {} cortical IDs",
@@ -129,9 +129,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Validate migrated genome
     println!("🔍 Validating migrated genome...");
-    match feagi_evo::load_genome_from_json(&serde_json::to_string(&migrated_genome)?) {
+    match feagi_evolutionary::load_genome_from_json(&serde_json::to_string(&migrated_genome)?) {
         Ok(runtime_genome) => {
-            let validation_result = feagi_evo::validate_genome(&runtime_genome);
+            let validation_result = feagi_evolutionary::validate_genome(&runtime_genome);
 
             if validation_result.errors.is_empty() {
                 println!("   ✅ Validation passed!");

@@ -46,7 +46,7 @@
 
 **1. Runtime Physiology Default**:
 ```rust
-// feagi-evo/src/runtime.rs
+// feagi-evolutionary/src/runtime.rs
 pub fn default_quantization_precision() -> String {
     "int8".to_string()  // Changed from "fp32"
 }
@@ -67,7 +67,7 @@ impl Default for QuantizationSpec {
 
 **3. Validator Auto-Fix**:
 ```rust
-// feagi-evo/src/validator.rs
+// feagi-evolutionary/src/validator.rs
 // Now auto-fixes missing quantization_precision to "int8" (was "fp32")
 ```
 

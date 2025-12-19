@@ -112,8 +112,8 @@ If you must publish manually, follow the layer order below exactly.
 
 ### **Layer 7: Evolutionary & Development**
 
-#### `feagi-evo`
-- **Path:** `crates/feagi-evo`
+#### `feagi-evolutionary`
+- **Path:** `crates/feagi-evolutionary`
 - **Dependencies:** 
   - `feagi-npu-neural`
   - `feagi-data-structures`
@@ -125,7 +125,7 @@ If you must publish manually, follow the layer order below exactly.
 - **Dependencies:**
   - `feagi-npu-neural`
   - `feagi-npu-burst-engine`
-  - `feagi-evo`
+  - `feagi-evolutionary`
   - `feagi-data-structures`
   - `feagi-observability`
 - **Purpose:** Brain Development Utilities (synaptogenesis, connectivity)
@@ -164,7 +164,7 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-state-manager`
   - `feagi-npu-burst-engine`
   - `feagi-bdu`
-  - `feagi-evo`
+  - `feagi-evolutionary`
   - `feagi-npu-neural`
   - `feagi-observability`
 - **Purpose:** Service trait definitions, runtime services
@@ -175,7 +175,7 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-services`
   - `feagi-io`
   - `feagi-npu-neural`
-  - `feagi-evo`
+  - `feagi-evolutionary`
   - `feagi-bdu`
   - `feagi-npu-burst-engine`
   - `feagi-npu-runtime`

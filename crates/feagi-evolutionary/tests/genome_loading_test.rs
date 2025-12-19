@@ -9,7 +9,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_evo::load_genome_from_file;
+use feagi_evolutionary::load_genome_from_file;
 
 #[test]
 fn test_load_barebones_genome() {
@@ -30,8 +30,8 @@ fn test_load_barebones_genome() {
         genome.cortical_areas.len()
     );
 
-    let death_id = feagi_evo::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
-    let power_id = feagi_evo::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
+    let death_id = feagi_evolutionary::genome::parser::string_to_cortical_id("_death").expect("Valid ID");
+    let power_id = feagi_evolutionary::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
     assert!(
         genome.cortical_areas.contains_key(&death_id),
         "Missing _death cortical area"

@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use feagi_bdu::BrainDevelopmentUnit;
-use feagi_evo::{templates, RuntimeGenome};
+use feagi_evolutionary::{templates, RuntimeGenome};
 use feagi_npu_burst_engine::DynamicNPU;
 use feagi_types::{AreaType, CorticalArea, Dimensions};
 

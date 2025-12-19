@@ -49,7 +49,7 @@ agent-sdk = ["feagi-agent"]
 
 [dependencies]
 # Foundation (vendored into feagi-core when published)
-feagi-evo = { version = "0.0.1", path = "crates/feagi-evo" }
+feagi-evolutionary = { version = "0.0.1", path = "crates/feagi-evolutionary" }
 feagi-npu-neural = { version = "0.0.1", path = "crates/feagi-npu/neural" }
 serde_json = "1.0"
 
@@ -87,7 +87,7 @@ members = [
     
     # === Infrastructure Layer (Cross-Cutting) ===
     "crates/feagi-state-manager",      # Runtime state management
-    "crates/feagi-evo",                # Genome I/O and evolution (genotype)
+    "crates/feagi-evolutionary",                # Genome I/O and evolution (genotype)
     "crates/feagi-services",           # Service layer (stable application boundary)
     "crates/feagi-api",                # REST API layer (HTTP + ZMQ transports)
     "crates/feagi-observability",      # Unified observability (logging, telemetry, profiling)

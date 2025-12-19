@@ -44,7 +44,7 @@ CRATES=(
     "crates/feagi-npu/plasticity"
     
     # Layer 7: Evolutionary and development
-    "crates/feagi-evo"
+    "crates/feagi-evolutionary"
     "crates/feagi-bdu"
     
     # Layer 8: I/O Layer

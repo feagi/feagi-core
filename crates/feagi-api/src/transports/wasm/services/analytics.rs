@@ -4,7 +4,7 @@
 //! WASM Analytics Service (stub)
 
 use async_trait::async_trait;
-use feagi_evo::RuntimeGenome;
+use feagi_evolutionary::RuntimeGenome;
 use feagi_services::traits::analytics_service::AnalyticsService;
 use feagi_services::types::errors::{ServiceError, ServiceResult};
 use feagi_services::types::*;

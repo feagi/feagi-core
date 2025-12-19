@@ -16,7 +16,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_evo::{
+use feagi_evolutionary::{
     create_genome_with_core_morphologies, load_genome_from_json, save_genome_to_json,
     validate_genome,
 };
@@ -30,7 +30,7 @@ fn test_complete_genome_workflow() {
     );
 
     // Add a cortical area (use valid core ID)
-    let test_id = feagi_evo::string_to_cortical_id("_power").expect("Valid ID");
+    let test_id = feagi_evolutionary::string_to_cortical_id("_power").expect("Valid ID");
     use feagi_data_structures::genomic::cortical_area::{
         AreaType, CorticalArea, CorticalAreaDimensions,
     };
@@ -75,7 +75,7 @@ fn test_complete_genome_workflow() {
     assert_eq!(loaded_genome.metadata.genome_id, "test_workflow_genome");
     assert_eq!(loaded_genome.cortical_areas.len(), 1);
 
-    let test_id = feagi_evo::string_to_cortical_id("_power").expect("Valid ID");
+    let test_id = feagi_evolutionary::string_to_cortical_id("_power").expect("Valid ID");
     assert!(loaded_genome.cortical_areas.contains_key(&test_id));
     assert!(loaded_genome.morphologies.contains("block_to_block"));
     assert!(loaded_genome.morphologies.contains("projector"));
@@ -95,7 +95,7 @@ fn test_complete_genome_workflow() {
 
 #[test]
 fn test_minimal_genome_creation() {
-    use feagi_evo::create_minimal_genome;
+    use feagi_evolutionary::create_minimal_genome;
 
     let genome = create_minimal_genome("minimal_test".to_string(), "Minimal Test".to_string());
 
@@ -113,7 +113,7 @@ fn test_minimal_genome_creation() {
 
 #[test]
 fn test_flat_to_hierarchical_conversion() {
-    use feagi_evo::convert_flat_to_hierarchical;
+    use feagi_evolutionary::convert_flat_to_hierarchical;
     use serde_json::json;
 
     let flat = json!({

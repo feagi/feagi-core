@@ -1790,7 +1790,7 @@ version = "0.0.1"
 dependencies = [
  "feagi-agent",
  "feagi-bdu",
- "feagi-evo",
+ "feagi-evolutionary",
  "feagi-io",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
@@ -1830,7 +1830,7 @@ dependencies = [
  "chrono",
  "feagi-bdu",
  "feagi-data-structures",
- "feagi-evo",
+ "feagi-evolutionary",
  "feagi-io",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
@@ -1871,7 +1871,7 @@ dependencies = [
  "chrono",
  "criterion",
  "feagi-data-structures",
- "feagi-evo",
+ "feagi-evolutionary",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
  "feagi-npu-runtime",
@@ -1954,7 +1954,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "feagi-evo"
+name = "feagi-evolutionary"
 version = "0.0.1"
 dependencies = [
  "chrono",
@@ -2110,7 +2110,7 @@ dependencies = [
  "chrono",
  "feagi-bdu",
  "feagi-data-structures",
- "feagi-evo",
+ "feagi-evolutionary",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
  "feagi-observability",

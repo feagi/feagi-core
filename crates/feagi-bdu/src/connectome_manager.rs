@@ -109,7 +109,7 @@ pub struct ConnectomeManager {
     brain_regions: BrainRegionHierarchy,
 
     /// Morphology registry from loaded genome
-    morphology_registry: feagi_evo::MorphologyRegistry,
+    morphology_registry: feagi_evolutionary::MorphologyRegistry,
 
     /// Configuration
     config: ConnectomeConfig,
@@ -142,7 +142,7 @@ impl ConnectomeManager {
             // CRITICAL: Reserve indices 0 (_death) and 1 (_power) - start regular areas at 2
             next_cortical_idx: 2,
             brain_regions: BrainRegionHierarchy::new(),
-            morphology_registry: feagi_evo::MorphologyRegistry::new(),
+            morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
@@ -191,7 +191,7 @@ impl ConnectomeManager {
             cortical_idx_to_id: HashMap::new(),
             next_cortical_idx: 0,
             brain_regions: BrainRegionHierarchy::new(),
-            morphology_registry: feagi_evo::MorphologyRegistry::new(),
+            morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
@@ -222,7 +222,7 @@ impl ConnectomeManager {
             cortical_idx_to_id: HashMap::new(),
             next_cortical_idx: 0,
             brain_regions: BrainRegionHierarchy::new(),
-            morphology_registry: feagi_evo::MorphologyRegistry::new(),
+            morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: Some(npu),
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
@@ -500,7 +500,7 @@ impl ConnectomeManager {
     // ========================================================================
 
     /// Get all morphologies from the loaded genome
-    pub fn get_morphologies(&self) -> &feagi_evo::MorphologyRegistry {
+    pub fn get_morphologies(&self) -> &feagi_evolutionary::MorphologyRegistry {
         &self.morphology_registry
     }
 
@@ -727,7 +727,7 @@ impl ConnectomeManager {
             let mut npu = npu_arc.lock().unwrap();
 
             match morphology.morphology_type {
-                feagi_evo::MorphologyType::Functions => {
+                feagi_evolutionary::MorphologyType::Functions => {
                     // Function-based morphologies (projector, memory, etc.)
                     match morphology_id {
                         "projector" => {
@@ -749,9 +749,9 @@ impl ConnectomeManager {
                         }
                     }
                 }
-                feagi_evo::MorphologyType::Vectors => {
+                feagi_evolutionary::MorphologyType::Vectors => {
                     use crate::connectivity::synaptogenesis::apply_vectors_morphology;
-                    if let feagi_evo::MorphologyParameters::Vectors { ref vectors } =
+                    if let feagi_evolutionary::MorphologyParameters::Vectors { ref vectors } =
                         morphology.parameters
                     {
                         // Convert Vec<[i32; 3]> to Vec<(i32, i32, i32)>
@@ -772,7 +772,7 @@ impl ConnectomeManager {
                         Ok(0)
                     }
                 }
-                feagi_evo::MorphologyType::Patterns => {
+                feagi_evolutionary::MorphologyType::Patterns => {
                     use tracing::debug;
                     // Patterns morphology requires Pattern3D conversion - complex, skip for now
                     debug!(target: "feagi-bdu", "Pattern morphology {} - conversion not yet implemented", morphology_id);
@@ -1768,7 +1768,7 @@ impl ConnectomeManager {
     ///
     pub fn load_genome_from_json(&mut self, json_str: &str) -> BduResult<()> {
         // Parse genome
-        let parsed = feagi_evo::GenomeParser::parse(json_str)?;
+        let parsed = feagi_evolutionary::GenomeParser::parse(json_str)?;
 
         info!(target: "feagi-bdu","🧬 Loading genome: {} (version {})",
             parsed.genome_title, parsed.version);
@@ -1846,7 +1846,7 @@ impl ConnectomeManager {
         }
 
         // Generate and return JSON
-        Ok(feagi_evo::GenomeSaver::save_to_json(
+        Ok(feagi_evolutionary::GenomeSaver::save_to_json(
             &self.cortical_areas,
             &brain_regions_with_parents,
             genome_id,
@@ -1873,7 +1873,7 @@ impl ConnectomeManager {
         &mut self,
         genome_path: P,
     ) -> BduResult<crate::neuroembryogenesis::DevelopmentProgress> {
-        use feagi_evo::load_genome_from_file;
+        use feagi_evolutionary::load_genome_from_file;
 
         info!(target: "feagi-bdu","Loading genome from: {:?}", genome_path.as_ref());
         let genome = load_genome_from_file(genome_path)?;
@@ -1897,7 +1897,7 @@ impl ConnectomeManager {
     ///
     pub fn load_from_genome(
         &mut self,
-        genome: feagi_evo::RuntimeGenome,
+        genome: feagi_evolutionary::RuntimeGenome,
     ) -> BduResult<crate::neuroembryogenesis::DevelopmentProgress> {
         // Prepare for new genome (clear existing state)
         self.prepare_for_new_genome()?;
@@ -1992,7 +1992,7 @@ impl ConnectomeManager {
     ///
     /// * `genome` - Genome to analyze for memory requirements
     ///
-    pub fn resize_for_genome(&mut self, genome: &feagi_evo::RuntimeGenome) -> BduResult<()> {
+    pub fn resize_for_genome(&mut self, genome: &feagi_evolutionary::RuntimeGenome) -> BduResult<()> {
         // Store morphologies from genome
         self.morphology_registry = genome.morphologies.clone();
         info!(target: "feagi-bdu", "Stored {} morphologies from genome", self.morphology_registry.count());

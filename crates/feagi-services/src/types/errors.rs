@@ -97,11 +97,11 @@ impl From<feagi_bdu::BduError> for ServiceError {
     }
 }
 
-impl From<feagi_evo::EvoError> for ServiceError {
-    fn from(err: feagi_evo::EvoError) -> Self {
+impl From<feagi_evolutionary::EvoError> for ServiceError {
+    fn from(err: feagi_evolutionary::EvoError) -> Self {
         match err {
-            feagi_evo::EvoError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
-            feagi_evo::EvoError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
+            feagi_evolutionary::EvoError::InvalidGenome(msg) => ServiceError::InvalidInput(msg),
+            feagi_evolutionary::EvoError::InvalidArea(msg) => ServiceError::InvalidInput(msg),
             _ => ServiceError::Backend(err.to_string()),
         }
     }

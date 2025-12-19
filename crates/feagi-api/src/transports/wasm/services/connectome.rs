@@ -7,7 +7,7 @@
 
 use async_trait::async_trait;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_evo::RuntimeGenome;
+use feagi_evolutionary::RuntimeGenome;
 use feagi_services::traits::connectome_service::ConnectomeService;
 use feagi_services::types::errors::{ServiceError, ServiceResult};
 use feagi_services::types::*;

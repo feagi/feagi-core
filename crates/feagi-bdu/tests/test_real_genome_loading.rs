@@ -15,7 +15,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use feagi_bdu::{ConnectomeManager, Neuroembryogenesis};
-use feagi_evo::{convert_flat_to_hierarchical_full, load_genome_from_json};
+use feagi_evolutionary::{convert_flat_to_hierarchical_full, load_genome_from_json};
 use std::fs;
 
 #[test]

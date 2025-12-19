@@ -13,7 +13,7 @@ use feagi_bdu::{ConnectomeManager, Neuroembryogenesis};
 use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-use feagi_evo::{RuntimeGenome, GenomeMetadata, CorticalArea as GenomeCorticalArea};
+use feagi_evolutionary::{RuntimeGenome, GenomeMetadata, CorticalArea as GenomeCorticalArea};
 use feagi_npu_runtime::StdRuntime;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use std::sync::{Arc, Mutex};
@@ -31,7 +31,7 @@ fn create_test_genome() -> RuntimeGenome {
         },
         cortical_areas: vec![],
         brain_regions: vec![],
-        physiology: feagi_evo::Physiology {
+        physiology: feagi_evolutionary::Physiology {
             quantization_precision: "fp32".to_string(),
             membrane_potential_range: (-1.0, 1.0),
             synaptic_weight_range: (0.0, 1.0),

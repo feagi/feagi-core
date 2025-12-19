@@ -27,7 +27,7 @@ impl GenomeSaver {
     /// Save connectome to genome JSON
     ///
     /// **DEPRECATED**: This method produces incomplete hierarchical format v2.1 without morphologies/physiology.
-    /// Use `feagi_evo::save_genome_to_json(RuntimeGenome)` instead, which produces complete flat format v3.0.
+    /// Use `feagi_evolutionary::save_genome_to_json(RuntimeGenome)` instead, which produces complete flat format v3.0.
     ///
     /// This method is kept only for legacy tests. Production code MUST use the RuntimeGenome saver.
     ///
@@ -43,7 +43,7 @@ impl GenomeSaver {
     /// JSON string of the genome (hierarchical v2.1, incomplete)
     ///
     #[deprecated(
-        note = "Use feagi_evo::save_genome_to_json(RuntimeGenome) instead. This produces incomplete v2.1 format."
+        note = "Use feagi_evolutionary::save_genome_to_json(RuntimeGenome) instead. This produces incomplete v2.1 format."
     )]
     pub fn save_to_json(
         cortical_areas: &HashMap<CorticalID, CorticalArea>,

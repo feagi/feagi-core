@@ -36,7 +36,7 @@
 | **feagi-api** | ✅ 100% | All 60 endpoints fully wired to services, HTTP/Axum server, OpenAPI/Swagger, error handling | ZMQ adapter (optional) | ✅ Production Ready |
 | **feagi-io** | ✅ 95% | ZMQ streams, sensory/motor, feagi-transports integration | Minor cleanup | ✅ Yes |
 | **feagi-transports** | ✅ Complete | ZMQ client/server, traits | UDP, SHM (future) | ✅ Yes |
-| **feagi-evo** | ✅ Complete | Genome parser/saver, validator, signatures, templates, flat-to-hierarchical converter | - | ✅ Yes |
+| **feagi-evolutionary** | ✅ Complete | Genome parser/saver, validator, signatures, templates, flat-to-hierarchical converter | - | ✅ Yes |
 | **feagi-plasticity** | ❌ 0% | - | Everything (synaptic learning) | ❌ No |
 
 ### BDU Methods Status (62 active, 86 dead)
@@ -132,7 +132,7 @@
 | **TOTAL** | 20 weeks | **~16 weeks done (Phases 1, 2, 3, 4 complete!)** | **4 weeks remaining** |
 
 **Major Progress Update (2025-10-30):**
-- ✅ **feagi-evo complete**: Full genome pipeline (parser, saver, validator, flat converter)
+- ✅ **feagi-evolutionary complete**: Full genome pipeline (parser, saver, validator, flat converter)
 - ✅ **Neuroembryogenesis complete**: All 4 stages (corticogenesis, voxelogenesis, neurogenesis, synaptogenesis) with SIMD batch operations
 - ✅ **🎉 PHASE 2 COMPLETE: ALL 62 BDU METHODS DONE! (P1-P6 100%)**: Every single ConnectomeManager method migrated and functional!
 - ✅ **NPU integration**: ConnectomeManager properly delegates to NPU for all neuron/synapse operations

@@ -67,7 +67,7 @@ pub use models::{BrainRegionHierarchy, CorticalAreaExt};
 pub use types::Position;
 
 // Re-export genome operations from feagi-evo
-pub use feagi_evo::{GenomeParser, GenomeSaver, ParsedGenome};
+pub use feagi_evolutionary::{GenomeParser, GenomeSaver, ParsedGenome};
 
 // Re-export connectome manager
 pub use connectome_manager::{ConnectomeConfig, ConnectomeManager};

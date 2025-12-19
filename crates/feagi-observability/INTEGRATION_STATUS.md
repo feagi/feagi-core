@@ -9,7 +9,7 @@
 ### ❌ NOT Integrated (Still using `log` or no logging)
 - **feagi-services** - Uses `log = "0.4"` directly
 - **feagi-bdu** - Uses `log = "0.4"` directly
-- **feagi-evo** - Uses `log = "0.4"` directly
+- **feagi-evolutionarylutionary** - Uses `log = "0.4"` directly
 - **feagi-agent** - Uses `log = "0.4"` directly
 - **feagi-api** - Uses `tracing` but NOT `feagi-observability` macros
 - **feagi-burst-engine** - No logging dependency at all
@@ -25,7 +25,7 @@
 ### Phase 1: Core Crates (Priority)
 1. **feagi-services** - Replace `log` with `feagi-observability` macros
 2. **feagi-bdu** - Replace `log` with `feagi-observability` macros
-3. **feagi-evo** - Replace `log` with `feagi-observability` macros
+3. **feagi-evolutionarylutionary** - Replace `log` with `feagi-observability` macros
 4. **feagi-burst-engine** - Add `feagi-observability` and add logging
 
 ### Phase 2: API and SDK Crates

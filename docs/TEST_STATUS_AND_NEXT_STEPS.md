@@ -189,7 +189,7 @@ Instead of fixing contract tests, we could start with **integration tests** whic
 
 use feagi_bdu::ConnectomeManager;
 use feagi_burst_engine::RustNPU;
-use feagi_evo::load_genome_from_file;
+use feagi_evolutionary::load_genome_from_file;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;
 
