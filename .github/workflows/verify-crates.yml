@@ -11,6 +11,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/verify-crates.yml'
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
