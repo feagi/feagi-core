@@ -10,9 +10,8 @@
 
 //! Standard runtime implementation for desktop/server platforms
 
-use crate::{NeuronArray, SynapseArray};
-use feagi_npu_neural::types::NeuralValue;
-use feagi_npu_runtime::{Result, Runtime};
+use crate::std_impl::{NeuronArray, SynapseArray};
+use crate::traits::{NeuralValue, Result, Runtime};
 
 /// Standard runtime for desktop/server (Vec-based, dynamic allocation)
 #[derive(Debug, Clone, Copy)]

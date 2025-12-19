@@ -15,8 +15,9 @@
 use ahash::AHashMap;
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_neural::{is_refractory, update_neuron_lif};
-use feagi_npu_runtime::{NeuronStorage, Result, RuntimeError};
+use crate::traits::{NeuronStorage, Result, RuntimeError};
 use rayon::prelude::*; // Faster hash map (already a dependency)
+use std::vec::Vec;
 
 /// Dynamic neuron array for desktop/server environments
 ///
@@ -74,24 +75,41 @@ pub struct NeuronArray<T: NeuralValue> {
 impl<T: NeuralValue> NeuronArray<T> {
     /// Create a new neuron array with initial capacity
     pub fn new(capacity: usize) -> Self {
-        Self {
+        let mut result = Self {
             count: 0,
-            membrane_potentials: vec![T::zero(); capacity],
-            thresholds: vec![T::from_f32(1.0); capacity],
-            leak_coefficients: vec![0.1; capacity],
-            resting_potentials: vec![T::zero(); capacity],
-            neuron_types: vec![0; capacity],
-            refractory_periods: vec![0; capacity],
-            refractory_countdowns: vec![0; capacity],
-            excitabilities: vec![1.0; capacity],
-            consecutive_fire_counts: vec![0; capacity],
-            consecutive_fire_limits: vec![0; capacity],
-            snooze_periods: vec![0; capacity],
-            mp_charge_accumulation: vec![true; capacity],
-            cortical_areas: vec![0; capacity],
-            coordinates: vec![0; capacity * 3], // x,y,z per neuron
-            valid_mask: vec![false; capacity],
-        }
+            membrane_potentials: Vec::with_capacity(capacity),
+            thresholds: Vec::with_capacity(capacity),
+            leak_coefficients: Vec::with_capacity(capacity),
+            resting_potentials: Vec::with_capacity(capacity),
+            neuron_types: Vec::with_capacity(capacity),
+            refractory_periods: Vec::with_capacity(capacity),
+            refractory_countdowns: Vec::with_capacity(capacity),
+            excitabilities: Vec::with_capacity(capacity),
+            consecutive_fire_counts: Vec::with_capacity(capacity),
+            consecutive_fire_limits: Vec::with_capacity(capacity),
+            snooze_periods: Vec::with_capacity(capacity),
+            mp_charge_accumulation: Vec::with_capacity(capacity),
+            cortical_areas: Vec::with_capacity(capacity),
+            coordinates: Vec::with_capacity(capacity * 3), // x,y,z per neuron
+            valid_mask: Vec::with_capacity(capacity),
+        };
+        // Resize to capacity with default values
+        result.membrane_potentials.resize(capacity, T::zero());
+        result.thresholds.resize(capacity, T::from_f32(1.0));
+        result.leak_coefficients.resize(capacity, 0.1);
+        result.resting_potentials.resize(capacity, T::zero());
+        result.neuron_types.resize(capacity, 0);
+        result.refractory_periods.resize(capacity, 0);
+        result.refractory_countdowns.resize(capacity, 0);
+        result.excitabilities.resize(capacity, 1.0);
+        result.consecutive_fire_counts.resize(capacity, 0);
+        result.consecutive_fire_limits.resize(capacity, 0);
+        result.snooze_periods.resize(capacity, 0);
+        result.mp_charge_accumulation.resize(capacity, true);
+        result.cortical_areas.resize(capacity, 0);
+        result.coordinates.resize(capacity * 3, 0);
+        result.valid_mask.resize(capacity, false);
+        result
     }
 
     /// Add a neuron with simplified parameters (for backward compatibility)
@@ -450,7 +468,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             || y_coords.len() != n
             || z_coords.len() != n
         {
-            return Err(RuntimeError::InvalidParameters(
+            return Err(crate::traits::RuntimeError::InvalidParameters(
                 "Batch neuron creation: all slices must have same length".into(),
             ));
         }
@@ -587,7 +605,7 @@ mod tests {
         array.add_neuron_simple(1.0, 0.1, 5, 1.0);
 
         // High input - should fire
-        let inputs = vec![1.5, 0.5]; // First fires, second doesn't
+        let inputs = Vec::from([1.5, 0.5]); // First fires, second doesn't
         let fired = array.process_burst_sequential(&inputs, 0);
 
         assert_eq!(fired.len(), 1);
@@ -601,7 +619,7 @@ mod tests {
             array.add_neuron_simple(1.0, 0.1, 5, 1.0);
         }
 
-        let inputs = vec![1.5; 100]; // All should fire
+        let inputs = Vec::from([1.5; 100]); // All should fire
         let fired = array.process_burst_parallel(&inputs, 0);
 
         assert_eq!(fired.len(), 100);

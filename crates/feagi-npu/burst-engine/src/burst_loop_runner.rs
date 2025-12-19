@@ -1456,7 +1456,7 @@ mod tests {
         }
 
         let rust_npu = <crate::RustNPU<
-            feagi_npu_runtime_std::StdRuntime,
+            feagi_npu_runtime::StdRuntime,
             f32,
             crate::backend::CPUBackend,
         >>::new_cpu_only(1000, 10000, 20);

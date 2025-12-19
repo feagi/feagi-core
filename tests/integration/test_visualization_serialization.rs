@@ -14,7 +14,7 @@ use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_evo::{RuntimeGenome, GenomeMetadata, CorticalArea as GenomeCorticalArea};
-use feagi_npu_runtime_std::StdRuntime;
+use feagi_npu_runtime::StdRuntime;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use std::sync::{Arc, Mutex};
 use parking_lot::RwLock;

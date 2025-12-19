@@ -12,9 +12,8 @@ description = "High-performance burst engine for FEAGI neural processing"
 feagi-npu-neural = { version = "0.0.0", path = "../neural" }
 
 # Runtime trait abstraction (generic over any runtime implementation)
-feagi-npu-runtime = { version = "0.0.0", path = "../runtime" }
-# Standard runtime implementation (for default DynamicNPU type alias)
-feagi-npu-runtime-std = { version = "0.0.0", path = "../runtime-std", optional = true }
+# Standard runtime implementation available via "std" feature
+feagi-npu-runtime = { version = "0.0.0", path = "../runtime", optional = true }
 feagi-state-manager = { version = "0.0.0", path = "../../feagi-state-manager" }  # For BurstEngineState enum
 # Async runtime abstraction for WASM compatibility
 # Note: default-features = false prevents pulling in standard-tokio by default
@@ -49,7 +48,7 @@ half = { version = "2.4", optional = true }
 [features]
 default = ["connectome-io", "async-tokio", "std"]
 # Standard library support (includes StdRuntime for DynamicNPU type alias)
-std = ["feagi-npu-runtime-std"]
+std = ["feagi-npu-runtime/std"]
 # Enable connectome serialization/deserialization (requires native dependencies)
 connectome-io = ["feagi-connectome-serialization"]
 # Async runtime features

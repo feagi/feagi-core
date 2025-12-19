@@ -200,7 +200,7 @@ impl Default for SynapticPropagationEngine {
 mod tests {
     use super::*;
 
-    use feagi_npu_runtime_std::SynapseArray;
+    use feagi_npu_runtime::SynapseArray;
 
     fn create_test_synapses() -> SynapseArray {
         let mut synapse_storage = SynapseArray {

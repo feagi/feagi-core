@@ -129,7 +129,7 @@ mod tests {
 
     #[test]
     fn test_cpu_backend_creation() {
-        use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
+        use feagi_npu_runtime::{NeuronArray, SynapseArray};
         let backend = CPUBackend::new();
         assert_eq!(
             <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::backend_name(
@@ -149,7 +149,7 @@ mod tests {
         let mut fcl = FireCandidateList::new();
 
         // Should not panic
-        use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
+        use feagi_npu_runtime::{NeuronArray, SynapseArray};
         let result = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_synaptic_propagation(
             &mut backend, &fired_neurons, &synapse_storage, &mut fcl
         );

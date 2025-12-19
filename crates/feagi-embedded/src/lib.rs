@@ -17,7 +17,7 @@
 //! ### Advanced Users (Direct HAL Usage)
 //! ```no_run
 //! use feagi_embedded::prelude::*;
-//! use feagi_npu_runtime_embedded::{NeuronArray, SynapseArray};
+//! use feagi_npu_runtime::embedded::{NeuronArray, SynapseArray};
 //! use feagi_npu_neural::types::INT8Value;
 //!
 //! fn main() -> ! {
@@ -86,7 +86,7 @@ pub use platforms::{Hailo8Accelerator, HailoError, HybridCpuHailo};
 
 // Re-export core FEAGI types for convenience
 pub use feagi_npu_neural::types::{INT8Value, NeuralValue};
-pub use feagi_npu_runtime_embedded::{NeuronArray, SynapseArray};
+pub use feagi_npu_runtime::embedded::{NeuronArray, SynapseArray};
 
 /// Prelude module for convenient imports
 ///
@@ -97,7 +97,7 @@ pub mod prelude {
     pub use crate::hal::*;
     pub use crate::platforms::*;
     pub use feagi_npu_neural::types::{INT8Value, NeuralValue};
-    pub use feagi_npu_runtime_embedded::{NeuronArray, SynapseArray};
+    pub use feagi_npu_runtime::embedded::{NeuronArray, SynapseArray};
 
     #[cfg(feature = "esp32")]
     pub use crate::platforms::Esp32Platform;

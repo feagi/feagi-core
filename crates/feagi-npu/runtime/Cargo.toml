@@ -5,18 +5,26 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Runtime abstraction traits for FEAGI neural processing across platforms"
+description = "Runtime abstraction traits and implementations for FEAGI neural processing across platforms"
 
 [features]
-default = ["std"]
-std = []
-alloc = []
+default = []  # Traits only - no_std compatible by default
+std = ["rayon", "ahash", "thiserror"]  # Standard library runtime implementation
+embedded = ["spin"]  # Embedded runtime implementation
+alloc = []  # Heap allocation without std (for some trait methods)
 
 [dependencies]
-feagi-npu-neural = { version = "0.0.0", path = "../neural", default-features = false }
-# No dependencies - pure trait definitions
-# This ensures the trait crate is minimal and can be used anywhere
+# Platform-agnostic core (types + algorithms)
+# Use default features (includes std) - traits work with std enabled
+feagi-npu-neural = { version = "0.0.0", path = "../neural" }
+
+# Standard library dependencies (optional, behind "std" feature)
+rayon = { workspace = true, optional = true }  # Parallel processing
+ahash = { workspace = true, optional = true }  # Fast hashing
+thiserror = { workspace = true, optional = true }  # Error handling
+
+# Embedded dependencies (optional, behind "embedded" feature)
+spin = { version = "0.9", optional = true }  # Spinlock-based Mutex (no OS required)
 
 [dev-dependencies]
 # For tests only
-

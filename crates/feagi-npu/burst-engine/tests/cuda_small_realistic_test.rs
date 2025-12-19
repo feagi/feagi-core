@@ -10,7 +10,7 @@ mod cuda_small_realistic_tests {
 
     /// Create a small realistic network for fast testing
     fn create_small_network_cpu(
-    ) -> RustNPU<feagi_npu_runtime_std::StdRuntime, f32, feagi_npu_burst_engine::backend::CPUBackend>
+    ) -> RustNPU<feagi_npu_runtime::StdRuntime, f32, feagi_npu_burst_engine::backend::CPUBackend>
     {
         let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 100);
 
@@ -77,7 +77,7 @@ mod cuda_small_realistic_tests {
 
     fn create_small_network_cuda() -> RustNPU<StdRuntime, f32, CPUBackend> {
         use feagi_npu_burst_engine::backend::CPUBackend;
-        use feagi_npu_runtime_std::StdRuntime;
+        use feagi_npu_runtime::StdRuntime;
 
         let runtime = StdRuntime;
         let backend = CPUBackend::new();

@@ -5,7 +5,7 @@
 mod cuda_realistic_genome_tests {
     use feagi_npu_burst_engine::backend::{is_cuda_available, GpuConfig};
     use feagi_npu_burst_engine::RustNPU;
-    use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
+    use feagi_npu_runtime::{NeuronArray, SynapseArray};
 
     /// Helper to create a realistic FEAGI genome scenario
     fn create_realistic_genome() -> (NeuronArray<f32>, SynapseArray) {

@@ -19,75 +19,95 @@
 
 //! # FEAGI Runtime Abstraction
 //!
-//! Cross-platform runtime traits for neural processing.
+//! Cross-platform runtime traits and implementations for neural processing.
 //!
-//! This crate defines the **abstraction layer** that enables FEAGI to run on different platforms:
-//! - Desktop/Server: `feagi-runtime-std` (Vec-based, dynamic)
-//! - Embedded: `feagi-runtime-embedded` (fixed arrays, no_std)
-//! - GPU: `feagi-runtime-cuda` (GPU VRAM, CUDA)
-//! - WASM: `feagi-runtime-wasm` (typed arrays, browser)
+//! This crate provides:
+//! - **Traits** (always available): `Runtime`, `NeuronStorage`, `SynapseStorage`
+//! - **Std Implementation** (behind `std` feature): `StdRuntime` for desktop/server
+//! - **Embedded Implementation** (behind `embedded` feature): `EmbeddedRuntime` for no_std
 //!
-//! ## Architecture
+//! ## Features
 //!
-//! ```text
-//! ┌────────────────────────────────────────────────┐
-//! │ feagi-burst-engine<R: Runtime>                 │
-//! │   - Generic burst processing                   │
-//! │   - Works with any Runtime                     │
-//! └────────────────────┬───────────────────────────┘
-//!                      │ uses
-//! ┌────────────────────▼───────────────────────────┐
-//! │ feagi-runtime (THIS CRATE)                     │
-//! │   - Runtime trait                              │
-//! │   - NeuronStorage trait                        │
-//! │   - SynapseStorage trait                       │
-//! └────────────────────┬───────────────────────────┘
-//!                      │ implemented by
-//! ┌────────────────────▼───────────────────────────┐
-//! │ feagi-runtime-std / embedded / cuda / wasm     │
-//! │   - Platform-specific storage                  │
-//! └────────────────────────────────────────────────┘
-//! ```
+//! - `default` = `[]` (traits only, no_std compatible)
+//! - `std` = Standard library runtime implementation (Vec-based, parallel)
+//! - `embedded` = Embedded runtime implementation (fixed arrays, no_std)
+//! - `alloc` = Heap allocation without std (for some trait methods)
 //!
 //! ## Usage
 //!
-//! This crate is typically not used directly. Instead, you use a concrete runtime:
-//!
-//! ```ignore
-//! use feagi_npu_runtime_std::StdRuntime;  // For desktop
-//! use feagi_npu_runtime_embedded::EmbeddedRuntime;  // For ESP32
-//! use feagi_runtime_cuda::CudaRuntime;  // For GPU
+//! ### Desktop/Server
+//! ```toml
+//! [dependencies]
+//! feagi-npu-runtime = { version = "2.0", features = ["std"] }
 //! ```
 //!
-//! ## Implementing a New Runtime
+//! ```rust
+//! use feagi_npu_runtime::StdRuntime;
+//! let runtime = StdRuntime::new();
+//! ```
 //!
-//! To add support for a new platform:
+//! ### Embedded
+//! ```toml
+//! [dependencies]
+//! feagi-npu-runtime = { version = "2.0", features = ["embedded"], default-features = false }
+//! ```
 //!
-//! 1. Create a new crate (e.g., `feagi-runtime-myplatform`)
-//! 2. Implement `NeuronStorage` and `SynapseStorage` traits
-//! 3. Implement `Runtime` trait
-//! 4. Test with `feagi-burst-engine`
+//! ```rust
+//! use feagi_npu_runtime::embedded::EmbeddedRuntime;
+//! let runtime = EmbeddedRuntime::new();
+//! ```
 //!
-//! See `feagi-runtime-std` for a reference implementation.
+//! ### Traits Only (for custom implementations)
+//! ```toml
+//! [dependencies]
+//! feagi-npu-runtime = { version = "2.0", default-features = false }
+//! ```
+//!
+//! ```rust
+//! use feagi_npu_runtime::{Runtime, NeuronStorage, SynapseStorage};
+//! // Implement your own runtime
+//! ```
 
 #![no_std]
 #![warn(missing_docs)]
 
-/// Crate version from Cargo.toml
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 #[cfg(feature = "std")]
 extern crate std;
 
-pub mod error;
+/// Crate version from Cargo.toml
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+// Traits module (always available)
 pub mod traits;
 
-// Re-export key types
-pub use error::{Result, RuntimeError};
-pub use traits::{NeuronStorage, Runtime, SynapseStorage};
+// Re-export traits for convenience
+pub use traits::{NeuronStorage, Runtime, SynapseStorage, NeuralValue, Result, RuntimeError};
 
-// Re-export NeuralValue from feagi-neural
-pub use feagi_npu_neural::types::NeuralValue;
+// Standard library implementation (behind "std" feature)
+#[cfg(feature = "std")]
+pub mod std_impl;
+
+// Re-export std module contents for convenience (backward compatibility)
+#[cfg(feature = "std")]
+pub use std_impl::{NeuronArray, StdRuntime, SynapseArray};
+#[cfg(feature = "std")]
+pub use std_impl::{NeuronArray as StdNeuronArray, SynapseArray as StdSynapseArray};
+
+// Embedded implementation (behind "embedded" feature)
+#[cfg(feature = "embedded")]
+pub mod embedded_impl;
+
+// Re-export embedded module contents for convenience
+#[cfg(feature = "embedded")]
+pub use embedded_impl::{EmbeddedRuntime, NeuronArray, SynapseArray};
+#[cfg(feature = "embedded")]
+pub use embedded_impl::{NeuronArray as EmbeddedNeuronArray, SynapseArray as EmbeddedSynapseArray};
+
+// Convenience module for embedded (re-exports from embedded_impl)
+#[cfg(feature = "embedded")]
+pub mod embedded {
+    pub use super::embedded_impl::{EmbeddedRuntime, NeuronArray, SynapseArray};
+}
 
 /// Version of the runtime trait API
 ///

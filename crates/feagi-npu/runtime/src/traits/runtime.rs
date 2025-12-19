@@ -16,7 +16,8 @@
 //! - **Platform-Agnostic**: Same burst engine code works everywhere
 //! - **Type-Safe**: Compile-time guarantees for platform compatibility
 
-use crate::error::Result;
+use crate::traits::error::Result;
+use crate::traits::NeuralValue;
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;
@@ -354,10 +355,6 @@ pub trait SynapseStorage: Send + Sync {
     fn valid_count(&self) -> usize;
 }
 
-// Note: NeuralValue trait is now in feagi-neural::types
-// Re-export it here for convenience
-pub use feagi_npu_neural::types::NeuralValue;
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -377,3 +374,4 @@ mod tests {
         // Actual implementations will be tested in runtime-specific crates
     }
 }
+

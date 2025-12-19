@@ -14,8 +14,10 @@
 
 use ahash::AHashMap;
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
-use feagi_npu_runtime::{Result, SynapseStorage};
+use crate::traits::{Result, SynapseStorage};
 use rayon::prelude::*;
+use std::format;
+use std::vec::Vec;
 
 /// Dynamic synapse array for desktop/server environments
 pub struct SynapseArray {
@@ -202,7 +204,7 @@ impl SynapseStorage for SynapseArray {
         weights: &[u8],
         psps: &[u8],
         types: &[u8],
-    ) -> feagi_npu_runtime::error::Result<()> {
+    ) -> crate::traits::Result<()> {
         let batch_size = sources.len();
         for i in 0..batch_size {
             self.add_synapse(sources[i], targets[i], weights[i], psps[i], types[i])?;
@@ -210,9 +212,9 @@ impl SynapseStorage for SynapseArray {
         Ok(())
     }
 
-    fn remove_synapse(&mut self, idx: usize) -> feagi_npu_runtime::error::Result<()> {
+    fn remove_synapse(&mut self, idx: usize) -> crate::traits::Result<()> {
         if idx >= self.count {
-            return Err(feagi_npu_runtime::error::RuntimeError::InvalidParameters(
+            return Err(crate::traits::RuntimeError::InvalidParameters(
                 format!(
                     "Synapse index {} out of bounds (count: {})",
                     idx, self.count
@@ -226,7 +228,7 @@ impl SynapseStorage for SynapseArray {
     fn remove_synapses_from_sources(
         &mut self,
         source_neurons: &[u32],
-    ) -> feagi_npu_runtime::error::Result<usize> {
+    ) -> crate::traits::Result<usize> {
         let mut removed = 0;
         for idx in 0..self.count {
             if self.valid_mask[idx] && source_neurons.contains(&self.source_neurons[idx]) {
@@ -241,7 +243,7 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         source: u32,
         target: u32,
-    ) -> feagi_npu_runtime::error::Result<usize> {
+    ) -> crate::traits::Result<usize> {
         let mut removed = 0;
         for idx in 0..self.count {
             if self.valid_mask[idx]
@@ -259,9 +261,9 @@ impl SynapseStorage for SynapseArray {
         &mut self,
         idx: usize,
         new_weight: u8,
-    ) -> feagi_npu_runtime::error::Result<()> {
+    ) -> crate::traits::Result<()> {
         if idx >= self.count {
-            return Err(feagi_npu_runtime::error::RuntimeError::InvalidParameters(
+            return Err(crate::traits::RuntimeError::InvalidParameters(
                 format!(
                     "Synapse index {} out of bounds (count: {})",
                     idx, self.count
@@ -269,7 +271,7 @@ impl SynapseStorage for SynapseArray {
             ));
         }
         if !self.valid_mask[idx] {
-            return Err(feagi_npu_runtime::error::RuntimeError::InvalidParameters(
+            return Err(crate::traits::RuntimeError::InvalidParameters(
                 format!("Synapse {} is not valid", idx),
             ));
         }

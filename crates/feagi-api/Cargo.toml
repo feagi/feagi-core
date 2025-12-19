@@ -84,7 +84,7 @@ insta = "1.34"
 wiremock = "0.6"
 assert-json-diff = "2.0"
 tokio-test = "0.4"
-feagi-npu-runtime-std = { version = "0.0.0", path = "../feagi-npu/runtime-std" }
+feagi-npu-runtime = { version = "0.0.0", path = "../feagi-npu/runtime", features = ["std"] }
 
 [features]
 default = ["http", "services"]

@@ -1,13 +1,6 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/*
- * Copyright 2025 Neuraville Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- */
-
 //! # FEAGI Runtime - Standard (Desktop/Server)
 //!
 //! Platform adapter for desktop and server environments with full std library support.
@@ -21,9 +14,8 @@
 //! ## Architecture
 //! Uses platform-agnostic core (`feagi-neural`, `feagi-synapse`) internally,
 //! providing a convenient API with standard library collections.
-
-/// Crate version from Cargo.toml
-pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+//!
+//! This module is only available when the `std` feature is enabled.
 
 pub mod neuron_array;
 pub mod runtime;
@@ -32,6 +24,10 @@ pub mod synapse_array;
 pub use neuron_array::NeuronArray;
 pub use runtime::StdRuntime;
 pub use synapse_array::SynapseArray;
+
+// Re-export for backward compatibility
+pub use NeuronArray as StdNeuronArray;
+pub use SynapseArray as StdSynapseArray;
 
 /// Runtime configuration for std platform
 #[derive(Debug, Clone)]
@@ -55,3 +51,4 @@ impl Default for RuntimeConfig {
         }
     }
 }
+

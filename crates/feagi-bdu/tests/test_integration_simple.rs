@@ -8,14 +8,14 @@ use feagi_bdu::{ConnectomeManager, CorticalArea, CorticalID};
 use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
-use feagi_npu_runtime_std::StdRuntime;
+use feagi_npu_runtime::StdRuntime;
 use std::sync::{Arc, Mutex};
 
 /// Helper to create an isolated test manager with NPU
 fn create_test_manager() -> ConnectomeManager {
     use feagi_npu_burst_engine::backend::CPUBackend;
     use feagi_npu_burst_engine::DynamicNPU;
-    use feagi_npu_runtime_std::StdRuntime;
+    use feagi_npu_runtime::StdRuntime;
 
     let runtime = StdRuntime;
     let backend = CPUBackend::new();

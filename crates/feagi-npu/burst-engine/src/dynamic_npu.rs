@@ -12,7 +12,7 @@ use feagi_npu_runtime::{NeuronStorage, Runtime, SynapseStorage};
 
 // Import StdRuntime for the default type alias
 #[cfg(feature = "std")]
-use feagi_npu_runtime_std::StdRuntime;
+use feagi_npu_runtime::StdRuntime;
 
 /// Dynamic NPU that dispatches to f32 or INT8 at runtime
 ///
@@ -601,7 +601,7 @@ where
 // ============================================================================
 
 #[cfg(test)]
-impl DynamicNPUGeneric<feagi_npu_runtime_std::StdRuntime, CPUBackend> {
+impl DynamicNPUGeneric<feagi_npu_runtime::StdRuntime, CPUBackend> {
     /// Create new f32 NPU with StdRuntime and CPUBackend (backward compatible)
     ///
     /// # Deprecation Notice

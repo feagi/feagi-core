@@ -23,7 +23,7 @@
 use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType, ComputeBackend};
 use feagi_npu_burst_engine::FireCandidateList;
 use feagi_npu_neural::types::NeuronId;
-use feagi_npu_runtime_std::{NeuronArray, SynapseArray};
+use feagi_npu_runtime::{NeuronArray, SynapseArray};
 
 /// Helper: Create test genome
 fn create_test_genome(

@@ -27,7 +27,7 @@ use feagi_npu_neural::SynapseType;
 
 /// Create a simple 3-layer network: Input → Hidden → Output
 fn create_simple_network(
-) -> RustNPU<feagi_npu_runtime_std::StdRuntime, f32, feagi_npu_burst_engine::backend::CPUBackend> {
+) -> RustNPU<feagi_npu_runtime::StdRuntime, f32, feagi_npu_burst_engine::backend::CPUBackend> {
     let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 20);
 
     // Power area (cortical_area=1) - 3 neurons

@@ -1835,7 +1835,7 @@ dependencies = [
  "feagi-io",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
- "feagi-npu-runtime-std",
+ "feagi-npu-runtime",
  "feagi-observability",
  "feagi-services",
  "feagi-transports",
@@ -1890,7 +1890,7 @@ dependencies = [
  "feagi-evo",
  "feagi-npu-burst-engine",
  "feagi-npu-neural",
- "feagi-npu-runtime-std",
+ "feagi-npu-runtime",
  "feagi-observability",
  "getrandom 0.2.16",
  "ndarray",
@@ -1980,7 +1980,7 @@ dependencies = [
  "esp-idf-svc",
  "esp-idf-sys",
  "feagi-npu-neural",
- "feagi-npu-runtime-embedded",
+ "feagi-npu-runtime",
  "heapless",
  "log",
  "panic-halt",
@@ -2055,7 +2055,6 @@ dependencies = [
  "feagi-data-structures",
  "feagi-npu-neural",
  "feagi-npu-runtime",
- "feagi-npu-runtime-std",
  "feagi-observability",
  "feagi-state-manager",
  "half",
@@ -2095,26 +2094,10 @@ dependencies = [
 name = "feagi-npu-runtime"
 version = "0.0.0"
 dependencies = [
- "feagi-npu-neural",
-]
-
-[[package]]
-name = "feagi-npu-runtime-embedded"
-version = "0.0.0"
-dependencies = [
- "feagi-npu-neural",
- "feagi-npu-runtime",
- "spin",
-]
-
-[[package]]
-name = "feagi-npu-runtime-std"
-version = "0.0.0"
-dependencies = [
  "ahash",
  "feagi-npu-neural",
- "feagi-npu-runtime",
  "rayon",
+ "spin",
  "thiserror 1.0.69",
 ]
 

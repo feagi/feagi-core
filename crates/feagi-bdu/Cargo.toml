@@ -68,7 +68,7 @@ async-tokio = []
 [dev-dependencies]
 criterion = "0.5"       # Benchmarking
 proptest = "1.4"        # Property-based testing
-feagi-npu-runtime-std = { version = "0.0.0", path = "../feagi-npu/runtime-std" }
+feagi-npu-runtime = { version = "0.0.0", path = "../feagi-npu/runtime", features = ["std"] }
 
 # Benchmarks will be added in Phase 2
 # [[bench]]

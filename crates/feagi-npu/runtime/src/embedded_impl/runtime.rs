@@ -10,9 +10,8 @@
 
 //! Embedded runtime implementation for ESP32, RTOS, no_std platforms
 
-use crate::{NeuronArray, SynapseArray};
-use feagi_npu_neural::types::NeuralValue;
-use feagi_npu_runtime::{NeuronStorage, Result, Runtime, RuntimeError, SynapseStorage};
+use crate::embedded_impl::{NeuronArray, SynapseArray};
+use crate::traits::{NeuralValue, Result, Runtime, RuntimeError};
 
 /// Embedded runtime for ESP32, Arduino, STM32 (fixed-size, no_std)
 #[derive(Debug, Clone, Copy)]

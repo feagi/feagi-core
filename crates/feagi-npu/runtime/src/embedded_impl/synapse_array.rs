@@ -13,7 +13,7 @@
 //! Uses stack-allocated arrays for predictable memory usage.
 
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
-use feagi_npu_runtime::{Result, RuntimeError, SynapseStorage};
+use crate::traits::{Result, RuntimeError, SynapseStorage};
 
 /// Fixed-size synapse array for embedded systems
 ///
@@ -208,6 +208,7 @@ impl<const N: usize> SynapseStorage for SynapseArray<N> {
         Ok(idx)
     }
 
+    #[cfg(any(feature = "std", feature = "alloc"))]
     fn add_synapses_batch(
         &mut self,
         sources: &[u32],

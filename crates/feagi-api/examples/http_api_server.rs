@@ -82,7 +82,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     use feagi_npu_burst_engine::backend::CPUBackend;
     use feagi_npu_burst_engine::DynamicNPU;
-    use feagi_npu_runtime_std::StdRuntime;
+    use feagi_npu_runtime::StdRuntime;
 
     let runtime = StdRuntime;
     let backend = CPUBackend::new();

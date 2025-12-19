@@ -304,7 +304,7 @@ fn process_single_neuron<T: NeuralValue>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_npu_runtime_std::NeuronArray; // OK: dev-dependency for tests
+    use feagi_npu_runtime::NeuronArray; // OK: dev-dependency for tests
 
     #[test]
     fn test_neuron_fires_when_above_threshold() {

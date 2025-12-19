@@ -265,7 +265,7 @@ impl CUDABackend {
 
     /// Upload neuron arrays to GPU memory
     fn upload_neuron_arrays(&mut self, neuron_array: &NeuronArray<f32>) -> Result<()> {
-        let count = neuron_array.count;
+        let count = neuron_array.count();
         self.current_neuron_count = count;
 
         info!("📤 Uploading {} neurons to GPU memory...", count);
@@ -351,7 +351,7 @@ impl CUDABackend {
 
     /// Upload synapse arrays to GPU memory
     fn upload_synapse_arrays(&mut self, synapse_array: &SynapseArray) -> Result<()> {
-        let synapse_count = synapse_array.count;
+        let synapse_count = synapse_array.count();
 
         info!("📤 Uploading {} synapses to GPU memory...", synapse_count);
 

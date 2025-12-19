@@ -14,7 +14,7 @@
 
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_neural::{is_refractory, update_neuron_lif};
-use feagi_npu_runtime::{NeuronStorage, Result, RuntimeError};
+use crate::traits::{NeuronStorage, Result, RuntimeError};
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;
@@ -30,7 +30,7 @@ use alloc::vec::Vec;
 ///
 /// # Example
 /// ```
-/// use feagi_npu_runtime_embedded::NeuronArray;
+/// use feagi_npu_runtime::embedded::NeuronArray;
 ///
 /// // 100-neuron array on the stack (~5 KB for f32)
 /// let mut neurons = NeuronArray::<f32, 100>::new();
