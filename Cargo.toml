@@ -99,7 +99,6 @@ members = [
     "crates/feagi-agent",              # Agent library (Rust client library)
     
     # === Applications ===
-    "crates/feagi-transports",         # Transport layer abstractions
     
     # === Data Processing ===
     "crates/feagi-connector-core",     # Connector agent core functionality

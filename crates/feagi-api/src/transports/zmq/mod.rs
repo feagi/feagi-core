@@ -3,7 +3,7 @@
 
 //! ZMQ Transport Module
 //!
-//! Provides ZMQ-based control plane for the FEAGI API using feagi-transports.
+//! Provides ZMQ-based control plane for the FEAGI API using feagi-io transport primitives.
 
 pub mod adapter;
 

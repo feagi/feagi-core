@@ -11,7 +11,7 @@ default = ["zmq-transport", "udp-transport"]  # Most deployments need both
 zmq-transport = ["dep:zmq"]                   # Blocking, TCP-based transport
 udp-transport = ["dep:tokio", "dep:async-trait", "dep:num_cpus"]  # Async, best-effort transport
 shm-transport = []                            # Shared memory (no extra deps, future)
-websocket-transport = ["udp-transport"]       # WebSocket requires tokio (shares with UDP)
+websocket-transport = ["udp-transport", "dep:tokio-tungstenite", "dep:futures-util"]  # WebSocket requires tokio, tungstenite, futures
 all-transports = ["zmq-transport", "udp-transport", "shm-transport", "websocket-transport"]
 connectome-serialization = ["bincode", "connectome-compression"]  # Connectome file I/O (types in feagi-npu-neural)
 connectome-compression = []  # LZ4 compression for connectome files (lz4 already in dependencies)
@@ -20,7 +20,6 @@ connectome-compression = []  # LZ4 compression for connectome files (lz4 already
 feagi-npu-burst-engine = { version = "0.0.0", path = "../feagi-npu/burst-engine" }
 feagi-bdu = { version = "0.0.0", path = "../feagi-bdu" }  # For CorticalAreaExt
 feagi-services = { version = "0.0.0", path = "../feagi-services" }  # For GenomeService and ConnectomeService
-feagi-transports = { version = "0.0.0", path = "../feagi-transports", features = ["zmq-server", "websocket-server"] }
 feagi-npu-neural = { version = "0.0.0", path = "../feagi-npu/neural" }  # For types
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi-data-structures.workspace = true
@@ -41,11 +40,13 @@ tracing = { workspace = true }  # Structured logging
 # Connectome serialization dependencies (optional, behind feature)
 bincode = { version = "1.3", optional = true }  # Fast binary serialization
 
-# Optional transport-specific dependencies (now via feagi-transports)
-zmq = { version = "0.10", optional = true }  # Still needed for context creation
-tokio = { version = "1.0", features = ["full"], optional = true }
-async-trait = { version = "0.1", optional = true }
-num_cpus = { version = "1.16", optional = true }
+# Optional transport-specific dependencies (consolidated from feagi-transports)
+zmq = { version = "0.10", optional = true }  # ZMQ transport
+tokio = { version = "1.0", features = ["full"], optional = true }  # Async runtime (UDP, WebSocket)
+async-trait = { version = "0.1", optional = true }  # Async traits
+num_cpus = { version = "1.16", optional = true }  # CPU detection for UDP
+tokio-tungstenite = { version = "0.21", optional = true }  # WebSocket transport
+futures-util = { version = "0.3", optional = true }  # WebSocket utilities
 
 [dev-dependencies]
 tokio-test = "0.4"

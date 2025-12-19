@@ -5,8 +5,8 @@
 
 use crate::blocking::compression;
 use crate::core::{IOConfig, IOError, Result};
-use feagi_transports::common::ServerConfig;
-use feagi_transports::prelude::*;
+use crate::transports::core::common::ServerConfig;
+use crate::transports::core::prelude::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use tokio::runtime::Runtime;

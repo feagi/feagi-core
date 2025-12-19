@@ -7,11 +7,15 @@
 //! (or both for dual-mode transports like ZMQ).
 //!
 //! Available transports:
-//! - zmq: ZeroMQ (blocking, TCP-based, reliable) [feature: zmq-transport]
+//! - core: Low-level transport primitives (ZMQ, WebSocket, UDP, SHM) [internal]
+//! - zmq: ZeroMQ domain-specific wrappers (blocking, TCP-based, reliable) [feature: zmq-transport]
 //! - udp: User Datagram Protocol (nonblocking, best-effort, high-throughput) [feature: udp-transport]
+//! - websocket: WebSocket domain-specific wrappers (nonblocking only) [feature: websocket-transport]
 //! - shm: Shared Memory (blocking only, future) [feature: shm-transport]
-//! - websocket: WebSocket (nonblocking only, future) [feature: websocket-transport]
 //! - rtos: Embedded/RTOS (special no_std, future) [build flag: --target]
+
+// Core transport primitives (consolidated from feagi-transports)
+pub mod core;
 
 #[cfg(feature = "zmq-transport")]
 pub mod zmq;

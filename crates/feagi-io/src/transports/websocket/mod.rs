@@ -9,7 +9,7 @@
 //! - Visualization stream (FEAGI → clients)
 //! - Registration/control stream (bidirectional)
 //!
-//! Uses the feagi-transports WebSocket implementation under the hood.
+//! Uses the internal transport primitives WebSocket implementation under the hood.
 
 #[cfg(feature = "websocket-transport")]
 pub mod streams;

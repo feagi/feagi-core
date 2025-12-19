@@ -1,13 +1,13 @@
 // Copyright 2025 Neuraville Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! API Control stream using feagi-transports
+//! API Control stream using transport primitives
 //!
-//! This is a refactored version using the feagi-transports abstraction layer.
+//! This uses the internal transport primitives (consolidated from feagi-transports).
 //! Domain logic (request routing, NPU queries, RPC) is preserved, but transport
-//! primitives are now provided by feagi-transports.
+//! primitives are now provided by feagi-io's internal core module.
 
-use feagi_transports::prelude::*;
+use crate::transports::core::prelude::*;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -67,7 +67,7 @@ impl ApiControlStream {
             track_connections: true,
         };
 
-        // Create ZMQ router using feagi-transports
+        // Create ZMQ router using internal transport primitives
         let router = ZmqRouter::new(context, server_config)
             .map_err(|e| format!("Failed to create router: {}", e))?;
 

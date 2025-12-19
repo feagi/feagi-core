@@ -3,21 +3,21 @@
 
 //! ZMQ Transport Adapter for FEAGI API
 //!
-//! This adapter uses feagi-transports to handle ZMQ communication and routes
+//! This adapter uses feagi-io transport primitives to handle ZMQ communication and routes
 //! requests to the unified endpoint layer. It provides an alternative to HTTP
 //! for control plane communication.
 
 use crate::common::{ApiError, ApiRequest, ApiResponse};
 use crate::endpoints;
 use crate::transports::http::server::ApiState;
-use feagi_transports::prelude::*;
+use feagi_io::transports::core::prelude::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use std::thread;
 
 /// ZMQ Transport Adapter for the API
 pub struct ZmqApiAdapter {
-    /// ZMQ ROUTER transport from feagi-transports
+    /// ZMQ ROUTER transport from feagi-io transport primitives
     router: Arc<Mutex<Option<ZmqRouter>>>,
 
     /// API state with all services
@@ -47,7 +47,7 @@ impl ZmqApiAdapter {
             track_connections: true,
         };
 
-        // Create ZMQ router using feagi-transports
+        // Create ZMQ router using feagi-io transport primitives
         let router = ZmqRouter::new(context, server_config)
             .map_err(|e| format!("Failed to create ZMQ router: {}", e))?;
 
@@ -75,7 +75,7 @@ impl ZmqApiAdapter {
 
         *self.running.lock() = true;
 
-        info!("🦀 [ZMQ-API] Adapter started (using feagi-transports)");
+        info!("🦀 [ZMQ-API] Adapter started (using feagi-io transport primitives)");
 
         // Start request handling loop
         self.start_request_loop();
