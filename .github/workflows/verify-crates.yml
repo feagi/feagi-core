@@ -191,7 +191,7 @@ jobs:
             # Check if the error is about missing dependencies on crates.io
             # This is expected for crates that depend on unpublished workspace members
             # Also check for workspace-wide resolution errors (cargo package resolves entire workspace)
-            if echo "$PACKAGE_OUTPUT" | grep -qE "no matching package|location searched: crates.io|failed to get.*as a dependency"; then
+            if echo "$PACKAGE_OUTPUT" | grep -qE "no matching package|location searched: crates.io|failed to get.*as a dependency|searched package name"; then
               echo "  ⚠️  $crate_name has unpublished workspace dependencies"
               echo "     This is expected - dependencies must be published first (see PUBLISHING_ORDER.md)"
               echo "     Note: cargo package resolves the entire workspace, so errors from other crates are expected"
