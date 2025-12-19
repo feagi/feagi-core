@@ -47,11 +47,10 @@ impl FeagiByteStructureType {
     /// assert!(FeagiByteStructureType::try_get_type_from_bytes(&empty_bytes).is_err());
     /// ```
     pub fn try_get_type_from_bytes(bytes: &[u8]) -> Result<FeagiByteStructureType, FeagiDataError> {
-        if bytes.len() < 1 {
+        if bytes.is_empty() {
             return Err(FeagiDataError::DeserializationError(
                 "Cannot ascertain type of empty bytes array!".into(),
-            )
-            .into());
+            ));
         }
         FeagiByteStructureType::try_from(bytes[0])
     }
@@ -89,8 +88,7 @@ impl TryFrom<u8> for FeagiByteStructureType {
             _ => Err(FeagiDataError::DeserializationError(format!(
                 "Unknown FeagiByteStructure type {}",
                 value
-            ))
-            .into()),
+            ))),
         }
     }
 }

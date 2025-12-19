@@ -138,7 +138,7 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
             ) as usize;
 
             if byte_reading.len() < data_start_reading + number_bytes_to_read {
-                return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZP is too short to fit the data the header says it contains!".into()).into());
+                return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZP is too short to fit the data the header says it contains!".into()));
             }
 
             let neuron_bytes =
@@ -200,8 +200,7 @@ fn write_neuron_array_to_bytes(
                 "Need exactly {} bytes to write xyzp neuron data, but given a space of {} bytes!",
                 bytes_to_write_to.len(),
                 number_bytes_needed
-            )
-            .into(),
+            ),
         ));
     }
 

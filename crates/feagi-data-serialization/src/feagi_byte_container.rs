@@ -421,15 +421,14 @@ impl FeagiByteContainer {
 
         // Write Structure lookup header and Data bytes at the same time
         let mut structure_size_header_byte_index = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT;
-        for struct_index in 0..incoming_structs.len() {
-            let incoming_struct = &incoming_structs[struct_index];
+        for (struct_index, incoming_struct) in incoming_structs.iter().enumerate() {
             let contained_struct_reference = &self.contained_struct_references[struct_index];
 
             LittleEndian::write_u32(
                 &mut self.bytes[structure_size_header_byte_index
                     ..structure_size_header_byte_index
                         + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE],
-                contained_struct_reference.number_bytes_to_read as u32,
+                contained_struct_reference.number_bytes_to_read,
             );
             incoming_struct.try_serialize_struct_to_byte_slice(
                 contained_struct_reference.get_as_byte_slice_mut(&mut self.bytes),
@@ -458,7 +457,7 @@ impl FeagiByteContainer {
 
         let number_of_bytes_used_by_struct = incoming_struct.get_number_of_bytes_needed();
         let total_number_of_bytes = Self::GLOBAL_BYTE_HEADER_BYTE_COUNT
-            + (1 * Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE)
+            + Self::STRUCTURE_LOOKUP_HEADER_BYTE_COUNT_PER_STRUCTURE
             + number_of_bytes_used_by_struct;
 
         self.contained_struct_references
@@ -663,13 +662,13 @@ struct ContainedStructReference {
 
 impl ContainedStructReference {
     /// Returns an immutable slice of the structure's bytes.
-    pub fn get_as_byte_slice<'a>(&self, byte_source: &'a Vec<u8>) -> &'a [u8] {
+    pub fn get_as_byte_slice<'a>(&self, byte_source: &'a [u8]) -> &'a [u8] {
         &byte_source[self.byte_start_index as usize
             ..self.byte_start_index as usize + self.number_bytes_to_read as usize]
     }
 
     /// Returns a mutable slice of the structure's bytes.
-    pub fn get_as_byte_slice_mut<'a>(&self, byte_source: &'a mut Vec<u8>) -> &'a mut [u8] {
+    pub fn get_as_byte_slice_mut<'a>(&self, byte_source: &'a mut [u8]) -> &'a mut [u8] {
         &mut byte_source[self.byte_start_index as usize
             ..self.byte_start_index as usize + self.number_bytes_to_read as usize]
     }
