@@ -3272,7 +3272,7 @@ mod tests {
         .unwrap();
 
         let initial_count = manager.get_cortical_area_count();
-        let cortical_idx = manager.add_cortical_area(area).unwrap();
+        let _cortical_idx = manager.add_cortical_area(area).unwrap();
 
         assert_eq!(manager.get_cortical_area_count(), initial_count + 1);
         assert!(manager.has_cortical_area(&cortical_id));

@@ -149,7 +149,6 @@ impl GenomeSaver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions as Dimensions;
     use feagi_data_structures::genomic::RegionType;
 
     #[test]

@@ -254,7 +254,7 @@ pub mod fs_storage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::FileSystemStorage;
 
     #[cfg(feature = "async-tokio")]
     #[tokio::test]
