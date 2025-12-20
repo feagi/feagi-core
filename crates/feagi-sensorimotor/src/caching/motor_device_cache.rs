@@ -374,6 +374,12 @@ impl std::fmt::Debug for MotorDeviceCache {
     }
 }
 
+impl Default for MotorDeviceCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MotorDeviceCache {
     pub fn new() -> Self {
         MotorDeviceCache {

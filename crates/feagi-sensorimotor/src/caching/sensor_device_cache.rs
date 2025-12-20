@@ -418,6 +418,12 @@ impl std::fmt::Debug for SensorDeviceCache {
     }
 }
 
+impl Default for SensorDeviceCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SensorDeviceCache {
     pub fn new() -> Self {
         SensorDeviceCache {
@@ -431,7 +437,7 @@ impl SensorDeviceCache {
         }
     }
 
-    sensor_cortical_units!(sensor_unit_functions);
+    let _ = sensor_cortical_units!(sensor_unit_functions);
 
     //region Data IO
 

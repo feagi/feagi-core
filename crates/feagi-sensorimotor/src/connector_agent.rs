@@ -18,7 +18,7 @@ impl ConnectorAgent {
         }
     }
 
-    pub fn get_sensor_cache(&self) -> MutexGuard<SensorDeviceCache> {
+    pub fn get_sensor_cache(&self) -> MutexGuard<'_, SensorDeviceCache> {
         self.sensor_cache.lock().unwrap()
     }
 
@@ -26,7 +26,7 @@ impl ConnectorAgent {
         self.sensor_cache.clone()
     }
 
-    pub fn get_motor_cache(&self) -> MutexGuard<MotorDeviceCache> {
+    pub fn get_motor_cache(&self) -> MutexGuard<'_, MotorDeviceCache> {
         self.motor_cache.lock().unwrap()
     }
 
