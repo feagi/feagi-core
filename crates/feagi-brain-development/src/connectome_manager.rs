@@ -3263,7 +3263,7 @@ mod tests {
         let cortical_id = CorticalID::try_from_bytes(b"cst_add_").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Visual Input".to_string(),
             CorticalAreaDimensions::new(128, 128, 20).unwrap(),
@@ -3293,7 +3293,7 @@ mod tests {
         let cortical_id = CorticalID::try_from_bytes(b"cst_look").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
@@ -3328,7 +3328,7 @@ mod tests {
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Test".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
@@ -3359,7 +3359,7 @@ mod tests {
         let cortical_id1 = CoreCorticalType::Power.to_cortical_id();
         let cortical_type1 = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area1 = CorticalArea::new(
-            cortical_id1.clone(),
+            cortical_id1,
             0,
             "First".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
@@ -3522,7 +3522,7 @@ mod tests {
         let cortical_id = CorticalID::try_from_bytes(b"cst_syn_").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0, // cortical_idx
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
@@ -3536,7 +3536,7 @@ mod tests {
         if let Some(npu_arc) = manager.get_npu() {
             if let Ok(mut npu_guard) = npu_arc.try_lock() {
                 if let DynamicNPU::F32(ref mut npu) = *npu_guard {
-                    npu.register_cortical_area(cortical_idx as u32, cortical_id.as_base_64());
+                    npu.register_cortical_area(cortical_idx, cortical_id.as_base_64());
                 }
             }
         }

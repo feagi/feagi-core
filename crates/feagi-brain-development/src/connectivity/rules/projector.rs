@@ -318,9 +318,9 @@ mod tests {
 
         // All positions should be within bounds
         for pos in &positions {
-            assert!(pos.0 >= 0 && pos.0 < 128);
-            assert!(pos.1 >= 0 && pos.1 < 128);
-            assert!(pos.2 >= 0 && pos.2 < 1);
+            assert!(pos.0 < 128);
+            assert!(pos.1 < 128);
+            assert!(pos.2 < 1);
         }
     }
 

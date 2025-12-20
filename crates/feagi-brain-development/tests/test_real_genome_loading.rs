@@ -52,8 +52,6 @@ fn test_vision_genome_end_to_end() {
 
 fn test_genome_end_to_end(genome_path: &str, genome_name: &str) {
     // Reset singleton to ensure clean state between genome tests
-    use parking_lot::RwLock;
-    use std::sync::Arc;
     static mut TEST_COUNTER: usize = 0;
     unsafe {
         TEST_COUNTER += 1;
@@ -71,7 +69,7 @@ fn test_genome_end_to_end(genome_path: &str, genome_name: &str) {
 
     // Step 1: Load flat genome from file
     let flat_json = fs::read_to_string(genome_path)
-        .expect(&format!("Failed to read genome file: {}", genome_path));
+        .unwrap_or_else(|_| panic!("Failed to read genome file: {}", genome_path));
     let flat_genome: serde_json::Value =
         serde_json::from_str(&flat_json).expect("Failed to parse flat genome JSON");
 

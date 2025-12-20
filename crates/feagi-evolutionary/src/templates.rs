@@ -529,16 +529,21 @@ mod tests {
     #[test]
     fn test_embedded_genomes_exist() {
         // Test that embedded genome strings are not empty
-        assert!(!ESSENTIAL_GENOME_JSON.is_empty());
-        assert!(!BAREBONES_GENOME_JSON.is_empty());
-        assert!(!TEST_GENOME_JSON.is_empty());
-        assert!(!VISION_GENOME_JSON.is_empty());
+        // These are compile-time constants, so they're always non-empty
+        // The assertions verify the constants are defined correctly
+        #[allow(clippy::const_is_empty)]
+        {
+            assert!(!ESSENTIAL_GENOME_JSON.is_empty());
+            assert!(!BAREBONES_GENOME_JSON.is_empty());
+            assert!(!TEST_GENOME_JSON.is_empty());
+            assert!(!VISION_GENOME_JSON.is_empty());
+        }
     }
 
     #[test]
     fn test_load_essential_genome() {
         let genome = load_essential_genome().expect("Failed to load essential genome");
-        assert!(genome.cortical_areas.len() > 0);
+        assert!(!genome.cortical_areas.is_empty());
         // Essential genome should have _power
         let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
         assert!(genome.cortical_areas.contains_key(&power_id));

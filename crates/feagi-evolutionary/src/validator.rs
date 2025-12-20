@@ -725,7 +725,7 @@ mod tests {
         };
         let test_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
-            test_id.clone(),
+            test_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),

@@ -160,7 +160,7 @@ mod tests {
         use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
@@ -205,7 +205,7 @@ mod tests {
         let mut cortical_areas = HashMap::new();
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),

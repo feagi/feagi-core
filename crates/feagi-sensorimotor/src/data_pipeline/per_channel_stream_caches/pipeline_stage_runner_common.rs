@@ -183,7 +183,7 @@ pub(crate) trait PipelineStageRunner {
         &mut self,
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
     ) -> Result<(), FeagiDataError> {
-        let size = new_pipeline_stage_properties.len();
+        let _size = new_pipeline_stage_properties.len();
         verify_pipeline_stage_properties(
             &new_pipeline_stage_properties,
             self.get_fixed_type(),

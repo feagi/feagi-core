@@ -11,7 +11,6 @@
 
 use feagi_brain_development::models::brain_region_hierarchy::BrainRegionHierarchy;
 use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Helper to create a root region with UUID
 fn create_root_region() -> BrainRegion {
@@ -157,7 +156,7 @@ fn test_multiple_subregions_same_parent() {
 
         hierarchy
             .add_region(subregion, Some(root_id_str.clone()))
-            .expect(&format!("Failed to add subregion {}", i));
+            .unwrap_or_else(|_| panic!("Failed to add subregion {}", i));
 
         // Verify each can find its parent
         let parent_id_opt = hierarchy.get_parent(&subregion_id_str);

@@ -159,26 +159,26 @@ define_pipeline_stage_properties_enum! {
 
         /// Properties for ImageFrameSegmentatorStage that store configuration for image segmentation
         ImageFrameSegmentator {
-            input_image_properties: ImageFrameProperties,
-            output_image_properties: SegmentedImageFrameProperties,
-            segmentation_gaze: GazeProperties,
+            input_image_properties,
+            output_image_properties: _output_image_properties,
+            segmentation_gaze: _segmentation_gaze,
         } => {
             input_type: WrappedIOType::ImageFrame(Some(*input_image_properties)),
-            output_type: WrappedIOType::SegmentedImageFrame(Some(*output_image_properties)),
+            output_type: WrappedIOType::SegmentedImageFrame(Some(*_output_image_properties)),
             create_stage: ImageFrameSegmentatorStage::new_box(
                 *input_image_properties,
-                *output_image_properties,
-                ImageFrameSegmentator::new(*input_image_properties, *output_image_properties, *segmentation_gaze).unwrap()
+                *_output_image_properties,
+                ImageFrameSegmentator::new(*input_image_properties, *_output_image_properties, *_segmentation_gaze).unwrap()
             ).unwrap(),
-            display: ("ImageFrameSegmentator(input: {:?}, output: {:?}, gaze: {:?})", input_image_properties, output_image_properties, segmentation_gaze),
+            display: ("ImageFrameSegmentator(input: {:?}, output: {:?}, gaze: {:?})", input_image_properties, _output_image_properties, _segmentation_gaze),
         },
 
         /// Properties for ImageFrameQuickDiffStage that configures quick difference detection
         /// between consecutive image frames.
         ImageQuickDiff {
-            per_pixel_allowed_range: RangeInclusive<u8>,
-            acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
-            image_properties: ImageFrameProperties,
+            per_pixel_allowed_range,
+            acceptable_amount_of_activity_in_image,
+            image_properties,
         } => {
             input_type: WrappedIOType::ImageFrame(Some(*image_properties)),
             output_type: WrappedIOType::ImageFrame(Some(*image_properties)),
@@ -192,9 +192,9 @@ define_pipeline_stage_properties_enum! {
 
         /// Properties for ImagePixelValueCountThresholdStage checks for an image global pixel threshold
         ImagePixelValueCountThreshold {
-            input_definition: ImageFrameProperties,
-            inclusive_pixel_range: RangeInclusive<u8>,
-            acceptable_amount_of_activity_in_image: RangeInclusive<Percentage>,
+            input_definition,
+            inclusive_pixel_range,
+            acceptable_amount_of_activity_in_image,
         } => {
             input_type: WrappedIOType::ImageFrame(Some(*input_definition)),
             output_type: WrappedIOType::ImageFrame(Some(*input_definition)),

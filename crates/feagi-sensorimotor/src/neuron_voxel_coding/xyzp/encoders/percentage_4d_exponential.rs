@@ -82,7 +82,7 @@ impl NeuronVoxelXYZPEncoder for Percentage4DExponentialNeuronVoxelXYZPEncoder {
         // Cannot parallelize due to data writing of various lengths
         for c in 0..self.scratch_space.len() as u32 {
             const Y: u32 = 0;
-            let channel_scratch = &self.scratch_space[_c as usize];
+            let channel_scratch = &self.scratch_space[c as usize];
             for a in &channel_scratch.0 {
                 neuron_array_target.push_raw(c * CHANNEL_WIDTH, Y, *a, 1.0);
             }

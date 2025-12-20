@@ -70,7 +70,7 @@ mod tests {
     fn test_random_f64() {
         for _ in 0..100 {
             let val = random_f64();
-            assert!(val >= 0.0 && val < 1.0, "random_f64 out of range: {}", val);
+            assert!((0.0..1.0).contains(&val), "random_f64 out of range: {}", val);
         }
     }
 
@@ -96,7 +96,7 @@ mod tests {
     fn test_random_range() {
         for _ in 0..100 {
             let val = random_range(10, 20);
-            assert!(val >= 10 && val < 20, "random_range out of range: {}", val);
+            assert!((10..20).contains(&val), "random_range out of range: {}", val);
         }
     }
 

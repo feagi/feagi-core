@@ -1068,7 +1068,7 @@ mod tests {
             .as_cortical_type()
             .expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),

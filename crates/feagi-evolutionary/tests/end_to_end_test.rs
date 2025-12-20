@@ -15,7 +15,6 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_evolutionary::{
     create_genome_with_core_morphologies, load_genome_from_json, save_genome_to_json,
     validate_genome,

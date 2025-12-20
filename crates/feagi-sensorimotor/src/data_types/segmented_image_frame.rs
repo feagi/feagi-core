@@ -276,7 +276,6 @@ impl SegmentedImageFrame {
         channel_index: CorticalChannelIndex,
     ) -> Result<(), FeagiDataError> {
         let ordered_images = self.get_ordered_image_frame_references();
-        let mut total_neurons = 0;
         write_targets.par_iter_mut().enumerate().try_for_each(
             |(image_ordered_index, write_target)| -> Result<(), FeagiDataError> {
                 ordered_images[image_ordered_index]
@@ -284,8 +283,6 @@ impl SegmentedImageFrame {
                 Ok(())
             },
         )?;
-
-        total_neurons = write_targets.iter().map(|wt| wt.len()).sum();
         Ok(())
     }
     //endregion
