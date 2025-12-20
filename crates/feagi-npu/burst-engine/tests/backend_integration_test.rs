@@ -9,14 +9,11 @@
 //!
 //! Tests the complete flow: configuration → backend selection → NPU creation → burst execution
 
-use feagi_npu_burst_engine::{
-    backend::select_backend,
-    RustNPU,
-};
 #[allow(unused_imports)]
 use feagi_npu_burst_engine::backend::BackendConfig;
 #[allow(unused_imports)]
 use feagi_npu_burst_engine::backend::BackendType;
+use feagi_npu_burst_engine::{backend::select_backend, RustNPU};
 
 /// Test: Backend selection logic with different genome sizes
 #[test]

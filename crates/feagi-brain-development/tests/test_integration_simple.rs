@@ -11,15 +11,13 @@ use std::sync::{Arc, Mutex};
 
 /// Helper to create an isolated test manager with NPU
 fn create_test_manager() -> ConnectomeManager {
-    use feagi_npu_burst_engine::backend::CPUBackend;
-    use feagi_npu_burst_engine::DynamicNPU;
-    use feagi_npu_runtime::StdRuntime;
-
-    let runtime = StdRuntime;
-    let backend = CPUBackend::new();
+    let runtime = feagi_npu_runtime::StdRuntime;
+    let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
     let npu_result =
         RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
-    let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
+    let npu = Arc::new(Mutex::new(feagi_npu_burst_engine::DynamicNPU::F32(
+        npu_result,
+    )));
     ConnectomeManager::new_for_testing_with_npu(npu)
 }
 

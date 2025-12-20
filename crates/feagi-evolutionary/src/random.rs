@@ -82,7 +82,11 @@ mod tests {
     fn test_random_f32() {
         for _ in 0..100 {
             let val = random_f32();
-            assert!((0.0..1.0).contains(&val), "random_f32 out of range: {}", val);
+            assert!(
+                (0.0..1.0).contains(&val),
+                "random_f32 out of range: {}",
+                val
+            );
         }
     }
 
