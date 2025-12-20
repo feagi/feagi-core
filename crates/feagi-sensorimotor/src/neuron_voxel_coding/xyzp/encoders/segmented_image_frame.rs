@@ -39,7 +39,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
             .zip(self.neuron_scratch_spaces.par_iter_mut())
             .enumerate()
             .try_for_each(
-                |(__channel_index, (pipeline, scratches))| -> Result<(), FeagiDataError> {
+                |(channel_index, (pipeline, scratches))| -> Result<(), FeagiDataError> {
                     let channel_updated = pipeline.get_last_processed_instant();
 
                     if channel_updated < time_of_previous_burst {

@@ -53,7 +53,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage4DExponentialNeuronVoxelXYZPEnco
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
             .try_for_each(
-                |(__channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+                |(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                     let channel_updated = pipeline.get_last_processed_instant();
                     if channel_updated < time_of_previous_burst {
                         return Ok(()); // We haven't updated, do nothing
@@ -93,7 +93,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage4DExponentialNeuronVoxelXYZPEnco
             )?;
 
         // Cannot parallelize due to data writing of various lengths
-        for _c in 0..self.scratch_space.len() as u32 {
+        for c in 0..self.scratch_space.len() as u32 {
             const Y: u32 = 0;
             let channel_scratch = &self.scratch_space[_c as usize];
 

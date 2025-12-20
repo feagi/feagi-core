@@ -46,7 +46,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
             .try_for_each(
-                |(__channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+                |(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                     let channel_updated = pipeline.get_last_processed_instant();
                     if channel_updated < time_of_previous_burst {
                         *scratch = BoolState::Unchanged;
@@ -64,7 +64,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
             )?;
 
         // Cannot parallelize due to data writing of various lengths
-        for _c in 0..self.scratch_space.len() as u32 {
+        for c in 0..self.scratch_space.len() as u32 {
             const Y: u32 = 0;
             const Z: u32 = 0;
             for (channel_x, changed) in self.scratch_space.iter().enumerate() {
