@@ -437,7 +437,7 @@ impl SensorDeviceCache {
         }
     }
 
-    let _ = sensor_cortical_units!(sensor_unit_functions);
+    sensor_cortical_units!(sensor_unit_functions);
 
     //region Data IO
 
