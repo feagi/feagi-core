@@ -15,7 +15,7 @@ mod cuda_correctness_tests {
     };
     use feagi_npu_burst_engine::FireCandidateList;
     use feagi_npu_neural::types::NeuronId;
-    use feagi_npu_runtime::{NeuronArray, SynapseArray};
+    use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
     /// Helper to create a small deterministic test genome
     fn create_test_genome(

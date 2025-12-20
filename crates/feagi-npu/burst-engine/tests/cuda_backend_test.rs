@@ -25,7 +25,7 @@ mod cuda_tests {
     };
     use feagi_npu_burst_engine::FireCandidateList;
     use feagi_npu_neural::types::NeuronId;
-    use feagi_npu_runtime::{NeuronArray, SynapseArray};
+    use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
     #[test]
     fn test_cuda_feature_enabled() {
@@ -234,7 +234,7 @@ fn test_backend_trait_object_safety() {
     use feagi_npu_burst_engine::backend::CPUBackend;
     use feagi_npu_neural::types::NeuralValue;
 
-    use feagi_npu_runtime::{NeuronArray, SynapseArray};
+    use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
     fn _uses_trait_object(
         _backend: &dyn feagi_npu_burst_engine::backend::ComputeBackend<
             f32,

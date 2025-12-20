@@ -24,7 +24,7 @@ use feagi_npu_burst_engine::backend::{
 };
 use feagi_npu_burst_engine::FireCandidateList;
 use feagi_npu_neural::types::NeuronId;
-use feagi_npu_runtime::{NeuronArray, SynapseArray};
+use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 use std::collections::HashSet;
 
 /// Helper: Create test genome
