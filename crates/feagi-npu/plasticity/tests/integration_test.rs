@@ -72,7 +72,7 @@ fn test_pattern_reactivation_workflow() {
     bitmap.insert(2);
 
     let pattern1 = detector
-        .detect_pattern(100, &vec![1], 10, vec![bitmap.clone()], None)
+        .detect_pattern(100, &[1], 10, vec![bitmap.clone()], None)
         .unwrap();
 
     let idx1 = memory_array
