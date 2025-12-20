@@ -67,9 +67,9 @@ impl NeuronVoxelXYZPEncoder for PercentageLinearNeuronVoxelXYZPEncoder {
             )?;
 
         // Cannot parallelize due to data writing of various lengths
-        for c in 0..self.scratch_space.len() as u32 {
+        for _c in 0..self.scratch_space.len() as u32 {
             const Y: u32 = 0;
-            let channel_scratch = &self.scratch_space[c as usize];
+            let channel_scratch = &self.scratch_space[_c as usize];
             for z in channel_scratch {
                 neuron_array_target.push_raw(c * CHANNEL_WIDTH, Y, *z, 1.0);
             }

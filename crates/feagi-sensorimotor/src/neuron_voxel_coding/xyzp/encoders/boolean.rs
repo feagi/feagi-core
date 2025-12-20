@@ -64,7 +64,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
             )?;
 
         // Cannot parallelize due to data writing of various lengths
-        for c in 0..self.scratch_space.len() as u32 {
+        for _c in 0..self.scratch_space.len() as u32 {
             const Y: u32 = 0;
             const Z: u32 = 0;
             for (channel_x, changed) in self.scratch_space.iter().enumerate() {

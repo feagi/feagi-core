@@ -71,9 +71,9 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage1DLinearNeuronVoxelXYZPEncoder {
             )?;
 
         // Cannot parallelize due to data writing of various lengths
-        for c in 0..self.scratch_space.len() as u32 {
+        for _c in 0..self.scratch_space.len() as u32 {
             const Y: u32 = 0;
-            let channel_scratch = &self.scratch_space[c as usize];
+            let channel_scratch = &self.scratch_space[_c as usize];
 
             // Write positive values
             for pos in &channel_scratch.0 {

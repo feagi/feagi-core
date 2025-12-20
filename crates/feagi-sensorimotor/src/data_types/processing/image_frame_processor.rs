@@ -149,7 +149,7 @@ impl ImageFrameProcessor {
         match self {
             // Do literally nothing, just copy the data
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: None,
                 final_resize_xy_to: None,
                 convert_color_space_to: None,
@@ -163,7 +163,7 @@ impl ImageFrameProcessor {
 
             // Only cropping
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: Some(cropping_from),
                 final_resize_xy_to: None,
                 convert_color_space_to: None,
@@ -182,7 +182,7 @@ impl ImageFrameProcessor {
 
             // Only resizing
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: None,
                 final_resize_xy_to: Some(final_resize_xy_to),
                 convert_color_space_to: None,
