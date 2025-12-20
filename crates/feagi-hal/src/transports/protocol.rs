@@ -65,9 +65,19 @@ use heapless::Vec;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Command {
     /// Set a GPIO pin to high or low
-    SetGpio { pin: u8, value: bool },
+    SetGpio {
+        /// GPIO pin number
+        pin: u8,
+        /// Pin value (true = high, false = low)
+        value: bool,
+    },
     /// Set PWM duty cycle (0-255) on a pin
-    SetPwm { pin: u8, duty: u8 },
+    SetPwm {
+        /// GPIO pin number
+        pin: u8,
+        /// PWM duty cycle (0-255)
+        duty: u8,
+    },
     /// Set full LED matrix (5x5 = 25 bytes, brightness 0-255)
     SetLedMatrix { data: [u8; 25] },
     /// Neuron firing coordinates for LED matrix visualization

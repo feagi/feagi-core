@@ -1796,7 +1796,8 @@ impl ConnectomeManager {
         // Add brain regions (hierarchy)
         for (region, parent_id) in parsed.brain_regions {
             let region_id = region.region_id;
-            self.brain_regions.add_region(region, parent_id)?;
+            let parent_id_clone = parent_id.clone();
+            self.brain_regions.add_region(region, parent_id_clone)?;
             debug!(target: "feagi-bdu","  ✅ Added brain region {} (parent: {:?})",
                 region_id, parent_id);
         }
