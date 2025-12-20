@@ -20,8 +20,9 @@
 //! Run with:
 //!   cargo test --test gpu_fcl_correctness_test --features gpu
 
-use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType, ComputeBackend};
+use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType};
 use feagi_npu_burst_engine::FireCandidateList;
+#[allow(unused_imports)]
 use feagi_npu_neural::types::NeuronId;
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
@@ -364,7 +365,7 @@ fn test_fcl_accumulation_correctness() {
     // FCL should contain accumulated contributions
     // With 5 source neurons × 10 synapses each = 50 synapses
     // Targeting ~10 unique downstream neurons (with overlap)
-    assert!(fcl.len() > 0, "FCL should have candidates");
+    assert!(!fcl.is_empty(), "FCL should have candidates");
     assert!(fcl.len() <= 50, "FCL should not exceed possible targets");
 
     println!("✅ FCL accumulation completed");

@@ -10,9 +10,13 @@
 //! Tests the complete flow: configuration → backend selection → NPU creation → burst execution
 
 use feagi_npu_burst_engine::{
-    backend::{select_backend, BackendConfig, BackendType},
+    backend::select_backend,
     RustNPU,
 };
+#[allow(unused_imports)]
+use feagi_npu_burst_engine::backend::BackendConfig;
+#[allow(unused_imports)]
+use feagi_npu_burst_engine::backend::BackendType;
 
 /// Test: Backend selection logic with different genome sizes
 #[test]
@@ -93,7 +97,7 @@ fn test_force_flags() {
 #[test]
 fn test_npu_creation_with_auto_backend() {
     // Small genome - should use CPU
-    let npu = RustNPU::<f32>::new(
+    let _npu = RustNPU::<f32>::new(
         10_000,    // neuron_capacity
         1_000_000, // synapse_capacity
         1000,      // fire_ledger_window
@@ -111,7 +115,7 @@ fn test_npu_burst_processing() {
     let neuron_capacity = 1000;
     let synapse_capacity = 10_000;
 
-    let npu = RustNPU::<f32>::new(
+    let _npu = RustNPU::<f32>::new(
         neuron_capacity,
         synapse_capacity,
         100,  // fire_ledger_window
@@ -123,7 +127,7 @@ fn test_npu_burst_processing() {
     drop(npu); // Explicit drop to show we successfully created it
 
     // Try with larger capacity
-    let npu = RustNPU::<f32>::new(100_000, 10_000_000, 100, None);
+    let _npu = RustNPU::<f32>::new(100_000, 10_000_000, 100, None);
     drop(npu);
 }
 

@@ -461,7 +461,7 @@ mod tests {
                 &mut neuron_indexes,
             );
             assert!(
-                neuron_indexes.len() > 0,
+                !neuron_indexes.is_empty(),
                 "0.5 should produce at least one active neuron"
             );
             assert!(
@@ -598,7 +598,7 @@ mod tests {
                 "Negative value should have no positive neurons"
             );
             assert!(
-                neuron_indexes_neg.len() > 0,
+                !neuron_indexes_neg.is_empty(),
                 "Negative value should have negative neurons"
             );
 
@@ -627,7 +627,7 @@ mod tests {
                 &mut neuron_indexes_neg,
             );
             assert!(
-                neuron_indexes_pos.len() > 0,
+                !neuron_indexes_pos.is_empty(),
                 "Value 1.0 should have positive neurons"
             );
             assert_eq!(
@@ -666,7 +666,7 @@ mod tests {
                 "Value -1.0 should have no positive neurons"
             );
             assert!(
-                neuron_indexes_neg.len() > 0,
+                !neuron_indexes_neg.is_empty(),
                 "Value -1.0 should have negative neurons"
             );
 

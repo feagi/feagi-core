@@ -19,7 +19,7 @@
 //! Run with:
 //!   cargo test --test gpu_error_handling_test --features gpu
 
-use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType};
+use feagi_npu_burst_engine::backend::create_backend;
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 /// Helper: Create test genome

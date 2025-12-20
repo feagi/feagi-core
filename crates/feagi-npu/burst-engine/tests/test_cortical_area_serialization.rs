@@ -191,7 +191,7 @@ fn test_incorrect_bytes_conversion_fails() {
     bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
 
     // This should fail because we're treating base64 string as raw bytes
-    let result = CorticalID::try_from_bytes(&bytes);
+    let result = CorticalID::try_from_bytes(bytes);
     assert!(
         result.is_err(),
         "Converting base64 string as raw bytes should fail"

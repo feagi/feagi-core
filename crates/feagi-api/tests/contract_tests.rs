@@ -274,7 +274,7 @@ async fn test_create_and_get_cortical_area() {
 
     // Get - need to recreate app because oneshot consumes it
     app = create_test_server().await;
-    let (status2, response2) = request_json(app, "GET", "/v1/connectome/areas/area01", None).await;
+    let (status2, _response2) = request_json(app, "GET", "/v1/connectome/areas/area01", None).await;
 
     // This will fail because each test gets a fresh manager
     // This demonstrates the isolation - which is good for parallel testing

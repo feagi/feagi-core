@@ -19,13 +19,9 @@
 //! Run with:
 //!   cargo test --test gpu_shader_correctness_test --features gpu
 
-use feagi_npu_burst_engine::backend::{
-    create_backend, BackendConfig, BackendType, CPUBackend, ComputeBackend,
-};
+use feagi_npu_burst_engine::backend::create_backend;
 use feagi_npu_burst_engine::FireCandidateList;
-use feagi_npu_neural::types::NeuronId;
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
-use std::collections::HashSet;
 
 /// Helper: Create test genome
 fn create_test_genome(

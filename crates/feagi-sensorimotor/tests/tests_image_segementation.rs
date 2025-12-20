@@ -16,6 +16,7 @@ use feagi_sensorimotor::ConnectorAgent;
 
 //region Helper Functions
 
+#[allow(dead_code)]
 fn load_bird_image() -> ImageFrame {
     let bird_bytes = std::fs::read("tests/images/bird.jpg")
         .expect("Bird image should exist at tests/images/bird.jpg");
@@ -66,6 +67,7 @@ mod test_image_segmentation_basic {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -107,6 +109,7 @@ mod test_image_segmentation_basic {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -162,6 +165,7 @@ mod test_image_segmentation_basic {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -210,6 +214,7 @@ mod test_image_segmentation_gaze_positions {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -253,6 +258,7 @@ mod test_image_segmentation_gaze_positions {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             dbg!("a");
             sensor_cache
@@ -297,6 +303,7 @@ mod test_image_segmentation_gaze_positions {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -340,6 +347,7 @@ mod test_image_segmentation_gaze_positions {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -388,6 +396,7 @@ mod test_image_segmentation_color_channels {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -431,6 +440,7 @@ mod test_image_segmentation_color_channels {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -479,6 +489,7 @@ mod test_image_segmentation_multiple_channels {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -534,6 +545,7 @@ mod test_image_segmentation_multiple_channels {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
 
             // Register multiple cortical groups with different gazes
@@ -614,6 +626,7 @@ mod test_image_segmentation_resolutions {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -656,6 +669,7 @@ mod test_image_segmentation_resolutions {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -698,6 +712,7 @@ mod test_image_segmentation_resolutions {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -744,6 +759,7 @@ mod test_image_segmentation_frame_change_handling {
 
         let connector_agent = ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(

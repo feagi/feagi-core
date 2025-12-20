@@ -15,7 +15,6 @@
 /// cargo test --release --test profiling_projection_performance -- --nocapture
 /// ```
 use parking_lot::Mutex;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -363,7 +362,7 @@ fn compare_metrics(baseline: &PerformanceMetrics, projection: &PerformanceMetric
     let projection_avg = projection.avg_burst_time().as_secs_f32() * 1000.0;
     let slowdown = projection_avg / baseline_avg;
     let overhead_ms = projection_avg - baseline_avg;
-    let overhead_pct = ((slowdown - 1.0) * 100.0);
+    let overhead_pct = (slowdown - 1.0) * 100.0;
 
     println!("   Burst Time Comparison:");
     println!("     Baseline:            {:>10.2} ms", baseline_avg);

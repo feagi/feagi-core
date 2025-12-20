@@ -12,6 +12,7 @@ use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupInd
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::SensoryCorticalUnit;
+#[allow(unused_imports)]
 use feagi_services::traits::registration_handler::RegistrationHandlerTrait;
 pub use feagi_services::types::registration::{
     AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,

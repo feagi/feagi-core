@@ -24,7 +24,6 @@ mod cuda_tests {
         enumerate_cuda_devices, is_cuda_available, CUDABackend, ComputeBackend,
     };
     use feagi_npu_burst_engine::FireCandidateList;
-    use feagi_npu_neural::types::NeuronId;
     use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
     #[test]
@@ -205,6 +204,7 @@ mod cuda_tests {
 
 #[cfg(not(feature = "cuda"))]
 mod no_cuda_tests {
+    #[allow(unused_imports)]
     use feagi_npu_burst_engine::backend::CUDABackend;
 
     #[test]
@@ -232,7 +232,8 @@ fn test_backend_trait_object_safety() {
     // This is important for dynamic backend selection
 
     use feagi_npu_burst_engine::backend::CPUBackend;
-
+    #[allow(unused_imports)]
+    use feagi_npu_neural::types::NeuronId;
     use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
     fn _uses_trait_object(
         _backend: &dyn feagi_npu_burst_engine::backend::ComputeBackend<

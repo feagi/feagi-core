@@ -608,7 +608,7 @@ pub fn create_backend<T: NeuralValue>(
 ) -> Result<Box<dyn ComputeBackend<T, N, S>>> {
     let actual_type = if backend_type == BackendType::Auto {
         // Count will be updated later, use capacity as estimate
-        let decision = select_backend(neuron_capacity, synapse_capacity, config);
+        let _decision = select_backend(neuron_capacity, synapse_capacity, config);
         info!(
             "🎯 Backend auto-selection: {} ({})",
             decision.backend_type, decision.reason

@@ -60,6 +60,7 @@ fn test_large_genome_prefers_gpu() {
     let config = BackendConfig::default();
 
     // Large genome: 1M neurons, 100M synapses
+    #[allow(unused_variables)]
     let decision = select_backend(1_000_000, 100_000_000, &config);
 
     #[cfg(feature = "gpu")]
@@ -113,6 +114,7 @@ fn test_custom_thresholds() {
     config.gpu_neuron_threshold = 100_000; // Lower threshold
 
     // 150K neurons should now trigger GPU
+    #[allow(unused_variables)]
     let decision = select_backend(150_000, 15_000_000, &config);
 
     #[cfg(feature = "gpu")]
@@ -134,9 +136,11 @@ fn test_speedup_estimation_scales() {
         (5_000_000, 500_000_000),
     ];
 
+    #[allow(unused_variables, unused_mut)]
     let mut prev_speedup = 0.0;
 
     for (neurons, synapses) in sizes {
+        #[allow(unused_variables)]
         let decision = select_backend(neurons, synapses, &config);
 
         #[cfg(feature = "gpu")]
@@ -167,7 +171,7 @@ fn test_speedup_estimation_scales() {
 fn test_backend_creation_cpu() {
     let config = BackendConfig::default();
 
-    let backend = create_backend::<f32>(BackendType::CPU, 10_000, 1_000_000, &config);
+    let _backend = create_backend::<f32>(BackendType::CPU, 10_000, 1_000_000, &config);
     assert!(backend.is_ok());
 
     let backend = backend.unwrap();
@@ -193,12 +197,12 @@ fn test_backend_creation_auto() {
     let config = BackendConfig::default();
 
     // Small genome - should get CPU
-    let backend_small = create_backend::<f32>(BackendType::Auto, 10_000, 1_000_000, &config);
-    assert!(backend_small.is_ok());
+    let _backend_small = create_backend::<f32>(BackendType::Auto, 10_000, 1_000_000, &config);
+    assert!(_backend_small.is_ok());
 
     // Large genome - should get GPU if available
-    let backend_large = create_backend::<f32>(BackendType::Auto, 1_000_000, 100_000_000, &config);
-    assert!(backend_large.is_ok());
+    let _backend_large = create_backend::<f32>(BackendType::Auto, 1_000_000, 100_000_000, &config);
+    assert!(_backend_large.is_ok());
 }
 
 #[cfg(feature = "gpu")]

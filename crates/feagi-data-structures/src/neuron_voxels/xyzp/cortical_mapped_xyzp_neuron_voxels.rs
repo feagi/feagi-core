@@ -367,7 +367,7 @@ impl FeagiByteStructureCompatible for CorticalMappedXYZPNeuronData {
     fn get_version(&self) -> u8 { Self::BYTE_STRUCT_VERSION }
     fn overwrite_feagi_byte_structure_slice(&self, slice: &mut [u8]) -> Result<usize, FeagiDataError> {
 
-        if self.mappings.len() == 0 {
+        if self.mappings.is_empty() {
             return Err(FeagiDataError::DeserializationError("Cannot generate a bytes structure export with an empty cortical mappings object!".into()).into())
         }
 

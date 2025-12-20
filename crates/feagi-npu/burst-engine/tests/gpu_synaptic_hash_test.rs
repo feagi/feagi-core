@@ -20,6 +20,7 @@
 //! Run with:
 //!   cargo test --test gpu_synaptic_hash_test --features gpu
 
+#[allow(unused_imports)]
 use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType};
 use feagi_npu_burst_engine::FireCandidateList;
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
@@ -172,7 +173,7 @@ fn test_gpu_hash_collision_correctness() {
     );
 
     // All target neurons should be in FCL
-    assert!(fcl.len() > 0, "FCL should contain target neurons");
+    assert!(!fcl.is_empty(), "FCL should contain target neurons");
 
     println!("✅ Hash collisions handled correctly");
 }
@@ -379,7 +380,7 @@ fn test_gpu_max_weight_synapses() {
     println!("Max weight: {} synapses processed", synapses_processed);
 
     // FCL should have strong contributions
-    assert!(fcl.len() > 0, "Should have FCL candidates");
+    assert!(!fcl.is_empty(), "Should have FCL candidates");
 
     println!("✅ Max-weight synapses handled correctly");
 }

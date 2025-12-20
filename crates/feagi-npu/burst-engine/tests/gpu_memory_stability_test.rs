@@ -19,9 +19,9 @@
 //! Run with:
 //!   cargo test --test gpu_memory_stability_test --features gpu
 
+#[allow(unused_imports)]
 use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType};
 use feagi_npu_burst_engine::FireCandidateList;
-use feagi_npu_neural::types::NeuronId;
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 /// Helper: Create test genome

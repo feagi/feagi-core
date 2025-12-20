@@ -1,10 +1,11 @@
 //! Tests for the data pipeline module - focusing on end -> end tests
 
 use feagi_sensorimotor::data_types::descriptors::ColorSpace;
-use feagi_sensorimotor::data_types::{ImageFrame, SegmentedImageFrame};
+use feagi_sensorimotor::data_types::ImageFrame;
 
 //region Helpers
 
+#[allow(dead_code)]
 fn load_bird_image() -> ImageFrame {
     let bird_bytes = std::fs::read("tests/images/bird.jpg").expect("Bird image should exist");
     ImageFrame::new_from_jpeg_bytes(&bird_bytes, &ColorSpace::Gamma)
@@ -54,6 +55,7 @@ mod test_connector_cache_sensor_load_image {
 
         let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -98,6 +100,7 @@ mod test_connector_cache_sensor_load_image {
 
         let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .segmented_vision_register(
@@ -152,6 +155,7 @@ mod test_connector_cache_sensor_load_image {
 
         let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache.segmented_vision_register(cortical_group, number_channels, FrameChangeHandling::Absolute, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
             sensor_cache.segmented_vision_write(cortical_group, channel_index, bird_image.into()).unwrap();
@@ -181,6 +185,7 @@ mod test_connector_cache_sensor_load_image {
 
         let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .miscellaneous_register(
@@ -251,6 +256,7 @@ mod test_connector_cache_sensor_load_image {
 
         let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
         {
+            #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
                 .miscellaneous_register(
