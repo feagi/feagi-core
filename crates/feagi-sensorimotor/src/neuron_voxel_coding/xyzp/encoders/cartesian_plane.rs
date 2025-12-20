@@ -42,7 +42,7 @@ impl NeuronVoxelXYZPEncoder for CartesianPlaneNeuronVoxelXYZPEncoder {
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
             .try_for_each(
-                |(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+                |(__channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                     let channel_updated = pipeline.get_last_processed_instant();
                     if channel_updated < time_of_previous_burst {
                         return Ok(()); // We haven't updated, do nothing
