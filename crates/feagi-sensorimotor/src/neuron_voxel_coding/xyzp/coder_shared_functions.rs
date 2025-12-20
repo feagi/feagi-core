@@ -1,6 +1,4 @@
 use crate::data_types::{Percentage, SignedPercentage};
-use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZP, NeuronVoxelXYZPArrays};
-use std::ops::Range;
 
 //region Decode Percentages
 #[inline]

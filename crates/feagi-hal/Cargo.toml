@@ -53,6 +53,11 @@ rp2040-boot2 = { version = "0.3", optional = true }
 [features]
 default = []
 
+# Optional features
+async = []  # Async/await support for transports
+defmt = []  # defmt logging support
+alloc = []  # Heap allocation support
+
 # Microcontroller platforms
 esp32 = ["esp-idf-svc", "esp-idf-hal", "esp-idf-sys", "embedded-hal", "log"]
 esp32-s3 = ["esp32"]

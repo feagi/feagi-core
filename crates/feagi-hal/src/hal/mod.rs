@@ -20,7 +20,6 @@ pub mod serial;
 /// - GPIO control (GpioProvider)
 /// - Logging (Logger)
 /// - Neural acceleration (NeuralAccelerator)
-
 /// Timekeeping abstractions (monotonic timers, delays).
 pub mod time;
 /// USB CDC Serial communication traits.

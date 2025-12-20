@@ -6,6 +6,7 @@ use super::{
     ImageFrame, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame,
 };
 use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelDimensions;
+// NeuronDepth is used in macro expansion
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::{
     define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping,
