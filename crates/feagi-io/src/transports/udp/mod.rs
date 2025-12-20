@@ -75,6 +75,7 @@ struct PacketHeader {
 }
 
 impl PacketHeader {
+    #[allow(clippy::wrong_self_convention)]
     fn to_bytes(&self) -> [u8; HEADER_SIZE] {
         let mut bytes = [0u8; HEADER_SIZE];
         bytes[0..4].copy_from_slice(&self.message_id.to_be_bytes());
