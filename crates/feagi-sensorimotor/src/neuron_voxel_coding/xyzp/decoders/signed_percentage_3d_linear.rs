@@ -11,8 +11,11 @@ use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_data_structures::FeagiDataError;
 use std::time::Instant;
 
+#[allow(dead_code)]
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
+#[allow(dead_code)]
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 3; // How many numbers are encoded per channel?
+#[allow(dead_code)]
 const CHANNEL_WIDTH: u32 = WIDTH_GIVEN_POSITIVE_Z_ROW * NUMBER_PAIRS_PER_CHANNEL;
 
 #[derive(Debug)]
@@ -91,7 +94,12 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage3DLinearNeuronVoxelXYZPDecoder {
         }
 
         // At this point, we have numbers in scratch space to average out
-        for channel_index in 0..number_of_channels as usize {
+        for (channel_index, (pipeline, changed_flag)) in pipelines_with_data_to_update
+            .iter_mut()
+            .zip(channel_changed.iter_mut())
+            .enumerate()
+            .take(number_of_channels as usize)
+        {
             // Literally not worth making parallel... right?
             let z_row_a_index = channel_index * NUMBER_PAIRS_PER_CHANNEL as usize;
 
@@ -131,10 +139,8 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage3DLinearNeuronVoxelXYZPDecoder {
             {
                 continue; // No data collected for this channel. Do not emit
             }
-            channel_changed[channel_index] = true;
-            let signed_percentage_3d: &mut SignedPercentage3D = pipelines_with_data_to_update
-                .get_mut(channel_index)
-                .unwrap()
+            *changed_flag = true;
+            let signed_percentage_3d: &mut SignedPercentage3D = pipeline
                 .get_preprocessed_cached_value_mut()
                 .try_into()?;
 
@@ -169,6 +175,7 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage3DLinearNeuronVoxelXYZPDecoder {
 }
 
 impl SignedPercentage3DLinearNeuronVoxelXYZPDecoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_read_target: CorticalID,
         z_resolution: NeuronDepth,

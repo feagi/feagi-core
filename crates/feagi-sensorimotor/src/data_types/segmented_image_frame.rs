@@ -251,6 +251,7 @@ impl SegmentedImageFrame {
         ]
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_image_internal_data_mut(&mut self) -> [&mut Array3<u8>; 9] {
         // return in same order as cortical IDs
         [

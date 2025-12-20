@@ -46,10 +46,12 @@ impl MotorChannelStreamCaches {
 
     //region Properties
 
+    #[allow(dead_code)]
     pub fn number_of_channels(&self) -> CorticalChannelCount {
         (self.pipeline_runners.len() as u32).try_into().unwrap()
     }
 
+    #[allow(dead_code)]
     pub fn verify_channel_exists(
         &self,
         channel_index: CorticalChannelIndex,
@@ -58,6 +60,7 @@ impl MotorChannelStreamCaches {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn get_output_type_for_channel(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -86,6 +89,7 @@ impl MotorChannelStreamCaches {
         Ok(pipeline_runner.get_postprocessed_cached_value())
     }
 
+    #[allow(dead_code)]
     pub fn try_get_channel_last_processed_instant(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -248,6 +252,7 @@ impl MotorChannelStreamCaches {
         Ok(self.value_updated_callbacks[idx].connect(callback))
     }
 
+    #[allow(dead_code)]
     pub fn try_disconnect_to_data_processed_signal(
         &mut self,
         cortical_channel_index: CorticalChannelIndex,

@@ -10,6 +10,12 @@ pub struct ConnectorAgent {
     motor_cache: Arc<Mutex<MotorDeviceCache>>,
 }
 
+impl Default for ConnectorAgent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConnectorAgent {
     pub fn new() -> Self {
         ConnectorAgent {

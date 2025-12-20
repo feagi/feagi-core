@@ -14,17 +14,24 @@ use feagi_data_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
 
+#[allow(dead_code)]
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 2; // How many numbers are encoded per channel?
+#[allow(dead_code)]
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
+#[allow(dead_code)]
 const WIDTH_GIVEN_NEGATIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> -1
+#[allow(dead_code)]
 const CHANNEL_WIDTH: u32 =
     NUMBER_PAIRS_PER_CHANNEL * (WIDTH_GIVEN_POSITIVE_Z_ROW + WIDTH_GIVEN_NEGATIVE_Z_ROW);
 
+type ScratchSpaceTuple2DSigned = ((Vec<u32>, Vec<u32>), (Vec<u32>, Vec<u32>));
+
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SignedPercentage2DLinearNeuronVoxelXYZPEncoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_write_target: CorticalID,
-    scratch_space: Vec<((Vec<u32>, Vec<u32>), (Vec<u32>, Vec<u32>))>, // # channels long - (a_pos, a_neg), (b_pos, b_neg)
+    scratch_space: Vec<ScratchSpaceTuple2DSigned>, // # channels long - (a_pos, a_neg), (b_pos, b_neg)
 }
 
 impl NeuronVoxelXYZPEncoder for SignedPercentage2DLinearNeuronVoxelXYZPEncoder {
@@ -34,7 +41,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage2DLinearNeuronVoxelXYZPEncoder {
 
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
-        pipelines: &Vec<SensoryPipelineStageRunner>,
+        pipelines: &[SensoryPipelineStageRunner],
         time_of_previous_burst: Instant,
         write_target: &mut CorticalMappedXYZPNeuronVoxels,
     ) -> Result<(), FeagiDataError> {
@@ -105,6 +112,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage2DLinearNeuronVoxelXYZPEncoder {
 }
 
 impl SignedPercentage2DLinearNeuronVoxelXYZPEncoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_write_target: CorticalID,
         z_resolution: NeuronDepth,

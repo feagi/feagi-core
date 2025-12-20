@@ -1,26 +1,20 @@
 use crate::data_pipeline::per_channel_stream_caches::SensoryChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_types::descriptors::*;
-use crate::data_types::*;
-use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
-use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
+use crate::wrapped_io_data::WrappedIOData;
 use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
+    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
 };
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
-    FrameChangeHandling, PercentageNeuronPositioning,
-};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
 use feagi_data_structures::genomic::SensoryCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
+use feagi_data_structures::{FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
 
+#[allow(unused_macros)] // Macro may be used in future
 macro_rules! sensor_unit_functions {
     (
         SensoryCorticalUnit {
@@ -399,7 +393,9 @@ pub struct SensorDeviceCache {
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
+    #[allow(dead_code)] // Part of public API
     neurons_encoded_signal: FeagiSignal<CorticalMappedXYZPNeuronVoxels>,
+    #[allow(dead_code)] // Part of public API
     bytes_encoded_signal: FeagiSignal<FeagiByteContainer>,
 }
 
@@ -436,8 +432,6 @@ impl SensorDeviceCache {
             bytes_encoded_signal: FeagiSignal::new(),
         }
     }
-
-    sensor_cortical_units!(sensor_unit_functions);
 
     //region Data IO
 
@@ -601,6 +595,7 @@ impl SensorDeviceCache {
 
     //region Cache Abstractions
 
+    #[allow(dead_code)]
     fn register(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -644,6 +639,7 @@ impl SensorDeviceCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn try_read_preprocessed_cached_value(
         &self,
         sensor_type: SensoryCorticalUnit,
@@ -673,6 +669,7 @@ impl SensorDeviceCache {
 
     //region Stages
 
+    #[allow(dead_code)]
     fn try_get_single_stage_properties(
         &self,
         sensor_type: SensoryCorticalUnit,
@@ -686,6 +683,7 @@ impl SensorDeviceCache {
             .try_get_single_stage_properties(channel_index, pipeline_stage_property_index)
     }
 
+    #[allow(dead_code)]
     fn try_get_all_stage_properties(
         &self,
         sensor_type: SensoryCorticalUnit,
@@ -697,6 +695,7 @@ impl SensorDeviceCache {
         sensor_stream_caches.get_all_stage_properties(channel_index)
     }
 
+    #[allow(dead_code)]
     fn try_update_single_stage_properties(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -714,6 +713,7 @@ impl SensorDeviceCache {
         )
     }
 
+    #[allow(dead_code)]
     fn try_update_all_stage_properties(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -727,6 +727,7 @@ impl SensorDeviceCache {
             .try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
     }
 
+    #[allow(dead_code)]
     fn try_replace_single_stage(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -744,6 +745,7 @@ impl SensorDeviceCache {
         )
     }
 
+    #[allow(dead_code)]
     fn try_replace_all_stages(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -756,6 +758,7 @@ impl SensorDeviceCache {
         sensor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
     }
 
+    #[allow(dead_code)]
     fn try_removing_all_stages(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -772,6 +775,7 @@ impl SensorDeviceCache {
 
     //region Agent Device
 
+    #[allow(dead_code)]
     fn register_agent_device_key(
         &mut self,
         agent_device_index: AgentDeviceIndex,
@@ -794,6 +798,7 @@ impl SensorDeviceCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn try_update_value_by_agent_device(
         &mut self,
         agent_device_index: AgentDeviceIndex,
@@ -816,6 +821,7 @@ impl SensorDeviceCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn try_read_postprocessed_cached_values_by_agent_device(
         &self,
         agent_device_index: AgentDeviceIndex,
@@ -872,6 +878,7 @@ impl SensorDeviceCache {
         Ok(check)
     }
 
+    #[allow(dead_code)]
     fn try_get_agent_device_lookup(
         &self,
         agent_device_index: AgentDeviceIndex,
@@ -886,6 +893,7 @@ impl SensorDeviceCache {
         Ok(val)
     }
 
+    #[allow(dead_code)]
     fn try_get_agent_device_lookup_mut(
         &mut self,
         agent_device_index: AgentDeviceIndex,
@@ -907,6 +915,6 @@ impl SensorDeviceCache {
 
 impl fmt::Display for SensorDeviceCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> std::fmt::Result {
-        Ok(write!(f, "Motor Device Cache:\n")?)
+        Ok(writeln!(f, "Motor Device Cache:")?)
     }
 }

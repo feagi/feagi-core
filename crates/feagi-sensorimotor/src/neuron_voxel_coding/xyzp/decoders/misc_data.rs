@@ -76,6 +76,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
 }
 
 impl MiscDataNeuronVoxelXYZPDecoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_read_target: CorticalID,
         misc_dimensions: MiscDataDimensions,

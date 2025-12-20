@@ -51,8 +51,7 @@ impl GazeProperties {
         if source_frame_resolution.width < 3 || source_frame_resolution.height < 3 {
             return Err(FeagiDataError::BadParameters(
                 "Source frame width and height must be at least 3!".into(),
-            )
-            .into());
+            ));
         }
 
         let center_corner_points = self.calculate_pixel_coordinates_of_center_corners(

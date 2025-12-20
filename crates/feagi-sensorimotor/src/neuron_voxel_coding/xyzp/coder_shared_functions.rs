@@ -3,7 +3,7 @@ use crate::data_types::{Percentage, SignedPercentage};
 //region Decode Percentages
 #[inline]
 pub(crate) fn decode_unsigned_percentage_from_linear_neurons(
-    neuron_indexes_along_z: &Vec<u32>,
+    neuron_indexes_along_z: &[u32],
     z_max_depth: u32,
     replace_val: &mut Percentage,
 ) {
@@ -15,8 +15,8 @@ pub(crate) fn decode_unsigned_percentage_from_linear_neurons(
 
 #[inline]
 pub(crate) fn decode_signed_percentage_from_linear_neurons(
-    neuron_indexes_along_z_positive: &Vec<u32>,
-    neuron_indexes_along_z_negative: &Vec<u32>,
+    neuron_indexes_along_z_positive: &[u32],
+    neuron_indexes_along_z_negative: &[u32],
     z_max_depth: u32,
     replace_val: &mut SignedPercentage,
 ) {
@@ -92,13 +92,13 @@ pub(crate) fn encode_unsigned_percentage_to_fractional_exponential_neuron_z_inde
     if processing == 0.0 {
         // In the case of 0, lets push the positive smallest value they have
         neuron_indexes_along_z.push(number_neurons_along_z - 1);
-        return;
-    }
-    for z in 1..(number_neurons_along_z + 1) {
-        let compare: f32 = 0.5f32.powi(z as i32);
-        if processing >= compare {
-            processing -= compare;
-            neuron_indexes_along_z.push(z - 1);
+    } else {
+        for z in 1..(number_neurons_along_z + 1) {
+            let compare: f32 = 0.5f32.powi(z as i32);
+            if processing >= compare {
+                processing -= compare;
+                neuron_indexes_along_z.push(z - 1);
+            }
         }
     }
 }
@@ -117,7 +117,7 @@ pub(crate) fn encode_signed_percentage_to_linear_neuron_z_index(
             .push(((1.0 - val.get_as_m1_1()) * z_length_as_float).floor() as u32);
     } else {
         neuron_indexes_along_z_negative
-            .push(((-1.0 - (val.get_as_m1_1() * -1.0)) * z_length_as_float).floor() as u32);
+            .push(((-1.0 - (-val.get_as_m1_1())) * z_length_as_float).floor() as u32);
     }
 }
 
@@ -136,10 +136,7 @@ pub(crate) fn encode_signed_percentage_to_fractional_exponential_neuron_z_indexe
         // In the case of 0, lets push both the positive and negative smallest value they have
         neuron_indexes_along_z_positive.push(number_neurons_along_z - 1);
         neuron_indexes_along_z_negative.push(number_neurons_along_z - 1);
-        return;
-    }
-
-    if processing < 0.0f32 {
+    } else if processing < 0.0f32 {
         // negative non-zero
         processing *= -1.0; // make positive once
         for z in 1..(number_neurons_along_z + 1) {
@@ -149,7 +146,6 @@ pub(crate) fn encode_signed_percentage_to_fractional_exponential_neuron_z_indexe
                 neuron_indexes_along_z_negative.push(z - 1);
             }
         }
-        return;
     } else {
         // positive non-zero
         for z in 1..(number_neurons_along_z + 1) {
@@ -159,7 +155,6 @@ pub(crate) fn encode_signed_percentage_to_fractional_exponential_neuron_z_indexe
                 neuron_indexes_along_z_positive.push(z - 1);
             }
         }
-        return;
     }
 }
 
@@ -498,7 +493,7 @@ mod tests {
             );
             // 1.0 should activate many neurons since sum of 0.5^i approaches 1.0
             assert!(
-                neuron_indexes.len() > 0,
+                !neuron_indexes.is_empty(),
                 "1.0 should produce active neurons"
             );
 
@@ -564,7 +559,7 @@ mod tests {
                 &mut neuron_indexes_neg,
             );
             assert!(
-                neuron_indexes_pos.len() > 0,
+                !neuron_indexes_pos.is_empty(),
                 "Positive value should have positive neurons"
             );
             assert_eq!(

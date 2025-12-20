@@ -8,18 +8,20 @@ use std::fmt::Debug;
 use std::time::Instant;
 
 pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
+    #[allow(dead_code)] // Part of public API, may be used by external code
     fn get_encodable_data_type(&self) -> WrappedIOType;
 
     /// Writes data to NeuronXYZPVoxelArray(s) of the relevant cortical area(s), where each element in pipelines is the channel. Assumes write_target been cleared of neuron data
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
-        pipelines: &Vec<SensoryPipelineStageRunner>,
+        pipelines: &[SensoryPipelineStageRunner],
         time_of_previous_burst: Instant,
         write_target: &mut CorticalMappedXYZPNeuronVoxels,
     ) -> Result<(), FeagiDataError>;
 }
 
 pub trait NeuronVoxelXYZPDecoder: Debug + Sync + Send {
+    #[allow(dead_code)] // Part of public API, may be used by external code
     fn get_decoded_data_type(&self) -> WrappedIOType;
 
     /// Writes data to the respective channel of PipelineStageRunner to the input cache, and marks if the channel has been changed or not, with data read from the neurons

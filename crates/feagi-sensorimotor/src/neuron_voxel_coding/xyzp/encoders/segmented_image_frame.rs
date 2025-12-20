@@ -15,10 +15,11 @@ use rayon::prelude::*;
 use std::time::Instant;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SegmentedImageFrameNeuronVoxelXYZPEncoder {
     segmented_image_properties: SegmentedImageFrameProperties,
     cortical_write_targets: [CorticalID; 9],
-    neuron_scratch_spaces: Vec<[NeuronVoxelXYZPArrays; 9]>, //channel index {segment index }
+    neuron_scratch_spaces: Vec<[NeuronVoxelXYZPArrays; 9]>, // channel index {segment index }
 }
 
 impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
@@ -29,7 +30,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
 
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
-        pipelines: &Vec<SensoryPipelineStageRunner>,
+        pipelines: &[SensoryPipelineStageRunner],
         time_of_previous_burst: Instant,
         write_target: &mut CorticalMappedXYZPNeuronVoxels,
     ) -> Result<(), FeagiDataError> {
@@ -67,7 +68,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
 
             let cortical_id = &self.cortical_write_targets[segmented_index];
 
-            let neuron_array_target = write_target.ensure_clear_and_borrow_mut(&cortical_id);
+            let neuron_array_target = write_target.ensure_clear_and_borrow_mut(cortical_id);
             neuron_array_target.ensure_capacity(neuron_count_in_segment);
 
             for channel_index in 0..pipelines.len() {
@@ -92,6 +93,7 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
 }
 
 impl SegmentedImageFrameNeuronVoxelXYZPEncoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_ids: [CorticalID; 9],
         segmented_image_properties: SegmentedImageFrameProperties,

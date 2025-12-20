@@ -15,6 +15,7 @@ use rayon::prelude::*;
 use std::time::Instant;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct CartesianPlaneNeuronVoxelXYZPEncoder {
     image_properties: ImageFrameProperties,
     cortical_write_target: CorticalID,
@@ -28,7 +29,7 @@ impl NeuronVoxelXYZPEncoder for CartesianPlaneNeuronVoxelXYZPEncoder {
 
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
-        pipelines: &Vec<SensoryPipelineStageRunner>,
+        pipelines: &[SensoryPipelineStageRunner],
         time_of_previous_burst: Instant,
         write_target: &mut CorticalMappedXYZPNeuronVoxels,
     ) -> Result<(), FeagiDataError> {
@@ -77,13 +78,14 @@ impl NeuronVoxelXYZPEncoder for CartesianPlaneNeuronVoxelXYZPEncoder {
 }
 
 impl CartesianPlaneNeuronVoxelXYZPEncoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_write_target: CorticalID,
         image_properties: &ImageFrameProperties,
         number_channels: CorticalChannelCount,
     ) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         let encoder = CartesianPlaneNeuronVoxelXYZPEncoder {
-            image_properties: image_properties.clone(),
+            image_properties: *image_properties,
             cortical_write_target,
             scratch_space: vec![NeuronVoxelXYZPArrays::new(); *number_channels as usize],
         };

@@ -52,6 +52,7 @@ pub struct SegmentedXYImageResolutions {
 }
 
 impl SegmentedXYImageResolutions {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         lower_left: ImageXYResolution,
         lower_middle: ImageXYResolution,
@@ -191,8 +192,7 @@ impl TryFrom<usize> for ColorChannelLayout {
             _ => Err(FeagiDataError::BadParameters(format!(
                 "No Channel Layout has {} channels! Acceptable values are 1,2,3,4!",
                 value
-            ))
-            .into()),
+            ))),
         }
     }
 }
@@ -318,19 +318,17 @@ impl ImageFrameProperties {
             return Err(FeagiDataError::BadParameters(
                 format! {"Expected resolution of {} but received an image with resolution of {}!",
                 self.image_resolution, image_frame.get_xy_resolution()},
-            )
-            .into());
+            ));
         }
         if image_frame.get_color_space() != &self.color_space {
             return Err(FeagiDataError::BadParameters(format!(
                 "Expected color space of {}, but got image with color space of {}!",
-                self.color_space.to_string(),
-                self.color_space.to_string()
-            ))
-            .into());
+                self.color_space,
+                self.color_space
+            )));
         }
         if image_frame.get_channel_layout() != &self.color_channel_layout {
-            return Err(FeagiDataError::BadParameters(format!("Expected color channel layout of {}, but got image with color channel layout of {}!", self.color_channel_layout.to_string(), self.color_channel_layout.to_string())).into());
+            return Err(FeagiDataError::BadParameters(format!("Expected color channel layout of {}, but got image with color channel layout of {}!", self.color_channel_layout, self.color_channel_layout)));
         }
         Ok(())
     }
@@ -378,8 +376,8 @@ impl Display for ImageFrameProperties {
         let s = format!(
             "ImageFrameProperties({}, {}, {})",
             self.image_resolution,
-            self.color_space.to_string(),
-            self.color_channel_layout.to_string()
+            self.color_space,
+            self.color_channel_layout
         );
         write!(f, "{}", s)
     }
@@ -433,10 +431,8 @@ impl SegmentedImageFrameProperties {
     ) -> Result<(), FeagiDataError> {
         if self != &segmented_image_frame.get_segmented_image_frame_properties() {
             return Err(FeagiDataError::BadParameters(
-                "Segmented image frame does not match the expected segmented frame properties!"
-                    .into(),
-            )
-            .into());
+                "Segmented image frame does not match the expected segmented frame properties!".into(),
+            ));
         }
         Ok(())
     }
@@ -466,8 +462,7 @@ impl CornerPoints {
         if lower_right.x <= upper_left.x || lower_right.y <= upper_left.y {
             return Err(FeagiDataError::BadParameters(
                 "Given Points are not forming a proper rectangle!".into(),
-            )
-            .into());
+            ));
         }
         Ok(CornerPoints {
             upper_left,
@@ -502,8 +497,7 @@ impl CornerPoints {
             return Err(FeagiDataError::BadParameters(format!(
                 "Corner Points {} do not fit in given resolution {}!",
                 self, resolution
-            ))
-            .into());
+            )));
         }
         Ok(())
     }
@@ -514,8 +508,8 @@ impl Display for CornerPoints {
         write!(
             f,
             "CornerPoints(Upper Left: {}, Lower Right: {})",
-            self.upper_left.to_string(),
-            self.lower_right.to_string()
+            self.upper_left,
+            self.lower_right
         )
     }
 }

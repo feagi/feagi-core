@@ -21,6 +21,7 @@ enum BoolState {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct BooleanNeuronVoxelXYZPEncoder {
     cortical_write_target: CorticalID,
     scratch_space: Vec<BoolState>, // # channels long
@@ -33,7 +34,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
 
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
-        pipelines: &Vec<SensoryPipelineStageRunner>,
+        pipelines: &[SensoryPipelineStageRunner],
         time_of_previous_burst: Instant,
         write_target: &mut CorticalMappedXYZPNeuronVoxels,
     ) -> Result<(), FeagiDataError> {
@@ -90,6 +91,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
 }
 
 impl BooleanNeuronVoxelXYZPEncoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_write_target: CorticalID,
         number_channels: CorticalChannelCount,

@@ -77,6 +77,7 @@ impl MotorPipelineStageRunner {
     //region Data
 
     /// Returns the type of data expected to be outputted
+    #[allow(dead_code)]
     pub fn get_expected_type_to_output_after_processing(&self) -> WrappedIOType {
         if self.does_contain_stages() {
             return self.pipeline_stages.last().unwrap().get_output_data_type();
@@ -84,6 +85,7 @@ impl MotorPipelineStageRunner {
         self.expected_decoded_motor_type
     }
 
+    #[allow(dead_code)]
     pub fn get_initial_decoded_type(&self) -> WrappedIOType {
         self.expected_decoded_motor_type
     }
@@ -132,6 +134,7 @@ impl MotorPipelineStageRunner {
     //region Pipeline Stages (delegating to trait)
 
     /// Returns true if 1 or more processing stages are within the pipeline stage runner.
+    #[allow(dead_code)]
     pub fn does_contain_stages(&self) -> bool {
         PipelineStageRunner::does_contain_stages(self)
     }

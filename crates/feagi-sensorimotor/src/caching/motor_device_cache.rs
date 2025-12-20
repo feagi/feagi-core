@@ -504,7 +504,7 @@ impl MotorDeviceCache {
     ) -> Result<(), FeagiDataError> {
         for motor_channel_stream_cache in self.stream_caches.values_mut() {
             motor_channel_stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(
-                &mut self.neuron_data,
+                &self.neuron_data,
                 time_of_decode,
             )?;
         }
@@ -552,7 +552,7 @@ impl MotorDeviceCache {
     ) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches =
             self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        Ok(motor_stream_caches.get_preprocessed_motor_value(channel_index)?)
+        motor_stream_caches.get_preprocessed_motor_value(channel_index)
     }
 
     fn try_read_postprocessed_cached_value(
@@ -563,7 +563,7 @@ impl MotorDeviceCache {
     ) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches =
             self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
-        Ok(motor_stream_caches.get_postprocessed_motor_value(channel_index)?)
+        motor_stream_caches.get_postprocessed_motor_value(channel_index)
     }
 
     fn try_register_motor_callback<F>(
@@ -685,6 +685,7 @@ impl MotorDeviceCache {
 
     //region Agent Devices
 
+    #[allow(dead_code)] // Part of public API
     fn register_agent_device_key(
         &mut self,
         agent_device_index: AgentDeviceIndex,
@@ -707,6 +708,7 @@ impl MotorDeviceCache {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn try_read_preprocessed_cached_values_by_agent_device(
         &self,
         agent_device_index: AgentDeviceIndex,
@@ -722,6 +724,7 @@ impl MotorDeviceCache {
         Ok(results)
     }
 
+    #[allow(dead_code)]
     fn try_read_postprocessed_cached_values_by_agent_device(
         &self,
         agent_device_index: AgentDeviceIndex,
@@ -775,6 +778,7 @@ impl MotorDeviceCache {
         Ok(check)
     }
 
+    #[allow(dead_code)]
     fn try_get_agent_device_lookup(
         &self,
         agent_device_index: AgentDeviceIndex,
@@ -789,6 +793,7 @@ impl MotorDeviceCache {
         Ok(val)
     }
 
+    #[allow(dead_code)]
     fn try_get_agent_device_lookup_mut(
         &mut self,
         agent_device_index: AgentDeviceIndex,
@@ -810,6 +815,6 @@ impl MotorDeviceCache {
 
 impl Display for MotorDeviceCache {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        Ok(write!(f, "Motor Device Cache:\n")?)
+        Ok(writeln!(f, "Motor Device Cache:")?)
     }
 }

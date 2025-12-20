@@ -47,7 +47,7 @@ impl std::fmt::Display for ImageFrameProcessor {
         steps += &*(match self.convert_color_space_to {
             None => String::new(),
             Some(change_colorspace_to) => {
-                format!("Convert Colorspace to {}", change_colorspace_to.to_string())
+                format!("Convert Colorspace to {}", change_colorspace_to)
             }
         });
         steps += &*(match self.offset_brightness_by {
@@ -96,8 +96,7 @@ impl ImageFrameProcessor {
                 // unsupported
                 return Err(FeagiDataError::BadParameters(
                     "Given Color Conversion not possible!".into(),
-                )
-                .into());
+                ));
             }
         }
         if output.get_image_resolution() != input.get_image_resolution() {

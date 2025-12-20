@@ -5,7 +5,7 @@ use feagi_data_structures::FeagiDataError;
 // These static functions are kept separate as adding them to the trait makes them no longer dyn compatible
 
 pub(crate) fn stage_properties_to_stages(
-    pipeline_stage_properties: &Vec<PipelineStageProperties>,
+    pipeline_stage_properties: &[PipelineStageProperties],
 ) -> Result<Vec<Box<dyn PipelineStage>>, FeagiDataError> {
     let mut output: Vec<Box<dyn PipelineStage>> =
         Vec::with_capacity(pipeline_stage_properties.len());

@@ -14,7 +14,9 @@ const LINEAR_THRESHOLD: f32 = 0.0031308;
 const SRGB_A: f32 = 1.055;
 const SRGB_B: f32 = 0.055;
 const LINEAR_SCALE: f32 = 12.92;
+#[allow(dead_code)] // Part of public API
 const GAMMA_MIDPOINT: f32 = 128.0;
+#[allow(dead_code)] // Part of public API
 const LINEAR_MIDPOINT: f32 = 0.5;
 
 /// A container for image data with support for various color formats and spaces.

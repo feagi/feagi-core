@@ -8,7 +8,6 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_evolutionary::load_genome_from_file;
 
 #[test]

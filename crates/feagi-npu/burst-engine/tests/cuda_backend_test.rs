@@ -232,7 +232,6 @@ fn test_backend_trait_object_safety() {
     // This is important for dynamic backend selection
 
     use feagi_npu_burst_engine::backend::CPUBackend;
-    use feagi_npu_neural::types::NeuralValue;
 
     use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
     fn _uses_trait_object(

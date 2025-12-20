@@ -96,7 +96,12 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
         }
 
         // At this point, we have numbers in scratch space to average out
-        for channel_index in 0..number_of_channels as usize {
+        for (channel_index, (pipeline, changed_flag)) in pipelines_with_data_to_update
+            .iter_mut()
+            .zip(channel_changed.iter_mut())
+            .enumerate()
+            .take(number_of_channels as usize)
+        {
             // Literally not worth making parallel... right?
             let eccentricity_z_row_a_index = channel_index * ECCENTRICITY_CHANNEL_WIDTH as usize;
             let eccentricity_z_row_b_index = eccentricity_z_row_a_index + 1;
@@ -123,30 +128,28 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
             {
                 continue; // No data collected for this channel. Do not emit
             }
-            channel_changed[channel_index] = true;
-            let prev_gaze: &mut GazeProperties = pipelines_with_data_to_update
-                .get_mut(channel_index)
-                .unwrap()
+            *changed_flag = true;
+            let prev_gaze: &mut GazeProperties = pipeline
                 .get_preprocessed_cached_value_mut()
                 .try_into()?;
 
             if !eccentricity_z_a_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &eccentricity_z_a_vector,
+                    eccentricity_z_a_vector,
                     &mut prev_gaze.eccentricity_location_xy.a,
                 );
             }
 
             if !eccentricity_z_b_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &eccentricity_z_b_vector,
+                    eccentricity_z_b_vector,
                     &mut prev_gaze.eccentricity_location_xy.b,
                 );
             }
 
             if !modularity_z_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &modularity_z_vector,
+                    modularity_z_vector,
                     &mut prev_gaze.modulation_size,
                 );
             }
@@ -157,6 +160,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
 }
 
 impl GazePropertiesExponentialNeuronVoxelXYZPDecoder {
+    #[allow(dead_code)]
     pub fn new_box(
         eccentricity_cortical_id: CorticalID,
         modularity_cortical_id: CorticalID,

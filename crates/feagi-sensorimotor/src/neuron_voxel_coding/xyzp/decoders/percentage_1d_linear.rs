@@ -11,8 +11,11 @@ use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_data_structures::FeagiDataError;
 use std::time::Instant;
 
+#[allow(dead_code)]
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
+#[allow(dead_code)]
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 1; // How many numbers are encoded per channel?
+#[allow(dead_code)]
 const CHANNEL_WIDTH: u32 = WIDTH_GIVEN_POSITIVE_Z_ROW * NUMBER_PAIRS_PER_CHANNEL;
 
 #[derive(Debug)]
@@ -81,7 +84,12 @@ impl NeuronVoxelXYZPDecoder for PercentageLinearNeuronVoxelXYZPDecoder {
         let _z_depth_float = self.channel_dimensions.depth as f32;
 
         // At this point, we have numbers in scratch space to average out
-        for channel_index in 0..number_of_channels as usize {
+        for (channel_index, (pipeline, changed_flag)) in pipelines_with_data_to_update
+            .iter_mut()
+            .zip(channel_changed.iter_mut())
+            .enumerate()
+            .take(number_of_channels as usize)
+        {
             // Literally not worth making parallel... right?
             let z_row_a_index = channel_index;
 
@@ -92,14 +100,12 @@ impl NeuronVoxelXYZPDecoder for PercentageLinearNeuronVoxelXYZPDecoder {
             if z_vector.is_empty() {
                 continue; // No data collected for this channel. Do not emit
             }
-            channel_changed[channel_index] = true;
-            let percentage: &mut Percentage = pipelines_with_data_to_update
-                .get_mut(channel_index)
-                .unwrap()
+            *changed_flag = true;
+            let percentage: &mut Percentage = pipeline
                 .get_preprocessed_cached_value_mut()
                 .try_into()?;
             decode_unsigned_percentage_from_linear_neurons(
-                &z_vector,
+                z_vector,
                 self.channel_dimensions.depth,
                 percentage,
             );
@@ -110,6 +116,7 @@ impl NeuronVoxelXYZPDecoder for PercentageLinearNeuronVoxelXYZPDecoder {
 }
 
 impl PercentageLinearNeuronVoxelXYZPDecoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_read_target: CorticalID,
         z_resolution: u32,
