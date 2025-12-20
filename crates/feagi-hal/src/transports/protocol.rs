@@ -56,7 +56,7 @@
 //!
 //! The protocol doesn't know or care which transport is used!
 
-#![no_std]
+// Note: This module is part of a no_std crate
 
 use heapless::Vec;
 

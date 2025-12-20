@@ -44,7 +44,7 @@
 //! let neuron_uuid = NEURON_DATA_CHAR_UUID;
 //! ```
 
-#![no_std]
+// Note: This module is part of a no_std crate
 
 // ============================================================================
 // Nordic UART Service (NUS) - Standard BLE service for serial-like communication

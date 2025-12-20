@@ -39,7 +39,7 @@
 //!   └─ Command: NeuronFiring
 //! ```
 
-#![no_std]
+// Note: This module is part of a no_std crate
 
 use heapless::Vec;
 

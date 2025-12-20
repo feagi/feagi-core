@@ -68,7 +68,6 @@
 //! // Implement your own runtime
 //! ```
 
-#![no_std]
 #![warn(missing_docs)]
 
 #[cfg(feature = "std")]
