@@ -9,7 +9,7 @@
 
 #[allow(unused_imports)]
 use feagi_npu_burst_engine::backend;
-use feagi_npu_burst_engine::FireCandidateList;
+use feagi_npu_neural::types::FireCandidateList;
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 /// Create test genome with specified size

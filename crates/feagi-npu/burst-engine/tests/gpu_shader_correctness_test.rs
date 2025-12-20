@@ -20,7 +20,7 @@
 //!   cargo test --test gpu_shader_correctness_test --features gpu
 
 use feagi_npu_burst_engine::backend::create_backend;
-use feagi_npu_burst_engine::FireCandidateList;
+use feagi_npu_neural::types::FireCandidateList;
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 /// Helper: Create test genome

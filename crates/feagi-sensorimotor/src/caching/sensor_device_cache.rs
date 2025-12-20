@@ -1,15 +1,31 @@
 use crate::data_pipeline::per_channel_stream_caches::SensoryChannelStreamCaches;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
+use crate::data_types::{
+    GazeProperties, ImageFrame, Percentage, Percentage3D, SegmentedImageFrame, SignedPercentage4D,
+};
+use crate::data_types::descriptors::{
+    ImageFrameProperties, SegmentedImageFrameProperties,
+};
+use crate::neuron_voxel_coding::xyzp::encoders::{
+    Percentage3DExponentialNeuronVoxelXYZPEncoder, Percentage3DLinearNeuronVoxelXYZPEncoder,
+    PercentageExponentialNeuronVoxelXYZPEncoder, PercentageLinearNeuronVoxelXYZPEncoder,
+    SegmentedImageFrameNeuronVoxelXYZPEncoder, SignedPercentage4DExponentialNeuronVoxelXYZPEncoder,
+    SignedPercentage4DLinearNeuronVoxelXYZPEncoder,
+};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
-use crate::wrapped_io_data::WrappedIOData;
+use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_data_serialization::FeagiByteContainer;
 use feagi_data_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
+    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
 };
+use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+    FrameChangeHandling, PercentageNeuronPositioning,
+};
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
 use feagi_data_structures::genomic::SensoryCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use feagi_data_structures::{FeagiDataError, FeagiSignal};
+use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
@@ -432,6 +448,8 @@ impl SensorDeviceCache {
             bytes_encoded_signal: FeagiSignal::new(),
         }
     }
+
+    sensor_cortical_units!(sensor_unit_functions);
 
     //region Data IO
 

@@ -12,20 +12,23 @@ use feagi_brain_development::ConnectomeManager;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
 use feagi_npu_runtime::StdRuntime;
-use feagi_services::{
+use feagi_services::impls::{
     AnalyticsServiceImpl, ConnectomeServiceImpl, GenomeServiceImpl, NeuronServiceImpl,
     SystemServiceImpl,
 };
 use parking_lot::RwLock;
 use serde_json::{json, Value};
 use std::sync::{Arc, Mutex};
-use tower::ServiceExt; // For .oneshot()
+use tower::util::ServiceExt; // For .oneshot()
 
 /// Helper to create a test server with initialized components
 /// Each test gets a fresh, isolated manager (no singleton conflicts)
 async fn create_test_server() -> axum::Router {
     // Initialize NPU (fire_ledger_window=10)
-    let npu = Arc::new(Mutex::new(RustNPU::new(1_000_000, 10_000_000, 10)));
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu_result = RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).unwrap();
+    let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
 
     // Create isolated ConnectomeManager for testing (bypasses singleton)
     let manager = Arc::new(RwLock::new(ConnectomeManager::new_for_testing_with_npu(
@@ -51,34 +54,35 @@ async fn create_test_server() -> axum::Router {
     // Create a mock RuntimeService that always returns NotImplemented
     // This is acceptable for tests that don't exercise runtime control
     struct MockRuntimeService;
+    #[async_trait::async_trait]
     impl feagi_services::RuntimeService for MockRuntimeService {
-        fn start(&self) -> feagi_services::ServiceResult<()> {
+        async fn start(&self) -> feagi_services::ServiceResult<()> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
             ))
         }
-        fn stop(&self) -> feagi_services::ServiceResult<()> {
+        async fn stop(&self) -> feagi_services::ServiceResult<()> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
             ))
         }
-        fn pause(&self) -> feagi_services::ServiceResult<()> {
+        async fn pause(&self) -> feagi_services::ServiceResult<()> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
             ))
         }
-        fn resume(&self) -> feagi_services::ServiceResult<()> {
+        async fn resume(&self) -> feagi_services::ServiceResult<()> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
             ))
         }
-        fn step(&self, _steps: u32) -> feagi_services::ServiceResult<u32> {
+        async fn step(&self) -> feagi_services::ServiceResult<()> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
             ))
         }
-        fn get_status(&self) -> feagi_services::ServiceResult<feagi_services::RuntimeStatusDTO> {
-            Ok(feagi_services::RuntimeStatusDTO {
+        async fn get_status(&self) -> feagi_services::ServiceResult<feagi_services::RuntimeStatus> {
+            Ok(feagi_services::RuntimeStatus {
                 active: false,
                 burst_count: 0,
                 burst_frequency: 0.0,
@@ -86,15 +90,80 @@ async fn create_test_server() -> axum::Router {
                 paused: false,
             })
         }
-        fn set_frequency(&self, _frequency: f64) -> feagi_services::ServiceResult<()> {
+        async fn set_frequency(&self, _frequency: f64) -> feagi_services::ServiceResult<()> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
             ))
         }
-        fn get_burst_count(&self) -> feagi_services::ServiceResult<u64> {
+        async fn get_burst_count(&self) -> feagi_services::ServiceResult<u64> {
             Ok(0)
         }
-        fn reset_burst_count(&self) -> feagi_services::ServiceResult<()> {
+        async fn reset_burst_count(&self) -> feagi_services::ServiceResult<()> {
+            Err(feagi_services::ServiceError::NotImplemented(
+                "MockRuntimeService".to_string(),
+            ))
+        }
+        async fn get_fcl_snapshot(&self) -> feagi_services::ServiceResult<Vec<(u64, f32)>> {
+            Ok(vec![])
+        }
+        async fn get_fcl_snapshot_with_cortical_idx(
+            &self,
+        ) -> feagi_services::ServiceResult<Vec<(u64, u32, f32)>> {
+            Ok(vec![])
+        }
+        async fn get_fire_queue_sample(
+            &self,
+        ) -> feagi_services::ServiceResult<
+            std::collections::HashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>,
+        > {
+            Ok(std::collections::HashMap::new())
+        }
+        async fn get_fire_ledger_configs(
+            &self,
+        ) -> feagi_services::ServiceResult<Vec<(u32, usize)>> {
+            Ok(vec![])
+        }
+        async fn configure_fire_ledger_window(
+            &self,
+            _cortical_id: u32,
+            _window_size: usize,
+        ) -> feagi_services::ServiceResult<()> {
+            Err(feagi_services::ServiceError::NotImplemented(
+                "MockRuntimeService".to_string(),
+            ))
+        }
+        async fn get_fcl_sampler_config(&self) -> feagi_services::ServiceResult<(f64, u32)> {
+            Ok((0.0, 0))
+        }
+        async fn set_fcl_sampler_config(
+            &self,
+            _sample_rate: Option<f64>,
+            _max_samples: Option<u32>,
+        ) -> feagi_services::ServiceResult<()> {
+            Err(feagi_services::ServiceError::NotImplemented(
+                "MockRuntimeService".to_string(),
+            ))
+        }
+        async fn get_area_fcl_sample_rate(
+            &self,
+            _cortical_id: u32,
+        ) -> feagi_services::ServiceResult<f64> {
+            Ok(0.0)
+        }
+        async fn set_area_fcl_sample_rate(
+            &self,
+            _cortical_id: u32,
+            _sample_rate: f64,
+        ) -> feagi_services::ServiceResult<()> {
+            Err(feagi_services::ServiceError::NotImplemented(
+                "MockRuntimeService".to_string(),
+            ))
+        }
+        async fn inject_sensory_by_coordinates(
+            &self,
+            _cortical_area_name: &str,
+            _coordinates: &[(u32, u32, u32, f32)],
+        ) -> feagi_services::ServiceResult<usize> {
             Err(feagi_services::ServiceError::NotImplemented(
                 "MockRuntimeService".to_string(),
             ))

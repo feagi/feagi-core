@@ -94,15 +94,11 @@ fn test_force_flags() {
 #[test]
 fn test_npu_creation_with_auto_backend() {
     // Small genome - should use CPU
-    let _npu = RustNPU::<f32>::new(
-        10_000,    // neuron_capacity
-        1_000_000, // synapse_capacity
-        1000,      // fire_ledger_window
-        None,      // gpu_config (auto)
-    );
-
-    // Just verify it was created successfully by dropping it
-    drop(npu);
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_runtime::StdRuntime;
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let _npu: RustNPU<StdRuntime, f32, CPUBackend> = RustNPU::new(runtime, backend, 10_000, 1_000_000, 1000).unwrap();
 }
 
 /// Test: NPU creation succeeds with different backends
@@ -112,19 +108,26 @@ fn test_npu_burst_processing() {
     let neuron_capacity = 1000;
     let synapse_capacity = 10_000;
 
-    let _npu = RustNPU::<f32>::new(
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_runtime::StdRuntime;
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu = RustNPU::new(
+        runtime,
+        backend,
         neuron_capacity,
         synapse_capacity,
         100,  // fire_ledger_window
-        None, // auto backend
-    );
+    ).unwrap();
 
     // Just verify NPU was created successfully
     // We can't access private fields, but we know it works if construction succeeded
     drop(npu); // Explicit drop to show we successfully created it
 
     // Try with larger capacity
-    let _npu = RustNPU::<f32>::new(100_000, 10_000_000, 100, None);
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu = RustNPU::new(runtime, backend, 100_000, 10_000_000, 100).unwrap();
     drop(npu);
 }
 

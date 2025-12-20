@@ -157,6 +157,7 @@ mod test_connector_cache_sensor_load_image {
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
+            let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache.segmented_vision_register(cortical_group, number_channels, FrameChangeHandling::Absolute, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
             sensor_cache.segmented_vision_write(cortical_group, channel_index, bird_image.into()).unwrap();
         }
