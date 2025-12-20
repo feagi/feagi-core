@@ -91,47 +91,47 @@ impl SegmentedImageFrame {
         Ok(SegmentedImageFrame {
             lower_left: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.lower_left,
             )?,
             middle_left: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.middle_left,
             )?,
             upper_left: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.upper_left,
             )?,
             upper_middle: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.upper_middle,
             )?,
             upper_right: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.upper_right,
             )?,
             middle_right: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.middle_right,
             )?,
             lower_right: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.lower_right,
             )?,
             lower_middle: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.lower_middle,
             )?,
             center: ImageFrame::new(
                 center_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.center,
             )?,
         })
@@ -155,9 +155,9 @@ impl SegmentedImageFrame {
     pub fn get_segmented_image_frame_properties(&self) -> SegmentedImageFrameProperties {
         SegmentedImageFrameProperties::new(
             self.get_segmented_frame_target_resolutions(),
-            self.center.get_channel_layout().clone(),
-            self.lower_right.get_channel_layout().clone(), // all peripherals should be the same
-            self.get_color_space().clone(),
+            *self.center.get_channel_layout(),
+            *self.lower_right.get_channel_layout(), // all peripherals should be the same
+            *self.get_color_space(),
         )
     }
 

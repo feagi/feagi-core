@@ -106,25 +106,25 @@ impl NeuronVoxelXYZPDecoder for Percentage4DExponentialNeuronVoxelXYZPDecoder {
 
             if !z_a_row_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &z_a_row_vector,
+                    z_a_row_vector,
                     &mut percentage_4d.a,
                 );
             }
             if !z_b_row_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &z_b_row_vector,
+                    z_b_row_vector,
                     &mut percentage_4d.b,
                 );
             }
             if !z_c_row_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &z_c_row_vector,
+                    z_c_row_vector,
                     &mut percentage_4d.c,
                 );
             }
             if !z_d_row_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &z_d_row_vector,
+                    z_d_row_vector,
                     &mut percentage_4d.d,
                 );
             }

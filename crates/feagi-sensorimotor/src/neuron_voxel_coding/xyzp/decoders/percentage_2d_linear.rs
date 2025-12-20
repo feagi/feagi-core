@@ -102,14 +102,14 @@ impl NeuronVoxelXYZPDecoder for Percentage2DLinearNeuronVoxelXYZPDecoder {
 
             if !z_a_row_vector.is_empty() {
                 decode_unsigned_percentage_from_linear_neurons(
-                    &z_a_row_vector,
+                    z_a_row_vector,
                     self.channel_dimensions.depth,
                     &mut percentage_2d.a,
                 );
             }
             if !z_b_row_vector.is_empty() {
                 decode_unsigned_percentage_from_linear_neurons(
-                    &z_b_row_vector,
+                    z_b_row_vector,
                     self.channel_dimensions.depth,
                     &mut percentage_2d.b,
                 )

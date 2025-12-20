@@ -20,8 +20,8 @@ impl ImageFrameSegmentator {
         initial_gaze: GazeProperties,
     ) -> Result<ImageFrameSegmentator, FeagiDataError> {
         Ok(ImageFrameSegmentator {
-            input_properties: input_properties.clone(),
-            output_properties: output_properties.clone(),
+            input_properties,
+            output_properties,
             ordered_transformers: Self::get_new_ordered_transformers(
                 &input_properties,
                 &output_properties,
@@ -37,7 +37,7 @@ impl ImageFrameSegmentator {
             &self.output_properties,
             gaze,
         )?;
-        self.gaze_being_used = gaze.clone();
+        self.gaze_being_used = *gaze;
         Ok(())
     }
 

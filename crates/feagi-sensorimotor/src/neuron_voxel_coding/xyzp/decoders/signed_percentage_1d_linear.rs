@@ -85,20 +85,17 @@ impl NeuronVoxelXYZPDecoder for SignedPercentageLinearNeuronVoxelXYZPDecoder {
                 continue;
             }
 
-            let z_row_vector;
-            if neuron.neuron_voxel_coordinate.x % 2 == 0 {
+            let z_row_vector = if neuron.neuron_voxel_coordinate.x % 2 == 0 {
                 // even, positive
-                z_row_vector = self
-                    .z_depth_scratch_space_positive
+                self.z_depth_scratch_space_positive
                     .get_mut(channel_index)
-                    .unwrap();
+                    .unwrap()
             } else {
                 // odd, negative
-                z_row_vector = self
-                    .z_depth_scratch_space_negative
+                self.z_depth_scratch_space_negative
                     .get_mut(channel_index)
-                    .unwrap();
-            }
+                    .unwrap()
+            };
             z_row_vector.push(neuron.neuron_voxel_coordinate.z)
         }
 
@@ -129,8 +126,8 @@ impl NeuronVoxelXYZPDecoder for SignedPercentageLinearNeuronVoxelXYZPDecoder {
                 .try_into()?;
 
             decode_signed_percentage_from_linear_neurons(
-                &z_row_vector_positive,
-                &z_row_vector_negative,
+                z_row_vector_positive,
+                z_row_vector_negative,
                 self.channel_dimensions.depth,
                 signed_percentage,
             );

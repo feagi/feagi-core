@@ -140,6 +140,7 @@ impl Display for SegmentedXYImageResolutions {
 /// - Linear: Linear color space
 /// - Gamma: Gamma-corrected color space
 #[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ColorSpace {
     Linear,
     Gamma,

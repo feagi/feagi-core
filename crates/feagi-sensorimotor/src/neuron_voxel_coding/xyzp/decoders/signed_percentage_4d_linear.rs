@@ -76,20 +76,17 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage4DLinearNeuronVoxelXYZPDecoder {
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            let z_row_vector;
-            if neuron.neuron_voxel_coordinate.x % 2 == 0 {
+            let z_row_vector = if neuron.neuron_voxel_coordinate.x % 2 == 0 {
                 // even, positive
-                z_row_vector = self
-                    .z_depth_scratch_space_positive
+                self.z_depth_scratch_space_positive
                     .get_mut(neuron.neuron_voxel_coordinate.x as usize)
-                    .unwrap();
+                    .unwrap()
             } else {
                 // odd, negative
-                z_row_vector = self
-                    .z_depth_scratch_space_negative
+                self.z_depth_scratch_space_negative
                     .get_mut(neuron.neuron_voxel_coordinate.x as usize)
-                    .unwrap();
-            }
+                    .unwrap()
+            };
             z_row_vector.push(neuron.neuron_voxel_coordinate.z)
         }
 
@@ -153,32 +150,32 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage4DLinearNeuronVoxelXYZPDecoder {
 
             if !(z_a_row_vector_positive.is_empty() && z_a_row_vector_negative.is_empty()) {
                 decode_signed_percentage_from_linear_neurons(
-                    &z_a_row_vector_positive,
-                    &z_a_row_vector_negative,
+                    z_a_row_vector_positive,
+                    z_a_row_vector_negative,
                     self.channel_dimensions.depth,
                     &mut signed_percentage_4d.a,
                 );
             }
             if !(z_b_row_vector_positive.is_empty() && z_b_row_vector_negative.is_empty()) {
                 decode_signed_percentage_from_linear_neurons(
-                    &z_b_row_vector_positive,
-                    &z_b_row_vector_negative,
+                    z_b_row_vector_positive,
+                    z_b_row_vector_negative,
                     self.channel_dimensions.depth,
                     &mut signed_percentage_4d.b,
                 );
             }
             if !(z_c_row_vector_positive.is_empty() && z_c_row_vector_negative.is_empty()) {
                 decode_signed_percentage_from_linear_neurons(
-                    &z_c_row_vector_positive,
-                    &z_c_row_vector_negative,
+                    z_c_row_vector_positive,
+                    z_c_row_vector_negative,
                     self.channel_dimensions.depth,
                     &mut signed_percentage_4d.c,
                 );
             }
             if !(z_d_row_vector_positive.is_empty() && z_d_row_vector_negative.is_empty()) {
                 decode_signed_percentage_from_linear_neurons(
-                    &z_d_row_vector_positive,
-                    &z_d_row_vector_negative,
+                    z_d_row_vector_positive,
+                    z_d_row_vector_negative,
                     self.channel_dimensions.depth,
                     &mut signed_percentage_4d.d,
                 );

@@ -76,20 +76,17 @@ impl NeuronVoxelXYZPDecoder for SignedPercentageExponentialNeuronVoxelXYZPDecode
                 continue; // Something is wrong, but currently we will just skip these
             }
 
-            let z_row_vector;
-            if neuron.neuron_voxel_coordinate.x % 2 == 0 {
+            let z_row_vector = if neuron.neuron_voxel_coordinate.x % 2 == 0 {
                 // even, positive
-                z_row_vector = self
-                    .z_depth_scratch_space_positive
+                self.z_depth_scratch_space_positive
                     .get_mut(neuron.neuron_voxel_coordinate.x as usize)
-                    .unwrap();
+                    .unwrap()
             } else {
                 // odd, negative
-                z_row_vector = self
-                    .z_depth_scratch_space_negative
+                self.z_depth_scratch_space_negative
                     .get_mut(neuron.neuron_voxel_coordinate.x as usize)
-                    .unwrap();
-            }
+                    .unwrap()
+            };
             z_row_vector.push(neuron.neuron_voxel_coordinate.z)
         }
 
@@ -120,8 +117,8 @@ impl NeuronVoxelXYZPDecoder for SignedPercentageExponentialNeuronVoxelXYZPDecode
                 .try_into()?;
 
             decode_signed_percentage_from_fractional_exponential_neurons(
-                &z_row_vector_positive,
-                &z_row_vector_negative,
+                z_row_vector_positive,
+                z_row_vector_negative,
                 signed_percentage,
             );
         }

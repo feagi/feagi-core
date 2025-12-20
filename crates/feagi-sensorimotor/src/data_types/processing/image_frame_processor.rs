@@ -85,7 +85,7 @@ impl ImageFrameProcessor {
         input: &ImageFrameProperties,
         output: &ImageFrameProperties,
     ) -> Result<Self, FeagiDataError> {
-        let mut definition = ImageFrameProcessor::new(input.clone());
+        let mut definition = ImageFrameProcessor::new(*input);
         if output.get_color_channel_layout() != input.get_color_channel_layout() {
             if output.get_color_channel_layout() == ColorChannelLayout::GrayScale
                 && input.get_color_channel_layout() == ColorChannelLayout::RGB
