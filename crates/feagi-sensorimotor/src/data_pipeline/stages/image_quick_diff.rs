@@ -186,7 +186,7 @@ fn quick_diff_and_check_if_pass(
     let total_pass_count: usize = Zip::from(minuend_arr)
         .and(subtrahend_arr)
         .and(diff_arr)
-        .par_map_collect(|&minuend, &subtrahend, diff| {
+        .par_map_collect(|&minuend: &u8, &subtrahend: &u8, diff: &mut u8| {
             let absolute_diff = minuend.abs_diff(subtrahend);
             let passed =
                 absolute_diff >= pixel_val_lower_bound && absolute_diff <= pixel_val_upper_bound;
