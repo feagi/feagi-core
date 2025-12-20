@@ -464,12 +464,12 @@ fn resize(source: &ImageFrame, destination: &mut ImageFrame) -> Result<(), Feagi
     let source_arr = source.get_internal_data();
     let destination_arr = destination.get_internal_data_mut();
 
-    let (src_h, src_w, src_c) = (
+    let (src_h, src_w, _src_c) = (
         source_arr.shape()[0],
         source_arr.shape()[1],
         source_arr.shape()[2],
     );
-    let (dst_h, dst_w, dst_c) = (
+    let (dst_h, dst_w, _dst_c) = (
         destination_arr.shape()[0],
         destination_arr.shape()[1],
         destination_arr.shape()[2],
