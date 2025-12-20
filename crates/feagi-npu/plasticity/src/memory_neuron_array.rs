@@ -677,7 +677,7 @@ mod tests {
         let config = MemoryNeuronLifecycleConfig::default();
 
         // Create neurons in different areas
-        for area in vec![100, 200] {
+        for area in [100, 200] {
             for i in 0..5 {
                 let mut pattern_hash = [0u8; 32];
                 pattern_hash[0] = (area / 100) as u8;
