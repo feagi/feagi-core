@@ -1633,9 +1633,11 @@ mod tests {
     #[test]
     fn test_udp_viz_config() {
         // Create PNS with UDP visualization transport
-        let mut udp_viz = UdpConfig::default();
-        udp_viz.bind_address = "127.0.0.1:0".to_string(); // Use port 0 for auto-assign
-        udp_viz.peer_address = "127.0.0.1:9999".to_string();
+        let udp_viz = UdpConfig {
+            bind_address: "127.0.0.1:0".to_string(), // Use port 0 for auto-assign
+            peer_address: "127.0.0.1:9999".to_string(),
+            ..Default::default()
+        };
         let config = IOConfig {
             visualization_transport: TransportMode::Udp,
             udp_viz_config: udp_viz,
@@ -1652,12 +1654,16 @@ mod tests {
     #[test]
     fn test_dual_transport_config() {
         // Test that we can configure both UDP and ZMQ
-        let mut udp_viz = UdpConfig::default();
-        udp_viz.bind_address = "127.0.0.1:0".to_string();
-        udp_viz.peer_address = "127.0.0.1:9998".to_string();
-        let mut udp_sensory = UdpConfig::default();
-        udp_sensory.bind_address = "127.0.0.1:0".to_string();
-        udp_sensory.peer_address = "127.0.0.1:9997".to_string();
+        let udp_viz = UdpConfig {
+            bind_address: "127.0.0.1:0".to_string(),
+            peer_address: "127.0.0.1:9998".to_string(),
+            ..Default::default()
+        };
+        let udp_sensory = UdpConfig {
+            bind_address: "127.0.0.1:0".to_string(),
+            peer_address: "127.0.0.1:9997".to_string(),
+            ..Default::default()
+        };
         let config = IOConfig {
             visualization_transport: TransportMode::Udp,
             sensory_transport: TransportMode::Udp,
