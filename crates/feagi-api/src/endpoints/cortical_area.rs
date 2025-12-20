@@ -247,12 +247,7 @@ pub async fn get_cortical_locations_2d(
         Ok(areas) => {
             let locations: HashMap<String, (i32, i32)> = areas
                 .into_iter()
-                .map(|area| {
-                    (
-                        area.cortical_id,
-                        (area.position.0, area.position.1),
-                    )
-                })
+                .map(|area| (area.cortical_id, (area.position.0, area.position.1)))
                 .collect();
             Ok(Json(locations))
         }
