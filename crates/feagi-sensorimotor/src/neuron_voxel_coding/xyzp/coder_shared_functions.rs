@@ -153,7 +153,7 @@ pub(crate) fn encode_signed_percentage_to_fractional_exponential_neuron_z_indexe
     } else {
         // positive non-zero
         for z in 1..(number_neurons_along_z + 1) {
-            let compare: f32 = (0.5f32.powi(z as i32));
+            let compare: f32 = 0.5f32.powi(z as i32);
             if processing >= compare {
                 processing -= compare;
                 neuron_indexes_along_z_positive.push(z - 1);

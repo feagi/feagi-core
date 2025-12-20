@@ -8,7 +8,6 @@ use crate::data_types::{
 };
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_data_structures::FeagiDataError;
-use std::fmt::write;
 use std::mem::discriminant;
 
 /// Type descriptor for wrapped I/O data.

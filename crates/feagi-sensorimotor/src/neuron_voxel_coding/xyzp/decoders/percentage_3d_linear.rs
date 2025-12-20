@@ -34,7 +34,7 @@ impl NeuronVoxelXYZPDecoder for Percentage3DLinearNeuronVoxelXYZPDecoder {
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
         &mut self,
         neurons_to_read: &CorticalMappedXYZPNeuronVoxels,
-        _time_of_read: Instant,
+        __time_of_read: Instant,
         pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>,
         channel_changed: &mut Vec<bool>,
     ) -> Result<(), FeagiDataError> {

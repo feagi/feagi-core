@@ -34,18 +34,29 @@ pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPEncoder;
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPEncoder;
 pub(crate) use percentage_1d_exponential::PercentageExponentialNeuronVoxelXYZPEncoder;
 pub(crate) use percentage_1d_linear::PercentageLinearNeuronVoxelXYZPEncoder;
+// Note: 2D and 4D encoders are not currently used but kept for future use
+#[allow(unused_imports)]
 pub(crate) use percentage_2d_exponential::Percentage2DExponentialNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use percentage_2d_linear::Percentage2DLinearNeuronVoxelXYZPEncoder;
 pub(crate) use percentage_3d_exponential::Percentage3DExponentialNeuronVoxelXYZPEncoder;
 pub(crate) use percentage_3d_linear::Percentage3DLinearNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use percentage_4d_exponential::Percentage4DExponentialNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use percentage_4d_linear::Percentage4DLinearNeuronVoxelXYZPEncoder;
 pub(crate) use segmented_image_frame::SegmentedImageFrameNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use signed_percentage_1d_exponential::SignedPercentage1DExponentialNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use signed_percentage_1d_linear::SignedPercentage1DLinearNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use signed_percentage_2d_exponential::SignedPercentage2DExponentialNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use signed_percentage_2d_linear::SignedPercentage2DLinearNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use signed_percentage_3d_exponential::SignedPercentage3DExponentialNeuronVoxelXYZPEncoder;
+#[allow(unused_imports)]
 pub(crate) use signed_percentage_3d_linear::SignedPercentage3DLinearNeuronVoxelXYZPEncoder;
 pub(crate) use signed_percentage_4d_exponential::SignedPercentage4DExponentialNeuronVoxelXYZPEncoder;
 pub(crate) use signed_percentage_4d_linear::SignedPercentage4DLinearNeuronVoxelXYZPEncoder;

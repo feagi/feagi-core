@@ -98,7 +98,7 @@ impl SegmentedImageFrameNeuronVoxelXYZPEncoder {
         number_channels: CorticalChannelCount,
     ) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         let encoder = SegmentedImageFrameNeuronVoxelXYZPEncoder {
-            segmented_image_properties: segmented_image_properties,
+            segmented_image_properties,
             cortical_write_targets: cortical_ids,
             neuron_scratch_spaces: vec![
                 [
