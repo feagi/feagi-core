@@ -100,7 +100,7 @@ pub async fn post_mapping_properties(
         if let Some(arr) = conn.as_array() {
             // Array format: [morphology_id, scalar, multiplier, plasticity_flag, constant, ltp, ltd]
             formatted.push(serde_json::json!({
-                "morphology_id": arr.get(0).and_then(|v| v.as_str()).unwrap_or(""),
+                "morphology_id": arr.first().and_then(|v| v.as_str()).unwrap_or(""),
                 "morphology_scalar": arr.get(1).cloned().unwrap_or(serde_json::json!([1, 1, 1])),
                 "postSynapticCurrent_multiplier": arr.get(2).and_then(|v| v.as_i64()).unwrap_or(1),
                 "plasticity_flag": arr.get(3).and_then(|v| v.as_bool()).unwrap_or(false),

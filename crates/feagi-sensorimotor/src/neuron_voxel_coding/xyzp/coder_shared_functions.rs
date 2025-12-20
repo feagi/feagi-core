@@ -212,7 +212,7 @@ mod tests {
 
         // Test encode/decode unsigned percentage with linear neurons - value 1.0
         {
-            let mut percentage = Percentage::new_from_0_1_unchecked(1.0);
+            let percentage = Percentage::new_from_0_1_unchecked(1.0);
             let mut neuron_indexes = Vec::new();
 
             encode_unsigned_percentage_to_linear_neuron_z_index(
@@ -243,7 +243,7 @@ mod tests {
 
         // Test encode/decode unsigned percentage with linear neurons - value 0.5
         {
-            let mut percentage = Percentage::new_from_0_1_unchecked(0.5);
+            let percentage = Percentage::new_from_0_1_unchecked(0.5);
             let mut neuron_indexes = Vec::new();
 
             encode_unsigned_percentage_to_linear_neuron_z_index(
@@ -313,7 +313,7 @@ mod tests {
 
         // Test encode/decode signed percentage with linear neurons - value 1.0
         {
-            let mut percentage = SignedPercentage::new_from_m1_1(1.0).unwrap();
+            let percentage = SignedPercentage::new_from_m1_1(1.0).unwrap();
             let mut neuron_indexes_pos = Vec::new();
             let mut neuron_indexes_neg = Vec::new();
 
@@ -352,7 +352,7 @@ mod tests {
 
         // Test encode/decode signed percentage with linear neurons - value -1.0
         {
-            let mut percentage = SignedPercentage::new_from_m1_1(-1.0).unwrap();
+            let percentage = SignedPercentage::new_from_m1_1(-1.0).unwrap();
             let mut neuron_indexes_pos = Vec::new();
             let mut neuron_indexes_neg = Vec::new();
 
@@ -457,7 +457,7 @@ mod tests {
 
         // Test encode/decode unsigned percentage with fractional neurons - value 0.5
         {
-            let mut percentage = Percentage::new_from_0_1_unchecked(0.5);
+            let percentage = Percentage::new_from_0_1_unchecked(0.5);
             let mut neuron_indexes = Vec::new();
 
             encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(
@@ -488,7 +488,7 @@ mod tests {
 
         // Test encode/decode unsigned percentage with fractional neurons - value 1.0
         {
-            let mut percentage = Percentage::new_from_0_1_unchecked(1.0);
+            let percentage = Percentage::new_from_0_1_unchecked(1.0);
             let mut neuron_indexes = Vec::new();
 
             encode_unsigned_percentage_to_fractional_exponential_neuron_z_indexes(
@@ -553,7 +553,7 @@ mod tests {
 
         // Test encode/decode signed percentage with fractional neurons - value 0.5
         {
-            let mut percentage = SignedPercentage::new_from_m1_1(0.5).unwrap();
+            let percentage = SignedPercentage::new_from_m1_1(0.5).unwrap();
             let mut neuron_indexes_pos = Vec::new();
             let mut neuron_indexes_neg = Vec::new();
 
@@ -587,7 +587,7 @@ mod tests {
 
         // Test encode/decode signed percentage with fractional neurons - value -0.5
         {
-            let mut percentage = SignedPercentage::new_from_m1_1(-0.5).unwrap();
+            let percentage = SignedPercentage::new_from_m1_1(-0.5).unwrap();
             let mut neuron_indexes_pos = Vec::new();
             let mut neuron_indexes_neg = Vec::new();
 
@@ -621,7 +621,7 @@ mod tests {
 
         // Test encode/decode signed percentage with fractional neurons - value 1.0
         {
-            let mut percentage = SignedPercentage::new_from_m1_1(1.0).unwrap();
+            let percentage = SignedPercentage::new_from_m1_1(1.0).unwrap();
             let mut neuron_indexes_pos = Vec::new();
             let mut neuron_indexes_neg = Vec::new();
 
@@ -655,7 +655,7 @@ mod tests {
 
         // Test encode/decode signed percentage with fractional neurons - value -1.0
         {
-            let mut percentage = SignedPercentage::new_from_m1_1(-1.0).unwrap();
+            let percentage = SignedPercentage::new_from_m1_1(-1.0).unwrap();
             let mut neuron_indexes_pos = Vec::new();
             let mut neuron_indexes_neg = Vec::new();
 
@@ -713,7 +713,7 @@ mod tests {
         // Test decode with empty vector for unsigned fractional
         {
             let empty: Vec<u32> = Vec::new();
-            let mut percentage = Percentage::new_from_0_1_unchecked(0.5); // Start with non-zero
+            let percentage = Percentage::new_from_0_1_unchecked(0.5); // Start with non-zero
 
             decode_unsigned_percentage_from_fractional_exponential_neurons(&empty, &mut percentage);
             assert_eq!(

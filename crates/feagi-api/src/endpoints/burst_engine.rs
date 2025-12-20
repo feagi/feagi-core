@@ -119,7 +119,7 @@ pub async fn get_fcl(
 
         cortical_areas
             .entry(cortical_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(*neuron_id);
     }
 

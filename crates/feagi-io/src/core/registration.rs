@@ -1682,6 +1682,7 @@ mod tests {
 }
 
 // Implement RegistrationHandlerTrait for RegistrationHandler
+#[cfg(not(test))]
 impl RegistrationHandlerTrait for RegistrationHandler {
     fn process_registration(
         &self,

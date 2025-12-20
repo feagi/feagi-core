@@ -541,7 +541,7 @@ pub async fn get_download_connectome(
         .connectome_service
         .export_connectome()
         .await
-        .map_err(|e| ApiError::from(e))?;
+        .map_err(ApiError::from)?;
 
     // Serialize snapshot to JSON
     let json_value = serde_json::to_value(&snapshot)
@@ -580,7 +580,7 @@ pub async fn post_upload_connectome(
         .connectome_service
         .import_connectome(snapshot)
         .await
-        .map_err(|e| ApiError::from(e))?;
+        .map_err(ApiError::from)?;
 
     Ok(Json(HashMap::from([(
         "message".to_string(),
@@ -634,7 +634,7 @@ pub async fn get_cortical_area_list_types(
             "dea" => "death".to_string(),
             _ => {
                 // For unknown types, capitalize first letter and add spaces
-                if subtype.len() > 0 {
+                if !subtype.is_empty() {
                     let mut chars = subtype.chars();
                     let first = chars.next().unwrap().to_uppercase().collect::<String>();
                     let rest: String = chars.collect();
