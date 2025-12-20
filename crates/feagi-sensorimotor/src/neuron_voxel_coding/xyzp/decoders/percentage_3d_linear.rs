@@ -58,7 +58,7 @@ impl NeuronVoxelXYZPDecoder for Percentage3DLinearNeuronVoxelXYZPDecoder {
         }
 
         let number_of_channels = pipelines_with_data_to_update.len() as u32;
-        let max_possible_x_index = CHANNEL_WIDTH * number_of_channels; // Something is wrong if we reach here
+        let _max_possible_x_index = CHANNEL_WIDTH * number_of_channels; // Something is wrong if we reach here
         let z_depth: u32 = self.channel_dimensions.depth;
 
         for neuron in neuron_array.iter() {
@@ -80,7 +80,7 @@ impl NeuronVoxelXYZPDecoder for Percentage3DLinearNeuronVoxelXYZPDecoder {
             z_row_vector.push(neuron.neuron_voxel_coordinate.z)
         }
 
-        let z_depth_float = self.channel_dimensions.depth as f32;
+        let _z_depth_float = self.channel_dimensions.depth as f32;
 
         // At this point, we have numbers in scratch space to average out
         for channel_index in 0..number_of_channels as usize {

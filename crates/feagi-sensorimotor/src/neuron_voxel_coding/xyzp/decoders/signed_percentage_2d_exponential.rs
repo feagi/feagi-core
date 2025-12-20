@@ -61,7 +61,7 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage2DExponentialNeuronVoxelXYZPDeco
         }
 
         let number_of_channels = pipelines_with_data_to_update.len() as u32;
-        let max_possible_x_index = CHANNEL_WIDTH * number_of_channels; // Something is wrong if we reach here
+        let _max_possible_x_index = CHANNEL_WIDTH * number_of_channels; // Something is wrong if we reach here
         let z_depth: u32 = self.channel_dimensions.depth;
 
         for neuron in neuron_array.iter() {

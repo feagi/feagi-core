@@ -39,7 +39,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
         }
 
         let number_of_channels = pipelines_with_data_to_update.len() as u32;
-        let max_possible_x_index = self.misc_dimensions.width * number_of_channels; // Something is wrong if we reach here
+        let _max_possible_x_index = self.misc_dimensions.width * number_of_channels; // Something is wrong if we reach here
         let max_possible_y_index = self.misc_dimensions.height;
         let max_possible_z_index = self.misc_dimensions.depth;
 
