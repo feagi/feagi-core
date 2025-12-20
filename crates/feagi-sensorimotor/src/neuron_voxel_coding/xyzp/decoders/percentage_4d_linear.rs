@@ -45,7 +45,7 @@ impl NeuronVoxelXYZPDecoder for Percentage4DLinearNeuronVoxelXYZPDecoder {
             return Ok(());
         }
 
-        let mut neuron_array = neuron_array.unwrap();
+        let neuron_array = neuron_array.unwrap();
         if neuron_array.is_empty() {
             return Ok(());
         }

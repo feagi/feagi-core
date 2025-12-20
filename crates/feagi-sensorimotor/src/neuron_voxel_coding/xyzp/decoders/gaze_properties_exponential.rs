@@ -104,15 +104,15 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
 
             // We need to ensure if ANY of the numbers changed (as in they added anything to the vector for that row that only originally had 0), we update it and label it as such
 
-            let mut eccentricity_z_a_vector = self
+            let eccentricity_z_a_vector = self
                 .z_depth_eccentricity_scratch_space
                 .get(eccentricity_z_row_a_index)
                 .unwrap();
-            let mut eccentricity_z_b_vector = self
+            let eccentricity_z_b_vector = self
                 .z_depth_eccentricity_scratch_space
                 .get(eccentricity_z_row_b_index)
                 .unwrap();
-            let mut modularity_z_vector = self
+            let modularity_z_vector = self
                 .z_depth_modularity_scratch_space
                 .get(modularity_z_row_index)
                 .unwrap();
