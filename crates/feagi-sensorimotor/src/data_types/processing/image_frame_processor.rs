@@ -184,7 +184,7 @@ impl ImageFrameProcessor {
             ImageFrameProcessor {
                 input_image_properties: _,
                 cropping_from: None,
-                final_resize_xy_to: Some(final_resize_xy_to),
+                final_resize_xy_to: Some(_final_resize_xy_to),
                 convert_color_space_to: None,
                 offset_brightness_by: None,
                 change_contrast_by: None,
@@ -216,7 +216,7 @@ impl ImageFrameProcessor {
             ImageFrameProcessor {
                 input_image_properties: _,
                 cropping_from: Some(cropping_from),
-                final_resize_xy_to: Some(final_resize_xy_to),
+                final_resize_xy_to: Some(_final_resize_xy_to),
                 convert_color_space_to: None,
                 offset_brightness_by: None,
                 change_contrast_by: None,
