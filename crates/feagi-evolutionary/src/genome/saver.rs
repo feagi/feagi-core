@@ -178,6 +178,7 @@ mod tests {
         brain_regions.insert("root".to_string(), (region, None));
 
         // Save to JSON
+        #[allow(deprecated)]
         let json = GenomeSaver::save_to_json(
             &cortical_areas,
             &brain_regions,
@@ -225,6 +226,7 @@ mod tests {
         brain_regions.insert("root".to_string(), (region, None));
 
         // Save to JSON
+        #[allow(deprecated)]
         let json = GenomeSaver::save_to_json(
             &cortical_areas,
             &brain_regions,

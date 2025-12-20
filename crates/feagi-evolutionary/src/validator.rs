@@ -12,6 +12,8 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{MorphologyParameters, RuntimeGenome};
+// CorticalID is used in function signatures but may appear unused in some contexts
+#[allow(unused_imports)]
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use serde_json::Value;
 use std::collections::HashSet;
