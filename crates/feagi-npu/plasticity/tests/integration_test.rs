@@ -152,7 +152,7 @@ fn test_multiple_memory_areas() {
         bitmap.insert(area_idx);
 
         let pattern = detector
-            .detect_pattern(area_idx, &vec![1], 10, vec![bitmap], None)
+            .detect_pattern(area_idx, &[1], 10, vec![bitmap], None)
             .unwrap();
 
         memory_array
@@ -258,7 +258,7 @@ fn test_pattern_cache_performance() {
     for i in 0..100 {
         let mut bitmap = HashSet::new();
         bitmap.insert(i);
-        detector.detect_pattern(100, &vec![1], 10, vec![bitmap], None);
+        detector.detect_pattern(100, &[1], 10, vec![bitmap], None);
     }
 
     let stats = detector.get_stats();
@@ -268,7 +268,7 @@ fn test_pattern_cache_performance() {
     // Detect the first pattern again - should be cache hit
     let mut bitmap = HashSet::new();
     bitmap.insert(0);
-    detector.detect_pattern(100, &vec![1], 11, vec![bitmap], None);
+    detector.detect_pattern(100, &[1], 11, vec![bitmap], None);
 
     let stats = detector.get_stats();
     assert_eq!(stats.cache_hits, 1);
@@ -330,10 +330,10 @@ fn test_deterministic_pattern_hashing_across_runs() {
 
     // Detect pattern with both detectors
     let pattern1 = detector1
-        .detect_pattern(100, &vec![1], 10, vec![bitmap.clone()], None)
+        .detect_pattern(100, &[1], 10, vec![bitmap.clone()], None)
         .unwrap();
     let pattern2 = detector2
-        .detect_pattern(100, &vec![1], 10, vec![bitmap], None)
+        .detect_pattern(100, &[1], 10, vec![bitmap], None)
         .unwrap();
 
     // Same input should produce same hash
@@ -354,7 +354,7 @@ fn test_concurrent_pattern_detection() {
             thread::spawn(move || {
                 let mut bitmap = HashSet::new();
                 bitmap.insert(i);
-                detector.detect_pattern(100, &vec![1], 10, vec![bitmap], None)
+                detector.detect_pattern(100, &[1], 10, vec![bitmap], None)
             })
         })
         .collect();
