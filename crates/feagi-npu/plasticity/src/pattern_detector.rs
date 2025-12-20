@@ -394,8 +394,10 @@ mod tests {
 
     #[test]
     fn test_pattern_detection_below_threshold() {
-        let mut config = PatternConfig::default();
-        config.min_activity_threshold = 10;
+        let config = PatternConfig {
+            min_activity_threshold: 10,
+            ..Default::default()
+        };
         let detector = PatternDetector::new(config);
 
         let mut bitmap = HashSet::new();
@@ -450,8 +452,10 @@ mod tests {
 
     #[test]
     fn test_cache_eviction() {
-        let mut config = PatternConfig::default();
-        config.max_pattern_cache_size = 2;
+        let config = PatternConfig {
+            max_pattern_cache_size: 2,
+            ..Default::default()
+        };
         let detector = PatternDetector::new(config);
 
         // Create 3 different patterns
