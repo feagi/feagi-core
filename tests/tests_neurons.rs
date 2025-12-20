@@ -1,6 +1,6 @@
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_serialization::FeagiByteStructure;
 use feagi_data_serialization::FeagiByteStructureCompatible;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
 };
@@ -112,12 +112,10 @@ fn test_serialize_deserialize_neuron_mapped_areas() {
             .unwrap();
 
     assert_eq!(received_cortical_mappings.len(), 3);
-    assert!(received_cortical_mappings.contains_cortical_id(
-        &CorticalID::try_from_base_64("cAAAAA").unwrap()
-    ));
-    assert!(received_cortical_mappings.contains_cortical_id(
-        &CorticalID::try_from_base_64("cBBBBB").unwrap()
-    ));
+    assert!(received_cortical_mappings
+        .contains_cortical_id(&CorticalID::try_from_base_64("cAAAAA").unwrap()));
+    assert!(received_cortical_mappings
+        .contains_cortical_id(&CorticalID::try_from_base_64("cBBBBB").unwrap()));
 
     let rec_neurons_a = received_cortical_mappings
         .get_neurons_of(&CorticalID::try_from_base_64("cAAAAA").unwrap())

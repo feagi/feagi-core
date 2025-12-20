@@ -1,11 +1,11 @@
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::FeagiJSON;
 use feagi_data_serialization::FeagiByteStructure;
 use feagi_data_serialization::FeagiByteStructureCompatible;
 use feagi_data_serialization::FeagiByteStructureType;
+use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
 };
+use feagi_data_structures::FeagiJSON;
 use serde_json::json;
 
 #[test]

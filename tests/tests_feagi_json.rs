@@ -1,6 +1,6 @@
-use feagi_data_structures::FeagiJSON;
 use feagi_data_serialization::FeagiByteStructure;
 use feagi_data_serialization::FeagiByteStructureCompatible;
+use feagi_data_structures::FeagiJSON;
 use serde_json::json;
 
 #[test]
