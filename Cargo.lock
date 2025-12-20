@@ -1790,6 +1790,8 @@ version = "0.0.1-beta.2"
 dependencies = [
  "feagi-agent",
  "feagi-brain-development",
+ "feagi-data-serialization",
+ "feagi-data-structures",
  "feagi-evolutionary",
  "feagi-io",
  "feagi-npu-burst-engine",
@@ -1797,6 +1799,7 @@ dependencies = [
  "feagi-npu-plasticity",
  "feagi-sensorimotor",
  "feagi-state-manager",
+ "ndarray",
  "serde_json",
 ]
 

@@ -52,6 +52,9 @@ agent-sdk = ["feagi-agent"]
 feagi-evolutionary = { version = "0.0.1-beta.2", path = "crates/feagi-evolutionary" }
 feagi-npu-neural = { version = "0.0.1-beta.2", path = "crates/feagi-npu/neural" }
 serde_json = "1.0"
+feagi-data-structures = { version = "0.0.1-beta.2", path = "crates/feagi-data-structures" }
+feagi-data-serialization = { version = "0.0.1-beta.2", path = "crates/feagi-data-serialization" }
+ndarray = { workspace = true }
 
 # Infrastructure (vendored)
 feagi-state-manager = { version = "0.0.1-beta.2", path = "crates/feagi-state-manager", optional = true }

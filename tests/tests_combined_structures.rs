@@ -1,10 +1,10 @@
-use feagi_core_data_structures_and_processing::genomic_structures::CorticalID;
-use feagi_core_data_structures_and_processing::io_data::FeagiJSON;
-use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructure;
-use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructureCompatible;
-use feagi_core_data_structures_and_processing::io_processing::byte_structures::FeagiByteStructureType;
-use feagi_core_data_structures_and_processing::neuron_data::xyzp::{
-    CorticalMappedXYZPNeuronData, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
+use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_data_structures::FeagiJSON;
+use feagi_data_serialization::FeagiByteStructure;
+use feagi_data_serialization::FeagiByteStructureCompatible;
+use feagi_data_serialization::FeagiByteStructureType;
+use feagi_data_structures::neuron_voxels::xyzp::{
+    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
 };
 use serde_json::json;
 
@@ -39,7 +39,7 @@ fn test_combined_neuron_json_multistruct_serialize_deserialize() {
     let mut neurons_b = NeuronVoxelXYZPArrays::with_capacity(1);
     neurons_b.push(&neuron_b_1);
 
-    let mut neuron_mappings = CorticalMappedXYZPNeuronData::new();
+    let mut neuron_mappings = CorticalMappedXYZPNeuronVoxels::new();
     neuron_mappings.insert(cortical_id_a, neurons_a);
     neuron_mappings.insert(cortical_id_b, neurons_b);
 
@@ -123,7 +123,7 @@ fn test_combined_neuron_json_multistruct_serialize_deserialize() {
     // Convert back to original data types
     let recovered_json_structure =
         FeagiJSON::new_from_feagi_byte_structure(&received_json_structure_bytes).unwrap();
-    let recovered_neuron_mappings = CorticalMappedXYZPNeuronData::new_from_feagi_byte_structure(
+    let recovered_neuron_mappings = CorticalMappedXYZPNeuronVoxels::new_from_feagi_byte_structure(
         &received_neuron_structure_bytes,
     )
     .unwrap();
@@ -171,14 +171,14 @@ fn test_multistruct_with_multiple_json_and_neuron_structures() {
     let neuron_1 = NeuronVoxelXYZP::new(1, 1, 1, 0.1);
     let mut neurons_1 = NeuronVoxelXYZPArrays::with_capacity(1);
     neurons_1.push(&neuron_1);
-    let mut neuron_mappings_1 = CorticalMappedXYZPNeuronData::new();
+    let mut neuron_mappings_1 = CorticalMappedXYZPNeuronVoxels::new();
     neuron_mappings_1.insert(cortical_id_1, neurons_1);
 
     let cortical_id_2 = CorticalID::new_custom_cortical_area_id("cTES02".to_string()).unwrap();
     let neuron_2 = NeuronVoxelXYZP::new(2, 2, 2, 0.2);
     let mut neurons_2 = NeuronVoxelXYZPArrays::with_capacity(1);
     neurons_2.push(&neuron_2);
-    let mut neuron_mappings_2 = CorticalMappedXYZPNeuronData::new();
+    let mut neuron_mappings_2 = CorticalMappedXYZPNeuronVoxels::new();
     neuron_mappings_2.insert(cortical_id_2, neurons_2);
 
     // Convert to bytes structures
