@@ -99,9 +99,8 @@ impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
                 continue; // No data collected for this channel. Do not emit
             }
             *changed_flag = true;
-            let percentage: &mut Percentage = pipeline
-                .get_preprocessed_cached_value_mut()
-                .try_into()?;
+            let percentage: &mut Percentage =
+                pipeline.get_preprocessed_cached_value_mut().try_into()?;
             decode_unsigned_percentage_from_fractional_exponential_neurons(z_vector, percentage);
         }
 

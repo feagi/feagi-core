@@ -258,8 +258,7 @@ pub(crate) trait PipelineStageRunner {
             "pipeline_stages".to_string(),
             serde_json::Value::Array(json_stages),
         );
-        serde_json::to_value(output)
-            .map_err(|err| FeagiDataError::InternalError(err.to_string()))
+        serde_json::to_value(output).map_err(|err| FeagiDataError::InternalError(err.to_string()))
     }
 
     fn import_from_json(

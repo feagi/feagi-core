@@ -108,9 +108,8 @@ impl NeuronVoxelXYZPDecoder for Percentage4DLinearNeuronVoxelXYZPDecoder {
                 continue; // No data collected for this channel. Do not emit
             }
             *changed_flag = true;
-            let percentage_4d: &mut Percentage4D = pipeline
-                .get_preprocessed_cached_value_mut()
-                .try_into()?;
+            let percentage_4d: &mut Percentage4D =
+                pipeline.get_preprocessed_cached_value_mut().try_into()?;
 
             if !z_a_row_vector.is_empty() {
                 decode_unsigned_percentage_from_linear_neurons(

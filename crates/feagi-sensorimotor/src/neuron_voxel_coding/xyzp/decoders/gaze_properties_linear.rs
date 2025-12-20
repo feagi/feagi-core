@@ -135,9 +135,8 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesLinearNeuronVoxelXYZPDecoder {
                 continue; // No data collected for this channel. Do not emit
             }
             *changed_flag = true;
-            let prev_gaze: &mut GazeProperties = pipeline
-                .get_preprocessed_cached_value_mut()
-                .try_into()?;
+            let prev_gaze: &mut GazeProperties =
+                pipeline.get_preprocessed_cached_value_mut().try_into()?;
 
             if !eccentricity_z_a_vector.is_empty() {
                 decode_unsigned_percentage_from_linear_neurons(

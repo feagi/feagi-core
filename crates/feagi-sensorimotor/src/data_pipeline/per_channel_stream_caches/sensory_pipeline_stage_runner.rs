@@ -63,7 +63,8 @@ impl SensoryPipelineStageRunner {
     /// Creates a new pipeline stage runner with the specified configuration.
     #[allow(dead_code)]
     pub fn new(initial_sensory_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
-        let type_to_be_outputted: WrappedIOType = WrappedIOType::from(&initial_sensory_cached_value);
+        let type_to_be_outputted: WrappedIOType =
+            WrappedIOType::from(&initial_sensory_cached_value);
 
         Ok(SensoryPipelineStageRunner {
             expected_processed_sensor_type: type_to_be_outputted,

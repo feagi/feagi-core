@@ -101,9 +101,8 @@ impl NeuronVoxelXYZPDecoder for PercentageLinearNeuronVoxelXYZPDecoder {
                 continue; // No data collected for this channel. Do not emit
             }
             *changed_flag = true;
-            let percentage: &mut Percentage = pipeline
-                .get_preprocessed_cached_value_mut()
-                .try_into()?;
+            let percentage: &mut Percentage =
+                pipeline.get_preprocessed_cached_value_mut().try_into()?;
             decode_unsigned_percentage_from_linear_neurons(
                 z_vector,
                 self.channel_dimensions.depth,

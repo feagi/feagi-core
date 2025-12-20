@@ -130,9 +130,8 @@ impl NeuronVoxelXYZPDecoder for SignedPercentage2DExponentialNeuronVoxelXYZPDeco
                 continue; // No data collected for this channel. Do not emit
             }
             *changed_flag = true;
-            let signed_percentage_2d: &mut SignedPercentage2D = pipeline
-                .get_preprocessed_cached_value_mut()
-                .try_into()?;
+            let signed_percentage_2d: &mut SignedPercentage2D =
+                pipeline.get_preprocessed_cached_value_mut().try_into()?;
 
             if !(z_a_row_vector_positive.is_empty() && z_a_row_vector_negative.is_empty()) {
                 decode_signed_percentage_from_fractional_exponential_neurons(

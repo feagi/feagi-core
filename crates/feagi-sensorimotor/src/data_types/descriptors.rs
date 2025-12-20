@@ -323,8 +323,7 @@ impl ImageFrameProperties {
         if image_frame.get_color_space() != &self.color_space {
             return Err(FeagiDataError::BadParameters(format!(
                 "Expected color space of {}, but got image with color space of {}!",
-                self.color_space,
-                self.color_space
+                self.color_space, self.color_space
             )));
         }
         if image_frame.get_channel_layout() != &self.color_channel_layout {
@@ -375,9 +374,7 @@ impl Display for ImageFrameProperties {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(
             "ImageFrameProperties({}, {}, {})",
-            self.image_resolution,
-            self.color_space,
-            self.color_channel_layout
+            self.image_resolution, self.color_space, self.color_channel_layout
         );
         write!(f, "{}", s)
     }
@@ -431,7 +428,8 @@ impl SegmentedImageFrameProperties {
     ) -> Result<(), FeagiDataError> {
         if self != &segmented_image_frame.get_segmented_image_frame_properties() {
             return Err(FeagiDataError::BadParameters(
-                "Segmented image frame does not match the expected segmented frame properties!".into(),
+                "Segmented image frame does not match the expected segmented frame properties!"
+                    .into(),
             ));
         }
         Ok(())
@@ -508,8 +506,7 @@ impl Display for CornerPoints {
         write!(
             f,
             "CornerPoints(Upper Left: {}, Lower Right: {})",
-            self.upper_left,
-            self.lower_right
+            self.upper_left, self.lower_right
         )
     }
 }

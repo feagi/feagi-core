@@ -127,9 +127,8 @@ impl NeuronVoxelXYZPDecoder for SignedPercentageLinearNeuronVoxelXYZPDecoder {
                 continue; // No data collected for this channel. Do not emit
             }
             *changed_flag = true;
-            let signed_percentage: &mut SignedPercentage = pipeline
-                .get_preprocessed_cached_value_mut()
-                .try_into()?;
+            let signed_percentage: &mut SignedPercentage =
+                pipeline.get_preprocessed_cached_value_mut().try_into()?;
 
             decode_signed_percentage_from_linear_neurons(
                 z_row_vector_positive,
