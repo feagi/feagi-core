@@ -1444,7 +1444,7 @@ impl IOSystem {
         static TRANSPORT_LOG_COUNTER: std::sync::atomic::AtomicU64 =
             std::sync::atomic::AtomicU64::new(0);
         let log_count = TRANSPORT_LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if log_count % 100 == 0 {
+        if log_count.is_multiple_of(100) {
             trace!("[PNS] Active viz transports: {:?}", active_transports);
         }
 
@@ -1483,14 +1483,14 @@ impl IOSystem {
                             Err(e) => errors.push(format!("WebSocket: {}", e)),
                         }
                     } else {
-                        if log_count % 100 == 0 {
+                        if log_count.is_multiple_of(100) {
                             warn!(
                                 "[PNS] ⚠️ WebSocket enabled but not running (servers not started)"
                             );
                         }
                     }
                 } else {
-                    if log_count % 100 == 0 {
+                    if log_count.is_multiple_of(100) {
                         warn!("[PNS] ⚠️ WebSocket enabled but streams not initialized!");
                     }
                 }
