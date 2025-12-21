@@ -29,22 +29,22 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi = "0.0.1-beta.1"  # Umbrella crate (includes everything)
+feagi = "0.0.1-beta.3"  # Umbrella crate (includes everything)
 ```
 
 Or use individual building blocks:
 
 ```toml
 [dependencies]
-feagi-npu-burst-engine = "0.0.1-beta.1"  # Just the NPU
-feagi-npu-neural = "0.0.1-beta.1"        # Just core types
+feagi-npu-burst-engine = "0.0.1-beta.3"  # Just the NPU
+feagi-npu-neural = "0.0.1-beta.3"        # Just core types
 ```
 
 Or umbrella with specific features:
 
 ```toml
 [dependencies]
-feagi = { version = "0.0.1-beta.1", features = ["gpu"] }
+feagi = { version = "0.0.1-beta.3", features = ["gpu"] }
 ```
 
 ## Quick Start
@@ -72,63 +72,51 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ```rust
 #![no_std]
-use feagi_neural::NeuronDynamics;
-use feagi_runtime_embedded::EmbeddedRuntime;
+use feagi_npu_neural::types::*;
+use feagi_npu_runtime::traits::*;
 
 // Configure for resource-constrained systems
-let runtime = EmbeddedRuntime::new(1000, 5000);
-let mut dynamics = NeuronDynamics::new(&runtime);
+let config = NeuronConfig::default();
+// Process neural dynamics
 ```
 
 ### Python Integration
 
 ```python
-import feagi_rust
-
-# Create high-performance engine
-engine = feagi_rust.SynapticPropagationEngine()
-
-# Build synaptic connectivity
-engine.build_index(source_neurons, target_neurons, weights, conductances, types, valid_mask)
-
-# Process neural activity
-result = engine.propagate(fired_neurons)
+# Python bindings available via PyO3
+# Check feagi-python-sdk for Python integration
 ```
 
 ## Architecture
 
 FEAGI Core is organized as a workspace of focused crates:
 
-### Core Types and Algorithms
-- **feagi-types**: Fundamental data structures (neurons, synapses, cortical areas)
-- **feagi-neural**: Platform-agnostic neuron dynamics (no_std compatible)
-- **feagi-synapse**: Synaptic computation algorithms (no_std compatible)
+### Core Types and Data Structures
+- **feagi-data-structures**: Fundamental data structures (neurons, synapses, cortical areas)
+- **feagi-data-serialization**: Binary serialization formats (FBC - FEAGI Byte Container)
+- **feagi-npu-neural**: Platform-agnostic neuron types and models (no_std compatible)
+- **feagi-npu-runtime**: Runtime trait abstractions for std and embedded
 
 ### Neural Processing
-- **feagi-burst-engine**: High-performance burst cycle execution
-- **feagi-brain-development**: Brain development (neurogenesis, synaptogenesis)
-- **feagi-plasticity**: Synaptic learning (STDP, memory consolidation)
-- **feagi-evolutionary**: Genome I/O and evolutionary algorithms
+- **feagi-npu-burst-engine**: High-performance burst cycle execution with GPU support
+- **feagi-brain-development**: Neurogenesis and synaptogenesis
+- **feagi-npu-plasticity**: Synaptic learning (STDP, memory consolidation)
+- **feagi-evolutionary**: Genome I/O, evolution, and validation
 
 ### Infrastructure
-- **feagi-state-manager**: Runtime state and lifecycle management
-- **feagi-config**: Configuration loading and validation
-- **feagi-observability**: Logging, telemetry, and profiling
+- **feagi-state-manager**: Runtime state and agent registry
+- **feagi-config**: TOML configuration loading and validation
+- **feagi-observability**: Unified logging, telemetry, and profiling
 
 ### I/O and Integration
-- **feagi-io**: I/O system (sensory input, motor output)
+- **feagi-io**: I/O system (sensory input, motor output, transports)
+- **feagi-sensorimotor**: Peripheral nervous system - data processing and encoding
 - **feagi-agent**: Client library for agent integration
-- **feagi-api**: REST API server
-- **feagi-transports**: Network transport abstractions (ZMQ, UDP, HTTP)
-
-### Platform Adapters
-- **feagi-runtime-std**: Desktop and server deployment (Vec, Rayon, async)
-- **feagi-runtime-embedded**: Embedded systems (fixed arrays, no_std)
-- **feagi-hal**: Platform abstraction layer for ESP32, Arduino, STM32
-
-### Utilities
-- **feagi-connectome-serialization**: Brain persistence and loading
+- **feagi-api**: REST API server with OpenAPI support
 - **feagi-services**: High-level service compositions
+
+### Platform Support
+- **feagi-hal**: Hardware abstraction layer (ESP32, Arduino, STM32)
 
 ## Performance
 
@@ -184,9 +172,10 @@ io = [...]            # I/O and networking
 
 ```toml
 [features]
-gpu = [...]           # Cross-platform GPU (WGPU)
-cuda = [...]          # NVIDIA CUDA acceleration
-all-gpu = [...]       # All GPU backends
+default = []
+gpu = ["wgpu", ...]      # Cross-platform GPU (WGPU)
+cuda = ["cudarc", ...]   # NVIDIA CUDA acceleration
+all-gpu = ["gpu", "cuda"] # All GPU backends
 ```
 
 ## Building from Source
@@ -309,9 +298,10 @@ cargo bench -p feagi-burst-engine
 
 ## Project Status
 
-**Version**: 0.0.1  
+**Version**: 0.0.1-beta.3  
 **Status**: Active development  
-**Minimum Rust Version**: 1.75+
+**Minimum Rust Version**: 1.75+  
+**Versioning**: Independent per-crate (see [docs/INDEPENDENT_VERSIONING.md](docs/INDEPENDENT_VERSIONING.md))
 
 FEAGI Core is under active development. The core APIs are stabilizing, but breaking changes may occur in minor releases.
 
