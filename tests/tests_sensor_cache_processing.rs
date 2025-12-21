@@ -14,40 +14,47 @@ use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_data_serialization::FeagiByteStructureCompatible;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 */
+#[allow(unused_imports)]
 use std::time::Instant;
 
 #[test]
 #[ignore] // TODO: Update to use new sensorimotor API
+#[allow(unused_variables, dead_code)]
 fn test_chained_encoders() -> Result<(), Box<dyn std::error::Error>> {
+    // TODO: Update this test to use new sensorimotor API
+    // These types no longer exist: LinearAverageRollingWindowProcessor, LinearScaleTo0And1Processor, IOTypeData
+    Ok(())
+    // Commented out old API code:
     // Create the rolling window processor (5-sample window, initial value 0.0)
-    let mut rolling_window_processor = LinearAverageRollingWindowProcessor::new(5, 0.0)?;
+    // let mut rolling_window_processor = LinearAverageRollingWindowProcessor::new(5, 0.0)?;
 
     // Create the range scaling processor (maps 0-50 to 0-1)
-    let mut range_processor = LinearScaleTo0And1Processor::new(0.0, 50.0, 25.0)?;
+    // let mut range_processor = LinearScaleTo0And1Processor::new(0.0, 50.0, 25.0)?;
 
+    // All old API code commented out - test needs full rewrite
     // In here, lets try manually running the data through without the help of higher level structures, just to ensure the math is fine in here
-    {
-        // Verify the processing handle the correct data types
-        assert_eq!(
-            range_processor.get_input_data_type(),
-            rolling_window_processor.get_output_data_type()
-        );
-
-        // Create the input sensor value (25.0)
-        let sensor_value = IOTypeData::new_f32(25.0)?;
-        let timestamp = Instant::now();
-
-        // Process through the rolling window processor first
-        let windowed_result =
-            rolling_window_processor.process_new_input(&sensor_value, timestamp)?; // 0 + 0 + 0 + 0 + 25 / 5 -> 5
-
-        // Then process through the range scaling processor
-        let scaled_result = range_processor.process_new_input(windowed_result, timestamp)?; // 0 <-> 5 <-> 50 -> 0.1
-
-        assert_eq!(f32::try_from(scaled_result)?, 0.1);
-
-        Ok(())
-    }
+    // {
+    //     // Verify the processing handle the correct data types
+    //     assert_eq!(
+    //         range_processor.get_input_data_type(),
+    //         rolling_window_processor.get_output_data_type()
+    //     );
+    //
+    //     // Create the input sensor value (25.0)
+    //     let sensor_value = IOTypeData::new_f32(25.0)?;
+    //     let timestamp = Instant::now();
+    //
+    //     // Process through the rolling window processor first
+    //     let windowed_result =
+    //         rolling_window_processor.process_new_input(&sensor_value, timestamp)?; // 0 + 0 + 0 + 0 + 25 / 5 -> 5
+    //
+    //     // Then process through the range scaling processor
+    //     let scaled_result = range_processor.process_new_input(windowed_result, timestamp)?; // 0 <-> 5 <-> 50 -> 0.1
+    //
+    //     assert_eq!(f32::try_from(scaled_result)?, 0.1);
+    //
+    //     Ok(())
+    // }
 }
 
 #[test]
