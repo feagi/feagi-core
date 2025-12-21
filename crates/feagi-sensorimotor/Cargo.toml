@@ -11,8 +11,8 @@ homepage.workspace = true
 
 [dependencies]
 ndarray = { workspace = true, features = ["rayon"] }
-feagi-data-structures = { version = "0.0.1-beta.2", path = "../feagi-data-structures" }
-feagi-data-serialization = { version = "0.0.1-beta.2", path = "../feagi-data-serialization" }
+feagi-data-structures = { version = "0.0.1-beta.1", path = "../feagi-data-structures" }
+feagi-data-serialization = { version = "0.0.1-beta.1", path = "../feagi-data-serialization" }
 image = {workspace = true}
 rayon = { workspace = true}
 paste = { workspace = true}

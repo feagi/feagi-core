@@ -8,7 +8,7 @@ repository.workspace = true
 description = "FEAGI plasticity algorithms - STDP and memory formation"
 
 [dependencies]
-feagi-npu-neural = { version = "0.0.1-beta.2", path = "../neural" }  # For NeuronId
+feagi-npu-neural = { version = "0.0.1-beta.1", path = "../neural" }  # For NeuronId
 thiserror.workspace = true
 rayon.workspace = true
 ahash.workspace = true
