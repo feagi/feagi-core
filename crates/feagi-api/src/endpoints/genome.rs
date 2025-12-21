@@ -112,7 +112,7 @@ async fn load_default_genome(
         "test" => feagi_evolutionary::TEST_GENOME_JSON,
         "vision" => feagi_evolutionary::VISION_GENOME_JSON,
         _ => {
-            return Err(ApiError::invalid_input(&format!(
+            return Err(ApiError::invalid_input(format!(
                 "Unknown genome name '{}'. Available: barebones, essential, test, vision",
                 genome_name
             )))
@@ -335,7 +335,7 @@ pub async fn post_upload(
 
     // Convert to JSON string
     let json_str = serde_json::to_string(&genome_json)
-        .map_err(|e| ApiError::invalid_input(&format!("Invalid JSON: {}", e)))?;
+        .map_err(|e| ApiError::invalid_input(format!("Invalid JSON: {}", e)))?;
 
     let params = LoadGenomeParams { json_str };
     let genome_info = genome_service

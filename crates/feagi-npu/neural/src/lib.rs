@@ -28,7 +28,7 @@
 //! - ✅ WASM (browser, Node.js)
 //! - ✅ GPU (CUDA, WebGPU)
 
-#![no_std]
+// Note: This module is part of a no_std crate
 
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

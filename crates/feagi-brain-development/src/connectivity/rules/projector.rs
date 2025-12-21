@@ -17,21 +17,12 @@ use feagi_data_structures::genomic::cortical_area::descriptors::CorticalAreaDime
 use rayon::prelude::*;
 
 /// Parameters for projection mapping
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ProjectorParams {
     /// Axis transpose mapping ("x", "y", "z") → (0, 1, 2)
     pub transpose: Option<(usize, usize, usize)>,
     /// Project from last layer of specific axis
     pub project_last_layer_of: Option<usize>,
-}
-
-impl Default for ProjectorParams {
-    fn default() -> Self {
-        Self {
-            transpose: None,
-            project_last_layer_of: None,
-        }
-    }
 }
 
 /// High-performance projection mapping.
@@ -60,6 +51,7 @@ impl Default for ProjectorParams {
 /// # Returns
 ///
 /// Vector of destination positions that match this source neuron
+#[allow(clippy::too_many_arguments)]
 pub fn syn_projector(
     _src_area_id: &str,
     _dst_area_id: &str,
@@ -140,14 +132,7 @@ pub fn syn_projector(
         for &y in &dst_voxels[1] {
             for &z in &dst_voxels[2] {
                 // Bounds check (should always pass if calculate_axis_projection is correct)
-                #[allow(unused_comparisons)] // Keep for future signed coordinate support
-                if x >= 0
-                    && y >= 0
-                    && z >= 0
-                    && (x as u32) < dst_dims.width
-                    && (y as u32) < dst_dims.height
-                    && (z as u32) < dst_dims.depth
-                {
+                if x < dst_dims.width && y < dst_dims.height && z < dst_dims.depth {
                     candidate_positions.push((x, y, z));
                 }
             }
@@ -246,6 +231,7 @@ fn apply_transpose(
 /// Batch projection for multiple neurons (parallel processing).
 ///
 /// PERFORMANCE: Uses rayon for parallel processing of large neuron batches.
+#[allow(clippy::too_many_arguments)]
 pub fn syn_projector_batch(
     src_area_id: &str,
     dst_area_id: &str,
@@ -332,9 +318,9 @@ mod tests {
 
         // All positions should be within bounds
         for pos in &positions {
-            assert!(pos.0 >= 0 && pos.0 < 128);
-            assert!(pos.1 >= 0 && pos.1 < 128);
-            assert!(pos.2 >= 0 && pos.2 < 1);
+            assert!(pos.0 < 128);
+            assert!(pos.1 < 128);
+            assert!(pos.2 < 1);
         }
     }
 

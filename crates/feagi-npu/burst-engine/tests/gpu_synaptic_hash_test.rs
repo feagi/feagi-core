@@ -20,11 +20,14 @@
 //! Run with:
 //!   cargo test --test gpu_synaptic_hash_test --features gpu
 
-use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType};
-use feagi_npu_burst_engine::FireCandidateList;
-use feagi_npu_runtime::{NeuronArray, SynapseArray};
+#[allow(unused_imports)]
+use feagi_npu_burst_engine::backend::{BackendConfig, BackendType};
+#[allow(unused_imports)]
+use feagi_npu_neural::types::FireCandidateList;
+use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 /// Helper: Create test genome
+#[allow(dead_code)]
 fn create_test_genome(
     neuron_count: usize,
     synapses_per_neuron: usize,
@@ -58,7 +61,7 @@ fn create_test_genome(
                 synapse_array
                     .source_index
                     .entry(source as u32)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(synapse_idx);
 
                 synapse_idx += 1;
@@ -71,6 +74,7 @@ fn create_test_genome(
 }
 
 /// Find neuron IDs that hash to the same slot (for collision testing)
+#[allow(dead_code)]
 fn find_colliding_neuron_ids(target_slot: usize, capacity: usize, count: usize) -> Vec<u32> {
     let mut colliding = Vec::new();
 
@@ -172,7 +176,7 @@ fn test_gpu_hash_collision_correctness() {
     );
 
     // All target neurons should be in FCL
-    assert!(fcl.len() > 0, "FCL should contain target neurons");
+    assert!(!fcl.is_empty(), "FCL should contain target neurons");
 
     println!("✅ Hash collisions handled correctly");
 }
@@ -379,7 +383,7 @@ fn test_gpu_max_weight_synapses() {
     println!("Max weight: {} synapses processed", synapses_processed);
 
     // FCL should have strong contributions
-    assert!(fcl.len() > 0, "Should have FCL candidates");
+    assert!(!fcl.is_empty(), "Should have FCL candidates");
 
     println!("✅ Max-weight synapses handled correctly");
 }

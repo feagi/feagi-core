@@ -59,7 +59,9 @@ fn test_fire_queue_ipu_area_serialization() {
     let mut npu = create_test_npu();
 
     // Register IPU area
-    let cortical_id = CorticalID::try_from_bytes(b"iav000").unwrap();
+    let mut bytes = [0u8; 8];
+    bytes[..6].copy_from_slice(b"iav000");
+    let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
     let base64_name = cortical_id.as_base_64();
     npu.register_cortical_area(2, base64_name.clone());
 
@@ -88,7 +90,9 @@ fn test_fire_queue_opu_area_serialization() {
     let mut npu = create_test_npu();
 
     // Register OPU area
-    let cortical_id = CorticalID::try_from_bytes(b"omot00").unwrap();
+    let mut bytes = [0u8; 8];
+    bytes[..6].copy_from_slice(b"omot00");
+    let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
     let base64_name = cortical_id.as_base_64();
     npu.register_cortical_area(3, base64_name.clone());
 
@@ -117,7 +121,9 @@ fn test_fire_queue_custom_area_serialization() {
     let mut npu = create_test_npu();
 
     // Register CUSTOM area
-    let cortical_id = CorticalID::try_from_bytes(b"cust000").unwrap();
+    let mut bytes = [0u8; 8];
+    bytes[..7].copy_from_slice(b"cust000");
+    let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
     let base64_name = cortical_id.as_base_64();
     npu.register_cortical_area(4, base64_name.clone());
 
@@ -146,7 +152,9 @@ fn test_fire_queue_memory_area_serialization() {
     let mut npu = create_test_npu();
 
     // Register MEMORY area
-    let cortical_id = CorticalID::try_from_bytes(b"memo000").unwrap();
+    let mut bytes = [0u8; 8];
+    bytes[..7].copy_from_slice(b"memo000");
+    let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
     let base64_name = cortical_id.as_base_64();
     npu.register_cortical_area(5, base64_name.clone());
 
@@ -174,13 +182,17 @@ fn test_fire_queue_memory_area_serialization() {
 fn test_fire_queue_multiple_areas() {
     let mut npu = create_test_npu();
 
-    let areas = vec![(1, b"___power"), (2, b"iav000"), (3, b"omot00")];
+    let mut bytes1 = [0u8; 8];
+    bytes1[..6].copy_from_slice(b"iav000");
+    let mut bytes2 = [0u8; 8];
+    bytes2[..6].copy_from_slice(b"omot00");
+    let areas: Vec<(u8, [u8; 8])> = vec![(1, *b"___power"), (2, bytes1), (3, bytes2)];
 
     // Register all areas
     for (idx, bytes) in &areas {
         let cortical_id = CorticalID::try_from_bytes(bytes).unwrap();
         let base64_name = cortical_id.as_base_64();
-        npu.register_cortical_area(*idx, base64_name);
+        npu.register_cortical_area(*idx as u32, base64_name.clone());
     }
 
     // Create fire queue data for each area
@@ -191,7 +203,7 @@ fn test_fire_queue_multiple_areas() {
         let base64_name = cortical_id.as_base_64();
 
         let fire_data = RawFireQueueData {
-            cortical_area_idx: *idx,
+            cortical_area_idx: *idx as u32,
             cortical_area_name: base64_name.clone(),
             neuron_ids: vec![*idx as u32 * 10],
             coords_x: vec![*idx as u32 * 5],

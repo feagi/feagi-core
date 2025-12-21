@@ -2,15 +2,13 @@
 //!
 //! This module provides data structures and enums for describing dat properties
 
-use super::{
-    ImageFrame, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame,
-};
+use super::{ImageFrame, SegmentedImageFrame};
 use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelDimensions;
+// NeuronDepth is used in macro expansion
 use feagi_data_structures::FeagiDataError;
 use feagi_data_structures::{
     define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping,
 };
-use std::cmp;
 use std::fmt::Display;
 
 //region Images
@@ -54,6 +52,7 @@ pub struct SegmentedXYImageResolutions {
 }
 
 impl SegmentedXYImageResolutions {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         lower_left: ImageXYResolution,
         lower_middle: ImageXYResolution,
@@ -141,7 +140,7 @@ impl Display for SegmentedXYImageResolutions {
 /// This enum defines the possible color spaces:
 /// - Linear: Linear color space
 /// - Gamma: Gamma-corrected color space
-#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum ColorSpace {
     Linear,
     Gamma,
@@ -193,8 +192,7 @@ impl TryFrom<usize> for ColorChannelLayout {
             _ => Err(FeagiDataError::BadParameters(format!(
                 "No Channel Layout has {} channels! Acceptable values are 1,2,3,4!",
                 value
-            ))
-            .into()),
+            ))),
         }
     }
 }
@@ -320,19 +318,16 @@ impl ImageFrameProperties {
             return Err(FeagiDataError::BadParameters(
                 format! {"Expected resolution of {} but received an image with resolution of {}!",
                 self.image_resolution, image_frame.get_xy_resolution()},
-            )
-            .into());
+            ));
         }
         if image_frame.get_color_space() != &self.color_space {
             return Err(FeagiDataError::BadParameters(format!(
                 "Expected color space of {}, but got image with color space of {}!",
-                self.color_space.to_string(),
-                self.color_space.to_string()
-            ))
-            .into());
+                self.color_space, self.color_space
+            )));
         }
         if image_frame.get_channel_layout() != &self.color_channel_layout {
-            return Err(FeagiDataError::BadParameters(format!("Expected color channel layout of {}, but got image with color channel layout of {}!", self.color_channel_layout.to_string(), self.color_channel_layout.to_string())).into());
+            return Err(FeagiDataError::BadParameters(format!("Expected color channel layout of {}, but got image with color channel layout of {}!", self.color_channel_layout, self.color_channel_layout)));
         }
         Ok(())
     }
@@ -379,9 +374,7 @@ impl Display for ImageFrameProperties {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let s = format!(
             "ImageFrameProperties({}, {}, {})",
-            self.image_resolution,
-            self.color_space.to_string(),
-            self.color_channel_layout.to_string()
+            self.image_resolution, self.color_space, self.color_channel_layout
         );
         write!(f, "{}", s)
     }
@@ -437,8 +430,7 @@ impl SegmentedImageFrameProperties {
             return Err(FeagiDataError::BadParameters(
                 "Segmented image frame does not match the expected segmented frame properties!"
                     .into(),
-            )
-            .into());
+            ));
         }
         Ok(())
     }
@@ -468,8 +460,7 @@ impl CornerPoints {
         if lower_right.x <= upper_left.x || lower_right.y <= upper_left.y {
             return Err(FeagiDataError::BadParameters(
                 "Given Points are not forming a proper rectangle!".into(),
-            )
-            .into());
+            ));
         }
         Ok(CornerPoints {
             upper_left,
@@ -504,8 +495,7 @@ impl CornerPoints {
             return Err(FeagiDataError::BadParameters(format!(
                 "Corner Points {} do not fit in given resolution {}!",
                 self, resolution
-            ))
-            .into());
+            )));
         }
         Ok(())
     }
@@ -516,8 +506,7 @@ impl Display for CornerPoints {
         write!(
             f,
             "CornerPoints(Upper Left: {}, Lower Right: {})",
-            self.upper_left.to_string(),
-            self.lower_right.to_string()
+            self.upper_left, self.lower_right
         )
     }
 }

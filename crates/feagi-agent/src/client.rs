@@ -511,7 +511,7 @@ impl AgentClient {
                 }
 
                 // Check if more frames are available (should be for multipart)
-                let data = if socket.get_rcvmore().map_err(|e| SdkError::Zmq(e))? {
+                let data = if socket.get_rcvmore().map_err(SdkError::Zmq)? {
                     info!(
                         "[CLIENT] 📥 More frames available, receiving second frame (motor data)..."
                     );

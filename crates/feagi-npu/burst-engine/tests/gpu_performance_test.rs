@@ -7,9 +7,11 @@
 
 //! GPU Performance Test - Measures actual speedup with full GPU pipeline
 
-use feagi_npu_burst_engine::*;
-use feagi_npu_neural::types::*;
-use std::time::Instant;
+#[allow(unused_imports)]
+use feagi_npu_burst_engine::backend;
+#[allow(unused_imports)]
+use feagi_npu_neural::types::FireCandidateList;
+use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 /// Create test genome with specified size
 fn create_test_genome(
@@ -47,7 +49,7 @@ fn create_test_genome(
                 synapse_array
                     .source_index
                     .entry(source as u32)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(synapse_idx);
 
                 synapse_idx += 1;
@@ -85,11 +87,14 @@ fn test_gpu_full_pipeline_speedup() {
     );
 
     // Create test genome
+    #[allow(unused_variables)]
     let (neuron_array, synapse_array) = create_test_genome(neuron_count, synapses_per_neuron);
+    #[allow(unused_variables)]
     let fired_neurons = create_fired_neurons(neuron_count);
 
     // Note: CPU backend comparison removed due to type inference complexity
     // GPU performance is validated independently
+    #[allow(unused_variables)]
     let cpu_us_per_burst = 0u128; // Placeholder for GPU-only test
 
     // ═══════════════════════════════════════════════════════════

@@ -3,9 +3,7 @@ use crate::data_pipeline::per_channel_stream_caches::{
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_data_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
-};
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_data_structures::FeagiDataError;
@@ -23,6 +21,7 @@ enum BoolState {
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct BooleanNeuronVoxelXYZPEncoder {
     cortical_write_target: CorticalID,
     scratch_space: Vec<BoolState>, // # channels long
@@ -35,7 +34,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
 
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
-        pipelines: &Vec<SensoryPipelineStageRunner>,
+        pipelines: &[SensoryPipelineStageRunner],
         time_of_previous_burst: Instant,
         write_target: &mut CorticalMappedXYZPNeuronVoxels,
     ) -> Result<(), FeagiDataError> {
@@ -48,7 +47,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
             .try_for_each(
-                |(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+                |(_channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                     let channel_updated = pipeline.get_last_processed_instant();
                     if channel_updated < time_of_previous_burst {
                         *scratch = BoolState::Unchanged;
@@ -66,7 +65,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
             )?;
 
         // Cannot parallelize due to data writing of various lengths
-        for c in 0..self.scratch_space.len() as u32 {
+        for _c in 0..self.scratch_space.len() as u32 {
             const Y: u32 = 0;
             const Z: u32 = 0;
             for (channel_x, changed) in self.scratch_space.iter().enumerate() {
@@ -92,6 +91,7 @@ impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
 }
 
 impl BooleanNeuronVoxelXYZPEncoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_write_target: CorticalID,
         number_channels: CorticalChannelCount,

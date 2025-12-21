@@ -35,7 +35,7 @@ pub struct CorticalID {
 
 impl CorticalID {
     pub const CORTICAL_ID_LENGTH: usize = 8; // 8 bytes -> 64 bit
-    pub const CORTICAL_ID_LENGTH_BASE_64: usize = 4 * (Self::CORTICAL_ID_LENGTH + 3 - 1 / 3); // enforces rounding up
+    pub const CORTICAL_ID_LENGTH_BASE_64: usize = 4 * (Self::CORTICAL_ID_LENGTH + 3); // enforces rounding up
 
     pub const NUMBER_OF_BYTES: usize = Self::CORTICAL_ID_LENGTH;
 
@@ -147,7 +147,7 @@ impl CorticalID {
     }
 
     pub fn as_base_64(&self) -> String {
-        general_purpose::STANDARD.encode(&self.bytes)
+        general_purpose::STANDARD.encode(self.bytes)
     }
 
     /// Extract subtype from cortical ID (e.g., "isvi0___" → "svi")
@@ -176,7 +176,7 @@ impl CorticalID {
         if self.bytes[0] == b'i' || self.bytes[0] == b'o' {
             // Byte 4 typically contains unit ID (0-9 as ASCII)
             let byte = self.bytes[4];
-            if byte >= b'0' && byte <= b'9' {
+            if byte.is_ascii_digit() {
                 Some(byte - b'0')
             } else if byte == b'_' || byte == 0 {
                 Some(0)
@@ -289,7 +289,7 @@ mod tests {
     #[test]
     fn test_base64_wrong_length() {
         // Test with valid base64 but wrong length (only 4 bytes encoded)
-        let short_base64 = general_purpose::STANDARD.encode(&[1u8, 2, 3, 4]);
+        let short_base64 = general_purpose::STANDARD.encode([1u8, 2, 3, 4]);
         let result = CorticalID::try_from_base_64(&short_base64);
         assert!(result.is_err());
     }

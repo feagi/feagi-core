@@ -36,7 +36,11 @@ macro_rules! run_async {
         #[cfg(all(feature = "async-wasm", feature = "async-wasi"))]
         compile_error!("Do not enable both async-wasm and async-wasi features!");
 
-        #[cfg(not(any(feature = "async-tokio", feature = "async-wasm", feature = "async-wasi")))]
+        #[cfg(not(any(
+            feature = "async-tokio",
+            feature = "async-wasm",
+            feature = "async-wasi"
+        )))]
         compile_error!(
             "No async runtime feature enabled! Enable one of: async-tokio, async-wasm, async-wasi"
         );

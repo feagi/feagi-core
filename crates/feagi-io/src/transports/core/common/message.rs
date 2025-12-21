@@ -51,7 +51,7 @@ impl From<&[u8]> for Message {
 }
 
 /// Message metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MessageMetadata {
     /// Message ID
     pub id: Option<String>,
@@ -67,18 +67,6 @@ pub struct MessageMetadata {
 
     /// Custom key-value pairs
     pub custom: std::collections::HashMap<String, String>,
-}
-
-impl Default for MessageMetadata {
-    fn default() -> Self {
-        Self {
-            id: None,
-            timestamp: None,
-            sender: None,
-            topic: None,
-            custom: std::collections::HashMap::new(),
-        }
-    }
 }
 
 /// Reply handle for request-reply patterns

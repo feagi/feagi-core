@@ -276,11 +276,11 @@ impl BatchPatternDetector {
     pub fn get_detector(&self, memory_area_idx: u32, temporal_depth: u32) -> PatternDetector {
         let mut detectors = self.detectors.lock().unwrap();
 
-        if !detectors.contains_key(&memory_area_idx) {
+        detectors.entry(memory_area_idx).or_insert_with(|| {
             let detector = PatternDetector::new(self.base_config.clone());
             detector.configure_area_temporal_depth(memory_area_idx, temporal_depth);
-            detectors.insert(memory_area_idx, detector);
-        }
+            detector
+        });
 
         // Clone the detector for thread-safe access
         detectors.get(&memory_area_idx).unwrap().clone()
@@ -394,8 +394,10 @@ mod tests {
 
     #[test]
     fn test_pattern_detection_below_threshold() {
-        let mut config = PatternConfig::default();
-        config.min_activity_threshold = 10;
+        let config = PatternConfig {
+            min_activity_threshold: 10,
+            ..Default::default()
+        };
         let detector = PatternDetector::new(config);
 
         let mut bitmap = HashSet::new();
@@ -450,15 +452,17 @@ mod tests {
 
     #[test]
     fn test_cache_eviction() {
-        let mut config = PatternConfig::default();
-        config.max_pattern_cache_size = 2;
+        let config = PatternConfig {
+            max_pattern_cache_size: 2,
+            ..Default::default()
+        };
         let detector = PatternDetector::new(config);
 
         // Create 3 different patterns
         for i in 0..3 {
             let mut bitmap = HashSet::new();
             bitmap.insert(i);
-            detector.detect_pattern(100, &vec![1], 10, vec![bitmap], None);
+            detector.detect_pattern(100, &[1], 10, vec![bitmap], None);
         }
 
         // Cache should have at most 2 patterns
@@ -542,7 +546,7 @@ mod tests {
 
         let mut bitmap = HashSet::new();
         bitmap.insert(1);
-        detector.detect_pattern(100, &vec![1], 10, vec![bitmap], None);
+        detector.detect_pattern(100, &[1], 10, vec![bitmap], None);
 
         // Cache should have entries
         {
@@ -564,7 +568,7 @@ mod tests {
 
         let mut bitmap = HashSet::new();
         bitmap.insert(1);
-        detector.detect_pattern(100, &vec![1], 10, vec![bitmap], None);
+        detector.detect_pattern(100, &[1], 10, vec![bitmap], None);
 
         let stats = detector.get_stats();
         assert!(stats.patterns_detected > 0);
@@ -586,7 +590,7 @@ mod tests {
 
         let mut bitmap = HashSet::new();
         bitmap.insert(1);
-        let pattern = detector.detect_pattern(100, &vec![1], 10, vec![bitmap], None);
+        let pattern = detector.detect_pattern(100, &[1], 10, vec![bitmap], None);
 
         assert!(pattern.is_some());
     }
@@ -597,11 +601,11 @@ mod tests {
         let batch_detector = BatchPatternDetector::new(config);
 
         // Create patterns for multiple areas
-        for area_idx in vec![100, 200, 300] {
+        for area_idx in [100, 200, 300] {
             let detector = batch_detector.get_detector(area_idx, 3);
             let mut bitmap = HashSet::new();
             bitmap.insert(area_idx);
-            detector.detect_pattern(area_idx, &vec![1], 10, vec![bitmap], None);
+            detector.detect_pattern(area_idx, &[1], 10, vec![bitmap], None);
         }
 
         let stats = batch_detector.get_batch_stats();

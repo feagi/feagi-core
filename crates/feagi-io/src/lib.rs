@@ -609,13 +609,13 @@ impl IOSystem {
         let motor_port = config
             .zmq_motor_address
             .split(':')
-            .last()
+            .next_back()
             .and_then(|s| s.parse::<u16>().ok())
             .unwrap_or(5564); // @architecture:acceptable - emergency fallback
         let viz_port = config
             .zmq_viz_address
             .split(':')
-            .last()
+            .next_back()
             .and_then(|s| s.parse::<u16>().ok())
             .unwrap_or(5562); // @architecture:acceptable - emergency fallback
 
@@ -623,7 +623,7 @@ impl IOSystem {
         let sensory_port = config
             .zmq_sensory_address
             .split(':')
-            .last()
+            .next_back()
             .and_then(|s| s.parse::<u16>().ok())
             .unwrap_or(5558); // @architecture:acceptable - emergency fallback
 
@@ -922,133 +922,123 @@ impl IOSystem {
     /// Dynamically start motor stream if conditions are met
     fn try_start_motor_stream(&self) {
         let mut state = self.motor_stream_state.lock();
-        match *state {
-            StreamState::Stopped => {
-                if !self.should_motor_stream_run() {
-                    return;
-                }
+        if *state == StreamState::Stopped {
+            if !self.should_motor_stream_run() {
+                return;
+            }
 
-                *state = StreamState::Starting;
-                drop(state);
+            *state = StreamState::Starting;
+            drop(state);
 
-                if !self.should_motor_stream_run() {
-                    *self.motor_stream_state.lock() = StreamState::Stopped;
-                    return;
-                }
+            if !self.should_motor_stream_run() {
+                *self.motor_stream_state.lock() = StreamState::Stopped;
+                return;
+            }
 
-                #[cfg(feature = "zmq-transport")]
-                {
-                    if let Some(streams) = self.zmq_streams.lock().as_ref() {
-                        match streams.start_motor_stream() {
-                            Ok(()) => {
-                                *self.motor_stream_state.lock() = StreamState::Running;
-                                let agent_count = self.agent_registry.read().count_motor_agents();
-                                info!("🟢 [PNS-DYNAMIC] Motor stream started: genome loaded, {} agents registered", agent_count);
-                            }
-                            Err(e) => {
-                                error!("❌ [PNS-DYNAMIC] Failed to start motor stream: {}", e);
-                                *self.motor_stream_state.lock() = StreamState::Stopped;
-                            }
+            #[cfg(feature = "zmq-transport")]
+            {
+                if let Some(streams) = self.zmq_streams.lock().as_ref() {
+                    match streams.start_motor_stream() {
+                        Ok(()) => {
+                            *self.motor_stream_state.lock() = StreamState::Running;
+                            let agent_count = self.agent_registry.read().count_motor_agents();
+                            info!("🟢 [PNS-DYNAMIC] Motor stream started: genome loaded, {} agents registered", agent_count);
+                        }
+                        Err(e) => {
+                            error!("❌ [PNS-DYNAMIC] Failed to start motor stream: {}", e);
+                            *self.motor_stream_state.lock() = StreamState::Stopped;
                         }
                     }
                 }
             }
-            _ => {}
         }
     }
 
     /// Dynamically stop motor stream
     fn try_stop_motor_stream(&self) {
         let mut state = self.motor_stream_state.lock();
-        match *state {
-            StreamState::Running => {
-                *state = StreamState::Stopping;
-                drop(state);
+        if *state == StreamState::Running {
+            *state = StreamState::Stopping;
+            drop(state);
 
-                #[cfg(feature = "zmq-transport")]
-                {
-                    if let Some(streams) = self.zmq_streams.lock().as_ref() {
-                        match streams.stop_motor_stream() {
-                            Ok(()) => {
-                                *self.motor_stream_state.lock() = StreamState::Stopped;
-                                warn!("🔴 [PNS-DYNAMIC] Motor stream stopped: conditions no longer met");
-                            }
-                            Err(e) => {
-                                error!("❌ [PNS-DYNAMIC] Failed to stop motor stream: {}", e);
-                                *self.motor_stream_state.lock() = StreamState::Running;
-                            }
+            #[cfg(feature = "zmq-transport")]
+            {
+                if let Some(streams) = self.zmq_streams.lock().as_ref() {
+                    match streams.stop_motor_stream() {
+                        Ok(()) => {
+                            *self.motor_stream_state.lock() = StreamState::Stopped;
+                            warn!(
+                                "🔴 [PNS-DYNAMIC] Motor stream stopped: conditions no longer met"
+                            );
+                        }
+                        Err(e) => {
+                            error!("❌ [PNS-DYNAMIC] Failed to stop motor stream: {}", e);
+                            *self.motor_stream_state.lock() = StreamState::Running;
                         }
                     }
                 }
             }
-            _ => {}
         }
     }
 
     /// Dynamically start visualization stream if conditions are met
     fn try_start_viz_stream(&self) {
         let mut state = self.viz_stream_state.lock();
-        match *state {
-            StreamState::Stopped => {
-                if !self.should_viz_stream_run() {
-                    return;
-                }
+        if *state == StreamState::Stopped {
+            if !self.should_viz_stream_run() {
+                return;
+            }
 
-                *state = StreamState::Starting;
-                drop(state);
+            *state = StreamState::Starting;
+            drop(state);
 
-                if !self.should_viz_stream_run() {
-                    *self.viz_stream_state.lock() = StreamState::Stopped;
-                    return;
-                }
+            if !self.should_viz_stream_run() {
+                *self.viz_stream_state.lock() = StreamState::Stopped;
+                return;
+            }
 
-                #[cfg(feature = "zmq-transport")]
-                {
-                    if let Some(streams) = self.zmq_streams.lock().as_ref() {
-                        match streams.start_viz_stream() {
-                            Ok(()) => {
-                                *self.viz_stream_state.lock() = StreamState::Running;
-                                let agent_count =
-                                    self.agent_registry.read().count_visualization_agents();
-                                info!("🟢 [PNS-DYNAMIC] Visualization stream started: genome loaded, {} agents registered", agent_count);
-                            }
-                            Err(e) => {
-                                error!("❌ [PNS-DYNAMIC] Failed to start viz stream: {}", e);
-                                *self.viz_stream_state.lock() = StreamState::Stopped;
-                            }
+            #[cfg(feature = "zmq-transport")]
+            {
+                if let Some(streams) = self.zmq_streams.lock().as_ref() {
+                    match streams.start_viz_stream() {
+                        Ok(()) => {
+                            *self.viz_stream_state.lock() = StreamState::Running;
+                            let agent_count =
+                                self.agent_registry.read().count_visualization_agents();
+                            info!("🟢 [PNS-DYNAMIC] Visualization stream started: genome loaded, {} agents registered", agent_count);
+                        }
+                        Err(e) => {
+                            error!("❌ [PNS-DYNAMIC] Failed to start viz stream: {}", e);
+                            *self.viz_stream_state.lock() = StreamState::Stopped;
                         }
                     }
                 }
             }
-            _ => {}
         }
     }
 
     /// Dynamically stop visualization stream
     fn try_stop_viz_stream(&self) {
         let mut state = self.viz_stream_state.lock();
-        match *state {
-            StreamState::Running => {
-                *state = StreamState::Stopping;
-                drop(state);
+        if *state == StreamState::Running {
+            *state = StreamState::Stopping;
+            drop(state);
 
-                #[cfg(feature = "zmq-transport")]
-                {
-                    if let Some(streams) = self.zmq_streams.lock().as_ref() {
-                        match streams.stop_viz_stream() {
-                            Ok(()) => {
-                                *self.viz_stream_state.lock() = StreamState::Stopped;
-                                warn!("🔴 [PNS-DYNAMIC] Visualization stream stopped: conditions no longer met");
-                            }
-                            Err(e) => {
-                                error!("❌ [PNS-DYNAMIC] Failed to stop viz stream: {}", e);
-                                *self.viz_stream_state.lock() = StreamState::Running;
-                            }
+            #[cfg(feature = "zmq-transport")]
+            {
+                if let Some(streams) = self.zmq_streams.lock().as_ref() {
+                    match streams.stop_viz_stream() {
+                        Ok(()) => {
+                            *self.viz_stream_state.lock() = StreamState::Stopped;
+                            warn!("🔴 [PNS-DYNAMIC] Visualization stream stopped: conditions no longer met");
+                        }
+                        Err(e) => {
+                            error!("❌ [PNS-DYNAMIC] Failed to stop viz stream: {}", e);
+                            *self.viz_stream_state.lock() = StreamState::Running;
                         }
                     }
                 }
             }
-            _ => {}
         }
     }
 
@@ -1454,7 +1444,7 @@ impl IOSystem {
         static TRANSPORT_LOG_COUNTER: std::sync::atomic::AtomicU64 =
             std::sync::atomic::AtomicU64::new(0);
         let log_count = TRANSPORT_LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        if log_count % 100 == 0 {
+        if log_count.is_multiple_of(100) {
             trace!("[PNS] Active viz transports: {:?}", active_transports);
         }
 
@@ -1493,14 +1483,14 @@ impl IOSystem {
                             Err(e) => errors.push(format!("WebSocket: {}", e)),
                         }
                     } else {
-                        if log_count % 100 == 0 {
+                        if log_count.is_multiple_of(100) {
                             warn!(
                                 "[PNS] ⚠️ WebSocket enabled but not running (servers not started)"
                             );
                         }
                     }
                 } else {
-                    if log_count % 100 == 0 {
+                    if log_count.is_multiple_of(100) {
                         warn!("[PNS] ⚠️ WebSocket enabled but streams not initialized!");
                     }
                 }
@@ -1511,7 +1501,7 @@ impl IOSystem {
         if !published_to.is_empty() {
             static LOG_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let count = LOG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            if count % 100 == 0 {
+            if count.is_multiple_of(100) {
                 // Log every 100th frame to avoid spam
                 trace!("[PNS] Published visualization to: {:?}", published_to);
             }
@@ -1643,10 +1633,16 @@ mod tests {
     #[test]
     fn test_udp_viz_config() {
         // Create PNS with UDP visualization transport
-        let mut config = IOConfig::default();
-        config.visualization_transport = TransportMode::Udp;
-        config.udp_viz_config.bind_address = "127.0.0.1:0".to_string(); // Use port 0 for auto-assign
-        config.udp_viz_config.peer_address = "127.0.0.1:9999".to_string();
+        let udp_viz = UdpConfig {
+            bind_address: "127.0.0.1:0".to_string(), // Use port 0 for auto-assign
+            peer_address: "127.0.0.1:9999".to_string(),
+            ..Default::default()
+        };
+        let config = IOConfig {
+            visualization_transport: TransportMode::Udp,
+            udp_viz_config: udp_viz,
+            ..Default::default()
+        };
 
         let pns = IOSystem::with_config(config).unwrap();
         assert!(!pns.is_running());
@@ -1658,13 +1654,23 @@ mod tests {
     #[test]
     fn test_dual_transport_config() {
         // Test that we can configure both UDP and ZMQ
-        let mut config = IOConfig::default();
-        config.visualization_transport = TransportMode::Udp;
-        config.sensory_transport = TransportMode::Udp;
-        config.udp_viz_config.bind_address = "127.0.0.1:0".to_string();
-        config.udp_viz_config.peer_address = "127.0.0.1:9998".to_string();
-        config.udp_sensory_config.bind_address = "127.0.0.1:0".to_string();
-        config.udp_sensory_config.peer_address = "127.0.0.1:9997".to_string();
+        let udp_viz = UdpConfig {
+            bind_address: "127.0.0.1:0".to_string(),
+            peer_address: "127.0.0.1:9998".to_string(),
+            ..Default::default()
+        };
+        let udp_sensory = UdpConfig {
+            bind_address: "127.0.0.1:0".to_string(),
+            peer_address: "127.0.0.1:9997".to_string(),
+            ..Default::default()
+        };
+        let config = IOConfig {
+            visualization_transport: TransportMode::Udp,
+            sensory_transport: TransportMode::Udp,
+            udp_viz_config: udp_viz,
+            udp_sensory_config: udp_sensory,
+            ..Default::default()
+        };
 
         let pns = IOSystem::with_config(config).unwrap();
         assert!(!pns.is_running());

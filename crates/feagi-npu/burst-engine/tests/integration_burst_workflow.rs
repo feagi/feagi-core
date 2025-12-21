@@ -17,18 +17,21 @@
 //! - Power injection persistence
 //! - Fire Ledger history tracking
 
+use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
 use feagi_npu_neural::SynapseType;
+use feagi_npu_runtime::StdRuntime;
 
 // ═══════════════════════════════════════════════════════════
 // Helper Functions
 // ═══════════════════════════════════════════════════════════
 
 /// Create a simple 3-layer network: Input → Hidden → Output
-fn create_simple_network(
-) -> RustNPU<feagi_npu_runtime::StdRuntime, f32, feagi_npu_burst_engine::backend::CPUBackend> {
-    let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 20);
+fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20).unwrap();
 
     // Power area (cortical_area=1) - 3 neurons
     for i in 0..3 {
@@ -104,7 +107,8 @@ fn test_end_to_end_burst_workflow() {
     let result1 = npu.process_burst().unwrap();
     assert_eq!(result1.burst, 1);
     assert_eq!(result1.power_injections, 3);
-    assert!(result1.neuron_count >= 0);
+    // Verify result was created successfully (no panic)
+    let _neuron_count = result1.neuron_count;
 
     // Burst 2: Add sensory input to input layer
     npu.inject_sensory_with_potentials(&[(NeuronId(3), 1.5), (NeuronId(4), 1.5)]);
@@ -124,7 +128,7 @@ fn test_end_to_end_burst_workflow() {
 
 #[test]
 fn test_power_injection_every_burst() {
-    let mut npu = create_simple_network();
+    let npu = create_simple_network();
 
     // Run 20 bursts and verify power injection happens every time
     for i in 1..=20 {
@@ -184,7 +188,9 @@ fn test_fire_ledger_across_bursts() {
 
 #[test]
 fn test_multi_burst_chain_propagation() {
-    let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
 
     // Create a chain: N1 -> N2 -> N3 -> N4
     let n1 = npu
@@ -246,7 +252,9 @@ fn test_multi_burst_chain_propagation() {
 
 #[test]
 fn test_refractory_period_across_bursts() {
-    let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
 
     // Neuron with 3-burst refractory period
     let neuron = npu
@@ -269,7 +277,9 @@ fn test_refractory_period_across_bursts() {
 
 #[test]
 fn test_mixed_excitatory_inhibitory_network() {
-    let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
 
     // Excitatory neuron
     let excitatory = npu
@@ -313,7 +323,7 @@ fn test_mixed_excitatory_inhibitory_network() {
 
 #[test]
 fn test_high_frequency_burst_processing() {
-    let mut npu = create_simple_network();
+    let npu = create_simple_network();
 
     // Process 100 bursts rapidly
     for i in 1..=100 {
@@ -350,7 +360,9 @@ fn test_burst_stats_accumulation() {
 
 #[test]
 fn test_dynamic_network_modification() {
-    let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 10);
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 10).unwrap();
 
     // Start with 5 neurons
     for i in 0..5 {
@@ -399,7 +411,9 @@ fn test_fq_sampler_integration() {
 
 #[test]
 fn test_zero_leak_neuron_persistence() {
-    let mut npu = RustNPU::<f32>::new_cpu_only(100, 1000, 10);
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
 
     // Neuron with zero leak (potential persists)
     let neuron = npu

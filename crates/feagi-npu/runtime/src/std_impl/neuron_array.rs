@@ -12,10 +12,10 @@
 //!
 //! Uses `Vec` for dynamic growth and Rayon for parallel processing.
 
+use crate::traits::{NeuronStorage, Result};
 use ahash::AHashMap;
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_neural::{is_refractory, update_neuron_lif};
-use crate::traits::{NeuronStorage, Result, RuntimeError};
 use rayon::prelude::*; // Faster hash map (already a dependency)
 use std::vec::Vec;
 
@@ -502,17 +502,13 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         z: u32,
     ) -> Option<usize> {
         // Linear search through coordinates
-        for idx in 0..self.count {
-            if self.valid_mask[idx]
+        (0..self.count).find(|&idx| {
+            self.valid_mask[idx]
                 && self.cortical_areas[idx] == cortical_area
                 && self.coordinates[idx * 3] == x
                 && self.coordinates[idx * 3 + 1] == y
                 && self.coordinates[idx * 3 + 2] == z
-            {
-                return Some(idx);
-            }
-        }
-        None
+        })
     }
 
     fn get_neurons_in_cortical_area(&self, cortical_area: u32) -> Vec<usize> {

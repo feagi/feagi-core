@@ -71,8 +71,8 @@ fn test_gpu_config_always_on() {
 fn test_gpu_config_default() {
     let config = GpuConfig::default();
 
-    assert_eq!(config.use_gpu, true);
-    assert_eq!(config.hybrid_enabled, true);
+    assert!(config.use_gpu);
+    assert!(config.hybrid_enabled);
     assert_eq!(config.gpu_threshold, 1_000_000);
     assert_eq!(config.gpu_memory_fraction, 0.8);
 }

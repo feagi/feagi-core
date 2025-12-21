@@ -172,7 +172,7 @@ fn filter_and_set_if_pass(
         .and(filter_arr)
         .par_map_collect(|&source, filter| {
             let passed = source >= pixel_val_lower_bound && source <= pixel_val_upper_bound;
-            *filter = if (source >= pixel_val_lower_bound && source <= pixel_val_upper_bound) {
+            *filter = if source >= pixel_val_lower_bound && source <= pixel_val_upper_bound {
                 source
             } else {
                 0

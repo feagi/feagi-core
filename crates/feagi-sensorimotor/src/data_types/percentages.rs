@@ -41,7 +41,7 @@ impl Percentage {
 
     /// Creates a percentage from a value in [0.0, 1.0] with validation.
     pub fn new_from_0_1(value: f32) -> Result<Percentage, FeagiDataError> {
-        if value > 1.0 || value < 0.0 {
+        if !(0.0..=1.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Percentage Value must be between 0 and 1!".into(),
             ));
@@ -50,7 +50,7 @@ impl Percentage {
     }
 
     pub fn new_from_interp_m1_1(value: f32) -> Result<Percentage, FeagiDataError> {
-        if value > 1.0 || value < -1.0 {
+        if !(-1.0..=1.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Signed Percentage Value to interp from must be between -1 and 1!".into(),
             ));
@@ -71,7 +71,7 @@ impl Percentage {
     }
 
     pub fn new_from_0_100(value: f32) -> Result<Percentage, FeagiDataError> {
-        if value > 100.0 || value < 0.0 {
+        if !(0.0..=100.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Percentage Value must be between 0 and 100!".into(),
             ));
@@ -105,7 +105,7 @@ impl Percentage {
     }
 
     pub fn inplace_update_from_0_1(&mut self, value: f32) -> Result<(), FeagiDataError> {
-        if value > 1.0 || value < 0.0 {
+        if !(0.0..=1.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Percentage Value must be between 0 and 1!".into(),
             ));
@@ -119,7 +119,7 @@ impl Percentage {
     }
 
     pub fn inplace_update_0_100(&mut self, value: f32) -> Result<(), FeagiDataError> {
-        if value > 100.0 || value < 0.0 {
+        if !(0.0..=100.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Percentage Value must be between 0 and 100!".into(),
             ));
@@ -223,7 +223,7 @@ impl SignedPercentage {
     }
 
     pub fn new_from_m1_1(value: f32) -> Result<SignedPercentage, FeagiDataError> {
-        if value > 1.0 || value < -1.0 {
+        if !(-1.0..=1.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Signed Percentage Value must be between -1 and 1!".into(),
             ));
@@ -232,7 +232,7 @@ impl SignedPercentage {
     }
 
     pub fn new_scaled_from_0_1(value: f32) -> Result<SignedPercentage, FeagiDataError> {
-        if value > 1.0 || value < 0.0 {
+        if !(0.0..=1.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Percentage Value to interp from must be between 0 and 1!".into(),
             ));
@@ -249,7 +249,7 @@ impl SignedPercentage {
     }
 
     pub fn new_from_m100_100(value: f32) -> Result<SignedPercentage, FeagiDataError> {
-        if value > 100.0 || value < -100.0 {
+        if !(-100.0..=100.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Signed Percentage Value must be between -100 and 100!".into(),
             ));
@@ -291,7 +291,7 @@ impl SignedPercentage {
     }
 
     pub fn inplace_update_from_m1_1(&mut self, value: f32) -> Result<(), FeagiDataError> {
-        if value > 1.0 || value < -1.0 {
+        if !(-1.0..=1.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
                 "Percentage Value must be between -1 and 1!".into(),
             ));
@@ -301,9 +301,9 @@ impl SignedPercentage {
     }
 
     pub fn inplace_update_m100_100(&mut self, value: f32) -> Result<(), FeagiDataError> {
-        if value > 100.0 || value < -100.0 {
+        if !(-100.0..=100.0).contains(&value) {
             return Err(FeagiDataError::BadParameters(
-                "Percentage Value must be between -1 and 1!".into(),
+                "Percentage Value must be between -100 and 100!".into(),
             ));
         }
         self.value = value / 100.0;
@@ -417,6 +417,7 @@ impl Percentage2D {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -497,6 +498,7 @@ impl SignedPercentage2D {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -584,6 +586,7 @@ impl Percentage3D {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -678,6 +681,7 @@ impl SignedPercentage3D {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -779,6 +783,7 @@ impl Percentage4D {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);
@@ -890,6 +895,7 @@ impl SignedPercentage4D {
         }
     }
 
+    #[allow(dead_code)]
     pub(crate) fn inplace_update_all(&mut self, value: f32) {
         self.a.inplace_update_unchecked(value);
         self.b.inplace_update_unchecked(value);

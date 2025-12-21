@@ -8,6 +8,12 @@ pub struct ShmManager {
     // TODO: Add SHM file management
 }
 
+impl Default for ShmManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ShmManager {
     pub fn new() -> Self {
         Self {}

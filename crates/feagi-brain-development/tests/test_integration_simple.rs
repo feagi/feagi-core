@@ -6,22 +6,18 @@
 /// Tests basic functionality without complex genome loading
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
 use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
-use feagi_npu_burst_engine::backend::CPUBackend;
-use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
-use feagi_npu_runtime::StdRuntime;
+use feagi_npu_burst_engine::RustNPU;
 use std::sync::{Arc, Mutex};
 
 /// Helper to create an isolated test manager with NPU
 fn create_test_manager() -> ConnectomeManager {
-    use feagi_npu_burst_engine::backend::CPUBackend;
-    use feagi_npu_burst_engine::DynamicNPU;
-    use feagi_npu_runtime::StdRuntime;
-
-    let runtime = StdRuntime;
-    let backend = CPUBackend::new();
+    let runtime = feagi_npu_runtime::StdRuntime;
+    let backend = feagi_npu_burst_engine::backend::CPUBackend::new();
     let npu_result =
         RustNPU::new(runtime, backend, 1_000_000, 10_000_000, 10).expect("Failed to create NPU");
-    let npu = Arc::new(Mutex::new(DynamicNPU::F32(npu_result)));
+    let npu = Arc::new(Mutex::new(feagi_npu_burst_engine::DynamicNPU::F32(
+        npu_result,
+    )));
     ConnectomeManager::new_for_testing_with_npu(npu)
 }
 
@@ -343,11 +339,11 @@ fn test_area_queries() {
                 .as_cortical_type()
                 .expect("Failed to get cortical type"),
         )
-        .expect(&format!("Failed to create area {}", i));
+        .unwrap_or_else(|_| panic!("Failed to create area {}", i));
 
         manager
             .add_cortical_area(area)
-            .expect(&format!("Failed to add area {}", i));
+            .unwrap_or_else(|_| panic!("Failed to add area {}", i));
     }
 
     // Test queries

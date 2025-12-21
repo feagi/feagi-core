@@ -28,7 +28,7 @@
 #[cfg(feature = "gpu")]
 mod gpu_integration {
     use feagi_npu_burst_engine::backend::{create_backend, BackendType};
-    use feagi_npu_runtime::{NeuronArray, SynapseArray};
+    use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
     #[test]
     fn test_gpu_neural_dynamics_small_genome() {

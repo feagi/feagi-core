@@ -56,7 +56,7 @@
 //!
 //! The protocol doesn't know or care which transport is used!
 
-#![no_std]
+// Note: This module is part of a no_std crate
 
 use heapless::Vec;
 
@@ -65,14 +65,30 @@ use heapless::Vec;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Command {
     /// Set a GPIO pin to high or low
-    SetGpio { pin: u8, value: bool },
+    SetGpio {
+        /// GPIO pin number
+        pin: u8,
+        /// Pin value (true = high, false = low)
+        value: bool,
+    },
     /// Set PWM duty cycle (0-255) on a pin
-    SetPwm { pin: u8, duty: u8 },
+    SetPwm {
+        /// GPIO pin number
+        pin: u8,
+        /// PWM duty cycle (0-255)
+        duty: u8,
+    },
     /// Set full LED matrix (5x5 = 25 bytes, brightness 0-255)
-    SetLedMatrix { data: [u8; 25] },
+    SetLedMatrix {
+        /// LED matrix data (5x5 = 25 bytes)
+        data: [u8; 25],
+    },
     /// Neuron firing coordinates for LED matrix visualization
     /// Each coordinate is (x, y) where x,y ∈ [0, 4] for a 5×5 matrix
-    NeuronFiring { coordinates: Vec<(u8, u8), 25> },
+    NeuronFiring {
+        /// Coordinates of fired neurons
+        coordinates: Vec<(u8, u8), 25>,
+    },
     /// Request device capabilities JSON
     GetCapabilities,
 }
@@ -81,10 +97,15 @@ pub enum Command {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PacketCommand {
+    /// Neuron firing command (0x01)
     NeuronFiring = 0x01,
+    /// Set GPIO command (0x02)
     SetGpio = 0x02,
+    /// Set PWM command (0x03)
     SetPwm = 0x03,
+    /// Set LED matrix command (0x04)
     SetLedMatrix = 0x04,
+    /// Get capabilities command (0x05)
     GetCapabilities = 0x05,
 }
 

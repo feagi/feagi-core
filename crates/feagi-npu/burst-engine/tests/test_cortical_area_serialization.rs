@@ -52,7 +52,9 @@ fn test_ipu_area_roundtrip() {
     let mut npu = create_test_npu();
 
     // Create IPU cortical ID (starts with 'i')
-    let cortical_id = CorticalID::try_from_bytes(b"iav000").unwrap();
+    let mut bytes = [0u8; 8];
+    bytes[..6].copy_from_slice(b"iav000");
+    let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
     let base64_name = cortical_id.as_base_64();
 
     // Register with NPU using cortical_idx = 2
@@ -74,7 +76,9 @@ fn test_opu_area_roundtrip() {
     let mut npu = create_test_npu();
 
     // Create OPU cortical ID (starts with 'o')
-    let cortical_id = CorticalID::try_from_bytes(b"omot00").unwrap();
+    let mut bytes = [0u8; 8];
+    bytes[..6].copy_from_slice(b"omot00");
+    let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
     let base64_name = cortical_id.as_base_64();
 
     // Register with NPU using cortical_idx = 3
@@ -96,7 +100,9 @@ fn test_custom_area_roundtrip() {
     let mut npu = create_test_npu();
 
     // Create CUSTOM cortical ID (starts with 'c')
-    let cortical_id = CorticalID::try_from_bytes(b"cust000").unwrap();
+    let mut bytes = [0u8; 8];
+    bytes[..7].copy_from_slice(b"cust000");
+    let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
     let base64_name = cortical_id.as_base_64();
 
     // Register with NPU using cortical_idx = 4
@@ -118,7 +124,9 @@ fn test_memory_area_roundtrip() {
     let mut npu = create_test_npu();
 
     // Create MEMORY cortical ID (starts with 'm')
-    let cortical_id = CorticalID::try_from_bytes(b"memo000").unwrap();
+    let mut bytes = [0u8; 8];
+    bytes[..7].copy_from_slice(b"memo000");
+    let cortical_id = CorticalID::try_from_bytes(&bytes).unwrap();
     let base64_name = cortical_id.as_base_64();
 
     // Register with NPU using cortical_idx = 5
@@ -139,25 +147,33 @@ fn test_memory_area_roundtrip() {
 fn test_multiple_areas_registration() {
     let mut npu = create_test_npu();
 
-    let areas = vec![
-        (1, b"___power"),
-        (2, b"iav000"),
-        (3, b"omot00"),
-        (4, b"cust000"),
-        (5, b"memo000"),
+    let mut bytes2 = [0u8; 8];
+    bytes2[..6].copy_from_slice(b"iav000");
+    let mut bytes3 = [0u8; 8];
+    bytes3[..6].copy_from_slice(b"omot00");
+    let mut bytes4 = [0u8; 8];
+    bytes4[..7].copy_from_slice(b"cust000");
+    let mut bytes5 = [0u8; 8];
+    bytes5[..7].copy_from_slice(b"memo000");
+    let areas: Vec<(u8, [u8; 8])> = vec![
+        (1, *b"___power"),
+        (2, bytes2),
+        (3, bytes3),
+        (4, bytes4),
+        (5, bytes5),
     ];
 
     // Register all areas
     for (idx, bytes) in &areas {
         let cortical_id = CorticalID::try_from_bytes(bytes).unwrap();
         let base64_name = cortical_id.as_base_64();
-        npu.register_cortical_area(*idx, base64_name);
+        npu.register_cortical_area(*idx as u32, base64_name);
     }
 
     // Verify all can be retrieved and decoded
     for (idx, bytes) in &areas {
         let expected_id = CorticalID::try_from_bytes(bytes).unwrap();
-        let retrieved = npu.get_cortical_area_name(*idx).unwrap();
+        let retrieved = npu.get_cortical_area_name(*idx as u32).unwrap();
         let decoded_id = CorticalID::try_from_base_64(&retrieved).unwrap();
 
         assert_eq!(

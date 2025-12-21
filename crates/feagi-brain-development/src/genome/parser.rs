@@ -45,7 +45,8 @@ use serde_json::Value;
 use std::collections::HashMap;
 use tracing::warn;
 
-use crate::models::{BrainRegion, CorticalArea, CorticalAreaDimensions, AreaType};
+use crate::models::{BrainRegion, CorticalArea, CorticalAreaDimensions};
+use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
 use feagi_data_structures::genomic::RegionType;
 use crate::types::{BduError, BduResult};
 
@@ -405,8 +406,8 @@ impl GenomeParser {
         Ok(regions)
     }
 
-    /// Parse area type string to AreaType enum
-    fn parse_area_type(type_str: Option<&str>) -> BduResult<AreaType> {
+    /// Parse area type string to CorticalAreaType enum
+    fn parse_area_type(type_str: Option<&str>) -> BduResult<CorticalAreaType> {
         match type_str {
             Some("IPU") => Ok(CorticalAreaType::Sensory),
             Some("OPU") => Ok(CorticalAreaType::Motor),

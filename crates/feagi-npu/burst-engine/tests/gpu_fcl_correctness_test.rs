@@ -20,12 +20,16 @@
 //! Run with:
 //!   cargo test --test gpu_fcl_correctness_test --features gpu
 
-use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType, ComputeBackend};
-use feagi_npu_burst_engine::FireCandidateList;
+#[allow(unused_imports)]
+use feagi_npu_burst_engine::backend::{BackendConfig, BackendType};
+#[allow(unused_imports)]
+use feagi_npu_neural::types::FireCandidateList;
+#[allow(unused_imports)]
 use feagi_npu_neural::types::NeuronId;
-use feagi_npu_runtime::{NeuronArray, SynapseArray};
+use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 /// Helper: Create test genome
+#[allow(dead_code)]
 fn create_test_genome(
     neuron_count: usize,
     synapses_per_neuron: usize,
@@ -63,7 +67,7 @@ fn create_test_genome(
                 synapse_array
                     .source_index
                     .entry(source as u32)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(synapse_idx);
 
                 synapse_idx += 1;
@@ -81,13 +85,9 @@ fn test_empty_fcl_processing() {
     let config = BackendConfig::default();
     let (mut neuron_array, synapse_array) = create_test_genome(1000, 10);
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -118,13 +118,9 @@ fn test_full_fcl_all_neurons() {
         neuron_array.membrane_potentials[i] = 10.0; // Well above threshold
     }
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -160,13 +156,9 @@ fn test_fcl_with_duplicate_entries() {
     let config = BackendConfig::default();
     let (mut neuron_array, synapse_array) = create_test_genome(1000, 10);
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -195,13 +187,9 @@ fn test_fcl_sparse_processing() {
     let (mut neuron_array, synapse_array) = create_test_genome(neuron_count, 100);
 
     // GPU backend
-    let mut gpu_backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut gpu_backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     gpu_backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -254,13 +242,9 @@ fn test_fcl_gpu_to_gpu_pipeline() {
     let neuron_count = 5_000;
     let (mut neuron_array, synapse_array) = create_test_genome(neuron_count, 50);
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -302,13 +286,9 @@ fn test_fcl_with_invalid_neuron_ids() {
     let neuron_count = 1000;
     let (mut neuron_array, synapse_array) = create_test_genome(neuron_count, 10);
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -337,13 +317,9 @@ fn test_fcl_accumulation_correctness() {
     let neuron_count = 1000;
     let (neuron_array, synapse_array) = create_test_genome(neuron_count, 10);
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -364,7 +340,7 @@ fn test_fcl_accumulation_correctness() {
     // FCL should contain accumulated contributions
     // With 5 source neurons × 10 synapses each = 50 synapses
     // Targeting ~10 unique downstream neurons (with overlap)
-    assert!(fcl.len() > 0, "FCL should have candidates");
+    assert!(!fcl.is_empty(), "FCL should have candidates");
     assert!(fcl.len() <= 50, "FCL should not exceed possible targets");
 
     println!("✅ FCL accumulation completed");
@@ -377,13 +353,9 @@ fn test_fcl_multiple_bursts() {
     let neuron_count = 2000;
     let (mut neuron_array, synapse_array) = create_test_genome(neuron_count, 20);
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -433,13 +405,9 @@ fn test_fcl_very_sparse() {
     let neuron_count = 100_000;
     let (mut neuron_array, synapse_array) = create_test_genome(neuron_count, 10);
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)
@@ -467,13 +435,9 @@ fn test_fcl_medium_density() {
     let neuron_count = 10_000;
     let (mut neuron_array, synapse_array) = create_test_genome(neuron_count, 50);
 
-    let mut backend = create_backend::<f32>(
-        BackendType::WGPU,
-        neuron_array.capacity,
-        synapse_array.capacity,
-        &config,
-    )
-    .expect("GPU backend should be created");
+    use feagi_npu_burst_engine::backend::WGPUBackend;
+    let mut backend = WGPUBackend::new(neuron_array.capacity, synapse_array.capacity)
+        .expect("GPU backend should be created");
 
     backend
         .initialize_persistent_data(&neuron_array, &synapse_array)

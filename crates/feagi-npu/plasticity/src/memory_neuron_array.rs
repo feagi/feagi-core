@@ -163,7 +163,7 @@ impl MemoryNeuronArray {
         // Add to area tracking
         self.area_neuron_indices
             .entry(cortical_area_id)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(neuron_idx);
 
         Some(neuron_idx)
@@ -512,8 +512,10 @@ mod tests {
     #[test]
     fn test_age_memory_neurons() {
         let mut array = MemoryNeuronArray::new(1000);
-        let mut config = MemoryNeuronLifecycleConfig::default();
-        config.initial_lifespan = 2;
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 2,
+            ..Default::default()
+        };
 
         let pattern_hash = [1u8; 32];
         let idx = array
@@ -539,8 +541,10 @@ mod tests {
     #[test]
     fn test_age_multiple_neurons() {
         let mut array = MemoryNeuronArray::new(1000);
-        let mut config = MemoryNeuronLifecycleConfig::default();
-        config.initial_lifespan = 5;
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 5,
+            ..Default::default()
+        };
 
         let mut neurons = Vec::new();
         for i in 0..10 {
@@ -570,8 +574,10 @@ mod tests {
     #[test]
     fn test_longterm_memory_no_aging() {
         let mut array = MemoryNeuronArray::new(1000);
-        let mut config = MemoryNeuronLifecycleConfig::default();
-        config.initial_lifespan = 100;
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            ..Default::default()
+        };
 
         let pattern_hash = [1u8; 32];
         let idx = array
@@ -597,8 +603,10 @@ mod tests {
     #[test]
     fn test_longterm_conversion() {
         let mut array = MemoryNeuronArray::new(1000);
-        let mut config = MemoryNeuronLifecycleConfig::default();
-        config.initial_lifespan = 100;
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 100,
+            ..Default::default()
+        };
 
         let pattern_hash = [1u8; 32];
         let idx = array
@@ -618,8 +626,10 @@ mod tests {
     #[test]
     fn test_longterm_conversion_threshold() {
         let mut array = MemoryNeuronArray::new(1000);
-        let mut config = MemoryNeuronLifecycleConfig::default();
-        config.initial_lifespan = 50;
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 50,
+            ..Default::default()
+        };
 
         let pattern_hash = [1u8; 32];
         let idx = array
@@ -667,7 +677,7 @@ mod tests {
         let config = MemoryNeuronLifecycleConfig::default();
 
         // Create neurons in different areas
-        for area in vec![100, 200] {
+        for area in [100, 200] {
             for i in 0..5 {
                 let mut pattern_hash = [0u8; 32];
                 pattern_hash[0] = (area / 100) as u8;
@@ -708,8 +718,10 @@ mod tests {
     #[test]
     fn test_index_reuse() {
         let mut array = MemoryNeuronArray::new(1000);
-        let mut config = MemoryNeuronLifecycleConfig::default();
-        config.initial_lifespan = 1;
+        let config = MemoryNeuronLifecycleConfig {
+            initial_lifespan: 1,
+            ..Default::default()
+        };
 
         let pattern_hash = [1u8; 32];
         let idx1 = array

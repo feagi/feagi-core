@@ -38,6 +38,7 @@ use tracing::{info, warn};
 /// This is the async equivalent of the synchronous `burst_loop` function.
 /// It can run on both desktop (Tokio) and WASM platforms.
 #[cfg(feature = "std")]
+#[allow(clippy::too_many_arguments)]
 pub async fn async_burst_loop<R: FeagiAsyncRuntime>(
     runtime: Arc<R>,
     npu: Arc<Mutex<DynamicNPU>>,

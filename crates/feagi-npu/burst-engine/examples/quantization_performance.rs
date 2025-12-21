@@ -166,11 +166,8 @@ fn create_test_npu_f32(
 fn create_test_npu_int8(
     neurons: usize,
     synapses: usize,
-) -> RustNPU<
-    feagi_npu_runtime::StdRuntime,
-    INT8Value,
-    feagi_npu_burst_engine::backend::CPUBackend,
-> {
+) -> RustNPU<feagi_npu_runtime::StdRuntime, INT8Value, feagi_npu_burst_engine::backend::CPUBackend>
+{
     let mut npu = RustNPU::<INT8Value>::new_cpu_only(neurons, synapses, 10);
 
     let _ = npu.create_cortical_area_neurons(

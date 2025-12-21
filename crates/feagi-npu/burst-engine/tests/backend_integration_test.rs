@@ -9,10 +9,11 @@
 //!
 //! Tests the complete flow: configuration → backend selection → NPU creation → burst execution
 
-use feagi_npu_burst_engine::{
-    backend::{select_backend, BackendConfig, BackendType},
-    RustNPU,
-};
+#[allow(unused_imports)]
+use feagi_npu_burst_engine::backend::BackendConfig;
+#[allow(unused_imports)]
+use feagi_npu_burst_engine::backend::BackendType;
+use feagi_npu_burst_engine::{backend::select_backend, RustNPU};
 
 /// Test: Backend selection logic with different genome sizes
 #[test]
@@ -55,17 +56,19 @@ fn test_backend_selection_thresholds() {
 /// Test: Force flags work correctly
 #[test]
 fn test_force_flags() {
-    let mut config = BackendConfig::default();
-
-    // Force CPU
-    config.force_cpu = true;
+    let config = BackendConfig {
+        force_cpu: true,
+        ..Default::default()
+    };
     let decision = select_backend(1_000_000, 100_000_000, &config);
     assert_eq!(decision.backend_type, BackendType::CPU);
     assert!(decision.reason.contains("Forced CPU"));
 
     // Force GPU (WGPU)
-    config = BackendConfig::default();
-    config.force_gpu = true;
+    let config = BackendConfig {
+        force_gpu: true,
+        ..Default::default()
+    };
     let _decision = select_backend(10_000, 1_000_000, &config);
     #[cfg(feature = "gpu")]
     {
@@ -79,8 +82,10 @@ fn test_force_flags() {
     // Force CUDA
     #[cfg(feature = "cuda")]
     {
-        config = BackendConfig::default();
-        config.force_cuda = true;
+        let config = BackendConfig {
+            force_cuda: true,
+            ..Default::default()
+        };
         let decision = select_backend(10_000, 1_000_000, &config);
         // Should select CUDA or fall back to CPU if not available
         assert!(
@@ -93,15 +98,12 @@ fn test_force_flags() {
 #[test]
 fn test_npu_creation_with_auto_backend() {
     // Small genome - should use CPU
-    let npu = RustNPU::<f32>::new(
-        10_000,    // neuron_capacity
-        1_000_000, // synapse_capacity
-        1000,      // fire_ledger_window
-        None,      // gpu_config (auto)
-    );
-
-    // Just verify it was created successfully by dropping it
-    drop(npu);
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_runtime::StdRuntime;
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let _npu: RustNPU<StdRuntime, f32, CPUBackend> =
+        RustNPU::new(runtime, backend, 10_000, 1_000_000, 1000).unwrap();
 }
 
 /// Test: NPU creation succeeds with different backends
@@ -111,19 +113,28 @@ fn test_npu_burst_processing() {
     let neuron_capacity = 1000;
     let synapse_capacity = 10_000;
 
-    let npu = RustNPU::<f32>::new(
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_runtime::StdRuntime;
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu: RustNPU<StdRuntime, f32, CPUBackend> = RustNPU::new(
+        runtime,
+        backend,
         neuron_capacity,
         synapse_capacity,
-        100,  // fire_ledger_window
-        None, // auto backend
-    );
+        100, // fire_ledger_window
+    )
+    .unwrap();
 
     // Just verify NPU was created successfully
     // We can't access private fields, but we know it works if construction succeeded
     drop(npu); // Explicit drop to show we successfully created it
 
     // Try with larger capacity
-    let npu = RustNPU::<f32>::new(100_000, 10_000_000, 100, None);
+    let runtime = StdRuntime;
+    let backend = CPUBackend::new();
+    let npu: RustNPU<StdRuntime, f32, CPUBackend> =
+        RustNPU::new(runtime, backend, 100_000, 10_000_000, 100).unwrap();
     drop(npu);
 }
 
@@ -191,11 +202,11 @@ fn test_backend_priority() {
 /// Test: Configuration threshold overrides
 #[test]
 fn test_custom_thresholds() {
-    let mut config = BackendConfig::default();
-
-    // Set lower CUDA threshold (but still reasonable for speedup)
-    config.cuda_neuron_threshold = 50_000;
-    config.cuda_synapse_threshold = 5_000_000;
+    let _config = BackendConfig {
+        cuda_neuron_threshold: 50_000,
+        cuda_synapse_threshold: 5_000_000,
+        ..Default::default()
+    };
 
     #[cfg(feature = "cuda")]
     {

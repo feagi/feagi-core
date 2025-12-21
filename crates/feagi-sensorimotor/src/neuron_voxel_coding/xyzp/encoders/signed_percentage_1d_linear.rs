@@ -14,13 +14,18 @@ use feagi_data_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
 
+#[allow(dead_code)]
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 1; // How many numbers are encoded per channel?
+#[allow(dead_code)]
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
+#[allow(dead_code)]
 const WIDTH_GIVEN_NEGATIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> -1
+#[allow(dead_code)]
 const CHANNEL_WIDTH: u32 =
     NUMBER_PAIRS_PER_CHANNEL * (WIDTH_GIVEN_POSITIVE_Z_ROW + WIDTH_GIVEN_NEGATIVE_Z_ROW);
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct SignedPercentage1DLinearNeuronVoxelXYZPEncoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_write_target: CorticalID,
@@ -34,7 +39,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage1DLinearNeuronVoxelXYZPEncoder {
 
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
-        pipelines: &Vec<SensoryPipelineStageRunner>,
+        pipelines: &[SensoryPipelineStageRunner],
         time_of_previous_burst: Instant,
         write_target: &mut CorticalMappedXYZPNeuronVoxels,
     ) -> Result<(), FeagiDataError> {
@@ -50,7 +55,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage1DLinearNeuronVoxelXYZPEncoder {
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
             .try_for_each(
-                |(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+                |(_channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                     let channel_updated = pipeline.get_last_processed_instant();
                     if channel_updated < time_of_previous_burst {
                         return Ok(()); // We haven't updated, do nothing
@@ -90,6 +95,7 @@ impl NeuronVoxelXYZPEncoder for SignedPercentage1DLinearNeuronVoxelXYZPEncoder {
 }
 
 impl SignedPercentage1DLinearNeuronVoxelXYZPEncoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_write_target: CorticalID,
         z_resolution: NeuronDepth,

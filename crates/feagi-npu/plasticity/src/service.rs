@@ -204,6 +204,7 @@ impl PlasticityService {
     }
 
     /// Compute plasticity for current burst
+    #[allow(clippy::too_many_arguments)]
     fn compute_plasticity(
         current_timestep: u64,
         memory_neuron_array: &Arc<Mutex<MemoryNeuronArray>>,

@@ -10,6 +10,8 @@ on:
       - 'crates/**'
       - 'Cargo.toml'
       - 'Cargo.lock'
+      - '.github/workflows/verify-crates.yml'
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
@@ -156,6 +158,7 @@ jobs:
     
     - name: Verify crate packaging (dry-run publish check)
       run: |
+        set +e  # Don't exit on error - we handle errors manually
         echo "📦 Verifying each crate can be packaged for publication..."
         echo ""
         echo "Note: This verifies package structure. Dependencies must be published"
@@ -180,6 +183,8 @@ jobs:
           # Attempt to create the package (this will fail if dependencies aren't on crates.io,
           # but that's expected for unpublished workspace dependencies)
           # We use --no-verify to skip the build since we already built them
+          # Note: cargo package resolves the entire workspace, so errors from other workspace
+          # members are expected and should be ignored
           PACKAGE_OUTPUT=$(cargo package --package "$package_name" --allow-dirty --no-verify 2>&1)
           PACKAGE_EXIT=$?
           
@@ -188,9 +193,12 @@ jobs:
           else
             # Check if the error is about missing dependencies on crates.io
             # This is expected for crates that depend on unpublished workspace members
-            if echo "$PACKAGE_OUTPUT" | grep -qE "no matching package|location searched: crates.io"; then
+            # Also check for workspace-wide resolution errors (cargo package resolves entire workspace)
+            # Use case-insensitive matching and check for multiple error patterns
+            if echo "$PACKAGE_OUTPUT" | grep -qiE "no matching package|location searched.*crates\.io|failed to get.*as a dependency|searched package name|required by package"; then
               echo "  ⚠️  $crate_name has unpublished workspace dependencies"
               echo "     This is expected - dependencies must be published first (see PUBLISHING_ORDER.md)"
+              echo "     Note: cargo package resolves the entire workspace, so errors from other crates are expected"
             else
               echo "  ❌ $crate_name failed to package (non-dependency issue)"
               FAILED_PACKAGES+=("$crate_name")

@@ -4,7 +4,6 @@ use crate::data_pipeline::{
 };
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_data_structures::FeagiDataError;
-use serde::Serialize;
 use std::cmp::PartialEq;
 use std::time::Instant;
 
@@ -159,7 +158,7 @@ pub(crate) trait PipelineStageRunner {
         verify_replacing_stage_properties(
             self.get_stages(),
             &new_pipeline_stage_properties,
-            &self.get_fixed_type(),
+            self.get_fixed_type(),
             replacing_at_index,
             self.get_direction(),
         )?;
@@ -184,7 +183,7 @@ pub(crate) trait PipelineStageRunner {
         &mut self,
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
     ) -> Result<(), FeagiDataError> {
-        let size = new_pipeline_stage_properties.len();
+        let _size = new_pipeline_stage_properties.len();
         verify_pipeline_stage_properties(
             &new_pipeline_stage_properties,
             self.get_fixed_type(),
@@ -259,8 +258,7 @@ pub(crate) trait PipelineStageRunner {
             "pipeline_stages".to_string(),
             serde_json::Value::Array(json_stages),
         );
-        Ok(serde_json::to_value(output)
-            .map_err(|err| FeagiDataError::InternalError(err.to_string()))?)
+        serde_json::to_value(output).map_err(|err| FeagiDataError::InternalError(err.to_string()))
     }
 
     fn import_from_json(
@@ -313,7 +311,7 @@ pub(crate) trait PipelineStageRunner {
 /// * `Ok(())` - If the properties form a valid pipeline
 /// * `Err(FeagiDataError)` - If the properties are incompatible
 pub(crate) fn verify_pipeline_stage_properties(
-    pipeline_stage_properties: &Vec<PipelineStageProperties>,
+    pipeline_stage_properties: &[PipelineStageProperties],
     fixed_type: &WrappedIOType,
     direction: PipelineDirection,
 ) -> Result<(), FeagiDataError> {
@@ -385,7 +383,7 @@ pub(crate) fn verify_pipeline_stage_properties(
 /// * `Err(FeagiDataError)` - If types don't match
 #[inline]
 pub(crate) fn verify_replacing_stage_properties(
-    current_stages: &Vec<Box<dyn PipelineStage>>,
+    current_stages: &[Box<dyn PipelineStage>],
     new_stage_properties: &PipelineStageProperties,
     fixed_type: &WrappedIOType,
     new_stage_index: PipelineStagePropertyIndex,

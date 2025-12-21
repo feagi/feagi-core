@@ -28,7 +28,6 @@ pub use wgpu_backend::WGPUBackend;
 
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::{NeuronStorage, SynapseStorage};
-use tracing::info;
 
 /// Result of processing a burst on any backend
 #[derive(Debug, Clone)]
@@ -181,7 +180,7 @@ pub trait ComputeBackend<T: NeuralValue, N: NeuronStorage<Value = T>, S: Synapse
 }
 
 /// Backend type enum for construction
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum BackendType {
     /// CPU with SIMD optimization (current implementation)
     CPU,
@@ -195,13 +194,8 @@ pub enum BackendType {
     CUDA,
 
     /// Auto-select based on genome size and hardware availability
+    #[default]
     Auto,
-}
-
-impl Default for BackendType {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl std::fmt::Display for BackendType {
@@ -614,7 +608,7 @@ pub fn create_backend<T: NeuralValue>(
 ) -> Result<Box<dyn ComputeBackend<T, N, S>>> {
     let actual_type = if backend_type == BackendType::Auto {
         // Count will be updated later, use capacity as estimate
-        let decision = select_backend(neuron_capacity, synapse_capacity, config);
+        let _decision = select_backend(neuron_capacity, synapse_capacity, config);
         info!(
             "🎯 Backend auto-selection: {} ({})",
             decision.backend_type, decision.reason

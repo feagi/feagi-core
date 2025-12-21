@@ -12,7 +12,11 @@ mod cuda_small_realistic_tests {
     fn create_small_network_cpu(
     ) -> RustNPU<feagi_npu_runtime::StdRuntime, f32, feagi_npu_burst_engine::backend::CPUBackend>
     {
-        let mut npu = RustNPU::<f32>::new_cpu_only(1000, 10000, 100);
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_runtime::StdRuntime;
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 100).unwrap();
 
         // Power neuron (cortical_area=1) - 1 neuron
         npu.add_neuron(0.5, 0.0, 0.0, 0, 1, 1.0, 0, 0, true, 1, 0, 0, 0)

@@ -14,9 +14,12 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 
 use crate::types::{EvoError, EvoResult};
+#[cfg(test)]
 use feagi_data_structures::genomic::brain_regions::RegionID;
+use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalID};
+#[cfg(test)]
 use feagi_data_structures::genomic::cortical_area::{
-    CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID, IOCorticalAreaDataFlag,
+    CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaDataFlag,
 };
 use feagi_data_structures::genomic::BrainRegion;
 
@@ -146,7 +149,6 @@ impl GenomeSaver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions as Dimensions;
     use feagi_data_structures::genomic::RegionType;
 
     #[test]
@@ -158,7 +160,7 @@ mod tests {
         use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
@@ -176,6 +178,7 @@ mod tests {
         brain_regions.insert("root".to_string(), (region, None));
 
         // Save to JSON
+        #[allow(deprecated)]
         let json = GenomeSaver::save_to_json(
             &cortical_areas,
             &brain_regions,
@@ -203,7 +206,7 @@ mod tests {
         let mut cortical_areas = HashMap::new();
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
@@ -223,6 +226,7 @@ mod tests {
         brain_regions.insert("root".to_string(), (region, None));
 
         // Save to JSON
+        #[allow(deprecated)]
         let json = GenomeSaver::save_to_json(
             &cortical_areas,
             &brain_regions,

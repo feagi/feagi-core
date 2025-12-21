@@ -1,5 +1,4 @@
 use crate::FeagiDataError;
-use serde_json;
 
 /// A wrapper around serde_json::Value for handling JSON data in FEAGI.
 ///
@@ -39,8 +38,7 @@ impl FeagiJSON {
             Err(e) => Err(FeagiDataError::BadParameters(format!(
                 "Failed to parse JSON string: {}",
                 e
-            ))
-            .into()),
+            ))),
         }
     }
 

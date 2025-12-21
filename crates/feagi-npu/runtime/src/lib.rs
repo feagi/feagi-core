@@ -68,7 +68,6 @@
 //! // Implement your own runtime
 //! ```
 
-#![no_std]
 #![warn(missing_docs)]
 
 #[cfg(feature = "std")]
@@ -81,7 +80,7 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub mod traits;
 
 // Re-export traits for convenience
-pub use traits::{NeuronStorage, Runtime, SynapseStorage, NeuralValue, Result, RuntimeError};
+pub use traits::{NeuralValue, NeuronStorage, Result, Runtime, RuntimeError, SynapseStorage};
 
 // Standard library implementation (behind "std" feature)
 #[cfg(feature = "std")]
@@ -89,7 +88,7 @@ pub mod std_impl;
 
 // Re-export std module contents for convenience (backward compatibility)
 #[cfg(feature = "std")]
-pub use std_impl::{StdRuntime, NeuronArray as StdNeuronArray, SynapseArray as StdSynapseArray};
+pub use std_impl::{NeuronArray as StdNeuronArray, StdRuntime, SynapseArray as StdSynapseArray};
 
 // Embedded implementation (behind "embedded" feature)
 #[cfg(feature = "embedded")]
@@ -97,9 +96,12 @@ pub mod embedded_impl;
 
 // Re-export embedded module contents for convenience
 #[cfg(feature = "embedded")]
-pub use embedded_impl::{EmbeddedRuntime, NeuronArray as EmbeddedNeuronArray, SynapseArray as EmbeddedSynapseArray};
+pub use embedded_impl::{
+    EmbeddedRuntime, NeuronArray as EmbeddedNeuronArray, SynapseArray as EmbeddedSynapseArray,
+};
 
 // Convenience module for embedded (re-exports from embedded_impl)
+/// Embedded runtime implementations for no_std environments
 #[cfg(feature = "embedded")]
 pub mod embedded {
     pub use super::embedded_impl::{EmbeddedRuntime, NeuronArray, SynapseArray};

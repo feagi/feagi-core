@@ -195,16 +195,16 @@ pub fn ensure_core_components(genome: &mut RuntimeGenome) -> (usize, usize) {
         crate::genome::parser::string_to_cortical_id("_power").expect("Valid cortical ID");
 
     // 1. Ensure core cortical areas exist
-    if !genome.cortical_areas.contains_key(&death_id) {
+    if let std::collections::hash_map::Entry::Vacant(e) = genome.cortical_areas.entry(death_id) {
         let death_area = create_death_area();
-        genome.cortical_areas.insert(death_id, death_area);
+        e.insert(death_area);
         areas_added += 1;
         tracing::info!("Added missing core area: _death (cortical_idx=0)");
     }
 
-    if !genome.cortical_areas.contains_key(&power_id) {
+    if let std::collections::hash_map::Entry::Vacant(e) = genome.cortical_areas.entry(power_id) {
         let power_area = create_power_area();
-        genome.cortical_areas.insert(power_id, power_area);
+        e.insert(power_area);
         areas_added += 1;
         tracing::info!("Added missing core area: _power (cortical_idx=1)");
     }
@@ -529,16 +529,21 @@ mod tests {
     #[test]
     fn test_embedded_genomes_exist() {
         // Test that embedded genome strings are not empty
-        assert!(!ESSENTIAL_GENOME_JSON.is_empty());
-        assert!(!BAREBONES_GENOME_JSON.is_empty());
-        assert!(!TEST_GENOME_JSON.is_empty());
-        assert!(!VISION_GENOME_JSON.is_empty());
+        // These are compile-time constants, so they're always non-empty
+        // The assertions verify the constants are defined correctly
+        #[allow(clippy::const_is_empty)]
+        {
+            assert!(!ESSENTIAL_GENOME_JSON.is_empty());
+            assert!(!BAREBONES_GENOME_JSON.is_empty());
+            assert!(!TEST_GENOME_JSON.is_empty());
+            assert!(!VISION_GENOME_JSON.is_empty());
+        }
     }
 
     #[test]
     fn test_load_essential_genome() {
         let genome = load_essential_genome().expect("Failed to load essential genome");
-        assert!(genome.cortical_areas.len() > 0);
+        assert!(!genome.cortical_areas.is_empty());
         // Essential genome should have _power
         let power_id = crate::genome::parser::string_to_cortical_id("_power").expect("Valid ID");
         assert!(genome.cortical_areas.contains_key(&power_id));

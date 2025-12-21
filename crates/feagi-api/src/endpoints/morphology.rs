@@ -27,7 +27,7 @@ pub async fn get_morphology_list(
         .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
 
     // Sort morphology names alphabetically for consistent UI display
-    let mut names: Vec<String> = morphologies.iter().map(|(name, _)| name.clone()).collect();
+    let mut names: Vec<String> = morphologies.keys().cloned().collect();
     names.sort();
 
     Ok(Json(MorphologyListResponse {
@@ -216,7 +216,7 @@ pub async fn post_morphology_usage(
                     if let Some(conn_array) = connections.as_array() {
                         for conn in conn_array {
                             let morph_id = if let Some(arr) = conn.as_array() {
-                                arr.get(0).and_then(|v| v.as_str())
+                                arr.first().and_then(|v| v.as_str())
                             } else if let Some(obj) = conn.as_object() {
                                 obj.get("morphology_id").and_then(|v| v.as_str())
                             } else {
@@ -256,10 +256,7 @@ pub async fn get_list(State(state): State<ApiState>) -> ApiResult<Json<Vec<Strin
         .map_err(|e| ApiError::internal(format!("Failed to get morphologies: {}", e)))?;
 
     // Sort morphology names alphabetically for consistent UI display
-    let mut names: Vec<String> = morphologies
-        .iter()
-        .map(|(name, _info)| name.clone())
-        .collect();
+    let mut names: Vec<String> = morphologies.keys().cloned().collect();
     names.sort();
     Ok(Json(names))
 }

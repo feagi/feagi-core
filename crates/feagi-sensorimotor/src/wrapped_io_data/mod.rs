@@ -6,8 +6,8 @@
 //!
 //! These types are tightly integrated with the neuron encoding/decoding system.
 
-mod wrapped_io_data;
+mod wrapped_io_data_types;
 mod wrapped_io_type;
 
-pub use wrapped_io_data::WrappedIOData;
+pub use wrapped_io_data_types::WrappedIOData;
 pub use wrapped_io_type::WrappedIOType;

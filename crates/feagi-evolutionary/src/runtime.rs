@@ -58,7 +58,7 @@ pub struct GenomeMetadata {
 }
 
 /// Neuron morphology registry
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MorphologyRegistry {
     /// All morphologies by morphology_id
     morphologies: HashMap<String, Morphology>,
@@ -67,9 +67,7 @@ pub struct MorphologyRegistry {
 impl MorphologyRegistry {
     /// Create empty registry
     pub fn new() -> Self {
-        Self {
-            morphologies: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Add a morphology
@@ -280,7 +278,7 @@ pub struct GenomeSignatures {
 }
 
 /// Genome statistics
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GenomeStats {
     /// Innate cortical area count
     pub innate_cortical_area_count: usize,
@@ -290,16 +288,6 @@ pub struct GenomeStats {
 
     /// Innate synapse count
     pub innate_synapse_count: usize,
-}
-
-impl Default for GenomeStats {
-    fn default() -> Self {
-        Self {
-            innate_cortical_area_count: 0,
-            innate_neuron_count: 0,
-            innate_synapse_count: 0,
-        }
-    }
 }
 
 #[cfg(test)]

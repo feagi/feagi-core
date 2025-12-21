@@ -471,9 +471,7 @@ impl GenomeService for GenomeServiceImpl {
             let mut genome_lock = self.current_genome.write();
             if let Some(ref mut genome) = *genome_lock {
                 for area in &areas_to_add {
-                    genome
-                        .cortical_areas
-                        .insert(area.cortical_id.clone(), area.clone());
+                    genome.cortical_areas.insert(area.cortical_id, area.clone());
                     info!(target: "feagi-services", "Added {} to runtime genome", area.cortical_id.as_base_64());
                 }
             } else {
@@ -753,9 +751,10 @@ impl GenomeServiceImpl {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
 
         // Convert cortical_id to CorticalID
-        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
-        })?;
+        let cortical_id_typed =
+            feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
+                ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
+            })?;
 
         // Update RuntimeGenome if available
         if let Some(genome) = self.current_genome.write().as_mut() {
@@ -892,9 +891,10 @@ impl GenomeServiceImpl {
         );
 
         // Convert cortical_id to CorticalID
-        let cortical_id_typed = feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
-            ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
-        })?;
+        let cortical_id_typed =
+            feagi_evolutionary::string_to_cortical_id(cortical_id).map_err(|e| {
+                ServiceError::InvalidInput(format!("Invalid cortical ID '{}': {}", cortical_id, e))
+            })?;
 
         // Step 1: Update RuntimeGenome dimensions/density
         let (old_dimensions, old_density, new_dimensions, new_density) = {
@@ -1105,7 +1105,7 @@ impl GenomeServiceImpl {
                         if obj.contains_key(cortical_id) {
                             // This area has mappings to our target - rebuild them
                             let mut manager = connectome.write();
-                            let count = manager.apply_cortical_mapping(&src_id).map_err(|e| {
+                            let count = manager.apply_cortical_mapping(src_id).map_err(|e| {
                                 ServiceError::Backend(format!(
                                     "Failed to rebuild incoming synapses from {}: {}",
                                     src_id, e

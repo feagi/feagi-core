@@ -75,6 +75,7 @@ struct PacketHeader {
 }
 
 impl PacketHeader {
+    #[allow(clippy::wrong_self_convention)]
     fn to_bytes(&self) -> [u8; HEADER_SIZE] {
         let mut bytes = [0u8; HEADER_SIZE];
         bytes[0..4].copy_from_slice(&self.message_id.to_be_bytes());
@@ -129,7 +130,7 @@ impl UdpTransport {
 
     /// Chunk a large payload into UDP-sized packets
     fn chunk_payload(&self, data: &[u8], message_id: u32) -> Vec<Vec<u8>> {
-        let total_chunks = (data.len() + MAX_CHUNK_DATA - 1) / MAX_CHUNK_DATA;
+        let total_chunks = data.len().div_ceil(MAX_CHUNK_DATA);
         let mut chunks = Vec::with_capacity(total_chunks);
 
         for (chunk_index, chunk_data) in data.chunks(MAX_CHUNK_DATA).enumerate() {

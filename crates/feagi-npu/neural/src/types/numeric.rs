@@ -22,24 +22,20 @@ use alloc::{format, string::String};
 use std::{format, string::String};
 
 /// Quantization precision mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "lowercase"))]
 pub enum Precision {
+    #[default]
     FP32,
     FP16,
     INT8,
 }
 
-impl Default for Precision {
-    fn default() -> Self {
-        Self::FP32
-    }
-}
+impl std::str::FromStr for Precision {
+    type Err = String;
 
-impl Precision {
-    /// Parse from string (case-insensitive)
-    pub fn from_str(s: &str) -> Result<Self, String> {
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "fp32" | "float32" | "f32" => Ok(Self::FP32),
             "fp16" | "float16" | "f16" => Ok(Self::FP16),
@@ -47,7 +43,9 @@ impl Precision {
             _ => Err(format!("Unknown precision: {}", s)),
         }
     }
+}
 
+impl Precision {
     /// Convert to canonical string representation
     pub fn as_str(&self) -> &'static str {
         match self {

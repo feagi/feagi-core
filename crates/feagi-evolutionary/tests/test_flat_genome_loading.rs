@@ -19,7 +19,7 @@ fn test_load_barebones_flat_genome() {
 
     // Read flat genome
     let flat_json = fs::read_to_string(genome_path)
-        .expect(&format!("Failed to read genome file: {}", genome_path));
+        .unwrap_or_else(|_| panic!("Failed to read genome file: {}", genome_path));
 
     let flat_genome: serde_json::Value =
         serde_json::from_str(&flat_json).expect("Failed to parse flat genome JSON");

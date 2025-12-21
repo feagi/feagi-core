@@ -29,22 +29,22 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi = "0.0.1"  # Umbrella crate (includes everything)
+feagi = "0.0.1-beta.1"  # Umbrella crate (includes everything)
 ```
 
 Or use individual building blocks:
 
 ```toml
 [dependencies]
-feagi-npu-burst-engine = "0.0.1"  # Just the NPU
-feagi-npu-neural = "0.0.1"        # Just core types
+feagi-npu-burst-engine = "0.0.1-beta.1"  # Just the NPU
+feagi-npu-neural = "0.0.1-beta.1"        # Just core types
 ```
 
 Or umbrella with specific features:
 
 ```toml
 [dependencies]
-feagi = { version = "0.0.1", features = ["gpu"] }
+feagi = { version = "0.0.1-beta.1", features = ["gpu"] }
 ```
 
 ## Quick Start

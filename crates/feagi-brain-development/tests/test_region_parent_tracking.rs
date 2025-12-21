@@ -11,7 +11,6 @@
 
 use feagi_brain_development::models::brain_region_hierarchy::BrainRegionHierarchy;
 use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 
 /// Helper to create a root region with UUID
 fn create_root_region() -> BrainRegion {
@@ -41,7 +40,7 @@ fn test_root_region_uuid_storage() {
 
     // Create root region with UUID
     let root_region = create_root_region();
-    let root_id = root_region.region_id.clone();
+    let root_id = root_region.region_id;
     let root_id_str = root_id.to_string();
 
     // Add to hierarchy (no parent for root)
@@ -68,7 +67,7 @@ fn test_subregion_parent_uuid_reference() {
 
     // Create root region
     let root_region = create_root_region();
-    let root_id = root_region.region_id.clone();
+    let root_id = root_region.region_id;
     let root_id_str = root_id.to_string();
 
     hierarchy
@@ -77,7 +76,7 @@ fn test_subregion_parent_uuid_reference() {
 
     // Create subregion
     let subregion = create_subregion();
-    let subregion_id = subregion.region_id.clone();
+    let subregion_id = subregion.region_id;
     let subregion_id_str = subregion_id.to_string();
 
     // Add subregion with parent reference
@@ -105,7 +104,7 @@ fn test_parent_lookup_with_uuid_keys() {
 
     // Create root region
     let root_region = create_root_region();
-    let root_id = root_region.region_id.clone();
+    let root_id = root_region.region_id;
     let root_id_str = root_id.to_string();
 
     hierarchy
@@ -114,7 +113,7 @@ fn test_parent_lookup_with_uuid_keys() {
 
     // Create subregion
     let subregion = create_subregion();
-    let subregion_id = subregion.region_id.clone();
+    let subregion_id = subregion.region_id;
     let subregion_id_str = subregion_id.to_string();
 
     hierarchy
@@ -143,7 +142,7 @@ fn test_multiple_subregions_same_parent() {
 
     // Create root region
     let root_region = create_root_region();
-    let root_id = root_region.region_id.clone();
+    let root_id = root_region.region_id;
     let root_id_str = root_id.to_string();
 
     hierarchy
@@ -157,7 +156,7 @@ fn test_multiple_subregions_same_parent() {
 
         hierarchy
             .add_region(subregion, Some(root_id_str.clone()))
-            .expect(&format!("Failed to add subregion {}", i));
+            .unwrap_or_else(|_| panic!("Failed to add subregion {}", i));
 
         // Verify each can find its parent
         let parent_id_opt = hierarchy.get_parent(&subregion_id_str);
@@ -193,7 +192,7 @@ fn test_deep_hierarchy_grandchild() {
 
     // Create root
     let root_region = create_root_region();
-    let root_id = root_region.region_id.clone();
+    let root_id = root_region.region_id;
     let root_id_str = root_id.to_string();
     hierarchy
         .add_region(root_region, None)
@@ -201,7 +200,7 @@ fn test_deep_hierarchy_grandchild() {
 
     // Create child
     let child_region = create_subregion();
-    let child_id = child_region.region_id.clone();
+    let child_id = child_region.region_id;
     let child_id_str = child_id.to_string();
     hierarchy
         .add_region(child_region, Some(root_id_str.clone()))
@@ -249,7 +248,7 @@ fn test_regression_parent_region_exists() {
 
     // Create root with UUID (as neuroembryogenesis does)
     let root_region = create_root_region();
-    let root_id = root_region.region_id.clone();
+    let root_id = root_region.region_id;
     let root_id_str = root_id.to_string();
 
     // Store with UUID string as key (as ConnectomeManager does)
@@ -291,7 +290,7 @@ fn test_regions_stored_by_uuid_not_hardcoded() {
 
     // Create root with UUID
     let root_region = create_root_region();
-    let root_id = root_region.region_id.clone();
+    let root_id = root_region.region_id;
     let root_id_str = root_id.to_string();
 
     hierarchy

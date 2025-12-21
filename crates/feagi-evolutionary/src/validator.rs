@@ -12,9 +12,12 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::{MorphologyParameters, RuntimeGenome};
+// CorticalID is used in function signatures but may appear unused in some contexts
+#[allow(unused_imports)]
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use serde_json::Value;
 use std::collections::HashSet;
+use std::str::FromStr;
 
 /// Validation result
 #[derive(Debug, Clone)]
@@ -591,7 +594,7 @@ fn cross_validate(genome: &RuntimeGenome, result: &mut ValidationResult) {
             for (dest_area, rules) in dstmap {
                 // Check if destination area exists (convert string to CorticalID)
                 if let Ok(dest_cortical_id) =
-                    crate::genome::parser::string_to_cortical_id(&dest_area)
+                    crate::genome::parser::string_to_cortical_id(dest_area)
                 {
                     if !genome.cortical_areas.contains_key(&dest_cortical_id) {
                         result.add_error(format!(
@@ -724,7 +727,7 @@ mod tests {
         };
         let test_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
-            test_id.clone(),
+            test_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),

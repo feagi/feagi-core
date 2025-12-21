@@ -17,4 +17,3 @@ mod run_async_macro;
 
 pub use feagi_async_runtime::{BlockOnError, FeagiAsyncRuntime, TimeoutError};
 pub use feagi_runtimes::*;
-

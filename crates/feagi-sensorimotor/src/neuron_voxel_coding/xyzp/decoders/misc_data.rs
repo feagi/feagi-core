@@ -23,7 +23,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
         &mut self,
         neurons_to_read: &CorticalMappedXYZPNeuronVoxels,
-        _time_of_read: Instant,
+        __time_of_read: Instant,
         pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>,
         channel_changed: &mut Vec<bool>,
     ) -> Result<(), FeagiDataError> {
@@ -76,6 +76,7 @@ impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
 }
 
 impl MiscDataNeuronVoxelXYZPDecoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_read_target: CorticalID,
         misc_dimensions: MiscDataDimensions,

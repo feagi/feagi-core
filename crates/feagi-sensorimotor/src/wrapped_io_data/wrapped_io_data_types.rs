@@ -30,6 +30,7 @@ macro_rules! define_wrapped_io_data_enum {
         /// ```
         #[derive(Debug, Clone)]
         #[allow(non_camel_case_types)]
+        #[allow(clippy::large_enum_variant)] // SegmentedImageFrame is large but necessary
         /// Due to Rust's memory management, WrappedIOData is used to pass around various data structures around.
         pub enum WrappedIOData
         {

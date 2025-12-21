@@ -12,9 +12,9 @@
 //!
 //! Uses stack-allocated arrays for predictable memory usage.
 
+use crate::traits::{NeuronStorage, Result, RuntimeError};
 use feagi_npu_neural::types::NeuralValue;
 use feagi_npu_neural::{is_refractory, update_neuron_lif};
-use crate::traits::{NeuronStorage, Result, RuntimeError};
 
 #[cfg(any(feature = "std", feature = "alloc"))]
 extern crate alloc;
@@ -111,7 +111,15 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
             valid_mask: [false; N],
         }
     }
+}
 
+impl<T: NeuralValue, const N: usize> Default for NeuronArray<T, N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
     /// Add a neuron (simplified for backward compatibility)
     ///
     /// Returns the neuron index, or None if array is full.
@@ -353,8 +361,8 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         mp_charge_accumulation: bool,
         cortical_area: u32,
         x: u32,
-        y: u32,
-        z: u32,
+        _y: u32,
+        _z: u32,
     ) -> Result<usize> {
         if self.count >= N {
             return Err(RuntimeError::CapacityExceeded {
@@ -435,16 +443,12 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
         _z: u32,
     ) -> Option<usize> {
         // Linear search through neurons (embedded systems typically have small neuron counts)
-        for idx in 0..self.count {
-            if self.valid_mask[idx]
+        // Simplified: only checking x coordinate
+        (0..self.count).find(|&idx| {
+            self.valid_mask[idx]
                 && self.cortical_areas[idx] == cortical_area
                 && self.coordinates[idx] == x
-            // Simplified: only checking x coordinate
-            {
-                return Some(idx);
-            }
-        }
-        None
+        })
     }
 
     #[cfg(any(feature = "std", feature = "alloc"))]

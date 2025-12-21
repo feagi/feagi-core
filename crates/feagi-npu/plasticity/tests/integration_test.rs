@@ -72,7 +72,7 @@ fn test_pattern_reactivation_workflow() {
     bitmap.insert(2);
 
     let pattern1 = detector
-        .detect_pattern(100, &vec![1], 10, vec![bitmap.clone()], None)
+        .detect_pattern(100, &[1], 10, vec![bitmap.clone()], None)
         .unwrap();
 
     let idx1 = memory_array
@@ -81,7 +81,7 @@ fn test_pattern_reactivation_workflow() {
 
     // Detect same pattern again (reactivation)
     let pattern2 = detector
-        .detect_pattern(100, &vec![1], 11, vec![bitmap], None)
+        .detect_pattern(100, &[1], 11, vec![bitmap], None)
         .unwrap();
 
     // Patterns should be identical
@@ -99,10 +99,12 @@ fn test_pattern_reactivation_workflow() {
 #[test]
 fn test_neuron_lifecycle_full_cycle() {
     let mut memory_array = MemoryNeuronArray::new(1000);
-    let mut lifecycle_config = MemoryNeuronLifecycleConfig::default();
-    lifecycle_config.initial_lifespan = 5;
-    lifecycle_config.lifespan_growth_rate = 2.0;
-    lifecycle_config.longterm_threshold = 15;
+    let lifecycle_config = MemoryNeuronLifecycleConfig {
+        initial_lifespan: 5,
+        lifespan_growth_rate: 2.0,
+        longterm_threshold: 15,
+        ..Default::default()
+    };
 
     let pattern_hash = [1u8; 32];
 
@@ -143,14 +145,14 @@ fn test_multiple_memory_areas() {
     let lifecycle_config = MemoryNeuronLifecycleConfig::default();
 
     // Create patterns for multiple memory areas
-    for area_idx in vec![100, 200, 300] {
+    for area_idx in [100, 200, 300] {
         let detector = batch_detector.get_detector(area_idx, 3);
 
         let mut bitmap = HashSet::new();
         bitmap.insert(area_idx);
 
         let pattern = detector
-            .detect_pattern(area_idx, &vec![1], 10, vec![bitmap], None)
+            .detect_pattern(area_idx, &[1], 10, vec![bitmap], None)
             .unwrap();
 
         memory_array
@@ -246,15 +248,17 @@ fn test_plasticity_service_basic_workflow() {
 
 #[test]
 fn test_pattern_cache_performance() {
-    let mut config = PatternConfig::default();
-    config.max_pattern_cache_size = 100;
+    let config = PatternConfig {
+        max_pattern_cache_size: 100,
+        ..Default::default()
+    };
     let detector = PatternDetector::new(config);
 
     // Create 100 different patterns
     for i in 0..100 {
         let mut bitmap = HashSet::new();
         bitmap.insert(i);
-        detector.detect_pattern(100, &vec![1], 10, vec![bitmap], None);
+        detector.detect_pattern(100, &[1], 10, vec![bitmap], None);
     }
 
     let stats = detector.get_stats();
@@ -264,7 +268,7 @@ fn test_pattern_cache_performance() {
     // Detect the first pattern again - should be cache hit
     let mut bitmap = HashSet::new();
     bitmap.insert(0);
-    detector.detect_pattern(100, &vec![1], 11, vec![bitmap], None);
+    detector.detect_pattern(100, &[1], 11, vec![bitmap], None);
 
     let stats = detector.get_stats();
     assert_eq!(stats.cache_hits, 1);
@@ -273,8 +277,10 @@ fn test_pattern_cache_performance() {
 #[test]
 fn test_memory_array_capacity_and_reuse() {
     let mut memory_array = MemoryNeuronArray::new(10);
-    let mut lifecycle_config = MemoryNeuronLifecycleConfig::default();
-    lifecycle_config.initial_lifespan = 1;
+    let lifecycle_config = MemoryNeuronLifecycleConfig {
+        initial_lifespan: 1,
+        ..Default::default()
+    };
 
     // Fill capacity
     for i in 0..10 {
@@ -324,10 +330,10 @@ fn test_deterministic_pattern_hashing_across_runs() {
 
     // Detect pattern with both detectors
     let pattern1 = detector1
-        .detect_pattern(100, &vec![1], 10, vec![bitmap.clone()], None)
+        .detect_pattern(100, &[1], 10, vec![bitmap.clone()], None)
         .unwrap();
     let pattern2 = detector2
-        .detect_pattern(100, &vec![1], 10, vec![bitmap], None)
+        .detect_pattern(100, &[1], 10, vec![bitmap], None)
         .unwrap();
 
     // Same input should produce same hash
@@ -348,7 +354,7 @@ fn test_concurrent_pattern_detection() {
             thread::spawn(move || {
                 let mut bitmap = HashSet::new();
                 bitmap.insert(i);
-                detector.detect_pattern(100, &vec![1], 10, vec![bitmap], None)
+                detector.detect_pattern(100, &[1], 10, vec![bitmap], None)
             })
         })
         .collect();

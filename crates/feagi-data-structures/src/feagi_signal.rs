@@ -42,8 +42,10 @@ define_index!(
 /// signal.emit(&"Hello".to_string());
 /// assert_eq!(handler.lock().unwrap().count, 1);
 /// ```
+type SignalListener<T> = Box<dyn FnMut(&T) + Send>;
+
 pub struct FeagiSignal<T> {
-    listeners: HashMap<FeagiSignalIndex, Box<dyn FnMut(&T) + Send>>,
+    listeners: HashMap<FeagiSignalIndex, SignalListener<T>>,
     next_index: u32,
 }
 

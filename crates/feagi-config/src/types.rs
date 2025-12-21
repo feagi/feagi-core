@@ -19,7 +19,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 /// Root configuration structure
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct FeagiConfig {
     pub system: SystemConfig,
@@ -42,33 +42,6 @@ pub struct FeagiConfig {
     pub compression: CompressionConfig,
     pub memory_processing: MemoryProcessingConfig,
     pub snapshot: SnapshotConfig,
-}
-
-impl Default for FeagiConfig {
-    fn default() -> Self {
-        Self {
-            system: SystemConfig::default(),
-            genome: GenomeConfig::default(),
-            api: ApiConfig::default(),
-            agent: AgentConfig::default(),
-            ports: PortsConfig::default(),
-            zmq: ZmqConfig::default(),
-            websocket: WebSocketConfig::default(),
-            transports: TransportsConfig::default(),
-            timeouts: TimeoutsConfig::default(),
-            agents: AgentsConfig::default(),
-            neural: NeuralConfig::default(),
-            plasticity: PlasticityConfig::default(),
-            burst_engine: BurstEngineConfig::default(),
-            connectome: ConnectomeConfig::default(),
-            resources: ResourcesConfig::default(),
-            logging: LoggingConfig::default(),
-            visualization: VisualizationConfig::default(),
-            compression: CompressionConfig::default(),
-            memory_processing: MemoryProcessingConfig::default(),
-            snapshot: SnapshotConfig::default(),
-        }
-    }
 }
 
 /// System-level configuration
@@ -238,24 +211,13 @@ impl Default for ZmqConfig {
 }
 
 /// ZMQ stream configurations
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ZmqStreamsConfig {
     pub visualization: VisualizationStreamConfig,
     pub sensory: SensoryStreamConfig,
     pub motor: MotorStreamConfig,
     pub rest: RestStreamConfig,
-}
-
-impl Default for ZmqStreamsConfig {
-    fn default() -> Self {
-        Self {
-            visualization: VisualizationStreamConfig::default(),
-            sensory: SensoryStreamConfig::default(),
-            motor: MotorStreamConfig::default(),
-            rest: RestStreamConfig::default(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

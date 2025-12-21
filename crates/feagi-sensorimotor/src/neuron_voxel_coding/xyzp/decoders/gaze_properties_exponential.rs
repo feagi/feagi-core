@@ -32,7 +32,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
         &mut self,
         neurons_to_read: &CorticalMappedXYZPNeuronVoxels,
-        time_of_read: Instant,
+        _time_of_read: Instant,
         pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>,
         channel_changed: &mut Vec<bool>,
     ) -> Result<(), FeagiDataError> {
@@ -96,7 +96,12 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
         }
 
         // At this point, we have numbers in scratch space to average out
-        for channel_index in 0..number_of_channels as usize {
+        for (channel_index, (pipeline, changed_flag)) in pipelines_with_data_to_update
+            .iter_mut()
+            .zip(channel_changed.iter_mut())
+            .enumerate()
+            .take(number_of_channels as usize)
+        {
             // Literally not worth making parallel... right?
             let eccentricity_z_row_a_index = channel_index * ECCENTRICITY_CHANNEL_WIDTH as usize;
             let eccentricity_z_row_b_index = eccentricity_z_row_a_index + 1;
@@ -104,15 +109,15 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
 
             // We need to ensure if ANY of the numbers changed (as in they added anything to the vector for that row that only originally had 0), we update it and label it as such
 
-            let mut eccentricity_z_a_vector = self
+            let eccentricity_z_a_vector = self
                 .z_depth_eccentricity_scratch_space
                 .get(eccentricity_z_row_a_index)
                 .unwrap();
-            let mut eccentricity_z_b_vector = self
+            let eccentricity_z_b_vector = self
                 .z_depth_eccentricity_scratch_space
                 .get(eccentricity_z_row_b_index)
                 .unwrap();
-            let mut modularity_z_vector = self
+            let modularity_z_vector = self
                 .z_depth_modularity_scratch_space
                 .get(modularity_z_row_index)
                 .unwrap();
@@ -123,30 +128,27 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
             {
                 continue; // No data collected for this channel. Do not emit
             }
-            channel_changed[channel_index] = true;
-            let prev_gaze: &mut GazeProperties = pipelines_with_data_to_update
-                .get_mut(channel_index)
-                .unwrap()
-                .get_preprocessed_cached_value_mut()
-                .try_into()?;
+            *changed_flag = true;
+            let prev_gaze: &mut GazeProperties =
+                pipeline.get_preprocessed_cached_value_mut().try_into()?;
 
             if !eccentricity_z_a_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &eccentricity_z_a_vector,
+                    eccentricity_z_a_vector,
                     &mut prev_gaze.eccentricity_location_xy.a,
                 );
             }
 
             if !eccentricity_z_b_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &eccentricity_z_b_vector,
+                    eccentricity_z_b_vector,
                     &mut prev_gaze.eccentricity_location_xy.b,
                 );
             }
 
             if !modularity_z_vector.is_empty() {
                 decode_unsigned_percentage_from_fractional_exponential_neurons(
-                    &modularity_z_vector,
+                    modularity_z_vector,
                     &mut prev_gaze.modulation_size,
                 );
             }
@@ -157,6 +159,7 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder 
 }
 
 impl GazePropertiesExponentialNeuronVoxelXYZPDecoder {
+    #[allow(dead_code)]
     pub fn new_box(
         eccentricity_cortical_id: CorticalID,
         modularity_cortical_id: CorticalID,

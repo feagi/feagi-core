@@ -149,7 +149,6 @@ pub use crate::synapse::SynapseType;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     // Test that trait is object-safe (can use `Box<dyn NeuronModel>`)
     #[test]

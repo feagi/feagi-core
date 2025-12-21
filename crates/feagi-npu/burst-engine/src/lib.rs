@@ -118,11 +118,12 @@ mod tests {
 
     #[test]
     fn test_burst_stats() {
-        let mut stats = BurstEngineStats::default();
-        stats.total_bursts = 100;
-        stats.total_neurons_fired = 10000;
-        stats.total_synapses_processed = 50000;
-        stats.total_processing_time_us = 1000000;
+        let stats = BurstEngineStats {
+            total_bursts: 100,
+            total_neurons_fired: 10000,
+            total_synapses_processed: 50000,
+            total_processing_time_us: 1000000,
+        };
 
         assert_eq!(stats.avg_neurons_per_burst(), 100.0);
         assert_eq!(stats.avg_processing_time_us(), 10000.0);

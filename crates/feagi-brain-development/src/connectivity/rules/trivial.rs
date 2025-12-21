@@ -73,9 +73,9 @@ mod tests {
         let dims = (10, 10, 10);
         for _ in 0..100 {
             let pos = syn_randomizer(dims);
-            assert!(pos.0 >= 0 && pos.0 < 10);
-            assert!(pos.1 >= 0 && pos.1 < 10);
-            assert!(pos.2 >= 0 && pos.2 < 10);
+            assert!(pos.0 < 10);
+            assert!(pos.1 < 10);
+            assert!(pos.2 < 10);
         }
     }
 

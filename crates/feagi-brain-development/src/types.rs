@@ -82,7 +82,9 @@ impl From<feagi_data_structures::FeagiDataError> for BduError {
 impl From<feagi_evolutionary::EvoError> for BduError {
     fn from(err: feagi_evolutionary::EvoError) -> Self {
         match &err {
-            feagi_evolutionary::EvoError::InvalidGenome(msg) => BduError::InvalidGenome(msg.clone()),
+            feagi_evolutionary::EvoError::InvalidGenome(msg) => {
+                BduError::InvalidGenome(msg.clone())
+            }
             feagi_evolutionary::EvoError::InvalidArea(msg) => BduError::InvalidArea(msg.clone()),
             _ => BduError::Internal(err.to_string()),
         }

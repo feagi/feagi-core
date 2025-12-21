@@ -447,6 +447,7 @@ mod tests {
 
     #[test]
     fn test_config_builder() {
+        #[allow(deprecated)]
         let config = AgentConfig::new("test_agent", AgentType::Sensory)
             .with_feagi_host("192.168.1.100")
             .with_vision_capability("camera", (640, 480), 3, "i_vision")

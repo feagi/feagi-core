@@ -217,7 +217,7 @@ pub async fn get_cortical_map_detailed(
                     if !cortical_mapping_dst.is_null()
                         && cortical_mapping_dst
                             .as_object()
-                            .map_or(false, |obj| !obj.is_empty())
+                            .is_some_and(|obj| !obj.is_empty())
                     {
                         map.insert(area.cortical_id.clone(), cortical_mapping_dst.clone());
                     }
@@ -247,12 +247,7 @@ pub async fn get_cortical_locations_2d(
         Ok(areas) => {
             let locations: HashMap<String, (i32, i32)> = areas
                 .into_iter()
-                .map(|area| {
-                    (
-                        area.cortical_id,
-                        (area.position.0 as i32, area.position.1 as i32),
-                    )
-                })
+                .map(|area| (area.cortical_id, (area.position.0, area.position.1)))
                 .collect();
             Ok(Json(locations))
         }
@@ -365,7 +360,7 @@ pub async fn post_cortical_name_location(
     match connectome_service.get_cortical_area(cortical_name).await {
         Ok(area) => Ok(Json(HashMap::from([(
             area.cortical_id,
-            (area.position.0 as i32, area.position.1 as i32),
+            (area.position.0, area.position.1),
         )]))),
         Err(e) => Err(ApiError::internal(format!("Failed to get location: {}", e))),
     }
@@ -659,7 +654,7 @@ pub async fn post_cortical_area(
         ];
 
         // Encode to base64 for use as cortical_id string
-        let cortical_id = general_purpose::STANDARD.encode(&cortical_id_bytes);
+        let cortical_id = general_purpose::STANDARD.encode(cortical_id_bytes);
 
         tracing::debug!(target: "feagi-api",
             "  Unit {}: dims={}x{}x{}, neurons_per_voxel={}, total_neurons={}",
@@ -903,7 +898,7 @@ pub async fn post_custom_cortical_area(
     cortical_id_bytes[7] = (timestamp & 0xFF) as u8;
 
     // Encode to base64 for use as cortical_id string
-    let cortical_id = general_purpose::STANDARD.encode(&cortical_id_bytes);
+    let cortical_id = general_purpose::STANDARD.encode(cortical_id_bytes);
 
     tracing::debug!(target: "feagi-api",
         "Generated cortical_id: {} (raw bytes: {:?})",

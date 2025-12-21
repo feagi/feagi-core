@@ -10,13 +10,8 @@ use super::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
 use super::ImageFrame;
-use feagi_data_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelIndex, CorticalGroupIndex,
-};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::neuron_voxels::xyzp::{
-    CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
-};
+use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
+use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
 use feagi_data_structures::FeagiDataError;
 use ndarray::Array3;
 use rayon::prelude::*;
@@ -96,47 +91,47 @@ impl SegmentedImageFrame {
         Ok(SegmentedImageFrame {
             lower_left: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.lower_left,
             )?,
             middle_left: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.middle_left,
             )?,
             upper_left: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.upper_left,
             )?,
             upper_middle: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.upper_middle,
             )?,
             upper_right: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.upper_right,
             )?,
             middle_right: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.middle_right,
             )?,
             lower_right: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.lower_right,
             )?,
             lower_middle: ImageFrame::new(
                 peripheral_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.lower_middle,
             )?,
             center: ImageFrame::new(
                 center_color_channels,
-                &color_space,
+                color_space,
                 &segment_resolutions.center,
             )?,
         })
@@ -160,9 +155,9 @@ impl SegmentedImageFrame {
     pub fn get_segmented_image_frame_properties(&self) -> SegmentedImageFrameProperties {
         SegmentedImageFrameProperties::new(
             self.get_segmented_frame_target_resolutions(),
-            self.center.get_channel_layout().clone(),
-            self.lower_right.get_channel_layout().clone(), // all peripherals should be the same
-            self.get_color_space().clone(),
+            *self.center.get_channel_layout(),
+            *self.lower_right.get_channel_layout(), // all peripherals should be the same
+            *self.get_color_space(),
         )
     }
 
@@ -256,6 +251,7 @@ impl SegmentedImageFrame {
         ]
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_image_internal_data_mut(&mut self) -> [&mut Array3<u8>; 9] {
         // return in same order as cortical IDs
         [
@@ -281,7 +277,6 @@ impl SegmentedImageFrame {
         channel_index: CorticalChannelIndex,
     ) -> Result<(), FeagiDataError> {
         let ordered_images = self.get_ordered_image_frame_references();
-        let mut total_neurons = 0;
         write_targets.par_iter_mut().enumerate().try_for_each(
             |(image_ordered_index, write_target)| -> Result<(), FeagiDataError> {
                 ordered_images[image_ordered_index]
@@ -289,8 +284,6 @@ impl SegmentedImageFrame {
                 Ok(())
             },
         )?;
-
-        total_neurons = write_targets.iter().map(|wt| wt.len()).sum();
         Ok(())
     }
     //endregion

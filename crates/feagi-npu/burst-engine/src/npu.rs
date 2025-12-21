@@ -47,6 +47,9 @@ use feagi_npu_runtime::{NeuronStorage, Runtime, SynapseStorage};
 #[cfg(test)]
 use feagi_npu_runtime::StdRuntime;
 
+/// Type alias for fire queue sample data structure
+type FireQueueSample = AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
+
 /// Burst processing result
 #[derive(Debug, Clone)]
 pub struct BurstResult {
@@ -321,6 +324,7 @@ impl<
     }
 
     /// Add a neuron to the NPU (LIF model with genome leak only)
+    #[allow(clippy::too_many_arguments)]
     pub fn add_neuron(
         &mut self,
         threshold: T,          // Quantized threshold
@@ -401,6 +405,7 @@ impl<
     /// - Batch propagation engine updates
     ///
     /// Returns: (neuron_ids, failed_indices)
+    #[allow(clippy::too_many_arguments)]
     pub fn add_neurons_batch(
         &mut self,
         thresholds: Vec<T>,          // Quantized thresholds
@@ -530,6 +535,7 @@ impl<
     /// # Returns
     /// * `Ok(count)` - Number of neurons created
     /// * `Err` - If capacity exceeded or other error
+    #[allow(clippy::too_many_arguments)]
     pub fn create_cortical_area_neurons(
         &mut self,
         cortical_idx: u32,
@@ -1237,44 +1243,42 @@ impl<
         // IMPORTANT: NPU is performance-sensitive. Any extra diagnostics must be gated behind
         // tracing level checks so we don't do O(n) work (min/max scans, neuron counts, allocations)
         // on every missed injection when TRACE isn't enabled.
-        if found_count == 0 {
-            if tracing::enabled!(tracing::Level::TRACE) {
-                // Root-cause diagnostics: report coordinate ranges so callers can compare against genome bbx/bby/bbz.
-                let (min_x, max_x, min_y, max_y, min_z, max_z) = coords.iter().fold(
-                    (u32::MAX, 0u32, u32::MAX, 0u32, u32::MAX, 0u32),
-                    |(min_x, max_x, min_y, max_y, min_z, max_z), &(x, y, z)| {
-                        (
-                            min_x.min(x),
-                            max_x.max(x),
-                            min_y.min(y),
-                            max_y.max(y),
-                            min_z.min(z),
-                            max_z.max(z),
-                        )
-                    },
-                );
-                let area_neuron_count = self
-                    .neuron_storage
-                    .read()
-                    .unwrap()
-                    .get_neuron_count(cortical_area);
-                let coord_sample: Vec<(u32, u32, u32)> = coords.iter().copied().take(5).collect();
+        if found_count == 0 && tracing::enabled!(tracing::Level::TRACE) {
+            // Root-cause diagnostics: report coordinate ranges so callers can compare against genome bbx/bby/bbz.
+            let (min_x, max_x, min_y, max_y, min_z, max_z) = coords.iter().fold(
+                (u32::MAX, 0u32, u32::MAX, 0u32, u32::MAX, 0u32),
+                |(min_x, max_x, min_y, max_y, min_z, max_z), &(x, y, z)| {
+                    (
+                        min_x.min(x),
+                        max_x.max(x),
+                        min_y.min(y),
+                        max_y.max(y),
+                        min_z.min(z),
+                        max_z.max(z),
+                    )
+                },
+            );
+            let area_neuron_count = self
+                .neuron_storage
+                .read()
+                .unwrap()
+                .get_neuron_count(cortical_area);
+            let coord_sample: Vec<(u32, u32, u32)> = coords.iter().copied().take(5).collect();
 
-                trace!(
-                    "[NPU] No neurons found for injection! Area: '{}', cortical_area_idx={}, coords={}, x=[{}..{}], y=[{}..{}], z=[{}..{}], area_neurons={}, sample={:?}",
-                    cortical_id_str,
-                    cortical_area,
-                    coords.len(),
-                    min_x,
-                    max_x,
-                    min_y,
-                    max_y,
-                    min_z,
-                    max_z,
-                    area_neuron_count,
-                    coord_sample
-                );
-            }
+            trace!(
+                "[NPU] No neurons found for injection! Area: '{}', cortical_area_idx={}, coords={}, x=[{}..{}], y=[{}..{}], z=[{}..{}], area_neurons={}, sample={:?}",
+                cortical_id_str,
+                cortical_area,
+                coords.len(),
+                min_x,
+                max_x,
+                min_y,
+                max_y,
+                min_z,
+                max_z,
+                area_neuron_count,
+                coord_sample
+            );
         }
 
         found_count
@@ -1410,14 +1414,14 @@ impl<
         }
     }
 
-    /// Import connectome snapshot (for loading from file)
-    ///
-    /// This replaces the entire NPU state with data from a saved connectome.
     // TODO: import_connectome needs refactoring for trait-based storage
     // Currently commented out - requires bulk load API in Storage traits
     // See issue: Direct field assignment doesn't work with trait-based storage
 
     /*
+    /// Import connectome snapshot (for loading from file)
+    ///
+    /// This replaces the entire NPU state with data from a saved connectome.
     /// Import a connectome from a snapshot
     ///
     /// # Arguments
@@ -2507,9 +2511,7 @@ impl<
     ///
     /// ⚠️ DEPRECATED: This method triggers deduplication and may return None if burst already sampled.
     /// Use `get_latest_fire_queue_sample()` instead for non-consuming reads.
-    pub fn sample_fire_queue(
-        &mut self,
-    ) -> Option<AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn sample_fire_queue(&mut self) -> Option<FireQueueSample> {
         let mut fire_structures = self.fire_structures.lock().unwrap();
         let current_fq_clone = fire_structures.current_fire_queue.clone();
         let sample_result = fire_structures.fq_sampler.sample(&current_fq_clone)?;
@@ -2539,9 +2541,7 @@ impl<
     /// Perfect for Python wrappers and SHM writers that need to read the same burst multiple times.
     ///
     /// Returns None if no sample has been taken yet (no bursts processed).
-    pub fn get_latest_fire_queue_sample(
-        &self,
-    ) -> Option<AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn get_latest_fire_queue_sample(&self) -> Option<FireQueueSample> {
         let fire_structures = self.fire_structures.lock().unwrap();
         let sample_result = fire_structures.fq_sampler.get_latest_sample()?;
 
@@ -2567,18 +2567,14 @@ impl<
     ///
     /// This is used by the burst loop to sample on every burst, regardless of the FQ sampler's
     /// configured rate limit. The rate limiting is meant for external consumers, not the burst loop itself.
-    pub fn force_sample_fire_queue(
-        &mut self,
-    ) -> Option<AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>> {
+    pub fn force_sample_fire_queue(&mut self) -> Option<FireQueueSample> {
         // FIXED: Use get_current_fire_queue() instead of accessing private fields
         Some(self.get_current_fire_queue())
     }
 
     /// Get current Fire Queue directly (bypasses FQ Sampler rate limiting)
     /// Used by FCL endpoint to get real-time firing data without sampling delays
-    pub fn get_current_fire_queue(
-        &self,
-    ) -> AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)> {
+    pub fn get_current_fire_queue(&self) -> FireQueueSample {
         let mut result = AHashMap::new();
 
         // Convert current Fire Queue to the same format as sample_fire_queue
@@ -2687,7 +2683,10 @@ mod tests {
 
     #[test]
     fn test_npu_creation() {
-        let npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        let npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                1000, 10000, 20,
+            );
         assert_eq!(npu.get_neuron_count(), 0);
         assert_eq!(npu.get_synapse_count(), 0);
         assert_eq!(npu.get_burst_count(), 0);
@@ -2695,14 +2694,20 @@ mod tests {
 
     #[test]
     fn test_npu_creation_with_zero_capacity() {
-        let npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(0, 0, 0);
+        let npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                0, 0, 0,
+            );
         assert_eq!(npu.get_neuron_count(), 0);
         assert_eq!(npu.get_synapse_count(), 0);
     }
 
     #[test]
     fn test_npu_creation_with_large_capacity() {
-        let npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1_000_000, 10_000_000, 100);
+        let npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                1_000_000, 10_000_000, 100,
+            );
         assert_eq!(npu.get_neuron_count(), 0);
     }
 
@@ -2712,7 +2717,10 @@ mod tests {
 
     #[test]
     fn test_add_neurons() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                1000, 10000, 20,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let id1 = npu
@@ -2729,7 +2737,10 @@ mod tests {
 
     #[test]
     fn test_add_neuron_sequential_ids() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         for i in 0..10 {
@@ -2744,7 +2755,10 @@ mod tests {
 
     #[test]
     fn test_add_neuron_different_parameters() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         // High threshold
@@ -2772,7 +2786,10 @@ mod tests {
 
     #[test]
     fn test_add_neuron_different_cortical_areas() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
         npu.register_cortical_area(3, CoreCorticalType::Power.to_cortical_id().as_base_64());
@@ -2792,7 +2809,10 @@ mod tests {
 
     #[test]
     fn test_add_neuron_3d_coordinates() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let _n1 = npu
@@ -2808,7 +2828,10 @@ mod tests {
 
     #[test]
     fn test_add_synapses() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                1000, 10000, 20,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
@@ -2832,7 +2855,10 @@ mod tests {
 
     #[test]
     fn test_add_multiple_synapses() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                1000, 10000, 20,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
@@ -2875,7 +2901,10 @@ mod tests {
 
     #[test]
     fn test_add_inhibitory_synapse() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
@@ -2899,7 +2928,10 @@ mod tests {
 
     #[test]
     fn test_synapse_removal() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                1000, 10000, 20,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
@@ -2925,7 +2957,10 @@ mod tests {
 
     #[test]
     fn test_remove_nonexistent_synapse() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
@@ -2944,7 +2979,10 @@ mod tests {
 
     #[test]
     fn test_burst_processing() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 20);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                1000, 10000, 20,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         // Add a power neuron
@@ -2962,7 +3000,10 @@ mod tests {
 
     #[test]
     fn test_burst_counter_increments() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         for i in 1..=10 {
@@ -2974,7 +3015,10 @@ mod tests {
 
     #[test]
     fn test_power_injection_auto_discovery() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
@@ -2998,7 +3042,10 @@ mod tests {
 
     #[test]
     fn test_set_power_amount() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         // Add power neuron with high threshold
@@ -3015,7 +3062,10 @@ mod tests {
 
     #[test]
     fn test_empty_burst_no_power() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
@@ -3033,7 +3083,10 @@ mod tests {
         // Test the startup race condition: burst loop starts before genome load
         // This simulates what happens in production when burst engine starts before embryogenesis
 
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.set_power_amount(0.5);
 
@@ -3071,7 +3124,10 @@ mod tests {
 
     #[test]
     fn test_inject_sensory_input() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
@@ -3087,7 +3143,10 @@ mod tests {
 
     #[test]
     fn test_inject_multiple_sensory_inputs() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
@@ -3108,7 +3167,10 @@ mod tests {
 
     #[test]
     fn test_sensory_accumulation_on_same_neuron() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
@@ -3130,7 +3192,10 @@ mod tests {
 
     #[test]
     fn test_fire_ledger_recording() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let _neuron = npu
@@ -3147,7 +3212,10 @@ mod tests {
 
     #[test]
     fn test_fire_ledger_window_configuration() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         npu.configure_fire_ledger_window(1, 50);
@@ -3162,7 +3230,10 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_rate_limiting() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -3179,7 +3250,10 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_motor_subscribers() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         assert!(!npu.has_motor_subscribers());
@@ -3193,7 +3267,10 @@ mod tests {
 
     #[test]
     fn test_fq_sampler_viz_subscribers() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         assert!(!npu.has_visualization_subscribers());
@@ -3207,7 +3284,10 @@ mod tests {
 
     #[test]
     fn test_get_latest_fire_queue_sample() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
@@ -3228,7 +3308,10 @@ mod tests {
 
     #[test]
     fn test_register_cortical_area_name() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
@@ -3242,7 +3325,10 @@ mod tests {
 
     #[test]
     fn test_add_synapse_to_nonexistent_neuron() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
@@ -3266,7 +3352,10 @@ mod tests {
 
     #[test]
     fn test_burst_with_empty_npu() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let result = npu.process_burst().unwrap();
@@ -3278,7 +3367,10 @@ mod tests {
 
     #[test]
     fn test_large_sensory_batch() {
-        let mut npu = <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(1000, 10000, 10);
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                1000, 10000, 10,
+            );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 

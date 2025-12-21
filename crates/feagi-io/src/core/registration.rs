@@ -12,6 +12,7 @@ use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupInd
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::SensoryCorticalUnit;
+#[allow(unused_imports)]
 use feagi_services::traits::registration_handler::RegistrationHandlerTrait;
 pub use feagi_services::types::registration::{
     AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
@@ -1067,7 +1068,7 @@ impl RegistrationHandler {
         let mut shm_paths = HashMap::new();
         let mut allocated_capabilities = capabilities.clone();
 
-        let should_provide_shm = match request.chosen_transport.as_ref().map(|s| s.as_str()) {
+        let should_provide_shm = match request.chosen_transport.as_deref() {
             Some("websocket") | Some("zmq") => false, // Agent explicitly chose non-SHM transport
             Some("shm") | Some("hybrid") | None => true, // Agent wants SHM or didn't specify
             Some(_) => false,                         // Unknown transport, don't offer SHM
@@ -1682,6 +1683,7 @@ mod tests {
 }
 
 // Implement RegistrationHandlerTrait for RegistrationHandler
+#[cfg(not(test))]
 impl RegistrationHandlerTrait for RegistrationHandler {
     fn process_registration(
         &self,

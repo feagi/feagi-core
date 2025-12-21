@@ -53,7 +53,7 @@ pub fn migrate_genome(genome_json: &Value) -> EvoResult<MigrationResult> {
     };
 
     // Step 1: Build ID mapping from old to new format
-    build_id_mapping(&genome_json, &mut result)?;
+    build_id_mapping(genome_json, &mut result)?;
 
     // Step 2: Migrate blueprint (cortical area definitions)
     migrate_blueprint(&mut result)?;

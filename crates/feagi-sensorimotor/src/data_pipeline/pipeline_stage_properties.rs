@@ -77,6 +77,7 @@ macro_rules! define_pipeline_stage_properties_enum {
 
         impl PipelineStageProperties {
             /// Returns the data type this stage expects as input.
+            #[allow(unused_variables)]
             pub fn get_input_data_type(&self) -> $crate::wrapped_io_data::WrappedIOType {
                 match self {
                     $(
@@ -88,6 +89,7 @@ macro_rules! define_pipeline_stage_properties_enum {
             }
 
             /// Returns the data type this stage produces as output.
+            #[allow(unused_variables)]
             pub fn get_output_data_type(&self) -> $crate::wrapped_io_data::WrappedIOType {
                 match self {
                     $(
@@ -99,6 +101,7 @@ macro_rules! define_pipeline_stage_properties_enum {
             }
 
             /// Creates the corresponding pipeline stage from these properties.
+            #[allow(unused_variables)]
             pub fn create_stage(&self) -> Box<dyn $crate::data_pipeline::pipeline_stage::PipelineStage> {
                 match self {
                     $(
@@ -120,6 +123,7 @@ macro_rules! define_pipeline_stage_properties_enum {
         }
 
         impl std::fmt::Display for PipelineStageProperties {
+            #[allow(unused_variables)]
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 match self {
                     $(

@@ -42,8 +42,9 @@ pub enum AgentType {
 }
 
 impl AgentType {
-    pub fn from_str(s: &str) -> Self {
-        match s {
+    /// Parse agent type from string (case-insensitive)
+    pub fn parse_from_str(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
             "sensory" => AgentType::Sensory,
             "motor" => AgentType::Motor,
             "both" => AgentType::Both,

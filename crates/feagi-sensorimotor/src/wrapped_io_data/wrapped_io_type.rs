@@ -8,7 +8,6 @@ use crate::data_types::{
 };
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_data_structures::FeagiDataError;
-use std::fmt::write;
 use std::mem::discriminant;
 
 /// Type descriptor for wrapped I/O data.
@@ -22,7 +21,7 @@ use std::mem::discriminant;
 ///
 /// # Examples
 /// ```
-    /// use feagi_sensorimotor::wrapped_io_data::WrappedIOType;
+/// use feagi_sensorimotor::wrapped_io_data::WrappedIOType;
 ///
 /// let io_type = WrappedIOType::Percentage;
 /// let blank_data = io_type.create_blank_data_of_type().unwrap();

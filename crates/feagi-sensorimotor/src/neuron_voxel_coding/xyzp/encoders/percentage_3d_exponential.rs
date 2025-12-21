@@ -14,10 +14,13 @@ use feagi_data_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
 
+#[allow(dead_code)]
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 3; // How many numbers are encoded per channel?
-const CHANNEL_WIDTH: u32 = NUMBER_PAIRS_PER_CHANNEL * 1;
+#[allow(dead_code)]
+const CHANNEL_WIDTH: u32 = NUMBER_PAIRS_PER_CHANNEL;
 
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct Percentage3DExponentialNeuronVoxelXYZPEncoder {
     channel_dimensions: CorticalChannelDimensions,
     cortical_write_target: CorticalID,
@@ -31,7 +34,7 @@ impl NeuronVoxelXYZPEncoder for Percentage3DExponentialNeuronVoxelXYZPEncoder {
 
     fn write_neuron_data_multi_channel_from_processed_cache(
         &mut self,
-        pipelines: &Vec<SensoryPipelineStageRunner>,
+        pipelines: &[SensoryPipelineStageRunner],
         time_of_previous_burst: Instant,
         write_target: &mut CorticalMappedXYZPNeuronVoxels,
     ) -> Result<(), FeagiDataError> {
@@ -45,7 +48,7 @@ impl NeuronVoxelXYZPEncoder for Percentage3DExponentialNeuronVoxelXYZPEncoder {
             .zip(self.scratch_space.par_iter_mut())
             .enumerate()
             .try_for_each(
-                |(channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
+                |(_channel_index, (pipeline, scratch))| -> Result<(), FeagiDataError> {
                     let channel_updated = pipeline.get_last_processed_instant();
                     if channel_updated < time_of_previous_burst {
                         return Ok(()); // We haven't updated, do nothing
@@ -94,6 +97,7 @@ impl NeuronVoxelXYZPEncoder for Percentage3DExponentialNeuronVoxelXYZPEncoder {
 }
 
 impl Percentage3DExponentialNeuronVoxelXYZPEncoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_write_target: CorticalID,
         z_resolution: NeuronDepth,

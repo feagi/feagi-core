@@ -260,10 +260,10 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // Iterate through all cortical areas and sum neurons from non-memory areas
         for cortical_id in manager.get_cortical_area_ids() {
-            if let Some(area) = manager.get_cortical_area(&cortical_id) {
+            if let Some(area) = manager.get_cortical_area(cortical_id) {
                 let cortical_group = area.get_cortical_group();
                 if cortical_group.as_deref() != Some("MEMORY") {
-                    regular_count += manager.get_neuron_count_in_area(&cortical_id);
+                    regular_count += manager.get_neuron_count_in_area(cortical_id);
                 }
             }
         }
@@ -279,10 +279,10 @@ impl AnalyticsService for AnalyticsServiceImpl {
 
         // Iterate through all cortical areas and sum neurons from memory areas
         for cortical_id in manager.get_cortical_area_ids() {
-            if let Some(area) = manager.get_cortical_area(&cortical_id) {
+            if let Some(area) = manager.get_cortical_area(cortical_id) {
                 let cortical_group = area.get_cortical_group();
                 if cortical_group.as_deref() == Some("MEMORY") {
-                    memory_count += manager.get_neuron_count_in_area(&cortical_id);
+                    memory_count += manager.get_neuron_count_in_area(cortical_id);
                 }
             }
         }

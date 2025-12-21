@@ -19,12 +19,14 @@
 //! Run with:
 //!   cargo test --test gpu_memory_stability_test --features gpu
 
-use feagi_npu_burst_engine::backend::{create_backend, BackendConfig, BackendType};
-use feagi_npu_burst_engine::FireCandidateList;
-use feagi_npu_neural::types::NeuronId;
-use feagi_npu_runtime::{NeuronArray, SynapseArray};
+#[allow(unused_imports)]
+use feagi_npu_burst_engine::backend::{BackendConfig, BackendType};
+#[allow(unused_imports)]
+use feagi_npu_neural::types::FireCandidateList;
+use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
 /// Helper: Create test genome
+#[allow(dead_code)]
 fn create_test_genome(
     neuron_count: usize,
     synapses_per_neuron: usize,
@@ -60,7 +62,7 @@ fn create_test_genome(
                 synapse_array
                     .source_index
                     .entry(source as u32)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(synapse_idx);
 
                 synapse_idx += 1;

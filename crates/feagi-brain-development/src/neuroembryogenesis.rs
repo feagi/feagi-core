@@ -411,18 +411,18 @@ impl Neuroembryogenesis {
                 // Assign to appropriate list
                 match category {
                     "IPU" => {
-                        ipu_areas.push(area_id.clone());
-                        auto_inputs.push(area_id.clone());
+                        ipu_areas.push(*area_id);
+                        auto_inputs.push(*area_id);
                     }
                     "OPU" => {
-                        opu_areas.push(area_id.clone());
-                        auto_outputs.push(area_id.clone());
+                        opu_areas.push(*area_id);
+                        auto_outputs.push(*area_id);
                     }
                     "CORE" => {
-                        core_areas.push(area_id.clone());
+                        core_areas.push(*area_id);
                     }
                     "MEMORY" | "CUSTOM" => {
-                        custom_memory_areas.push(area_id.clone());
+                        custom_memory_areas.push(*area_id);
                     }
                     _ => {}
                 }
@@ -834,7 +834,10 @@ impl Neuroembryogenesis {
 /// Estimate synapse count for an area (fallback when NPU not connected)
 ///
 /// This is only used when NPU is not available for actual synapse creation.
-fn estimate_synapses_for_area(src_area: &CorticalArea, genome: &feagi_evolutionary::RuntimeGenome) -> usize {
+fn estimate_synapses_for_area(
+    src_area: &CorticalArea,
+    genome: &feagi_evolutionary::RuntimeGenome,
+) -> usize {
     let dstmap = match src_area.properties.get("cortical_mapping_dst") {
         Some(serde_json::Value::Object(map)) => map,
         _ => return 0,
@@ -885,7 +888,7 @@ fn estimate_synapses_for_area(src_area: &CorticalArea, genome: &feagi_evolutiona
             let dst_voxels =
                 dst_area.dimensions.width * dst_area.dimensions.height * dst_area.dimensions.depth;
 
-            let src_neurons = src_voxels as usize * src_per_voxel as usize;
+            let src_neurons = src_voxels as usize * src_per_voxel;
             let dst_neurons = dst_voxels as usize * dst_per_voxel as usize;
 
             // Basic estimation by morphology type
@@ -1035,7 +1038,7 @@ impl Neuroembryogenesis {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::{CoreCorticalType, CorticalAreaDimensions};
+    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
     use feagi_evolutionary::create_genome_with_core_morphologies;
 
     #[test]
@@ -1065,7 +1068,7 @@ mod tests {
             .as_cortical_type()
             .expect("Failed to get cortical type");
         let area = CorticalArea::new(
-            cortical_id.clone(),
+            cortical_id,
             0,
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),

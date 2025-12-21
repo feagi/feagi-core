@@ -80,7 +80,7 @@ pub async fn put_physiology(
     Json(request): Json<HashMap<String, Value>>,
 ) -> ApiResult<Json<HashMap<String, Value>>> {
     // Whitelist of allowed physiology keys
-    let allowed_keys = vec![
+    let allowed_keys = [
         "simulation_timestep",
         "max_age",
         "evolution_burst_count",

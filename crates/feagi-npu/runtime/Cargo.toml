@@ -16,7 +16,7 @@ alloc = []  # Heap allocation without std (for some trait methods)
 [dependencies]
 # Platform-agnostic core (types + algorithms)
 # Use default features (includes std) - traits work with std enabled
-feagi-npu-neural = { version = "0.0.1-beta.1", path = "../neural" }
+feagi-npu-neural = { version = "0.0.1-beta.2", path = "../neural" }
 
 # Standard library dependencies (optional, behind "std" feature)
 rayon = { workspace = true, optional = true }  # Parallel processing

@@ -15,7 +15,6 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_evolutionary::{
     create_genome_with_core_morphologies, load_genome_from_json, save_genome_to_json,
     validate_genome,
@@ -32,15 +31,15 @@ fn test_complete_genome_workflow() {
     // Add a cortical area (use valid core ID)
     let test_id = feagi_evolutionary::string_to_cortical_id("_power").expect("Valid ID");
     use feagi_data_structures::genomic::cortical_area::{
-        AreaType, CorticalArea, CorticalAreaDimensions,
+        CorticalArea, CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
     };
     let area = CorticalArea::new(
-        test_id.clone(),
+        test_id,
         0,
         "Test Area".to_string(),
         CorticalAreaDimensions::new(10, 10, 10).unwrap(),
         (0, 0, 0).into(),
-        CorticalAreaType::Custom,
+        CorticalAreaType::Custom(CustomCorticalType::LeakyIntegrateFire),
     )
     .expect("Failed to create cortical area");
 

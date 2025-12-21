@@ -21,8 +21,7 @@ impl FeagiSerializable for FeagiJSON {
     }
 
     fn get_number_of_bytes_needed(&self) -> usize {
-        self.borrow_json_value().to_string().as_bytes().len()
-            + FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT
+        self.borrow_json_value().to_string().len() + FeagiByteContainer::STRUCT_HEADER_BYTE_COUNT
     }
 
     fn try_serialize_struct_to_byte_slice(

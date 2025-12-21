@@ -11,8 +11,11 @@ use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_data_structures::FeagiDataError;
 use std::time::Instant;
 
+#[allow(dead_code)]
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1; // One row of neuron voxels along the Z represents 0 -> +1
+#[allow(dead_code)]
 const NUMBER_PAIRS_PER_CHANNEL: u32 = 1; // How many numbers are encoded per channel?
+#[allow(dead_code)]
 const CHANNEL_WIDTH: u32 = WIDTH_GIVEN_POSITIVE_Z_ROW * NUMBER_PAIRS_PER_CHANNEL;
 
 #[derive(Debug)]
@@ -32,7 +35,7 @@ impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
         &mut self,
         neurons_to_read: &CorticalMappedXYZPNeuronVoxels,
-        _time_of_read: Instant,
+        __time_of_read: Instant,
         pipelines_with_data_to_update: &mut Vec<MotorPipelineStageRunner>,
         channel_changed: &mut Vec<bool>,
     ) -> Result<(), FeagiDataError> {
@@ -79,7 +82,12 @@ impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
         }
 
         // At this point, we have numbers in scratch space to average out
-        for channel_index in 0..number_of_channels as usize {
+        for (channel_index, (pipeline, changed_flag)) in pipelines_with_data_to_update
+            .iter_mut()
+            .zip(channel_changed.iter_mut())
+            .enumerate()
+            .take(number_of_channels as usize)
+        {
             // Literally not worth making parallel... right?
             let z_row_index = channel_index;
 
@@ -90,13 +98,10 @@ impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
             if z_vector.is_empty() {
                 continue; // No data collected for this channel. Do not emit
             }
-            channel_changed[channel_index] = true;
-            let percentage: &mut Percentage = pipelines_with_data_to_update
-                .get_mut(channel_index)
-                .unwrap()
-                .get_preprocessed_cached_value_mut()
-                .try_into()?;
-            decode_unsigned_percentage_from_fractional_exponential_neurons(&z_vector, percentage);
+            *changed_flag = true;
+            let percentage: &mut Percentage =
+                pipeline.get_preprocessed_cached_value_mut().try_into()?;
+            decode_unsigned_percentage_from_fractional_exponential_neurons(z_vector, percentage);
         }
 
         Ok(())
@@ -104,6 +109,7 @@ impl NeuronVoxelXYZPDecoder for PercentageExponentialNeuronVoxelXYZPDecoder {
 }
 
 impl PercentageExponentialNeuronVoxelXYZPDecoder {
+    #[allow(dead_code)]
     pub fn new_box(
         cortical_read_target: CorticalID,
         z_resolution: u32,

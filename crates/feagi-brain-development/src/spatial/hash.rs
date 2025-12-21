@@ -13,6 +13,11 @@ use std::sync::{Arc, RwLock};
 
 use super::morton::{morton_encode_3d, morton_encode_region_3d};
 
+/// Type alias for neuron map key: (cortical_area, morton_code)
+type NeuronMapKey = (String, u64);
+/// Type alias for coordinate map value: (area, x, y, z)
+type CoordinateMapValue = (String, u32, u32, u32);
+
 /// Spatial hash system using Morton encoding + Roaring bitmaps
 pub struct MortonSpatialHash {
     /// Per-cortical-area bitmaps of occupied positions
@@ -20,10 +25,10 @@ pub struct MortonSpatialHash {
 
     /// Map Morton code -> list of neuron IDs at that position
     /// Key: (cortical_area, morton_code)
-    neuron_map: Arc<RwLock<AHashMap<(String, u64), Vec<u64>>>>,
+    neuron_map: Arc<RwLock<AHashMap<NeuronMapKey, Vec<u64>>>>,
 
     /// Reverse map: neuron_id -> (area, x, y, z)
-    coordinate_map: Arc<RwLock<AHashMap<u64, (String, u32, u32, u32)>>>,
+    coordinate_map: Arc<RwLock<AHashMap<u64, CoordinateMapValue>>>,
 }
 
 impl MortonSpatialHash {
@@ -57,7 +62,7 @@ impl MortonSpatialHash {
             let mut bitmaps = self.cortical_bitmaps.write().unwrap();
             bitmaps
                 .entry(cortical_area.clone())
-                .or_insert_with(RoaringBitmap::new)
+                .or_default()
                 .insert(morton_code as u32);
         }
 
@@ -65,10 +70,7 @@ impl MortonSpatialHash {
         {
             let mut neuron_map = self.neuron_map.write().unwrap();
             let key = (cortical_area.clone(), morton_code);
-            neuron_map
-                .entry(key)
-                .or_insert_with(Vec::new)
-                .push(neuron_id);
+            neuron_map.entry(key).or_default().push(neuron_id);
         }
 
         // Add to coordinate map
@@ -143,13 +145,11 @@ impl MortonSpatialHash {
         // Get neurons
         let neuron_map = self.neuron_map.read().unwrap();
         let key = (cortical_area.to_string(), morton_code);
-        neuron_map
-            .get(&key)
-            .map(|neurons| neurons.clone())
-            .unwrap_or_default()
+        neuron_map.get(&key).cloned().unwrap_or_default()
     }
 
     /// Get all neurons in a 3D region
+    #[allow(clippy::too_many_arguments)]
     pub fn get_neurons_in_region(
         &self,
         cortical_area: &str,

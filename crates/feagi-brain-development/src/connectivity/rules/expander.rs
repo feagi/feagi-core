@@ -43,7 +43,7 @@ pub fn syn_expander_batch(
     #[cfg(feature = "parallel")]
     {
         use rayon::prelude::*;
-        Ok(neuron_locations
+        neuron_locations
             .par_iter()
             .map(|&loc| {
                 syn_expander(
@@ -54,12 +54,12 @@ pub fn syn_expander_batch(
                     dst_dimensions,
                 )
             })
-            .collect::<Result<Vec<_>, _>>()?)
+            .collect::<Result<Vec<_>, _>>()
     }
 
     #[cfg(not(feature = "parallel"))]
     {
-        Ok(neuron_locations
+        neuron_locations
             .iter()
             .map(|&loc| {
                 syn_expander(
@@ -70,7 +70,7 @@ pub fn syn_expander_batch(
                     dst_dimensions,
                 )
             })
-            .collect::<Result<Vec<_>, _>>()?)
+            .collect::<Result<Vec<_>, _>>()
     }
 }
 

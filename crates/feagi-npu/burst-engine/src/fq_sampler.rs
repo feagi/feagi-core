@@ -328,7 +328,7 @@ mod tests {
 
         // Immediate second sample (different burst) may be rate-limited
         fire_queue.set_timestep(2);
-        let result2 = sampler.sample(&fire_queue);
+        let _result2 = sampler.sample(&fire_queue);
         // Result may be None due to rate limiting
     }
 }

@@ -138,15 +138,16 @@ impl FeagiSerializable for CorticalMappedXYZPNeuronVoxels {
             ) as usize;
 
             if byte_reading.len() < data_start_reading + number_bytes_to_read {
-                return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZP is too short to fit the data the header says it contains!".into()).into());
+                return Err(FeagiDataError::SerializationError("Byte structure for NeuronCategoricalXYZP is too short to fit the data the header says it contains!".into()));
             }
 
             let neuron_bytes =
                 &byte_reading[data_start_reading..data_start_reading + number_bytes_to_read];
             let bytes_length = neuron_bytes.len();
 
+            #[allow(clippy::manual_is_multiple_of)] // Manual modulo check is clear and works
             if bytes_length % NeuronVoxelXYZP::NUMBER_BYTES_PER_NEURON != 0 {
-                return Err(FeagiDataError::SerializationError("As NeuronXYCPArrays contains 4 internal arrays of equal length, each of elements of 4 bytes each (uint32 and float), the input bytes array must be divisible by 16!".into()).into());
+                return Err(FeagiDataError::SerializationError("As NeuronXYCPArrays contains 4 internal arrays of equal length, each of elements of 4 bytes each (uint32 and float), the input bytes array must be divisible by 16!".into()));
             }
 
             let x_end = bytes_length / 4; // q1
@@ -195,14 +196,11 @@ fn write_neuron_array_to_bytes(
     let number_of_neurons_to_write: usize = neuron_array.len();
     let number_bytes_needed = neuron_array.get_size_in_number_of_bytes();
     if bytes_to_write_to.len() != number_bytes_needed {
-        return Err(FeagiDataError::SerializationError(
-            format!(
-                "Need exactly {} bytes to write xyzp neuron data, but given a space of {} bytes!",
-                bytes_to_write_to.len(),
-                number_bytes_needed
-            )
-            .into(),
-        ));
+        return Err(FeagiDataError::SerializationError(format!(
+            "Need exactly {} bytes to write xyzp neuron data, but given a space of {} bytes!",
+            bytes_to_write_to.len(),
+            number_bytes_needed
+        )));
     }
 
     let x_offset: usize = 0;

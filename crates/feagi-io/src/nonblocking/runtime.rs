@@ -57,7 +57,7 @@ mod tests {
     fn test_runtime_handle() {
         let handle = create_runtime_handle().unwrap();
         handle.block_on(async {
-            assert!(true);
+            // Test that runtime handle can be created and used
         });
     }
 }

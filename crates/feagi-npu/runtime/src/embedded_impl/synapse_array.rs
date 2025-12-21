@@ -12,8 +12,8 @@
 //!
 //! Uses stack-allocated arrays for predictable memory usage.
 
-use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
 use crate::traits::{Result, RuntimeError, SynapseStorage};
+use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType};
 
 /// Fixed-size synapse array for embedded systems
 ///
@@ -55,7 +55,15 @@ impl<const N: usize> SynapseArray<N> {
             valid_mask: [false; N],
         }
     }
+}
 
+impl<const N: usize> Default for SynapseArray<N> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<const N: usize> SynapseArray<N> {
     /// Add a synapse (simplified for backward compatibility)
     ///
     /// Returns true if successful, false if array is full.

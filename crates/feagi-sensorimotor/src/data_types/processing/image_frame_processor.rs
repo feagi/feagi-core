@@ -47,7 +47,7 @@ impl std::fmt::Display for ImageFrameProcessor {
         steps += &*(match self.convert_color_space_to {
             None => String::new(),
             Some(change_colorspace_to) => {
-                format!("Convert Colorspace to {}", change_colorspace_to.to_string())
+                format!("Convert Colorspace to {}", change_colorspace_to)
             }
         });
         steps += &*(match self.offset_brightness_by {
@@ -85,7 +85,7 @@ impl ImageFrameProcessor {
         input: &ImageFrameProperties,
         output: &ImageFrameProperties,
     ) -> Result<Self, FeagiDataError> {
-        let mut definition = ImageFrameProcessor::new(input.clone());
+        let mut definition = ImageFrameProcessor::new(*input);
         if output.get_color_channel_layout() != input.get_color_channel_layout() {
             if output.get_color_channel_layout() == ColorChannelLayout::GrayScale
                 && input.get_color_channel_layout() == ColorChannelLayout::RGB
@@ -96,8 +96,7 @@ impl ImageFrameProcessor {
                 // unsupported
                 return Err(FeagiDataError::BadParameters(
                     "Given Color Conversion not possible!".into(),
-                )
-                .into());
+                ));
             }
         }
         if output.get_image_resolution() != input.get_image_resolution() {
@@ -149,7 +148,7 @@ impl ImageFrameProcessor {
         match self {
             // Do literally nothing, just copy the data
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: None,
                 final_resize_xy_to: None,
                 convert_color_space_to: None,
@@ -163,7 +162,7 @@ impl ImageFrameProcessor {
 
             // Only cropping
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: Some(cropping_from),
                 final_resize_xy_to: None,
                 convert_color_space_to: None,
@@ -182,9 +181,9 @@ impl ImageFrameProcessor {
 
             // Only resizing
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: None,
-                final_resize_xy_to: Some(final_resize_xy_to),
+                final_resize_xy_to: Some(_final_resize_xy_to),
                 convert_color_space_to: None,
                 offset_brightness_by: None,
                 change_contrast_by: None,
@@ -196,7 +195,7 @@ impl ImageFrameProcessor {
 
             // Only grayscaling
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: None,
                 final_resize_xy_to: None,
                 convert_color_space_to: None,
@@ -214,9 +213,9 @@ impl ImageFrameProcessor {
 
             // Cropping, Resizing
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: Some(cropping_from),
-                final_resize_xy_to: Some(final_resize_xy_to),
+                final_resize_xy_to: Some(_final_resize_xy_to),
                 convert_color_space_to: None,
                 offset_brightness_by: None,
                 change_contrast_by: None,
@@ -228,7 +227,7 @@ impl ImageFrameProcessor {
 
             // Cropping, Resizing, Grayscaling (the most common with segmentation vision)
             ImageFrameProcessor {
-                input_image_properties,
+                input_image_properties: _,
                 cropping_from: Some(cropping_from),
                 final_resize_xy_to: Some(final_resize_xy_to),
                 convert_color_space_to: None,
@@ -464,12 +463,12 @@ fn resize(source: &ImageFrame, destination: &mut ImageFrame) -> Result<(), Feagi
     let source_arr = source.get_internal_data();
     let destination_arr = destination.get_internal_data_mut();
 
-    let (src_h, src_w, src_c) = (
+    let (src_h, src_w, _src_c) = (
         source_arr.shape()[0],
         source_arr.shape()[1],
         source_arr.shape()[2],
     );
-    let (dst_h, dst_w, dst_c) = (
+    let (dst_h, dst_w, _dst_c) = (
         destination_arr.shape()[0],
         destination_arr.shape()[1],
         destination_arr.shape()[2],

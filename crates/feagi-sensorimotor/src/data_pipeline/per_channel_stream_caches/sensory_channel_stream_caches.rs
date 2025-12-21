@@ -31,6 +31,7 @@ pub(crate) struct SensoryChannelStreamCaches {
 }
 
 impl SensoryChannelStreamCaches {
+    #[allow(dead_code)]
     pub fn new(
         neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
         number_channels: CorticalChannelCount,
@@ -56,6 +57,7 @@ impl SensoryChannelStreamCaches {
     ///
     /// # Returns
     /// The count of channels as a `CorticalChannelCount`.
+    #[allow(dead_code)]
     pub fn number_of_channels(&self) -> CorticalChannelCount {
         (self.pipeline_runners.len() as u32).try_into().unwrap()
     }
@@ -68,6 +70,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the channel exists
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
+    #[allow(dead_code)]
     pub fn verify_channel_exists(
         &self,
         channel_index: CorticalChannelIndex,
@@ -77,6 +80,7 @@ impl SensoryChannelStreamCaches {
     }
 
     /// Retrieves the expected input data type for a channel
+    #[allow(dead_code)]
     pub fn get_input_type_for_channel(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -100,6 +104,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(&WrappedIOData)` - Reference to the unprocessed input data
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
+    #[allow(dead_code)]
     pub fn try_get_channel_preprocessed_value(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -151,6 +156,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(Instant)` - The timestamp when the channel was last updated
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
+    #[allow(dead_code)]
     pub fn try_get_channel_update_instant(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -172,6 +178,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(Box<dyn PipelineStageProperties>)` - The stage's properties
     /// * `Err(FeagiDataError)` - If channel or stage index is out of bounds
+    #[allow(dead_code)]
     pub fn try_get_single_stage_properties(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -189,6 +196,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(Vec<Box<dyn PipelineStageProperties>>)` - Properties for all stages in order
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
+    #[allow(dead_code)]
     pub fn get_all_stage_properties(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -207,6 +215,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the properties were successfully updated
     /// * `Err(FeagiDataError)` - If channel/stage index is invalid or update fails
+    #[allow(dead_code)]
     pub fn try_update_single_stage_properties(
         &mut self,
         cortical_channel_index: CorticalChannelIndex,
@@ -227,6 +236,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If all properties were successfully updated
     /// * `Err(FeagiDataError)` - If channel is invalid, count mismatch, or update fails
+    #[allow(dead_code)]
     pub fn try_update_all_stage_properties(
         &mut self,
         cortical_channel_index: CorticalChannelIndex,
@@ -246,6 +256,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the stage was successfully replaced
     /// * `Err(FeagiDataError)` - If indices are invalid or types are incompatible
+    #[allow(dead_code)]
     pub fn try_replace_single_stage(
         &mut self,
         cortical_channel_index: CorticalChannelIndex,
@@ -265,6 +276,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If all stages were successfully replaced
     /// * `Err(FeagiDataError)` - If channel is invalid or stages are incompatible
+    #[allow(dead_code)]
     pub fn try_replace_all_stages(
         &mut self,
         cortical_channel_index: CorticalChannelIndex,
@@ -285,6 +297,7 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If all stages were successfully removed
     /// * `Err(FeagiDataError)` - If channel is invalid or input/output types don't match
+    #[allow(dead_code)]
     pub fn try_removing_all_stages(
         &mut self,
         cortical_channel_index: CorticalChannelIndex,

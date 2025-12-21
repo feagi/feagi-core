@@ -42,7 +42,15 @@ impl CorticalMappedXYZPNeuronVoxels {
             mappings: HashMap::new(),
         }
     }
+}
 
+impl Default for CorticalMappedXYZPNeuronVoxels {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CorticalMappedXYZPNeuronVoxels {
     //region HashMap like implementation
     /// Creates a new neuron data collection with pre-allocated capacity.
     ///
@@ -178,7 +186,7 @@ impl CorticalMappedXYZPNeuronVoxels {
         &mut self,
         cortical_id: &CorticalID,
     ) -> Option<&mut NeuronVoxelXYZPArrays> {
-        self.mappings.get_mut(&cortical_id)
+        self.mappings.get_mut(cortical_id)
     }
 
     /// Checks if a cortical area has neuron data.
@@ -349,7 +357,7 @@ impl CorticalMappedXYZPNeuronVoxels {
         }
         _ = self
             .mappings
-            .insert(cortical_id.clone(), NeuronVoxelXYZPArrays::new());
+            .insert(*cortical_id, NeuronVoxelXYZPArrays::new());
         self.mappings.get_mut(cortical_id).unwrap()
     }
 }
@@ -359,7 +367,7 @@ impl FeagiByteStructureCompatible for CorticalMappedXYZPNeuronData {
     fn get_version(&self) -> u8 { Self::BYTE_STRUCT_VERSION }
     fn overwrite_feagi_byte_structure_slice(&self, slice: &mut [u8]) -> Result<usize, FeagiDataError> {
 
-        if self.mappings.len() == 0 {
+        if self.mappings.is_empty() {
             return Err(FeagiDataError::DeserializationError("Cannot generate a bytes structure export with an empty cortical mappings object!".into()).into())
         }
 
@@ -557,12 +565,7 @@ impl std::fmt::Display for CorticalMappedXYZPNeuronVoxels {
         let mut inner: String = String::new();
         for cortical_id_and_data in self {
             inner.push_str(
-                format!(
-                    "[{}, {}],",
-                    cortical_id_and_data.0.to_string(),
-                    cortical_id_and_data.1.to_string()
-                )
-                .as_str(),
+                format!("[{}, {}],", cortical_id_and_data.0, cortical_id_and_data.1).as_str(),
             );
         }
         _ = inner.pop(); // Remove the last comma

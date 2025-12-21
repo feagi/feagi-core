@@ -1374,7 +1374,12 @@ impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::Syn
 
         // Return estimated synapse count
         // Use source_neurons().len() as approximation since source_index is not available in trait
-        let unique_sources = synapse_array.source_neurons().iter().collect::<std::collections::HashSet<_>>().len().max(1);
+        let unique_sources = synapse_array
+            .source_neurons()
+            .iter()
+            .collect::<std::collections::HashSet<_>>()
+            .len()
+            .max(1);
         Ok(fired_neurons.len() * (synapse_array.count() / unique_sources))
     }
 
@@ -1425,7 +1430,7 @@ impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::Syn
         // Note: upload_neuron_arrays and upload_synapse_arrays expect concrete types
         // For now, we need to use trait methods to access data
         // TODO: Make these methods generic over trait types or add trait methods for GPU upload
-        
+
         // Create atomic FCL potentials buffer (for synaptic propagation output)
         let neuron_count = neuron_array.count();
         let atomic_buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
@@ -1454,7 +1459,8 @@ impl<N: feagi_npu_runtime::NeuronStorage<Value = f32>, S: feagi_npu_runtime::Syn
 
         info!(
             "✅ GPU initialized: {} neurons, {} synapses uploaded",
-            neuron_array.count(), synapse_array.count()
+            neuron_array.count(),
+            synapse_array.count()
         );
 
         Ok(())
