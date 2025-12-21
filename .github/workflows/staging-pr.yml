@@ -25,10 +25,10 @@ jobs:
       id: changes
       run: |
         # Fetch base branch for comparison
-        git fetch origin staging:staging
+        git fetch origin staging
         
-        # Get list of changed files
-        CHANGED_FILES=$(git diff --name-only staging...HEAD)
+        # Get list of changed files (compare with origin/staging)
+        CHANGED_FILES=$(git diff --name-only origin/staging...HEAD)
         echo "Changed files:"
         echo "$CHANGED_FILES"
         
