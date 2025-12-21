@@ -230,16 +230,30 @@ If you must publish manually, follow the layer order below exactly.
 
 ## 🔄 Version Synchronization
 
-### Current Strategy: Unified Versioning
-- **All crates:** Use `0.0.1` for first publication
-- **Workspace inheritance:** Most crates use `version.workspace = true`
-- **Future versions:** Can increment independently (e.g., `0.0.2`, `0.0.3`)
+### Current Strategy: Independent Versioning ✅
+- **Each crate:** Maintains its own version number
+- **Beta releases:** Per-crate beta counters (e.g., `0.0.1-beta.5`)
+- **Smart detection:** Only changed crates get version bumps
+- **Automatic propagation:** Dependent crates update when dependencies change
 
 ### Example:
 ```
-First Publication:  0.0.1 (all crates)
-Future Updates:     0.0.2, 0.0.3, etc. (can vary per crate)
+feagi-npu-neural:       0.0.1-beta.5
+feagi-npu-burst-engine: 0.0.1-beta.3
+feagi-io:               0.0.1-beta.8
+feagi-api:              0.0.1-beta.2
 ```
+
+**See:** `docs/INDEPENDENT_VERSIONING.md` for complete details.
+
+### Automation
+The staging CI workflow automatically:
+1. Detects which crates changed
+2. Computes new version numbers
+3. Updates Cargo.toml files
+4. Publishes only changed crates
+
+**No manual version management required!**
 
 ---
 
