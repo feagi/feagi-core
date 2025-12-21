@@ -3326,6 +3326,12 @@ mod tests {
             CorticalAreaType, IOCorticalAreaDataFlag,
         };
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
+
+        // Remove area if it already exists from previous tests
+        if manager.has_cortical_area(&cortical_id) {
+            manager.remove_cortical_area(&cortical_id).unwrap();
+        }
+
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
             cortical_id,

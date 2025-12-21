@@ -9,6 +9,7 @@
 
 #[allow(unused_imports)]
 use feagi_npu_burst_engine::backend;
+#[allow(unused_imports)]
 use feagi_npu_neural::types::FireCandidateList;
 use feagi_npu_runtime::{StdNeuronArray as NeuronArray, StdSynapseArray as SynapseArray};
 
@@ -48,7 +49,7 @@ fn create_test_genome(
                 synapse_array
                     .source_index
                     .entry(source as u32)
-                    .or_insert_with(Vec::new)
+                    .or_default()
                     .push(synapse_idx);
 
                 synapse_idx += 1;

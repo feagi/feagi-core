@@ -4,7 +4,9 @@
 // - get_number_of_bytes_needed() instead of max_number_bytes_needed()
 // - overwrite_byte_data_with_single_struct_data() instead of as_new_feagi_byte_structure()
 // TODO: Update tests to use new serialization API
+#[allow(unused_imports)]
 use feagi_data_serialization::FeagiByteContainer;
+#[allow(unused_imports)]
 use feagi_data_serialization::FeagiSerializable;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::neuron_voxels::xyzp::{

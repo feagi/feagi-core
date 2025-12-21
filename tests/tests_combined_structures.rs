@@ -2,8 +2,11 @@
 // - FeagiByteContainer instead of FeagiByteStructure
 // - FeagiSerializable trait instead of FeagiByteStructureCompatible
 // TODO: Update tests to use new serialization API
+#[allow(unused_imports)]
 use feagi_data_serialization::FeagiByteContainer;
+#[allow(unused_imports)]
 use feagi_data_serialization::FeagiByteStructureType;
+#[allow(unused_imports)]
 use feagi_data_serialization::FeagiSerializable;
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::neuron_voxels::xyzp::{

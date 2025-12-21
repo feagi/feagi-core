@@ -1,30 +1,44 @@
+#[allow(unused_imports)] // These imports are used by macro-generated code
 use crate::data_pipeline::per_channel_stream_caches::SensoryChannelStreamCaches;
+#[allow(unused_imports)] // Used by macro-generated code
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-use crate::data_types::{
-    GazeProperties, ImageFrame, Percentage, Percentage3D, SegmentedImageFrame, SignedPercentage4D,
-};
+#[allow(unused_imports)] // Used by macro-generated code
 use crate::data_types::descriptors::{
-    ImageFrameProperties, SegmentedImageFrameProperties,
+    ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
+#[allow(unused_imports)] // Used by macro-generated code
+use crate::data_types::{
+    GazeProperties, ImageFrame, MiscData, Percentage, Percentage3D, SegmentedImageFrame,
+    SignedPercentage4D,
+};
+#[allow(unused_imports)] // Used by macro-generated code
 use crate::neuron_voxel_coding::xyzp::encoders::{
-    Percentage3DExponentialNeuronVoxelXYZPEncoder, Percentage3DLinearNeuronVoxelXYZPEncoder,
-    PercentageExponentialNeuronVoxelXYZPEncoder, PercentageLinearNeuronVoxelXYZPEncoder,
-    SegmentedImageFrameNeuronVoxelXYZPEncoder, SignedPercentage4DExponentialNeuronVoxelXYZPEncoder,
+    BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder,
+    MiscDataNeuronVoxelXYZPEncoder, Percentage3DExponentialNeuronVoxelXYZPEncoder,
+    Percentage3DLinearNeuronVoxelXYZPEncoder, PercentageExponentialNeuronVoxelXYZPEncoder,
+    PercentageLinearNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder,
+    SignedPercentage4DExponentialNeuronVoxelXYZPEncoder,
     SignedPercentage4DLinearNeuronVoxelXYZPEncoder,
 };
+#[allow(unused_imports)] // Used by macro-generated code
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
+#[allow(unused_imports)] // Used by macro-generated code
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_data_serialization::FeagiByteContainer;
+#[allow(unused_imports)] // Used by macro-generated code
 use feagi_data_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
 };
+#[allow(unused_imports)] // Used by macro-generated code
 use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
+#[allow(unused_imports)] // Used by macro-generated code
 use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
 use feagi_data_structures::genomic::SensoryCorticalUnit;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+#[allow(unused_imports)] // Used by macro-generated code
 use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
@@ -436,6 +450,7 @@ impl Default for SensorDeviceCache {
     }
 }
 
+#[allow(unused_must_use)] // Macro generates code that returns Result, but we don't need to handle it
 impl SensorDeviceCache {
     pub fn new() -> Self {
         SensorDeviceCache {

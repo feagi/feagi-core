@@ -107,7 +107,8 @@ fn test_end_to_end_burst_workflow() {
     let result1 = npu.process_burst().unwrap();
     assert_eq!(result1.burst, 1);
     assert_eq!(result1.power_injections, 3);
-    assert!(result1.neuron_count >= 0);
+    // Verify result was created successfully (no panic)
+    let _neuron_count = result1.neuron_count;
 
     // Burst 2: Add sensory input to input layer
     npu.inject_sensory_with_potentials(&[(NeuronId(3), 1.5), (NeuronId(4), 1.5)]);

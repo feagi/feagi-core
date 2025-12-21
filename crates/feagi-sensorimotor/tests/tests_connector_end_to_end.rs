@@ -31,7 +31,7 @@ mod test_connector_cache_sensor_load_image {
 
     #[test]
     fn test_segment_bird_image() {
-        let time_of_previous_burst: Instant = Instant::now(); // Pretend
+        let _time_of_previous_burst: Instant = Instant::now(); // Pretend
 
         let cortical_group: CorticalGroupIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
@@ -76,7 +76,7 @@ mod test_connector_cache_sensor_load_image {
 
     #[test]
     fn test_segment_bird_image_twice() {
-        let time_of_previous_burst: Instant = Instant::now(); // Pretend
+        let _time_of_previous_burst: Instant = Instant::now(); // Pretend
 
         let cortical_group: CorticalGroupIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
@@ -132,7 +132,7 @@ mod test_connector_cache_sensor_load_image {
     /*
     #[test]
     fn test_segment_bird_image_with_moving_gaze() {
-        let time_of_previous_burst: Instant = Instant::now(); // Pretend
+        let _time_of_previous_burst: Instant = Instant::now(); // Pretend
 
         let cortical_group: CorticalGroupIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
@@ -175,7 +175,7 @@ mod test_connector_cache_sensor_load_image {
 
     #[test]
     fn test_encode_of_misc_then_reencode() {
-        let time_of_previous_burst: Instant = Instant::now();
+        let _time_of_previous_burst: Instant = Instant::now();
 
         let cortical_group: CorticalGroupIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
@@ -213,18 +213,18 @@ mod test_connector_cache_sensor_load_image {
 
             // Test encoding/decoding cycle
             // Since the output of the sensor is under cortical ID imis00, to read it to the motor, we need to assign it to omis00,
-            let sensor_cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_miscellaneous(
+            let _sensor_cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_miscellaneous(
                 FrameChangeHandling::Absolute,
                 cortical_group,
             )[0];
-            let motor_cortical_id = MotorCorticalUnit::get_cortical_ids_array_for_miscellaneous(
+            let _motor_cortical_id = MotorCorticalUnit::get_cortical_ids_array_for_miscellaneous(
                 FrameChangeHandling::Absolute,
                 cortical_group,
             )[0];
 
             // Note: This test needs reworking for the new architecture where encoding/decoding is handled differently
             // For now, we verify the registration works
-            let new_misc_data = motor_cache
+            let _new_misc_data = motor_cache
                 .miscellaneous_read_postprocessed_cache_value(cortical_group, channel_index)
                 .unwrap();
             // assert_eq!(misc_data, new_misc_data);
@@ -233,7 +233,7 @@ mod test_connector_cache_sensor_load_image {
 
     #[test]
     fn test_expanding_encode() {
-        let time_of_previous_burst: Instant = Instant::now();
+        let _time_of_previous_burst: Instant = Instant::now();
 
         let cortical_group: CorticalGroupIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
@@ -244,14 +244,14 @@ mod test_connector_cache_sensor_load_image {
         let misc_data_empty = MiscData::new(&misc_data_image.get_dimensions()).unwrap();
         let mut misc_data_semi = misc_data_empty.clone();
         {
-            let mut data = misc_data_semi.get_internal_data_mut();
+            let data = misc_data_semi.get_internal_data_mut();
             for i in 0..20usize {
                 data[[i, 0, 0]] = 1.0;
             }
         }
-        let mut misc_data_solid = misc_data_empty.clone();
+        let misc_data_solid = misc_data_empty.clone();
         {
-            let mut data = misc_data_semi.get_internal_data_mut();
+            let data = misc_data_semi.get_internal_data_mut();
             data.fill(10.0);
         }
 
