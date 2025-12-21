@@ -7,6 +7,12 @@
 //!
 //! Provides consistent observability patterns across all FEAGI crates with
 //! per-crate debug flag support.
+//!
+//! ## Features
+//! - `file-logging`: File-based log rotation (desktop only)
+//! - `metrics`: Prometheus metrics collection (desktop only)
+//! - `opentelemetry`: OpenTelemetry exporter support
+//! - `profiling`: Chrome tracing and pprof profiling support
 
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
