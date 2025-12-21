@@ -258,8 +258,8 @@ jobs:
         
         if [ ${#MISMATCHED[@]} -gt 0 ]; then
           echo ""
-          echo "⚠️  Warning: ${#MISMATCHED[@]} crates have different versions"
-          echo "This is allowed for hybrid versioning, but verify it's intentional."
+          echo "ℹ️  Note: ${#MISMATCHED[@]} crates have independent versions"
+          echo "This is EXPECTED with independent versioning (see docs/INDEPENDENT_VERSIONING.md)"
           echo ""
           for item in "${MISMATCHED[@]}"; do
             echo "  - $item"

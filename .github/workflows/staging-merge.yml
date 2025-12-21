@@ -39,75 +39,36 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
     
-    - name: Get base version and increment beta
+    - name: Smart version detection and bumping
       id: version
       run: |
-        # Get base version from workspace Cargo.toml
-        BASE_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-        
-        # Remove any existing beta suffix if present
-        BASE_VERSION=$(echo "$BASE_VERSION" | sed 's/-beta\.[0-9]*$//')
-        
-        echo "Base version: $BASE_VERSION"
-        
-        # Check for existing beta versions on crates.io for the first crate (feagi-observability)
-        # This gives us the highest beta number
-        HIGHEST_BETA=0
-        if cargo search feagi-observability --limit 100 2>/dev/null | grep -q "^feagi-observability = \"$BASE_VERSION-beta\."; then
-          # Get all beta versions for this base version
-          BETA_VERSIONS=$(cargo search feagi-observability --limit 100 2>/dev/null | \
-            grep "^feagi-observability = \"$BASE_VERSION-beta\." | \
-            sed "s/.*\"$BASE_VERSION-beta\.\([0-9]*\)\".*/\1/" | \
-            sort -n)
-          
-          if [ -n "$BETA_VERSIONS" ]; then
-            HIGHEST_BETA=$(echo "$BETA_VERSIONS" | tail -1)
-          fi
-        fi
-        
-        # Increment beta number
-        NEW_BETA=$((HIGHEST_BETA + 1))
-        BETA_VERSION="${BASE_VERSION}-beta.${NEW_BETA}"
-        
-        echo "Highest existing beta: $HIGHEST_BETA"
-        echo "New beta version: $BETA_VERSION"
-        echo "version=$BETA_VERSION" >> $GITHUB_OUTPUT
-        echo "base_version=$BASE_VERSION" >> $GITHUB_OUTPUT
-        echo "beta_number=$NEW_BETA" >> $GITHUB_OUTPUT
-    
-    - name: Update all crate versions to beta
-      run: |
-        BETA_VERSION="${{ steps.version.outputs.version }}"
-        BASE_VERSION="${{ steps.version.outputs.base_version }}"
-        
-        echo "📝 Updating all crate versions to $BETA_VERSION..."
+        echo "🔍 Detecting changed crates and computing independent version bumps..."
         echo ""
         
-        # Update workspace version in root Cargo.toml
-        sed -i "s/^version = \".*\"/version = \"$BETA_VERSION\"/" Cargo.toml
-        echo "✅ Updated workspace version to $BETA_VERSION"
+        # Run smart version bump detection
+        chmod +x scripts/smart-version-bump.sh
+        chmod +x scripts/apply-version-bumps.sh
         
-        # Update all crate versions (both explicit and workspace-inherited)
-        # For crates with explicit versions
-        find crates -name "Cargo.toml" -exec sed -i "s/^version = \"$BASE_VERSION\"/version = \"$BETA_VERSION\"/" {} \;
+        # Detect changes and compute new versions
+        VERSION_OUTPUT=$(./scripts/smart-version-bump.sh)
+        echo "$VERSION_OUTPUT"
         
-        # Update workspace dependencies that reference versions
-        sed -i "s/version = \"$BASE_VERSION\"/version = \"$BETA_VERSION\"/g" Cargo.toml
-        
-        # Also update feagi-async (nested)
-        if [ -f "crates/feagi-data-structures/feagi-async/Cargo.toml" ]; then
-          sed -i "s/^version = \"$BASE_VERSION\"/version = \"$BETA_VERSION\"/" crates/feagi-data-structures/feagi-async/Cargo.toml
-        fi
-        
-        # Update nested crates in feagi-npu
-        find crates/feagi-npu -name "Cargo.toml" -exec sed -i "s/^version = \"$BASE_VERSION\"/version = \"$BETA_VERSION\"/" {} \;
+        # Extract version file path and changed crates list from output
+        VERSIONS_FILE=$(echo "$VERSION_OUTPUT" | grep "VERSIONS_FILE=" | cut -d'=' -f2)
+        CHANGED_CRATES=$(echo "$VERSION_OUTPUT" | grep "CHANGED_CRATES=" | cut -d'=' -f2-)
         
         echo ""
-        echo "✅ All crate versions updated to $BETA_VERSION"
+        echo "versions_file=$VERSIONS_FILE" >> $GITHUB_OUTPUT
+        echo "changed_crates=$CHANGED_CRATES" >> $GITHUB_OUTPUT
+        
+        # Apply version bumps to Cargo.toml files
         echo ""
-        echo "Verifying version updates:"
-        grep -h "^version = " Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml 2>/dev/null | head -5
-        echo "..."
+        echo "📝 Applying version updates to Cargo.toml files..."
+        export VERSIONS_FILE="$VERSIONS_FILE"
+        ./scripts/apply-version-bumps.sh
+        
+        echo ""
+        echo "✅ Smart independent versioning complete"
     
     - name: Run tests (lib only, examples have known API migration issues)
       run: cargo test --workspace --lib --verbose
@@ -115,19 +76,20 @@ jobs:
     - name: Build release
       run: cargo build --release --lib --verbose
     
-    - name: Publish all workspace crates to crates.io (beta)
+    - name: Publish changed crates to crates.io (smart independent versioning)
       run: |
-        BETA_VERSION="${{ steps.version.outputs.version }}"
-        echo "📦 Publishing all feagi-core workspace crates (v$BETA_VERSION)..."
-        echo "This will publish 19 crates in dependency order with delays for indexing."
+        CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
+        echo "📦 Publishing changed feagi-core workspace crates..."
+        echo "Changed crates: $CHANGED_CRATES"
         echo ""
         
-        # Run the multi-crate publish script
-        chmod +x scripts/publish-crates.sh
-        ./scripts/publish-crates.sh
+        # Run the smart publish script (only publishes changed crates)
+        chmod +x scripts/publish-crates-smart.sh
+        export CHANGED_CRATES="$CHANGED_CRATES"
+        ./scripts/publish-crates-smart.sh
         
         echo ""
-        echo "✅ Successfully published all workspace crates (beta v$BETA_VERSION)"
+        echo "✅ Successfully published changed workspace crates"
       continue-on-error: false
       env:
         CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
@@ -137,11 +99,24 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        BETA_VERSION="${{ steps.version.outputs.version }}"
+        CHANGED_CRATES="${{ steps.version.outputs.changed_crates }}"
         
         # Commit the version updates
-        git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml crates/feagi-data-structures/feagi-async/Cargo.toml
-        git commit -m "chore: bump version to $BETA_VERSION for staging release" || echo "No changes to commit"
+        git add Cargo.toml crates/*/Cargo.toml crates/feagi-npu/*/Cargo.toml
+        
+        # Create meaningful commit message listing changed crates
+        if [ -n "$CHANGED_CRATES" ]; then
+          COMMIT_MSG="chore: bump versions for staging release (independent versioning)
+
+Changed crates: $CHANGED_CRATES
+
+This release uses smart independent versioning - only changed crates
+and their dependents have version bumps."
+        else
+          COMMIT_MSG="chore: staging release (no version changes)"
+        fi
+        
+        git commit -m "$COMMIT_MSG" || echo "No changes to commit"
         git push origin staging || echo "Push failed (may already be up to date)"
         
         echo "✅ Version updates committed to staging branch"
@@ -153,87 +128,87 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         
-        TAG_NAME="v${{ steps.version.outputs.version }}"
+        # Use timestamp-based tag for independent versioning
+        TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+        TAG_NAME="staging-${TIMESTAMP}"
         echo "Creating prerelease tag: $TAG_NAME"
         
         git tag "$TAG_NAME"
         git push origin "$TAG_NAME"
+        
+        echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      id: tag
     
     - name: Create GitHub Prerelease
       uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag_name: v${{ steps.version.outputs.version }}
-        release_name: Beta Release v${{ steps.version.outputs.version }}
+        tag_name: ${{ steps.tag.outputs.tag_name }}
+        release_name: Staging Release ${{ steps.tag.outputs.tag_name }}
         body: |
-          🚀 **Beta release of FEAGI Core v${{ steps.version.outputs.version }}**
+          🚀 **FEAGI Core Staging Release (Smart Independent Versioning)**
           
-          This is a beta version from the staging branch. All 19 workspace crates have been published to crates.io with the `-beta.${{ steps.version.outputs.beta_number }}` suffix.
+          This is a beta/staging release from the staging branch. Only changed crates have been published to crates.io with independent version numbers.
           
-          ## Published Crates
+          ## Changed Crates
           
-          All workspace crates published with version **${{ steps.version.outputs.version }}**:
+          The following crates were updated in this release:
           
-          - 📦 `feagi-observability`
-          - 📦 `feagi-data-structures`
-          - 📦 `feagi-config`
-          - 📦 `feagi-npu-neural`
-          - 📦 `feagi-npu-runtime`
-          - 📦 `feagi-data-serialization`
-          - 📦 `feagi-state-manager`
-          - 📦 `feagi-npu-burst-engine`
-          - 📦 `feagi-npu-plasticity`
-          - 📦 `feagi-evolutionary`
-          - 📦 `feagi-brain-development`
-          - 📦 `feagi-io`
-          - 📦 `feagi-sensorimotor`
-          - 📦 `feagi-services`
-          - 📦 `feagi-api`
-          - 📦 `feagi-agent`
-          - 📦 `feagi-hal`
-          - 📦 `feagi` (root meta-crate)
+          ${{ steps.version.outputs.changed_crates }}
+          
+          **Note:** Each crate maintains its own independent version number. Only crates with actual changes (or dependency updates) are published.
           
           ## Installation
           
-          ```toml
-          [dependencies]
-          feagi = "${{ steps.version.outputs.version }}"
-          ```
-          
-          Or install individual crates:
+          Install individual crates from crates.io:
           
           ```toml
           [dependencies]
-          feagi-npu-neural = "${{ steps.version.outputs.version }}"
-          feagi-npu-burst-engine = "${{ steps.version.outputs.version }}"
+          feagi-npu-neural = "0.0.1-beta.X"  # Check crates.io for latest version
+          feagi-npu-burst-engine = "0.0.1-beta.Y"
           ```
           
+          Or use the workspace with feature flags:
+          
+          ```toml
+          [dependencies]
+          feagi = { version = "0.0.1-beta.Z", features = ["compute", "io"] }
+          ```
           
           ## Release Information
           
-          - **Version:** ${{ steps.version.outputs.version }}
-          - **Base Version:** ${{ steps.version.outputs.base_version }}
-          - **Beta Number:** ${{ steps.version.outputs.beta_number }}
+          - **Tag:** ${{ steps.tag.outputs.tag_name }}
           - **Branch:** staging
           - **Commit:** ${{ github.sha }}
+          - **Versioning Strategy:** Independent per-crate versioning
           
           ## Testing Status
           
           - ✅ All workspace tests passed
           - ✅ Package builds successfully
-          - ✅ All 19 crates published to crates.io with beta suffix
+          - ✅ Changed crates published to crates.io
           - ✅ Ready for testing and integration
           
-          **Note:** This beta version is available on crates.io for testing. The next staging merge will increment the beta number.
+          ## About Independent Versioning
+          
+          This release uses **smart independent versioning**:
+          - Each crate has its own version number
+          - Only changed crates get version bumps
+          - Dependent crates are automatically updated
+          - Unchanged crates remain at their current version
+          
+          This approach reduces version pollution and provides clearer semantic versioning.
         draft: false
         prerelease: true
     
     - name: Notify success
       run: |
-        echo "🎉 Prerelease v${{ steps.version.outputs.version }} completed successfully!"
-        echo "⚠️  Publishing to crates.io is disabled (version update in progress)"
-        echo "🏷️ Tagged as: v${{ steps.version.outputs.version }}"
+        echo "🎉 Staging release ${{ steps.tag.outputs.tag_name }} completed successfully!"
+        echo "✅ Published changed crates: ${{ steps.version.outputs.changed_crates }}"
+        echo "🏷️ Tagged as: ${{ steps.tag.outputs.tag_name }}"
+        echo ""
+        echo "📊 Independent versioning ensures only changed crates were published"
 

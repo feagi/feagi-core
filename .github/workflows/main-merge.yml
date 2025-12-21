@@ -39,35 +39,37 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-cargo-
     
-    - name: Get version
+    - name: Get workspace version
       id: version
       run: |
-        VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        VERSION=$(grep '^\[workspace\.package\]' -A 10 Cargo.toml | grep '^version = ' | head -1 | sed 's/version = "\(.*\)"/\1/')
+        if [ -z "$VERSION" ]; then
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        fi
         echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "Version: $VERSION"
+        echo "Workspace Version: $VERSION"
+        echo "ℹ️  Note: Individual crates may have different versions (independent versioning)"
     
     - name: Build release
       run: cargo build --release --lib --verbose
     
-    # TEMPORARILY DISABLED: Publish to crates.io
-    # - name: Publish all workspace crates to crates.io
-    #   run: |
-    #     echo "📦 Publishing all feagi-core workspace crates (v${{ steps.version.outputs.version }})..."
-    #     echo "This will publish 23+ crates in dependency order with delays for indexing."
-    #     echo ""
-    #     
-    #     # Run the multi-crate publish script
-    #     chmod +x scripts/publish-crates.sh
-    #     ./scripts/publish-crates.sh
-    #     
-    #     echo ""
-    #     echo "✅ Successfully published all workspace crates"
-    #   env:
-    #     CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
-    - name: Publish to crates.io (DISABLED - Version update only)
+    - name: Publish changed crates to crates.io (smart independent versioning)
       run: |
-        echo "⚠️  Publishing temporarily disabled for version update"
-        echo "📦 Would publish feagi v${{ steps.version.outputs.version }}..."
+        echo "📦 Publishing feagi-core workspace crates with independent versioning..."
+        echo "   Only crates with new versions will be published"
+        echo ""
+        
+        # Run the smart publish script
+        chmod +x scripts/publish-crates-smart.sh
+        
+        # For main branch, publish all crates that differ from crates.io
+        # (smart script automatically detects which crates need publishing)
+        ./scripts/publish-crates-smart.sh
+        
+        echo ""
+        echo "✅ Successfully published crates with updated versions"
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_PUSH_TOKEN }}
     
     - name: Create release tag
       run: |
@@ -113,9 +115,7 @@ jobs:
           
           High-performance Rust libraries for bio-inspired neural computation and evolutionary artificial general intelligence.
           
-          ⚠️ **Publishing to crates.io is temporarily disabled for version update.**
-          
-          ## Installation (when published)
+          ## Installation
           
           ```toml
           [dependencies]
@@ -126,18 +126,34 @@ jobs:
           
           ```toml
           [dependencies]
-          feagi = { version = "${{ steps.version.outputs.version }}", features = ["gpu"] }
+          feagi = { version = "${{ steps.version.outputs.version }}", features = ["compute", "io"] }
           ```
+          
+          Or install individual crates:
+          
+          ```toml
+          [dependencies]
+          feagi-npu-burst-engine = "X.Y.Z"  # Check crates.io for latest
+          feagi-io = "X.Y.Z"
+          ```
+          
+          **Note:** Individual crates use independent versioning. Check [crates.io](https://crates.io/search?q=feagi) for specific versions.
           
           ## Quick Start
           
           ```rust
-          use feagi_core::prelude::*;
+          use feagi::prelude::*;
           
           fn main() -> Result<(), Box<dyn std::error::Error>> {
-              let mut npu = RustNPU::new(100_000, 1_000_000, 20)?;
-              npu.load_connectome("brain.json")?;
-              npu.process_burst()?;
+              // Initialize NPU
+              let npu = initialize_npu()?;
+              
+              // Load brain connectome
+              load_genome("brain.json")?;
+              
+              // Process neural burst
+              process_burst()?;
+              
               Ok(())
           }
           ```
@@ -151,8 +167,9 @@ jobs:
           - **Version:** ${{ steps.version.outputs.version }}
           - **Branch:** main
           - **Commit:** ${{ github.sha }}
-          - **Documentation:** https://docs.rs/feagi-core
+          - **Documentation:** https://docs.rs/feagi
           - **Repository:** https://github.com/feagi/feagi-core
+          - **Versioning:** Independent per-crate (see [INDEPENDENT_VERSIONING.md](docs/INDEPENDENT_VERSIONING.md))
           
           ## Verification
           
@@ -161,7 +178,7 @@ jobs:
           - ✅ Linting passed (Clippy)
           - ✅ Documentation generated
           - ✅ Package built successfully
-          - ⚠️ Publishing to crates.io is disabled (version update in progress)
+          - ✅ Published to crates.io with independent versioning
           
           ## Platform Support
           
@@ -200,7 +217,7 @@ jobs:
     - name: Notify success
       run: |
         echo "🎉 Release v${{ steps.version.outputs.version }} completed successfully!"
-        echo "⚠️  Publishing to crates.io is disabled (version update in progress)"
+        echo "✅ Published changed crates to crates.io (independent versioning)"
         echo "📚 Docs: https://docs.rs/feagi"
         echo "🏷️ Tagged as: v${{ steps.version.outputs.version }}"
         echo "🔄 Staging branch updated with latest release"
