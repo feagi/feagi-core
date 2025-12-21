@@ -21,7 +21,46 @@ jobs:
         repository: ${{ github.event.pull_request.head.repo.full_name }}
         ref: ${{ github.event.pull_request.head.ref }}
     
+    - name: Detect changed files
+      id: changes
+      run: |
+        # Fetch base branch for comparison
+        git fetch origin staging:staging
+        
+        # Get list of changed files
+        CHANGED_FILES=$(git diff --name-only staging...HEAD)
+        echo "Changed files:"
+        echo "$CHANGED_FILES"
+        
+        # Check if only infrastructure files changed
+        # Infrastructure: .github/, scripts/, docs/ (but not crates/*/docs/)
+        LIBRARY_CHANGED=false
+        
+        while IFS= read -r file; do
+          # Skip empty lines
+          [ -z "$file" ] && continue
+          
+          # Library code changes (requires version bump)
+          if [[ "$file" =~ ^crates/.*/src/ ]] || \
+             [[ "$file" =~ ^crates/.*/Cargo\.toml$ ]] || \
+             [[ "$file" =~ ^src/ ]] || \
+             [[ "$file" == "Cargo.toml" && ! "$file" =~ version ]]; then
+            LIBRARY_CHANGED=true
+            echo "Library change detected: $file"
+            break
+          fi
+        done <<< "$CHANGED_FILES"
+        
+        echo "library_changed=$LIBRARY_CHANGED" >> $GITHUB_OUTPUT
+        
+        if [ "$LIBRARY_CHANGED" = "false" ]; then
+          echo "ℹ️  Only infrastructure changes detected - version check will be skipped"
+        else
+          echo "📦 Library code changed - version check required"
+        fi
+    
     - name: Check version number increase
+      if: steps.changes.outputs.library_changed == 'true'
       run: |
         # Get current version from PR branch (HEAD)
         # Check both [package] and [workspace.package] sections
