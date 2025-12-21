@@ -106,12 +106,13 @@ jobs:
         
         # Create meaningful commit message listing changed crates
         if [ -n "$CHANGED_CRATES" ]; then
-          COMMIT_MSG="chore: bump versions for staging release (independent versioning)
-
-Changed crates: $CHANGED_CRATES
-
-This release uses smart independent versioning - only changed crates
-and their dependents have version bumps."
+          echo "chore: bump versions for staging release (independent versioning)" > commit_msg.txt
+          echo "" >> commit_msg.txt
+          echo "Changed crates: $CHANGED_CRATES" >> commit_msg.txt
+          echo "" >> commit_msg.txt
+          echo "This release uses smart independent versioning - only changed crates" >> commit_msg.txt
+          echo "and their dependents have version bumps." >> commit_msg.txt
+          COMMIT_MSG=$(cat commit_msg.txt)
         else
           COMMIT_MSG="chore: staging release (no version changes)"
         fi
