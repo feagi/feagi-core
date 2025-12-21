@@ -53,9 +53,11 @@ jobs:
           # Skip infrastructure-only files
           if [[ "$file" =~ ^\.github/ ]] || \
              [[ "$file" =~ ^scripts/ ]] || \
-             [[ "$file" =~ ^docs/.*\.md$ ]] || \
-             [[ "$file" =~ ^PUBLISHING.*\.md$ ]] || \
-             [[ "$file" =~ ^tmp/ ]]; then
+             [[ "$file" =~ ^docs/ ]] || \
+             [[ "$file" =~ ^tmp/ ]] || \
+             [[ "$file" == "README.md" ]] || \
+             [[ "$file" == "LICENSE" ]] || \
+             [[ "$file" =~ ^PUBLISHING.*\.md$ ]]; then
             continue
           fi
           
