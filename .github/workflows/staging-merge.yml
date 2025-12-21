@@ -7,6 +7,12 @@ on:
   pull_request:
     branches: [ staging ]
     types: [ closed ]
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual publish'
+        required: false
+        default: 'Manual publish trigger'
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,8 +20,8 @@ env:
 jobs:
   prerelease:
     runs-on: ubuntu-latest
-    # Only run if the PR was actually merged (not just closed)
-    if: github.event.pull_request.merged == true
+    # Run if PR was merged OR manually triggered
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     
     steps:
     - name: Checkout code
