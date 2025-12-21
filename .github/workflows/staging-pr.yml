@@ -40,15 +40,19 @@ jobs:
           # Skip empty lines
           [ -z "$file" ] && continue
           
-          # Library code changes (requires version bump)
-          if [[ "$file" =~ ^crates/.*/src/ ]] || \
-             [[ "$file" =~ ^crates/.*/Cargo\.toml$ ]] || \
-             [[ "$file" =~ ^src/ ]] || \
-             [[ "$file" == "Cargo.toml" && ! "$file" =~ version ]]; then
-            LIBRARY_CHANGED=true
-            echo "Library change detected: $file"
-            break
+          # Skip infrastructure-only files
+          if [[ "$file" =~ ^\.github/ ]] || \
+             [[ "$file" =~ ^scripts/ ]] || \
+             [[ "$file" =~ ^docs/.*\.md$ ]] || \
+             [[ "$file" =~ ^PUBLISHING.*\.md$ ]] || \
+             [[ "$file" =~ ^tmp/ ]]; then
+            continue
           fi
+          
+          # Anything else is library code (requires version bump)
+          LIBRARY_CHANGED=true
+          echo "Library change detected: $file"
+          break
         done <<< "$CHANGED_FILES"
         
         echo "library_changed=$LIBRARY_CHANGED" >> $GITHUB_OUTPUT
