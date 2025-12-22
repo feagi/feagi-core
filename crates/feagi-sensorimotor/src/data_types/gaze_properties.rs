@@ -114,7 +114,7 @@ impl GazeProperties {
     ) -> Result<CornerPoints, FeagiDataError> {
         let source_frame_center_normal: (f32, f32) = (
             self.eccentricity_location_xy.a.get_as_0_1(),
-            self.eccentricity_location_xy.b.get_as_0_1(),
+            1.0 - self.eccentricity_location_xy.b.get_as_0_1(), // Remember that in an image, Y increases downward
         );
 
         let source_frame_max_off_center_normal: (f32, f32) = {
@@ -149,7 +149,6 @@ impl GazeProperties {
             )
         };
 
-        // Remember that in an image, Y increases downward
         let left_position_normal: f32 =
             source_frame_center_normal.0 - source_frame_max_off_center_normal.0;
         let top_position_normal: f32 =
