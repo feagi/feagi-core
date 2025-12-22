@@ -981,7 +981,8 @@ fn burst_loop(
             .unwrap()
             .as_millis() as u64;
         let last_viz = LAST_VIZ_PUBLISH.load(std::sync::atomic::Ordering::Relaxed);
-        let should_publish_viz = (now_ms - last_viz >= 33) && has_viz_publisher;
+        // Use saturating_sub to prevent panic on clock adjustments (NTP sync, suspend/resume, etc.)
+        let should_publish_viz = (now_ms.saturating_sub(last_viz) >= 33) && has_viz_publisher;
 
         // Sample fire queue ONCE and share between viz and motor using Arc (zero-cost sharing!)
         let has_motor_publisher = motor_publisher.is_some();
