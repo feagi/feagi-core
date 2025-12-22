@@ -12,6 +12,8 @@ images/visual_test_*.png
 images/visual_test_*.jpg
 images/brightness_test_*.png
 images/contrast_test_*.png
+center_gaze/*.png
+down_gaze/*.png
 # Processor test outputs
 images/processor_*.png
 images/processor_*.jpg
