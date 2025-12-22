@@ -251,6 +251,42 @@ impl SegmentedImageFrame {
         ]
     }
 
+    pub fn get_image_lower_left(&self) -> &ImageFrame {
+        &self.lower_left
+    }
+
+    pub fn get_image_lower_middle(&self) -> &ImageFrame {
+        &self.lower_middle
+    }
+
+    pub fn get_image_lower_right(&self) -> &ImageFrame {
+        &self.lower_right
+    }
+
+    pub fn get_image_middle_left(&self) -> &ImageFrame {
+        &self.middle_left
+    }
+
+    pub fn get_image_center(&self) -> &ImageFrame {
+        &self.center
+    }
+
+    pub fn get_image_middle_right(&self) -> &ImageFrame {
+        &self.middle_right
+    }
+
+    pub fn get_image_upper_left(&self) -> &ImageFrame {
+        &self.upper_left
+    }
+
+    pub fn get_image_upper_middle(&self) -> &ImageFrame {
+        &self.upper_middle
+    }
+
+    pub fn get_image_upper_right(&self) -> &ImageFrame {
+        &self.upper_right
+    }
+
     #[allow(dead_code)]
     pub(crate) fn get_image_internal_data_mut(&mut self) -> [&mut Array3<u8>; 9] {
         // return in same order as cortical IDs

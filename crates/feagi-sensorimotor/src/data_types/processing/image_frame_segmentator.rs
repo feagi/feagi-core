@@ -55,6 +55,10 @@ impl ImageFrameSegmentator {
             .verify_segmented_image_frame_matches_properties(output)
     }
 
+    pub fn create_blank_segmented_image_for_use_as_write_cache(&self) -> SegmentedImageFrame {
+        SegmentedImageFrame::from_segmented_image_frame_properties(&self.output_properties).unwrap()
+    }
+
     pub fn segment_image(
         &mut self,
         input: &ImageFrame,
