@@ -212,7 +212,7 @@ publish_crate() {
             if echo "$publish_output" | grep -qiE "already exists on crates\.io|already exists on crates\.io index|version .* already exists"; then
                 echo -e "   ${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
                 cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
-                return 2
+                return 0
             fi
 
             echo "$publish_output"
@@ -277,13 +277,15 @@ for crate_name in "${CRATE_ORDER[@]}"; do
         echo -e "${CYAN}📌 Publishing $crate_name (unpublished dependency)${NC}"
     fi
     
+    # With `set -e`, a non-zero return would abort the script before we can
+    # record failures. Temporarily disable errexit around the publish attempt.
+    set +e
     publish_crate "$crate_name"
     publish_rc=$?
+    set -e
 
     if [ "$publish_rc" -eq 0 ]; then
         PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
-    elif [ "$publish_rc" -eq 2 ]; then
-        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
     else
         FAILED_CRATES+=("$crate_name")
     fi
