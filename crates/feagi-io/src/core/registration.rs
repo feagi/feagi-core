@@ -1450,9 +1450,18 @@ impl RegistrationHandler {
         &self,
         caps_json: &serde_json::Value,
     ) -> Result<AgentCapabilities, String> {
+        // Check if this is feagi-sensorimotor format (has "input"/"output" keys)
+        // This must be checked BEFORE attempting direct deserialization because
+        // AgentCapabilities has #[serde(flatten)] which will absorb these keys
+        // into the custom map, resulting in empty capabilities.
+        let has_legacy_format = caps_json.get("input").is_some() || caps_json.get("output").is_some();
+
         // Try to deserialize directly from JSON first (handles new agent SDK format)
-        if let Ok(capabilities) = serde_json::from_value::<AgentCapabilities>(caps_json.clone()) {
-            return Ok(capabilities);
+        // But skip this if we detected the legacy format
+        if !has_legacy_format {
+            if let Ok(capabilities) = serde_json::from_value::<AgentCapabilities>(caps_json.clone()) {
+                return Ok(capabilities);
+            }
         }
 
         // Support feagi-sensorimotor format: {"capabilities": {"input": {...}, "output": {...}}}
