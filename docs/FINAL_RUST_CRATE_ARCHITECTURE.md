@@ -6,7 +6,7 @@
 > **⚠️ IMPORTANT UPDATE (December 2025):** The `feagi-data-processing` repository has been merged into `feagi-core` as workspace members:
 > - `feagi-data-structures` → `crates/feagi-data-structures`
 > - `feagi-data-serialization` → `crates/feagi-data-serialization`
-> - `feagi-connector-core` → `crates/feagi-connector-core`
+> - `feagi-sensorimotor` → `crates/feagi-sensorimotor` (previously feagi-connector-core, then feagi-pns)
 > 
 > This document retains historical references to `feagi-data-processing` as a separate entity for architectural context.
 

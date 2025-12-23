@@ -98,7 +98,7 @@ cargo publish -p feagi-evolutionary
 # Phase 5: I/O & Transport
 cargo publish -p feagi-transports
 cargo publish -p feagi-io
-cargo publish -p feagi-connector-core
+cargo publish -p feagi-sensorimotor
 
 # Phase 6: Services & API
 cargo publish -p feagi-services

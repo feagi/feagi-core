@@ -76,7 +76,7 @@ This crate is part of the FEAGI project:
 
 - **Main Project**: [feagi](https://crates.io/crates/feagi)
 - **Data Serialization**: [feagi-data-serialization](https://crates.io/crates/feagi-data-serialization)
-- **Connector Core**: [feagi-connector-core](https://crates.io/crates/feagi-connector-core)
+- **Sensorimotor**: [feagi-sensorimotor](https://crates.io/crates/feagi-sensorimotor)
 
 ## License
 

@@ -95,7 +95,7 @@ This crate is part of the FEAGI project:
 
 - **Main Project**: [feagi](https://crates.io/crates/feagi)
 - **Data Structures**: [feagi-data-structures](https://crates.io/crates/feagi-data-structures)
-- **Connector Core**: [feagi-connector-core](https://crates.io/crates/feagi-connector-core)
+- **Sensorimotor**: [feagi-sensorimotor](https://crates.io/crates/feagi-sensorimotor)
 
 ## License
 

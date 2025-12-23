@@ -152,7 +152,7 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-data-structures`
   - `feagi-data-serialization`
 - **Purpose:** Peripheral Nervous System - data processing, caching, neuron voxel encoding
-- **Note:** Renamed from feagi-connector-core
+- **Note:** Previously named feagi-connector-core, then feagi-pns, now feagi-sensorimotor
 
 ---
 
