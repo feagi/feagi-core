@@ -1896,7 +1896,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-config"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -2041,7 +2041,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-observability"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "anyhow",
  "chrono",
@@ -2061,7 +2061,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-sensorimotor"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "clap",
  "feagi-serialization",
@@ -2077,7 +2077,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-serialization"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "byteorder",
  "feagi-structures",
@@ -2107,7 +2107,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-state-manager"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "ahash",
  "atomic-polyfill",
@@ -2127,7 +2127,7 @@ dependencies = [
 
 [[package]]
 name = "feagi-structures"
-version = "0.0.1-beta.1"
+version = "0.0.1-beta.2"
 dependencies = [
  "base64 0.22.1",
  "futures-channel",

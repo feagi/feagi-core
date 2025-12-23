@@ -4,11 +4,16 @@
 name: Staging PR Tests
 
 on:
-  pull_request_target:
-    branches: staging
+  pull_request:
+    branches: [ staging ]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 env:
   CARGO_TERM_COLOR: always
+
+# Least-privilege: PR test workflow must not have write permissions.
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -17,9 +22,6 @@ jobs:
     steps:
     - name: Checkout PR code
       uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.pull_request.head.repo.full_name }}
-        ref: ${{ github.event.pull_request.head.ref }}
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable

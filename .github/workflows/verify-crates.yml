@@ -16,6 +16,10 @@ on:
 env:
   CARGO_TERM_COLOR: always
 
+# Least-privilege: verification workflow must not have write permissions.
+permissions:
+  contents: read
+
 jobs:
   verify-crate-structure:
     runs-on: ubuntu-latest
@@ -42,7 +46,7 @@ jobs:
         
         FAILED_CRATES=()
         
-        for crate_dir in crates/*/; do
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
           if [ ! -f "$crate_dir/Cargo.toml" ]; then
             continue
           fi
@@ -60,9 +64,15 @@ jobs:
             CRATE_FAILED=true
           fi
           
-          # Check version (direct or workspace inheritance)
-          if ! grep -qE '^version(\.workspace)? = ' "$crate_dir/Cargo.toml"; then
-            echo "  ❌ Missing 'version' field"
+          # Independent versioning enforcement:
+          # - Every crate MUST have explicit `version = "..."` (no workspace inheritance)
+          if grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Forbidden: 'version.workspace = true' (independent versioning required)"
+            CRATE_FAILED=true
+          fi
+          
+          if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
+            echo "  ❌ Missing explicit 'version = \"...\"' field (independent versioning requires explicit version)"
             CRATE_FAILED=true
           fi
           
@@ -127,7 +137,7 @@ jobs:
         
         FAILED_BUILDS=()
         
-        for crate_dir in crates/*/; do
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
           if [ ! -f "$crate_dir/Cargo.toml" ]; then
             continue
           fi
@@ -167,7 +177,7 @@ jobs:
         
         FAILED_PACKAGES=()
         
-        for crate_dir in crates/*/; do
+        for crate_dir in crates/*/ crates/feagi-npu/*/; do
           if [ ! -f "$crate_dir/Cargo.toml" ]; then
             continue
           fi
@@ -230,17 +240,12 @@ jobs:
           echo "✅ Ready for publication to crates.io"
         fi
     
-    - name: Verify dependency versions
+    - name: Verify versioning policy (independent versioning)
       run: |
-        echo "🔗 Verifying workspace dependency versions..."
+        echo "🔗 Verifying independent versioning policy..."
         echo ""
         
-        # Get workspace version
-        WORKSPACE_VERSION=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-        echo "Workspace version: $WORKSPACE_VERSION"
-        echo ""
-        
-        MISMATCHED=()
+        FAILED=()
         
         for crate_dir in crates/*/; do
           if [ ! -f "$crate_dir/Cargo.toml" ]; then
@@ -248,25 +253,27 @@ jobs:
           fi
           
           crate_name=$(basename "$crate_dir")
-          crate_version=$(grep '^version = ' "$crate_dir/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/')
           
-          if [ -n "$crate_version" ] && [ "$crate_version" != "$WORKSPACE_VERSION" ]; then
-            echo "  ⚠️  $crate_name version mismatch: $crate_version (workspace: $WORKSPACE_VERSION)"
-            MISMATCHED+=("$crate_name: $crate_version")
+          if grep -q '^version\.workspace = true' "$crate_dir/Cargo.toml"; then
+            FAILED+=("$crate_name: version.workspace is forbidden")
+            continue
+          fi
+          
+          if ! grep -q '^version = ' "$crate_dir/Cargo.toml"; then
+            FAILED+=("$crate_name: missing explicit version")
+            continue
           fi
         done
         
-        if [ ${#MISMATCHED[@]} -gt 0 ]; then
-          echo ""
-          echo "ℹ️  Note: ${#MISMATCHED[@]} crates have independent versions"
-          echo "This is EXPECTED with independent versioning (see docs/INDEPENDENT_VERSIONING.md)"
-          echo ""
-          for item in "${MISMATCHED[@]}"; do
+        if [ ${#FAILED[@]} -gt 0 ]; then
+          echo "❌ Independent versioning policy violations:"
+          for item in "${FAILED[@]}"; do
             echo "  - $item"
           done
-        else
-          echo "✅ All crates use workspace version: $WORKSPACE_VERSION"
+          exit 1
         fi
+        
+        echo "✅ Independent versioning policy enforced (explicit versions; no version.workspace)"
     
     - name: Summary
       if: success()
@@ -279,7 +286,7 @@ jobs:
         echo "✅ Metadata complete for all crates"
         echo "✅ All crates build independently"
         echo "✅ All crates package successfully"
-        echo "✅ Dependency versions verified"
+        echo "✅ Independent versioning policy verified"
         echo ""
         echo "🎉 Workspace is ready for publication to crates.io"
 
