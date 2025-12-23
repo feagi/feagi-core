@@ -1455,6 +1455,14 @@ impl RegistrationHandler {
             return Ok(capabilities);
         }
 
+        // Support feagi-sensorimotor format: {"capabilities": {"input": {...}, "output": {...}}}
+        // Unwrap if wrapped in "capabilities" key
+        let caps_json = if let Some(caps_wrapper) = caps_json.get("capabilities") {
+            caps_wrapper
+        } else {
+            caps_json
+        };
+
         // Fall back to manual parsing for legacy format
         let mut capabilities = AgentCapabilities::default();
 
@@ -1502,50 +1510,43 @@ impl RegistrationHandler {
             }
         }
 
-        // Parse legacy sensory capability
-        if let Some(sensory) = caps_json.get("sensory") {
-            if let Some(rate_hz) = sensory.get("rate_hz").and_then(|v| v.as_f64()) {
-                capabilities.sensory = Some(SensoryCapability {
-                    rate_hz,
-                    shm_path: None,
-                    cortical_mappings: HashMap::new(),
-                });
+        // Parse input capability (feagi-sensorimotor format: ONLY "input"/"output" keys)
+        // Format: {"input": ["cortical_id1", "cortical_id2", ...]}
+        if let Some(input) = caps_json.get("input") {
+            if let Some(cortical_areas) = input.as_array() {
+                let mut cortical_mappings = HashMap::new();
+                for area_id in cortical_areas.iter().filter_map(|v| v.as_str()) {
+                    cortical_mappings.insert(area_id.to_string(), 0);
+                }
+
+                if !cortical_mappings.is_empty() {
+                    capabilities.sensory = Some(SensoryCapability {
+                        rate_hz: 30.0, // Default rate
+                        shm_path: None,
+                        cortical_mappings,
+                    });
+                }
             }
         }
 
-        // Parse motor capability (support both legacy and new format)
-        if let Some(motor) = caps_json.get("motor") {
-            // Check if motor is enabled (legacy format) or if it exists (new format)
-            let is_enabled = motor
-                .get("enabled")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true); // Default to true if 'enabled' key doesn't exist (new format)
+        // Parse output capability (feagi-sensorimotor format: ONLY "input"/"output" keys)
+        // Format: {"output": ["cortical_id1", "cortical_id2", ...]}
+        if let Some(output) = caps_json.get("output") {
+            if let Some(cortical_areas) = output.as_array() {
+                let source_cortical_areas: Vec<String> = cortical_areas
+                    .iter()
+                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                    .collect();
 
-            if is_enabled {
-                // Extract source_cortical_areas from JSON
-                let source_cortical_areas: Vec<String> = motor
-                    .get("source_cortical_areas")
-                    .and_then(|v| v.as_array())
-                    .map(|arr| {
-                        arr.iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                            .collect()
-                    })
-                    .unwrap_or_else(|| vec!["omot00".to_string()]); // Default to omot00 for backward compatibility
-
-                capabilities.motor = Some(MotorCapability {
-                    modality: motor
-                        .get("modality")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("generic")
-                        .to_string(),
-                    output_count: motor
-                        .get("output_count")
-                        .and_then(|v| v.as_u64())
-                        .unwrap_or(source_cortical_areas.len() as u64)
-                        as usize,
-                    source_cortical_areas,
-                });
+                // Only create motor capability if source_cortical_areas is non-empty
+                // ARCHITECTURAL PRINCIPLE: Don't invent capabilities that weren't requested
+                if !source_cortical_areas.is_empty() {
+                    capabilities.motor = Some(MotorCapability {
+                        modality: "generic".to_string(),
+                        output_count: source_cortical_areas.len(),
+                        source_cortical_areas,
+                    });
+                }
             }
         }
 
@@ -1571,6 +1572,7 @@ impl RegistrationHandler {
                 });
             }
         }
+
 
         Ok(capabilities)
     }
@@ -1668,8 +1670,8 @@ mod tests {
             agent_id: "test-agent".to_string(),
             agent_type: "both".to_string(),
             capabilities: serde_json::json!({
-                "sensory": {"rate_hz": 30.0},
-                "motor": {"enabled": true, "rate_hz": 20.0, "modality": "servo", "output_count": 2}
+                "input": ["aXN2aQkAAAA="],  // feagi-sensorimotor format
+                "output": ["b21vdDAwAAA="]  // feagi-sensorimotor format
             }),
             chosen_transport: None,
         };
