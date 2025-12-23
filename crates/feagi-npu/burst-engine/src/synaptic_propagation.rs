@@ -39,9 +39,9 @@
 //! - Rust Target: <3ms (50-100x speedup)
 
 use ahash::AHashMap;
-use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use rayon::prelude::*;
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)

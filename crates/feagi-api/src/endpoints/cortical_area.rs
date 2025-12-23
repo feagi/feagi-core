@@ -452,8 +452,8 @@ pub async fn post_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use feagi_services::types::CreateCorticalAreaParams;
+    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 
     // ARCHITECTURE: Use genome_service (proper entry point) instead of connectome_service
     let genome_service = state.genome_service.as_ref();

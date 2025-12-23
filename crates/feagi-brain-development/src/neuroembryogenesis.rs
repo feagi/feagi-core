@@ -432,9 +432,7 @@ impl Neuroembryogenesis {
                   ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
 
             // Build brain region structure following Python's normalize_brain_region_membership()
-            use feagi_structures::genomic::brain_regions::{
-                BrainRegion, RegionID, RegionType,
-            };
+            use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
             let mut regions_map = std::collections::HashMap::new();
 
             // Step 1: Create root region with only IPU/OPU/CORE areas
@@ -1038,8 +1036,8 @@ impl Neuroembryogenesis {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
     use feagi_evolutionary::create_genome_with_core_morphologies;
+    use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
 
     #[test]
     fn test_neuroembryogenesis_creation() {

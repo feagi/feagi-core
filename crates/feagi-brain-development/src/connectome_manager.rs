@@ -38,8 +38,8 @@ use tracing::{debug, info, trace, warn};
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
-use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_npu_neural::types::NeuronId;
+use feagi_structures::genomic::cortical_area::CorticalID;
 
 // NPU integration (optional dependency)
 // use feagi_npu_burst_engine::RustNPU; // Now using DynamicNPU
@@ -3257,9 +3257,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id = CorticalID::try_from_bytes(b"cst_add_").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
@@ -3287,9 +3285,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id = CorticalID::try_from_bytes(b"cst_look").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(
@@ -3322,9 +3318,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
 
         // Remove area if it already exists from previous tests
@@ -3359,9 +3353,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id1 = CoreCorticalType::Power.to_cortical_id();
         let cortical_type1 = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area1 = CorticalArea::new(
@@ -3522,9 +3514,7 @@ mod tests {
         let mut manager = manager_arc.write();
 
         // First create a cortical area to add neurons to
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id = CorticalID::try_from_bytes(b"cst_syn_").unwrap(); // Use unique custom ID
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
         let area = CorticalArea::new(

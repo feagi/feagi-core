@@ -180,7 +180,11 @@ impl ImageFrameProcessor {
                 let sentinel_points = [
                     (0usize, 0usize, 0usize),
                     (h / 2, w / 2, 0usize),
-                    (h.saturating_sub(1), w.saturating_sub(1), c.saturating_sub(1)),
+                    (
+                        h.saturating_sub(1),
+                        w.saturating_sub(1),
+                        c.saturating_sub(1),
+                    ),
                 ];
                 for (y, x, ch) in sentinel_points {
                     if src[[y, x, ch]] != dst[[y, x, ch]] {

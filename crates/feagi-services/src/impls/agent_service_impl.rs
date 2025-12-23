@@ -363,7 +363,10 @@ impl AgentService for AgentServiceImpl {
         if let Some(ref motor) = agent.capabilities.motor {
             // Convert motor capability to "output" format: array of cortical IDs
             let output_areas: Vec<String> = motor.source_cortical_areas.clone();
-            capabilities.insert("output".to_string(), serde_json::to_value(output_areas).unwrap_or(serde_json::Value::Null));
+            capabilities.insert(
+                "output".to_string(),
+                serde_json::to_value(output_areas).unwrap_or(serde_json::Value::Null),
+            );
         }
 
         // Add visualization capability if present
@@ -378,7 +381,10 @@ impl AgentService for AgentServiceImpl {
         if let Some(ref sensory) = agent.capabilities.sensory {
             // Convert sensory capability to "input" format: array of cortical IDs
             let input_areas: Vec<String> = sensory.cortical_mappings.keys().cloned().collect();
-            capabilities.insert("input".to_string(), serde_json::to_value(input_areas).unwrap_or(serde_json::Value::Null));
+            capabilities.insert(
+                "input".to_string(),
+                serde_json::to_value(input_areas).unwrap_or(serde_json::Value::Null),
+            );
         }
 
         // Add custom capabilities

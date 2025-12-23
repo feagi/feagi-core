@@ -1,15 +1,15 @@
 //! Tests for the data pipeline module - focusing on end -> end tests
 
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
-};
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_sensorimotor::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
 use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_sensorimotor::ConnectorAgent;
+use feagi_structures::genomic::cortical_area::descriptors::{
+    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
+};
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 
 //region Helpers
 
@@ -39,16 +39,16 @@ fn create_gaze(x: f32, y: f32, size: f32) -> GazeProperties {
 #[cfg(test)]
 mod test_connector_cache_sensor_load_image {
     use crate::load_bird_image;
-    use feagi_structures::genomic::cortical_area::descriptors::{
-        CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
-    };
-    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use feagi_sensorimotor::data_types::descriptors::{
         SegmentedImageFrameProperties, SegmentedXYImageResolutions,
     };
     use feagi_sensorimotor::data_types::{GazeProperties, MiscData};
     use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
+    use feagi_structures::genomic::cortical_area::descriptors::{
+        CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
+    };
+    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use std::time::Instant;
 
     #[test]

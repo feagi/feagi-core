@@ -10,16 +10,16 @@ use ahash::AHashSet;
 use parking_lot::RwLock;
 use tracing::{debug, error, info, warn};
 
-use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::SensoryCorticalUnit;
 #[allow(unused_imports)]
 use feagi_services::traits::registration_handler::RegistrationHandlerTrait;
 pub use feagi_services::types::registration::{
     AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
     RegistrationResponse, TransportConfig,
 };
+use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::SensoryCorticalUnit;
 
 use super::agent_registry::{
     AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
@@ -1457,12 +1457,14 @@ impl RegistrationHandler {
         // This must be checked BEFORE attempting direct deserialization because
         // AgentCapabilities has #[serde(flatten)] which will absorb these keys
         // into the custom map, resulting in empty capabilities.
-        let has_legacy_format = caps_json.get("input").is_some() || caps_json.get("output").is_some();
+        let has_legacy_format =
+            caps_json.get("input").is_some() || caps_json.get("output").is_some();
 
         // Try to deserialize directly from JSON first (handles new agent SDK format)
         // But skip this if we detected the legacy format
         if !has_legacy_format {
-            if let Ok(capabilities) = serde_json::from_value::<AgentCapabilities>(caps_json.clone()) {
+            if let Ok(capabilities) = serde_json::from_value::<AgentCapabilities>(caps_json.clone())
+            {
                 return Ok(capabilities);
             }
         }
@@ -1584,7 +1586,6 @@ impl RegistrationHandler {
                 });
             }
         }
-
 
         Ok(capabilities)
     }

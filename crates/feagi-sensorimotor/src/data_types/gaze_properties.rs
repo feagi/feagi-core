@@ -112,7 +112,6 @@ impl GazeProperties {
         source_frame_resolution: ImageXYResolution,
         destination_segmented_center_cortical_dimensions: CorticalAreaDimensions,
     ) -> Result<CornerPoints, FeagiDataError> {
-
         let modulation_normal: (f32, f32) = // Calculate ranges as per aspect ratio of cortical dimensions
         {
 
@@ -164,14 +163,10 @@ impl GazeProperties {
         dbg!(modulation_normal);
         dbg!(&self.eccentricity_location_xy);
         dbg!(eccentricity_normal);
-        let left_position_normal: f32 =
-            eccentricity_normal.0 - (modulation_normal.0 / 2.0);
-        let top_position_normal: f32 =
-            eccentricity_normal.1 - (modulation_normal.1 / 2.0);
-        let right_position_normal: f32 =
-            eccentricity_normal.0 + (modulation_normal.0 / 2.0);
-        let bottom_position_normal: f32 =
-            eccentricity_normal.1 + (modulation_normal.1 / 2.0);
+        let left_position_normal: f32 = eccentricity_normal.0 - (modulation_normal.0 / 2.0);
+        let top_position_normal: f32 = eccentricity_normal.1 - (modulation_normal.1 / 2.0);
+        let right_position_normal: f32 = eccentricity_normal.0 + (modulation_normal.0 / 2.0);
+        let bottom_position_normal: f32 = eccentricity_normal.1 + (modulation_normal.1 / 2.0);
 
         let source_frame_width_height_pixel: (f32, f32) = (
             source_frame_resolution.width as f32,

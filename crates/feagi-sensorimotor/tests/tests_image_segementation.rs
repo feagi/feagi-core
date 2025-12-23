@@ -26,32 +26,69 @@ fn save_png_image(image: &ImageFrame, subpath: String) {
     std::fs::write(&fullpath, image_bytes).unwrap()
 }
 
-
 //endregion
-
 
 #[cfg(test)]
 mod test_segmented_images {
-    use feagi_sensorimotor::data_types::descriptors::{SegmentedImageFrameProperties, SegmentedXYImageResolutions};
-    use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D, SegmentedImageFrame};
-    use feagi_sensorimotor::data_types::processing::ImageFrameSegmentator;
     use crate::{load_bird_image, save_png_image};
+    use feagi_sensorimotor::data_types::descriptors::{
+        SegmentedImageFrameProperties, SegmentedXYImageResolutions,
+    };
+    use feagi_sensorimotor::data_types::processing::ImageFrameSegmentator;
+    use feagi_sensorimotor::data_types::{
+        GazeProperties, ImageFrame, Percentage, Percentage2D, SegmentedImageFrame,
+    };
 
     #[test]
     fn test_segment_bird_image() {
-        fn write_with_gaze(image_frame_segmentator: &mut ImageFrameSegmentator, image: &ImageFrame, segmented_image: &mut SegmentedImageFrame, new_gaze: &GazeProperties, gaze_name: &str) {
+        fn write_with_gaze(
+            image_frame_segmentator: &mut ImageFrameSegmentator,
+            image: &ImageFrame,
+            segmented_image: &mut SegmentedImageFrame,
+            new_gaze: &GazeProperties,
+            gaze_name: &str,
+        ) {
             image_frame_segmentator.update_gaze(new_gaze).unwrap();
-            image_frame_segmentator.segment_image(image, segmented_image).unwrap();
+            image_frame_segmentator
+                .segment_image(image, segmented_image)
+                .unwrap();
 
-            save_png_image(segmented_image.get_image_lower_left(), format!("{}/0_lower_left.png", gaze_name));
-            save_png_image(segmented_image.get_image_lower_middle(), format!("{}/1_lower_middle.png", gaze_name));
-            save_png_image(segmented_image.get_image_lower_right(), format!("{}/2_lower_right.png", gaze_name));
-            save_png_image(segmented_image.get_image_middle_left(), format!("{}/3_middle_left.png", gaze_name));
-            save_png_image(segmented_image.get_image_center(), format!("{}/4_center.png", gaze_name));
-            save_png_image(segmented_image.get_image_middle_right(), format!("{}/5_middle_right.png", gaze_name));
-            save_png_image(segmented_image.get_image_upper_left(), format!("{}/6_upper_left.png", gaze_name));
-            save_png_image(segmented_image.get_image_upper_middle(), format!("{}/7_upper_middle.png", gaze_name));
-            save_png_image(segmented_image.get_image_upper_right(), format!("{}/8_upper_right.png", gaze_name));
+            save_png_image(
+                segmented_image.get_image_lower_left(),
+                format!("{}/0_lower_left.png", gaze_name),
+            );
+            save_png_image(
+                segmented_image.get_image_lower_middle(),
+                format!("{}/1_lower_middle.png", gaze_name),
+            );
+            save_png_image(
+                segmented_image.get_image_lower_right(),
+                format!("{}/2_lower_right.png", gaze_name),
+            );
+            save_png_image(
+                segmented_image.get_image_middle_left(),
+                format!("{}/3_middle_left.png", gaze_name),
+            );
+            save_png_image(
+                segmented_image.get_image_center(),
+                format!("{}/4_center.png", gaze_name),
+            );
+            save_png_image(
+                segmented_image.get_image_middle_right(),
+                format!("{}/5_middle_right.png", gaze_name),
+            );
+            save_png_image(
+                segmented_image.get_image_upper_left(),
+                format!("{}/6_upper_left.png", gaze_name),
+            );
+            save_png_image(
+                segmented_image.get_image_upper_middle(),
+                format!("{}/7_upper_middle.png", gaze_name),
+            );
+            save_png_image(
+                segmented_image.get_image_upper_right(),
+                format!("{}/8_upper_right.png", gaze_name),
+            );
         }
 
         let segmented_image_resolutions: SegmentedXYImageResolutions =
@@ -68,67 +105,90 @@ mod test_segmented_images {
             bird_image_properties.get_color_space(),
         );
 
-        let gaze =
-            GazeProperties::create_default_centered();
+        let gaze = GazeProperties::create_default_centered();
 
-        let mut image_frame_segmentator = ImageFrameSegmentator::new(
-            bird_image_properties,
-            segmented_bird_properties,
-            gaze
-        ).unwrap();
+        let mut image_frame_segmentator =
+            ImageFrameSegmentator::new(bird_image_properties, segmented_bird_properties, gaze)
+                .unwrap();
 
-        let mut segmented_output = image_frame_segmentator.create_blank_segmented_image_for_use_as_write_cache();
-        image_frame_segmentator.verify_input_image(&bird_image).unwrap();
+        let mut segmented_output =
+            image_frame_segmentator.create_blank_segmented_image_for_use_as_write_cache();
+        image_frame_segmentator
+            .verify_input_image(&bird_image)
+            .unwrap();
 
         // center
         let gaze = GazeProperties::create_default_centered();
-        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
-                        &gaze, "center_gaze");
+        write_with_gaze(
+            &mut image_frame_segmentator,
+            &bird_image,
+            &mut segmented_output,
+            &gaze,
+            "center_gaze",
+        );
 
         // down
         let gaze = GazeProperties::new(
             Percentage2D::new(
                 Percentage::new_from_0_1(0.5).unwrap(),
-                Percentage::new_from_0_1(0.25).unwrap()
+                Percentage::new_from_0_1(0.25).unwrap(),
             ),
-            Percentage::new_from_0_1(0.5).unwrap()
+            Percentage::new_from_0_1(0.5).unwrap(),
         );
-        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
-                        &gaze, "down_gaze");
+        write_with_gaze(
+            &mut image_frame_segmentator,
+            &bird_image,
+            &mut segmented_output,
+            &gaze,
+            "down_gaze",
+        );
 
         // left down
         let gaze = GazeProperties::new(
             Percentage2D::new(
                 Percentage::new_from_0_1(0.25).unwrap(),
-                Percentage::new_from_0_1(0.25).unwrap()
+                Percentage::new_from_0_1(0.25).unwrap(),
             ),
-            Percentage::new_from_0_1(0.5).unwrap()
+            Percentage::new_from_0_1(0.5).unwrap(),
         );
-        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
-                        &gaze, "left_down_gaze");
+        write_with_gaze(
+            &mut image_frame_segmentator,
+            &bird_image,
+            &mut segmented_output,
+            &gaze,
+            "left_down_gaze",
+        );
 
         // down most bottom
         let gaze = GazeProperties::new(
             Percentage2D::new(
                 Percentage::new_from_0_1(0.5).unwrap(),
-                Percentage::new_from_0_1(0.0).unwrap()
+                Percentage::new_from_0_1(0.0).unwrap(),
             ),
-            Percentage::new_from_0_1(0.5).unwrap()
+            Percentage::new_from_0_1(0.5).unwrap(),
         );
-        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
-                        &gaze, "down_bottom_gaze");
+        write_with_gaze(
+            &mut image_frame_segmentator,
+            &bird_image,
+            &mut segmented_output,
+            &gaze,
+            "down_bottom_gaze",
+        );
 
         // almost entire screen
         let gaze = GazeProperties::new(
             Percentage2D::new(
                 Percentage::new_from_0_1(0.2).unwrap(), // these shouldnt matter much in this case
-                Percentage::new_from_0_1(0.0).unwrap()
+                Percentage::new_from_0_1(0.0).unwrap(),
             ),
-            Percentage::new_from_0_1(1.0).unwrap()
+            Percentage::new_from_0_1(1.0).unwrap(),
         );
-        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
-                        &gaze, "whole_screen");
+        write_with_gaze(
+            &mut image_frame_segmentator,
+            &bird_image,
+            &mut segmented_output,
+            &gaze,
+            "whole_screen",
+        );
     }
-
-
 }

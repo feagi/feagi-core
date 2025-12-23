@@ -213,9 +213,7 @@ mod tests {
     fn test_validate_sensory_compatibility() {
         // Create BrainInput area (valid cortical ID with 'i' prefix for input)
         use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id = CorticalID::try_from_bytes(b"ivision1").unwrap();
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
             FrameChangeHandling::Absolute,
@@ -246,9 +244,7 @@ mod tests {
         use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
             FrameChangeHandling, PercentageNeuronPositioning,
         };
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id = CorticalID::try_from_bytes(b"omotor01").unwrap();
         let cortical_type = CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Percentage(
             FrameChangeHandling::Absolute,
@@ -272,9 +268,7 @@ mod tests {
     #[test]
     fn test_get_recommended_buffer_size() {
         use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id = CorticalID::try_from_bytes(b"ivision2").unwrap();
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
             FrameChangeHandling::Absolute,
@@ -299,9 +293,7 @@ mod tests {
     #[test]
     fn test_should_use_compression() {
         use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_structures::genomic::cortical_area::{
-            CorticalAreaType, IOCorticalAreaDataFlag,
-        };
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
         let cortical_id = CorticalID::try_from_bytes(b"ivision3").unwrap();
         let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
             FrameChangeHandling::Absolute,
