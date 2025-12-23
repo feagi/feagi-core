@@ -18,7 +18,7 @@ feagi-state-manager = { version = "0.0.1-beta.1", path = "../../feagi-state-mana
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
 feagi-serialization = { workspace = true }  # For decoding sensory data
-feagi-data-structures = { workspace = true, features = ["async"] }  # For CorticalMappedXYZPNeuronVoxels and async runtime
+feagi-structures = { workspace = true, features = ["async"] }  # For CorticalMappedXYZPNeuronVoxels and async runtime
 thiserror.workspace = true
 rayon.workspace = true
 ndarray.workspace = true
@@ -48,8 +48,8 @@ std = ["feagi-npu-runtime/std"]
 # Enable connectome serialization/deserialization (requires native dependencies)
 connectome-io = []  # Types are in feagi-npu-neural (always available with std feature)
 # Async runtime features
-async-tokio = ["feagi-data-structures/async-tokio"]
-wasm = ["feagi-data-structures/async-wasm"]  # Explicitly enable wasm feature (no tokio)
+async-tokio = ["feagi-structures/async-tokio"]
+wasm = ["feagi-structures/async-wasm"]  # Explicitly enable wasm feature (no tokio)
 # Enable GPU acceleration via WGPU (cross-platform)
 gpu = ["wgpu", "pollster", "bytemuck"]
 # Enable CUDA acceleration (NVIDIA only, highest performance)

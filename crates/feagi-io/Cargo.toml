@@ -22,7 +22,7 @@ feagi-brain-development = { version = "0.0.1-beta.1", path = "../feagi-brain-dev
 feagi-services = { version = "0.0.1-beta.1", path = "../feagi-services" }  # For GenomeService and ConnectomeService
 feagi-npu-neural = { version = "0.0.1-beta.1", path = "../feagi-npu/neural" }  # For types
 # FEAGI data structures and serialization (for binary XYZP format)
-feagi-data-structures.workspace = true
+feagi-structures.workspace = true
 feagi-serialization = { workspace = true }
 
 # Core dependencies (always required)
