@@ -179,7 +179,9 @@ publish_crate() {
     
     # Package first to verify
     echo "   📦 Packaging..."
-    if ! cargo package --quiet 2>&1; then
+    # CI modifies Cargo.toml versions right before publishing, which makes the
+    # working directory "dirty" by design. Packaging must allow this.
+    if ! cargo package --allow-dirty --quiet 2>&1; then
         echo -e "   ${RED}❌ Failed to package $crate_name${NC}"
         cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
         return 1
@@ -188,12 +190,12 @@ publish_crate() {
     # Publish
     if [ "$DRY_RUN" = "true" ]; then
         echo -e "   ${CYAN}🧪 Dry run: cargo publish --dry-run${NC}"
-        cargo publish --dry-run
+        cargo publish --dry-run --allow-dirty
     else
         echo "   🚀 Publishing to crates.io..."
         # With set -e, we must temporarily disable exit-on-error to capture output.
         set +e
-        publish_output="$(cargo publish --token "$CARGO_TOKEN" 2>&1)"
+        publish_output="$(cargo publish --allow-dirty --token "$CARGO_TOKEN" 2>&1)"
         publish_status=$?
         set -e
 
