@@ -81,7 +81,8 @@ impl PipelineStage for ImageFrameProcessorStage {
         let write_target: &mut ImageFrame = (&mut self.cached).try_into()?;
         self.transformer_definition
             .process_image(read_from, write_target)?;
-        write_target.skip_encoding = read_from.skip_encoding;
+        // NOTE: Do NOT copy skip_encoding from input - let downstream stages (like diff) control it
+        // The process_image function handles skip_encoding appropriately for transformations
         Ok(&self.cached)
     }
 

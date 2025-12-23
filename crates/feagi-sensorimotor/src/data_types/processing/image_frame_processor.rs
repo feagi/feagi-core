@@ -156,7 +156,40 @@ impl ImageFrameProcessor {
                 change_contrast_by: None,
                 convert_to_grayscale: false,
             } => {
-                *destination = source.clone();
+                // For pass-through: copy ONLY pixel data into the pre-allocated destination buffer.
+                // Do NOT replace the destination `ImageFrame` struct; downstream stages rely on the
+                // cached buffer identity staying stable.
+                destination
+                    .get_internal_data_mut()
+                    .assign(source.get_internal_data());
+                destination.skip_encoding = false;
+                // Sanity check: ensure a few sentinel pixels match after the copy.
+                // If these don't match, downstream diff/segmentor behavior will be nonsensical.
+                let src = source.get_internal_data();
+                let dst = destination.get_internal_data();
+                let h = src.shape()[0];
+                let w = src.shape()[1];
+                let c = src.shape()[2];
+                if dst.shape() != src.shape() {
+                    return Err(FeagiDataError::InternalError(format!(
+                        "ImageFrameProcessor(pass-through) shape mismatch: src={:?}, dst={:?}",
+                        src.shape(),
+                        dst.shape()
+                    )));
+                }
+                let sentinel_points = [
+                    (0usize, 0usize, 0usize),
+                    (h / 2, w / 2, 0usize),
+                    (h.saturating_sub(1), w.saturating_sub(1), c.saturating_sub(1)),
+                ];
+                for (y, x, ch) in sentinel_points {
+                    if src[[y, x, ch]] != dst[[y, x, ch]] {
+                        return Err(FeagiDataError::InternalError(format!(
+                            "ImageFrameProcessor(pass-through) copy mismatch at (y={}, x={}, c={}): src={}, dst={}",
+                            y, x, ch, src[[y, x, ch]], dst[[y, x, ch]]
+                        )));
+                    }
+                }
                 Ok(())
             }
 
@@ -170,7 +203,7 @@ impl ImageFrameProcessor {
                 change_contrast_by: None,
                 convert_to_grayscale: false,
             } => {
-                destination.skip_encoding = source.skip_encoding;
+                destination.skip_encoding = false;
                 crop(
                     source,
                     destination,
@@ -189,7 +222,7 @@ impl ImageFrameProcessor {
                 change_contrast_by: None,
                 convert_to_grayscale: false,
             } => {
-                destination.skip_encoding = source.skip_encoding;
+                destination.skip_encoding = false;
                 resize(source, destination)
             }
 
@@ -203,7 +236,7 @@ impl ImageFrameProcessor {
                 change_contrast_by: None,
                 convert_to_grayscale: true,
             } => {
-                destination.skip_encoding = source.skip_encoding;
+                destination.skip_encoding = false;
                 to_grayscale(
                     source,
                     destination,
@@ -221,7 +254,7 @@ impl ImageFrameProcessor {
                 change_contrast_by: None,
                 convert_to_grayscale: false,
             } => {
-                destination.skip_encoding = source.skip_encoding;
+                destination.skip_encoding = false;
                 crop_and_resize(source, destination, cropping_from)
             }
 
@@ -235,7 +268,7 @@ impl ImageFrameProcessor {
                 change_contrast_by: None,
                 convert_to_grayscale: true,
             } => {
-                destination.skip_encoding = source.skip_encoding;
+                destination.skip_encoding = false;
                 crop_and_resize_and_grayscale(
                     source,
                     destination,
@@ -302,8 +335,14 @@ impl ImageFrameProcessor {
                     return Err(FeagiDataError::NotImplemented);
                 }
 
-                *destination = processing;
-                destination.skip_encoding = source.skip_encoding;
+                // Copy ONLY pixel data into the pre-allocated destination buffer.
+                // Do NOT replace the destination `ImageFrame` struct; downstream stages rely on the
+                // cached buffer identity staying stable.
+                destination
+                    .get_internal_data_mut()
+                    .assign(processing.get_internal_data());
+                // Reset skip_encoding to allow downstream stages (like diff) to control it.
+                destination.skip_encoding = false;
                 Ok(())
             }
         }
