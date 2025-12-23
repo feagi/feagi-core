@@ -1,4 +1,4 @@
-use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
+use crate::genomic::cortical_area::descriptors::{CorticalUnitIndex, CorticalSubUnitIndex};
 use crate::genomic::cortical_area::CorticalID;
 use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};
@@ -138,7 +138,7 @@ impl IOCorticalAreaDataFlag {
         is_input: bool,
         cortical_unit_identifier: [u8; 3],
         cortical_unit_index: CorticalUnitIndex,
-        cortical_group_index: CorticalGroupIndex,
+        cortical_sub_unit_index: CorticalSubUnitIndex,
     ) -> CorticalID {
         let data_type_configuration: DataTypeConfigurationFlag =
             self.to_data_type_configuration_flag();
@@ -151,8 +151,8 @@ impl IOCorticalAreaDataFlag {
             cortical_unit_identifier[2],
             data_type_configuration_bytes[0],
             data_type_configuration_bytes[1],
+            cortical_sub_unit_index.get(),
             cortical_unit_index.get(),
-            cortical_group_index.get(),
         ];
 
         CorticalID {

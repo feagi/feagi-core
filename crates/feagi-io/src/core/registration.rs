@@ -16,7 +16,7 @@ pub use feagi_services::types::registration::{
     AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
     RegistrationResponse, TransportConfig,
 };
-use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
@@ -294,7 +294,7 @@ impl RegistrationHandler {
         unit: SensoryCorticalUnit,
         frame_change_handling: FrameChangeHandling,
         percentage_neuron_positioning: feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
-        group: CorticalGroupIndex,
+        group: CorticalUnitIndex,
     ) -> Result<Vec<CorticalID>, String> {
         // Dispatch to the appropriate get_cortical_ids_array_for method based on unit type
         // This is systematic (covers all types) not hardcoded for one specific type
@@ -515,7 +515,7 @@ impl RegistrationHandler {
             } else {
                 0
             };
-            let group: CorticalGroupIndex = group_index.into();
+            let group: CorticalUnitIndex = group_index.into();
 
             // Find matching SensoryCorticalUnit by unit identifier
             let sensory_unit = self.find_sensory_unit_by_identifier(unit_identifier)?;

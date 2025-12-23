@@ -7,7 +7,7 @@ use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Per
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
 use feagi_sensorimotor::ConnectorAgent;
 use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
+    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 
@@ -45,7 +45,7 @@ mod test_connector_cache_sensor_load_image {
     use feagi_sensorimotor::data_types::{GazeProperties, MiscData};
     use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
     use feagi_structures::genomic::cortical_area::descriptors::{
-        CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
+        CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
     };
     use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
     use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
@@ -55,7 +55,7 @@ mod test_connector_cache_sensor_load_image {
     fn test_segment_bird_image() {
         let _time_of_previous_burst: Instant = Instant::now(); // Pretend
 
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
         let segmented_image_resolutions: SegmentedXYImageResolutions =
@@ -100,7 +100,7 @@ mod test_connector_cache_sensor_load_image {
     fn test_segment_bird_image_twice() {
         let _time_of_previous_burst: Instant = Instant::now(); // Pretend
 
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
         let segmented_image_resolutions: SegmentedXYImageResolutions =
@@ -150,56 +150,13 @@ mod test_connector_cache_sensor_load_image {
             // let bytes = sensor_cache.sensor_copy_feagi_byte_container();
         }
     }
-
-    /*
-    #[test]
-    fn test_segment_bird_image_with_moving_gaze() {
-        let _time_of_previous_burst: Instant = Instant::now(); // Pretend
-
-        let cortical_group: CorticalGroupIndex = 0.into();
-        let number_channels: CorticalChannelCount = 1.try_into().unwrap();
-        let channel_index: CorticalChannelIndex = 0.into();
-        let segmented_image_resolutions: SegmentedXYImageResolutions = SegmentedXYImageResolutions::create_with_same_sized_peripheral(
-            (256, 256).try_into().unwrap(), (128, 128).try_into().unwrap()
-        );
-
-
-        let bird_image = load_bird_image();
-        let bird_image_properties = bird_image.get_image_frame_properties();
-        let segmented_bird_properties = SegmentedImageFrameProperties::new(
-            segmented_image_resolutions,
-            bird_image_properties.get_color_channel_layout(),
-            bird_image_properties.get_color_channel_layout(),
-            bird_image_properties.get_color_space());
-        let initial_gaze = GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
-        let second_gaze = GazeProperties::new((0.3, 0.3).try_into().unwrap(), 0.2.try_into().unwrap());
-
-
-        let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
-        {
-            #[allow(unused_mut)]
-            let mut sensor_cache = connector_agent.get_sensor_cache();
-            let mut sensor_cache = connector_agent.get_sensor_cache();
-            sensor_cache.segmented_vision_register(cortical_group, number_channels, FrameChangeHandling::Absolute, bird_image_properties, segmented_bird_properties, initial_gaze).unwrap();
-            sensor_cache.segmented_vision_write(cortical_group, channel_index, bird_image.into()).unwrap();
-        }
-        {
-            let mut motor_cache = connector_agent.get_motor_cache();
-            motor_cache.gaze_control_register(cortical_group, number_channels, FrameChangeHandling::Absolute, 10.try_into().unwrap(), feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning::Linear).unwrap();
-
-            // TODO motor bytes sending
-
-            // let sensor_bytes = sensor_cache.sensor_copy_feagi_byte_container();
-            let motor_data = motor_cache.gaze_control_read_postprocessed_cache_value(cortical_group, channel_index).unwrap();
-        }
-    }
-    */
+    
 
     #[test]
     fn test_encode_of_misc_then_reencode() {
         let _time_of_previous_burst: Instant = Instant::now();
 
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -257,7 +214,7 @@ mod test_connector_cache_sensor_load_image {
     fn test_expanding_encode() {
         let _time_of_previous_burst: Instant = Instant::now();
 
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -374,7 +331,7 @@ mod test_image_segmentation_basic {
 
     #[test]
     fn test_segment_bird_image_centered_gaze() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -415,7 +372,7 @@ mod test_image_segmentation_basic {
 
     #[test]
     fn test_segment_bird_image_multiple_writes() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -469,7 +426,7 @@ mod test_image_segmentation_basic {
 
     #[test]
     fn test_segment_with_small_center_large_peripheral() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -516,7 +473,7 @@ mod test_image_segmentation_gaze_positions {
 
     #[test]
     fn test_segment_with_top_left_gaze() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -559,7 +516,7 @@ mod test_image_segmentation_gaze_positions {
 
     #[test]
     fn test_segment_with_bottom_right_gaze() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -603,7 +560,7 @@ mod test_image_segmentation_gaze_positions {
 
     #[test]
     fn test_segment_with_minimum_modulation_size() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -646,7 +603,7 @@ mod test_image_segmentation_gaze_positions {
 
     #[test]
     fn test_segment_with_maximum_modulation_size() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -694,7 +651,7 @@ mod test_image_segmentation_color_channels {
 
     #[test]
     fn test_segment_with_grayscale_peripheral() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -737,7 +694,7 @@ mod test_image_segmentation_color_channels {
 
     #[test]
     fn test_segment_with_grayscale_center_and_peripheral() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -785,7 +742,7 @@ mod test_image_segmentation_multiple_channels {
 
     #[test]
     fn test_segment_with_multiple_channels() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 3.try_into().unwrap();
         let channel_0: CorticalChannelIndex = 0.into();
         let channel_1: CorticalChannelIndex = 1.into();
@@ -837,9 +794,9 @@ mod test_image_segmentation_multiple_channels {
 
     #[test]
     fn test_segment_with_multiple_cortical_groups() {
-        let group_0: CorticalGroupIndex = 0.into();
-        let group_1: CorticalGroupIndex = 1.into();
-        let group_2: CorticalGroupIndex = 2.into();
+        let group_0: CorticalUnitIndex = 0.into();
+        let group_1: CorticalUnitIndex = 1.into();
+        let group_2: CorticalUnitIndex = 2.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -921,7 +878,7 @@ mod test_image_segmentation_resolutions {
 
     #[test]
     fn test_segment_with_asymmetric_resolutions() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -963,7 +920,7 @@ mod test_image_segmentation_resolutions {
 
     #[test]
     fn test_segment_with_tall_resolutions() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -1005,7 +962,7 @@ mod test_image_segmentation_resolutions {
 
     #[test]
     fn test_segment_with_very_small_resolutions() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 
@@ -1052,7 +1009,7 @@ mod test_image_segmentation_frame_change_handling {
 
     #[test]
     fn test_segment_with_differential_frame_handling() {
-        let cortical_group: CorticalGroupIndex = 0.into();
+        let cortical_group: CorticalUnitIndex = 0.into();
         let number_channels: CorticalChannelCount = 1.try_into().unwrap();
         let channel_index: CorticalChannelIndex = 0.into();
 

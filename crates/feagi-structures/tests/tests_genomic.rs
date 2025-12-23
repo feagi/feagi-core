@@ -18,33 +18,33 @@ mod test_cortical_area_descriptors {
 
         #[test]
         fn test_cortical_group_index_creation() {
-            let index = CorticalGroupIndex::from(42u8);
+            let index = CorticalUnitIndex::from(42u8);
             assert_eq!(*index, 42u8);
         }
 
         #[test]
         fn test_cortical_group_index_deref() {
-            let index = CorticalGroupIndex::from(100u8);
+            let index = CorticalUnitIndex::from(100u8);
             assert_eq!(*index, 100u8);
         }
 
         #[test]
         fn test_cortical_group_index_max_value() {
-            let index = CorticalGroupIndex::from(u8::MAX);
+            let index = CorticalUnitIndex::from(u8::MAX);
             assert_eq!(*index, u8::MAX);
         }
 
         #[test]
         fn test_cortical_group_index_zero() {
-            let index = CorticalGroupIndex::from(0u8);
+            let index = CorticalUnitIndex::from(0u8);
             assert_eq!(*index, 0u8);
         }
 
         #[test]
         fn test_cortical_group_index_equality() {
-            let index1 = CorticalGroupIndex::from(50u8);
-            let index2 = CorticalGroupIndex::from(50u8);
-            let index3 = CorticalGroupIndex::from(51u8);
+            let index1 = CorticalUnitIndex::from(50u8);
+            let index2 = CorticalUnitIndex::from(50u8);
+            let index3 = CorticalUnitIndex::from(51u8);
 
             assert_eq!(index1, index2);
             assert_ne!(index1, index3);
@@ -52,8 +52,8 @@ mod test_cortical_area_descriptors {
 
         #[test]
         fn test_cortical_group_index_ordering() {
-            let index1 = CorticalGroupIndex::from(10u8);
-            let index2 = CorticalGroupIndex::from(20u8);
+            let index1 = CorticalUnitIndex::from(10u8);
+            let index2 = CorticalUnitIndex::from(20u8);
 
             assert!(index1 < index2);
             assert!(index2 > index1);
@@ -73,13 +73,13 @@ mod test_cortical_area_descriptors {
 
         #[test]
         fn test_cortical_unit_index_creation() {
-            let index = CorticalUnitIndex::from(5u8);
+            let index = CorticalSubUnitIndex::from(5u8);
             assert_eq!(*index, 5u8);
         }
 
         #[test]
         fn test_cortical_unit_index_max_value() {
-            let index = CorticalUnitIndex::from(u8::MAX);
+            let index = CorticalSubUnitIndex::from(u8::MAX);
             assert_eq!(*index, u8::MAX);
         }
     }
@@ -615,8 +615,8 @@ mod test_io_cortical_area_data_type {
             );
 
             let unit_id = *b"tst";
-            let unit_index = CorticalUnitIndex::from(0u8);
-            let group_index = CorticalGroupIndex::from(5u8);
+            let unit_index = CorticalSubUnitIndex::from(0u8);
+            let group_index = CorticalUnitIndex::from(5u8);
 
             let cortical_id = io_type.as_io_cortical_id(true, unit_id, unit_index, group_index);
 
@@ -633,8 +633,8 @@ mod test_io_cortical_area_data_type {
             );
 
             let unit_id = *b"tst";
-            let unit_index = CorticalUnitIndex::from(0u8);
-            let group_index = CorticalGroupIndex::from(0u8);
+            let unit_index = CorticalSubUnitIndex::from(0u8);
+            let group_index = CorticalUnitIndex::from(0u8);
 
             let input_id = io_type.as_io_cortical_id(true, unit_id, unit_index, group_index);
             let output_id = io_type.as_io_cortical_id(false, unit_id, unit_index, group_index);
@@ -703,7 +703,7 @@ mod test_sensory_cortical_unit {
         // Test that infrared generates correct cortical IDs
         let frame_handling = FrameChangeHandling::Absolute;
         let positioning = PercentageNeuronPositioning::Linear;
-        let group = CorticalGroupIndex::from(5u8);
+        let group = CorticalUnitIndex::from(5u8);
 
         let ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
@@ -742,7 +742,7 @@ mod test_sensory_cortical_unit {
     fn test_segmented_vision_cortical_ids_array() {
         // Test that segmented vision generates 9 distinct cortical IDs
         let frame_handling = FrameChangeHandling::Incremental;
-        let group = CorticalGroupIndex::from(3u8);
+        let group = CorticalUnitIndex::from(3u8);
 
         let ids =
             SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(frame_handling, group);
@@ -776,7 +776,7 @@ mod test_sensory_cortical_unit {
     fn test_different_frame_handling_produces_different_ids() {
         // Test that different frame handling produces different IDs
         let positioning = PercentageNeuronPositioning::Linear;
-        let group = CorticalGroupIndex::from(0u8);
+        let group = CorticalUnitIndex::from(0u8);
 
         let absolute_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             FrameChangeHandling::Absolute,
@@ -800,7 +800,7 @@ mod test_sensory_cortical_unit {
     fn test_different_positioning_produces_different_ids() {
         // Test that different positioning produces different IDs
         let frame_handling = FrameChangeHandling::Absolute;
-        let group = CorticalGroupIndex::from(0u8);
+        let group = CorticalUnitIndex::from(0u8);
 
         let linear_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
@@ -829,13 +829,13 @@ mod test_sensory_cortical_unit {
         let group0_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             positioning,
-            CorticalGroupIndex::from(0u8),
+            CorticalUnitIndex::from(0u8),
         );
 
         let group1_ids = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
             frame_handling,
             positioning,
-            CorticalGroupIndex::from(1u8),
+            CorticalUnitIndex::from(1u8),
         );
 
         assert_ne!(
@@ -853,7 +853,7 @@ mod test_comprehensive_scenarios {
     #[test]
     fn test_maximum_index_values() {
         // Test that maximum values work correctly
-        let max_group = CorticalGroupIndex::from(u8::MAX);
+        let max_group = CorticalUnitIndex::from(u8::MAX);
         let max_channel = CorticalChannelIndex::from(u32::MAX);
         let max_agent = AgentDeviceIndex::from(u32::MAX);
 
@@ -888,7 +888,7 @@ mod test_comprehensive_scenarios {
     fn test_agent_device_channel_mapping() {
         // Test a realistic scenario of mapping agent devices to channels
         let agent_device = AgentDeviceIndex::from(1001u32);
-        let cortical_group = CorticalGroupIndex::from(5u8);
+        let cortical_group = CorticalUnitIndex::from(5u8);
         let cortical_channel = CorticalChannelIndex::from(0u32);
 
         assert_eq!(*agent_device, 1001);
@@ -918,7 +918,7 @@ mod test_comprehensive_scenarios {
             ),
         ];
 
-        let group = CorticalGroupIndex::from(0u8);
+        let group = CorticalUnitIndex::from(0u8);
         let mut all_ids = Vec::new();
 
         for (frame, pos) in params.iter() {

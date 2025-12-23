@@ -5,7 +5,7 @@
 
 use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType};
 use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalAreaDimensions, CorticalGroupIndex,
+    CorticalAreaDimensions, CorticalUnitIndex,
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
@@ -223,7 +223,7 @@ fn test_byte_container_with_sensory_cortical_id() {
     let cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
         FrameChangeHandling::Absolute,
         PercentageNeuronPositioning::Linear,
-        CorticalGroupIndex::from(0u8),
+        CorticalUnitIndex::from(0u8),
     )[0];
 
     let dimensions = CorticalAreaDimensions::new(5, 5, 3).unwrap();
@@ -253,7 +253,7 @@ fn test_byte_container_with_segmented_vision() {
     // Test with a more complex sensor that has multiple cortical areas
     let cortical_ids = SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
         FrameChangeHandling::Incremental,
-        CorticalGroupIndex::from(2u8),
+        CorticalUnitIndex::from(2u8),
     );
 
     let dimensions = CorticalAreaDimensions::new(4, 4, 2).unwrap();

@@ -3,28 +3,19 @@ use crate::{define_index, define_nonzero_count, define_xyz_coordinates, define_x
 
 //region Cortical Indexing
 
-define_index!(
-    CorticalChannelIndex,
-    u32,
-    "Index for addressing specific channels within an I/O cortical area.
-
-Cortical areas can contain multiple channels for processing different
-aspects of data. This index addresses individual channels within a
-specific cortical area for fine-grained data routing."
-);
 
 define_index!(
-    CorticalGroupIndex,
+    CorticalUnitIndex,
     u8,
-    "Index for grouping cortical areas of the same type within a genome.
+    "Index for grouping cortical units of the same type within a genome.
 
 This index distinguishes between multiple instances of the same cortical type.
-For example, multiple vision sensors would have different CorticalGroupingIndex
+For example, multiple vision sensors would have different CorticalUnitIndex
 values (0, 1, 2, etc.) while sharing the same base cortical type.
 
 # Range
 Values are limited to 0-255 (u8) and are encoded in hexadecimal within cortical IDs.
-This provides support for up to 256 instances of each cortical type.
+This provides support for up to 256 instances of each cortical unit type.
 
 # Usage in Cortical IDs
 The index appears as the last two characters of a cortical ID:
@@ -34,9 +25,20 @@ The index appears as the last two characters of a cortical ID:
 );
 
 define_index!(
-    CorticalUnitIndex,
+    CorticalSubUnitIndex,
     u8,
-    "Index for cortical areas within a cortical unit"
+    "Index for cortical areas within a cortical unit. This allows easy identification of various
+     cortical areas (which can be called CorticalSubUnits in this case) within a cortical unit"
+);
+
+define_index!(
+    CorticalChannelIndex,
+    u32,
+    "Index for addressing specific channels within an I/O cortical area.
+
+Cortical areas can contain multiple channels for processing different
+aspects of data. This index addresses individual channels within a
+specific cortical area for fine-grained data routing."
 );
 
 //endregion

@@ -1,4 +1,5 @@
-use crate::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
+use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
+use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex};
 use crate::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
@@ -31,7 +32,7 @@ macro_rules! define_sensory_cortical_units_enum {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
                     cortical_area_properties: {
-                        $($area_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
+                        $($cortical_sub_unit_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
                 }
             ),* $(,)?
@@ -58,11 +59,11 @@ macro_rules! define_sensory_cortical_units_enum {
 
                     #[doc = "Get cortical IDs array for " $friendly_name "."]
                     pub const fn [<get_cortical_ids_array_for_ $snake_case_name >](
-                        $($param_name: $param_type,)* cortical_group_index: CorticalGroupIndex) -> [CorticalID; $number_cortical_areas] {
+                        $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> [CorticalID; $number_cortical_areas] {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
-                                $cortical_area_type_expr .as_io_cortical_id(true, cortical_unit_identifier, CorticalUnitIndex::from($area_index), cortical_group_index)
+                                $cortical_area_type_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
                             ),*
                         ]
                     }
@@ -134,14 +135,14 @@ macro_rules! define_sensory_cortical_units_enum {
 
 
             /// Returns the default topology for all units of this cortical type.
-            pub fn get_unit_default_topology(&self) -> HashMap<usize, UnitTopology> {
+            pub fn get_unit_default_topology(&self) -> HashMap<CorticalSubUnitIndex, UnitTopology> {
                 match self {
                     $(
                         SensoryCorticalUnit::$variant_name => {
                             let mut topology = HashMap::new();
                             $(
                                 topology.insert(
-                                    $area_index,
+                                    CorticalSubUnitIndex::from($cortical_sub_unit_index),
                                     UnitTopology {
                                         relative_position: [$rel_x, $rel_y, $rel_z],
                                         channel_dimensions_default: [$dim_default_x, $dim_default_y, $dim_default_z],

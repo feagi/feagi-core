@@ -7,7 +7,7 @@ use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_serialization::FeagiByteContainer;
 use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
+    CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
@@ -64,122 +64,122 @@ macro_rules! motor_unit_functions {
 
             pub fn [<$snake_case_name _read_preprocessed_cache_value>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel: CorticalChannelIndex,
             ) -> Result< $wrapped_data_type, FeagiDataError> {
 
                 const MOTOR_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                let wrapped = self.try_read_preprocessed_cached_value(MOTOR_TYPE, group, channel)?;
+                let wrapped = self.try_read_preprocessed_cached_value(MOTOR_TYPE, unit, channel)?;
                 let val: $wrapped_data_type = wrapped.try_into()?;
                 Ok(val)
             }
 
             pub fn [<$snake_case_name _read_postprocessed_cache_value>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel: CorticalChannelIndex,
             ) -> Result< $wrapped_data_type, FeagiDataError> {
 
                 const MOTOR_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                let wrapped = self.try_read_postprocessed_cached_value(MOTOR_TYPE, group, channel)?;
+                let wrapped = self.try_read_postprocessed_cached_value(MOTOR_TYPE, unit, channel)?;
                 let val: $wrapped_data_type = wrapped.try_into()?;
                 Ok(val)
             }
 
             pub fn [<motor_ $snake_case_name _try_register_motor_callback>]<F>(
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
                 callback: F
             ) -> Result<FeagiSignalIndex, FeagiDataError>
             where F: Fn(&WrappedIOData) + Send + Sync + 'static,
             {
                 const MOTOR_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                let signal_index = self.try_register_motor_callback(MOTOR_TYPE, group, channel_index, callback)?;
+                let signal_index = self.try_register_motor_callback(MOTOR_TYPE, unit, channel_index, callback)?;
                 Ok(signal_index)
             }
 
             pub fn [<$snake_case_name _get_single_stage_properties>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
                 stage_index: PipelineStagePropertyIndex
             ) -> Result<PipelineStageProperties, FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                let stage = self.try_get_single_stage_properties(MOTOR_UNIT_TYPE, group, channel_index, stage_index)?;
+                let stage = self.try_get_single_stage_properties(MOTOR_UNIT_TYPE, unit, channel_index, stage_index)?;
                 Ok(stage)
             }
 
             pub fn [<$snake_case_name _get_all_stage_properties>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex
             ) -> Result<Vec<PipelineStageProperties>, FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                let stages = self.try_get_all_stage_properties(MOTOR_UNIT_TYPE, group, channel_index)?;
+                let stages = self.try_get_all_stage_properties(MOTOR_UNIT_TYPE, unit, channel_index)?;
                 Ok(stages)
             }
 
             pub fn [<$snake_case_name _update_single_stage_properties>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
                 pipeline_stage_property_index: PipelineStagePropertyIndex,
                 updating_property: PipelineStageProperties
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                self.try_update_single_stage_properties(MOTOR_UNIT_TYPE, group, channel_index, pipeline_stage_property_index, updating_property)?;
+                self.try_update_single_stage_properties(MOTOR_UNIT_TYPE, unit, channel_index, pipeline_stage_property_index, updating_property)?;
                 Ok(())
             }
 
             pub fn [<$snake_case_name _update_all_stage_properties>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
                 updated_pipeline_stage_properties: Vec<PipelineStageProperties>
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                self.try_update_all_stage_properties(MOTOR_UNIT_TYPE, group, channel_index, updated_pipeline_stage_properties)?;
+                self.try_update_all_stage_properties(MOTOR_UNIT_TYPE, unit, channel_index, updated_pipeline_stage_properties)?;
                 Ok(())
             }
 
             pub fn [<$snake_case_name _replace_single_stage>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
                 pipeline_stage_property_index: PipelineStagePropertyIndex,
                 replacing_property: PipelineStageProperties
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                self.try_replace_single_stage(MOTOR_UNIT_TYPE, group, channel_index, pipeline_stage_property_index, replacing_property)?;
+                self.try_replace_single_stage(MOTOR_UNIT_TYPE, unit, channel_index, pipeline_stage_property_index, replacing_property)?;
                 Ok(())
             }
 
             pub fn [<$snake_case_name _replace_all_stages>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
                 new_pipeline_stage_properties: Vec<PipelineStageProperties>
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                self.try_replace_all_stages(MOTOR_UNIT_TYPE, group, channel_index, new_pipeline_stage_properties)?;
+                self.try_replace_all_stages(MOTOR_UNIT_TYPE, unit, channel_index, new_pipeline_stage_properties)?;
                 Ok(())
             }
 
             pub fn [<$snake_case_name _removing_all_stages>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex
             ) -> Result<(), FeagiDataError>
             {
                 const MOTOR_UNIT_TYPE: MotorCorticalUnit = MotorCorticalUnit::$cortical_type_key_name;
-                self.try_removing_all_stages(MOTOR_UNIT_TYPE, group, channel_index)?;
+                self.try_removing_all_stages(MOTOR_UNIT_TYPE, unit, channel_index)?;
                 Ok(())
             }
         }
@@ -195,7 +195,7 @@ macro_rules! motor_unit_functions {
         ::paste::paste! {
             pub fn [<$snake_case_name _register>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
                 eccentricity_z_neuron_resolution: NeuronDepth,
@@ -203,8 +203,8 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let eccentricity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[0];
-                let modularity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[1];
+                let eccentricity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let modularity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[1];
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
                     match percentage_neuron_positioning {
@@ -214,7 +214,7 @@ macro_rules! motor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::GazeProperties(GazeProperties::create_default_centered());
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -231,14 +231,14 @@ macro_rules! motor_unit_functions {
         ::paste::paste! {
             pub fn [<$snake_case_name _register>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
                 z_neuron_resolution: NeuronDepth,
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
                     match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
                         PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
@@ -247,7 +247,7 @@ macro_rules! motor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -264,14 +264,14 @@ macro_rules! motor_unit_functions {
         ::paste::paste! {
             pub fn [<$snake_case_name _register>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
                 z_neuron_resolution: NeuronDepth,
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
                     match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
                         PercentageNeuronPositioning::Linear => Percentage3DLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
@@ -280,7 +280,7 @@ macro_rules! motor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage_3D(Percentage3D::new_zero());
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -297,14 +297,14 @@ macro_rules! motor_unit_functions {
         ::paste::paste! {
             pub fn [<$snake_case_name _register>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
                 z_neuron_resolution: NeuronDepth,
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
                     match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
                         PercentageNeuronPositioning::Linear => SignedPercentageLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
@@ -313,7 +313,7 @@ macro_rules! motor_unit_functions {
                 };
 
                 let initial_val: WrappedIOData = WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0));
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -330,17 +330,17 @@ macro_rules! motor_unit_functions {
         ::paste::paste! {
             pub fn [<$snake_case_name _register>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
                 misc_data_dimensions: MiscDataDimensions
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
                 let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }
@@ -351,9 +351,9 @@ macro_rules! motor_unit_functions {
 }
 
 pub struct MotorDeviceCache {
-    stream_caches: HashMap<(MotorCorticalUnit, CorticalGroupIndex), MotorChannelStreamCaches>,
+    stream_caches: HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorChannelStreamCaches>,
     agent_device_key_lookup:
-        HashMap<AgentDeviceIndex, Vec<(MotorCorticalUnit, CorticalGroupIndex)>>,
+        HashMap<AgentDeviceIndex, Vec<(MotorCorticalUnit, CorticalUnitIndex)>>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
@@ -411,11 +411,11 @@ impl MotorDeviceCache {
         &self,
     ) -> Result<serde_json::Value, FeagiDataError> {
         let mut output = serde_json::Map::new();
-        for ((motor_cortical_unit, cortical_group_index), motor_channel_stream_caches) in
+        for ((motor_cortical_unit, cortical_unit_index), motor_channel_stream_caches) in
             &self.stream_caches
         {
             let motor_unit_name = motor_cortical_unit.get_snake_case_name().to_string();
-            let cortical_group_name = cortical_group_index.to_string();
+            let cortical_unit_name = cortical_unit_index.to_string();
 
             let motor_units_map = output
                 .entry(motor_unit_name)
@@ -424,7 +424,7 @@ impl MotorDeviceCache {
                 .expect("Just inserted an Object");
 
             motor_units_map.insert(
-                cortical_group_name,
+                cortical_unit_name,
                 motor_channel_stream_caches.export_as_json()?,
             );
         }
@@ -450,7 +450,7 @@ impl MotorDeviceCache {
             FeagiDataError::DeserializationError("Expected output object for motors".to_string())
         })?;
 
-        for (motor_type_name, groups) in output_map {
+        for (motor_type_name, units) in output_map {
             // Parse motor type from snake_case name
             let motor_type =
                 MotorCorticalUnit::from_snake_case_name(motor_type_name).ok_or_else(|| {
@@ -460,29 +460,29 @@ impl MotorDeviceCache {
                     ))
                 })?;
 
-            let groups_map = groups.as_object().ok_or_else(|| {
+            let units_map = units.as_object().ok_or_else(|| {
                 FeagiDataError::DeserializationError(format!(
-                    "Expected groups object for motor type: {}",
+                    "Expected units object for motor type: {}",
                     motor_type_name
                 ))
             })?;
 
-            for (group_id_str, device_config) in groups_map {
-                let group_id: CorticalGroupIndex = group_id_str
+            for (unit_id_str, device_config) in units_map {
+                let unit_id: CorticalUnitIndex = unit_id_str
                     .parse::<u8>()
                     .map_err(|e| {
                         FeagiDataError::DeserializationError(format!(
-                            "Invalid group ID '{}': {}",
-                            group_id_str, e
+                            "Invalid unit ID '{}': {}",
+                            unit_id_str, e
                         ))
                     })?
                     .into();
 
-                // Get the stream cache for this motor type + group
-                let stream_cache = self.stream_caches.get_mut(&(motor_type, group_id))
+                // Get the stream cache for this motor type + unit
+                let stream_cache = self.stream_caches.get_mut(&(motor_type, unit_id))
                     .ok_or_else(|| FeagiDataError::BadParameters(
                         format!("Motor {}:{} not registered. Register the motor first before importing configuration.",
-                            motor_type_name, group_id_str)
+                            motor_type_name, unit_id_str)
                     ))?;
 
                 // Import configuration (pipelines, friendly names)
@@ -520,22 +520,22 @@ impl MotorDeviceCache {
     fn register(
         &mut self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
         number_channels: CorticalChannelCount,
         initial_cached_value: WrappedIOData,
     ) -> Result<(), FeagiDataError> {
         // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
 
-        if self.stream_caches.contains_key(&(motor_type, group_index)) {
+        if self.stream_caches.contains_key(&(motor_type, unit_index)) {
             return Err(FeagiDataError::BadParameters(format!(
-                "Already registered motor {} of group index {}!",
-                motor_type, group_index
+                "Already registered motor {} of unit index {}!",
+                motor_type, unit_index
             )));
         }
 
         self.stream_caches.insert(
-            (motor_type, group_index),
+            (motor_type, unit_index),
             MotorChannelStreamCaches::new(neuron_decoder, number_channels, initial_cached_value)?,
         );
 
@@ -547,29 +547,29 @@ impl MotorDeviceCache {
     fn try_read_preprocessed_cached_value(
         &self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
     ) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches(motor_type, unit_index)?;
         motor_stream_caches.get_preprocessed_motor_value(channel_index)
     }
 
     fn try_read_postprocessed_cached_value(
         &self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
     ) -> Result<&WrappedIOData, FeagiDataError> {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches(motor_type, unit_index)?;
         motor_stream_caches.get_postprocessed_motor_value(channel_index)
     }
 
     fn try_register_motor_callback<F>(
         &mut self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
         callback: F,
     ) -> Result<FeagiSignalIndex, FeagiDataError>
@@ -577,7 +577,7 @@ impl MotorDeviceCache {
         F: Fn(&WrappedIOData) + Send + Sync + 'static,
     {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches_mut(motor_type, unit_index)?;
         let index =
             motor_stream_caches.try_connect_to_data_processed_signal(channel_index, callback)?;
         Ok(index)
@@ -590,36 +590,36 @@ impl MotorDeviceCache {
     fn try_get_single_stage_properties(
         &self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
         stage_index: PipelineStagePropertyIndex,
     ) -> Result<PipelineStageProperties, FeagiDataError> {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches(motor_type, unit_index)?;
         motor_stream_caches.try_get_single_stage_properties(channel_index, stage_index)
     }
 
     fn try_get_all_stage_properties(
         &self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
     ) -> Result<Vec<PipelineStageProperties>, FeagiDataError> {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches(motor_type, unit_index)?;
         motor_stream_caches.get_all_stage_properties(channel_index)
     }
 
     fn try_update_single_stage_properties(
         &mut self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
         pipeline_stage_property_index: PipelineStagePropertyIndex,
         replacing_property: PipelineStageProperties,
     ) -> Result<(), FeagiDataError> {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches_mut(motor_type, unit_index)?;
         motor_stream_caches.try_update_single_stage_properties(
             channel_index,
             pipeline_stage_property_index,
@@ -630,12 +630,12 @@ impl MotorDeviceCache {
     fn try_update_all_stage_properties(
         &mut self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
     ) -> Result<(), FeagiDataError> {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches_mut(motor_type, unit_index)?;
         motor_stream_caches
             .try_update_all_stage_properties(channel_index, new_pipeline_stage_properties)
     }
@@ -643,13 +643,13 @@ impl MotorDeviceCache {
     fn try_replace_single_stage(
         &mut self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
         replacing_at_index: PipelineStagePropertyIndex,
         new_pipeline_stage_properties: PipelineStageProperties,
     ) -> Result<(), FeagiDataError> {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches_mut(motor_type, unit_index)?;
         motor_stream_caches.try_replace_single_stage(
             channel_index,
             replacing_at_index,
@@ -660,23 +660,23 @@ impl MotorDeviceCache {
     fn try_replace_all_stages(
         &mut self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
     ) -> Result<(), FeagiDataError> {
         let motor_stream_caches =
-            self.try_get_motor_channel_stream_caches_mut(motor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches_mut(motor_type, unit_index)?;
         motor_stream_caches.try_replace_all_stages(channel_index, new_pipeline_stage_properties)
     }
 
     fn try_removing_all_stages(
         &mut self,
         sensor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
         channel_index: CorticalChannelIndex,
     ) -> Result<(), FeagiDataError> {
         let motor_stream_cache =
-            self.try_get_motor_channel_stream_caches_mut(sensor_type, group_index)?;
+            self.try_get_motor_channel_stream_caches_mut(sensor_type, unit_index)?;
         motor_stream_cache.try_removing_all_stages(channel_index)?;
         Ok(())
     }
@@ -690,7 +690,7 @@ impl MotorDeviceCache {
         &mut self,
         agent_device_index: AgentDeviceIndex,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
     ) -> Result<(), FeagiDataError> {
         let keys = {
             match self.agent_device_key_lookup.get_mut(&agent_device_index) {
@@ -704,7 +704,7 @@ impl MotorDeviceCache {
                 }
             }
         };
-        keys.push((motor_type, group_index));
+        keys.push((motor_type, unit_index));
         Ok(())
     }
 
@@ -714,11 +714,11 @@ impl MotorDeviceCache {
         agent_device_index: AgentDeviceIndex,
         channel_index: CorticalChannelIndex,
     ) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
-        let motor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
-        let mut results = Vec::with_capacity(motor_group_pairs.len());
-        for (motor_type, group_index) in motor_group_pairs {
+        let motor_unit_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
+        let mut results = Vec::with_capacity(motor_unit_pairs.len());
+        for (motor_type, unit_index) in motor_unit_pairs {
             let value =
-                self.try_read_preprocessed_cached_value(*motor_type, *group_index, channel_index)?;
+                self.try_read_preprocessed_cached_value(*motor_type, *unit_index, channel_index)?;
             results.push(value);
         }
         Ok(results)
@@ -730,11 +730,11 @@ impl MotorDeviceCache {
         agent_device_index: AgentDeviceIndex,
         channel_index: CorticalChannelIndex,
     ) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
-        let motor_group_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
-        let mut results = Vec::with_capacity(motor_group_pairs.len());
-        for (motor_type, group_index) in motor_group_pairs {
+        let motor_unit_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
+        let mut results = Vec::with_capacity(motor_unit_pairs.len());
+        for (motor_type, unit_index) in motor_unit_pairs {
             let value =
-                self.try_read_postprocessed_cached_value(*motor_type, *group_index, channel_index)?;
+                self.try_read_postprocessed_cached_value(*motor_type, *unit_index, channel_index)?;
             results.push(value);
         }
         Ok(results)
@@ -749,13 +749,13 @@ impl MotorDeviceCache {
     fn try_get_motor_channel_stream_caches(
         &self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
     ) -> Result<&MotorChannelStreamCaches, FeagiDataError> {
-        let check = self.stream_caches.get(&(motor_type, group_index));
+        let check = self.stream_caches.get(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
-                "Unable to find {} of cortical group index {} in registered motor's list!",
-                motor_type, group_index
+                "Unable to find {} of cortical unit index {} in registered motor's list!",
+                motor_type, unit_index
             )));
         }
         let check = check.unwrap();
@@ -765,13 +765,13 @@ impl MotorDeviceCache {
     fn try_get_motor_channel_stream_caches_mut(
         &mut self,
         motor_type: MotorCorticalUnit,
-        group_index: CorticalGroupIndex,
+        unit_index: CorticalUnitIndex,
     ) -> Result<&mut MotorChannelStreamCaches, FeagiDataError> {
-        let check = self.stream_caches.get_mut(&(motor_type, group_index));
+        let check = self.stream_caches.get_mut(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
-                "Unable to find {} of cortical group index {} in registered motor's list!",
-                motor_type, group_index
+                "Unable to find {} of cortical unit index {} in registered motor's list!",
+                motor_type, unit_index
             )));
         }
         let check = check.unwrap();
@@ -782,7 +782,7 @@ impl MotorDeviceCache {
     fn try_get_agent_device_lookup(
         &self,
         agent_device_index: AgentDeviceIndex,
-    ) -> Result<&[(MotorCorticalUnit, CorticalGroupIndex)], FeagiDataError> {
+    ) -> Result<&[(MotorCorticalUnit, CorticalUnitIndex)], FeagiDataError> {
         let val = self
             .agent_device_key_lookup
             .get(&agent_device_index)
@@ -797,7 +797,7 @@ impl MotorDeviceCache {
     fn try_get_agent_device_lookup_mut(
         &mut self,
         agent_device_index: AgentDeviceIndex,
-    ) -> Result<&mut Vec<(MotorCorticalUnit, CorticalGroupIndex)>, FeagiDataError> {
+    ) -> Result<&mut Vec<(MotorCorticalUnit, CorticalUnitIndex)>, FeagiDataError> {
         let val = self
             .agent_device_key_lookup
             .get_mut(&agent_device_index)
