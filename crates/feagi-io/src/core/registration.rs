@@ -3,11 +3,13 @@
 
 // Registration Handler - processes agent registration requests
 
-use super::agent_registry::{
-    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
-    SensoryCapability, VisionCapability, VisualizationCapability,
-};
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use ahash::AHashSet;
+use parking_lot::RwLock;
+use tracing::{debug, error, info, warn};
+
 use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
@@ -18,10 +20,11 @@ pub use feagi_services::types::registration::{
     AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
     RegistrationResponse, TransportConfig,
 };
-use parking_lot::RwLock;
-use std::collections::HashMap;
-use std::sync::Arc;
-use tracing::{debug, error, info, warn};
+
+use super::agent_registry::{
+    AgentCapabilities, AgentInfo, AgentRegistry, AgentTransport, AgentType, MotorCapability,
+    SensoryCapability, VisionCapability, VisualizationCapability,
+};
 
 /// Type alias for registration callbacks
 pub type RegistrationCallback =
