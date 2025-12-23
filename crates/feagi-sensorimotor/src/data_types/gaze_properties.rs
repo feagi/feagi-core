@@ -116,17 +116,21 @@ impl GazeProperties {
         let modulation_normal: (f32, f32) = // Calculate ranges as per aspect ratio of cortical dimensions
         {
 
-            if destination_segmented_center_cortical_dimensions.width
-                > destination_segmented_center_cortical_dimensions.height
+            if source_frame_resolution.width
+                > source_frame_resolution.height
             {
                 // widescreen
+                let max_width_normal = (destination_segmented_center_cortical_dimensions.width as f32)
+
+
                 let max_cortical_length =
                     destination_segmented_center_cortical_dimensions.width;
                 let min_cortical_length =
                     destination_segmented_center_cortical_dimensions.height;
                 let max_offset =
-                    (min_cortical_length as f32) / (max_cortical_length as f32);
-                (max_offset * self.modulation_size.get_as_0_1(), self.modulation_size.get_as_0_1())
+                    (max_cortical_length as f32) / (min_cortical_length as f32);
+                dbg!(max_offset);
+                (self.modulation_size.get_as_0_1() * max_offset, self.modulation_size.get_as_0_1())
 
 
             } else {
@@ -137,7 +141,7 @@ impl GazeProperties {
                     destination_segmented_center_cortical_dimensions.width;
                 let max_offset =
                     (min_cortical_length as f32) / (max_cortical_length as f32);
-                (self.modulation_size.get_as_0_1(), max_offset * self.modulation_size.get_as_0_1())
+                (self.modulation_size.get_as_0_1(), self.modulation_size.get_as_0_1() * max_offset)
             }
         };
 
@@ -146,7 +150,6 @@ impl GazeProperties {
             // map to allowed scales
             let x: f32 = {
                 let x = self.eccentricity_location_xy.a.get_as_0_1();
-                dbg!(x);
                 let min = modulation_normal.0 / 2.0;
                 let max = 1.0 - min;
                 let x = (x * (max - min)) + min;
@@ -154,7 +157,6 @@ impl GazeProperties {
             };
             let y: f32 = {
                 let y = 1.0 - self.eccentricity_location_xy.b.get_as_0_1(); // Remember that in an image, Y increases downward
-                dbg!(y);
                 let min = modulation_normal.1 / 2.0;
                 let max = 1.0 - min;
                 let y = (y * (max - min)) + min;
@@ -163,9 +165,6 @@ impl GazeProperties {
             (x, y)
         };
 
-        dbg!(modulation_normal);
-        dbg!(&self.eccentricity_location_xy);
-        dbg!(eccentricity_normal);
         let left_position_normal: f32 =
             eccentricity_normal.0 - (modulation_normal.0 / 2.0);
         let top_position_normal: f32 =

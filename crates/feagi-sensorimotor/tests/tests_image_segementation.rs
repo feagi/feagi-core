@@ -17,12 +17,18 @@ use feagi_sensorimotor::ConnectorAgent;
 
 //region Helper Functions
 
-#[allow(dead_code)]
 fn load_bird_image() -> ImageFrame {
     let bird_bytes = std::fs::read("tests/images/bird.jpg")
         .expect("Bird image should exist at tests/images/bird.jpg");
     ImageFrame::new_from_jpeg_bytes(&bird_bytes, &ColorSpace::Gamma)
         .expect("Bird image should load correctly")
+}
+
+fn load_squares_image() -> ImageFrame {
+    let square_bytes = std::fs::read("tests/images/squares.png")
+        .expect("Bird image should exist at tests/images/squares.png");
+    ImageFrame::new_from_png_bytes(&square_bytes, &ColorSpace::Gamma)
+        .expect("Squares image should load correctly")
 }
 
 fn save_png_image(image: &ImageFrame, subpath: String) {
@@ -44,10 +50,10 @@ mod test_segmented_images {
     use feagi_sensorimotor::data_types::descriptors::{SegmentedImageFrameProperties, SegmentedXYImageResolutions};
     use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D, SegmentedImageFrame};
     use feagi_sensorimotor::data_types::processing::ImageFrameSegmentator;
-    use crate::{load_bird_image, save_png_image};
+    use crate::{load_bird_image, load_squares_image, save_png_image};
 
     #[test]
-    fn test_segment_bird_image() {
+    fn test_segment_square_image() {
         fn write_with_gaze(image_frame_segmentator: &mut ImageFrameSegmentator, image: &ImageFrame, segmented_image: &mut SegmentedImageFrame, new_gaze: &GazeProperties, gaze_name: &str) {
             image_frame_segmentator.update_gaze(new_gaze).unwrap();
             image_frame_segmentator.segment_image(image, segmented_image).unwrap();
@@ -68,7 +74,7 @@ mod test_segmented_images {
                 (256, 256).try_into().unwrap(),
                 (128, 128).try_into().unwrap(),
             );
-        let bird_image = load_bird_image();
+        let bird_image = load_squares_image();
         let bird_image_properties = bird_image.get_image_frame_properties();
         let segmented_bird_properties = SegmentedImageFrameProperties::new(
             segmented_image_resolutions,
