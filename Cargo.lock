@@ -1911,7 +1911,6 @@ version = "0.0.1-beta.1"
 dependencies = [
  "chrono",
  "env_logger",
- "feagi-brain-development",
  "feagi-npu-neural",
  "feagi-observability",
  "feagi-structures",
