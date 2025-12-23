@@ -235,14 +235,14 @@ impl CorticalAreaExt for CorticalArea {
     fn is_input_area(&self) -> bool {
         matches!(
             self.cortical_type,
-            feagi_data_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)
+            feagi_structures::genomic::cortical_area::CorticalAreaType::BrainInput(_)
         )
     }
 
     fn is_output_area(&self) -> bool {
         matches!(
             self.cortical_type,
-            feagi_data_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_)
+            feagi_structures::genomic::cortical_area::CorticalAreaType::BrainOutput(_)
         )
     }
 

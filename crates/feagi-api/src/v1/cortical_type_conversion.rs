@@ -143,7 +143,7 @@ fn frame_handling_to_string(frame_handling: &FrameChangeHandling) -> String {
 
 /// Convert PercentageNeuronPositioning enum to string
 fn positioning_to_string(
-    positioning: &feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
+    positioning: &feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
 ) -> String {
     use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
 

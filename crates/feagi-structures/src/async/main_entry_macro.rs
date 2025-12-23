@@ -15,7 +15,7 @@
 /// }
 ///
 /// // Generate the main entry point
-/// feagi_data_structures::feagi_main!(run_application);
+/// feagi_structures::feagi_main!(run_application);
 /// ```
 #[cfg(feature = "async")]
 #[macro_export]

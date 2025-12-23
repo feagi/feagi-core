@@ -185,7 +185,7 @@ mod test_connector_cache_sensor_load_image {
         }
         {
             let mut motor_cache = connector_agent.get_motor_cache();
-            motor_cache.gaze_control_register(cortical_group, number_channels, FrameChangeHandling::Absolute, 10.try_into().unwrap(), feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning::Linear).unwrap();
+            motor_cache.gaze_control_register(cortical_group, number_channels, FrameChangeHandling::Absolute, 10.try_into().unwrap(), feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning::Linear).unwrap();
 
             // TODO motor bytes sending
 

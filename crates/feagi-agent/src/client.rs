@@ -477,7 +477,7 @@ impl AgentClient {
     /// ```
     pub fn receive_motor_data(
         &self,
-    ) -> Result<Option<feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels>>
+    ) -> Result<Option<feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels>>
     {
         use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 

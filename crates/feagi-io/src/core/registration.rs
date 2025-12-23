@@ -290,7 +290,7 @@ impl RegistrationHandler {
         &self,
         unit: SensoryCorticalUnit,
         frame_change_handling: FrameChangeHandling,
-        percentage_neuron_positioning: feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
+        percentage_neuron_positioning: feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
         group: CorticalGroupIndex,
     ) -> Result<Vec<CorticalID>, String> {
         // Dispatch to the appropriate get_cortical_ids_array_for method based on unit type

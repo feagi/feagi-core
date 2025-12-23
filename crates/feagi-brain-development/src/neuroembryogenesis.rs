@@ -960,7 +960,7 @@ impl Neuroembryogenesis {
     /// - OUTPUT: Any area in the region that connects to an area OUTSIDE the region
     /// - INPUT: Any area in the region that receives connection from OUTSIDE the region
     fn analyze_region_io(
-        region_area_ids: &[feagi_data_structures::genomic::cortical_area::CorticalID],
+        region_area_ids: &[feagi_structures::genomic::cortical_area::CorticalID],
         all_cortical_areas: &std::collections::HashMap<CorticalID, CorticalArea>,
     ) -> (Vec<String>, Vec<String>) {
         let area_set: std::collections::HashSet<_> = region_area_ids.iter().cloned().collect();

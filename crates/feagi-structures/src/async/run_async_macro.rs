@@ -18,7 +18,7 @@
 ///
 /// #[tokio::test]  // or #[wasm_bindgen_test] on WASM
 /// async fn test_something() {
-///     let result = feagi_data_structures::run_async!(my_async_work);
+///     let result = feagi_structures::run_async!(my_async_work);
 ///     assert_eq!(result, 42);
 /// }
 /// ```

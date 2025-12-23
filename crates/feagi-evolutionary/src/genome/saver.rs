@@ -247,7 +247,7 @@ mod tests {
         let area = &parsed.cortical_areas[0];
         // cortical_id is now stored as CorticalID object after roundtrip
         let expected_power_id =
-            feagi_data_structures::genomic::cortical_area::CoreCorticalType::Power.to_cortical_id();
+            feagi_structures::genomic::cortical_area::CoreCorticalType::Power.to_cortical_id();
         assert_eq!(area.cortical_id, expected_power_id);
         assert_eq!(area.name, "Test Area");
         assert_eq!(area.dimensions.width, 10);

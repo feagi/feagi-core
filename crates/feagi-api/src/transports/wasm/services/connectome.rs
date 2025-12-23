@@ -33,7 +33,7 @@ impl WasmConnectomeService {
     fn area_to_info(
         &self,
         cortical_id: &CorticalID,
-        area: &feagi_data_structures::genomic::cortical_area::CorticalArea,
+        area: &feagi_structures::genomic::cortical_area::CorticalArea,
     ) -> CorticalAreaInfo {
         use feagi_structures::genomic::cortical_area::CorticalArea;
 

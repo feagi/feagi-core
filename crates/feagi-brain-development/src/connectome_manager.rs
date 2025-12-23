@@ -2714,7 +2714,7 @@ impl ConnectomeManager {
                     if let Some(type_str) = value.as_str() {
                         // Note: RegionType is currently a placeholder (Undefined only)
                         // Specific region types will be added in the future
-                        region.region_type = feagi_data_structures::genomic::RegionType::Undefined;
+                        region.region_type = feagi_structures::genomic::RegionType::Undefined;
                         debug!(target: "feagi-bdu", "Updated brain region {} type = {}", region_id, type_str);
                     }
                 }
@@ -3399,12 +3399,12 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        let region_id = feagi_data_structures::genomic::brain_regions::RegionID::new();
+        let region_id = feagi_structures::genomic::brain_regions::RegionID::new();
         let region_id_str = region_id.to_string();
         let root = BrainRegion::new(
             region_id,
             "Root".to_string(),
-            feagi_data_structures::genomic::brain_regions::RegionType::Undefined,
+            feagi_structures::genomic::brain_regions::RegionType::Undefined,
         )
         .unwrap();
 
