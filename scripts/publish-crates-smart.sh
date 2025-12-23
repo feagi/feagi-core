@@ -11,7 +11,9 @@ set -e
 
 CARGO_TOKEN="${CARGO_REGISTRY_TOKEN:-}"
 DRY_RUN="${DRY_RUN:-false}"
-DELAY_SECONDS=30
+# Crates.io enforces publish rate limits. Use a conservative default delay.
+# You can override per-run with: DELAY_SECONDS=60 ./scripts/publish-crates-smart.sh
+DELAY_SECONDS="${DELAY_SECONDS:-90}"
 
 # ----------------------------------------------------------------------------
 # Normalize CHANGED_CRATES input (supports both array and string formats)
