@@ -18,11 +18,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use feagi_bdu::Neuroembryogenesis;
+use feagi_evolutionary::{templates, RuntimeGenome};
+use feagi_npu_burst_engine::DynamicNPU;
 use feagi_structures::genomic::cortical_area::{
     AreaType, CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
-use feagi_evolutionary::{templates, RuntimeGenome};
-use feagi_npu_burst_engine::DynamicNPU;
 
 // Configuration - edit these to change test parameters
 const WITH_PROJECTION: bool = true; // Set to true to test with projection
