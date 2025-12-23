@@ -149,16 +149,14 @@ impl GazeProperties {
                 dbg!(x);
                 let min = modulation_normal.0 / 2.0;
                 let max = 1.0 - min;
-                let x = (x * (max - min)) + min;
-                x
+                (x * (max - min)) + min
             };
             let y: f32 = {
                 let y = 1.0 - self.eccentricity_location_xy.b.get_as_0_1(); // Remember that in an image, Y increases downward
                 dbg!(y);
                 let min = modulation_normal.1 / 2.0;
                 let max = 1.0 - min;
-                let y = (y * (max - min)) + min;
-                y
+                (y * (max - min)) + min
             };
             (x, y)
         };

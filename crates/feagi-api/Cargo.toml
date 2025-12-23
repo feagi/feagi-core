@@ -1,9 +1,11 @@
 [package]
 name = "feagi-api"
-version.workspace = true
-edition = "2021"
+version = "0.0.1-beta.1"
+edition.workspace = true
 authors.workspace = true
-license = "Apache-2.0"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 
 [dependencies]

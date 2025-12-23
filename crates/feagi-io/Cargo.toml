@@ -1,9 +1,11 @@
 [package]
-authors.workspace = true
 name = "feagi-io"
-version.workspace = true
-edition = "2021"
-license = "Apache-2.0"
+version = "0.0.1-beta.1"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "FEAGI I/O System - Agent I/O, registration, ZMQ & SHM"
 
 [features]

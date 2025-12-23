@@ -3,17 +3,8 @@
 //! These tests verify image segmentation through the ConnectorAgent and sensor cache,
 //! testing various gaze positions, resolutions, and color channel configurations.
 
-use std::io::Read;
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
-};
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-use feagi_sensorimotor::data_types::descriptors::{
-    ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
-};
-use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
-use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-use feagi_sensorimotor::ConnectorAgent;
+use feagi_sensorimotor::data_types::descriptors::ColorSpace;
+use feagi_sensorimotor::data_types::ImageFrame;
 
 //region Helper Functions
 

@@ -1,10 +1,12 @@
 [package]
 name = "feagi-agent"
-version.workspace = true
-edition = "2021"
+version = "0.0.1-beta.1"
+edition.workspace = true
 authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Client library for building FEAGI agents in Rust"
-license = "Apache-2.0"
 readme = "README.md"
 
 [dependencies]

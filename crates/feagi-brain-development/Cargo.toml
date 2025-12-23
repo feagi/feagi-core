@@ -1,9 +1,11 @@
 [package]
 name = "feagi-brain-development"
-version.workspace = true
+version = "0.0.1-beta.1"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Brain Development Utilities - Synaptogenesis and Connectivity"
 
 [lib]

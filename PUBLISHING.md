@@ -6,7 +6,25 @@
 1. A **main facade crate** (`feagi`) - What users import
 2. **Individual component crates** - Can be used independently
 
-## What Gets Published to crates.io
+## 🔢 VERSIONING STRATEGY: INDEPENDENT
+
+**CRITICAL:** Each crate maintains its OWN independent version number.
+
+### Rules:
+- ✅ Each crate has explicit `version = "X.Y.Z"` in its Cargo.toml
+- ✅ Only bump version for crates that changed
+- ✅ Version numbers can differ across crates
+- ❌ **NEVER use `version.workspace = true`**
+
+### Example:
+```toml
+# Different versions for different crates
+feagi-npu-neural:       version = "0.0.1-beta.5"
+feagi-npu-burst-engine: version = "0.0.1-beta.3"
+feagi-io:               version = "0.0.1-beta.8"
+```
+
+---
 
 ### 1. Main Facade Crate
 
@@ -168,34 +186,37 @@ When users run:
 feagi = "0.0.1-beta.1"
 ```
 
-Cargo automatically resolves:
+Cargo automatically resolves the latest compatible versions of dependencies:
 ```
-feagi 0.0.1
-├── feagi-types 0.0.1
-├── feagi-state-manager 0.0.1
-├── feagi-burst-engine 0.0.1
-├── feagi-brain-development 0.0.1
-├── feagi-plasticity 0.0.1
-├── feagi-connectome-serialization 0.0.1
-├── feagi-io 0.0.1
-└── feagi-agent 0.0.1
+feagi 0.0.1-beta.1
+├── feagi-npu-neural ^0.0.1-beta.1  (may resolve to 0.0.1-beta.5 if published)
+├── feagi-state-manager ^0.0.1-beta.1
+├── feagi-npu-burst-engine ^0.0.1-beta.1
+└── ... (other dependencies at their respective versions)
 ```
 
-## Version Synchronization
+**Note:** Each sub-crate can be at a different patch/beta version due to independent versioning.
 
-**All crates MUST have synchronized versions**:
-- Main crate: `0.0.1`
-- All sub-crates: `0.0.1` (inherited from workspace)
+---
 
-**Update script**:
+## Version Management
+
+### Manual Version Bumps
+Each crate version must be manually updated in its Cargo.toml:
+
 ```bash
-# Update all versions at once
-cd /Users/nadji/code/FEAGI-2.0/feagi-core
-# Update workspace version (most crates inherit from this)
-sed -i 's/version = "0.0.1"/version = "0.0.2"/' Cargo.toml
-# Update any crates with explicit versions
-find crates -name Cargo.toml -exec sed -i 's/version = "0.0.1"/version = "0.0.2"/' {} \;
+# Example: Bump feagi-npu-neural after bug fix
+vim crates/feagi-npu/neural/Cargo.toml
+# Change: version = "0.0.1-beta.1" → version = "0.0.1-beta.2"
+
+# Publish
+cargo publish -p feagi-npu-neural
 ```
+
+### When to Bump
+- **Bug fix**: Increment beta number (`0.0.1-beta.1` → `0.0.1-beta.2`)
+- **New feature**: Consider minor bump or beta increment
+- **Breaking change**: Increment minor (`0.0.1` → `0.1.0`) or major after 1.0
 
 ## Verification
 

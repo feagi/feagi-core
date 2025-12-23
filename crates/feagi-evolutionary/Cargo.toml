@@ -1,10 +1,12 @@
 [package]
 name = "feagi-evolutionary"
-version.workspace = true
-edition = "2021"
+version = "0.0.1-beta.1"
+edition.workspace = true
 authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
 description = "Evolution and Genome Management - Genotype operations for FEAGI"
-license = "Apache-2.0"
 
 [lib]
 crate-type = ["rlib"]

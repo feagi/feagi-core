@@ -1,12 +1,12 @@
 [package]
-authors.workspace = true
 name = "feagi-structures"
+version = "0.0.1-beta.1"
 edition.workspace = true
-version.workspace = true
+authors.workspace = true
 license.workspace = true
-description = "The most core library, defines the basic data types used by FEAGI, as well as some processors to modify them"
 repository.workspace = true
 homepage.workspace = true
+description = "The most core library, defines the basic data types used by FEAGI, as well as some processors to modify them"
 
 [dependencies]
 serde = { workspace = true }

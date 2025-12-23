@@ -1,10 +1,11 @@
 [package]
 name = "feagi-npu-neural"
-version.workspace = true
+version = "0.0.1-beta.1"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
 description = "Platform-agnostic neural computation: types, algorithms, and neuron models"
 
 [features]
