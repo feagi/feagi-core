@@ -106,6 +106,7 @@ impl PipelineStage for ImageFrameProcessorStage {
     ) -> Result<(), FeagiDataError> {
         match properties {
             PipelineStageProperties::ImageFrameProcessor { transformer_definition } => {
+                // No real point checking for change, just replace
                 self.transformer_definition = transformer_definition;
                 Ok(())
             }

@@ -73,8 +73,8 @@ impl PipelineStage for ImageFrameSegmentatorStage {
         properties: PipelineStageProperties,
     ) -> Result<(), FeagiDataError> {
         match properties {
-            PipelineStageProperties::ImageFrameSegmentator { segmentation_gaze, .. } => {
-                self.image_segmentator.update_gaze(&segmentation_gaze)?;
+            PipelineStageProperties::ImageFrameSegmentator { segmentation_gaze, .. } => { // Other properties not allowed to be changed
+                self.image_segmentator.update_gaze(&segmentation_gaze)?; // TODO for only updating gaze, we dont need to change this much!
                 Ok(())
             }
             _ => Err(FeagiDataError::BadParameters(

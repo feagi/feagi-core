@@ -98,6 +98,8 @@ impl PipelineStage for ImageFrameQuickDiffStage {
                     return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
                 }
 
+                // no point running checks here for change
+
                 // Update the threshold and activity range
                 self.inclusive_pixel_range = per_pixel_allowed_range;
                 self.acceptable_amount_of_activity_in_image = acceptable_amount_of_activity_in_image;

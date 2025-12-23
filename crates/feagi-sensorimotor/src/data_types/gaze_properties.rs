@@ -112,51 +112,68 @@ impl GazeProperties {
         source_frame_resolution: ImageXYResolution,
         destination_segmented_center_cortical_dimensions: CorticalAreaDimensions,
     ) -> Result<CornerPoints, FeagiDataError> {
-        let source_frame_center_normal: (f32, f32) = (
-            self.eccentricity_location_xy.a.get_as_0_1(),
-            1.0 - self.eccentricity_location_xy.b.get_as_0_1(), // Remember that in an image, Y increases downward
-        );
 
-        let source_frame_max_off_center_normal: (f32, f32) = {
-            // To keep aspect ratio to the center cortical area XY, but also not allow the size to grow past it
-            let source_frame_max_offset_normal: (f32, f32) = {
-                if destination_segmented_center_cortical_dimensions.width
-                    > destination_segmented_center_cortical_dimensions.height
-                {
-                    // widescreen
-                    let max_cortical_length =
-                        destination_segmented_center_cortical_dimensions.width;
-                    let min_cortical_length =
-                        destination_segmented_center_cortical_dimensions.height;
-                    let max_offset =
-                        ((min_cortical_length as f32) / (max_cortical_length as f32)) * 0.5;
-                    (max_offset, 0.5)
-                } else {
-                    // portrait / square
-                    let max_cortical_length =
-                        destination_segmented_center_cortical_dimensions.height;
-                    let min_cortical_length =
-                        destination_segmented_center_cortical_dimensions.width;
-                    let max_offset =
-                        ((min_cortical_length as f32) / (max_cortical_length as f32)) * 0.5;
-                    (0.5, max_offset)
-                }
-            };
+        let modulation_normal: (f32, f32) = // Calculate ranges as per aspect ratio of cortical dimensions
+        {
 
-            (
-                source_frame_max_offset_normal.0 * self.modulation_size.get_as_0_1(),
-                source_frame_max_offset_normal.1 * self.modulation_size.get_as_0_1(),
-            )
+            if destination_segmented_center_cortical_dimensions.width
+                > destination_segmented_center_cortical_dimensions.height
+            {
+                // widescreen
+                let max_cortical_length =
+                    destination_segmented_center_cortical_dimensions.width;
+                let min_cortical_length =
+                    destination_segmented_center_cortical_dimensions.height;
+                let max_offset =
+                    (min_cortical_length as f32) / (max_cortical_length as f32);
+                (max_offset * self.modulation_size.get_as_0_1(), self.modulation_size.get_as_0_1())
+
+
+            } else {
+                // portrait / square
+                let max_cortical_length =
+                    destination_segmented_center_cortical_dimensions.height;
+                let min_cortical_length =
+                    destination_segmented_center_cortical_dimensions.width;
+                let max_offset =
+                    (min_cortical_length as f32) / (max_cortical_length as f32);
+                (self.modulation_size.get_as_0_1(), max_offset * self.modulation_size.get_as_0_1())
+            }
         };
 
+        let eccentricity_normal: (f32, f32) = // Prevent eccentricity from going off frame
+        {
+            // map to allowed scales
+            let x: f32 = {
+                let x = self.eccentricity_location_xy.a.get_as_0_1();
+                dbg!(x);
+                let min = modulation_normal.0 / 2.0;
+                let max = 1.0 - min;
+                let x = (x * (max - min)) + min;
+                x
+            };
+            let y: f32 = {
+                let y = 1.0 - self.eccentricity_location_xy.b.get_as_0_1(); // Remember that in an image, Y increases downward
+                dbg!(y);
+                let min = modulation_normal.1 / 2.0;
+                let max = 1.0 - min;
+                let y = (y * (max - min)) + min;
+                y
+            };
+            (x, y)
+        };
+
+        dbg!(modulation_normal);
+        dbg!(&self.eccentricity_location_xy);
+        dbg!(eccentricity_normal);
         let left_position_normal: f32 =
-            source_frame_center_normal.0 - source_frame_max_off_center_normal.0;
+            eccentricity_normal.0 - (modulation_normal.0 / 2.0);
         let top_position_normal: f32 =
-            source_frame_center_normal.1 - source_frame_max_off_center_normal.1;
+            eccentricity_normal.1 - (modulation_normal.1 / 2.0);
         let right_position_normal: f32 =
-            source_frame_center_normal.0 + source_frame_max_off_center_normal.0;
+            eccentricity_normal.0 + (modulation_normal.0 / 2.0);
         let bottom_position_normal: f32 =
-            source_frame_center_normal.1 + source_frame_max_off_center_normal.1;
+            eccentricity_normal.1 + (modulation_normal.1 / 2.0);
 
         let source_frame_width_height_pixel: (f32, f32) = (
             source_frame_resolution.width as f32,
