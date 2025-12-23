@@ -12,7 +12,18 @@ set -e
 CARGO_TOKEN="${CARGO_REGISTRY_TOKEN:-}"
 DRY_RUN="${DRY_RUN:-false}"
 DELAY_SECONDS=30
-CHANGED_CRATES_LIST="${CHANGED_CRATES[@]}"
+
+# ----------------------------------------------------------------------------
+# Normalize CHANGED_CRATES input (supports both array and string formats)
+#
+# CI often passes:
+#   CHANGED_CRATES="(feagi-a feagi-b ...)"
+# While bash arrays are:
+#   CHANGED_CRATES=(feagi-a feagi-b ...)
+# ----------------------------------------------------------------------------
+RAW_CHANGED_CRATES="${CHANGED_CRATES[*]}"
+# Strip parentheses, convert commas to spaces, and normalize whitespace
+CHANGED_CRATES_LIST="$(echo "${RAW_CHANGED_CRATES}" | tr -d '()' | tr ',' ' ' | xargs)"
 
 # ANSI colors
 RED='\033[0;31m'
@@ -35,26 +46,32 @@ echo ""
 # Define crate paths and publication order
 # ============================================================================
 
-declare -A CRATE_PATHS=(
-    ["feagi-observability"]="crates/feagi-observability"
-    ["feagi-structures"]="crates/feagi-structures"
-    ["feagi-config"]="crates/feagi-config"
-    ["feagi-npu-neural"]="crates/feagi-npu/neural"
-    ["feagi-npu-runtime"]="crates/feagi-npu/runtime"
-    ["feagi-serialization"]="crates/feagi-serialization"
-    ["feagi-state-manager"]="crates/feagi-state-manager"
-    ["feagi-npu-burst-engine"]="crates/feagi-npu/burst-engine"
-    ["feagi-npu-plasticity"]="crates/feagi-npu/plasticity"
-    ["feagi-evolutionary"]="crates/feagi-evolutionary"
-    ["feagi-brain-development"]="crates/feagi-brain-development"
-    ["feagi-io"]="crates/feagi-io"
-    ["feagi-sensorimotor"]="crates/feagi-sensorimotor"
-    ["feagi-services"]="crates/feagi-services"
-    ["feagi-api"]="crates/feagi-api"
-    ["feagi-agent"]="crates/feagi-agent"
-    ["feagi-hal"]="crates/feagi-hal"
-    ["feagi"]="."
-)
+# NOTE: This script must work on macOS default bash (3.2) and Ubuntu CI bash.
+# Bash 3.2 does NOT support associative arrays (declare -A), so we use a
+# portable mapping function instead.
+crate_path_for() {
+    case "$1" in
+        feagi-observability) echo "crates/feagi-observability" ;;
+        feagi-structures) echo "crates/feagi-structures" ;;
+        feagi-config) echo "crates/feagi-config" ;;
+        feagi-npu-neural) echo "crates/feagi-npu/neural" ;;
+        feagi-npu-runtime) echo "crates/feagi-npu/runtime" ;;
+        feagi-serialization) echo "crates/feagi-serialization" ;;
+        feagi-state-manager) echo "crates/feagi-state-manager" ;;
+        feagi-npu-burst-engine) echo "crates/feagi-npu/burst-engine" ;;
+        feagi-npu-plasticity) echo "crates/feagi-npu/plasticity" ;;
+        feagi-evolutionary) echo "crates/feagi-evolutionary" ;;
+        feagi-brain-development) echo "crates/feagi-brain-development" ;;
+        feagi-io) echo "crates/feagi-io" ;;
+        feagi-sensorimotor) echo "crates/feagi-sensorimotor" ;;
+        feagi-services) echo "crates/feagi-services" ;;
+        feagi-api) echo "crates/feagi-api" ;;
+        feagi-agent) echo "crates/feagi-agent" ;;
+        feagi-hal) echo "crates/feagi-hal" ;;
+        feagi) echo "." ;;
+        *) return 1 ;;
+    esac
+}
 
 # Publication order (dependencies first)
 CRATE_ORDER=(
@@ -112,6 +129,15 @@ should_publish_crate() {
         echo "skip_published"
         return
     fi
+
+    # If the crate is NOT published yet, we MUST publish it even if it's not in
+    # the changed list. Otherwise, dependents will fail with "no matching package".
+    if [ -n "$CHANGED_CRATES_LIST" ]; then
+        if [[ " ${CHANGED_CRATES_LIST} " != *" ${crate_name} "* ]]; then
+            echo "publish_unpublished"
+            return
+        fi
+    fi
     
     # If CHANGED_CRATES_LIST is empty, publish all unpublished crates
     if [ -z "$CHANGED_CRATES_LIST" ]; then
@@ -133,7 +159,8 @@ should_publish_crate() {
 
 publish_crate() {
     local crate_name=$1
-    local crate_path="${CRATE_PATHS[$crate_name]}"
+    local crate_path
+    crate_path="$(crate_path_for "$crate_name")" || return 1
     
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -164,15 +191,29 @@ publish_crate() {
         cargo publish --dry-run
     else
         echo "   🚀 Publishing to crates.io..."
-        if cargo publish --token "$CARGO_TOKEN"; then
+        # With set -e, we must temporarily disable exit-on-error to capture output.
+        set +e
+        publish_output="$(cargo publish --token "$CARGO_TOKEN" 2>&1)"
+        publish_status=$?
+        set -e
+
+        if [ "$publish_status" -eq 0 ]; then
             echo -e "   ${GREEN}✅ Successfully published $crate_name v$version${NC}"
-            
+
             # Delay for crates.io indexing (except for last crate)
             if [ "$crate_name" != "feagi" ]; then
                 echo -e "   ${CYAN}⏳ Waiting ${DELAY_SECONDS}s for crates.io indexing...${NC}"
                 sleep $DELAY_SECONDS
             fi
         else
+            # If already published, treat as a skip (do NOT fail the run)
+            if echo "$publish_output" | grep -qiE "already exists on crates\.io|already exists on crates\.io index|version .* already exists"; then
+                echo -e "   ${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
+                cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+                return 2
+            fi
+
+            echo "$publish_output"
             echo -e "   ${RED}❌ Failed to publish $crate_name${NC}"
             cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
             return 1
@@ -208,7 +249,7 @@ PUBLISHED_COUNT=0
 SKIPPED_COUNT=0
 
 for crate_name in "${CRATE_ORDER[@]}"; do
-    crate_path="${CRATE_PATHS[$crate_name]}"
+    crate_path="$(crate_path_for "$crate_name")" || continue
     
     if [ ! -f "$crate_path/Cargo.toml" ] && [ "$crate_path" != "." ]; then
         echo -e "${YELLOW}⚠️  Warning: $crate_path not found, skipping...${NC}"
@@ -221,7 +262,7 @@ for crate_name in "${CRATE_ORDER[@]}"; do
     if [ "$publish_decision" = "skip_published" ]; then
         # Get version for display
         cd "$crate_path" 2>/dev/null || continue
-        local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
         cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
         echo -e "${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
         SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
@@ -230,10 +271,17 @@ for crate_name in "${CRATE_ORDER[@]}"; do
         echo -e "${BLUE}⏭️  Skipping $crate_name (not in changed list)${NC}"
         SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
         continue
+    elif [ "$publish_decision" = "publish_unpublished" ]; then
+        echo -e "${CYAN}📌 Publishing $crate_name (unpublished dependency)${NC}"
     fi
     
-    if publish_crate "$crate_name"; then
+    publish_crate "$crate_name"
+    publish_rc=$?
+
+    if [ "$publish_rc" -eq 0 ]; then
         PUBLISHED_COUNT=$((PUBLISHED_COUNT + 1))
+    elif [ "$publish_rc" -eq 2 ]; then
+        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
     else
         FAILED_CRATES+=("$crate_name")
     fi
