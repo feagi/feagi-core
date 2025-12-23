@@ -1,18 +1,18 @@
 [package]
-authors.workspace = true
 name = "feagi-sensorimotor"
+version = "0.0.1-beta.1"
 edition.workspace = true
-version.workspace = true
+authors.workspace = true
 license.workspace = true
-description = "Sensorimotor System - Data processing, caching, and neuron voxel encoding for FEAGI agents (sensory input and motor output)"
 repository.workspace = true
 homepage.workspace = true
+description = "Sensorimotor System - Data processing, caching, and neuron voxel encoding for FEAGI agents (sensory input and motor output)"
 
 
 [dependencies]
 ndarray = { workspace = true, features = ["rayon"] }
-feagi-data-structures = { version = "0.0.1-beta.1", path = "../feagi-data-structures" }
-feagi-data-serialization = { version = "0.0.1-beta.1", path = "../feagi-data-serialization" }
+feagi-structures = { version = "0.0.1-beta.1", path = "../feagi-structures" }
+feagi-serialization = { version = "0.0.1-beta.1", path = "../feagi-serialization" }
 image = {workspace = true}
 rayon = { workspace = true}
 paste = { workspace = true}

@@ -3,19 +3,19 @@
 // - FeagiSerializable trait instead of FeagiByteStructureCompatible
 // TODO: Update tests to use new serialization API
 #[allow(unused_imports)]
-use feagi_data_serialization::FeagiByteContainer;
+use feagi_serialization::FeagiByteContainer;
 #[allow(unused_imports)]
-use feagi_data_serialization::FeagiByteStructureType;
+use feagi_serialization::FeagiByteStructureType;
 #[allow(unused_imports)]
-use feagi_data_serialization::FeagiSerializable;
+use feagi_serialization::FeagiSerializable;
 #[allow(unused_imports)]
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 #[allow(unused_imports)]
-use feagi_data_structures::neuron_voxels::xyzp::{
+use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
 };
 #[allow(unused_imports)]
-use feagi_data_structures::FeagiJSON;
+use feagi_structures::FeagiJSON;
 #[allow(unused_imports)]
 use serde_json::json;
 

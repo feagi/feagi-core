@@ -21,7 +21,7 @@ use crate::types::agent_registry::{
 };
 use crate::types::registration::RegistrationRequest;
 use feagi_brain_development::ConnectomeManager;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 
 /// Implementation of the Agent service
 pub struct AgentServiceImpl {
@@ -348,7 +348,7 @@ impl AgentService for AgentServiceImpl {
 
         let agent_router_address = format!("tcp://{}:{}", agent_ip, agent_data_port);
 
-        // Build full capabilities map (including vision, motor, viz, not just custom)
+        // Build full capabilities map using feagi-sensorimotor format: {"input": [...], "output": [...]}
         let mut capabilities = HashMap::new();
 
         // Add vision capability if present
@@ -359,11 +359,13 @@ impl AgentService for AgentServiceImpl {
             );
         }
 
-        // Add motor capability if present
+        // Add output capability (feagi-sensorimotor format)
         if let Some(ref motor) = agent.capabilities.motor {
+            // Convert motor capability to "output" format: array of cortical IDs
+            let output_areas: Vec<String> = motor.source_cortical_areas.clone();
             capabilities.insert(
-                "motor".to_string(),
-                serde_json::to_value(motor).unwrap_or(serde_json::Value::Null),
+                "output".to_string(),
+                serde_json::to_value(output_areas).unwrap_or(serde_json::Value::Null),
             );
         }
 
@@ -375,11 +377,13 @@ impl AgentService for AgentServiceImpl {
             );
         }
 
-        // Add sensory capability if present
+        // Add input capability (feagi-sensorimotor format)
         if let Some(ref sensory) = agent.capabilities.sensory {
+            // Convert sensory capability to "input" format: array of cortical IDs
+            let input_areas: Vec<String> = sensory.cortical_mappings.keys().cloned().collect();
             capabilities.insert(
-                "sensory".to_string(),
-                serde_json::to_value(sensory).unwrap_or(serde_json::Value::Null),
+                "input".to_string(),
+                serde_json::to_value(input_areas).unwrap_or(serde_json::Value::Null),
             );
         }
 

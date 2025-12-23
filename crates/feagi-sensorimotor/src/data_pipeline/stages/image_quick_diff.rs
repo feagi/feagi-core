@@ -3,7 +3,7 @@ use crate::data_pipeline::pipeline_stage_properties::PipelineStageProperties;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::{ImageFrame, Percentage};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use ndarray::{Array3, Zip};
 use rayon::iter::IntoParallelIterator;
 use rayon::prelude::*;
@@ -97,6 +97,8 @@ impl PipelineStage for ImageFrameQuickDiffStage {
                 if acceptable_amount_of_activity_in_image.is_empty() {
                     return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
                 }
+
+                // no point running checks here for change
 
                 // Update the threshold and activity range
                 self.inclusive_pixel_range = per_pixel_allowed_range;

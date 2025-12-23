@@ -326,7 +326,7 @@ impl NonBlockingTransport for UdpTransport {
 mod tests {
     use super::*;
     use crate::nonblocking::runtime as pns_runtime;
-    use feagi_data_serialization::FeagiByteContainer;
+    use feagi_serialization::FeagiByteContainer;
     use tokio::runtime;
 
     #[test]

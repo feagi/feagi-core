@@ -16,7 +16,7 @@ mod gaze_properties;
 mod image_frame;
 mod misc_data;
 mod percentages;
-pub(crate) mod processing;
+pub mod processing;
 mod segmented_image_frame;
 
 pub use gaze_properties::GazeProperties;

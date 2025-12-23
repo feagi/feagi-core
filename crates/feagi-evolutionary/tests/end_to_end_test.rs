@@ -30,7 +30,7 @@ fn test_complete_genome_workflow() {
 
     // Add a cortical area (use valid core ID)
     let test_id = feagi_evolutionary::string_to_cortical_id("_power").expect("Valid ID");
-    use feagi_data_structures::genomic::cortical_area::{
+    use feagi_structures::genomic::cortical_area::{
         CorticalArea, CorticalAreaDimensions, CorticalAreaType, CustomCorticalType,
     };
     let area = CorticalArea::new(

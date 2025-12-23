@@ -3,7 +3,7 @@ use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::ImageFrameProperties;
 use crate::data_types::{ImageFrame, Percentage};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use ndarray::{Array3, Zip};
 use rayon::prelude::*;
 use std::any::Any;
@@ -91,6 +91,8 @@ impl PipelineStage for ImagePixelValueCountThresholdStage {
                 if acceptable_amount_of_activity_in_image.is_empty() {
                     return Err(FeagiDataError::BadParameters("acceptable_amount_of_activity_in_image appears to be empty! Are your bounds correct?".into()));
                 }
+
+                // no point running checks here for change
 
                 self.inclusive_pixel_range = inclusive_pixel_range;
                 self.acceptable_amount_of_activity_in_image = acceptable_amount_of_activity_in_image;

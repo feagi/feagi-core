@@ -5,12 +5,12 @@ use crate::data_types::SignedPercentage;
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::encode_signed_percentage_to_linear_neuron_z_index;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_data_structures::genomic::cortical_area::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
 };
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
 

@@ -5,14 +5,14 @@
 //!
 //! Moved from feagi-types/src/models/ (Phase 2c)
 
-// Dimensions removed - use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
+// Dimensions removed - use feagi_structures::genomic::cortical_area::CorticalAreaDimensions
 
 // CorticalArea stub removed - use feagi_data_structures or feagi-bdu versions
 // This was a minimal runtime placeholder that's no longer needed
 
 // BrainRegion, RegionType, and BrainRegionHierarchy moved to feagi_data_structures
-// Use: feagi_data_structures::genomic::brain_regions::BrainRegion
-// Use: feagi_data_structures::genomic::brain_regions::RegionType
+// Use: feagi_structures::genomic::brain_regions::BrainRegion
+// Use: feagi_structures::genomic::brain_regions::RegionType
 
 // Placeholder types for no_std
 #[cfg(not(feature = "std"))]

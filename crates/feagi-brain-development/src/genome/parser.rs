@@ -46,8 +46,8 @@ use std::collections::HashMap;
 use tracing::warn;
 
 use crate::models::{BrainRegion, CorticalArea, CorticalAreaDimensions};
-use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
-use feagi_data_structures::genomic::RegionType;
+use feagi_structures::genomic::cortical_area::CorticalAreaType;
+use feagi_structures::genomic::RegionType;
 use crate::types::{BduError, BduResult};
 
 /// Parsed genome data ready for ConnectomeManager

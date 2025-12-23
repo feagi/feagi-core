@@ -3,7 +3,7 @@
 
 //! Core types used across all PNS modules
 
-use feagi_data_serialization::FeagiByteContainer;
+use feagi_serialization::FeagiByteContainer;
 use std::sync::Arc;
 use thiserror::Error;
 

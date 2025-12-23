@@ -50,11 +50,11 @@ source "$VERSIONS_FILE"
 
 declare -A CRATE_PATHS=(
     ["feagi-observability"]="crates/feagi-observability"
-    ["feagi-data-structures"]="crates/feagi-data-structures"
+    ["feagi-structures"]="crates/feagi-structures"
     ["feagi-config"]="crates/feagi-config"
     ["feagi-npu-neural"]="crates/feagi-npu/neural"
     ["feagi-npu-runtime"]="crates/feagi-npu/runtime"
-    ["feagi-data-serialization"]="crates/feagi-data-serialization"
+    ["feagi-serialization"]="crates/feagi-serialization"
     ["feagi-state-manager"]="crates/feagi-state-manager"
     ["feagi-npu-burst-engine"]="crates/feagi-npu/burst-engine"
     ["feagi-npu-plasticity"]="crates/feagi-npu/plasticity"

@@ -21,7 +21,7 @@ use crate::parameter_update_queue::ParameterUpdateQueue;
 #[cfg(feature = "std")]
 use ahash::AHashMap;
 #[cfg(feature = "std")]
-use feagi_data_structures::r#async::FeagiAsyncRuntime;
+use feagi_structures::r#async::FeagiAsyncRuntime;
 #[cfg(feature = "std")]
 use parking_lot::RwLock as ParkingLotRwLock;
 #[cfg(feature = "std")]

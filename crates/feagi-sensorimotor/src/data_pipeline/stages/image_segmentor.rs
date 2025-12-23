@@ -4,7 +4,7 @@ use crate::data_types::descriptors::{ImageFrameProperties, SegmentedImageFramePr
 use crate::data_types::ImageFrameSegmentator;
 use crate::data_types::{ImageFrame, SegmentedImageFrame};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use std::any::Any;
 use std::fmt::Display;
 use std::time::Instant;
@@ -73,8 +73,8 @@ impl PipelineStage for ImageFrameSegmentatorStage {
         properties: PipelineStageProperties,
     ) -> Result<(), FeagiDataError> {
         match properties {
-            PipelineStageProperties::ImageFrameSegmentator { segmentation_gaze, .. } => {
-                self.image_segmentator.update_gaze(&segmentation_gaze)?;
+            PipelineStageProperties::ImageFrameSegmentator { segmentation_gaze, .. } => { // Other properties not allowed to be changed
+                self.image_segmentator.update_gaze(&segmentation_gaze)?; // TODO for only updating gaze, we dont need to change this much!
                 Ok(())
             }
             _ => Err(FeagiDataError::BadParameters(

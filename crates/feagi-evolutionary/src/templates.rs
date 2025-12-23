@@ -18,9 +18,9 @@ use crate::{
     GenomeMetadata, GenomeSignatures, GenomeStats, MorphologyRegistry, PhysiologyConfig,
     RuntimeGenome,
 };
-use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
-use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
-use feagi_data_structures::genomic::descriptors::GenomeCoordinate3D;
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
+use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 use serde_json::Value;
 use std::collections::HashMap;
 

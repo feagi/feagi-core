@@ -319,9 +319,9 @@ impl VisualizationStream {
     fn serialize_fire_queue(
         fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot,
     ) -> Result<Vec<u8>, String> {
-        use feagi_data_serialization::FeagiByteContainer;
-        use feagi_data_structures::genomic::cortical_area::CorticalID;
-        use feagi_data_structures::neuron_voxels::xyzp::{
+        use feagi_serialization::FeagiByteContainer;
+        use feagi_structures::genomic::cortical_area::CorticalID;
+        use feagi_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
 

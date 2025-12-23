@@ -351,7 +351,7 @@ impl Neuroembryogenesis {
                     "CORE"
                 } else if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
                     // Use cortical type from CorticalID
-                    use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
+                    use feagi_structures::genomic::cortical_area::CorticalAreaType;
                     match cortical_type {
                         CorticalAreaType::Core(_) => "CORE",
                         CorticalAreaType::BrainInput(_) => "IPU",
@@ -432,9 +432,7 @@ impl Neuroembryogenesis {
                   ipu_areas.len(), opu_areas.len(), core_areas.len(), custom_memory_areas.len());
 
             // Build brain region structure following Python's normalize_brain_region_membership()
-            use feagi_data_structures::genomic::brain_regions::{
-                BrainRegion, RegionID, RegionType,
-            };
+            use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
             let mut regions_map = std::collections::HashMap::new();
 
             // Step 1: Create root region with only IPU/OPU/CORE areas
@@ -960,7 +958,7 @@ impl Neuroembryogenesis {
     /// - OUTPUT: Any area in the region that connects to an area OUTSIDE the region
     /// - INPUT: Any area in the region that receives connection from OUTSIDE the region
     fn analyze_region_io(
-        region_area_ids: &[feagi_data_structures::genomic::cortical_area::CorticalID],
+        region_area_ids: &[feagi_structures::genomic::cortical_area::CorticalID],
         all_cortical_areas: &std::collections::HashMap<CorticalID, CorticalArea>,
     ) -> (Vec<String>, Vec<String>) {
         let area_set: std::collections::HashSet<_> = region_area_ids.iter().cloned().collect();
@@ -1038,8 +1036,8 @@ impl Neuroembryogenesis {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
     use feagi_evolutionary::create_genome_with_core_morphologies;
+    use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
 
     #[test]
     fn test_neuroembryogenesis_creation() {

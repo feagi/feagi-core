@@ -7,12 +7,12 @@
 // the new feagi-sensorimotor API (SensorDeviceCache, WrappedIOData, etc.)
 // For now, commenting out to allow compilation to proceed.
 /*
-use feagi_data_structures::genomic::cortical_area::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalGroupIndex,
 };
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-use feagi_data_serialization::FeagiByteStructureCompatible;
-use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_serialization::FeagiByteStructureCompatible;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 */
 #[allow(unused_imports)]
 use std::time::Instant;

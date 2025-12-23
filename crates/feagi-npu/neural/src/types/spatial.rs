@@ -3,8 +3,8 @@
 
 //! Spatial types for 3D brain coordinates
 
-// Dimensions moved to feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
-// Use: feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
+// Dimensions moved to feagi_structures::genomic::cortical_area::CorticalAreaDimensions
+// Use: feagi_structures::genomic::cortical_area::CorticalAreaDimensions
 
 /// 3D position (x, y, z) in brain space
 pub type Position = (i32, i32, i32);

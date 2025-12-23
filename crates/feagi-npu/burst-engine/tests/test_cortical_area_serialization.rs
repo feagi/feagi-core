@@ -8,10 +8,10 @@
 //! - Retrieval and decoding back to CorticalID
 //! - All cortical types (CORE, IPU, OPU, CUSTOM, MEMORY)
 
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_runtime::StdRuntime;
+use feagi_structures::genomic::cortical_area::CorticalID;
 
 /// Helper to create a test NPU
 fn create_test_npu() -> RustNPU<StdRuntime, f32, CPUBackend> {

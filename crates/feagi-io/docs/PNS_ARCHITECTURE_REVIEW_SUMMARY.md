@@ -384,7 +384,7 @@ pub struct AsyncZmqTransport { /* uses nonblocking infrastructure */ }
 **Implementation**:
 ```rust
 // src/core/types.rs
-use feagi-data-serialization::FeagiByteContainer;
+use feagi_serialization::FeagiByteContainer;
 use std::sync::Arc;
 
 /// Type alias for thread-safe shared reference to FBC
@@ -913,7 +913,7 @@ async-infra = ["async", "std"]  # Enabled by any async transport
 
 [dependencies]
 # Core (always)
-feagi-data-serialization = { workspace = true }
+feagi-serialization = { workspace = true }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"

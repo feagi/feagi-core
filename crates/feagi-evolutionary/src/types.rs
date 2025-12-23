@@ -53,10 +53,10 @@ impl From<std::io::Error> for EvoError {
 }
 
 // Convert from FeagiDataError
-impl From<feagi_data_structures::FeagiDataError> for EvoError {
-    fn from(err: feagi_data_structures::FeagiDataError) -> Self {
+impl From<feagi_structures::FeagiDataError> for EvoError {
+    fn from(err: feagi_structures::FeagiDataError) -> Self {
         match &err {
-            feagi_data_structures::FeagiDataError::BadParameters(msg) => {
+            feagi_structures::FeagiDataError::BadParameters(msg) => {
                 EvoError::InvalidArea(msg.clone())
             }
             _ => EvoError::Internal(err.to_string()),

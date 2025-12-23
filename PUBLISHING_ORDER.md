@@ -3,8 +3,34 @@
 This document defines the correct dependency order for publishing all crates in the `feagi-core` workspace to crates.io.
 
 **Last Updated:** January 2025  
-**Workspace Version:** 0.0.1  
-**Total Crates:** 19
+**Initial Version:** 0.0.1-beta.1  
+**Total Crates:** 17
+
+---
+
+## 🔢 VERSIONING STRATEGY: INDEPENDENT
+
+**CRITICAL:** Each crate maintains its OWN independent version number.
+
+### Rules:
+1. ✅ **Each crate has explicit `version = "X.Y.Z"` in its Cargo.toml**
+2. ✅ **Only bump version for crates that changed**
+3. ✅ **Version numbers can differ across crates**
+4. ❌ **NEVER use `version.workspace = true`** - this creates synchronized versioning
+
+### Example of Independent Versioning:
+```toml
+feagi-npu-neural:       version = "0.0.1-beta.5"
+feagi-npu-burst-engine: version = "0.0.1-beta.3"  
+feagi-io:               version = "0.0.1-beta.8"
+feagi-api:              version = "0.0.1-beta.2"
+```
+
+### When to Bump Versions:
+- **Patch (0.0.X)**: Bug fixes, documentation, internal optimizations
+- **Minor (0.X.0)**: New features, non-breaking API changes
+- **Major (X.0.0)**: Breaking API changes (after 1.0.0 release)
+- **Beta releases**: Increment beta number (e.g., `0.0.1-beta.5` → `0.0.1-beta.6`)
 
 ---
 
@@ -41,8 +67,8 @@ If you must publish manually, follow the layer order below exactly.
 
 ### **Layer 2: Core Data Structures**
 
-#### `feagi-data-structures`
-- **Path:** `crates/feagi-data-structures`
+#### `feagi-structures`
+- **Path:** `crates/feagi-structures`
 - **Dependencies:** `feagi-observability`
 - **Purpose:** Neurons, synapses, cortical areas, genome structures
 - **Features:** `async` (platform-agnostic async runtime abstraction with `async-tokio`, `async-wasm`, `async-wasi` sub-features)
@@ -77,8 +103,8 @@ If you must publish manually, follow the layer order below exactly.
 
 ### **Layer 5: Serialization & State**
 
-#### `feagi-data-serialization`
-- **Path:** `crates/feagi-data-serialization`
+#### `feagi-serialization`
+- **Path:** `crates/feagi-serialization`
 - **Dependencies:** `feagi-data-structures`
 - **Purpose:** FEAGI Byte Container (FBC) format for binary serialization
 
@@ -97,8 +123,8 @@ If you must publish manually, follow the layer order below exactly.
 - **Dependencies:** 
   - `feagi-npu-neural`
   - `feagi-npu-runtime` (optional, via `std` feature)
-  - `feagi-data-serialization`
-  - `feagi-data-structures`
+  - `feagi-serialization`
+  - `feagi-structures`
   - `feagi-state-manager`
 - **Purpose:** Neural burst processing engine (CPU/GPU)
 
@@ -116,7 +142,7 @@ If you must publish manually, follow the layer order below exactly.
 - **Path:** `crates/feagi-evolutionary`
 - **Dependencies:** 
   - `feagi-npu-neural`
-  - `feagi-data-structures`
+  - `feagi-structures`
   - `feagi-observability`
 - **Purpose:** Genome management, evolution, validation
 
@@ -126,7 +152,7 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-npu-neural`
   - `feagi-npu-burst-engine`
   - `feagi-evolutionary`
-  - `feagi-data-structures`
+  - `feagi-structures`
   - `feagi-observability`
 - **Purpose:** Brain Development Utilities (synaptogenesis, connectivity)
 
@@ -141,18 +167,18 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-brain-development`
   - `feagi-services`
   - `feagi-npu-neural`
-  - `feagi-data-structures`
-  - `feagi-data-serialization`
+  - `feagi-structures`
+  - `feagi-serialization`
 - **Purpose:** Agent I/O, registration, ZMQ/UDP/WebSocket transports, connectome file I/O
 - **Note:** Includes consolidated transport primitives (formerly feagi-transports)
 
 #### `feagi-sensorimotor`
 - **Path:** `crates/feagi-sensorimotor`
 - **Dependencies:**
-  - `feagi-data-structures`
-  - `feagi-data-serialization`
+  - `feagi-structures`
+  - `feagi-serialization`
 - **Purpose:** Peripheral Nervous System - data processing, caching, neuron voxel encoding
-- **Note:** Renamed from feagi-connector-core
+- **Note:** Previously named feagi-connector-core, then feagi-pns, now feagi-sensorimotor
 
 ---
 
@@ -189,8 +215,8 @@ If you must publish manually, follow the layer order below exactly.
 - **Path:** `crates/feagi-agent`
 - **Dependencies:**
   - `feagi-io`
-  - `feagi-data-structures`
-  - `feagi-data-serialization`
+  - `feagi-structures`
+  - `feagi-serialization`
   - `feagi-observability`
 - **Purpose:** Agent connection lifecycle, reconnection, heartbeat
 
@@ -228,32 +254,32 @@ If you must publish manually, follow the layer order below exactly.
 
 ---
 
-## 🔄 Version Synchronization
+## 🔄 Version Management
 
-### Current Strategy: Independent Versioning ✅
-- **Each crate:** Maintains its own version number
-- **Beta releases:** Per-crate beta counters (e.g., `0.0.1-beta.5`)
-- **Smart detection:** Only changed crates get version bumps
-- **Automatic propagation:** Dependent crates update when dependencies change
+### Independent Versioning (Current Strategy)
 
-### Example:
+**Each crate manages its own version independently.**
+
+#### Workflow for Version Bumps:
+1. Identify which crates changed (git diff, manual review)
+2. Bump version in each changed crate's Cargo.toml
+3. Update any dependent crates' version requirements if needed
+4. Publish changed crates in dependency order
+
+#### Example Scenario:
+```bash
+# Bug fix in feagi-npu-neural
+# Edit crates/feagi-npu/neural/Cargo.toml
+version = "0.0.1-beta.2"  # was 0.0.1-beta.1
+
+# Publish just that crate
+cargo publish -p feagi-npu-neural
 ```
-feagi-npu-neural:       0.0.1-beta.5
-feagi-npu-burst-engine: 0.0.1-beta.3
-feagi-io:               0.0.1-beta.8
-feagi-api:              0.0.1-beta.2
-```
 
-**See:** `docs/INDEPENDENT_VERSIONING.md` for complete details.
-
-### Automation
-The staging CI workflow automatically:
-1. Detects which crates changed
-2. Computes new version numbers
-3. Updates Cargo.toml files
-4. Publishes only changed crates
-
-**No manual version management required!**
+#### Version Compatibility:
+- Use `^` for compatible updates: `feagi-npu-neural = "^0.0.1-beta.1"`
+- Cargo will allow any version >= 0.0.1-beta.1 and < 0.0.2
+- For strict pinning: `feagi-npu-neural = "=0.0.1-beta.1"`
 
 ---
 

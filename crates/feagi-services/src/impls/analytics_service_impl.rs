@@ -8,16 +8,18 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use crate::traits::AnalyticsService;
-use crate::types::*;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_npu_burst_engine::BurstLoopRunner;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use parking_lot::RwLock;
-use std::sync::Arc;
 use tracing::trace;
+
+use crate::traits::AnalyticsService;
+use crate::types::*;
 
 /// Default implementation of AnalyticsService
 pub struct AnalyticsServiceImpl {

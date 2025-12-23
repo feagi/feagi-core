@@ -19,8 +19,8 @@ use super::types::SharedFBC;
 /// # Example
 /// ```no_run
 /// use feagi_io::core::events::VisualizationReadyEvent;
-/// use feagi_data_serialization::FeagiByteContainer;
-/// use feagi_data_structures::FeagiSignal;
+/// use feagi_serialization::FeagiByteContainer;
+/// use feagi_structures::FeagiSignal;
 /// use std::sync::{Arc, Mutex};
 ///
 /// // Burst engine side
@@ -67,8 +67,8 @@ pub struct MotorCommandEvent {
 /// # Example
 /// ```no_run
 /// use feagi_io::core::events::SensoryDataEvent;
-/// use feagi_data_serialization::FeagiByteContainer;
-/// use feagi_data_structures::FeagiSignal;
+/// use feagi_serialization::FeagiByteContainer;
+/// use feagi_structures::FeagiSignal;
 /// use std::sync::{Arc, Mutex};
 ///
 /// // PNS side
@@ -128,8 +128,8 @@ pub struct AgentDisconnectedEvent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_serialization::FeagiByteContainer;
-    use feagi_data_structures::FeagiSignal;
+    use feagi_serialization::FeagiByteContainer;
+    use feagi_structures::FeagiSignal;
     use std::sync::{Arc, Mutex};
 
     #[test]

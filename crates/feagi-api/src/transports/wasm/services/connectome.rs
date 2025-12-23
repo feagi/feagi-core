@@ -6,11 +6,11 @@
 //! Extracts cortical area and brain region data from RuntimeGenome.
 
 use async_trait::async_trait;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_evolutionary::RuntimeGenome;
 use feagi_services::traits::connectome_service::ConnectomeService;
 use feagi_services::types::errors::{ServiceError, ServiceResult};
 use feagi_services::types::*;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -33,9 +33,9 @@ impl WasmConnectomeService {
     fn area_to_info(
         &self,
         cortical_id: &CorticalID,
-        area: &feagi_data_structures::genomic::cortical_area::CorticalArea,
+        area: &feagi_structures::genomic::cortical_area::CorticalArea,
     ) -> CorticalAreaInfo {
-        use feagi_data_structures::genomic::cortical_area::CorticalArea;
+        use feagi_structures::genomic::cortical_area::CorticalArea;
 
         // Extract physiology parameters from properties
         let leak_coefficient = area

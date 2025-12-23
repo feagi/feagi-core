@@ -58,7 +58,7 @@ pub use utils::*;
 // Re-export types
 pub use types::{
     Error,
-    // Dimensions moved to feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
+    // Dimensions moved to feagi_structures::genomic::cortical_area::CorticalAreaDimensions
     FeagiError,
     FireCandidateList,
     FireLedger,

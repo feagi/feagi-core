@@ -28,7 +28,7 @@ pub use ids::{NeuronId, SynapseId};
 pub use numeric::{INT8LeakCoefficient, INT8Value, NeuralValue, Precision, QuantizationSpec};
 pub use spatial::Position;
 pub use synapse_types::{Synapse, SynapticConductance, SynapticContribution, SynapticWeight};
-// Dimensions moved to feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions
+// Dimensions moved to feagi_structures::genomic::cortical_area::CorticalAreaDimensions
 pub use error::{Error, FeagiError, Result};
 pub use fire::{FireCandidateList, FireLedger, FireQueue};
 // CorticalArea, BrainRegion, RegionType, BrainRegionHierarchy moved to feagi_data_structures

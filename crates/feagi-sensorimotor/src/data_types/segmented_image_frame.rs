@@ -10,9 +10,9 @@ use super::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
 use super::ImageFrame;
-use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
+use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+use feagi_structures::FeagiDataError;
 use ndarray::Array3;
 use rayon::prelude::*;
 
@@ -249,6 +249,42 @@ impl SegmentedImageFrame {
             &mut self.upper_middle,
             &mut self.upper_right,
         ]
+    }
+
+    pub fn get_image_lower_left(&self) -> &ImageFrame {
+        &self.lower_left
+    }
+
+    pub fn get_image_lower_middle(&self) -> &ImageFrame {
+        &self.lower_middle
+    }
+
+    pub fn get_image_lower_right(&self) -> &ImageFrame {
+        &self.lower_right
+    }
+
+    pub fn get_image_middle_left(&self) -> &ImageFrame {
+        &self.middle_left
+    }
+
+    pub fn get_image_center(&self) -> &ImageFrame {
+        &self.center
+    }
+
+    pub fn get_image_middle_right(&self) -> &ImageFrame {
+        &self.middle_right
+    }
+
+    pub fn get_image_upper_left(&self) -> &ImageFrame {
+        &self.upper_left
+    }
+
+    pub fn get_image_upper_middle(&self) -> &ImageFrame {
+        &self.upper_middle
+    }
+
+    pub fn get_image_upper_right(&self) -> &ImageFrame {
+        &self.upper_right
     }
 
     #[allow(dead_code)]

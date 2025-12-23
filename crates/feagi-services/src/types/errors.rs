@@ -80,8 +80,8 @@ impl From<feagi_npu_neural::types::FeagiError> for ServiceError {
     }
 }
 
-impl From<feagi_data_structures::FeagiDataError> for ServiceError {
-    fn from(err: feagi_data_structures::FeagiDataError) -> Self {
+impl From<feagi_structures::FeagiDataError> for ServiceError {
+    fn from(err: feagi_structures::FeagiDataError) -> Self {
         ServiceError::InvalidInput(err.to_string())
     }
 }

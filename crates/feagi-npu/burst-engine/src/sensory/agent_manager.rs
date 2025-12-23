@@ -12,12 +12,12 @@
 //!
 //! Spawns and manages per-agent polling threads that:
 //! 1. Read from SHM at agent-requested rate
-//! 2. Decode using feagi_data_serialization
+//! 2. Decode using feagi_serialization
 //! 3. Extract neuron IDs
 //! 4. Inject directly into FCL
 
 use super::{RateLimiter, ShmReader};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -283,8 +283,8 @@ fn agent_polling_loop(
             }
         };
 
-        // Decode using feagi_data_serialization
-        let mut byte_container = feagi_data_serialization::FeagiByteContainer::new_empty();
+        // Decode using feagi_serialization
+        let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
         let mut data_vec = slot_data.data.to_vec();
 
         // 🔍 DEBUG: Log first 20 bytes to diagnose format mismatch
@@ -390,7 +390,7 @@ fn agent_polling_loop(
                 };
 
             // Downcast to CorticalMappedXYZPNeuronData
-            use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+            use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
             let cortical_mapped = match boxed_struct
                 .as_any()
                 .downcast_ref::<CorticalMappedXYZPNeuronVoxels>()

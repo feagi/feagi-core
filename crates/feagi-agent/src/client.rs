@@ -390,8 +390,8 @@ impl AgentClient {
 
         // ARCHITECTURE COMPLIANCE: Use binary XYZP format, NOT JSON
         // This serializes data using feagi_data_structures for cross-platform compatibility
-        use feagi_data_structures::genomic::cortical_area::CorticalID;
-        use feagi_data_structures::neuron_voxels::xyzp::{
+        use feagi_structures::genomic::cortical_area::CorticalID;
+        use feagi_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
 
@@ -441,7 +441,7 @@ impl AgentClient {
         cortical_mapped.insert(cortical_id, neuron_arrays);
 
         // Serialize to binary using FeagiByteContainer (version 2 container format)
-        let mut byte_container = feagi_data_serialization::FeagiByteContainer::new_empty();
+        let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
         byte_container
             .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)
             .map_err(|e| SdkError::Other(format!("Failed to serialize to container: {:?}", e)))?;
@@ -466,7 +466,7 @@ impl AgentClient {
     ///
     /// # Example
     /// ```ignore
-    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+    /// use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
     /// if let Some(motor_data) = client.receive_motor_data()? {
     ///     // Process binary motor data
@@ -477,9 +477,8 @@ impl AgentClient {
     /// ```
     pub fn receive_motor_data(
         &self,
-    ) -> Result<Option<feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels>>
-    {
-        use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+    ) -> Result<Option<feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels>> {
+        use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
         if !self.registered {
             return Err(SdkError::NotRegistered);
@@ -536,7 +535,7 @@ impl AgentClient {
                 };
 
                 // ARCHITECTURE COMPLIANCE: Deserialize binary XYZP motor data using FeagiByteContainer
-                let mut byte_container = feagi_data_serialization::FeagiByteContainer::new_empty();
+                let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
                 let mut data_vec = data.to_vec();
 
                 // Load bytes into container

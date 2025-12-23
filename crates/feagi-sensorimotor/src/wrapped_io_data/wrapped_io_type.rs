@@ -7,7 +7,7 @@ use crate::data_types::{
     SignedPercentage4D,
 };
 use crate::wrapped_io_data::WrappedIOData;
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use std::mem::discriminant;
 
 /// Type descriptor for wrapped I/O data.

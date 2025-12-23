@@ -2,8 +2,8 @@ use crate::data_types::descriptors::{
     ColorChannelLayout, ImageFrameProperties, SegmentedImageFrameProperties,
 };
 use crate::data_types::{GazeProperties, ImageFrame, ImageFrameProcessor, SegmentedImageFrame};
-use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
+use feagi_structures::FeagiDataError;
 
 #[derive(Debug, Clone)]
 pub struct ImageFrameSegmentator {
@@ -53,6 +53,10 @@ impl ImageFrameSegmentator {
     pub fn verify_output_image(&self, output: &SegmentedImageFrame) -> Result<(), FeagiDataError> {
         self.output_properties
             .verify_segmented_image_frame_matches_properties(output)
+    }
+
+    pub fn create_blank_segmented_image_for_use_as_write_cache(&self) -> SegmentedImageFrame {
+        SegmentedImageFrame::from_segmented_image_frame_properties(&self.output_properties).unwrap()
     }
 
     pub fn segment_image(

@@ -9,7 +9,7 @@ use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::{ImageFrame, ImageFrameProcessor};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use std::any::Any;
 use std::fmt::Display;
 use std::time::Instant;
@@ -81,7 +81,8 @@ impl PipelineStage for ImageFrameProcessorStage {
         let write_target: &mut ImageFrame = (&mut self.cached).try_into()?;
         self.transformer_definition
             .process_image(read_from, write_target)?;
-        write_target.skip_encoding = read_from.skip_encoding;
+        // NOTE: Do NOT copy skip_encoding from input - let downstream stages (like diff) control it
+        // The process_image function handles skip_encoding appropriately for transformations
         Ok(&self.cached)
     }
 
@@ -105,6 +106,7 @@ impl PipelineStage for ImageFrameProcessorStage {
     ) -> Result<(), FeagiDataError> {
         match properties {
             PipelineStageProperties::ImageFrameProcessor { transformer_definition } => {
+                // No real point checking for change, just replace
                 self.transformer_definition = transformer_definition;
                 Ok(())
             }

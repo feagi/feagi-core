@@ -36,8 +36,8 @@ use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::neural_dynamics::*;
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
 use feagi_npu_neural::types::*;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use tracing::{debug, error, info, trace, warn};
 
 // Import Runtime trait for generic runtime abstraction
@@ -2675,7 +2675,7 @@ impl<
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
     // ═══════════════════════════════════════════════════════════
     // Core NPU Creation & Initialization
