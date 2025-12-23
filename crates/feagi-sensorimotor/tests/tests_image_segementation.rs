@@ -137,6 +137,29 @@ mod test_segmented_images {
         );
         write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
                         &gaze, "whole_screen");
+
+        // Right
+        let gaze = GazeProperties::new(
+            Percentage2D::new(
+                Percentage::new_from_0_1(1.0).unwrap(),
+                Percentage::new_from_0_1(0.5).unwrap()
+            ),
+            Percentage::new_from_0_1(0.75).unwrap()
+        );
+        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
+                        &gaze, "right_gaze");
+
+        // Left most
+        let gaze = GazeProperties::new(
+            Percentage2D::new(
+                Percentage::new_from_0_1(0.0).unwrap(),
+                Percentage::new_from_0_1(0.5).unwrap()
+            ),
+            Percentage::new_from_0_1(0.75).unwrap()
+        );
+        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
+                        &gaze, "left_gaze");
+
     }
 
 

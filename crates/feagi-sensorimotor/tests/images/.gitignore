@@ -17,6 +17,8 @@ down_gaze/*.png
 down_bottom_gaze/*.png
 left_down_gaze/*.png
 whole_screen/*.png
+right_gaze/*.png
+left_gaze/*.png
 # Processor test outputs
 images/processor_*.png
 images/processor_*.jpg
