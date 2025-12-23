@@ -79,23 +79,51 @@ CRATE_ORDER=(
 )
 
 # ============================================================================
+# Check if crate is already published on crates.io
+# ============================================================================
+
+is_already_published() {
+    local crate_name=$1
+    local crate_path=$2
+    
+    # Get version from Cargo.toml
+    cd "$crate_path" 2>/dev/null || return 1
+    local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+    cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+    
+    # Check if this exact version exists on crates.io
+    if cargo search "$crate_name" --limit 1 2>/dev/null | grep -q "^$crate_name = \"$version\""; then
+        echo "true"
+    else
+        echo "false"
+    fi
+}
+
+# ============================================================================
 # Check if crate should be published
 # ============================================================================
 
 should_publish_crate() {
     local crate_name=$1
+    local crate_path=$2
     
-    # If CHANGED_CRATES_LIST is empty, publish all (fallback to old behavior)
+    # CRITICAL: Check crates.io FIRST - if already published, always skip
+    if [ "$(is_already_published "$crate_name" "$crate_path")" = "true" ]; then
+        echo "skip_published"
+        return
+    fi
+    
+    # If CHANGED_CRATES_LIST is empty, publish all unpublished crates
     if [ -z "$CHANGED_CRATES_LIST" ]; then
-        echo "true"
+        echo "publish"
         return
     fi
     
     # Check if crate is in changed list
     if [[ " ${CHANGED_CRATES_LIST} " == *" ${crate_name} "* ]]; then
-        echo "true"
+        echo "publish"
     else
-        echo "false"
+        echo "skip_unchanged"
     fi
 }
 
@@ -121,13 +149,6 @@ publish_crate() {
     # Get version
     local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
     echo "   Version: $version"
-    
-    # Check if already published
-    if cargo search "$crate_name" --limit 1 2>/dev/null | grep -q "^$crate_name = \"$version\""; then
-        echo -e "   ${YELLOW}⏭️  Skipping $crate_name v$version (already published)${NC}"
-        cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
-        return 0
-    fi
     
     # Package first to verify
     echo "   📦 Packaging..."
@@ -195,8 +216,18 @@ for crate_name in "${CRATE_ORDER[@]}"; do
     fi
     
     # Check if crate should be published
-    if [ "$(should_publish_crate "$crate_name")" = "false" ]; then
-        echo -e "${BLUE}⏭️  Skipping $crate_name (unchanged)${NC}"
+    publish_decision=$(should_publish_crate "$crate_name" "$crate_path")
+    
+    if [ "$publish_decision" = "skip_published" ]; then
+        # Get version for display
+        cd "$crate_path" 2>/dev/null || continue
+        local version=$(grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+        cd "$WORKSPACE_ROOT" 2>/dev/null || cd - > /dev/null
+        echo -e "${YELLOW}⏭️  Skipping $crate_name v$version (already published on crates.io)${NC}"
+        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
+        continue
+    elif [ "$publish_decision" = "skip_unchanged" ]; then
+        echo -e "${BLUE}⏭️  Skipping $crate_name (not in changed list)${NC}"
         SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
         continue
     fi
