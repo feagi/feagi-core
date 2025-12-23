@@ -14,6 +14,9 @@ images/brightness_test_*.png
 images/contrast_test_*.png
 center_gaze/*.png
 down_gaze/*.png
+down_bottom_gaze/*.png
+left_down_gaze/*.png
+whole_screen/*.png
 # Processor test outputs
 images/processor_*.png
 images/processor_*.jpg

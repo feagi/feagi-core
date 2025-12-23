@@ -104,6 +104,39 @@ mod test_segmented_images {
         );
         write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
                         &gaze, "down_gaze");
+
+        // left down
+        let gaze = GazeProperties::new(
+            Percentage2D::new(
+                Percentage::new_from_0_1(0.25).unwrap(),
+                Percentage::new_from_0_1(0.25).unwrap()
+            ),
+            Percentage::new_from_0_1(0.5).unwrap()
+        );
+        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
+                        &gaze, "left_down_gaze");
+
+        // down most bottom
+        let gaze = GazeProperties::new(
+            Percentage2D::new(
+                Percentage::new_from_0_1(0.5).unwrap(),
+                Percentage::new_from_0_1(0.0).unwrap()
+            ),
+            Percentage::new_from_0_1(0.5).unwrap()
+        );
+        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
+                        &gaze, "down_bottom_gaze");
+
+        // almost entire screen
+        let gaze = GazeProperties::new(
+            Percentage2D::new(
+                Percentage::new_from_0_1(0.2).unwrap(), // these shouldnt matter much in this case
+                Percentage::new_from_0_1(0.0).unwrap()
+            ),
+            Percentage::new_from_0_1(1.0).unwrap()
+        );
+        write_with_gaze(&mut image_frame_segmentator, &bird_image, &mut segmented_output,
+                        &gaze, "whole_screen");
     }
 
 
