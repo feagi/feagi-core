@@ -5,7 +5,7 @@ use crate::data_types::*;
 use crate::neuron_voxel_coding::xyzp::decoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_serialization::FeagiByteContainer;
+use feagi_serialization::FeagiByteContainer;
 use feagi_data_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
 };

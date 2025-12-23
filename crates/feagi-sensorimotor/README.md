@@ -27,7 +27,7 @@ Add this to your `Cargo.toml`:
 [dependencies]
 feagi-sensorimotor = "2.0.0"
 feagi-data-structures = "2.0.0"
-feagi-data-serialization = "2.0.0"
+feagi-serialization = "2.0.0"
 ```
 
 ## Usage
@@ -139,7 +139,7 @@ This crate is part of the FEAGI project:
 
 - **Main Project**: [feagi](https://crates.io/crates/feagi)
 - **Data Structures**: [feagi-data-structures](https://crates.io/crates/feagi-data-structures)
-- **Data Serialization**: [feagi-data-serialization](https://crates.io/crates/feagi-data-serialization)
+- **Data Serialization**: [feagi-serialization](https://crates.io/crates/feagi-serialization)
 - **Agent SDK**: [feagi-agent](https://crates.io/crates/feagi-agent)
 
 ## License

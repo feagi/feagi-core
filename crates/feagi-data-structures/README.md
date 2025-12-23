@@ -75,7 +75,7 @@ For conceptual documentation and guides, see the [docs/](docs/) directory.
 This crate is part of the FEAGI project:
 
 - **Main Project**: [feagi](https://crates.io/crates/feagi)
-- **Data Serialization**: [feagi-data-serialization](https://crates.io/crates/feagi-data-serialization)
+- **Data Serialization**: [feagi-serialization](https://crates.io/crates/feagi-serialization)
 - **Sensorimotor**: [feagi-sensorimotor](https://crates.io/crates/feagi-sensorimotor)
 
 ## License

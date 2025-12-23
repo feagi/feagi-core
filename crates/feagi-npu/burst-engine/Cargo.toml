@@ -17,7 +17,7 @@ feagi-npu-runtime = { version = "0.0.1-beta.1", path = "../runtime", optional = 
 feagi-state-manager = { version = "0.0.1-beta.1", path = "../../feagi-state-manager" }  # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
-feagi-data-serialization = { workspace = true }  # For decoding sensory data
+feagi-serialization = { workspace = true }  # For decoding sensory data
 feagi-data-structures = { workspace = true, features = ["async"] }  # For CorticalMappedXYZPNeuronVoxels and async runtime
 thiserror.workspace = true
 rayon.workspace = true

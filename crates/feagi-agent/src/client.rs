@@ -441,7 +441,7 @@ impl AgentClient {
         cortical_mapped.insert(cortical_id, neuron_arrays);
 
         // Serialize to binary using FeagiByteContainer (version 2 container format)
-        let mut byte_container = feagi_data_serialization::FeagiByteContainer::new_empty();
+        let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
         byte_container
             .overwrite_byte_data_with_single_struct_data(&cortical_mapped, 0)
             .map_err(|e| SdkError::Other(format!("Failed to serialize to container: {:?}", e)))?;
@@ -536,7 +536,7 @@ impl AgentClient {
                 };
 
                 // ARCHITECTURE COMPLIANCE: Deserialize binary XYZP motor data using FeagiByteContainer
-                let mut byte_container = feagi_data_serialization::FeagiByteContainer::new_empty();
+                let mut byte_container = feagi_serialization::FeagiByteContainer::new_empty();
                 let mut data_vec = data.to_vec();
 
                 // Load bytes into container

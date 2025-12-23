@@ -11,7 +11,7 @@ use feagi_data_structures::genomic::cortical_area::descriptors::{
     CorticalGroupIndex,
 };
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-use feagi_data_serialization::FeagiByteStructureCompatible;
+use feagi_serialization::FeagiByteStructureCompatible;
 use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 */
 #[allow(unused_imports)]

@@ -24,7 +24,7 @@ use crate::neuron_voxel_coding::xyzp::encoders::{
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 #[allow(unused_imports)] // Used by macro-generated code
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_serialization::FeagiByteContainer;
+use feagi_serialization::FeagiByteContainer;
 #[allow(unused_imports)] // Used by macro-generated code
 use feagi_data_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,

@@ -353,7 +353,7 @@ impl SensoryStream {
         rejected_no_genome: &Arc<Mutex<u64>>,
         rejected_no_agents: &Arc<Mutex<u64>>,
     ) -> Result<usize, String> {
-        use feagi_data_serialization::FeagiByteContainer;
+        use feagi_serialization::FeagiByteContainer;
         use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
         // Get NPU reference

@@ -23,7 +23,7 @@ ahash = { version = "0.8", default-features = false, features = ["std", "compile
 
 # feagi-data-processing for efficient data structures (TODO: Add when published to crates.io)
 # feagi-data-structures = "0.0.50-beta.50"
-# feagi-data-serialization = "0.0.50-beta.50"
+# feagi-serialization = "0.0.50-beta.50"
 
 # Standard Rust (desktop/server)
 parking_lot = { version = "0.12", optional = true }

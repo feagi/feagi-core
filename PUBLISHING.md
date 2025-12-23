@@ -86,7 +86,7 @@ cargo publish -p feagi-hal
 cargo publish -p feagi-state-manager
 
 # Phase 3: Data & Serialization
-cargo publish -p feagi-data-serialization
+cargo publish -p feagi-serialization
 cargo publish -p feagi-connectome-serialization
 
 # Phase 4: Core algorithms

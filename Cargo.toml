@@ -53,7 +53,7 @@ feagi-evolutionary = { version = "0.0.1-beta.1", path = "crates/feagi-evolutiona
 feagi-npu-neural = { version = "0.0.1-beta.1", path = "crates/feagi-npu/neural" }
 serde_json = "1.0"
 feagi-data-structures = { version = "0.0.1-beta.1", path = "crates/feagi-data-structures" }
-feagi-data-serialization = { version = "0.0.1-beta.1", path = "crates/feagi-data-serialization" }
+feagi-serialization = { version = "0.0.1-beta.1", path = "crates/feagi-serialization" }
 ndarray = { workspace = true }
 
 # Infrastructure (vendored)
@@ -108,7 +108,7 @@ members = [
     
     # === Data Processing ===
     "crates/feagi-sensorimotor",                # Sensorimotor System - data processing & encoding (sensory & motor)
-    "crates/feagi-data-serialization", # Data serialization formats
+    "crates/feagi-serialization", # Data serialization formats
     "crates/feagi-data-structures",    # Core data structures
 ]
 
@@ -144,7 +144,7 @@ bytemuck = { version = "1.14", features = ["derive"] }  # Type casting for GPU b
 
 # FEAGI data crates (now internal to workspace)
 feagi-data-structures = { version = "0.0.1-beta.1", path = "crates/feagi-data-structures" }
-feagi-data-serialization = { version = "0.0.1-beta.1", path = "crates/feagi-data-serialization" }
+feagi-serialization = { version = "0.0.1-beta.1", path = "crates/feagi-serialization" }
 
 # Workspace-internal crates
 feagi-observability = { version = "0.0.1-beta.1", path = "crates/feagi-observability" }

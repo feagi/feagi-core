@@ -36,7 +36,7 @@ CRATES=(
     "crates/feagi-npu/runtime"
     
     # Layer 5: Serialization and state
-    "crates/feagi-data-serialization"
+    "crates/feagi-serialization"
     "crates/feagi-state-manager"
     
     # Layer 6: High-performance processing

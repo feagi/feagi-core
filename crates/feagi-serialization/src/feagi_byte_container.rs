@@ -102,7 +102,7 @@ impl FeagiByteContainer {
     ///
     /// # Example
     /// ```
-    /// use feagi_data_serialization::{FeagiByteContainer};
+    /// use feagi_serialization::{FeagiByteContainer};
     ///
     /// // NOTE: This function is just here as an example, but this specific implementation is invalid
     /// let mut container = FeagiByteContainer::new_empty();
@@ -129,7 +129,7 @@ impl FeagiByteContainer {
     ///
     /// # Example
     /// ```
-    /// use feagi_data_serialization::{FeagiByteContainer};
+    /// use feagi_serialization::{FeagiByteContainer};
     ///
     /// // NOTE: This here as an example, but this specific implementation is invalid
     /// let bytes = vec![20u8, 2u8, 3u8];
@@ -151,7 +151,7 @@ impl FeagiByteContainer {
     ///
     /// # Example
     /// ```
-    /// use feagi_data_serialization::{FeagiByteContainer};
+    /// use feagi_serialization::{FeagiByteContainer};
     ///
     /// // NOTE: This here as an example, but this specific implementation is invalid
     /// let bytes = vec![20u8, 2u8, 3u8];

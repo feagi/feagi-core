@@ -27,7 +27,7 @@ feagi-io = { version = "0.0.1-beta.1", path = "../feagi-io" }
 
 # FEAGI data structures and serialization (for binary XYZP format)
 feagi-data-structures.workspace = true
-feagi-data-serialization = { workspace = true }
+feagi-serialization = { workspace = true }
 
 [dev-dependencies]
 env_logger = "0.11"

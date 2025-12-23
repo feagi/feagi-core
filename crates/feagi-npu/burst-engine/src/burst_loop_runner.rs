@@ -670,7 +670,7 @@ fn encode_fire_data_to_xyzp(
     // - It pre-calculates size via get_number_of_bytes_needed()
     // - Only resizes if current capacity is insufficient
     // - Reuses existing allocation when possible
-    use feagi_data_serialization::FeagiByteContainer;
+    use feagi_serialization::FeagiByteContainer;
 
     let mut byte_container = FeagiByteContainer::new_empty();
     byte_container

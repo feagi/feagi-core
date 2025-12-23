@@ -187,7 +187,7 @@ Layer 4 (Runtime):
   └─ feagi-npu-runtime → npu-neural
 
 Layer 5 (Serialization):
-  ├─ feagi-data-serialization → data-structures
+  ├─ feagi-serialization → data-structures
   └─ feagi-state-manager → observability, data-structures, config
 
 Layer 6 (Processing):

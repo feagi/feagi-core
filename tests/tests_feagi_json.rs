@@ -3,9 +3,9 @@
 // - FeagiSerializable trait instead of FeagiByteStructureCompatible
 // TODO: Update tests to use new serialization API
 #[allow(unused_imports)]
-use feagi_data_serialization::FeagiByteContainer;
+use feagi_serialization::FeagiByteContainer;
 #[allow(unused_imports)]
-use feagi_data_serialization::FeagiSerializable;
+use feagi_serialization::FeagiSerializable;
 use feagi_data_structures::FeagiJSON;
 #[allow(unused_imports)]
 use serde_json::json;
