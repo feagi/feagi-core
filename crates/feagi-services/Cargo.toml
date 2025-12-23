@@ -19,7 +19,7 @@ feagi-brain-development = { version = "0.0.1-beta.1", path = "../feagi-brain-dev
 feagi-npu-burst-engine = { version = "0.0.1-beta.1", path = "../feagi-npu/burst-engine", default-features = false, optional = true }
 # feagi-io dependency removed to break circular dependency
 # AgentRegistry and types moved to feagi-services
-feagi-data-structures = { workspace = true }
+feagi-structures = { workspace = true }
 
 # Async runtime (optional for embedded)
 async-trait = "0.1"

@@ -3,8 +3,8 @@
 //! This module contains comprehensive tests for brain region data structures
 //! including RegionID, BrainRegion, RegionType, and BrainRegionProperties.
 
-use feagi_data_structures::genomic::brain_regions::*;
-use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+use feagi_structures::genomic::brain_regions::*;
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
 #[cfg(test)]
 mod test_region_id {
@@ -154,7 +154,7 @@ mod test_brain_region {
 
     #[test]
     fn test_with_areas() {
-        use feagi_data_structures::genomic::cortical_area::CorticalID;
+        use feagi_structures::genomic::cortical_area::CorticalID;
 
         let area1 = CoreCorticalType::Power.to_cortical_id();
         let area2 = CoreCorticalType::Death.to_cortical_id();

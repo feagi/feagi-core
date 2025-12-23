@@ -15,13 +15,13 @@ use std::collections::HashMap;
 
 use crate::types::{EvoError, EvoResult};
 #[cfg(test)]
-use feagi_data_structures::genomic::brain_regions::RegionID;
-use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalID};
+use feagi_structures::genomic::brain_regions::RegionID;
+use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalID};
 #[cfg(test)]
-use feagi_data_structures::genomic::cortical_area::{
+use feagi_structures::genomic::cortical_area::{
     CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaDataFlag,
 };
-use feagi_data_structures::genomic::BrainRegion;
+use feagi_structures::genomic::BrainRegion;
 
 /// Genome saver
 pub struct GenomeSaver;
@@ -149,7 +149,7 @@ impl GenomeSaver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::RegionType;
+    use feagi_structures::genomic::RegionType;
 
     #[test]
     fn test_save_minimal_genome() {
@@ -157,7 +157,7 @@ mod tests {
         let mut brain_regions = HashMap::new();
 
         // Create a test cortical area (use valid core ID)
-        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(
             cortical_id,
@@ -202,7 +202,7 @@ mod tests {
         use crate::genome::GenomeParser;
 
         // Create test data (use valid core ID)
-        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let mut cortical_areas = HashMap::new();
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
         let area = CorticalArea::new(

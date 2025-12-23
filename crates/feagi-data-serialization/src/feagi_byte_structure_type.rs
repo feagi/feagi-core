@@ -1,7 +1,7 @@
 use crate::FeagiSerializable;
-use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::FeagiJSON;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::FeagiDataError;
+use feagi_structures::FeagiJSON;
 use std::fmt::{Display, Formatter};
 
 /// Represents different types of serializable data structures in the FEAGI system.

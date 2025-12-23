@@ -651,7 +651,7 @@ pub async fn get_cortical_area_list_types(
 
     for area in areas {
         // Parse cortical ID from base64
-        use feagi_data_structures::genomic::cortical_area::CorticalID;
+        use feagi_structures::genomic::cortical_area::CorticalID;
         if let Ok(cortical_id_typed) = CorticalID::try_from_base_64(&area.cortical_id) {
             // Extract subtype and group_id using CorticalID methods
             if let Some(subtype) = cortical_id_typed.extract_subtype() {

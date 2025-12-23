@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
-use feagi_data_structures::genomic::cortical_area::{
+use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions, CorticalID,
 };
 use feagi_npu_burst_engine::ParameterUpdateQueue;

@@ -5,7 +5,7 @@
 ///
 /// Tests basic functionality without complex genome loading
 use feagi_brain_development::{ConnectomeManager, CorticalArea, CorticalID};
-use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
+use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
 use feagi_npu_burst_engine::RustNPU;
 use std::sync::{Arc, Mutex};
 

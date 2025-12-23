@@ -4,8 +4,8 @@
 //! arbitrary JSON data to be stored in FEAGI byte containers.
 
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
-use feagi_data_structures::FeagiDataError;
-use feagi_data_structures::FeagiJSON;
+use feagi_structures::FeagiDataError;
+use feagi_structures::FeagiJSON;
 use std::any::Any;
 
 /// Current version of the JSON serialization format.

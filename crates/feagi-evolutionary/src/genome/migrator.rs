@@ -183,11 +183,11 @@ fn needs_migration(id: &str) -> bool {
 /// NOTE: Old format doesn't encode frame handling, so we default to Absolute.
 /// This function is public so it can be used by string_to_cortical_id for individual ID conversions.
 pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
-    use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+    use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
         FrameChangeHandling, PercentageNeuronPositioning,
     };
-    use feagi_data_structures::genomic::SensoryCorticalUnit;
+    use feagi_structures::genomic::SensoryCorticalUnit;
 
     // IPU: iicXYZ → Proper 8-byte SegmentedVision ID
     if old_id.starts_with("iic") && old_id.len() >= 6 {
@@ -217,7 +217,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
     }
 
     // OPU: omot00 → Proper 8-byte Motor ID (Absolute + Linear, priority)
-    use feagi_data_structures::genomic::MotorCorticalUnit;
+    use feagi_structures::genomic::MotorCorticalUnit;
     if old_id.starts_with("omot") && old_id.len() >= 6 {
         if let Some(index_chars) = old_id.get(4..6) {
             if let Ok(unit_index) = index_chars.parse::<u8>() {
@@ -272,7 +272,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
     }
 
     // CORE: Use feagi-data-processing types as single source of truth
-    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
     if old_id == "_power" {
         let new_id = CoreCorticalType::Power.to_cortical_id().as_base_64();
         tracing::debug!(
@@ -442,12 +442,12 @@ mod tests {
 
     #[test]
     fn test_map_old_id_to_new() {
-        use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
-        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
-        use feagi_data_structures::genomic::MotorCorticalUnit;
-        use feagi_data_structures::genomic::SensoryCorticalUnit;
+        use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::MotorCorticalUnit;
+        use feagi_structures::genomic::SensoryCorticalUnit;
 
         // IPU migrations - should return base64 IDs with Absolute frame handling
         let group_index: CorticalGroupIndex = 0.into();
@@ -516,7 +516,7 @@ mod tests {
 
     #[test]
     fn test_needs_migration() {
-        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
         // Should migrate
         assert!(needs_migration("iic000"));
@@ -534,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_migrate_simple_genome() {
-        use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
         let genome = json!({
             "genome_id": "test",

@@ -1,9 +1,9 @@
 //! Tests for the data pipeline module - focusing on end -> end tests
 
-use feagi_data_structures::genomic::cortical_area::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
 };
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_sensorimotor::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
@@ -39,11 +39,11 @@ fn create_gaze(x: f32, y: f32, size: f32) -> GazeProperties {
 #[cfg(test)]
 mod test_connector_cache_sensor_load_image {
     use crate::load_bird_image;
-    use feagi_data_structures::genomic::cortical_area::descriptors::{
+    use feagi_structures::genomic::cortical_area::descriptors::{
         CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex,
     };
-    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-    use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use feagi_sensorimotor::data_types::descriptors::{
         SegmentedImageFrameProperties, SegmentedXYImageResolutions,
     };

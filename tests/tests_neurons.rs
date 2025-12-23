@@ -8,8 +8,8 @@
 use feagi_serialization::FeagiByteContainer;
 #[allow(unused_imports)]
 use feagi_serialization::FeagiSerializable;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::neuron_voxels::xyzp::{
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
 };
 use ndarray::prelude::*;

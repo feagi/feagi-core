@@ -77,7 +77,7 @@ cargo publish -p feagi-npu-neural
 cargo publish -p feagi-npu-runtime
 cargo publish -p feagi-config
 cargo publish -p feagi-observability
-cargo publish -p feagi-data-structures
+cargo publish -p feagi-structures
 
 # Phase 2: Runtime implementations
 cargo publish -p feagi-npu-runtime-std

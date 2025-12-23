@@ -8,7 +8,7 @@ use std::fmt::{Display, Formatter};
 ///
 /// # Examples
 /// ```
-/// use feagi_data_structures::FeagiDataError;
+/// use feagi_structures::FeagiDataError;
 ///
 /// fn validate_count(count: u32) -> Result<(), FeagiDataError> {
 ///     if count == 0 {

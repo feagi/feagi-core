@@ -12,7 +12,7 @@ This repository is a dedicated workspace for core FEAGI components, maintained s
 - **feagi-connector** (agent SDK, separate repo)
 - **brain-visualizer** (3D visualization, separate repo)
 
-**Note**: The `feagi-data-processing` crates (`feagi-data-structures`, `feagi-serialization`, `feagi-sensorimotor`) have been merged into this repository as workspace members under `crates/`.
+**Note**: The `feagi-data-processing` crates (`feagi-structures`, `feagi-serialization`, `feagi-sensorimotor`) have been merged into this repository as workspace members under `crates/`.
 
 ## Crate Hierarchy
 

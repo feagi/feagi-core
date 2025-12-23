@@ -21,7 +21,7 @@ use crate::types::agent_registry::{
 };
 use crate::types::registration::RegistrationRequest;
 use feagi_brain_development::ConnectomeManager;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 
 /// Implementation of the Agent service
 pub struct AgentServiceImpl {

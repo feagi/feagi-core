@@ -17,7 +17,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use crate::types::EvoError;
-use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
+use feagi_structures::genomic::cortical_area::CorticalAreaType;
 use std::collections::HashMap;
 
 /// Parse CorticalAreaType from genome properties
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_validate_ipu_type() {
-        use feagi_data_structures::genomic::cortical_area::{
+        use feagi_structures::genomic::cortical_area::{
             io_cortical_area_data_type::FrameChangeHandling, IOCorticalAreaDataFlag,
         };
 

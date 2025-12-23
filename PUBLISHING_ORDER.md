@@ -41,8 +41,8 @@ If you must publish manually, follow the layer order below exactly.
 
 ### **Layer 2: Core Data Structures**
 
-#### `feagi-data-structures`
-- **Path:** `crates/feagi-data-structures`
+#### `feagi-structures`
+- **Path:** `crates/feagi-structures`
 - **Dependencies:** `feagi-observability`
 - **Purpose:** Neurons, synapses, cortical areas, genome structures
 - **Features:** `async` (platform-agnostic async runtime abstraction with `async-tokio`, `async-wasm`, `async-wasi` sub-features)
@@ -98,7 +98,7 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-npu-neural`
   - `feagi-npu-runtime` (optional, via `std` feature)
   - `feagi-serialization`
-  - `feagi-data-structures`
+  - `feagi-structures`
   - `feagi-state-manager`
 - **Purpose:** Neural burst processing engine (CPU/GPU)
 
@@ -116,7 +116,7 @@ If you must publish manually, follow the layer order below exactly.
 - **Path:** `crates/feagi-evolutionary`
 - **Dependencies:** 
   - `feagi-npu-neural`
-  - `feagi-data-structures`
+  - `feagi-structures`
   - `feagi-observability`
 - **Purpose:** Genome management, evolution, validation
 
@@ -126,7 +126,7 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-npu-neural`
   - `feagi-npu-burst-engine`
   - `feagi-evolutionary`
-  - `feagi-data-structures`
+  - `feagi-structures`
   - `feagi-observability`
 - **Purpose:** Brain Development Utilities (synaptogenesis, connectivity)
 
@@ -141,7 +141,7 @@ If you must publish manually, follow the layer order below exactly.
   - `feagi-brain-development`
   - `feagi-services`
   - `feagi-npu-neural`
-  - `feagi-data-structures`
+  - `feagi-structures`
   - `feagi-serialization`
 - **Purpose:** Agent I/O, registration, ZMQ/UDP/WebSocket transports, connectome file I/O
 - **Note:** Includes consolidated transport primitives (formerly feagi-transports)
@@ -149,7 +149,7 @@ If you must publish manually, follow the layer order below exactly.
 #### `feagi-sensorimotor`
 - **Path:** `crates/feagi-sensorimotor`
 - **Dependencies:**
-  - `feagi-data-structures`
+  - `feagi-structures`
   - `feagi-serialization`
 - **Purpose:** Peripheral Nervous System - data processing, caching, neuron voxel encoding
 - **Note:** Previously named feagi-connector-core, then feagi-pns, now feagi-sensorimotor
@@ -189,7 +189,7 @@ If you must publish manually, follow the layer order below exactly.
 - **Path:** `crates/feagi-agent`
 - **Dependencies:**
   - `feagi-io`
-  - `feagi-data-structures`
+  - `feagi-structures`
   - `feagi-serialization`
   - `feagi-observability`
 - **Purpose:** Agent connection lifecycle, reconnection, heartbeat

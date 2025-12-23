@@ -10,9 +10,9 @@ use super::descriptors::{
     ColorChannelLayout, ColorSpace, SegmentedImageFrameProperties, SegmentedXYImageResolutions,
 };
 use super::ImageFrame;
-use feagi_data_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
-use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
+use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+use feagi_structures::FeagiDataError;
 use ndarray::Array3;
 use rayon::prelude::*;
 

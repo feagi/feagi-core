@@ -2,7 +2,7 @@ use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_pipeline::PipelineStagePropertyIndex;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use std::time::Instant;
 
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};

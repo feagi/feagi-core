@@ -390,8 +390,8 @@ impl AgentClient {
 
         // ARCHITECTURE COMPLIANCE: Use binary XYZP format, NOT JSON
         // This serializes data using feagi_data_structures for cross-platform compatibility
-        use feagi_data_structures::genomic::cortical_area::CorticalID;
-        use feagi_data_structures::neuron_voxels::xyzp::{
+        use feagi_structures::genomic::cortical_area::CorticalID;
+        use feagi_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
 
@@ -466,7 +466,7 @@ impl AgentClient {
     ///
     /// # Example
     /// ```ignore
-    /// use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+    /// use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
     ///
     /// if let Some(motor_data) = client.receive_motor_data()? {
     ///     // Process binary motor data
@@ -479,7 +479,7 @@ impl AgentClient {
         &self,
     ) -> Result<Option<feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels>>
     {
-        use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+        use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
         if !self.registered {
             return Err(SdkError::NotRegistered);

@@ -37,7 +37,7 @@ echo ""
 
 declare -A CRATE_PATHS=(
     ["feagi-observability"]="crates/feagi-observability"
-    ["feagi-data-structures"]="crates/feagi-data-structures"
+    ["feagi-structures"]="crates/feagi-structures"
     ["feagi-config"]="crates/feagi-config"
     ["feagi-npu-neural"]="crates/feagi-npu/neural"
     ["feagi-npu-runtime"]="crates/feagi-npu/runtime"
@@ -59,7 +59,7 @@ declare -A CRATE_PATHS=(
 # Publication order (dependencies first)
 CRATE_ORDER=(
     "feagi-observability"
-    "feagi-data-structures"
+    "feagi-structures"
     "feagi-config"
     "feagi-npu-neural"
     "feagi-npu-runtime"

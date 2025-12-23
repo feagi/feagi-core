@@ -25,4 +25,4 @@ impl fmt::Display for SynapseId {
     }
 }
 
-// Note: CorticalAreaId REMOVED - use feagi_data_structures::genomic::cortical_area::CorticalID instead
+// Note: CorticalAreaId REMOVED - use feagi_structures::genomic::cortical_area::CorticalID instead

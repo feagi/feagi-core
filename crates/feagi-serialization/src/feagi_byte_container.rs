@@ -1,7 +1,7 @@
 use crate::feagi_serializable::FeagiSerializable;
 use crate::FeagiByteStructureType;
 use byteorder::{ByteOrder, LittleEndian};
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 
 const MAX_NUMBER_OF_STRUCTS: usize = u8::MAX as usize;
 

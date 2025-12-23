@@ -596,10 +596,10 @@ pub async fn get_amalgamation_history_exact(
 pub async fn get_cortical_template(
     State(_state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
         FrameChangeHandling, IOCorticalAreaDataFlag, PercentageNeuronPositioning,
     };
-    use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use serde_json::json;
 
     let mut templates = HashMap::new();

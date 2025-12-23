@@ -13,10 +13,10 @@ use crate::types::*;
 use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
-use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
-// Note: decode_cortical_id removed - use feagi_data_structures::CorticalID directly
+use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
+// Note: decode_cortical_id removed - use feagi_structures::CorticalID directly
 use parking_lot::RwLock;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -577,7 +577,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
               src_area_id, dst_area_id, mapping_data.len());
 
         // Convert String to CorticalID
-        use feagi_data_structures::genomic::cortical_area::CorticalID;
+        use feagi_structures::genomic::cortical_area::CorticalID;
         let src_id = CorticalID::try_from_base_64(&src_area_id).map_err(|e| {
             ServiceError::InvalidInput(format!("Invalid source cortical ID: {}", e))
         })?;

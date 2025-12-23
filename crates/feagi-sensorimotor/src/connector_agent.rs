@@ -1,6 +1,6 @@
 use crate::caching::MotorDeviceCache;
 use crate::caching::SensorDeviceCache;
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
 

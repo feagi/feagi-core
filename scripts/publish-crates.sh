@@ -26,7 +26,7 @@ CRATES=(
     "crates/feagi-observability"
     
     # Layer 2: Core data structures
-    "crates/feagi-data-structures"
+    "crates/feagi-structures"
     "crates/feagi-config"
     
     # Layer 3: Neural foundations

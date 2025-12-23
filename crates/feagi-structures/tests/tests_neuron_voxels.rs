@@ -1,11 +1,11 @@
 //! Tests for neuron voxel structures
 
-use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_data_structures::genomic::SensoryCorticalUnit;
-use feagi_data_structures::neuron_voxels::xyzp::{
+use feagi_structures::genomic::SensoryCorticalUnit;
+use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
 };
 use std::ops::RangeInclusive;
@@ -13,7 +13,7 @@ use std::ops::RangeInclusive;
 #[cfg(test)]
 mod xyzp_tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
     //region NeuronVoxelXYZP Tests
 
     #[test]

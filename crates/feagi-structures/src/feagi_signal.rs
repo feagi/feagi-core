@@ -17,7 +17,7 @@ define_index!(
 /// # Example with Shared State
 /// ```
 /// use std::sync::{Arc, Mutex};
-/// use feagi_data_structures::FeagiSignal;
+/// use feagi_structures::FeagiSignal;
 ///
 /// struct MyHandler {
 ///     count: i32,
@@ -65,7 +65,7 @@ impl<T> FeagiSignal<T> {
     ///
     /// # Example
     /// ```
-    /// use feagi_data_structures::FeagiSignal;
+    /// use feagi_structures::FeagiSignal;
     ///
     /// let mut signal = FeagiSignal::new();
     /// let handle = signal.connect(|value: &i32| {
@@ -115,7 +115,7 @@ impl<T> FeagiSignal<T> {
     /// # Example
     /// ```
     /// use std::sync::{Arc, Mutex};
-    /// use feagi_data_structures::FeagiSignal;
+    /// use feagi_structures::FeagiSignal;
     ///
     /// struct Counter { value: i32 }
     /// impl Counter {

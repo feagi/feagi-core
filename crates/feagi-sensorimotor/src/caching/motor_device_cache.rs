@@ -6,17 +6,17 @@ use crate::neuron_voxel_coding::xyzp::decoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_serialization::FeagiByteContainer;
-use feagi_data_structures::genomic::cortical_area::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
 };
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
-use feagi_data_structures::genomic::MotorCorticalUnit;
-use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-use feagi_data_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::descriptors::AgentDeviceIndex;
+use feagi_structures::genomic::MotorCorticalUnit;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;

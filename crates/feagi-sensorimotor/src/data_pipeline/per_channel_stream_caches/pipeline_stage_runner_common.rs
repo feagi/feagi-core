@@ -3,7 +3,7 @@ use crate::data_pipeline::{
     stage_properties_to_stages, PipelineStageProperties, PipelineStagePropertyIndex,
 };
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use std::cmp::PartialEq;
 use std::time::Instant;
 

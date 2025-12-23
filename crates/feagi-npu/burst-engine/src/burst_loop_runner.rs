@@ -557,8 +557,8 @@ fn encode_fire_data_to_xyzp(
     fire_data: RawFireQueueSnapshot,
     cortical_id_filter: Option<&ahash::AHashSet<String>>,
 ) -> Result<Vec<u8>, String> {
-    use feagi_data_structures::genomic::cortical_area::CorticalID;
-    use feagi_data_structures::neuron_voxels::xyzp::{
+    use feagi_structures::genomic::cortical_area::CorticalID;
+    use feagi_structures::neuron_voxels::xyzp::{
         CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
     };
 

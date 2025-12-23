@@ -6,7 +6,7 @@
 /// # Usage
 ///
 /// ```ignore
-/// use feagi_data_structures::async::FeagiAsyncRuntime;
+/// use feagi_structures::async::FeagiAsyncRuntime;
 ///
 /// // Your application logic - platform agnostic
 /// async fn run_application<R: FeagiAsyncRuntime>(runtime: &R) {

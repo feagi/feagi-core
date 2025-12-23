@@ -247,8 +247,8 @@ impl WebSocketStreams {
         fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot,
     ) -> std::result::Result<Vec<u8>, String> {
         use feagi_serialization::FeagiByteContainer;
-        use feagi_data_structures::genomic::cortical_area::CorticalID;
-        use feagi_data_structures::neuron_voxels::xyzp::{
+        use feagi_structures::genomic::cortical_area::CorticalID;
+        use feagi_structures::neuron_voxels::xyzp::{
             CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
         };
 

@@ -2,7 +2,7 @@ use crate::data_types::descriptors::{
     ColorChannelLayout, ColorSpace, CornerPoints, ImageFrameProperties, ImageXYResolution,
 };
 use crate::data_types::ImageFrame;
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use ndarray::{s, ArrayView3, Zip};
 
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]

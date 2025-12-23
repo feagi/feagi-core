@@ -24,8 +24,8 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi-serialization = "2.0.0"
-feagi-data-structures = "2.0.0"
+feagi-serialization = "0.0.1-beta.1"
+feagi-structures = "0.0.1-beta.1"
 ```
 
 ## Usage
@@ -53,7 +53,7 @@ let decoded = FeagiByteContainer::from_bytes(&bytes)?;
 
 ```rust
 use feagi_serialization::implementations::cortical_mapped_xyzp_neuron_data::CorticalMappedXYZPNeuronVoxels;
-use feagi-data-structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 
 // Create neuron data mapped to cortical areas
 let cortical_id = CorticalID::from_base_64("aXB1MDAw")?;
@@ -94,7 +94,7 @@ For format specifications, see the [docs/](docs/) directory.
 This crate is part of the FEAGI project:
 
 - **Main Project**: [feagi](https://crates.io/crates/feagi)
-- **Data Structures**: [feagi-data-structures](https://crates.io/crates/feagi-data-structures)
+- **Data Structures**: [feagi-structures](https://crates.io/crates/feagi-structures)
 - **Sensorimotor**: [feagi-sensorimotor](https://crates.io/crates/feagi-sensorimotor)
 
 ## License

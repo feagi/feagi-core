@@ -14,7 +14,7 @@ Licensed under the Apache License, Version 2.0
 use crate::{MorphologyParameters, RuntimeGenome};
 // CorticalID is used in function signatures but may appear unused in some contexts
 #[allow(unused_imports)]
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use serde_json::Value;
 use std::collections::HashSet;
 use std::str::FromStr;
@@ -329,7 +329,7 @@ fn validate_cortical_id_format(
 
 /// Validate CORE area IDs (power, death, etc.) using feagi-data-processing types
 fn validate_core_area_id(display: &str, result: &mut ValidationResult) {
-    use feagi_data_structures::genomic::cortical_area::CoreCorticalType;
+    use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
     // Generate valid CORE IDs from the authoritative source (feagi-data-processing)
     let valid_core_ids: Vec<String> = vec![
@@ -721,8 +721,8 @@ mod tests {
         };
 
         // Add a valid cortical area (use CoreCorticalType::Power)
-        use feagi_data_structures::genomic::cortical_area::CustomCorticalType;
-        use feagi_data_structures::genomic::cortical_area::{
+        use feagi_structures::genomic::cortical_area::CustomCorticalType;
+        use feagi_structures::genomic::cortical_area::{
             CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType,
         };
         let test_id = CoreCorticalType::Power.to_cortical_id();

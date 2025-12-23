@@ -6,7 +6,7 @@
 use feagi_serialization::FeagiByteContainer;
 #[allow(unused_imports)]
 use feagi_serialization::FeagiSerializable;
-use feagi_data_structures::FeagiJSON;
+use feagi_structures::FeagiJSON;
 #[allow(unused_imports)]
 use serde_json::json;
 

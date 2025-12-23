@@ -26,8 +26,8 @@ Add this to your `Cargo.toml`:
 ```toml
 [dependencies]
 feagi-sensorimotor = "2.0.0"
-feagi-data-structures = "2.0.0"
-feagi-serialization = "2.0.0"
+feagi-structures = "0.0.1-beta.1"
+feagi-serialization = "0.0.1-beta.1"
 ```
 
 ## Usage

@@ -9,7 +9,7 @@ use crate::data_pipeline::pipeline_stage::PipelineStage;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::{ImageFrame, ImageFrameProcessor};
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use std::any::Any;
 use std::fmt::Display;
 use std::time::Instant;

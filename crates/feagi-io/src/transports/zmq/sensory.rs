@@ -354,7 +354,7 @@ impl SensoryStream {
         rejected_no_agents: &Arc<Mutex<u64>>,
     ) -> Result<usize, String> {
         use feagi_serialization::FeagiByteContainer;
-        use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+        use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 
         // Get NPU reference
         let npu_lock = npu_mutex.lock();

@@ -16,9 +16,9 @@ Copyright 2025 Neuraville Inc.
 Licensed under the Apache License, Version 2.0
 */
 
-use feagi_data_structures::genomic::cortical_area::CorticalArea;
-use feagi_data_structures::genomic::cortical_area::IOCorticalAreaDataFlag;
-// Note: CorticalTypeAdapter removed - use feagi_data_structures::CorticalID directly
+use feagi_structures::genomic::cortical_area::CorticalArea;
+use feagi_structures::genomic::cortical_area::IOCorticalAreaDataFlag;
+// Note: CorticalTypeAdapter removed - use feagi_structures::CorticalID directly
 
 /// Validation result for agent-area compatibility
 #[derive(Debug, Clone)]
@@ -76,7 +76,7 @@ pub fn validate_sensory_compatibility(
 
     // Phase 4: Provide recommendations based on cortical type
     // Use the stored cortical_type field instead of extracting from cortical_id
-    use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
+    use feagi_structures::genomic::cortical_area::CorticalAreaType;
     if let CorticalAreaType::BrainInput(io_type) = &area.cortical_type {
         let mut result = ValidationResult::compatible();
 
@@ -136,7 +136,7 @@ pub fn validate_motor_compatibility(
 /// Future: More sophisticated sizing based on dimensions and encoding
 pub fn get_recommended_buffer_size(area: &CorticalArea) -> usize {
     // Use the stored cortical_type field instead of extracting from cortical_id
-    use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
+    use feagi_structures::genomic::cortical_area::CorticalAreaType;
     if let Some(io_type) = match &area.cortical_type {
         CorticalAreaType::BrainInput(t) => Some(t),
         CorticalAreaType::BrainOutput(t) => Some(t),
@@ -181,7 +181,7 @@ pub fn get_recommended_buffer_size(area: &CorticalArea) -> usize {
 /// Future: More sophisticated compression strategies
 pub fn should_use_compression(area: &CorticalArea) -> bool {
     if let Ok(cortical_type) = area.cortical_id.as_cortical_type() {
-        use feagi_data_structures::genomic::cortical_area::CorticalAreaType;
+        use feagi_structures::genomic::cortical_area::CorticalAreaType;
         if let Some(io_type) = match cortical_type {
             CorticalAreaType::BrainInput(t) => Some(t),
             CorticalAreaType::BrainOutput(t) => Some(t),
@@ -207,13 +207,13 @@ pub fn should_use_compression(area: &CorticalArea) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalID};
+    use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalID};
 
     #[test]
     fn test_validate_sensory_compatibility() {
         // Create BrainInput area (valid cortical ID with 'i' prefix for input)
-        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_data_structures::genomic::cortical_area::{
+        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+        use feagi_structures::genomic::cortical_area::{
             CorticalAreaType, IOCorticalAreaDataFlag,
         };
         let cortical_id = CorticalID::try_from_bytes(b"ivision1").unwrap();
@@ -243,10 +243,10 @@ mod tests {
     #[test]
     fn test_validate_motor_compatibility() {
         // Create BrainOutput area (valid cortical ID with 'o' prefix for output)
-        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
             FrameChangeHandling, PercentageNeuronPositioning,
         };
-        use feagi_data_structures::genomic::cortical_area::{
+        use feagi_structures::genomic::cortical_area::{
             CorticalAreaType, IOCorticalAreaDataFlag,
         };
         let cortical_id = CorticalID::try_from_bytes(b"omotor01").unwrap();
@@ -271,8 +271,8 @@ mod tests {
 
     #[test]
     fn test_get_recommended_buffer_size() {
-        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_data_structures::genomic::cortical_area::{
+        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+        use feagi_structures::genomic::cortical_area::{
             CorticalAreaType, IOCorticalAreaDataFlag,
         };
         let cortical_id = CorticalID::try_from_bytes(b"ivision2").unwrap();
@@ -298,8 +298,8 @@ mod tests {
 
     #[test]
     fn test_should_use_compression() {
-        use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_data_structures::genomic::cortical_area::{
+        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+        use feagi_structures::genomic::cortical_area::{
             CorticalAreaType, IOCorticalAreaDataFlag,
         };
         let cortical_id = CorticalID::try_from_bytes(b"ivision3").unwrap();

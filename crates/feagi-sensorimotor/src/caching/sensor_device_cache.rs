@@ -26,20 +26,20 @@ use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_serialization::FeagiByteContainer;
 #[allow(unused_imports)] // Used by macro-generated code
-use feagi_data_structures::genomic::cortical_area::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalGroupIndex, NeuronDepth,
 };
 #[allow(unused_imports)] // Used by macro-generated code
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 #[allow(unused_imports)] // Used by macro-generated code
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
-use feagi_data_structures::genomic::SensoryCorticalUnit;
-use feagi_data_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::descriptors::AgentDeviceIndex;
+use feagi_structures::genomic::SensoryCorticalUnit;
+use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 #[allow(unused_imports)] // Used by macro-generated code
-use feagi_data_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
+use feagi_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;

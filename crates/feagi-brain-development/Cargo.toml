@@ -15,7 +15,7 @@ name = "feagi_brain_development"
 feagi-npu-neural = { version = "0.0.1-beta.1", path = "../feagi-npu/neural" }  # For types (CorticalArea, Dimensions, etc.)
 feagi-evolutionary = { version = "0.0.1-beta.1", path = "../feagi-evolutionary" }
 # feagi-burst-engine configured per-platform below
-feagi-data-structures = { workspace = true }
+feagi-structures = { workspace = true }
 
 # Performance (using workspace versions)
 rayon = { workspace = true, optional = true }  # Optional - not available in WASM

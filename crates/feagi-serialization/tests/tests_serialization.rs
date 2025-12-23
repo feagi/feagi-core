@@ -4,15 +4,15 @@
 //! using the FeagiByteContainer format.
 
 use feagi_serialization::{FeagiByteContainer, FeagiByteStructureType};
-use feagi_data_structures::genomic::cortical_area::descriptors::{
+use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalAreaDimensions, CorticalGroupIndex,
 };
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use feagi_data_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
-use feagi_data_structures::genomic::SensoryCorticalUnit;
-use feagi_data_structures::neuron_voxels::xyzp::{
+use feagi_structures::genomic::cortical_area::{CoreCorticalType, CorticalID};
+use feagi_structures::genomic::SensoryCorticalUnit;
+use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
 };
 

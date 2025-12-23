@@ -13,7 +13,7 @@ impl FeagiJSON {
     ///
     /// # Example
     /// ```
-    /// use feagi_data_structures::FeagiJSON;
+    /// use feagi_structures::FeagiJSON;
     ///
     /// let json = FeagiJSON::new_empty();
     /// println!("{}", json); // prints: {}
@@ -28,7 +28,7 @@ impl FeagiJSON {
     ///
     /// # Example
     /// ```
-    /// use feagi_data_structures::FeagiJSON;
+    /// use feagi_structures::FeagiJSON;
     ///
     /// let json = FeagiJSON::from_json_string(r#"{"key": "value"}"#.to_string()).unwrap();
     /// ```

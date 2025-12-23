@@ -1,10 +1,10 @@
-# feagi-data-structures
+# feagi-structures
 
 **Core data structures and types for the FEAGI ecosystem**
 
-[![Crates.io](https://img.shields.io/crates/v/feagi-data-structures.svg)](https://crates.io/crates/feagi-data-structures)
-[![Documentation](https://docs.rs/feagi-data-structures/badge.svg)](https://docs.rs/feagi-data-structures)
-[![License](https://img.shields.io/crates/l/feagi-data-structures.svg)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/feagi-structures.svg)](https://crates.io/crates/feagi-structures)
+[![Documentation](https://docs.rs/feagi-structures/badge.svg)](https://docs.rs/feagi-structures)
+[![License](https://img.shields.io/crates/l/feagi-structures.svg)](LICENSE)
 
 ## Overview
 
@@ -25,7 +25,7 @@ Add this to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-feagi-data-structures = "2.0.0"
+feagi-structures = "0.0.1-beta.1"
 ```
 
 ## Usage
@@ -45,7 +45,7 @@ let cortical_type = cortical_id.cortical_type();
 ### Brain Regions
 
 ```rust
-use feagi-data-structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 
 // Create a brain region
 let region = BrainRegion::new(

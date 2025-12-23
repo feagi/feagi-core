@@ -11,7 +11,7 @@ Licensed under the Apache License, Version 2.0
 */
 
 use async_trait::async_trait;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_npu_burst_engine::BurstLoopRunner;
 use parking_lot::RwLock;
 use std::sync::Arc;

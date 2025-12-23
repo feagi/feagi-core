@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use feagi_bdu::Neuroembryogenesis;
-use feagi_data_structures::genomic::cortical_area::{
+use feagi_structures::genomic::cortical_area::{
     AreaType, CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
 use feagi_evolutionary::{templates, RuntimeGenome};

@@ -50,7 +50,7 @@ source "$VERSIONS_FILE"
 
 declare -A CRATE_PATHS=(
     ["feagi-observability"]="crates/feagi-observability"
-    ["feagi-data-structures"]="crates/feagi-data-structures"
+    ["feagi-structures"]="crates/feagi-structures"
     ["feagi-config"]="crates/feagi-config"
     ["feagi-npu-neural"]="crates/feagi-npu/neural"
     ["feagi-npu-runtime"]="crates/feagi-npu/runtime"

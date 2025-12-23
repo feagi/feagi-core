@@ -9,7 +9,7 @@
 /// # Usage
 ///
 /// ```ignore
-/// use feagi_data_structures::async::FeagiAsyncRuntime;
+/// use feagi_structures::async::FeagiAsyncRuntime;
 ///
 /// async fn my_async_work<R: FeagiAsyncRuntime>(runtime: &R) -> i32 {
 ///     let handle = runtime.spawn(async { 42 });

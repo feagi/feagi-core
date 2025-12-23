@@ -3,11 +3,11 @@
 //! This module contains comprehensive tests for genomic data structures
 //! including cortical types, cortical IDs, descriptors, and sensory cortical units.
 
-use feagi_data_structures::genomic::cortical_area::descriptors::*;
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::*;
-use feagi_data_structures::genomic::cortical_area::*;
-use feagi_data_structures::genomic::*;
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::genomic::cortical_area::descriptors::*;
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::*;
+use feagi_structures::genomic::cortical_area::*;
+use feagi_structures::genomic::*;
+use feagi_structures::FeagiDataError;
 
 #[cfg(test)]
 mod test_cortical_area_descriptors {
@@ -142,7 +142,7 @@ mod test_cortical_area_descriptors {
 
     mod test_coordinates {
         use super::*;
-        use feagi_data_structures::genomic::descriptors::GenomeCoordinate;
+        use feagi_structures::genomic::descriptors::GenomeCoordinate;
 
         #[test]
         fn test_neuron_voxel_coordinate_creation() {
@@ -230,7 +230,7 @@ mod test_cortical_area_descriptors {
 
 #[cfg(test)]
 mod test_genomic_descriptors {
-    use feagi_data_structures::genomic::descriptors::AgentDeviceIndex;
+    use feagi_structures::genomic::descriptors::AgentDeviceIndex;
 
     #[test]
     fn test_agent_device_index_creation() {
@@ -848,7 +848,7 @@ mod test_sensory_cortical_unit {
 #[cfg(test)]
 mod test_comprehensive_scenarios {
     use super::*;
-    use feagi_data_structures::genomic::descriptors::{AgentDeviceIndex, GenomeCoordinate};
+    use feagi_structures::genomic::descriptors::{AgentDeviceIndex, GenomeCoordinate};
 
     #[test]
     fn test_maximum_index_values() {
@@ -968,8 +968,8 @@ mod test_error_handling {
 #[cfg(test)]
 mod test_cortical_area {
     use super::*;
-    use feagi_data_structures::genomic::cortical_area::CorticalArea;
-    use feagi_data_structures::genomic::descriptors::GenomeCoordinate3D;
+    use feagi_structures::genomic::cortical_area::CorticalArea;
+    use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 
     #[test]
     fn test_cortical_area_creation() {

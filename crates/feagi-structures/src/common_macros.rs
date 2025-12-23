@@ -4,7 +4,7 @@
 ///
 /// # Example
 /// ```
-/// use feagi_data_structures::define_index;
+/// use feagi_structures::define_index;
 ///
 /// define_index!(NodeId, u32, "Unique identifier for a node");
 ///
@@ -76,7 +76,7 @@ macro_rules! define_index {
 ///
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_nonzero_count, FeagiDataError};
+/// use feagi_structures::{define_nonzero_count, FeagiDataError};
 ///
 /// define_nonzero_count!(ItemCount, u32, "Number of items (must be > 0)");
 ///
@@ -153,7 +153,7 @@ macro_rules! define_nonzero_count {
 ///
 /// # Example
 /// ```
-/// use feagi_data_structures::define_xy_coordinates;
+/// use feagi_structures::define_xy_coordinates;
 ///
 /// define_xy_coordinates!(Point2D, i32, "Point2D", "A 2D point with integer coordinates");
 ///
@@ -202,7 +202,7 @@ macro_rules! define_xy_coordinates {
 ///
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_xy_dimensions, FeagiDataError};
+/// use feagi_structures::{define_xy_dimensions, FeagiDataError};
 ///
 /// define_xy_dimensions!(Size2D, u32, "Size2D", 0, "A 2D size with positive dimensions");
 ///
@@ -280,7 +280,7 @@ macro_rules! define_xy_dimensions {
 ///
 /// # Example
 /// ```
-/// use feagi_data_structures::define_xyz_coordinates;
+/// use feagi_structures::define_xyz_coordinates;
 ///
 /// define_xyz_coordinates!(Point3D, u32, "Point3D", "A 3D point with u32 coordinates");
 ///
@@ -331,7 +331,7 @@ macro_rules! define_xyz_coordinates {
 ///
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_xyz_dimensions, FeagiDataError};
+/// use feagi_structures::{define_xyz_dimensions, FeagiDataError};
 ///
 /// define_xyz_dimensions!(Volume3D, u32, "Volume3D", 0, "A 3D volume with positive dimensions");
 ///
@@ -452,7 +452,7 @@ macro_rules! define_xyz_dimensions {
 ///
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_xyz_dimensions, define_xyz_mapping, FeagiDataError};
+/// use feagi_structures::{define_xyz_dimensions, define_xyz_mapping, FeagiDataError};
 ///
 /// define_xyz_dimensions!(VolumeA, u32, "VolumeA", 0, "Volume type A");
 /// define_xyz_dimensions!(VolumeB, u32, "VolumeB", 0, "Volume type B");
@@ -483,7 +483,7 @@ macro_rules! define_xyz_mapping {
 ///
 /// # Example
 /// ```
-/// use feagi_data_structures::{define_xyz_dimensions, define_xyz_dimension_range, FeagiDataError};
+/// use feagi_structures::{define_xyz_dimensions, define_xyz_dimension_range, FeagiDataError};
 ///
 /// define_xyz_dimensions!(Position3D, u32, "Position3D", 0, "3D position coordinates");
 /// define_xyz_dimension_range!(BoundingBox3D, u32, Position3D, "BoundingBox3D", "3D bounding box for spatial queries");

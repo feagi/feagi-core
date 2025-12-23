@@ -11,8 +11,8 @@
 
 use feagi_bdu::{ConnectomeManager, Neuroembryogenesis};
 use feagi_npu_burst_engine::{RustNPU, DynamicNPU};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_evolutionary::{RuntimeGenome, GenomeMetadata, CorticalArea as GenomeCorticalArea};
 use feagi_npu_runtime::StdRuntime;
 use feagi_npu_burst_engine::backend::CPUBackend;
@@ -21,7 +21,7 @@ use parking_lot::RwLock;
 
 /// Create a minimal test genome with all cortical types
 fn create_test_genome() -> RuntimeGenome {
-    use feagi_data_structures::genomic::cortical_area::CorticalAreaDimensions;
+    use feagi_structures::genomic::cortical_area::CorticalAreaDimensions;
     
     let mut genome = RuntimeGenome {
         metadata: GenomeMetadata {

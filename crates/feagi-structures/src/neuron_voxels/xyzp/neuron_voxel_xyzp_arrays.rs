@@ -31,7 +31,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
     ///
     /// let arrays = NeuronVoxelXYZPArrays::new();
     /// assert_eq!(arrays.len(), 0);
@@ -67,7 +67,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
     ///
     /// let x = vec![1, 2, 3];
     /// let y = vec![4, 5, 6];
@@ -106,7 +106,7 @@ impl NeuronVoxelXYZPArrays {
     /// # Examples
     /// ```
     /// use ndarray::Array1;
-    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
     ///
     /// let x_nd = Array1::from_vec(vec![1, 2, 3]);
     /// let y_nd = Array1::from_vec(vec![4, 5, 6]);
@@ -163,7 +163,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
     ///
     /// let arrays = NeuronVoxelXYZPArrays::with_capacity(100);
     /// assert_eq!(arrays.capacity(), 100);
@@ -179,7 +179,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(10);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -196,7 +196,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
     /// assert_eq!(arrays.len(), 0);
@@ -213,7 +213,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(100);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -237,7 +237,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(10);
     /// arrays.ensure_capacity(50);
@@ -260,7 +260,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::new();
     /// arrays.reserve(100);
@@ -280,7 +280,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
     /// let neuron = NeuronVoxelXYZP::new(1, 2, 3, 0.5);
@@ -304,7 +304,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
+    /// use feagi_structures::neuron_voxels::xyzp::NeuronVoxelXYZPArrays;
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::new();
     /// arrays.push_raw(1, 2, 3, 0.5);
@@ -327,7 +327,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -407,7 +407,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -442,7 +442,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
     /// assert!(arrays.is_empty());
@@ -461,7 +461,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -495,7 +495,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -557,7 +557,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -585,7 +585,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -618,7 +618,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(2);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -636,7 +636,7 @@ impl NeuronVoxelXYZPArrays {
     ///
     /// # Examples
     /// ```
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(1);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));
@@ -664,7 +664,7 @@ impl NeuronVoxelXYZPArrays {
     /// # Examples
     /// ```
     /// use std::ops::RangeInclusive;
-    /// use feagi_data_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
+    /// use feagi_structures::neuron_voxels::xyzp::{NeuronVoxelXYZPArrays, NeuronVoxelXYZP};
     ///
     /// let mut arrays = NeuronVoxelXYZPArrays::with_capacity(3);
     /// arrays.push(&NeuronVoxelXYZP::new(1, 2, 3, 0.5));

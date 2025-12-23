@@ -56,10 +56,10 @@ pub use spatial::{morton_decode_3d, morton_encode_3d, MortonSpatialHash, Spatial
 pub use types::{AreaId, BduError, BduResult, Weight};
 
 // Re-export core types from feagi_data_structures (single source of truth)
-pub use feagi_data_structures::genomic::cortical_area::{
+pub use feagi_structures::genomic::cortical_area::{
     CorticalArea, CorticalAreaDimensions as Dimensions, CorticalID,
 };
-pub use feagi_data_structures::genomic::{BrainRegion, RegionType};
+pub use feagi_structures::genomic::{BrainRegion, RegionType};
 pub mod models;
 pub use models::{BrainRegionHierarchy, CorticalAreaExt};
 

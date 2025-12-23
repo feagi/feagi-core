@@ -2,11 +2,11 @@
 
 use crate::{FeagiByteContainer, FeagiByteStructureType, FeagiSerializable};
 use byteorder::{ByteOrder, LittleEndian};
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::neuron_voxels::xyzp::{
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZP, NeuronVoxelXYZPArrays,
 };
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 use std::any::Any;
 
 /// Current version of the neuron XYZP serialization format.

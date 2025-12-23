@@ -8,10 +8,10 @@ use super::agent_registry::{
     SensoryCapability, VisionCapability, VisualizationCapability,
 };
 use ahash::AHashSet;
-use feagi_data_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-use feagi_data_structures::genomic::cortical_area::CorticalID;
-use feagi_data_structures::genomic::SensoryCorticalUnit;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::CorticalID;
+use feagi_structures::genomic::SensoryCorticalUnit;
 #[allow(unused_imports)]
 use feagi_services::traits::registration_handler::RegistrationHandlerTrait;
 pub use feagi_services::types::registration::{
@@ -535,7 +535,7 @@ impl RegistrationHandler {
                 // Use default frame_change_handling (Absolute) - this should match what the encoder uses
                 // TODO: Get frame_change_handling from registration request if available
                 let frame_change_handling = FrameChangeHandling::Absolute;
-                use feagi_data_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+                use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
                 let percentage_neuron_positioning = PercentageNeuronPositioning::Linear; // Default
 
                 // Get all cortical IDs for this unit type using generic method dispatch
@@ -1249,7 +1249,7 @@ impl RegistrationHandler {
                 // Convert cortical area names to proper 8-byte CorticalID strings
                 // SDK may send either plain names ("omot") or base64 encoded IDs ("b21vdAQAAAA=")
                 use base64::{engine::general_purpose, Engine as _};
-                use feagi_data_structures::genomic::cortical_area::CorticalID;
+                use feagi_structures::genomic::cortical_area::CorticalID;
 
                 let mut cortical_ids: AHashSet<String> = AHashSet::new();
                 for area_input in &motor.source_cortical_areas {

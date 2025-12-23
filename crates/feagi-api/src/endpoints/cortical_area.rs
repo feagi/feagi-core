@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
-use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 
 // ============================================================================
 // REQUEST/RESPONSE MODELS
@@ -452,7 +452,7 @@ pub async fn post_cortical_area(
     State(state): State<ApiState>,
     Json(request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<serde_json::Value>> {
-    use feagi_data_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+    use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use feagi_services::types::CreateCorticalAreaParams;
 
     // ARCHITECTURE: Use genome_service (proper entry point) instead of connectome_service

@@ -1,4 +1,4 @@
-use feagi_data_structures::FeagiDataError;
+use feagi_structures::FeagiDataError;
 
 //region 1D Percentage Types
 
