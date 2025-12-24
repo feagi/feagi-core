@@ -95,7 +95,7 @@ let config = AgentConfig::new("agent_id", AgentType::Sensory)
     // Option 2: Set endpoints individually
     .with_registration_endpoint("tcp://192.168.1.100:30001")
     .with_sensory_endpoint("tcp://192.168.1.100:5555")
-    .with_motor_endpoint("tcp://192.168.1.100:30005");
+    .with_motor_endpoint("tcp://192.168.1.100:5564");
 ```
 
 ### Reliability Configuration

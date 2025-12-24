@@ -128,7 +128,7 @@ impl Default for AgentConfig {
         Self {
             registration_port: 30001,
             sensory_port: 5555, // NOTE: This is agent config (different from ports.zmq_sensory_port)
-            motor_port: 30005,
+            motor_port: 5564,
             host: "0.0.0.0".to_string(),
             auto_create_missing_cortical_areas: true,
         }

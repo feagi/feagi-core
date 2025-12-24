@@ -101,7 +101,7 @@ impl AgentConfig {
     /// ```
     /// # use feagi_agent::{AgentConfig, AgentType};
     /// let config = AgentConfig::new("camera", AgentType::Sensory)
-    ///     .with_feagi_endpoints("192.168.1.100", 30001, 5558, 30005, 5562, 5563);
+    ///     .with_feagi_endpoints("192.168.1.100", 30001, 5558, 5564, 5562, 5563);
     /// ```
     #[deprecated(
         since = "0.1.0",
@@ -113,7 +113,7 @@ impl AgentConfig {
         // Users should migrate to with_feagi_endpoints() or individual endpoint setters
         self.registration_endpoint = format!("tcp://{}:30001", host);
         self.sensory_endpoint = format!("tcp://{}:5558", host);
-        self.motor_endpoint = format!("tcp://{}:30005", host);
+        self.motor_endpoint = format!("tcp://{}:5564", host);
         self.visualization_endpoint = format!("tcp://{}:5562", host);
         self.control_endpoint = format!("tcp://{}:5563", host);
         self
@@ -132,7 +132,7 @@ impl AgentConfig {
     ///         "192.168.1.100",
     ///         30001,  // registration_port
     ///         5558,   // sensory_port
-    ///         30005,  // motor_port
+    ///         5564,   // motor_port
     ///         5562,   // visualization_port
     ///         5563    // control_port
     ///     );

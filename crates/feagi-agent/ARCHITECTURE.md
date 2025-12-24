@@ -268,7 +268,7 @@ FEAGI NPU
 |-------------|-----------|--------------|---------|
 | REQ/REP | Agent ↔ FEAGI | 30001 | Registration & Heartbeat |
 | PUSH/PULL | Agent → FEAGI | 5555 | Sensory Data |
-| SUB/PUB | FEAGI → Agent | 30005 | Motor Commands |
+| SUB/PUB | FEAGI → Agent | 5564 | Motor Commands |
 
 ### **Registration Protocol (REQ/REP):**
 
@@ -297,7 +297,7 @@ FEAGI NPU
   "message": "Agent registered successfully",
   "endpoints": {
     "sensory_endpoint": "tcp://0.0.0.0:5555",
-    "motor_endpoint": "tcp://0.0.0.0:30005"
+    "motor_endpoint": "tcp://0.0.0.0:5564"
   }
 }
 ```
@@ -351,7 +351,7 @@ AgentConfig {
     // Network
     registration_endpoint: String,  // tcp://host:30001
     sensory_endpoint: String,       // tcp://host:5555
-    motor_endpoint: String,         // tcp://host:30005
+    motor_endpoint: String,         // tcp://host:5564
     
     // Reliability
     heartbeat_interval: f64,        // seconds (0 = disabled)
