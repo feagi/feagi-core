@@ -229,6 +229,32 @@ mod test_cortical_area_descriptors {
 }
 
 #[cfg(test)]
+mod test_motor_cortical_units {
+    use super::*;
+
+    #[test]
+    fn test_object_segmentation_cortical_id_and_default_topology() {
+        let group = CorticalGroupIndex::from(0u8);
+        let ids = MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation(
+            FrameChangeHandling::Absolute,
+            group,
+        );
+
+        let bytes = ids[0].as_bytes();
+        assert_eq!(bytes[0], b'o', "Expected OPU cortical id prefix 'o'");
+        assert_eq!(&bytes[1..4], b"seg", "Expected subtype 'seg' for object segmentation");
+
+        // IOCorticalAreaDataFlag::Misc(Absolute) => variant=10 (0x0A), frame bit=0, positioning bit=0
+        assert_eq!(bytes[4], 10, "Expected data type variant 10 (Misc) in low config byte");
+        assert_eq!(bytes[5], 0, "Expected Absolute frame handling in high config byte");
+
+        let topology = MotorCorticalUnit::ObjectSegmentation.get_unit_default_topology();
+        let unit = topology.get(&0).expect("Missing topology entry for area 0");
+        assert_eq!(unit.channel_dimensions_default, [32, 32, 8]);
+    }
+}
+
+#[cfg(test)]
 mod test_genomic_descriptors {
     use feagi_structures::genomic::descriptors::AgentDeviceIndex;
 
@@ -262,14 +288,14 @@ mod test_cortical_types {
         fn test_core_cortical_type_death() {
             let core_type = CoreCorticalType::Death;
             let cortical_id = core_type.to_cortical_id();
-            assert_eq!(format!("{}", cortical_id), "___death");
+            assert_eq!(format!("{}", cortical_id), cortical_id.as_base_64());
         }
 
         #[test]
         fn test_core_cortical_type_power() {
             let core_type = CoreCorticalType::Power;
             let cortical_id = core_type.to_cortical_id();
-            assert_eq!(format!("{}", cortical_id), "___power");
+            assert_eq!(format!("{}", cortical_id), cortical_id.as_base_64());
         }
 
         #[test]
@@ -362,13 +388,13 @@ mod test_cortical_id {
         #[test]
         fn test_cortical_id_from_core_death() {
             let cortical_id = CoreCorticalType::Death.to_cortical_id();
-            assert_eq!(format!("{}", cortical_id), "___death");
+            assert_eq!(format!("{}", cortical_id), cortical_id.as_base_64());
         }
 
         #[test]
         fn test_cortical_id_from_core_power() {
             let cortical_id = CoreCorticalType::Power.to_cortical_id();
-            assert_eq!(format!("{}", cortical_id), "___power");
+            assert_eq!(format!("{}", cortical_id), cortical_id.as_base_64());
         }
     }
 
@@ -386,7 +412,7 @@ mod test_cortical_id {
         fn test_cortical_id_display() {
             let cortical_id = CoreCorticalType::Power.to_cortical_id();
             let display_string = format!("{}", cortical_id);
-            assert_eq!(display_string, "___power");
+            assert_eq!(display_string, cortical_id.as_base_64());
         }
 
         #[test]

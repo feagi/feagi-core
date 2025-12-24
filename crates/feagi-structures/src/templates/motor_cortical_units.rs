@@ -69,6 +69,21 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Object semantic segmentation output (bitplane class encoding)"]
+                ObjectSegmentation => {
+                    friendly_name: "Object Segmentation",
+                    snake_case_name: "object_segmentation",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"seg",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                    }
+                },
+
             }
         }
     };
