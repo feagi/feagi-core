@@ -13,7 +13,6 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::descriptors::AgentDeviceIndex;
 use feagi_structures::genomic::MotorCorticalUnit;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
@@ -352,8 +351,6 @@ macro_rules! motor_unit_functions {
 
 pub struct MotorDeviceCache {
     stream_caches: HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorChannelStreamCaches>,
-    agent_device_key_lookup:
-        HashMap<AgentDeviceIndex, Vec<(MotorCorticalUnit, CorticalUnitIndex)>>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
@@ -363,10 +360,6 @@ impl std::fmt::Debug for MotorDeviceCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MotorDeviceCache")
             .field("stream_caches_count", &self.stream_caches.len())
-            .field(
-                "agent_device_key_lookup_count",
-                &self.agent_device_key_lookup.len(),
-            )
             .field("neuron_data", &self.neuron_data)
             .field("byte_data", &self.byte_data)
             .field("previous_burst", &self.previous_burst)
@@ -384,7 +377,6 @@ impl MotorDeviceCache {
     pub fn new() -> Self {
         MotorDeviceCache {
             stream_caches: HashMap::new(),
-            agent_device_key_lookup: HashMap::new(),
             neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
@@ -683,65 +675,6 @@ impl MotorDeviceCache {
 
     //endregion
 
-    //region Agent Devices
-
-    #[allow(dead_code)] // Part of public API
-    fn register_agent_device_key(
-        &mut self,
-        agent_device_index: AgentDeviceIndex,
-        motor_type: MotorCorticalUnit,
-        unit_index: CorticalUnitIndex,
-    ) -> Result<(), FeagiDataError> {
-        let keys = {
-            match self.agent_device_key_lookup.get_mut(&agent_device_index) {
-                Some(keys) => keys,
-                None => {
-                    self.agent_device_key_lookup
-                        .insert(agent_device_index, Vec::new());
-                    self.agent_device_key_lookup
-                        .get_mut(&agent_device_index)
-                        .unwrap()
-                }
-            }
-        };
-        keys.push((motor_type, unit_index));
-        Ok(())
-    }
-
-    #[allow(dead_code)]
-    fn try_read_preprocessed_cached_values_by_agent_device(
-        &self,
-        agent_device_index: AgentDeviceIndex,
-        channel_index: CorticalChannelIndex,
-    ) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
-        let motor_unit_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
-        let mut results = Vec::with_capacity(motor_unit_pairs.len());
-        for (motor_type, unit_index) in motor_unit_pairs {
-            let value =
-                self.try_read_preprocessed_cached_value(*motor_type, *unit_index, channel_index)?;
-            results.push(value);
-        }
-        Ok(results)
-    }
-
-    #[allow(dead_code)]
-    fn try_read_postprocessed_cached_values_by_agent_device(
-        &self,
-        agent_device_index: AgentDeviceIndex,
-        channel_index: CorticalChannelIndex,
-    ) -> Result<Vec<&WrappedIOData>, FeagiDataError> {
-        let motor_unit_pairs = self.try_get_agent_device_lookup(agent_device_index)?;
-        let mut results = Vec::with_capacity(motor_unit_pairs.len());
-        for (motor_type, unit_index) in motor_unit_pairs {
-            let value =
-                self.try_read_postprocessed_cached_value(*motor_type, *unit_index, channel_index)?;
-            results.push(value);
-        }
-        Ok(results)
-    }
-
-    //endregion
-
     //endregion
 
     //region Hashmap Interactions
@@ -776,36 +709,6 @@ impl MotorDeviceCache {
         }
         let check = check.unwrap();
         Ok(check)
-    }
-
-    #[allow(dead_code)]
-    fn try_get_agent_device_lookup(
-        &self,
-        agent_device_index: AgentDeviceIndex,
-    ) -> Result<&[(MotorCorticalUnit, CorticalUnitIndex)], FeagiDataError> {
-        let val = self
-            .agent_device_key_lookup
-            .get(&agent_device_index)
-            .ok_or(FeagiDataError::BadParameters(format!(
-                "No registered motor device found in agent's list for agent index {}!",
-                *agent_device_index
-            )))?;
-        Ok(val)
-    }
-
-    #[allow(dead_code)]
-    fn try_get_agent_device_lookup_mut(
-        &mut self,
-        agent_device_index: AgentDeviceIndex,
-    ) -> Result<&mut Vec<(MotorCorticalUnit, CorticalUnitIndex)>, FeagiDataError> {
-        let val = self
-            .agent_device_key_lookup
-            .get_mut(&agent_device_index)
-            .ok_or(FeagiDataError::BadParameters(format!(
-                "No registered motor device found in agent's list for agent index {}!",
-                *agent_device_index
-            )))?;
-        Ok(val)
     }
 
     //endregion
