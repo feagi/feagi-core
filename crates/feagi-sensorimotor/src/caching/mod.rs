@@ -5,6 +5,7 @@
 //! The cache handles data preprocessing, pipeline management, and type conversions.
 mod motor_device_cache;
 mod sensor_device_cache;
+mod feedbacks;
 
 pub use motor_device_cache::MotorDeviceCache;
 pub use sensor_device_cache::SensorDeviceCache;

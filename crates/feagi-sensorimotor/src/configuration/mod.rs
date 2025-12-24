@@ -1,1 +1,1 @@
-mod jsonable;
+pub mod jsonable;

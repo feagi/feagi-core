@@ -42,6 +42,7 @@ use feagi_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
+use crate::configuration::jsonable::UnitDefinition;
 
 #[allow(unused_macros)] // Macro may be used in future
 macro_rules! sensor_unit_functions {
@@ -616,11 +617,13 @@ impl SensorDeviceCache {
 
     //endregion
 
+
+
+
     //region Internal
 
     //region Cache Abstractions
 
-    #[allow(dead_code)]
     fn register(
         &mut self,
         sensor_type: SensoryCorticalUnit,
@@ -642,6 +645,14 @@ impl SensorDeviceCache {
         );
 
         Ok(())
+    }
+
+
+    fn register_unit_definition(&mut self, sensor_type: SensoryCorticalUnit, definition: UnitDefinition) -> Result<(), FeagiDataError> {
+
+
+
+
     }
 
     //region Data
@@ -689,6 +700,8 @@ impl SensorDeviceCache {
             sensor_stream_caches.try_get_channel_recent_postprocessed_value(channel_index)?;
         Ok(value)
     }
+
+
 
     //endregion
 
