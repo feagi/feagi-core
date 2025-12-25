@@ -658,7 +658,15 @@ impl GenomeServiceImpl {
             // Update BDU metadata fields
             for (key, value) in &changes {
                 match key.as_str() {
-                    "firing_threshold_limit" | "neuron_fire_threshold" => {
+                    "neuron_fire_threshold" | "firing_threshold" => {
+                        if let Some(v) = value.as_f64() {
+                            area.add_property_mut(
+                                "firing_threshold".to_string(),
+                                serde_json::json!(v),
+                            );
+                        }
+                    }
+                    "firing_threshold_limit" | "neuron_firing_threshold_limit" => {
                         if let Some(v) = value.as_f64() {
                             area.add_property_mut(
                                 "firing_threshold_limit".to_string(),

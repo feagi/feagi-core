@@ -65,6 +65,9 @@ fn test_psp_uniformity_false_divides_psp() {
             SynapseType::Excitatory,
         ).expect("Failed to add synapse");
     }
+    
+    // CRITICAL: Rebuild synapse index so propagation engine can find new synapses
+    npu.rebuild_synapse_index();
 
     // Set PSP uniformity to FALSE for area A
     let mut flags = AHashMap::new();
@@ -124,6 +127,9 @@ fn test_psp_uniformity_true_applies_full_psp() {
             SynapseType::Excitatory,
         ).expect("Failed to add synapse");
     }
+    
+    // CRITICAL: Rebuild synapse index so propagation engine can find new synapses
+    npu.rebuild_synapse_index();
 
     // Set PSP uniformity to TRUE for area A
     let mut flags = AHashMap::new();
@@ -179,6 +185,9 @@ fn test_psp_uniformity_default_is_false() {
         SynapticConductance(10),
         SynapseType::Excitatory,
     ).expect("Failed to add synapse 2");
+    
+    // CRITICAL: Rebuild synapse index so propagation engine can find new synapses
+    npu.rebuild_synapse_index();
 
     // Don't set PSP uniformity flags - should default to false (divided)
     

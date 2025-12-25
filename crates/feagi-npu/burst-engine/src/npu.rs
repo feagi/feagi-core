@@ -725,6 +725,13 @@ impl<
 
     /// Remove a synapse by source and target
     ///
+    /// Remove a synapse by source and target
+    ///
+    /// NOTE: This does NOT rebuild the synapse index for performance reasons.
+    /// Callers should call rebuild_synapse_index() once after bulk removals.
+    /// Until rebuilt, propagation engine will skip deleted synapses via valid_mask check,
+    /// but this wastes CPU cycles iterating stale index entries.
+    ///
     /// Note: This searches for the synapse index first, which is O(n).
     /// For better performance, use remove_synapses_between() for batch operations.
     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
@@ -765,6 +772,8 @@ impl<
     }
 
     /// Batch remove synapses between source and target neuron sets
+    ///
+    /// NOTE: This does NOT rebuild the synapse index. Call rebuild_synapse_index() after bulk removals.
     ///
     /// Note: The trait method only supports single source-target pairs.
     /// This method calls remove_synapses_between() for each source-target combination.

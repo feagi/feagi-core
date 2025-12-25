@@ -60,7 +60,7 @@ impl CorticalParameterUpdater {
         for (param_name, value) in parameter_changes {
             let updated = match param_name.as_str() {
                 // Firing threshold
-                "neuron_fire_threshold" | "firing_threshold" | "firing_threshold_limit" => {
+                "neuron_fire_threshold" | "firing_threshold" => {
                     if let Some(threshold) = value.as_f64() {
                         let count =
                             npu.update_cortical_area_threshold(cortical_idx, threshold as f32);
@@ -69,6 +69,20 @@ impl CorticalParameterUpdater {
                             threshold, count, cortical_id
                         );
                         count
+                    } else {
+                        0
+                    }
+                }
+
+                // Firing threshold limit (different from firing threshold)
+                "neuron_firing_threshold_limit" | "firing_threshold_limit" => {
+                    if let Some(limit) = value.as_f64() {
+                        // TODO: Implement update_cortical_area_threshold_limit when available in NPU
+                        warn!(
+                            "⚠ firing_threshold_limit={} update requested for area {} but NPU method not yet implemented",
+                            limit, cortical_id
+                        );
+                        0
                     } else {
                         0
                     }
