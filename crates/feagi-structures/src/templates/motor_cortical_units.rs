@@ -85,6 +85,21 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Visual thoughts output - RGB image generation from brain activity"]
+                SimpleVisionOutput => {
+                    friendly_name: "Simple Vision Output",
+                    snake_case_name: "simple_vision_output",
+                    accepted_wrapped_io_data_type: ImageFrame,
+                    cortical_id_unit_reference: *b"img",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [64, 64, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
+                    }
+                },
+
             }
         }
     };

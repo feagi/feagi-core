@@ -672,6 +672,16 @@ pub async fn get_cortical_template(
                     data_types.push(data_type_to_json(dt));
                 }
             }
+            "ImageFrame" => {
+                // ImageFrame uses CartesianPlane with frame handling (no positioning)
+                for frame in [
+                    FrameChangeHandling::Absolute,
+                    FrameChangeHandling::Incremental,
+                ] {
+                    let dt = IOCorticalAreaDataFlag::CartesianPlane(frame);
+                    data_types.push(data_type_to_json(dt));
+                }
+            }
             _ => {
                 // Default: SignedPercentage for most motor outputs
                 for frame in [

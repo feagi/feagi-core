@@ -1,5 +1,6 @@
 #![allow(unused_imports)] // These are used, but by macros that some IDEs cannot see
 
+mod cartesian_plane;
 mod gaze_properties_exponential;
 mod gaze_properties_linear;
 mod misc_data;
@@ -20,6 +21,7 @@ mod signed_percentage_3d_linear;
 mod signed_percentage_4d_exponential;
 mod signed_percentage_4d_linear;
 
+pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPDecoder;
 pub(crate) use gaze_properties_exponential::GazePropertiesExponentialNeuronVoxelXYZPDecoder;
 pub(crate) use gaze_properties_linear::GazePropertiesLinearNeuronVoxelXYZPDecoder;
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPDecoder;
