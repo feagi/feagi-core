@@ -831,6 +831,25 @@ impl<
             .set_neuron_mapping(mapping);
     }
 
+    /// Set mp_driven_psp flags for cortical areas
+    /// When enabled for an area, synaptic PSP will be dynamically set from source neuron's membrane potential
+    pub fn set_mp_driven_psp_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_mp_driven_psp_flags(flags);
+    }
+
+    /// Set psp_uniform_distribution flags for cortical areas
+    /// When false (default): PSP value is divided among all outgoing synapses from the source neuron
+    /// When true: Full PSP value is applied to each outgoing synapse
+    pub fn set_psp_uniform_distribution_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_psp_uniform_distribution_flags(flags);
+    }
+
     // ===== SENSORY INJECTION API =====
 
     /// Inject sensory neurons into FCL (called from Rust sensory threads)
@@ -2421,8 +2440,21 @@ fn phase1_injection_with_synapses<
     if !previous_fire_queue.is_empty() {
         let fired_ids = previous_fire_queue.get_all_neuron_ids();
 
+        // Build membrane potential map for fired neurons
+        // This is needed for mp_driven_psp feature
+        let membrane_potentials = neuron_storage.membrane_potentials();
+        let mut neuron_mps = ahash::AHashMap::new();
+        for &neuron_id in &fired_ids {
+            let mp = membrane_potentials[neuron_id.0 as usize];
+            // Convert f32/T MP to u8 (0-255 range)
+            // Assuming T is f32 and MP is normalized to [0,1]
+            let mp_f32: f32 = mp.to_f32();
+            let mp_u8 = (mp_f32.clamp(0.0, 1.0) * 255.0) as u8;
+            neuron_mps.insert(neuron_id, mp_u8);
+        }
+
         // Call synaptic propagation engine (ZERO-COPY: pass synapse_storage by reference)
-        let propagation_result = propagation_engine.propagate(&fired_ids, synapse_storage)?;
+        let propagation_result = propagation_engine.propagate(&fired_ids, synapse_storage, &neuron_mps)?;
 
         // Inject propagated potentials into FCL
         for (_cortical_area, targets) in propagation_result {

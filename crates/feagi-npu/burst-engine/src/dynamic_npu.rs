@@ -596,6 +596,20 @@ where
     pub fn neuron_count(&self) -> usize {
         dispatch!(self, get_neuron_count())
     }
+
+    pub fn set_psp_uniform_distribution_flags(
+        &mut self,
+        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, bool>,
+    ) {
+        dispatch_mut!(self, set_psp_uniform_distribution_flags(flags))
+    }
+
+    pub fn set_mp_driven_psp_flags(
+        &mut self,
+        flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, bool>,
+    ) {
+        dispatch_mut!(self, set_mp_driven_psp_flags(flags))
+    }
 }
 
 // ============================================================================

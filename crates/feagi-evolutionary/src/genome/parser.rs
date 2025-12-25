@@ -112,7 +112,12 @@ pub struct RawCorticalArea {
     pub synapse_attractivity: Option<f32>,
     pub refractory_period: Option<u32>,
     pub firing_threshold: Option<f32>,
+    pub firing_threshold_limit: Option<f32>,
+    pub firing_threshold_increment_x: Option<f32>,
+    pub firing_threshold_increment_y: Option<f32>,
+    pub firing_threshold_increment_z: Option<f32>,
     pub leak_coefficient: Option<f32>,
+    pub leak_variability: Option<f32>,
     pub neuron_excitability: Option<f32>,
     pub postsynaptic_current: Option<f32>,
     pub postsynaptic_current_max: Option<f32>,
@@ -121,6 +126,7 @@ pub struct RawCorticalArea {
     pub mp_charge_accumulation: Option<bool>,
     pub mp_driven_psp: Option<bool>,
     pub visualization: Option<bool>,
+    pub burst_engine_activation: Option<bool>,
     #[serde(rename = "2d_coordinate")]
     pub coordinate_2d: Option<Vec<i32>>,
 
@@ -381,9 +387,29 @@ impl GenomeParser {
                 area.properties
                     .insert("firing_threshold".to_string(), serde_json::json!(v));
             }
+            if let Some(v) = raw_area.firing_threshold_limit {
+                area.properties
+                    .insert("firing_threshold_limit".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.firing_threshold_increment_x {
+                area.properties
+                    .insert("firing_threshold_increment_x".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.firing_threshold_increment_y {
+                area.properties
+                    .insert("firing_threshold_increment_y".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.firing_threshold_increment_z {
+                area.properties
+                    .insert("firing_threshold_increment_z".to_string(), serde_json::json!(v));
+            }
             if let Some(v) = raw_area.leak_coefficient {
                 area.properties
                     .insert("leak_coefficient".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.leak_variability {
+                area.properties
+                    .insert("leak_variability".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.neuron_excitability {
                 area.properties
@@ -418,6 +444,13 @@ impl GenomeParser {
             if let Some(v) = raw_area.visualization {
                 area.properties
                     .insert("visualization".to_string(), serde_json::json!(v));
+                // Also store as "visible" for compatibility with getters
+                area.properties
+                    .insert("visible".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.burst_engine_activation {
+                area.properties
+                    .insert("burst_engine_active".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.is_mem_type {
                 area.properties
@@ -444,10 +477,13 @@ impl GenomeParser {
             if let Some(v) = raw_area.consecutive_fire_cnt_max {
                 area.properties
                     .insert("consecutive_fire_cnt_max".to_string(), serde_json::json!(v));
+                // Also store as "consecutive_fire_limit" for getter compatibility
+                area.properties
+                    .insert("consecutive_fire_limit".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.snooze_length {
                 area.properties
-                    .insert("snooze_length".to_string(), serde_json::json!(v));
+                    .insert("snooze_period".to_string(), serde_json::json!(v));
             }
 
             // Other properties

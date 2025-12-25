@@ -363,6 +363,9 @@ impl ConnectomeManager {
             }
         }
 
+        // Synchronize cortical area flags with NPU (psp_uniform_distribution, mp_driven_psp, etc.)
+        self.sync_cortical_area_flags_to_npu()?;
+
         self.initialized = true;
 
         Ok(cortical_idx)
@@ -2104,6 +2107,46 @@ impl ConnectomeManager {
 
         debug!(target: "feagi-bdu", "Created synapse: {} -> {} (weight: {}, conductance: {}, type: {}, idx: {})",
             source_neuron_id, target_neuron_id, weight, conductance, synapse_type, synapse_idx);
+
+        Ok(())
+    }
+
+    /// Synchronize cortical area flags with NPU
+    /// This should be called after adding/updating cortical areas
+    fn sync_cortical_area_flags_to_npu(&mut self) -> BduResult<()> {
+        if let Some(ref npu) = self.npu {
+            if let Ok(mut npu_lock) = npu.lock() {
+                // Build psp_uniform_distribution flags map
+                let mut psp_uniform_flags = ahash::AHashMap::new();
+                let mut mp_driven_psp_flags = ahash::AHashMap::new();
+
+                for (cortical_id, area) in &self.cortical_areas {
+                    // Get psp_uniform_distribution flag (default to false)
+                    let psp_uniform = area
+                        .get_property("psp_uniform_distribution")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    psp_uniform_flags.insert(*cortical_id, psp_uniform);
+
+                    // Get mp_driven_psp flag (default to false)
+                    let mp_driven_psp = area
+                        .get_property("mp_driven_psp")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    mp_driven_psp_flags.insert(*cortical_id, mp_driven_psp);
+                }
+
+                // Update NPU with flags
+                npu_lock.set_psp_uniform_distribution_flags(psp_uniform_flags);
+                npu_lock.set_mp_driven_psp_flags(mp_driven_psp_flags);
+
+                trace!(
+                    target: "feagi-bdu",
+                    "Synchronized cortical area flags to NPU ({} areas)",
+                    self.cortical_areas.len()
+                );
+            }
+        }
 
         Ok(())
     }

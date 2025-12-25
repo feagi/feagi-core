@@ -65,18 +65,46 @@ pub struct CorticalAreaInfo {
     )]
     pub sub_group: Option<String>,
     pub neurons_per_voxel: u32,
+    #[serde(rename = "neuron_post_synaptic_potential")]
     pub postsynaptic_current: f64,
+    #[serde(rename = "neuron_post_synaptic_potential_max")]
+    pub postsynaptic_current_max: f64,
+    #[serde(rename = "neuron_plasticity_constant")]
     pub plasticity_constant: f64,
+    #[serde(rename = "neuron_degeneracy_coefficient")]
     pub degeneration: f64,
+    #[serde(rename = "neuron_psp_uniform_distribution")]
     pub psp_uniform_distribution: bool,
-    pub firing_threshold_increment: f64,
+    #[serde(rename = "neuron_mp_driven_psp")]
+    pub mp_driven_psp: bool,
+    #[serde(rename = "neuron_fire_threshold")]
+    pub firing_threshold: f64,
+    #[serde(rename = "neuron_fire_threshold_increment")]
+    pub firing_threshold_increment: [f64; 3],
+    #[serde(rename = "neuron_firing_threshold_limit")]
     pub firing_threshold_limit: f64,
+    #[serde(rename = "neuron_consecutive_fire_count")]
     pub consecutive_fire_count: u32,
+    #[serde(rename = "neuron_snooze_period")]
     pub snooze_period: u32,
+    #[serde(rename = "neuron_refractory_period")]
     pub refractory_period: u32,
+    #[serde(rename = "neuron_leak_coefficient")]
     pub leak_coefficient: f64,
+    #[serde(rename = "neuron_leak_variability")]
     pub leak_variability: f64,
+    #[serde(rename = "neuron_mp_charge_accumulation")]
+    pub mp_charge_accumulation: bool,
+    #[serde(rename = "neuron_excitability")]
+    pub neuron_excitability: f64,
+    #[serde(rename = "neuron_burst_engine_active")]
     pub burst_engine_active: bool,
+    #[serde(rename = "neuron_init_lifespan")]
+    pub init_lifespan: u32,
+    #[serde(rename = "neuron_lifespan_growth_rate")]
+    pub lifespan_growth_rate: f64,
+    #[serde(rename = "neuron_longterm_mem_threshold")]
+    pub longterm_mem_threshold: u32,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)
