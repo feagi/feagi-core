@@ -104,6 +104,17 @@ pub struct CorticalAreaInfo {
     /// This is required by Brain Visualizer to correctly place cortical areas in the 3D scene
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_region_id: Option<String>,
+
+    /// Number of devices/channels for IPU/OPU areas (e.g., number of cameras for vision)
+    /// This is the total device count that was specified when creating the area
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_count: Option<usize>,
+
+    /// Per-device/per-channel dimensions for IPU/OPU areas
+    /// For a multi-channel area, this represents the dimensions of a single channel
+    /// The total width is: cortical_dimensions_per_device.width * dev_count
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_dimensions_per_device: Option<(usize, usize, usize)>,
 }
 
 /// Parameters for creating a cortical area

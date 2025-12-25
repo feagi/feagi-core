@@ -315,6 +315,26 @@ impl ConnectomeService for ConnectomeServiceImpl {
             unit_id: None,
             group_id: None,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
+            // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
+            dev_count: area
+                .properties
+                .get("dev_count")
+                .and_then(|v| v.as_u64().map(|n| n as usize)),
+            cortical_dimensions_per_device: area
+                .properties
+                .get("cortical_dimensions_per_device")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| {
+                    if arr.len() == 3 {
+                        Some((
+                            arr[0].as_u64()? as usize,
+                            arr[1].as_u64()? as usize,
+                            arr[2].as_u64()? as usize,
+                        ))
+                    } else {
+                        None
+                    }
+                }),
         })
     }
 

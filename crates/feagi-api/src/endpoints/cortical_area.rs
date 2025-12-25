@@ -662,6 +662,17 @@ pub async fn post_cortical_area(
             dimensions.0 * dimensions.1 * dimensions.2 * neurons_per_voxel as usize
         );
 
+        // Store device_count and per-device dimensions in properties for BV compatibility
+        let mut properties = HashMap::new();
+        properties.insert(
+            "dev_count".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(device_count)),
+        );
+        properties.insert(
+            "cortical_dimensions_per_device".to_string(),
+            serde_json::json!([dimensions.0, dimensions.1, dimensions.2]),
+        );
+
         let params = CreateCorticalAreaParams {
             cortical_id: cortical_id.clone(),
             name: format!("{} Unit {}", cortical_type_key, unit_idx),
@@ -683,7 +694,7 @@ pub async fn post_cortical_area(
             leak_coefficient: Some(0.0),
             leak_variability: Some(0.0),
             burst_engine_active: Some(true),
-            properties: Some(HashMap::new()),
+            properties: Some(properties),
         };
 
         creation_params.push(params);
