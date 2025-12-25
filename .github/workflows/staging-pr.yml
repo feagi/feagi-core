@@ -42,6 +42,23 @@ jobs:
     - name: Run tests (lib only)
       run: cargo test --workspace --lib --verbose
     
+      - name: Run Comprehensive Neural Dynamics Tests
+        working-directory: crates/feagi-npu/burst-engine
+        run: |
+          echo "::group::Running Comprehensive Neural Dynamics Test Suite"
+          cargo test --test comprehensive_neural_dynamics --no-fail-fast -- --test-threads=1 --nocapture
+          echo "::endgroup::"
+          echo "::group::Running Extended Neural Dynamics Tests (Consecutive Limits, Threshold Dynamics)"
+          cargo test --test comprehensive_neural_dynamics_extended --no-fail-fast -- --test-threads=1 --nocapture
+          echo "::endgroup::"
+      
+    - name: Run NPU Integration Tests
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "::group::Running NPU Integration Tests"
+        cargo test --tests --no-fail-fast
+        echo "::endgroup::"
+    
     - name: Check if builds
       run: cargo build --workspace --lib --verbose
     

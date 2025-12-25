@@ -310,7 +310,7 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn postsynaptic_current(&self) -> f32 {
-        self.get_f32_property("postsynaptic_current", 0.0)
+        self.get_f32_property("postsynaptic_current", 1.0)
     }
 
     fn psp_uniform_distribution(&self) -> f32 {

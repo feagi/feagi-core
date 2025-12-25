@@ -191,6 +191,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 serde_json::json!(burst_engine_active),
             );
         }
+        
+        // Extract parent_region_id before moving properties
+        let parent_region_id = params.properties.as_ref()
+            .and_then(|props| props.get("parent_region_id"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        
         if let Some(properties) = params.properties {
             area.properties = properties;
         }
@@ -200,6 +207,24 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .write()
             .add_cortical_area(area)
             .map_err(ServiceError::from)?;
+
+        // CRITICAL: If parent_region_id is specified, add this cortical area
+        // to the parent brain region's cortical_areas set so it persists in genome
+        if let Some(region_id) = parent_region_id {
+            let mut manager = self.connectome.write();
+            if let Some(region) = manager.get_brain_region_mut(&region_id) {
+                region.add_area(cortical_id_typed);
+                info!(target: "feagi-services", 
+                    "Added cortical area {} to parent region {}", 
+                    params.cortical_id, region_id
+                );
+            } else {
+                warn!(target: "feagi-services", 
+                    "Parent region {} not found for cortical area {}", 
+                    region_id, params.cortical_id
+                );
+            }
+        }
 
         // Return info
         self.get_cortical_area(&params.cortical_id).await

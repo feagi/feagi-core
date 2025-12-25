@@ -730,6 +730,51 @@ impl ConnectomeManager {
         if let Some(ref npu_arc) = self.npu {
             let mut npu = npu_arc.lock().unwrap();
 
+            // Get source area to access PSP property
+            let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+            })?;
+
+            // Extract weight from rule (postSynapticCurrent_multiplier)
+            let weight = if let Some(obj) = rule.as_object() {
+                (obj.get("postSynapticCurrent_multiplier")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
+                    * 255.0)
+                    .min(255.0) as u8
+            } else if let Some(arr) = rule.as_array() {
+                // Array format: [morphology_id, scalar, multiplier, ...]
+                (arr.get(2)
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
+                    * 255.0)
+                    .min(255.0) as u8
+            } else {
+                128 // @architecture:acceptable - emergency fallback for malformed rule
+            };
+
+            // Get PSP (conductance) from source cortical area
+            let conductance = {
+                use crate::models::cortical_area::CorticalAreaExt;
+                let psp_f32 = src_area.postsynaptic_current();
+                // Normalize to 0-255 range
+                // If PSP > 1.0, treat it as already in 0-255 range (legacy compatibility)
+                if psp_f32 > 1.0 {
+                    psp_f32.min(255.0) as u8
+                } else {
+                    (psp_f32 * 255.0).min(255.0) as u8
+                }
+            };
+
+            // Extract synapse_attractivity from rule (probability 0-100)
+            let synapse_attractivity = if let Some(obj) = rule.as_object() {
+                obj.get("synapse_attractivity")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(100) as u8
+            } else {
+                100 // @architecture:acceptable - default to always create when not specified
+            };
+
             match morphology.morphology_type {
                 feagi_evolutionary::MorphologyType::Functions => {
                     // Function-based morphologies (projector, memory, etc.)
@@ -739,9 +784,9 @@ impl ConnectomeManager {
                             let count = apply_projector_morphology(
                                 &mut npu, *src_idx, *dst_idx, None, // transpose
                                 None, // project_last_layer_of
-                                128,  // weight
-                                255,  // conductance (u8)
-                                100,  // synapse_attractivity
+                                weight,  // From rule, not hardcoded
+                                conductance,  // PSP from source area, NOT hardcoded!
+                                synapse_attractivity,  // From rule, not hardcoded
                             )?;
                             Ok(count as usize)
                         }
@@ -767,9 +812,9 @@ impl ConnectomeManager {
                             *src_idx,
                             *dst_idx,
                             vectors_tuples,
-                            128, // weight
-                            255, // conductance (u8)
-                            100, // synapse_attractivity (added parameter)
+                            weight, // From rule, not hardcoded
+                            conductance, // PSP from source area, NOT hardcoded!
+                            synapse_attractivity, // From rule, not hardcoded
                         )?;
                         Ok(count as usize)
                     } else {
@@ -897,51 +942,17 @@ impl ConnectomeManager {
             .as_ref()
             .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
 
-        // Extract neural parameters from area properties
+        // Extract neural parameters from area properties using CorticalAreaExt trait
+        // This ensures consistent defaults across the codebase
         use crate::models::CorticalAreaExt;
         let per_voxel_cnt = area.neurons_per_voxel();
-
-        let firing_threshold = area
-            .properties
-            .get("firing_threshold")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0) as f32;
-
-        let leak_coefficient = area
-            .properties
-            .get("leak_coefficient")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as f32;
-
-        let excitability = area
-            .properties
-            .get("neuron_excitability")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(1.0) as f32;
-
-        let refractory_period = area
-            .properties
-            .get("refractory_period")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(0) as u16;
-
-        let consecutive_fire_limit = area
-            .properties
-            .get("consecutive_fire_cnt_max")
-            .and_then(|v| v.as_i64())
-            .unwrap_or(100) as u16;
-
-        let snooze_length = area
-            .properties
-            .get("snooze_length")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.0) as u16;
-
-        let mp_charge_accumulation = area
-            .properties
-            .get("mp_charge_accumulation")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
+        let firing_threshold = area.firing_threshold();
+        let leak_coefficient = area.leak_coefficient();
+        let excitability = area.neuron_excitability();
+        let refractory_period = area.refractory_period();
+        let consecutive_fire_limit = area.consecutive_fire_count() as u16;
+        let snooze_length = area.snooze_period();
+        let mp_charge_accumulation = area.mp_charge_accumulation();
 
         // Calculate expected neuron count for logging
         let voxels = area.dimensions.width as usize
@@ -1200,11 +1211,23 @@ impl ConnectomeManager {
                 let weight = (rule_obj
                     .get("postSynapticCurrent_multiplier")
                     .and_then(|v| v.as_f64())
-                    .unwrap_or(1.0)
+                    .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
                     * 255.0)
                     .min(255.0) as u8;
 
-                let conductance = 255u8; // Default
+                // Get PSP (conductance) from source cortical area, NOT hardcoded!
+                // PSP is stored as f32 (0.0-1.0 range typically), convert to u8 (0-255)
+                let conductance = {
+                    use crate::models::cortical_area::CorticalAreaExt;
+                    let psp_f32 = src_area.postsynaptic_current();
+                    // Normalize to 0-255 range
+                    // If PSP > 1.0, treat it as already in 0-255 range (legacy compatibility)
+                    if psp_f32 > 1.0 {
+                        psp_f32.min(255.0) as u8
+                    } else {
+                        (psp_f32 * 255.0).min(255.0) as u8
+                    }
+                };
                 let synapse_attractivity = 100u8; // Default: always create
 
                 // Call NPU synaptogenesis based on morphology type

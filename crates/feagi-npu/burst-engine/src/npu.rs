@@ -659,7 +659,7 @@ impl<
         conductance: SynapticConductance,
         synapse_type: SynapseType,
     ) -> Result<usize> {
-        self.synapse_storage
+        let result = self.synapse_storage
             .write()
             .unwrap()
             .add_synapse(
@@ -669,7 +669,13 @@ impl<
                 conductance.0,
                 synapse_type as u8,
             )
-            .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))
+            .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))?;
+        
+        // NOTE: This does NOT rebuild the synapse index for performance reasons.
+        // Callers should call rebuild_synapse_index() once after bulk synapse additions.
+        // For single synapse additions in tests, call rebuild_synapse_index() manually.
+        
+        Ok(result)
     }
 
     /// Batch add synapses (SIMD-optimized)
@@ -996,10 +1002,12 @@ impl<
         let mut fire_structures = self.fire_structures.lock().unwrap();
 
         // Phase 1: Injection (power + synaptic propagation + staged sensory)
-        // Clone previous_fire_queue to avoid multiple borrows
-        let previous_fq = fire_structures.previous_fire_queue.clone();
+        // Use CURRENT_fire_queue (which contains fired neurons from the PREVIOUS burst after swap)
+        // Note: At burst N start, current_fire_queue contains burst N-1's results (set at end of burst N-1)
+        let previous_fq = fire_structures.current_fire_queue.clone();
         let pending_mutex =
             std::sync::Mutex::new(fire_structures.pending_sensory_injections.clone());
+        
         let injection_result = phase1_injection_with_synapses(
             &mut fire_structures.fire_candidate_list,
             &mut *neuron_storage,
@@ -3090,6 +3098,114 @@ mod tests {
         // Should fire immediately (10.0 > 5.0 threshold)
         let result = npu.process_burst().unwrap();
         assert_eq!(result.neuron_count, 1);
+    }
+
+    #[test]
+    fn test_mp_charge_accumulation_false_respects_threshold() {
+        use feagi_npu_neural::{SynapticWeight, SynapticConductance, SynapseType};
+        
+        // REGRESSION TEST: Verify that neurons with mp_charge_accumulation=false
+        // do NOT fire when PSP < threshold, even if they had residual potential
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        
+        // Use simple area IDs  - Power and Death are standard areas
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        
+        // Area A: 1x1x1 with threshold 1.0, mp_acc=false
+        let neuron_a = npu
+            .add_neuron(
+                1.0,   // threshold
+                0.0,   // leak_coefficient (no leak)
+                0.0,   // resting_potential
+                0,     // neuron_type
+                0,     // refractory_period (fire every burst)
+                1.0,   // excitability (always fire)
+                0,     // consecutive_fire_limit (unlimited)
+                0,     // snooze_period
+                false, // mp_charge_accumulation=FALSE (reset each burst)
+                1,     // cortical_area (Power area)
+                0, 0, 0,
+            )
+            .unwrap();
+        
+        // Area B: 1x1x1 with threshold 1.1, mp_acc=false
+        let neuron_b = npu
+            .add_neuron(
+                1.1,   // threshold (HIGHER than PSP)
+                0.0,   // leak_coefficient (no leak)
+                0.0,   // resting_potential
+                0,     // neuron_type
+                0,     // refractory_period
+                1.0,   // excitability (always fire if threshold met)
+                0,     // consecutive_fire_limit
+                0,     // snooze_period
+                false, // mp_charge_accumulation=FALSE (reset each burst)
+                2,     // cortical_area (Death area - just a test area)
+                0, 0, 0,
+            )
+            .unwrap();
+        
+        // Connect A → B with conductance=1.0 (PSP)
+        // CRITICAL: Using weight=1, conductance=1 → PSP = 1×1 = 1.0
+        npu.add_synapse(
+            neuron_a,
+            neuron_b,
+            SynapticWeight(1),          // weight = 1
+            SynapticConductance(1),     // conductance = 1 → PSP = 1×1 = 1.0
+            SynapseType::Excitatory,    // synapse_type (excitatory)
+        ).unwrap();
+        
+        // Burst 1: Inject neuron_a manually to make it fire
+        npu.inject_sensory_batch(&[neuron_a], 1.5);
+        let result1 = npu.process_burst().unwrap();
+        
+        println!("Burst 1 Results:");
+        println!("  - Fired neurons: {:?}", result1.fired_neurons);
+        println!("  - Synaptic injections: {}", result1.synaptic_injections);
+        println!("  - Neurons processed: {}", result1.neurons_processed);
+        
+        // Neuron A should fire (1.5 > 1.0 threshold)
+        assert!(result1.fired_neurons.contains(&neuron_a), 
+                "Neuron A should fire with 1.5 input");
+        
+        // Check if synaptic propagation happened
+        assert!(result1.synaptic_injections > 0, "Synapse from A to B should have propagated");
+        
+        // Neuron B should NOT fire (PSP=1.0 < 1.1 threshold)
+        assert!(!result1.fired_neurons.contains(&neuron_b),
+                "BUG: Neuron B fired with PSP=1.0 but threshold=1.1! mp_charge_accumulation=false not respected");
+        
+        // Verify membrane potentials
+        {
+            let neuron_storage = npu.neuron_storage.read().unwrap();
+            let mp_a = neuron_storage.membrane_potentials()[neuron_a.0 as usize].to_f32();
+            let mp_b = neuron_storage.membrane_potentials()[neuron_b.0 as usize].to_f32();
+            
+            // Neuron A fired, so it should be reset to 0
+            assert_eq!(mp_a, 0.0, "Neuron A should have 0 membrane potential after firing");
+            
+            // Neuron B did not fire, but with mp_acc=false, it should be reset at start of next burst
+            // After burst processing, it may have accumulated potential, but next burst will reset it
+            println!("Neuron B membrane potential after burst 1: {} (expected: 1.0 from PSP)", mp_b);
+            assert!((mp_b - 1.0).abs() < 0.01, "Neuron B should have ~1.0 potential from PSP");
+        } // Drop the read lock here
+        
+        // Burst 2: Fire neuron A again
+        npu.inject_sensory_batch(&[neuron_a], 1.5);
+        let result2 = npu.process_burst().unwrap();
+        
+        println!("Burst 2: Fired neurons: {:?}", result2.fired_neurons);
+        
+        // Neuron A should fire again
+        assert!(result2.fired_neurons.contains(&neuron_a));
+        
+        // Neuron B should STILL NOT fire (fresh burst, mp reset to 0, PSP=1.0 < 1.1)
+        assert!(!result2.fired_neurons.contains(&neuron_b),
+                "BUG: Neuron B fired on burst 2! Membrane potential not reset despite mp_charge_accumulation=false");
     }
 
     #[test]
