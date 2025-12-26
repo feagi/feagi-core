@@ -627,13 +627,27 @@ impl IOSystem {
             .and_then(|s| s.parse::<u16>().ok())
             .unwrap_or(5558); // @architecture:acceptable - emergency fallback
 
+        // Extract registration/rest port from config (used by AgentClient registration channel)
+        let registration_port = config
+            .zmq_rest_address
+            .split(':')
+            .next_back()
+            .and_then(|s| s.parse::<u16>().ok())
+            .ok_or_else(|| {
+                core::types::IOError::Config(format!(
+                    "Invalid zmq_rest_address (expected host:port): {}",
+                    config.zmq_rest_address
+                ))
+            })?;
+
         info!(
-            "🦀 [PNS] Port configuration: sensory={}, motor={}, viz={}",
-            sensory_port, motor_port, viz_port
+            "🦀 [PNS] Port configuration: registration={}, sensory={}, motor={}, viz={}",
+            registration_port, sensory_port, motor_port, viz_port
         );
 
         let mut registration_handler_instance = RegistrationHandler::new(
             Arc::clone(&agent_registry),
+            registration_port,
             sensory_port,
             motor_port,
             viz_port,

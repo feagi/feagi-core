@@ -9,6 +9,8 @@ use crate::heartbeat::HeartbeatService;
 use crate::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::SystemTime;
 use tracing::{debug, error, info, warn};
 
 /// Main FEAGI Agent Client
@@ -457,6 +459,60 @@ impl AgentClient {
             cortical_area
         );
         Ok(())
+    }
+
+    /// Send pre-serialized sensory bytes to FEAGI (real-time semantics).
+    ///
+    /// This is intended for high-performance clients (e.g., Python SDK brain_input)
+    /// that already produce FeagiByteContainer bytes via Rust-side encoding caches.
+    ///
+    /// Real-time policy:
+    /// - Uses ZMQ DONTWAIT to avoid blocking the caller.
+    /// - On backpressure (EAGAIN), the message is dropped (latest-only semantics).
+    pub fn send_sensory_bytes(&self, bytes: Vec<u8>) -> Result<()> {
+        if !self.registered {
+            return Err(SdkError::NotRegistered);
+        }
+
+        let socket = self
+            .sensory_socket
+            .as_ref()
+            .ok_or_else(|| SdkError::Other("Sensory socket not initialized".to_string()))?;
+
+        match socket.send(&bytes, zmq::DONTWAIT) {
+            Ok(()) => {
+                debug!("[CLIENT] Sent {} bytes sensory (raw)", bytes.len());
+                Ok(())
+            }
+            Err(zmq::Error::EAGAIN) => {
+                // REAL-TIME: Drop on pressure (do not block and do not buffer history)
+                static DROPPED: AtomicU64 = AtomicU64::new(0);
+                static LAST_LOG_MS: AtomicU64 = AtomicU64::new(0);
+
+                let dropped = DROPPED.fetch_add(1, Ordering::Relaxed) + 1;
+                let now_ms = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+
+                let last_ms = LAST_LOG_MS.load(Ordering::Relaxed);
+                // Rate-limit warnings (max once per 5s) to avoid log spam on sustained pressure.
+                if now_ms.saturating_sub(last_ms) >= 5_000
+                    && LAST_LOG_MS
+                        .compare_exchange(last_ms, now_ms, Ordering::Relaxed, Ordering::Relaxed)
+                        .is_ok()
+                {
+                    warn!(
+                        "[CLIENT] Sensory backpressure: dropped_messages={} last_payload_bytes={}",
+                        dropped,
+                        bytes.len()
+                    );
+                }
+
+                Ok(())
+            }
+            Err(e) => Err(SdkError::Zmq(e)),
+        }
     }
 
     /// Receive motor data from FEAGI (non-blocking)

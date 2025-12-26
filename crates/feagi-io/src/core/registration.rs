@@ -61,6 +61,7 @@ pub struct RegistrationHandler {
     /// Configuration for auto-creating missing cortical areas
     auto_create_missing_areas: bool,
     /// Actual ZMQ port numbers (from config, NOT hardcoded)
+    registration_port: u16,
     sensory_port: u16,
     motor_port: u16,
     viz_port: u16,
@@ -82,6 +83,7 @@ pub struct RegistrationHandler {
 impl RegistrationHandler {
     pub fn new(
         agent_registry: Arc<RwLock<AgentRegistry>>,
+        registration_port: u16,
         sensory_port: u16,
         motor_port: u16,
         viz_port: u16,
@@ -94,6 +96,7 @@ impl RegistrationHandler {
             genome_service: Arc::new(parking_lot::Mutex::new(None)),
             connectome_service: Arc::new(parking_lot::Mutex::new(None)),
             auto_create_missing_areas: true, // Default enabled
+            registration_port,
             sensory_port,
             motor_port,
             viz_port,
@@ -1388,6 +1391,7 @@ impl RegistrationHandler {
             transport_type: "zmq".to_string(),
             enabled: true,
             ports: HashMap::from([
+                ("registration".to_string(), self.registration_port),
                 ("sensory".to_string(), self.sensory_port),
                 ("motor".to_string(), self.motor_port),
                 ("visualization".to_string(), self.viz_port),
@@ -1438,6 +1442,7 @@ impl RegistrationHandler {
                 Some(shm_paths)
             },
             zmq_ports: Some(HashMap::from([
+                ("registration".to_string(), self.registration_port),
                 ("sensory".to_string(), self.sensory_port),
                 ("motor".to_string(), self.motor_port),
                 ("visualization".to_string(), self.viz_port),
@@ -1674,7 +1679,7 @@ mod tests {
     #[test]
     fn test_registration_handler() {
         let registry = Arc::new(RwLock::new(AgentRegistry::with_defaults()));
-        let mut handler = RegistrationHandler::new(registry.clone(), 8000, 8001, 8002);
+        let mut handler = RegistrationHandler::new(registry.clone(), 8003, 8000, 8001, 8002);
 
         // Disable auto-create to avoid needing GenomeService in this unit test
         handler.set_auto_create_missing_areas(false);

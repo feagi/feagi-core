@@ -2576,18 +2576,32 @@ fn phase1_injection_with_synapses<
     if !previous_fire_queue.is_empty() {
         let fired_ids = previous_fire_queue.get_all_neuron_ids();
 
-        // Build membrane potential map for fired neurons
-        // This is needed for mp_driven_psp feature
-        let membrane_potentials = neuron_storage.membrane_potentials();
-        let mut neuron_mps = ahash::AHashMap::new();
-        for &neuron_id in &fired_ids {
-            let mp = membrane_potentials[neuron_id.0 as usize];
-            // Convert MP (T) to u8 (0-255 range) for mp_driven_psp.
-            // Canonical contract: mp_driven_psp uses absolute u8 units (0..255),
-            // so we clamp the current MP into that range (NO normalization by 255).
-            let mp_f32: f32 = mp.to_f32();
-            let mp_u8 = mp_f32.clamp(0.0, 255.0) as u8;
-            neuron_mps.insert(neuron_id, mp_u8);
+        // Build membrane potential map for fired neurons (needed for mp_driven_psp feature)
+        //
+        // IMPORTANT:
+        // - We must use the *firing-time* membrane potential, not the current neuron_storage value.
+        //   Neurons reset their membrane potential after firing, so neuron_storage will typically
+        //   contain 0 by the time we propagate (which breaks mp_driven_psp).
+        // - FireQueue stores the membrane potential captured at the moment of firing.
+        //
+        // Conversion contract:
+        // - Synaptic propagation expects a u8 conductance (0..=255).
+        // - Some pipelines use absolute-u8 MP (0..=255), while others may accumulate in u8×u8 space.
+        //   To stay deterministic and preserve dynamic range, we downscale only when values exceed
+        //   the representable u8 range.
+        let mut neuron_mps: ahash::AHashMap<NeuronId, u8> = ahash::AHashMap::new();
+        let u8_max_f32 = u8::MAX as f32;
+        for neurons in previous_fire_queue.neurons_by_area.values() {
+            for neuron in neurons {
+                let mp_f32 = neuron.membrane_potential;
+                let mp_scaled = if mp_f32 > u8_max_f32 {
+                    mp_f32 / u8_max_f32
+                } else {
+                    mp_f32
+                };
+                let mp_u8 = mp_scaled.clamp(0.0, u8_max_f32).round() as u8;
+                neuron_mps.insert(neuron.neuron_id, mp_u8);
+            }
         }
 
         // Call synaptic propagation engine (ZERO-COPY: pass synapse_storage by reference)
@@ -3335,6 +3349,102 @@ mod tests {
         // Neuron B should STILL NOT fire (fresh burst, mp reset to 0, PSP=1.0 < 1.1)
         assert!(!result2.fired_neurons.contains(&neuron_b),
                 "BUG: Neuron B fired on burst 2! Membrane potential not reset despite mp_charge_accumulation=false");
+    }
+
+    #[test]
+    fn test_mp_driven_psp_uses_firing_time_membrane_potential() {
+        use feagi_npu_neural::{SynapticConductance, SynapseType, SynapticWeight};
+
+        // REGRESSION TEST:
+        // mp_driven_psp must use the firing-time MP captured in FireQueue, NOT neuron_storage MP
+        // (neuron_storage MP is reset to 0 after firing).
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+
+        // Avoid power auto-injection by NOT using cortical_area index 1.
+        // We still use a valid CorticalID string for propagation-engine mapping.
+        let cortical_id = CoreCorticalType::Death.to_cortical_id();
+        npu.register_cortical_area(2, cortical_id.as_base_64());
+        npu.register_cortical_area(3, cortical_id.as_base_64());
+
+        // Source neuron in cortical_area=2 (will be the mp_driven_psp source area).
+        let neuron_src = npu
+            .add_neuron(
+                1.0, // threshold
+                0.0, // leak_coefficient
+                0.0, // resting_potential
+                0,   // neuron_type
+                0,   // refractory_period
+                1.0, // excitability
+                0,   // consecutive_fire_limit
+                0,   // snooze_period
+                true, // mp_charge_accumulation
+                2,   // cortical_area
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        // Target neuron in cortical_area=3. Threshold=100 so it will fire only if it receives
+        // a conductance roughly >= 100 from mp_driven_psp propagation.
+        let neuron_dst = npu
+            .add_neuron(
+                100.0, // threshold
+                0.0,   // leak_coefficient
+                0.0,   // resting_potential
+                0,     // neuron_type
+                0,     // refractory_period
+                1.0,   // excitability
+                0,     // consecutive_fire_limit
+                0,     // snooze_period
+                true,  // mp_charge_accumulation
+                3,     // cortical_area
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        // Connect src → dst. With mp_driven_psp enabled, the synapse conductance is ignored
+        // and replaced by the source neuron's MP (converted to u8).
+        npu.add_synapse(
+            neuron_src,
+            neuron_dst,
+            SynapticWeight(1),
+            SynapticConductance(1),
+            SynapseType::Excitatory,
+        )
+        .unwrap();
+        npu.rebuild_synapse_index();
+
+        // Enable mp_driven_psp on the source cortical ID.
+        let mut flags = ahash::AHashMap::new();
+        flags.insert(cortical_id, true);
+        npu.set_mp_driven_psp_flags(flags);
+
+        // Burst 1: force src to fire with MP=128.0 (captured in FireQueue before reset).
+        // IMPORTANT: Use staged sensory injection so it survives Phase-1 FCL clear.
+        npu.inject_sensory_with_potentials(&[(neuron_src, 128.0)]);
+        let result1 = npu.process_burst().unwrap();
+        assert!(
+            result1.fired_neurons.contains(&neuron_src),
+            "Source neuron should fire with injected MP=128.0"
+        );
+
+        // Burst 2: no injection. Propagation should use the firing-time MP from burst 1 and
+        // stimulate dst enough to cross its threshold.
+        let result2 = npu.process_burst().unwrap();
+        assert!(
+            result2.synaptic_injections > 0,
+            "Expected synaptic propagation on burst 2"
+        );
+        assert!(
+            result2.fired_neurons.contains(&neuron_dst),
+            "Target neuron should fire when mp_driven_psp uses src firing-time MP"
+        );
     }
 
     #[test]
