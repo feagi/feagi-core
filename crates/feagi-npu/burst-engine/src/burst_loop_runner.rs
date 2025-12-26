@@ -899,6 +899,39 @@ fn burst_loop(
                                     0
                                 }
                             }
+                            "mp_driven_psp" | "neuron_mp_driven_psp" => {
+                                if let Some(enabled) = update.value.as_bool() {
+                                    match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                        &update.cortical_id,
+                                    ) {
+                                        Ok(cortical_id) => {
+                                            npu_lock.set_mp_driven_psp_flag(cortical_id, enabled);
+                                            1
+                                        }
+                                        Err(_) => 0,
+                                    }
+                                } else {
+                                    0
+                                }
+                            }
+                            "psp_uniform_distribution" | "neuron_psp_uniform_distribution" => {
+                                if let Some(enabled) = update.value.as_bool() {
+                                    match feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(
+                                        &update.cortical_id,
+                                    ) {
+                                        Ok(cortical_id) => {
+                                            npu_lock.set_psp_uniform_distribution_flag(
+                                                cortical_id,
+                                                enabled,
+                                            );
+                                            1
+                                        }
+                                        Err(_) => 0,
+                                    }
+                                } else {
+                                    0
+                                }
+                            }
                             _ => 0,
                         };
 

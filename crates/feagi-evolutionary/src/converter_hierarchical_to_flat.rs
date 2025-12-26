@@ -289,6 +289,24 @@ fn convert_properties_to_flat(
             .or_else(|| required_defaults.get(prop_key).cloned())
             .unwrap_or_else(|| json!(null));
 
+        // Debug logging for key properties
+        let debug_props = ["mp_driven_psp", "snooze_length", "consecutive_fire_cnt_max", 
+                          "firing_threshold_increment_x", "firing_threshold", "leak_coefficient"];
+        if debug_props.contains(prop_key) {
+            if let Some(prop_value) = properties.get(*prop_key) {
+                tracing::info!(
+                    "[GENOME-CONVERT] Found {}={} in properties for area {}, writing to flat format",
+                    prop_key, prop_value, prefix
+                );
+            } else {
+                let default_val = required_defaults.get(*prop_key).unwrap_or(&json!(null));
+                tracing::info!(
+                    "[GENOME-CONVERT] {} not in properties for area {}, using default={}",
+                    prop_key, prefix, default_val
+                );
+            }
+        }
+
         if !value.is_null() {
             flat_blueprint.insert(format!("{}-{}-{}", prefix, scope, suffix), value);
         }

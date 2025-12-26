@@ -371,6 +371,7 @@ pub async fn post_upload(
     )
 )]
 pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde_json::Value>> {
+    info!("🦀 [API] GET /v1/genome/download - Downloading current genome");
     let genome_service = state.genome_service.as_ref();
 
     // Get genome as JSON string
@@ -380,12 +381,16 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
             genome_title: None,
         })
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to export genome: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Failed to export genome: {}", e);
+            ApiError::internal(format!("Failed to export genome: {}", e))
+        })?;
 
     // Parse to Value for JSON response
     let genome_value: serde_json::Value = serde_json::from_str(&genome_json_str)
         .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
 
+    info!("✅ Genome download complete, {} bytes", genome_json_str.len());
     Ok(Json(genome_value))
 }
 

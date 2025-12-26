@@ -372,7 +372,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             postsynaptic_current_max: area.postsynaptic_current_max() as f64,
             plasticity_constant: area.plasticity_constant() as f64,
             degeneration: area.degeneration() as f64,
-            psp_uniform_distribution: area.psp_uniform_distribution() != 0.0,
+            psp_uniform_distribution: area.psp_uniform_distribution(),
             mp_driven_psp: area.mp_driven_psp(),
             firing_threshold: area.firing_threshold() as f64,
             firing_threshold_increment: [

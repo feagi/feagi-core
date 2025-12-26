@@ -440,6 +440,18 @@ impl GenomeParser {
             if let Some(v) = raw_area.mp_driven_psp {
                 area.properties
                     .insert("mp_driven_psp".to_string(), serde_json::json!(v));
+                tracing::info!(
+                    target: "feagi-evo",
+                    "[GENOME-LOAD] Loaded mp_driven_psp={} for area {}",
+                    v,
+                    cortical_id_str
+                );
+            } else {
+                tracing::debug!(
+                    target: "feagi-evo",
+                    "[GENOME-LOAD] mp_driven_psp not found in raw_area for {}, will use default=false",
+                    cortical_id_str
+                );
             }
             if let Some(v) = raw_area.visualization {
                 area.properties

@@ -87,7 +87,7 @@ pub trait CorticalAreaExt {
     fn postsynaptic_current(&self) -> f32;
 
     /// Get psp_uniform_distribution from properties
-    fn psp_uniform_distribution(&self) -> f32;
+    fn psp_uniform_distribution(&self) -> bool;
 
     /// Get degeneration from properties
     fn degeneration(&self) -> f32;
@@ -313,8 +313,8 @@ impl CorticalAreaExt for CorticalArea {
         self.get_f32_property("postsynaptic_current", 1.0)
     }
 
-    fn psp_uniform_distribution(&self) -> f32 {
-        self.get_f32_property("psp_uniform_distribution", 0.0)
+    fn psp_uniform_distribution(&self) -> bool {
+        self.get_bool_property("psp_uniform_distribution", false)
     }
 
     fn degeneration(&self) -> f32 {

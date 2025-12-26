@@ -619,11 +619,27 @@ where
         dispatch_mut!(self, set_psp_uniform_distribution_flags(flags))
     }
 
+    pub fn set_psp_uniform_distribution_flag(
+        &mut self,
+        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        enabled: bool,
+    ) {
+        dispatch_mut!(self, set_psp_uniform_distribution_flag(cortical_id, enabled))
+    }
+
     pub fn set_mp_driven_psp_flags(
         &mut self,
         flags: ahash::AHashMap<feagi_structures::genomic::cortical_area::CorticalID, bool>,
     ) {
         dispatch_mut!(self, set_mp_driven_psp_flags(flags))
+    }
+
+    pub fn set_mp_driven_psp_flag(
+        &mut self,
+        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+        enabled: bool,
+    ) {
+        dispatch_mut!(self, set_mp_driven_psp_flag(cortical_id, enabled))
     }
 }
 

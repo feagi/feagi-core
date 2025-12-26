@@ -239,6 +239,34 @@ impl GenomeService for GenomeServiceImpl {
 
         info!(target: "feagi-services", "✅ RuntimeGenome loaded, exporting in flat format v3.0");
 
+        // Debug: Check all property values in RuntimeGenome before saving
+        for (cortical_id, area) in &genome.cortical_areas {
+            let area_id_str = cortical_id.as_base_64();
+            info!(
+                target: "feagi-services",
+                "[GENOME-SAVE] Area {} has {} properties in RuntimeGenome",
+                area_id_str,
+                area.properties.len()
+            );
+            
+            // Log key properties that should be saved
+            let key_props = [
+                "mp_driven_psp", "snooze_length", "consecutive_fire_cnt_max",
+                "firing_threshold_increment_x", "firing_threshold_increment_y", "firing_threshold_increment_z",
+                "firing_threshold", "leak_coefficient", "refractory_period", "neuron_excitability"
+            ];
+            
+            for prop_name in &key_props {
+                if let Some(prop_value) = area.properties.get(*prop_name) {
+                    info!(
+                        target: "feagi-services",
+                        "[GENOME-SAVE] Area {} property {}={}",
+                        area_id_str, prop_name, prop_value
+                    );
+                }
+            }
+        }
+
         // Update metadata if provided
         if let Some(id) = params.genome_id {
             genome.metadata.genome_id = id;
@@ -654,6 +682,11 @@ impl GenomeServiceImpl {
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
         if let Some(genome) = self.current_genome.write().as_mut() {
             if let Some(area) = genome.cortical_areas.get_mut(&cortical_id_typed) {
+                trace!(
+                    target: "feagi-services",
+                    "[GENOME-UPDATE] Updating RuntimeGenome for area {}",
+                    cortical_id
+                );
                 for (key, value) in &changes {
                     match key.as_str() {
                         "neuron_fire_threshold" | "firing_threshold" => {
@@ -698,16 +731,18 @@ impl GenomeServiceImpl {
                         }
                         "snooze_period" | "neuron_snooze_period" => {
                             if let Some(v) = value.as_u64() {
+                                // Converter expects "snooze_length" not "snooze_period"
                                 area.properties.insert(
-                                    "snooze_period".to_string(),
+                                    "snooze_length".to_string(),
                                     serde_json::json!(v as u32),
                                 );
                             }
                         }
                         "consecutive_fire_count" | "neuron_consecutive_fire_count" => {
                             if let Some(v) = value.as_u64() {
+                                // Converter expects "consecutive_fire_cnt_max" not "consecutive_fire_count"
                                 area.properties.insert(
-                                    "consecutive_fire_count".to_string(),
+                                    "consecutive_fire_cnt_max".to_string(),
                                     serde_json::json!(v as u32),
                                 );
                             }
@@ -758,6 +793,17 @@ impl GenomeServiceImpl {
                                     "mp_driven_psp".to_string(),
                                     serde_json::json!(v),
                                 );
+                                info!(
+                                    target: "feagi-services",
+                                    "[GENOME-UPDATE] Updated mp_driven_psp={} in RuntimeGenome for area {}",
+                                    v, cortical_id
+                                );
+                            } else {
+                                warn!(
+                                    target: "feagi-services",
+                                    "[GENOME-UPDATE] Failed to update mp_driven_psp: value is not a bool (got {:?})",
+                                    value
+                                );
                             }
                         }
                         "mp_charge_accumulation" | "neuron_mp_charge_accumulation" => {
@@ -801,23 +847,48 @@ impl GenomeServiceImpl {
                             }
                         }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
-                            // Expect either array [x, y, z] or dict {x, y, z}
+                            // Converter expects separate x, y, z properties, not an array
                             if let Some(arr) = value.as_array() {
                                 if arr.len() == 3 {
-                                    area.properties.insert(
-                                        "firing_threshold_increment".to_string(),
-                                        serde_json::json!(arr),
-                                    );
+                                    if let (Some(x), Some(y), Some(z)) = (
+                                        arr[0].as_f64(),
+                                        arr[1].as_f64(),
+                                        arr[2].as_f64(),
+                                    ) {
+                                        area.properties.insert(
+                                            "firing_threshold_increment_x".to_string(),
+                                            serde_json::json!(x),
+                                        );
+                                        area.properties.insert(
+                                            "firing_threshold_increment_y".to_string(),
+                                            serde_json::json!(y),
+                                        );
+                                        area.properties.insert(
+                                            "firing_threshold_increment_z".to_string(),
+                                            serde_json::json!(z),
+                                        );
+                                    }
                                 }
                             } else if let Some(obj) = value.as_object() {
-                                // Convert {x, y, z} to [x, y, z]
-                                let x = obj.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                let y = obj.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                let z = obj.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                                area.properties.insert(
-                                    "firing_threshold_increment".to_string(),
-                                    serde_json::json!([x, y, z]),
-                                );
+                                // Convert {x, y, z} to separate properties
+                                if let (Some(x), Some(y), Some(z)) = (
+                                    obj.get("x").and_then(|v| v.as_f64()),
+                                    obj.get("y").and_then(|v| v.as_f64()),
+                                    obj.get("z").and_then(|v| v.as_f64()),
+                                ) {
+                                    area.properties.insert(
+                                        "firing_threshold_increment_x".to_string(),
+                                        serde_json::json!(x),
+                                    );
+                                    area.properties.insert(
+                                        "firing_threshold_increment_y".to_string(),
+                                        serde_json::json!(y),
+                                    );
+                                    area.properties.insert(
+                                        "firing_threshold_increment_z".to_string(),
+                                        serde_json::json!(z),
+                                    );
+                                }
                             }
                         }
                         "burst_engine_active" => {
@@ -831,7 +902,18 @@ impl GenomeServiceImpl {
                         _ => {}
                     }
                 }
+            } else {
+                warn!(
+                    target: "feagi-services",
+                    "[GENOME-UPDATE] WARNING: Cortical area {} not found in RuntimeGenome - property updates will not persist to saved genome!",
+                    cortical_id
+                );
             }
+        } else {
+            warn!(
+                target: "feagi-services",
+                "[GENOME-UPDATE] WARNING: No RuntimeGenome loaded - property updates will not persist to saved genome!"
+            );
         }
 
         // Update ConnectomeManager metadata for consistency
@@ -945,6 +1027,11 @@ impl GenomeServiceImpl {
                             area.add_property_mut(
                                 "mp_driven_psp".to_string(),
                                 serde_json::json!(v),
+                            );
+                            info!(
+                                target: "feagi-services",
+                                "[CONNECTOME-UPDATE] Updated mp_driven_psp={} in ConnectomeManager for area {}",
+                                v, cortical_id
                             );
                         }
                     }
@@ -1478,7 +1565,7 @@ impl GenomeServiceImpl {
             postsynaptic_current_max: area.postsynaptic_current_max() as f64,
             plasticity_constant: area.plasticity_constant() as f64,
             degeneration: area.degeneration() as f64,
-            psp_uniform_distribution: area.psp_uniform_distribution() != 0.0,
+            psp_uniform_distribution: area.psp_uniform_distribution(),
             mp_driven_psp: area.mp_driven_psp(),
             firing_threshold: area.firing_threshold() as f64,
             firing_threshold_increment: [
@@ -1581,7 +1668,7 @@ impl GenomeServiceImpl {
             postsynaptic_current_max: area.postsynaptic_current_max() as f64,
             plasticity_constant: area.plasticity_constant() as f64,
             degeneration: area.degeneration() as f64,
-            psp_uniform_distribution: area.psp_uniform_distribution() != 0.0,
+            psp_uniform_distribution: area.psp_uniform_distribution(),
             mp_driven_psp: area.mp_driven_psp(),
             firing_threshold: area.firing_threshold() as f64,
             firing_threshold_increment: [

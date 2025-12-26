@@ -916,6 +916,14 @@ impl<
             .set_mp_driven_psp_flags(flags);
     }
 
+    /// Set mp_driven_psp for a single cortical area (in-place).
+    pub fn set_mp_driven_psp_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_mp_driven_psp_flag(cortical_id, enabled);
+    }
+
     /// Set psp_uniform_distribution flags for cortical areas
     /// When false (default): PSP value is divided among all outgoing synapses from the source neuron
     /// When true: Full PSP value is applied to each outgoing synapse
@@ -924,6 +932,14 @@ impl<
             .write()
             .unwrap()
             .set_psp_uniform_distribution_flags(flags);
+    }
+
+    /// Set psp_uniform_distribution for a single cortical area (in-place).
+    pub fn set_psp_uniform_distribution_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_psp_uniform_distribution_flag(cortical_id, enabled);
     }
 
     // ===== SENSORY INJECTION API =====

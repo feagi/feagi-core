@@ -385,6 +385,7 @@ pub async fn post_cortical_area_properties(
     match connectome_service.get_cortical_area(cortical_id).await {
         Ok(area_info) => {
             tracing::debug!(target: "feagi-api", "Cortical area properties for {}: cortical_group={}, area_type={}", cortical_id, area_info.cortical_group, area_info.area_type);
+            tracing::info!(target: "feagi-api", "[API-RESPONSE] Returning mp_driven_psp={} for area {}", area_info.mp_driven_psp, cortical_id);
             let json_value = serde_json::to_value(&area_info).unwrap_or_default();
             tracing::debug!(target: "feagi-api", "Serialized JSON keys: {:?}", json_value.as_object().map(|o| o.keys().collect::<Vec<_>>()));
             Ok(Json(json_value))

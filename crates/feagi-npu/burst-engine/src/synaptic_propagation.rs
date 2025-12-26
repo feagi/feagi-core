@@ -153,11 +153,25 @@ impl SynapticPropagationEngine {
         self.area_mp_driven_psp = flags;
     }
 
+    /// Update mp_driven_psp flag for a single cortical area (in-place).
+    ///
+    /// This avoids rebuilding/replacing the entire flags map when toggling one area.
+    pub fn set_mp_driven_psp_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
+        self.area_mp_driven_psp.insert(cortical_id, enabled);
+    }
+
     /// Set the psp_uniform_distribution flags for cortical areas
     /// When false (default): PSP value is divided among all outgoing synapses from the source neuron
     /// When true: Full PSP value is applied to each outgoing synapse
     pub fn set_psp_uniform_distribution_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
         self.area_psp_uniform_distribution = flags;
+    }
+
+    /// Update psp_uniform_distribution flag for a single cortical area (in-place).
+    ///
+    /// This avoids rebuilding/replacing the entire flags map when toggling one area.
+    pub fn set_psp_uniform_distribution_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
+        self.area_psp_uniform_distribution.insert(cortical_id, enabled);
     }
 
     /// Compute synaptic propagation for a set of fired neurons

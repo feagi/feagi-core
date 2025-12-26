@@ -146,6 +146,10 @@ impl CorticalChangeClassifier {
             "neuron_mp_charge_accumulation",
             "mp_driven_psp",
             "neuron_mp_driven_psp",
+            // Postsynaptic current distribution mode
+            // NOTE: This is a runtime propagation flag, not a structural/topology change.
+            "psp_uniform_distribution",
+            "neuron_psp_uniform_distribution",
             // Plasticity
             "plasticity_constant",
             // Burst engine
@@ -166,8 +170,6 @@ impl CorticalChangeClassifier {
             "firing_threshold_increment_z",
             "leak_variability",
             "neuron_leak_variability",
-            "psp_uniform_distribution",
-            "neuron_psp_uniform_distribution",
             "is_mem_type",
             "dev_count",
             "synapse_attractivity",
