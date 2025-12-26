@@ -79,7 +79,7 @@ impl NeuronModel for LIFModel {
         synapse_type: SynapseType,
     ) -> f32 {
         // LIF formula: contribution = sign × weight × psp
-        // Result range: -1.0 to +1.0
+        // Canonical range (absolute-u8 contract): -65,025.0 to +65,025.0 (255 × 255)
         let sign = match synapse_type {
             SynapseType::Excitatory => 1.0,
             SynapseType::Inhibitory => -1.0,

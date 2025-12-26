@@ -587,8 +587,9 @@ fn synaptic_propagation_fcl_main(@builtin(global_invocation_id) global_id: vec3<
         let packed_params = synapse_data[data_idx + 2u];
         
         // Unpack: weight, psp, type
-        let weight_f32 = f32(packed_params & 0xFFu) / 255.0;
-        let psp_f32 = f32((packed_params >> 8u) & 0xFFu) / 255.0;
+        // Canonical synaptic units: weight/psp are absolute u8 values (0..255), no normalization.
+        let weight_f32 = f32(packed_params & 0xFFu);
+        let psp_f32 = f32((packed_params >> 8u) & 0xFFu);
         let sign = select(-1.0, 1.0, (packed_params >> 16u) & 0xFFu == 0u);
         
         // LIF synaptic contribution: sign × weight × psp

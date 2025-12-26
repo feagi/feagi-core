@@ -24,7 +24,7 @@ use crate::fire_structures::{FireQueue, FiringNeuron};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::NeuronStorage;
 use std::sync::OnceLock;
-use tracing::debug;
+use tracing::trace;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
 use feagi_npu_neural::{apply_leak, excitability_random};
@@ -193,7 +193,7 @@ fn process_single_neuron<T: NeuralValue>(
             let mp = neuron_array.membrane_potentials()[idx].to_f32();
             let thr = neuron_array.thresholds()[idx].to_f32();
             let leak = neuron_array.leak_coefficients()[idx];
-            debug!(
+            trace!(
                 target: "feagi-npu-trace",
                 "[DYN] burst={} neuron={} area={} mp_acc={} REFRACTORY countdown={} candidate={:.6} mp={:.6} thr={:.6} leak={:.6}",
                 burst_count,
@@ -244,7 +244,7 @@ fn process_single_neuron<T: NeuralValue>(
     let threshold = neuron_array.thresholds()[idx];
     if current_potential.ge(threshold) {
         if allow_trace {
-            debug!(
+            trace!(
                 target: "feagi-npu-trace",
                 "[DYN] burst={} neuron={} area={} mp_acc={} CROSS mp_old={:.6} cand={:.6} mp_new={:.6} thr={:.6} leak={:.6} excit={:.6}",
                 burst_count,
@@ -302,7 +302,7 @@ fn process_single_neuron<T: NeuralValue>(
 
         if should_fire {
             if allow_trace {
-                debug!(
+                trace!(
                     target: "feagi-npu-trace",
                     "[DYN] burst={} neuron={} area={} mp_acc={} FIRED mp_new={:.6} thr={:.6} refrac_period={} cfc={}/{} snooze={}",
                     burst_count,
@@ -391,7 +391,7 @@ fn process_single_neuron<T: NeuralValue>(
     );
 
     if allow_trace {
-        debug!(
+        trace!(
             target: "feagi-npu-trace",
             "[DYN] burst={} neuron={} area={} mp_acc={} NOFIRE mp_old={:.6} cand={:.6} mp_preleak={:.6} mp_postleak={:.6} thr={:.6} leak={:.6}",
             burst_count,

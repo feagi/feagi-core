@@ -47,7 +47,7 @@ use std::sync::OnceLock;
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType as FeagiSynapseType};
-use tracing::debug;
+use tracing::trace;
 
 /// Runtime-gated tracing config for synaptic propagation.
 /// Enable with:
@@ -295,7 +295,7 @@ impl SynapticPropagationEngine {
 
                 if allow_trace {
                     let outgoing = source_synapse_counts.get(&source_neuron).copied().unwrap_or(1);
-                    debug!(
+                    trace!(
                         target: "feagi-npu-trace",
                         "[SYNAPSE] syn_idx={} src={} dst={} src_area={:?} dst_area={:?} type={:?} weight={} psp_used={} mp_driven={} uniform={} outgoing={} base_contrib={:.3} final_contrib={:.3}",
                         syn_idx,

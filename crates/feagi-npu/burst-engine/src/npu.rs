@@ -36,6 +36,7 @@ use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::neural_dynamics::*;
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
+use ahash::AHashSet;
 use feagi_npu_neural::types::*;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use tracing::{debug, error, info, trace, warn};
@@ -804,6 +805,56 @@ impl<
             }
         }
         total_removed
+    }
+
+    /// Efficiently remove synapses from a set of source neurons to a set of target neurons.
+    ///
+    /// This is intended for cortical mapping updates/removals where synapses must be pruned
+    /// deterministically without destroying other outgoing synapses from the same source area.
+    ///
+    /// Implementation detail:
+    /// - Uses the propagation engine's `synapse_index` to iterate only synapses reachable from
+    ///   the given source neurons.
+    /// - Marks matching synapses invalid via `valid_mask` (no compaction).
+    ///
+    /// NOTE: This does NOT rebuild the synapse index. Call `rebuild_synapse_index()` after bulk removals.
+    pub fn remove_synapses_from_sources_to_targets(
+        &mut self,
+        sources: Vec<NeuronId>,
+        targets: Vec<NeuronId>,
+    ) -> usize {
+        if sources.is_empty() || targets.is_empty() {
+            return 0;
+        }
+
+        let target_set: AHashSet<u32> = targets.into_iter().map(|n| n.0).collect();
+
+        // Lock order: synapse_storage -> propagation_engine (matches rebuild path to avoid deadlocks)
+        let mut synapse_storage = self.synapse_storage.write().unwrap();
+        let prop_engine = self.propagation_engine.read().unwrap();
+
+        let mut removed = 0usize;
+        for source in sources {
+            let Some(indices) = prop_engine.synapse_index.get(&source) else {
+                continue;
+            };
+            for &syn_idx in indices {
+                if syn_idx >= synapse_storage.count() {
+                    continue;
+                }
+                if !synapse_storage.valid_mask()[syn_idx] {
+                    continue;
+                }
+                let target = synapse_storage.target_neurons()[syn_idx];
+                if target_set.contains(&target) {
+                    if synapse_storage.remove_synapse(syn_idx).is_ok() {
+                        removed += 1;
+                    }
+                }
+            }
+        }
+
+        removed
     }
 
     /// Update synapse weight
@@ -2531,10 +2582,11 @@ fn phase1_injection_with_synapses<
         let mut neuron_mps = ahash::AHashMap::new();
         for &neuron_id in &fired_ids {
             let mp = membrane_potentials[neuron_id.0 as usize];
-            // Convert f32/T MP to u8 (0-255 range)
-            // Assuming T is f32 and MP is normalized to [0,1]
+            // Convert MP (T) to u8 (0-255 range) for mp_driven_psp.
+            // Canonical contract: mp_driven_psp uses absolute u8 units (0..255),
+            // so we clamp the current MP into that range (NO normalization by 255).
             let mp_f32: f32 = mp.to_f32();
-            let mp_u8 = (mp_f32.clamp(0.0, 1.0) * 255.0) as u8;
+            let mp_u8 = mp_f32.clamp(0.0, 255.0) as u8;
             neuron_mps.insert(neuron_id, mp_u8);
         }
 

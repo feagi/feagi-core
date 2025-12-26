@@ -76,8 +76,10 @@ impl NeuronVoxelXYZPDecoder for CartesianPlaneNeuronVoxelXYZPDecoder {
             let col = in_channel_x_index as usize;
             let color_channel = neuron.neuron_voxel_coordinate.z as usize;
 
-            // Convert neuron potential (0.0-1.0) to RGB value (0-255)
-            let color_val = (neuron.potential.clamp(0.0, 1.0) * 255.0) as u8;
+            // Canonical image decoding (absolute intensity):
+            // - Neuron potential (p) carries raw pixel intensity in 0..255.
+            // - Clamp defensively to the representable u8 range.
+            let color_val = neuron.potential.clamp(0.0, 255.0).round() as u8;
 
             pixels[[row, col, color_channel]] = color_val;
         }

@@ -422,6 +422,14 @@ where
         dispatch_mut!(self, remove_synapse(source, target))
     }
 
+    pub fn remove_synapses_from_sources_to_targets(
+        &mut self,
+        sources: Vec<NeuronId>,
+        targets: Vec<NeuronId>,
+    ) -> usize {
+        dispatch_mut!(self, remove_synapses_from_sources_to_targets(sources, targets))
+    }
+
     pub fn update_synapse_weight(
         &mut self,
         source: NeuronId,

@@ -22,6 +22,47 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, info, trace, warn};
 
+/// Update a cortical area's `cortical_mapping_dst` property in-place.
+///
+/// - When `mapping_data` is empty: remove the destination entry, and if the
+///   container becomes empty remove `cortical_mapping_dst` entirely.
+/// - When `mapping_data` is non-empty: insert/overwrite the destination entry.
+fn update_cortical_mapping_dst_in_properties(
+    properties: &mut HashMap<String, serde_json::Value>,
+    dst_area_id: &str,
+    mapping_data: &[serde_json::Value],
+) -> ServiceResult<()> {
+    if mapping_data.is_empty() {
+        let Some(existing) = properties.get_mut("cortical_mapping_dst") else {
+            return Ok(());
+        };
+        let Some(mapping_dst) = existing.as_object_mut() else {
+            return Err(ServiceError::Backend(
+                "cortical_mapping_dst is not a JSON object".to_string(),
+            ));
+        };
+
+        mapping_dst.remove(dst_area_id);
+        if mapping_dst.is_empty() {
+            properties.remove("cortical_mapping_dst");
+        }
+        return Ok(());
+    }
+
+    let entry = properties
+        .entry("cortical_mapping_dst".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+
+    let Some(mapping_dst) = entry.as_object_mut() else {
+        return Err(ServiceError::Backend(
+            "cortical_mapping_dst is not a JSON object".to_string(),
+        ));
+    };
+
+    mapping_dst.insert(dst_area_id.to_string(), serde_json::json!(mapping_data));
+    Ok(())
+}
+
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
@@ -652,23 +693,18 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
         if let Some(genome) = self.current_genome.write().as_mut() {
             if let Some(src_area) = genome.cortical_areas.get_mut(&src_id) {
-                // Get or create the cortical_mapping_dst property
-                let mut mapping_dst = if let Some(existing) = src_area.properties.get("cortical_mapping_dst") {
-                    existing.as_object().cloned().unwrap_or_default()
-                } else {
-                    serde_json::Map::new()
-                };
-
-                // Update the mapping for this destination area
-                mapping_dst.insert(dst_area_id.clone(), serde_json::json!(mapping_data));
-
-                // Store back into properties
-                src_area.properties.insert(
-                    "cortical_mapping_dst".to_string(),
-                    serde_json::json!(mapping_dst),
+                update_cortical_mapping_dst_in_properties(
+                    &mut src_area.properties,
+                    &dst_area_id,
+                    &mapping_data,
+                )?;
+                info!(
+                    target: "feagi-services",
+                    "[GENOME-UPDATE] Updated cortical_mapping_dst for {} -> {} (connections={})",
+                    src_area_id,
+                    dst_area_id,
+                    mapping_data.len()
                 );
-
-                info!(target: "feagi-services", "[GENOME-UPDATE] Updated cortical_mapping_dst for {} -> {}", src_area_id, dst_area_id);
             } else {
                 warn!(target: "feagi-services", "[GENOME-UPDATE] Source area {} not found in RuntimeGenome", src_area_id);
             }
@@ -690,6 +726,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         info!(target: "feagi-services", "Cortical mapping updated: {} synapses created", synapse_count);
         Ok(synapse_count)
     }
+
+    // Note: unit tests for mapping persistence behavior are below in this module.
 
     // ========================================================================
     // CONNECTOME I/O OPERATIONS
@@ -758,5 +796,58 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Err(ServiceError::NotImplemented(
             "Connectome import via service layer requires NPU replacement coordination. Use NPU.import_connectome_with_config() during application initialization, or implement a 'replace NPU' operation that coordinates with BurstLoopRunner.".to_string(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::update_cortical_mapping_dst_in_properties;
+    use crate::types::ServiceResult;
+    use std::collections::HashMap;
+
+    #[test]
+    fn empty_mapping_deletes_destination_key_and_prunes_container() -> ServiceResult<()> {
+        let mut props: HashMap<String, serde_json::Value> = HashMap::new();
+        props.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                "dstA": [{"morphology_id": "m1"}],
+                "dstB": []
+            }),
+        );
+
+        update_cortical_mapping_dst_in_properties(&mut props, "dstA", &[])?;
+        let dst = props
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+            .expect("cortical_mapping_dst should remain with dstB");
+        assert!(!dst.contains_key("dstA"));
+        assert!(dst.contains_key("dstB"));
+
+        // Now remove last remaining destination, container should be removed entirely
+        update_cortical_mapping_dst_in_properties(&mut props, "dstB", &[])?;
+        assert!(!props.contains_key("cortical_mapping_dst"));
+        Ok(())
+    }
+
+    #[test]
+    fn non_empty_mapping_sets_destination_key() -> ServiceResult<()> {
+        let mut props: HashMap<String, serde_json::Value> = HashMap::new();
+        update_cortical_mapping_dst_in_properties(
+            &mut props,
+            "dstX",
+            &[serde_json::json!({"morphology_id": "m1"})],
+        )?;
+
+        let dst = props
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+            .expect("cortical_mapping_dst should exist");
+        let arr = dst
+            .get("dstX")
+            .and_then(|v| v.as_array())
+            .expect("dstX should be an array");
+        assert_eq!(arr.len(), 1);
+        Ok(())
     }
 }

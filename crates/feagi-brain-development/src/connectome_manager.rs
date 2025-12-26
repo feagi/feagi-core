@@ -604,25 +604,64 @@ impl ConnectomeManager {
         info!(target: "feagi-bdu", "Regenerating synapses: {} -> {}", src_area_id, dst_area_id);
 
         // If NPU is available, regenerate synapses
-        if self.npu.is_some() {
-            // First, delete existing synapses between these areas
-            // TODO: Implement delete_synapses_between_areas in NPU
+        let Some(npu_arc) = self.npu.clone() else {
+            info!(target: "feagi-bdu", "NPU not available - skipping synapse regeneration");
+            return Ok(0);
+        };
 
-            // Then, apply cortical mapping to create new synapses
+        {
+            // First, delete existing synapses between these areas (mapping removal must prune synapses).
+            {
+                let src_idx = *self.cortical_id_to_idx.get(src_area_id).ok_or_else(|| {
+                    BduError::InvalidArea(format!("No cortical idx for source area {}", src_area_id))
+                })?;
+                let dst_idx = *self.cortical_id_to_idx.get(dst_area_id).ok_or_else(|| {
+                    BduError::InvalidArea(format!("No cortical idx for destination area {}", dst_area_id))
+                })?;
+
+                let mut npu = npu_arc.lock().unwrap();
+                let sources: Vec<NeuronId> = npu
+                    .get_neurons_in_cortical_area(src_idx)
+                    .into_iter()
+                    .map(NeuronId)
+                    .collect();
+                let targets: Vec<NeuronId> = npu
+                    .get_neurons_in_cortical_area(dst_idx)
+                    .into_iter()
+                    .map(NeuronId)
+                    .collect();
+                let removed = npu.remove_synapses_from_sources_to_targets(sources, targets);
+                info!(
+                    target: "feagi-bdu",
+                    "Pruned {} existing synapses for mapping {} -> {}",
+                    removed,
+                    src_area_id,
+                    dst_area_id
+                );
+            }
+
+            // Then, apply cortical mapping to create new synapses (may be 0 for deletions)
             let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
 
-            info!(target: "feagi-bdu", "Created {} new synapses: {} -> {}",
-                  synapse_count, src_area_id, dst_area_id);
+            info!(
+                target: "feagi-bdu",
+                "Created {} new synapses: {} -> {}",
+                synapse_count,
+                src_area_id,
+                dst_area_id
+            );
 
             // CRITICAL: Rebuild synapse index so new synapses are visible to queries and propagation!
-            let mut npu = self.npu.as_ref().unwrap().lock().unwrap();
+            let mut npu = npu_arc.lock().unwrap();
             npu.rebuild_synapse_index();
-            info!(target: "feagi-bdu", "Rebuilt synapse index after adding {} synapses", synapse_count);
+            info!(
+                target: "feagi-bdu",
+                "Rebuilt synapse index after regenerating {} -> {}",
+                src_area_id,
+                dst_area_id
+            );
 
             Ok(synapse_count)
-        } else {
-            info!(target: "feagi-bdu", "NPU not available - skipping synapse regeneration");
-            Ok(0)
         }
     }
 
@@ -632,37 +671,30 @@ impl ConnectomeManager {
         src_area_id: &CorticalID,
         dst_area_id: &CorticalID,
     ) -> BduResult<usize> {
-        // Clone the rules to avoid borrow checker issues
+        // Clone the rules to avoid borrow checker issues.
+        //
+        // IMPORTANT: absence of mapping rules is a valid state (e.g. mapping deletion).
+        // In that case, return Ok(0) rather than an error so API callers can treat
+        // "deleted mapping" as success (and BV can update its cache/UI).
         let rules = {
             let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
-                crate::types::BduError::InvalidArea(format!(
-                    "Source area not found: {}",
-                    src_area_id
-                ))
+                crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
             })?;
 
-            // Get cortical_mapping_dst
-            let mapping_dst = src_area
+            let Some(mapping_dst) = src_area
                 .properties
                 .get("cortical_mapping_dst")
                 .and_then(|v| v.as_object())
-                .ok_or_else(|| {
-                    crate::types::BduError::InvalidMorphology(format!(
-                        "No cortical_mapping_dst for {}",
-                        src_area_id
-                    ))
-                })?;
+            else {
+                return Ok(0);
+            };
 
-            // Get rules for this destination
-            let rules = mapping_dst
+            let Some(rules) = mapping_dst
                 .get(&dst_area_id.as_base_64())
                 .and_then(|v| v.as_array())
-                .ok_or_else(|| {
-                    crate::types::BduError::InvalidMorphology(format!(
-                        "No mapping rules from {} to {}",
-                        src_area_id, dst_area_id
-                    ))
-                })?;
+            else {
+                return Ok(0);
+            };
 
             rules.clone()
         }; // Borrow ends here
@@ -3653,5 +3685,133 @@ mod tests {
         // Note: Synapse retrieval/update/removal tests require full NPU propagation engine initialization
         // which is beyond the scope of this unit test. The important part is that create_synapse succeeds.
         println!("✅ Synapse creation test passed");
+    }
+
+    #[test]
+    fn test_apply_cortical_mapping_missing_rules_is_ok() {
+        // This guards against a regression where deleting a mapping causes a 500 because
+        // synapse regeneration treats "no mapping rules" as an error.
+        let mut manager = ConnectomeManager::new_for_testing();
+
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+
+        let src_id = CorticalID::try_from_bytes(b"map_src_").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"map_dst_").unwrap();
+
+        let src_area = CorticalArea::new(
+            src_id,
+            0,
+            "src".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean),
+        )
+        .unwrap();
+
+        let dst_area = CorticalArea::new(
+            dst_id,
+            0,
+            "dst".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
+        )
+        .unwrap();
+
+        manager.add_cortical_area(src_area).unwrap();
+        manager.add_cortical_area(dst_area).unwrap();
+
+        // No cortical_mapping_dst property set -> should be Ok(0), not an error
+        let count = manager.apply_cortical_mapping_for_pair(&src_id, &dst_id).unwrap();
+        assert_eq!(count, 0);
+
+        // Now create then delete mapping; missing destination rules should still be Ok(0)
+        manager
+            .update_cortical_mapping(&src_id, &dst_id, vec![serde_json::json!({"morphology_id":"m1"})])
+            .unwrap();
+        manager.update_cortical_mapping(&src_id, &dst_id, vec![]).unwrap();
+
+        let count2 = manager.apply_cortical_mapping_for_pair(&src_id, &dst_id).unwrap();
+        assert_eq!(count2, 0);
+    }
+
+    #[test]
+    fn test_mapping_deletion_prunes_synapses_between_areas() {
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_burst_engine::RustNPU;
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaDataFlag};
+        use std::sync::{Arc, Mutex};
+
+        // Create NPU and manager (small capacities for a deterministic unit test)
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
+        let dyn_npu = Arc::new(Mutex::new(feagi_npu_burst_engine::DynamicNPU::F32(npu)));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+
+        // Create two cortical areas
+        let src_id = CorticalID::try_from_bytes(b"cst_src_").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"cst_dst_").unwrap();
+
+        let src_area = CorticalArea::new(
+            src_id,
+            0,
+            "src".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean),
+        )
+        .unwrap();
+        let dst_area = CorticalArea::new(
+            dst_id,
+            0,
+            "dst".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
+        )
+        .unwrap();
+
+        manager.add_cortical_area(src_area).unwrap();
+        manager.add_cortical_area(dst_area).unwrap();
+
+        // Add a couple neurons to each area
+        let s0 = manager
+            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let s1 = manager
+            .add_neuron(&src_id, 1, 0, 0, 1.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let t0 = manager
+            .add_neuron(&dst_id, 0, 0, 0, 1.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+        let t1 = manager
+            .add_neuron(&dst_id, 1, 0, 0, 1.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .unwrap();
+
+        // Create synapses that represent an established mapping between the two areas
+        manager.create_synapse(s0, t0, 128, 200, 0).unwrap();
+        manager.create_synapse(s1, t1, 128, 200, 0).unwrap();
+
+        // Build index once before pruning
+        {
+            let mut npu = dyn_npu.lock().unwrap();
+            npu.rebuild_synapse_index();
+            assert_eq!(npu.get_synapse_count(), 2);
+        }
+
+        // Simulate mapping deletion and regeneration: should prune synapses and not re-add any
+        manager.update_cortical_mapping(&src_id, &dst_id, vec![]).unwrap();
+        let created = manager.regenerate_synapses_for_mapping(&src_id, &dst_id).unwrap();
+        assert_eq!(created, 0);
+
+        // Verify synapses are gone (invalidated) and no outgoing synapses remain from the sources
+        {
+            let npu = dyn_npu.lock().unwrap();
+            assert_eq!(npu.get_synapse_count(), 0);
+            assert!(npu.get_outgoing_synapses(s0 as u32).is_empty());
+            assert!(npu.get_outgoing_synapses(s1 as u32).is_empty());
+        }
     }
 }
