@@ -367,6 +367,26 @@ fn process_dstmap(
         let mut converted_rules = Vec::new();
 
         for rule in rules_array {
+            // Support BOTH representations:
+            // - Array format (legacy flat): ["projector", 1, 1.0, false, ...]
+            // - Object format (already hierarchical-like): {"morphology_id": "...", ...}
+            if let Some(rule_obj) = rule.as_object() {
+                // Minimal validation to avoid silently accepting garbage.
+                if !rule_obj.contains_key("morphology_id")
+                    || !rule_obj.contains_key("postSynapticCurrent_multiplier")
+                    || !rule_obj.contains_key("plasticity_flag")
+                {
+                    warn!(
+                        target: "feagi-evo",
+                        "Invalid dstmap rule object for destination {}: missing required keys",
+                        destination_area
+                    );
+                    continue;
+                }
+                converted_rules.push(Value::Object(rule_obj.clone()));
+                continue;
+            }
+
             let rule_array = match rule.as_array() {
                 Some(arr) => arr,
                 None => continue,
@@ -374,7 +394,8 @@ fn process_dstmap(
 
             // Validate minimum required elements
             if rule_array.len() < 4 {
-                warn!(target: "feagi-evo",
+                warn!(
+                    target: "feagi-evo",
                     "Invalid mapping recipe format (need at least 4 elements): {:?}",
                     rule_array
                 );
@@ -409,7 +430,12 @@ fn process_dstmap(
             converted_rules.push(Value::Object(rule_dict));
         }
 
-        hierarchical_dstmap.insert(destination_area.clone(), Value::Array(converted_rules));
+        // Avoid populating cortical_mapping_dst with empty per-destination arrays:
+        // an empty array is semantically "no mapping rules", and downstream code
+        // treats presence of the destination key as "has mappings".
+        if !converted_rules.is_empty() {
+            hierarchical_dstmap.insert(destination_area.clone(), Value::Array(converted_rules));
+        }
     }
 
     area_data.insert(
@@ -453,5 +479,30 @@ mod tests {
         assert_eq!(dest_rules[0]["plasticity_constant"], 1);
         assert_eq!(dest_rules[1]["morphology_id"], "projector");
         assert_eq!(dest_rules[1]["plasticity_constant"], 1); // Default
+    }
+
+    #[test]
+    fn test_dstmap_parsing_object_rules_passthrough() {
+        let dstmap_flat = json!({
+            "dest_area": [
+                {
+                    "morphology_id": "projector",
+                    "morphology_scalar": [1, 1, 1],
+                    "postSynapticCurrent_multiplier": 1,
+                    "plasticity_flag": false
+                }
+            ]
+        });
+
+        let mut area_data = serde_json::Map::new();
+        process_dstmap(&dstmap_flat, &mut area_data).unwrap();
+
+        let dstmap = area_data.get("cortical_mapping_dst").unwrap();
+        let dest_rules = dstmap.get("dest_area").unwrap().as_array().unwrap();
+
+        assert_eq!(dest_rules.len(), 1);
+        assert_eq!(dest_rules[0]["morphology_id"], "projector");
+        assert_eq!(dest_rules[0]["postSynapticCurrent_multiplier"], 1);
+        assert_eq!(dest_rules[0]["plasticity_flag"], false);
     }
 }

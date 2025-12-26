@@ -174,3 +174,8 @@ debug = true
 name = "migrate_genome"
 path = "tools/migrate_genome.rs"
 required-features = []
+
+[[bin]]
+name = "perf_compare"
+path = "tools/perf_compare.rs"
+required-features = []

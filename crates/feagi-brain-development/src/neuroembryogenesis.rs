@@ -20,7 +20,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::connectome_manager::ConnectomeManager;
 use crate::models::{CorticalArea, CorticalID};
-use crate::types::BduResult;
+use crate::types::{BduError, BduResult};
 use feagi_evolutionary::RuntimeGenome;
 use feagi_npu_neural::types::{Precision, QuantizationSpec};
 use parking_lot::RwLock;
@@ -802,6 +802,25 @@ impl Neuroembryogenesis {
                 p.synapses_created = total_synapses_created;
                 p.progress = progress_pct;
             });
+        }
+
+        // CRITICAL: Rebuild the NPU synapse index so newly created synapses are visible to
+        // queries (e.g. get_outgoing_synapses / synapse counts) and propagation.
+        //
+        // Note: We do this once at the end for performance.
+        let npu_arc = {
+            let manager = self.connectome_manager.read();
+            manager.get_npu().cloned()
+        };
+        if let Some(npu_arc) = npu_arc {
+            let mut npu_lock = npu_arc
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+            npu_lock.rebuild_synapse_index();
+
+            // Refresh cached counts after index rebuild.
+            let manager = self.connectome_manager.read();
+            manager.update_cached_synapse_count();
         }
 
         // Verify against genome stats
