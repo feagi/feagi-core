@@ -682,6 +682,14 @@ impl GenomeServiceImpl {
                             );
                         }
                     }
+                    "leak_variability" | "neuron_leak_variability" => {
+                        if let Some(v) = value.as_f64() {
+                            area.add_property_mut(
+                                "leak_variability".to_string(),
+                                serde_json::json!(v),
+                            );
+                        }
+                    }
                     "refractory_period" | "neuron_refractory_period" => {
                         if let Some(v) = value.as_u64() {
                             area.add_property_mut(
@@ -706,7 +714,7 @@ impl GenomeServiceImpl {
                             );
                         }
                     }
-                    "plasticity_constant" => {
+                    "plasticity_constant" | "neuron_plasticity_constant" => {
                         if let Some(v) = value.as_f64() {
                             area.add_property_mut(
                                 "plasticity_constant".to_string(),
@@ -714,16 +722,100 @@ impl GenomeServiceImpl {
                             );
                         }
                     }
-                    "degeneration" => {
+                    "degeneration" | "neuron_degeneracy_coefficient" => {
                         if let Some(v) = value.as_f64() {
                             area.add_property_mut("degeneration".to_string(), serde_json::json!(v));
                         }
                     }
-                    "postsynaptic_current" => {
+                    "postsynaptic_current" | "neuron_post_synaptic_potential" => {
                         if let Some(v) = value.as_f64() {
                             area.add_property_mut(
                                 "postsynaptic_current".to_string(),
                                 serde_json::json!(v),
+                            );
+                        }
+                    }
+                    "postsynaptic_current_max" | "neuron_post_synaptic_potential_max" => {
+                        if let Some(v) = value.as_f64() {
+                            area.add_property_mut(
+                                "postsynaptic_current_max".to_string(),
+                                serde_json::json!(v),
+                            );
+                        }
+                    }
+                    "psp_uniform_distribution" | "neuron_psp_uniform_distribution" => {
+                        if let Some(v) = value.as_bool() {
+                            area.add_property_mut(
+                                "psp_uniform_distribution".to_string(),
+                                serde_json::json!(v),
+                            );
+                        }
+                    }
+                    "mp_driven_psp" | "neuron_mp_driven_psp" => {
+                        if let Some(v) = value.as_bool() {
+                            area.add_property_mut(
+                                "mp_driven_psp".to_string(),
+                                serde_json::json!(v),
+                            );
+                        }
+                    }
+                    "mp_charge_accumulation" | "neuron_mp_charge_accumulation" => {
+                        if let Some(v) = value.as_bool() {
+                            area.add_property_mut(
+                                "mp_charge_accumulation".to_string(),
+                                serde_json::json!(v),
+                            );
+                        }
+                    }
+                    "excitability" | "neuron_excitability" => {
+                        if let Some(v) = value.as_f64() {
+                            area.add_property_mut(
+                                "excitability".to_string(),
+                                serde_json::json!(v),
+                            );
+                        }
+                    }
+                    "init_lifespan" | "neuron_init_lifespan" => {
+                        if let Some(v) = value.as_u64() {
+                            area.add_property_mut(
+                                "init_lifespan".to_string(),
+                                serde_json::json!(v as u32),
+                            );
+                        }
+                    }
+                    "lifespan_growth_rate" | "neuron_lifespan_growth_rate" => {
+                        if let Some(v) = value.as_u64() {
+                            area.add_property_mut(
+                                "lifespan_growth_rate".to_string(),
+                                serde_json::json!(v as u32),
+                            );
+                        }
+                    }
+                    "longterm_mem_threshold" | "neuron_longterm_mem_threshold" => {
+                        if let Some(v) = value.as_u64() {
+                            area.add_property_mut(
+                                "longterm_mem_threshold".to_string(),
+                                serde_json::json!(v as u32),
+                            );
+                        }
+                    }
+                    "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
+                        // Expect either array [x, y, z] or dict {x, y, z}
+                        if let Some(arr) = value.as_array() {
+                            if arr.len() == 3 {
+                                area.add_property_mut(
+                                    "firing_threshold_increment".to_string(),
+                                    serde_json::json!(arr),
+                                );
+                            }
+                        } else if let Some(obj) = value.as_object() {
+                            // Convert {x, y, z} to [x, y, z]
+                            let x = obj.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                            let y = obj.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                            let z = obj.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                            area.add_property_mut(
+                                "firing_threshold_increment".to_string(),
+                                serde_json::json!([x, y, z]),
                             );
                         }
                     }

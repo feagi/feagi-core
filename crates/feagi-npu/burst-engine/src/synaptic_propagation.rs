@@ -200,32 +200,33 @@ impl SynapticPropagationEngine {
                     synapse_storage.postsynaptic_potentials()[syn_idx]
                 };
 
-                // Apply PSP uniformity: divide PSP if uniformity is false
-                let psp = if self.area_psp_uniform_distribution.get(source_area).copied().unwrap_or(false) {
-                    // PSP uniformity = true: Each synapse gets full PSP value
-                    base_psp
-                } else {
-                    // PSP uniformity = false: PSP is divided among all outgoing synapses
-                    let synapse_count = source_synapse_counts.get(&source_neuron).copied().unwrap_or(1);
-                    if synapse_count > 1 {
-                        // Divide PSP by number of outgoing synapses
-                        base_psp / synapse_count as u8
-                    } else {
-                        base_psp
-                    }
-                };
-
-                // Calculate contribution using platform-agnostic function from feagi-synapse
+                // Calculate base contribution using platform-agnostic function from feagi-synapse
                 let weight = synapse_storage.weights()[syn_idx];
                 let synapse_type = match synapse_storage.types()[syn_idx] {
                     0 => FeagiSynapseType::Excitatory,
                     _ => FeagiSynapseType::Inhibitory,
                 };
 
-                let contribution =
-                    SynapticContribution(compute_synaptic_contribution(weight, psp, synapse_type));
+                let base_contribution = compute_synaptic_contribution(weight, base_psp, synapse_type);
 
-                Some((target_neuron, cortical_area, contribution))
+                // Apply PSP uniformity: divide CONTRIBUTION (not PSP) if uniformity is false
+                // This preserves precision by doing float division instead of u8 integer division
+                let final_contribution = if self.area_psp_uniform_distribution.get(source_area).copied().unwrap_or(false) {
+                    // PSP uniformity = true: Each synapse contributes full amount
+                    base_contribution
+                } else {
+                    // PSP uniformity = false: Total contribution is divided among all outgoing synapses
+                    let synapse_count = source_synapse_counts.get(&source_neuron).copied().unwrap_or(1);
+                    if synapse_count > 1 {
+                        // Divide contribution by number of outgoing synapses (float division preserves precision!)
+                        // Example: 1.0 / 10 = 0.1 (not 0 like u8 division would give)
+                        base_contribution / synapse_count as f32
+                    } else {
+                        base_contribution
+                    }
+                };
+
+                Some((target_neuron, cortical_area, SynapticContribution(final_contribution)))
             })
             .collect();
 

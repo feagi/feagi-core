@@ -78,7 +78,8 @@ fn test_complete_genome_workflow() {
     assert!(loaded_genome.cortical_areas.contains_key(&test_id));
     assert!(loaded_genome.morphologies.contains("block_to_block"));
     assert!(loaded_genome.morphologies.contains("projector"));
-    assert_eq!(loaded_genome.metadata.version, "2.0");
+    // Version is upgraded to 3.0 (flat format) when saving
+    assert_eq!(loaded_genome.metadata.version, "3.0");
 
     println!("✅ Complete genome workflow test passed!");
     println!(

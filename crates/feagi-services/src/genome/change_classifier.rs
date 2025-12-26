@@ -130,7 +130,9 @@ impl CorticalChangeClassifier {
             "neuron_degeneracy_coefficient",
             // Postsynaptic current
             "postsynaptic_current",
+            "neuron_post_synaptic_potential",
             "postsynaptic_current_max",
+            "neuron_post_synaptic_potential_max",
             // Memory parameters
             "longterm_mem_threshold",
             "neuron_longterm_mem_threshold",
