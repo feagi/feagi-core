@@ -136,6 +136,15 @@ pub struct RustNPU<
 
     // Configuration (AtomicU32 for f32 as u32 bits)
     power_amount: std::sync::atomic::AtomicU32, // f32::to_bits()
+
+    /// Optional firing threshold cap per cortical_idx.
+    /// Semantics:
+    /// - cap == 0.0 : disabled (no cap)
+    /// - cap  > 0.0 : effective threshold = min(requested_threshold, cap)
+    ///
+    /// This is runtime state. Persistence remains in genome properties; this exists to ensure
+    /// the burst-time threshold update path can enforce the cap deterministically.
+    cortical_threshold_caps: std::sync::RwLock<AHashMap<u32, f32>>,
 }
 
 /// Fire-related structures grouped together for single mutex
@@ -205,6 +214,7 @@ impl<
             backend: std::sync::Mutex::new(backend),
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
+            cortical_threshold_caps: std::sync::RwLock::new(AHashMap::new()),
         })
     }
 }
@@ -1746,6 +1756,20 @@ impl<
     pub fn update_cortical_area_threshold(&mut self, cortical_area: u32, threshold: f32) -> usize {
         let mut updated_count = 0;
 
+        // Apply optional threshold cap (0.0 disables cap)
+        let cap = self
+            .cortical_threshold_caps
+            .read()
+            .unwrap()
+            .get(&cortical_area)
+            .copied()
+            .unwrap_or(0.0);
+        let effective_threshold = if cap > 0.0 {
+            threshold.min(cap)
+        } else {
+            threshold
+        };
+
         // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
 
@@ -1754,8 +1778,52 @@ impl<
             if neuron_storage_write.valid_mask()[idx]
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
-                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(threshold);
+                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(effective_threshold);
                 updated_count += 1;
+            }
+        }
+
+        updated_count
+    }
+
+    /// Update firing threshold cap ("firing_threshold_limit") for all neurons in a cortical area.
+    ///
+    /// Semantics:
+    /// - limit == 0.0: disable cap (no clamping applied to future threshold updates)
+    /// - limit  > 0.0: enable cap; effective firing threshold becomes min(threshold, limit)
+    ///
+    /// Note: This does NOT restore thresholds when cap is disabled; it only affects future updates.
+    /// This is deterministic and avoids guessing prior uncapped values.
+    pub fn update_cortical_area_threshold_limit(
+        &mut self,
+        cortical_area: u32,
+        limit: f32,
+    ) -> usize {
+        {
+            let mut caps = self.cortical_threshold_caps.write().unwrap();
+            if limit > 0.0 {
+                caps.insert(cortical_area, limit);
+            } else {
+                caps.remove(&cortical_area);
+            }
+        }
+
+        // If enabling a cap, clamp existing thresholds immediately.
+        if limit <= 0.0 {
+            return 0;
+        }
+
+        let mut updated_count = 0;
+        let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+        for idx in 0..neuron_storage_write.count() {
+            if neuron_storage_write.valid_mask()[idx]
+                && neuron_storage_write.cortical_areas()[idx] == cortical_area
+            {
+                let current = neuron_storage_write.thresholds()[idx].to_f32();
+                if current > limit {
+                    neuron_storage_write.thresholds_mut()[idx] = T::from_f32(limit);
+                    updated_count += 1;
+                }
             }
         }
 

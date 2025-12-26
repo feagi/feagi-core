@@ -736,34 +736,35 @@ impl ConnectomeManager {
             })?;
 
             // Extract weight from rule (postSynapticCurrent_multiplier)
+            //
+            // IMPORTANT:
+            // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
+            // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
             let weight = if let Some(obj) = rule.as_object() {
-                (obj.get("postSynapticCurrent_multiplier")
+                obj.get("postSynapticCurrent_multiplier")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
-                    * 255.0)
-                    .min(255.0) as u8
+                    .clamp(0.0, 255.0) as u8
             } else if let Some(arr) = rule.as_array() {
                 // Array format: [morphology_id, scalar, multiplier, ...]
-                (arr.get(2)
+                arr.get(2)
                     .and_then(|v| v.as_f64())
                     .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
-                    * 255.0)
-                    .min(255.0) as u8
+                    .clamp(0.0, 255.0) as u8
             } else {
                 128 // @architecture:acceptable - emergency fallback for malformed rule
             };
 
-            // Get PSP (conductance) from source cortical area
+            // Get PSP (conductance) from source cortical area.
+            //
+            // IMPORTANT:
+            // - This value represents the synapse "conductance" stored in the NPU (u8: 0..255).
+            // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
+            // - Do NOT scale by 255 here. A PSP of 1.0 should remain conductance=1 (not 255).
             let conductance = {
                 use crate::models::cortical_area::CorticalAreaExt;
                 let psp_f32 = src_area.postsynaptic_current();
-                // Normalize to 0-255 range
-                // If PSP > 1.0, treat it as already in 0-255 range (legacy compatibility)
-                if psp_f32 > 1.0 {
-                    psp_f32.min(255.0) as u8
-                } else {
-                    (psp_f32 * 255.0).min(255.0) as u8
-                }
+                psp_f32.clamp(0.0, 255.0) as u8
             };
 
             // Extract synapse_attractivity from rule (probability 0-100)
@@ -1208,25 +1209,25 @@ impl ConnectomeManager {
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown");
 
-                let weight = (rule_obj
+                // IMPORTANT:
+                // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
+                // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
+                let weight = rule_obj
                     .get("postSynapticCurrent_multiplier")
                     .and_then(|v| v.as_f64())
                     .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
-                    * 255.0)
-                    .min(255.0) as u8;
+                    .clamp(0.0, 255.0) as u8;
 
                 // Get PSP (conductance) from source cortical area, NOT hardcoded!
-                // PSP is stored as f32 (0.0-1.0 range typically), convert to u8 (0-255)
+                //
+                // IMPORTANT:
+                // - This value represents the synapse "conductance" stored in the NPU (u8: 0..255).
+                // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
+                // - Do NOT scale by 255 here. A PSP of 1.0 should remain conductance=1 (not 255).
                 let conductance = {
                     use crate::models::cortical_area::CorticalAreaExt;
                     let psp_f32 = src_area.postsynaptic_current();
-                    // Normalize to 0-255 range
-                    // If PSP > 1.0, treat it as already in 0-255 range (legacy compatibility)
-                    if psp_f32 > 1.0 {
-                        psp_f32.min(255.0) as u8
-                    } else {
-                        (psp_f32 * 255.0).min(255.0) as u8
-                    }
+                    psp_f32.clamp(0.0, 255.0) as u8
                 };
                 let synapse_attractivity = 100u8; // Default: always create
 

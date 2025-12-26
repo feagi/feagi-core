@@ -490,6 +490,13 @@ where
         )
     }
 
+    pub fn update_cortical_area_threshold_limit(&mut self, cortical_area: u32, limit: f32) -> usize {
+        dispatch_mut!(
+            self,
+            update_cortical_area_threshold_limit(cortical_area, limit)
+        )
+    }
+
     pub fn update_cortical_area_refractory_period(
         &mut self,
         cortical_area: u32,

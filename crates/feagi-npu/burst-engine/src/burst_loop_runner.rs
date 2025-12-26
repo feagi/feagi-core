@@ -806,11 +806,24 @@ fn burst_loop(
                         let count = match update.parameter_name.as_str() {
                             "neuron_fire_threshold"
                             | "firing_threshold"
-                            | "firing_threshold_limit" => {
+                            => {
                                 if let Some(threshold) = update.value.as_f64() {
                                     npu_lock.update_cortical_area_threshold(
                                         update.cortical_idx,
                                         threshold as f32,
+                                    )
+                                } else {
+                                    0
+                                }
+                            }
+                            // IMPORTANT: firing_threshold_limit is NOT the firing threshold.
+                            // Previously this was (incorrectly) routed into update_cortical_area_threshold(),
+                            // which could set threshold=0 and make downstream neurons fire trivially.
+                            "neuron_firing_threshold_limit" | "firing_threshold_limit" => {
+                                if let Some(limit) = update.value.as_f64() {
+                                    npu_lock.update_cortical_area_threshold_limit(
+                                        update.cortical_idx,
+                                        limit as f32,
                                     )
                                 } else {
                                     0

@@ -25,15 +25,22 @@ use tracing::{debug, info, trace, warn};
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
+    /// Currently loaded genome (source of truth for genome persistence)
+    /// Shared with GenomeServiceImpl to ensure cortical mappings are saved
+    current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
     /// Optional reference to RuntimeService for accessing NPU (for connectome I/O)
     #[cfg(feature = "connectome-io")]
     runtime_service: Arc<RwLock<Option<Arc<dyn crate::traits::RuntimeService + Send + Sync>>>>,
 }
 
 impl ConnectomeServiceImpl {
-    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
+    pub fn new(
+        connectome: Arc<RwLock<ConnectomeManager>>,
+        current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
+    ) -> Self {
         Self {
             connectome,
+            current_genome,
             #[cfg(feature = "connectome-io")]
             runtime_service: Arc::new(RwLock::new(None)),
         }
@@ -641,6 +648,33 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let dst_id = CorticalID::try_from_base_64(&dst_area_id).map_err(|e| {
             ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e))
         })?;
+
+        // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Some(src_area) = genome.cortical_areas.get_mut(&src_id) {
+                // Get or create the cortical_mapping_dst property
+                let mut mapping_dst = if let Some(existing) = src_area.properties.get("cortical_mapping_dst") {
+                    existing.as_object().cloned().unwrap_or_default()
+                } else {
+                    serde_json::Map::new()
+                };
+
+                // Update the mapping for this destination area
+                mapping_dst.insert(dst_area_id.clone(), serde_json::json!(mapping_data));
+
+                // Store back into properties
+                src_area.properties.insert(
+                    "cortical_mapping_dst".to_string(),
+                    serde_json::json!(mapping_dst),
+                );
+
+                info!(target: "feagi-services", "[GENOME-UPDATE] Updated cortical_mapping_dst for {} -> {}", src_area_id, dst_area_id);
+            } else {
+                warn!(target: "feagi-services", "[GENOME-UPDATE] Source area {} not found in RuntimeGenome", src_area_id);
+            }
+        } else {
+            warn!(target: "feagi-services", "[GENOME-UPDATE] No RuntimeGenome loaded - mapping will not persist");
+        }
 
         // Update the cortical_mapping_dst property in ConnectomeManager
         let mut manager = self.connectome.write();

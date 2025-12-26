@@ -60,6 +60,12 @@ impl GenomeServiceImpl {
             genome_load_timestamp: Arc::new(RwLock::new(None)),
         }
     }
+
+    /// Get a reference to the current genome Arc
+    /// This allows other services to share access to the genome for persistence
+    pub fn get_current_genome_arc(&self) -> Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>> {
+        Arc::clone(&self.current_genome)
+    }
 }
 
 #[async_trait]
@@ -643,6 +649,189 @@ impl GenomeServiceImpl {
             info!(target: "feagi-services", "[FAST-UPDATE] Queued parameter updates (will apply in next burst)");
         } else {
             warn!(target: "feagi-services", "Parameter queue not available - updates will not affect neurons");
+        }
+
+        // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Some(area) = genome.cortical_areas.get_mut(&cortical_id_typed) {
+                for (key, value) in &changes {
+                    match key.as_str() {
+                        "neuron_fire_threshold" | "firing_threshold" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "firing_threshold_limit" | "neuron_firing_threshold_limit" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold_limit".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "leak_coefficient" | "neuron_leak_coefficient" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "leak_coefficient".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "leak_variability" | "neuron_leak_variability" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "leak_variability".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "refractory_period" | "neuron_refractory_period" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "refractory_period".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "snooze_period" | "neuron_snooze_period" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "snooze_period".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "consecutive_fire_count" | "neuron_consecutive_fire_count" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "consecutive_fire_count".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "postsynaptic_current" | "neuron_post_synaptic_potential" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "postsynaptic_current".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "postsynaptic_current_max" | "neuron_post_synaptic_potential_max" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "postsynaptic_current_max".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "plasticity_constant" | "neuron_plasticity_constant" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "plasticity_constant".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "degeneration" | "neuron_degeneracy_coefficient" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "degeneration".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "psp_uniform_distribution" | "neuron_psp_uniform_distribution" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "psp_uniform_distribution".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "mp_driven_psp" | "neuron_mp_driven_psp" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_driven_psp".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "mp_charge_accumulation" | "neuron_mp_charge_accumulation" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_charge_accumulation".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "neuron_excitability" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "neuron_excitability".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "init_lifespan" | "neuron_init_lifespan" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "init_lifespan".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "lifespan_growth_rate" | "neuron_lifespan_growth_rate" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "lifespan_growth_rate".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "longterm_mem_threshold" | "neuron_longterm_mem_threshold" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "longterm_mem_threshold".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
+                            // Expect either array [x, y, z] or dict {x, y, z}
+                            if let Some(arr) = value.as_array() {
+                                if arr.len() == 3 {
+                                    area.properties.insert(
+                                        "firing_threshold_increment".to_string(),
+                                        serde_json::json!(arr),
+                                    );
+                                }
+                            } else if let Some(obj) = value.as_object() {
+                                // Convert {x, y, z} to [x, y, z]
+                                let x = obj.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                let y = obj.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                let z = obj.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                                area.properties.insert(
+                                    "firing_threshold_increment".to_string(),
+                                    serde_json::json!([x, y, z]),
+                                );
+                            }
+                        }
+                        "burst_engine_active" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "burst_engine_active".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
         }
 
         // Update ConnectomeManager metadata for consistency

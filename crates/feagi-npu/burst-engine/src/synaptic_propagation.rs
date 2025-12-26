@@ -43,9 +43,53 @@ use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use rayon::prelude::*;
+use std::sync::OnceLock;
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType as FeagiSynapseType};
+use tracing::debug;
+
+/// Runtime-gated tracing config for synaptic propagation.
+/// Enable with:
+/// - FEAGI_NPU_TRACE_SYNAPSE=1
+/// Optional filters:
+/// - FEAGI_NPU_TRACE_SRC=<u32 neuron_id>
+/// - FEAGI_NPU_TRACE_DST=<u32 neuron_id>
+struct SynapseTraceCfg {
+    enabled: bool,
+    src_filter: Option<u32>,
+    dst_filter: Option<u32>,
+}
+
+fn synapse_trace_cfg() -> &'static SynapseTraceCfg {
+    static CFG: OnceLock<SynapseTraceCfg> = OnceLock::new();
+    CFG.get_or_init(|| {
+        let enabled = std::env::var("FEAGI_NPU_TRACE_SYNAPSE")
+            .ok()
+            .as_deref()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let src_filter = std::env::var("FEAGI_NPU_TRACE_SRC").ok().and_then(|v| v.parse().ok());
+        let dst_filter = std::env::var("FEAGI_NPU_TRACE_DST").ok().and_then(|v| v.parse().ok());
+
+        SynapseTraceCfg {
+            enabled,
+            src_filter,
+            dst_filter,
+        }
+    })
+}
+
+fn power_cortical_id() -> &'static CorticalID {
+    static POWER: OnceLock<CorticalID> = OnceLock::new();
+    POWER.get_or_init(|| {
+        // "_power" is special-cased and stored as base64 in the genome parser.
+        // See feagi-evolutionary parser docs; this value is stable.
+        CorticalID::try_from_base_64("X19fcG93ZXI=")
+            .expect("Power cortical ID base64 must be valid")
+    })
+}
 
 /// Synapse lookup index: maps source neuron → list of synapse indices
 pub type SynapseIndex = AHashMap<NeuronId, Vec<usize>>;
@@ -191,8 +235,26 @@ impl SynapticPropagationEngine {
                 // Get source cortical area
                 let source_area = self.neuron_to_area.get(&source_neuron)?;
 
+                // Logging: exclude power sources to avoid noise (cortical_idx=1 maps to _power).
+                let trace_cfg = synapse_trace_cfg();
+                let allow_trace = trace_cfg.enabled
+                    && *source_area != *power_cortical_id()
+                    && trace_cfg
+                        .src_filter
+                        .map(|id| id == source_neuron.0)
+                        .unwrap_or(true)
+                    && trace_cfg
+                        .dst_filter
+                        .map(|id| id == target_neuron.0)
+                        .unwrap_or(true);
+
                 // Calculate base PSP: Use source neuron's MP if mp_driven_psp is enabled, else use static synapse PSP
-                let base_psp = if self.area_mp_driven_psp.get(source_area).copied().unwrap_or(false) {
+                let mp_driven = self
+                    .area_mp_driven_psp
+                    .get(source_area)
+                    .copied()
+                    .unwrap_or(false);
+                let base_psp = if mp_driven {
                     // mp_driven_psp enabled: use source neuron's current membrane potential
                     neuron_membrane_potentials.get(&source_neuron).copied().unwrap_or(0)
                 } else {
@@ -211,7 +273,12 @@ impl SynapticPropagationEngine {
 
                 // Apply PSP uniformity: divide CONTRIBUTION (not PSP) if uniformity is false
                 // This preserves precision by doing float division instead of u8 integer division
-                let final_contribution = if self.area_psp_uniform_distribution.get(source_area).copied().unwrap_or(false) {
+                let uniform = self
+                    .area_psp_uniform_distribution
+                    .get(source_area)
+                    .copied()
+                    .unwrap_or(false);
+                let final_contribution = if uniform {
                     // PSP uniformity = true: Each synapse contributes full amount
                     base_contribution
                 } else {
@@ -225,6 +292,27 @@ impl SynapticPropagationEngine {
                         base_contribution
                     }
                 };
+
+                if allow_trace {
+                    let outgoing = source_synapse_counts.get(&source_neuron).copied().unwrap_or(1);
+                    debug!(
+                        target: "feagi-npu-trace",
+                        "[SYNAPSE] syn_idx={} src={} dst={} src_area={:?} dst_area={:?} type={:?} weight={} psp_used={} mp_driven={} uniform={} outgoing={} base_contrib={:.3} final_contrib={:.3}",
+                        syn_idx,
+                        source_neuron.0,
+                        target_neuron.0,
+                        source_area,
+                        cortical_area,
+                        synapse_type,
+                        weight,
+                        base_psp,
+                        mp_driven,
+                        uniform,
+                        outgoing,
+                        base_contribution,
+                        final_contribution
+                    );
+                }
 
                 Some((target_neuron, cortical_area, SynapticContribution(final_contribution)))
             })

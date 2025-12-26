@@ -23,9 +23,39 @@
 use crate::fire_structures::{FireQueue, FiringNeuron};
 use feagi_npu_neural::types::*;
 use feagi_npu_runtime::NeuronStorage;
+use std::sync::OnceLock;
+use tracing::debug;
 
 // Use platform-agnostic core algorithms (Phase 1 - NO DUPLICATION)
 use feagi_npu_neural::{apply_leak, excitability_random};
+
+/// Runtime-gated tracing config for neural dynamics.
+/// Enable with:
+/// - FEAGI_NPU_TRACE_DYNAMICS=1
+/// Optional filters:
+/// - FEAGI_NPU_TRACE_NEURON=<u32 neuron_id> (single neuron)
+struct DynamicsTraceCfg {
+    enabled: bool,
+    neuron_filter: Option<u32>,
+}
+
+fn dynamics_trace_cfg() -> &'static DynamicsTraceCfg {
+    static CFG: OnceLock<DynamicsTraceCfg> = OnceLock::new();
+    CFG.get_or_init(|| {
+        let enabled = std::env::var("FEAGI_NPU_TRACE_DYNAMICS")
+            .ok()
+            .as_deref()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let neuron_filter = std::env::var("FEAGI_NPU_TRACE_NEURON").ok().and_then(|v| v.parse().ok());
+
+        DynamicsTraceCfg {
+            enabled,
+            neuron_filter,
+        }
+    })
+}
 
 /// Result of neural dynamics processing
 #[derive(Debug, Clone)]
@@ -127,6 +157,19 @@ fn process_single_neuron<T: NeuralValue>(
         return None; // Neuron doesn't exist
     }
 
+    // Trace config (exclude power to avoid noise)
+    let trace_cfg = dynamics_trace_cfg();
+    let is_power = neuron_array.cortical_areas()[idx] == 1;
+    let allow_trace = trace_cfg.enabled
+        && !is_power
+        && trace_cfg
+            .neuron_filter
+            .map(|id| id == neuron_id.0)
+            .unwrap_or(true);
+
+    let cortical_idx = neuron_array.cortical_areas()[idx];
+    let mp_acc = neuron_array.mp_charge_accumulation()[idx];
+
     // CRITICAL DEBUG: Log entry for neuron 16438 (disabled to reduce spam)
     // if neuron_id.0 == 16438 {
     //     println!("[RUST-16438] Burst {}: START - countdown={}, count={}/{}, potential={:.6}, threshold={:.6}, candidate={:.6}",
@@ -143,7 +186,27 @@ fn process_single_neuron<T: NeuralValue>(
     // CRITICAL: Decrement countdown, but BLOCK THIS ENTIRE BURST
     // Semantics: refractory_period=1 → fire, block 1 burst, fire
     // When countdown=1, this burst is blocked, then countdown becomes 0 for next burst
-    if neuron_array.refractory_countdowns_mut()[idx] > 0 {
+    // IMPORTANT: avoid mixing *_mut() borrows with immutable borrows in logging.
+    let refractory_countdown = neuron_array.refractory_countdowns()[idx];
+    if refractory_countdown > 0 {
+        if allow_trace {
+            let mp = neuron_array.membrane_potentials()[idx].to_f32();
+            let thr = neuron_array.thresholds()[idx].to_f32();
+            let leak = neuron_array.leak_coefficients()[idx];
+            debug!(
+                target: "feagi-npu-trace",
+                "[DYN] burst={} neuron={} area={} mp_acc={} REFRACTORY countdown={} candidate={:.6} mp={:.6} thr={:.6} leak={:.6}",
+                burst_count,
+                neuron_id.0,
+                cortical_idx,
+                mp_acc,
+                refractory_countdown,
+                candidate_potential.to_f32(),
+                mp,
+                thr,
+                leak
+            );
+        }
         let _old_countdown = neuron_array.refractory_countdowns_mut()[idx];
 
         // Decrement countdown for next burst
@@ -180,6 +243,22 @@ fn process_single_neuron<T: NeuralValue>(
     // 3. Check threshold (matches Python: "Check firing conditions BEFORE decay")
     let threshold = neuron_array.thresholds()[idx];
     if current_potential.ge(threshold) {
+        if allow_trace {
+            debug!(
+                target: "feagi-npu-trace",
+                "[DYN] burst={} neuron={} area={} mp_acc={} CROSS mp_old={:.6} cand={:.6} mp_new={:.6} thr={:.6} leak={:.6} excit={:.6}",
+                burst_count,
+                neuron_id.0,
+                cortical_idx,
+                mp_acc,
+                old_potential.to_f32(),
+                candidate_potential.to_f32(),
+                current_potential.to_f32(),
+                threshold.to_f32(),
+                neuron_array.leak_coefficients()[idx],
+                neuron_array.excitabilities()[idx]
+            );
+        }
         // 5. Check consecutive fire limit (matches Python SIMD implementation)
         // Skip constraint if consecutive_fire_limit is 0 (unlimited firing)
         let consecutive_fire_limit = neuron_array.consecutive_fire_limits()[idx];
@@ -222,6 +301,22 @@ fn process_single_neuron<T: NeuralValue>(
         };
 
         if should_fire {
+            if allow_trace {
+                debug!(
+                    target: "feagi-npu-trace",
+                    "[DYN] burst={} neuron={} area={} mp_acc={} FIRED mp_new={:.6} thr={:.6} refrac_period={} cfc={}/{} snooze={}",
+                    burst_count,
+                    neuron_id.0,
+                    cortical_idx,
+                    mp_acc,
+                    current_potential.to_f32(),
+                    threshold.to_f32(),
+                    neuron_array.refractory_periods()[idx],
+                    neuron_array.consecutive_fire_counts()[idx],
+                    neuron_array.consecutive_fire_limits()[idx],
+                    neuron_array.snooze_periods()[idx]
+                );
+            }
             // Reset membrane potential
             neuron_array.membrane_potentials_mut()[idx] = T::zero();
 
@@ -294,6 +389,23 @@ fn process_single_neuron<T: NeuralValue>(
         &mut neuron_array.membrane_potentials_mut()[idx],
         leak_coefficient,
     );
+
+    if allow_trace {
+        debug!(
+            target: "feagi-npu-trace",
+            "[DYN] burst={} neuron={} area={} mp_acc={} NOFIRE mp_old={:.6} cand={:.6} mp_preleak={:.6} mp_postleak={:.6} thr={:.6} leak={:.6}",
+            burst_count,
+            neuron_id.0,
+            cortical_idx,
+            mp_acc,
+            old_potential.to_f32(),
+            candidate_potential.to_f32(),
+            current_potential.to_f32(),
+            neuron_array.membrane_potentials()[idx].to_f32(),
+            threshold.to_f32(),
+            leak_coefficient
+        );
+    }
 
     None
 }
