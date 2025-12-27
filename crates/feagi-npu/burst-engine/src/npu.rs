@@ -1129,8 +1129,20 @@ impl<
         // Use CURRENT_fire_queue (which contains fired neurons from the PREVIOUS burst after swap)
         // Note: At burst N start, current_fire_queue contains burst N-1's results (set at end of burst N-1)
         let previous_fq = fire_structures.current_fire_queue.clone();
-        let pending_mutex =
-            std::sync::Mutex::new(fire_structures.pending_sensory_injections.clone());
+        // PERFORMANCE + REAL-TIME:
+        // Avoid cloning `pending_sensory_injections` (O(n) copy) on every burst.
+        // Under dense sensory injection (e.g., diffThreshold=0), this clone can dominate burst time
+        // and create visible drift that looks like buffering.
+        //
+        // Instead, move the staged injections out (preserving capacity) and let Phase 1 drain it.
+        // Any injections arriving while the burst loop holds `fire_structures` will already block
+        // on the lock; after Phase 1 completes we restore the vector back.
+        let mut pending_sensory = Vec::new();
+        std::mem::swap(
+            &mut pending_sensory,
+            &mut fire_structures.pending_sensory_injections,
+        );
+        let pending_mutex = std::sync::Mutex::new(pending_sensory);
         
         let injection_result = phase1_injection_with_synapses(
             &mut fire_structures.fire_candidate_list,
@@ -1433,6 +1445,94 @@ impl<
         }
 
         found_count
+    }
+
+    /// Inject sensory neurons using separate XYZP arrays (optimized; avoids building a tuple Vec upstream).
+    ///
+    /// This is a performance-focused variant of `inject_sensory_xyzp_by_id` intended for hot paths
+    /// (e.g., high-rate vision) where upstream code already has SoA buffers (x/y/z/p).
+    ///
+    /// Semantics are identical to `inject_sensory_xyzp_by_id`:
+    /// - Batch coordinate lookup
+    /// - Filter missing neurons
+    /// - Inject found neurons with provided potentials
+    pub fn inject_sensory_xyzp_arrays_by_id(
+        &mut self,
+        cortical_id: &CorticalID,
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+        potentials: &[f32],
+    ) -> usize {
+        use tracing::error;
+
+        if x_coords.len() != y_coords.len()
+            || x_coords.len() != z_coords.len()
+            || x_coords.len() != potentials.len()
+        {
+            error!(
+                "[NPU] Invalid XYZP arrays: x={}, y={}, z={}, p={}",
+                x_coords.len(),
+                y_coords.len(),
+                z_coords.len(),
+                potentials.len()
+            );
+            return 0;
+        }
+
+        let cortical_id_str = cortical_id.to_string();
+        let cortical_id_base64 = cortical_id.as_base_64();
+
+        let cortical_area = match self.get_cortical_area_id(&cortical_id_str) {
+            Some(id) => id,
+            None => match self.get_cortical_area_id(&cortical_id_base64) {
+                Some(id) => id,
+                None => {
+                    error!(
+                        "[NPU] Unknown cortical area: '{}' (base64: {})",
+                        cortical_id_str, cortical_id_base64
+                    );
+                    return 0;
+                }
+            },
+        };
+
+        // Build coords once (x/y/z) for batch lookup.
+        let mut coords: Vec<(u32, u32, u32)> = Vec::with_capacity(x_coords.len());
+        for i in 0..x_coords.len() {
+            coords.push((x_coords[i], y_coords[i], z_coords[i]));
+        }
+
+        let neuron_ids = self
+            .neuron_storage
+            .read()
+            .unwrap()
+            .batch_coordinate_lookup(cortical_area, &coords);
+
+        let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
+        for (i, opt_idx) in neuron_ids.iter().enumerate() {
+            if let Some(idx) = opt_idx {
+                neuron_potential_pairs.push((NeuronId(*idx as u32), potentials[i]));
+            }
+        }
+        let found_count = neuron_potential_pairs.len();
+
+        if !neuron_potential_pairs.is_empty() {
+            self.inject_sensory_with_potentials(&neuron_potential_pairs);
+        }
+
+        found_count
+    }
+
+    /// Clear any staged (pending) sensory injections.
+    ///
+    /// @architecture:acceptable - real-time semantics
+    /// Under high-rate sensory streams (e.g., vision), multiple incoming messages can arrive
+    /// between burst boundaries. Keeping all of them causes drift that looks like buffering.
+    /// This clears the staged queue so only the newest sensory message is applied on the next burst.
+    pub fn clear_pending_sensory_injections(&mut self) {
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures.pending_sensory_injections.clear();
     }
 
     /// Inject sensory neurons using cortical area name (backward compatibility)

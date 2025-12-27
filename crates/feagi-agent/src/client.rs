@@ -11,7 +11,7 @@ use feagi_io::AgentType;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, trace, warn};
 
 /// Main FEAGI Agent Client
 ///
@@ -541,7 +541,7 @@ impl AgentClient {
         }
 
         let socket = self.motor_socket.as_ref().ok_or_else(|| {
-            info!("[CLIENT] ❌ receive_motor_data() called but motor_socket is None!");
+            error!("[CLIENT] receive_motor_data() called but motor_socket is None");
             SdkError::Other("Motor socket not initialized (not a motor agent?)".to_string())
         })?;
 
@@ -549,16 +549,16 @@ impl AgentClient {
         // First frame is the topic (agent_id), second frame is the motor data
         match socket.recv_bytes(zmq::DONTWAIT) {
             Ok(topic) => {
-                info!(
-                    "[CLIENT] 📥 Received first frame: {} bytes: '{}'",
+                trace!(
+                    "[CLIENT] Received first frame: {} bytes: '{}'",
                     topic.len(),
                     String::from_utf8_lossy(&topic)
                 );
 
                 // Verify topic matches our agent_id (redundant due to SUB filter, but safe)
                 if topic != self.config.agent_id.as_bytes() {
-                    info!(
-                        "[CLIENT] ⚠️ Received motor data for different agent: expected '{}', got '{}'",
+                    warn!(
+                        "[CLIENT] Received motor data for different agent: expected '{}', got '{}'",
                         self.config.agent_id,
                         String::from_utf8_lossy(&topic)
                     );
@@ -567,25 +567,17 @@ impl AgentClient {
 
                 // Check if more frames are available (should be for multipart)
                 let data = if socket.get_rcvmore().map_err(SdkError::Zmq)? {
-                    info!(
-                        "[CLIENT] 📥 More frames available, receiving second frame (motor data)..."
-                    );
+                    trace!("[CLIENT] Receiving second frame (motor data)");
                     // Receive second frame (actual motor data)
                     let data = socket.recv_bytes(0).map_err(|e| {
-                        info!("[CLIENT] ❌ Failed to receive second frame: {}", e);
+                        error!("[CLIENT] Failed to receive second frame: {}", e);
                         SdkError::Zmq(e)
                     })?;
-                    info!(
-                        "[CLIENT] 📥 Received motor data frame: {} bytes",
-                        data.len()
-                    );
+                    trace!("[CLIENT] Received motor data frame: {} bytes", data.len());
                     data
                 } else {
-                    info!("[CLIENT] ⚠️ NO MORE FRAMES! Old FEAGI (single-part message)");
-                    info!(
-                        "[CLIENT] 📥 Using first frame as motor data ({} bytes)",
-                        topic.len()
-                    );
+                    debug!("[CLIENT] No more frames; using single-part motor message");
+                    trace!("[CLIENT] Using first frame as motor data ({} bytes)", topic.len());
                     // Fallback: treat first frame as data (backward compatibility with old FEAGI)
                     topic
                 };

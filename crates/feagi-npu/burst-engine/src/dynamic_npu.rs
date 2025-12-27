@@ -275,6 +275,24 @@ where
         dispatch_mut!(self, inject_sensory_xyzp_by_id(cortical_id, xyzp_data))
     }
 
+    pub fn inject_sensory_xyzp_arrays_by_id(
+        &mut self,
+        cortical_id: &feagi_structures::genomic::cortical_area::CorticalID,
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+        potentials: &[f32],
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            inject_sensory_xyzp_arrays_by_id(cortical_id, x_coords, y_coords, z_coords, potentials)
+        )
+    }
+
+    pub fn clear_pending_sensory_injections(&mut self) {
+        dispatch_mut!(self, clear_pending_sensory_injections())
+    }
+
     pub fn set_power_amount(&mut self, amount: f32) {
         dispatch_mut!(self, set_power_amount(amount))
     }
