@@ -527,7 +527,10 @@ impl<
     /// * `height` - Y dimension
     /// * `depth` - Z dimension
     /// * `neurons_per_voxel` - Neurons per spatial position
-    /// * `default_threshold` - Default firing threshold (minimum MP to fire)
+    /// * `default_threshold` - Base firing threshold at (0,0,0) position
+    /// * `threshold_increment_x` - Threshold increment per X position
+    /// * `threshold_increment_y` - Threshold increment per Y position
+    /// * `threshold_increment_z` - Threshold increment per Z position
     /// * `default_threshold_limit` - Default firing threshold limit (maximum MP to fire, 0 = no limit)
     /// * `default_leak_coefficient` - Default leak rate
     /// * `default_resting_potential` - Default resting potential
@@ -550,6 +553,9 @@ impl<
         depth: u32,
         neurons_per_voxel: u32,
         default_threshold: f32,
+        threshold_increment_x: f32,
+        threshold_increment_y: f32,
+        threshold_increment_z: f32,
         default_threshold_limit: f32,
         default_leak_coefficient: f32,
         default_resting_potential: f32,
@@ -577,10 +583,44 @@ impl<
         }
 
         let alloc_start = Instant::now();
+        // ✅ SPATIAL GRADIENT: Calculate thresholds based on (x,y,z) position
+        // Base threshold at (0,0,0), incremented by position dot product with increment vector
+        // threshold(x,y,z) = base + x*increment_x + y*increment_y + z*increment_z
+        let mut thresholds = Vec::with_capacity(total_neurons);
+        let mut threshold_limits = Vec::with_capacity(total_neurons);
+        
+        // Pre-compute if we have spatial gradients
+        let has_x_gradient = threshold_increment_x.abs() > f32::EPSILON;
+        let has_y_gradient = threshold_increment_y.abs() > f32::EPSILON;
+        let has_z_gradient = threshold_increment_z.abs() > f32::EPSILON;
+        let has_any_gradient = has_x_gradient || has_y_gradient || has_z_gradient;
+        
+        if has_any_gradient {
+            // Calculate position-based thresholds (spatial gradient)
+            for x in 0..width {
+                for y in 0..height {
+                    for z in 0..depth {
+                        // Calculate threshold for this voxel position
+                        let threshold_at_pos = default_threshold
+                            + (x as f32 * threshold_increment_x)
+                            + (y as f32 * threshold_increment_y)
+                            + (z as f32 * threshold_increment_z);
+                        
+                        // Apply to all neurons in this voxel
+                        for _ in 0..neurons_per_voxel {
+                            thresholds.push(T::from_f32(threshold_at_pos));
+                            threshold_limits.push(T::from_f32(default_threshold_limit));
+                        }
+                    }
+                }
+            }
+        } else {
+            // Uniform thresholds (no spatial gradient) - faster path
+            thresholds.resize(total_neurons, T::from_f32(default_threshold));
+            threshold_limits.resize(total_neurons, T::from_f32(default_threshold_limit));
+        }
+        
         // ✅ SIMD-OPTIMIZED: Fill uniform values with bulk operations (LLVM auto-vectorizes!)
-        // Convert f32 defaults to T
-        let thresholds = vec![T::from_f32(default_threshold); total_neurons];
-        let threshold_limits = vec![T::from_f32(default_threshold_limit); total_neurons];
         let leak_coefficients = vec![default_leak_coefficient; total_neurons];
         let resting_potentials = vec![T::from_f32(default_resting_potential); total_neurons];
         let neuron_types = vec![default_neuron_type; total_neurons];
@@ -1857,6 +1897,65 @@ impl<
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
                 neuron_storage_write.threshold_limits_mut()[idx] = T::from_f32(limit);
+                updated_count += 1;
+            }
+        }
+
+        updated_count
+    }
+
+    /// Update thresholds with spatial gradient for all neurons in a cortical area.
+    ///
+    /// Applies position-based threshold calculation WITHOUT rebuilding neurons:
+    /// `threshold = base + (x * inc_x) + (y * inc_y) + (z * inc_z)`
+    ///
+    /// This allows dynamic adjustment of spatial gradients without neuron recreation.
+    /// Uses each neuron's stored (x, y, z) position for calculation.
+    ///
+    /// # Arguments
+    /// * `cortical_area` - Cortical area index
+    /// * `base_threshold` - Base firing threshold
+    /// * `increment_x/y/z` - Spatial gradient increments
+    ///
+    /// # Returns
+    /// Number of neurons updated
+    pub fn update_cortical_area_threshold_with_gradient(
+        &mut self,
+        cortical_area: u32,
+        base_threshold: f32,
+        increment_x: f32,
+        increment_y: f32,
+        increment_z: f32,
+    ) -> usize {
+        let mut updated_count = 0;
+
+        // Fast path: if all increments are 0, just set uniform threshold
+        if increment_x == 0.0 && increment_y == 0.0 && increment_z == 0.0 {
+            return self.update_cortical_area_threshold(cortical_area, base_threshold);
+        }
+
+        // Acquire write lock once for all updates
+        let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+
+        for idx in 0..neuron_storage_write.count() {
+            if neuron_storage_write.valid_mask()[idx]
+                && neuron_storage_write.cortical_areas()[idx] == cortical_area
+            {
+                // Read neuron's actual stored position (interleaved: x,y,z,x,y,z,...)
+                let coord_idx = idx * 3;
+                let coords = neuron_storage_write.coordinates();
+                let x = coords[coord_idx];
+                let y = coords[coord_idx + 1];
+                let z = coords[coord_idx + 2];
+
+                // Calculate position-based threshold
+                let threshold = base_threshold
+                    + (x as f32 * increment_x)
+                    + (y as f32 * increment_y)
+                    + (z as f32 * increment_z);
+
+                // Update threshold (coordinates borrow is dropped here)
+                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(threshold);
                 updated_count += 1;
             }
         }

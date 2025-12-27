@@ -292,6 +292,9 @@ where
         depth: u32,
         neurons_per_voxel: u32,
         default_threshold: f32,
+        threshold_increment_x: f32,
+        threshold_increment_y: f32,
+        threshold_increment_z: f32,
         default_threshold_limit: f32,
         default_leak_coefficient: f32,
         default_resting_potential: f32,
@@ -310,6 +313,9 @@ where
                 depth,
                 neurons_per_voxel,
                 default_threshold,
+                threshold_increment_x,
+                threshold_increment_y,
+                threshold_increment_z,
                 default_threshold_limit,
                 default_leak_coefficient,
                 default_resting_potential,
@@ -327,6 +333,9 @@ where
                 depth,
                 neurons_per_voxel,
                 default_threshold,
+                threshold_increment_x,
+                threshold_increment_y,
+                threshold_increment_z,
                 default_threshold_limit,
                 default_leak_coefficient,
                 default_resting_potential,
@@ -513,6 +522,26 @@ where
         dispatch_mut!(
             self,
             update_cortical_area_threshold_limit(cortical_area, limit)
+        )
+    }
+
+    pub fn update_cortical_area_threshold_with_gradient(
+        &mut self,
+        cortical_area: u32,
+        base_threshold: f32,
+        increment_x: f32,
+        increment_y: f32,
+        increment_z: f32,
+    ) -> usize {
+        dispatch_mut!(
+            self,
+            update_cortical_area_threshold_with_gradient(
+                cortical_area,
+                base_threshold,
+                increment_x,
+                increment_y,
+                increment_z
+            )
         )
     }
 

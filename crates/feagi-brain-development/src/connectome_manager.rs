@@ -980,7 +980,37 @@ impl ConnectomeManager {
         use crate::models::CorticalAreaExt;
         let per_voxel_cnt = area.neurons_per_voxel();
         let firing_threshold = area.firing_threshold();
+        let firing_threshold_increment_x = area.firing_threshold_increment_x();
+        let firing_threshold_increment_y = area.firing_threshold_increment_y();
+        let firing_threshold_increment_z = area.firing_threshold_increment_z();
         let firing_threshold_limit = area.firing_threshold_limit();
+        
+        // DEBUG: Log the increment values
+        if firing_threshold_increment_x != 0.0 || firing_threshold_increment_y != 0.0 || firing_threshold_increment_z != 0.0 {
+            info!(
+                target: "feagi-bdu",
+                "🔍 [DEBUG] Area {}: firing_threshold_increment = [{}, {}, {}]",
+                cortical_id.as_base_64(),
+                firing_threshold_increment_x,
+                firing_threshold_increment_y,
+                firing_threshold_increment_z
+            );
+        } else {
+            // Check if properties exist but are just 0
+            if area.properties.contains_key("firing_threshold_increment_x") ||
+               area.properties.contains_key("firing_threshold_increment_y") ||
+               area.properties.contains_key("firing_threshold_increment_z") {
+                info!(
+                    target: "feagi-bdu",
+                    "🔍 [DEBUG] Area {}: INCREMENT PROPERTIES FOUND: x={:?}, y={:?}, z={:?}",
+                    cortical_id.as_base_64(),
+                    area.properties.get("firing_threshold_increment_x"),
+                    area.properties.get("firing_threshold_increment_y"),
+                    area.properties.get("firing_threshold_increment_z")
+                );
+            }
+        }
+        
         let leak_coefficient = area.leak_coefficient();
         let excitability = area.neuron_excitability();
         let refractory_period = area.refractory_period();
@@ -1019,6 +1049,9 @@ impl ConnectomeManager {
                 area.dimensions.depth,
                 per_voxel_cnt,
                 firing_threshold,
+                firing_threshold_increment_x,
+                firing_threshold_increment_y,
+                firing_threshold_increment_z,
                 firing_threshold_limit,
                 leak_coefficient,
                 0.0, // resting_potential (LIF default)

@@ -405,21 +405,46 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 .properties
                 .get("dev_count")
                 .and_then(|v| v.as_u64().map(|n| n as usize)),
-            cortical_dimensions_per_device: area
-                .properties
-                .get("cortical_dimensions_per_device")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| {
-                    if arr.len() == 3 {
-                        Some((
-                            arr[0].as_u64()? as usize,
-                            arr[1].as_u64()? as usize,
-                            arr[2].as_u64()? as usize,
-                        ))
+            cortical_dimensions_per_device: {
+                // Try to get from properties first
+                let from_properties = area
+                    .properties
+                    .get("cortical_dimensions_per_device")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| {
+                        if arr.len() == 3 {
+                            Some((
+                                arr[0].as_u64()? as usize,
+                                arr[1].as_u64()? as usize,
+                                arr[2].as_u64()? as usize,
+                            ))
+                        } else {
+                            None
+                        }
+                    });
+                
+                // If not in properties, compute from dimensions and dev_count for IPU/OPU areas
+                if from_properties.is_none() {
+                    if let Some(dev_count) = area
+                        .properties
+                        .get("dev_count")
+                        .and_then(|v| v.as_u64().map(|n| n as usize))
+                    {
+                        if dev_count > 0 {
+                            let total_width = area.dimensions.width as usize;
+                            let height = area.dimensions.height as usize;
+                            let depth = area.dimensions.depth as usize;
+                            Some((total_width / dev_count, height, depth))
+                        } else {
+                            from_properties
+                        }
                     } else {
-                        None
+                        from_properties
                     }
-                }),
+                } else {
+                    from_properties
+                }
+            },
         })
     }
 

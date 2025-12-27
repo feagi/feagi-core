@@ -655,15 +655,37 @@ impl GenomeServiceImpl {
 
         // Queue parameter updates for burst loop to consume (non-blocking!)
         if let Some(queue) = &self.parameter_queue {
+            // Get base threshold for spatial gradient updates
+            let base_threshold = {
+                let manager = self.connectome.read();
+                if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
+                    Some(area.firing_threshold())
+                } else {
+                    None
+                }
+            };
+
             for (param_name, value) in &changes {
                 // Only queue parameters that affect NPU neurons
                 let classifier = CorticalChangeClassifier::parameter_changes();
                 if classifier.contains(param_name.as_str()) {
+                    // Include base threshold for spatial gradient updates
+                    let bt = if param_name == "neuron_fire_threshold_increment"
+                        || param_name == "firing_threshold_increment"
+                    {
+                        base_threshold
+                    } else {
+                        None
+                    };
+
                     queue.push(feagi_npu_burst_engine::ParameterUpdate {
                         cortical_idx,
                         cortical_id: cortical_id.to_string(),
                         parameter_name: param_name.clone(),
                         value: value.clone(),
+                        dimensions: None, // Not needed anymore - neurons have stored positions
+                        neurons_per_voxel: None,
+                        base_threshold: bt,
                     });
                     trace!(
                         target: "feagi-services",
@@ -701,6 +723,30 @@ impl GenomeServiceImpl {
                             if let Some(v) = value.as_f64() {
                                 area.properties.insert(
                                     "firing_threshold_limit".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "firing_threshold_increment_x" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold_increment_x".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "firing_threshold_increment_y" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold_increment_y".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "firing_threshold_increment_z" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold_increment_z".to_string(),
                                     serde_json::json!(v),
                                 );
                             }
@@ -1079,19 +1125,49 @@ impl GenomeServiceImpl {
                         // Expect either array [x, y, z] or dict {x, y, z}
                         if let Some(arr) = value.as_array() {
                             if arr.len() == 3 {
+                                let x = arr[0].as_f64().unwrap_or(0.0);
+                                let y = arr[1].as_f64().unwrap_or(0.0);
+                                let z = arr[2].as_f64().unwrap_or(0.0);
+                                
+                                // Store both array format and individual x/y/z properties
                                 area.add_property_mut(
                                     "firing_threshold_increment".to_string(),
                                     serde_json::json!(arr),
                                 );
+                                area.add_property_mut(
+                                    "firing_threshold_increment_x".to_string(),
+                                    serde_json::json!(x),
+                                );
+                                area.add_property_mut(
+                                    "firing_threshold_increment_y".to_string(),
+                                    serde_json::json!(y),
+                                );
+                                area.add_property_mut(
+                                    "firing_threshold_increment_z".to_string(),
+                                    serde_json::json!(z),
+                                );
                             }
                         } else if let Some(obj) = value.as_object() {
-                            // Convert {x, y, z} to [x, y, z]
+                            // Convert {x, y, z} to individual properties
                             let x = obj.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
                             let y = obj.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
                             let z = obj.get("z").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                            
                             area.add_property_mut(
                                 "firing_threshold_increment".to_string(),
                                 serde_json::json!([x, y, z]),
+                            );
+                            area.add_property_mut(
+                                "firing_threshold_increment_x".to_string(),
+                                serde_json::json!(x),
+                            );
+                            area.add_property_mut(
+                                "firing_threshold_increment_y".to_string(),
+                                serde_json::json!(y),
+                            );
+                            area.add_property_mut(
+                                "firing_threshold_increment_z".to_string(),
+                                serde_json::json!(z),
                             );
                         }
                     }
@@ -1368,6 +1444,67 @@ impl GenomeServiceImpl {
                 );
             }
 
+            // Update spatial gradient increment properties if changed
+            // These require rebuild because thresholds must be recalculated based on position
+            // Handle neuron_fire_threshold_increment as ARRAY [x, y, z] from BV
+            if let Some(value) = changes.get("neuron_fire_threshold_increment") {
+                if let Some(arr) = value.as_array() {
+                    // Parse array [x, y, z] into separate properties
+                    if arr.len() >= 3 {
+                        let x = arr[0].as_f64().unwrap_or(0.0) as f32;
+                        let y = arr[1].as_f64().unwrap_or(0.0) as f32;
+                        let z = arr[2].as_f64().unwrap_or(0.0) as f32;
+                        
+                        area.properties.insert(
+                            "firing_threshold_increment_x".to_string(),
+                            serde_json::json!(x),
+                        );
+                        area.properties.insert(
+                            "firing_threshold_increment_y".to_string(),
+                            serde_json::json!(y),
+                        );
+                        area.properties.insert(
+                            "firing_threshold_increment_z".to_string(),
+                            serde_json::json!(z),
+                        );
+                        
+                        info!(
+                            "[STRUCTURAL-REBUILD] Updated firing_threshold_increment to [{}, {}, {}] for area {}",
+                            x, y, z, cortical_id
+                        );
+                    }
+                }
+            }
+            
+            // Handle individual x/y/z properties if sent separately
+            for increment_param in [
+                "firing_threshold_increment_x",
+                "firing_threshold_increment_y",
+                "firing_threshold_increment_z",
+            ] {
+                if let Some(value) = changes.get(increment_param) {
+                    area.properties
+                        .insert(increment_param.to_string(), value.clone());
+                    info!(
+                        "[STRUCTURAL-REBUILD] Updated {} to {} for area {}",
+                        increment_param, value, cortical_id
+                    );
+                }
+            }
+
+            // Update leak_variability if changed (also requires rebuild)
+            for param in ["leak_variability", "neuron_leak_variability"] {
+                if let Some(value) = changes.get(param) {
+                    area.properties
+                        .insert("leak_variability".to_string(), value.clone());
+                    info!(
+                        "[STRUCTURAL-REBUILD] Updated leak_variability to {} for area {}",
+                        value, cortical_id
+                    );
+                    break;
+                }
+            }
+
             (
                 old_dims,
                 old_dens,
@@ -1430,6 +1567,53 @@ impl GenomeServiceImpl {
                         "cortical_dimensions_per_device".to_string(),
                         per_device_dims.clone(),
                     );
+                }
+
+                // ✅ Sync spatial gradient increment properties to ConnectomeManager
+                // This ensures BV reads back the updated values
+                // Handle neuron_fire_threshold_increment as ARRAY [x, y, z] from BV
+                if let Some(value) = changes.get("neuron_fire_threshold_increment") {
+                    if let Some(arr) = value.as_array() {
+                        if arr.len() >= 3 {
+                            let x = arr[0].as_f64().unwrap_or(0.0) as f32;
+                            let y = arr[1].as_f64().unwrap_or(0.0) as f32;
+                            let z = arr[2].as_f64().unwrap_or(0.0) as f32;
+                            
+                            area.properties.insert(
+                                "firing_threshold_increment_x".to_string(),
+                                serde_json::json!(x),
+                            );
+                            area.properties.insert(
+                                "firing_threshold_increment_y".to_string(),
+                                serde_json::json!(y),
+                            );
+                            area.properties.insert(
+                                "firing_threshold_increment_z".to_string(),
+                                serde_json::json!(z),
+                            );
+                        }
+                    }
+                }
+                
+                // Handle individual x/y/z properties if sent separately
+                for increment_param in [
+                    "firing_threshold_increment_x",
+                    "firing_threshold_increment_y",
+                    "firing_threshold_increment_z",
+                ] {
+                    if let Some(value) = changes.get(increment_param) {
+                        area.properties
+                            .insert(increment_param.to_string(), value.clone());
+                    }
+                }
+
+                // ✅ Sync leak_variability to ConnectomeManager
+                for param in ["leak_variability", "neuron_leak_variability"] {
+                    if let Some(value) = changes.get(param) {
+                        area.properties
+                            .insert("leak_variability".to_string(), value.clone());
+                        break;
+                    }
                 }
             }
         }

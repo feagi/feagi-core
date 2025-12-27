@@ -1003,13 +1003,57 @@ pub async fn post_clone(
     path = "/v1/cortical_area/multi/cortical_area",
     tag = "cortical_area"
 )]
-#[allow(unused_variables)] // In development
 pub async fn put_multi_cortical_area(
     State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, serde_json::Value>>,
+    Json(mut request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Update multiple cortical areas
-    Err(ApiError::internal("Not yet implemented"))
+    let genome_service = state.genome_service.as_ref();
+
+    // Extract cortical_id_list
+    let cortical_ids: Vec<String> = request
+        .get("cortical_id_list")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| ApiError::invalid_input("cortical_id_list required"))?
+        .iter()
+        .filter_map(|v| v.as_str().map(String::from))
+        .collect();
+
+    if cortical_ids.is_empty() {
+        return Err(ApiError::invalid_input("cortical_id_list cannot be empty"));
+    }
+
+    // Remove cortical_id_list from changes (it's not a property to update)
+    request.remove("cortical_id_list");
+
+    // Update each cortical area with the same properties
+    for cortical_id in &cortical_ids {
+        match genome_service
+            .update_cortical_area(cortical_id, request.clone())
+            .await
+        {
+            Ok(_) => {
+                tracing::info!("Updated cortical area: {}", cortical_id);
+            }
+            Err(e) => {
+                tracing::error!("Failed to update cortical area {}: {}", cortical_id, e);
+                return Err(ApiError::internal(format!(
+                    "Failed to update cortical area {}: {}",
+                    cortical_id, e
+                )));
+            }
+        }
+    }
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            format!("Updated {} cortical areas", cortical_ids.len()),
+        ),
+        (
+            "cortical_ids".to_string(),
+            cortical_ids.join(", "),
+        ),
+    ])))
 }
 
 /// Delete multiple cortical areas by their IDs. (Not yet implemented)

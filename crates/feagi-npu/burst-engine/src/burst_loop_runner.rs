@@ -816,6 +816,41 @@ fn burst_loop(
                                     0
                                 }
                             }
+                            // Spatial gradient threshold increments - uses stored neuron positions
+                            "neuron_fire_threshold_increment" | "firing_threshold_increment" => {
+                                // This is sent as array [x, y, z] from BV
+                                if let Some(arr) = update.value.as_array() {
+                                    if arr.len() == 3 {
+                                        if let (Some(inc_x), Some(inc_y), Some(inc_z)) = (
+                                            arr[0].as_f64(),
+                                            arr[1].as_f64(),
+                                            arr[2].as_f64(),
+                                        ) {
+                                            // Get base threshold from update metadata
+                                            if let Some(base_threshold) = update.base_threshold {
+                                                npu_lock.update_cortical_area_threshold_with_gradient(
+                                                    update.cortical_idx,
+                                                    base_threshold,
+                                                    inc_x as f32,
+                                                    inc_y as f32,
+                                                    inc_z as f32,
+                                                )
+                                            } else {
+                                                warn!(
+                                                    "[PARAM-QUEUE] Spatial gradient update missing base_threshold - skipping"
+                                                );
+                                                0
+                                            }
+                                        } else {
+                                            0
+                                        }
+                                    } else {
+                                        0
+                                    }
+                                } else {
+                                    0
+                                }
+                            }
                             // IMPORTANT: firing_threshold_limit is NOT the firing threshold.
                             // Previously this was (incorrectly) routed into update_cortical_area_threshold(),
                             // which could set threshold=0 and make downstream neurons fire trivially.
