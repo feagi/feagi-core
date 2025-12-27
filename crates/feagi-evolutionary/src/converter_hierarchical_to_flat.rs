@@ -197,9 +197,27 @@ fn convert_area_to_flat(
         flat_blueprint.insert(format!("{}-cx-__name-t", prefix), json!(area.name));
     }
 
+    // CRITICAL: Derive cortical_group from cortical_type if not in properties
+    // This ensures the saved genome correctly reflects the area's type classification.
+    // The cortical_type (BrainInput, BrainOutput, etc.) is the source of truth,
+    // and cortical_group is the flat format representation (_group-t: "IPU", "OPU", etc.)
+    // Without this, areas default to "CUSTOM" regardless of their actual type.
+    let mut properties_with_group = area.properties.clone();
+    if !properties_with_group.contains_key("cortical_group") {
+        use feagi_structures::genomic::cortical_area::CorticalAreaType;
+        let cortical_group = match area.cortical_type {
+            CorticalAreaType::BrainInput(_) => "IPU",
+            CorticalAreaType::BrainOutput(_) => "OPU",
+            CorticalAreaType::Memory(_) => "MEMORY",
+            CorticalAreaType::Core(_) => "CORE",
+            CorticalAreaType::Custom(_) => "CUSTOM",
+        };
+        properties_with_group.insert("cortical_group".to_string(), json!(cortical_group));
+    }
+
     // Convert all properties from area.properties using reverse mapping
     // This includes cortical_group (_group-t) which should come from properties, not area_type
-    convert_properties_to_flat(&prefix, &area.properties, flat_blueprint)?;
+    convert_properties_to_flat(&prefix, &properties_with_group, flat_blueprint)?;
 
     Ok(())
 }
@@ -432,5 +450,86 @@ mod tests {
         assert!(flat["blueprint"].is_object());
         assert!(flat["neuron_morphologies"].is_object());
         assert!(flat["physiology"].is_object());
+    }
+
+    #[test]
+    fn test_cortical_group_derived_from_type() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            IOCorticalAreaDataFlag, io_cortical_area_data_type::FrameChangeHandling,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "Test cortical_group derivation".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        };
+
+        // Create test areas with different cortical types
+        let opu_id = CorticalID::try_from_base_64("b2ltZwkAAAA=").unwrap();
+        let opu_area = CorticalArea::new(
+            opu_id.clone(),
+            0,
+            "Test OPU".to_string(),
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
+            GenomeCoordinate3D { x: 0, y: 0, z: 0 },
+            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::CartesianPlane(
+                FrameChangeHandling::Absolute
+            )),
+        ).unwrap();
+
+        let ipu_id = CorticalID::try_from_base_64("aXN2aQkABAA=").unwrap();
+        let ipu_area = CorticalArea::new(
+            ipu_id.clone(),
+            1,
+            "Test IPU".to_string(),
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
+            GenomeCoordinate3D { x: 0, y: 0, z: 0 },
+            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
+                FrameChangeHandling::Absolute
+            )),
+        ).unwrap();
+
+        genome.cortical_areas.insert(opu_id.clone(), opu_area);
+        genome.cortical_areas.insert(ipu_id.clone(), ipu_area);
+
+        // Convert to flat format
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+
+        // Verify cortical_group is correctly derived from cortical_type
+        let blueprint = flat["blueprint"].as_object().unwrap();
+        
+        // Check OPU area
+        let opu_group_key = "_____10c-b2ltZwkAAAA=-cx-_group-t";
+        assert_eq!(
+            blueprint[opu_group_key],
+            "OPU",
+            "OPU area should have _group-t set to OPU"
+        );
+
+        // Check IPU area
+        let ipu_group_key = "_____10c-aXN2aQkABAA=-cx-_group-t";
+        assert_eq!(
+            blueprint[ipu_group_key],
+            "IPU",
+            "IPU area should have _group-t set to IPU"
+        );
     }
 }
