@@ -132,8 +132,8 @@ pub struct ConnectomeManager {
     initialized: bool,
 }
 
-/// Type alias for neuron batch data: (x, y, z, threshold, leak, resting, neuron_type, refractory_period, excitability, consecutive_fire_limit, snooze_period, mp_charge_accumulation)
-type NeuronData = (u32, u32, u32, f32, f32, f32, i32, u16, f32, u16, u16, bool);
+/// Type alias for neuron batch data: (x, y, z, threshold, threshold_limit, leak, resting, neuron_type, refractory_period, excitability, consecutive_fire_limit, snooze_period, mp_charge_accumulation)
+type NeuronData = (u32, u32, u32, f32, f32, f32, f32, i32, u16, f32, u16, u16, bool);
 
 impl ConnectomeManager {
     /// Create a new ConnectomeManager (private - use `instance()`)
@@ -980,6 +980,7 @@ impl ConnectomeManager {
         use crate::models::CorticalAreaExt;
         let per_voxel_cnt = area.neurons_per_voxel();
         let firing_threshold = area.firing_threshold();
+        let firing_threshold_limit = area.firing_threshold_limit();
         let leak_coefficient = area.leak_coefficient();
         let excitability = area.neuron_excitability();
         let refractory_period = area.refractory_period();
@@ -1018,6 +1019,7 @@ impl ConnectomeManager {
                 area.dimensions.depth,
                 per_voxel_cnt,
                 firing_threshold,
+                firing_threshold_limit,
                 leak_coefficient,
                 0.0, // resting_potential (LIF default)
                 0,   // neuron_type (excitatory)
@@ -1047,7 +1049,8 @@ impl ConnectomeManager {
     /// * `x` - X coordinate
     /// * `y` - Y coordinate
     /// * `z` - Z coordinate
-    /// * `firing_threshold` - Firing threshold
+    /// * `firing_threshold` - Firing threshold (minimum MP to fire)
+    /// * `firing_threshold_limit` - Firing threshold limit (maximum MP to fire, 0 = no limit)
     /// * `leak_coefficient` - Leak coefficient
     /// * `resting_potential` - Resting membrane potential
     /// * `neuron_type` - Neuron type (0=excitatory, 1=inhibitory)
@@ -1069,6 +1072,7 @@ impl ConnectomeManager {
         y: u32,
         z: u32,
         firing_threshold: f32,
+        firing_threshold_limit: f32,
         leak_coefficient: f32,
         resting_potential: f32,
         neuron_type: u8,
@@ -1105,6 +1109,7 @@ impl ConnectomeManager {
         let neuron_id = npu_lock
             .add_neuron(
                 firing_threshold,
+                firing_threshold_limit,
                 leak_coefficient,
                 resting_potential,
                 neuron_type as i32,
@@ -2371,6 +2376,7 @@ impl ConnectomeManager {
         let mut y_coords = Vec::with_capacity(count);
         let mut z_coords = Vec::with_capacity(count);
         let mut firing_thresholds = Vec::with_capacity(count);
+        let mut threshold_limits = Vec::with_capacity(count);
         let mut leak_coeffs = Vec::with_capacity(count);
         let mut resting_potentials = Vec::with_capacity(count);
         let mut neuron_types = Vec::with_capacity(count);
@@ -2386,6 +2392,7 @@ impl ConnectomeManager {
             y,
             z,
             threshold,
+            threshold_limit,
             leak,
             resting,
             ntype,
@@ -2400,6 +2407,7 @@ impl ConnectomeManager {
             y_coords.push(y);
             z_coords.push(z);
             firing_thresholds.push(threshold);
+            threshold_limits.push(threshold_limit);
             leak_coeffs.push(leak);
             resting_potentials.push(resting);
             neuron_types.push(ntype);
@@ -2415,13 +2423,15 @@ impl ConnectomeManager {
         let first_neuron_id = npu_lock.get_neuron_count() as u32;
 
         // Call NPU batch creation (SIMD-optimized)
-        // Signature: (thresholds, leak_coeffs, resting_pots, neuron_types, refract, excit, consec_limits, snooze, mp_accums, cortical_areas, x, y, z)
+        // Signature: (thresholds, threshold_limits, leak_coeffs, resting_pots, neuron_types, refract, excit, consec_limits, snooze, mp_accums, cortical_areas, x, y, z)
         // Convert f32 vectors to T
         // DynamicNPU will handle f32 inputs and convert internally based on its precision
         let firing_thresholds_t = firing_thresholds;
+        let threshold_limits_t = threshold_limits;
         let resting_potentials_t = resting_potentials;
         let (neurons_created, _indices) = npu_lock.add_neurons_batch(
             firing_thresholds_t,
+            threshold_limits_t,
             leak_coeffs,
             resting_potentials_t,
             neuron_types,

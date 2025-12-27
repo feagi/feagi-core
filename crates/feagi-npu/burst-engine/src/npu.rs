@@ -137,15 +137,6 @@ pub struct RustNPU<
 
     // Configuration (AtomicU32 for f32 as u32 bits)
     power_amount: std::sync::atomic::AtomicU32, // f32::to_bits()
-
-    /// Optional firing threshold cap per cortical_idx.
-    /// Semantics:
-    /// - cap == 0.0 : disabled (no cap)
-    /// - cap  > 0.0 : effective threshold = min(requested_threshold, cap)
-    ///
-    /// This is runtime state. Persistence remains in genome properties; this exists to ensure
-    /// the burst-time threshold update path can enforce the cap deterministically.
-    cortical_threshold_caps: std::sync::RwLock<AHashMap<u32, f32>>,
 }
 
 /// Fire-related structures grouped together for single mutex
@@ -215,7 +206,6 @@ impl<
             backend: std::sync::Mutex::new(backend),
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
-            cortical_threshold_caps: std::sync::RwLock::new(AHashMap::new()),
         })
     }
 }
@@ -339,6 +329,7 @@ impl<
     pub fn add_neuron(
         &mut self,
         threshold: T,          // Quantized threshold
+        threshold_limit: T,    // Quantized threshold limit (0 = no limit)
         leak_coefficient: f32, // Kept as f32 for precision
         resting_potential: T,  // Quantized resting potential
         neuron_type: i32,
@@ -358,6 +349,7 @@ impl<
             .unwrap()
             .add_neuron(
                 threshold,
+                threshold_limit,
                 leak_coefficient,
                 resting_potential,
                 neuron_type,
@@ -420,6 +412,7 @@ impl<
     pub fn add_neurons_batch(
         &mut self,
         thresholds: Vec<T>,          // Quantized thresholds
+        threshold_limits: Vec<T>,    // Quantized threshold limits (0 = no limit)
         leak_coefficients: Vec<f32>, // Kept as f32 for precision
         resting_potentials: Vec<T>,  // Quantized resting potentials
         neuron_types: Vec<i32>,
@@ -441,6 +434,7 @@ impl<
         // Call the TRUE batch method on neuron_storage (100-1000x faster!)
         match self.neuron_storage.write().unwrap().add_neurons_batch(
             &thresholds,
+            &threshold_limits,
             &leak_coefficients,
             &resting_potentials,
             &neuron_types,
@@ -533,7 +527,8 @@ impl<
     /// * `height` - Y dimension
     /// * `depth` - Z dimension
     /// * `neurons_per_voxel` - Neurons per spatial position
-    /// * `default_threshold` - Default firing threshold
+    /// * `default_threshold` - Default firing threshold (minimum MP to fire)
+    /// * `default_threshold_limit` - Default firing threshold limit (maximum MP to fire, 0 = no limit)
     /// * `default_leak_coefficient` - Default leak rate
     /// * `default_resting_potential` - Default resting potential
     /// * `default_neuron_type` - Default neuron type
@@ -555,6 +550,7 @@ impl<
         depth: u32,
         neurons_per_voxel: u32,
         default_threshold: f32,
+        default_threshold_limit: f32,
         default_leak_coefficient: f32,
         default_resting_potential: f32,
         default_neuron_type: i32,
@@ -584,6 +580,7 @@ impl<
         // ✅ SIMD-OPTIMIZED: Fill uniform values with bulk operations (LLVM auto-vectorizes!)
         // Convert f32 defaults to T
         let thresholds = vec![T::from_f32(default_threshold); total_neurons];
+        let threshold_limits = vec![T::from_f32(default_threshold_limit); total_neurons];
         let leak_coefficients = vec![default_leak_coefficient; total_neurons];
         let resting_potentials = vec![T::from_f32(default_resting_potential); total_neurons];
         let neuron_types = vec![default_neuron_type; total_neurons];
@@ -619,6 +616,7 @@ impl<
         // Call existing batch creation (already optimized with SIMD)
         let (success_count, failed) = self.add_neurons_batch(
             thresholds,
+            threshold_limits,
             leak_coefficients,
             resting_potentials,
             neuron_types,
@@ -1823,20 +1821,6 @@ impl<
     pub fn update_cortical_area_threshold(&mut self, cortical_area: u32, threshold: f32) -> usize {
         let mut updated_count = 0;
 
-        // Apply optional threshold cap (0.0 disables cap)
-        let cap = self
-            .cortical_threshold_caps
-            .read()
-            .unwrap()
-            .get(&cortical_area)
-            .copied()
-            .unwrap_or(0.0);
-        let effective_threshold = if cap > 0.0 {
-            threshold.min(cap)
-        } else {
-            threshold
-        };
-
         // CRITICAL: Acquire write lock ONCE, not per-neuron (huge performance gain)
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
 
@@ -1845,7 +1829,7 @@ impl<
             if neuron_storage_write.valid_mask()[idx]
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
-                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(effective_threshold);
+                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(threshold);
                 updated_count += 1;
             }
         }
@@ -1853,44 +1837,27 @@ impl<
         updated_count
     }
 
-    /// Update firing threshold cap ("firing_threshold_limit") for all neurons in a cortical area.
+    /// Update firing threshold limit (upper bound) for all neurons in a cortical area.
     ///
     /// Semantics:
-    /// - limit == 0.0: disable cap (no clamping applied to future threshold updates)
-    /// - limit  > 0.0: enable cap; effective firing threshold becomes min(threshold, limit)
+    /// - limit == 0.0: no upper bound (neuron fires if MP >= threshold)
+    /// - limit  > 0.0: neuron fires only if threshold <= MP <= limit
     ///
-    /// Note: This does NOT restore thresholds when cap is disabled; it only affects future updates.
-    /// This is deterministic and avoids guessing prior uncapped values.
+    /// This defines the firing window for neurons in the area.
     pub fn update_cortical_area_threshold_limit(
         &mut self,
         cortical_area: u32,
         limit: f32,
     ) -> usize {
-        {
-            let mut caps = self.cortical_threshold_caps.write().unwrap();
-            if limit > 0.0 {
-                caps.insert(cortical_area, limit);
-            } else {
-                caps.remove(&cortical_area);
-            }
-        }
-
-        // If enabling a cap, clamp existing thresholds immediately.
-        if limit <= 0.0 {
-            return 0;
-        }
-
         let mut updated_count = 0;
         let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+        
         for idx in 0..neuron_storage_write.count() {
             if neuron_storage_write.valid_mask()[idx]
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
-                let current = neuron_storage_write.thresholds()[idx].to_f32();
-                if current > limit {
-                    neuron_storage_write.thresholds_mut()[idx] = T::from_f32(limit);
-                    updated_count += 1;
-                }
+                neuron_storage_write.threshold_limits_mut()[idx] = T::from_f32(limit);
+                updated_count += 1;
             }
         }
 

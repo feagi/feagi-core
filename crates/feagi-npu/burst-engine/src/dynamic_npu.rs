@@ -111,6 +111,7 @@ where
     pub fn add_neuron(
         &mut self,
         threshold: f32,
+        threshold_limit: f32,
         leak_coefficient: f32,
         resting_potential: f32,
         neuron_type: i32,
@@ -127,6 +128,7 @@ where
         match self {
             DynamicNPUGeneric::F32(npu) => npu.add_neuron(
                 threshold,
+                threshold_limit,
                 leak_coefficient,
                 resting_potential,
                 neuron_type,
@@ -142,6 +144,7 @@ where
             ),
             DynamicNPUGeneric::INT8(npu) => npu.add_neuron(
                 INT8Value::from_f32(threshold),
+                INT8Value::from_f32(threshold_limit),
                 leak_coefficient,
                 INT8Value::from_f32(resting_potential),
                 neuron_type,
@@ -162,6 +165,7 @@ where
     pub fn add_neurons_batch(
         &mut self,
         thresholds: Vec<f32>,
+        threshold_limits: Vec<f32>,
         leak_coefficients: Vec<f32>,
         resting_potentials: Vec<f32>,
         neuron_types: Vec<i32>,
@@ -178,6 +182,7 @@ where
         match self {
             DynamicNPUGeneric::F32(npu) => npu.add_neurons_batch(
                 thresholds,
+                threshold_limits,
                 leak_coefficients,
                 resting_potentials,
                 neuron_types,
@@ -194,12 +199,15 @@ where
             DynamicNPUGeneric::INT8(npu) => {
                 let thresholds_int8: Vec<INT8Value> =
                     thresholds.into_iter().map(INT8Value::from_f32).collect();
+                let threshold_limits_int8: Vec<INT8Value> =
+                    threshold_limits.into_iter().map(INT8Value::from_f32).collect();
                 let resting_int8: Vec<INT8Value> = resting_potentials
                     .into_iter()
                     .map(INT8Value::from_f32)
                     .collect();
                 npu.add_neurons_batch(
                     thresholds_int8,
+                    threshold_limits_int8,
                     leak_coefficients,
                     resting_int8,
                     neuron_types,
@@ -284,6 +292,7 @@ where
         depth: u32,
         neurons_per_voxel: u32,
         default_threshold: f32,
+        default_threshold_limit: f32,
         default_leak_coefficient: f32,
         default_resting_potential: f32,
         default_neuron_type: i32,
@@ -301,6 +310,7 @@ where
                 depth,
                 neurons_per_voxel,
                 default_threshold,
+                default_threshold_limit,
                 default_leak_coefficient,
                 default_resting_potential,
                 default_neuron_type,
@@ -317,6 +327,7 @@ where
                 depth,
                 neurons_per_voxel,
                 default_threshold,
+                default_threshold_limit,
                 default_leak_coefficient,
                 default_resting_potential,
                 default_neuron_type,

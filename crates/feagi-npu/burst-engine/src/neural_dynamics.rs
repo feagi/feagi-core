@@ -242,11 +242,20 @@ fn process_single_neuron<T: NeuralValue>(
 
     // 3. Check threshold (matches Python: "Check firing conditions BEFORE decay")
     let threshold = neuron_array.thresholds()[idx];
-    if current_potential.ge(threshold) {
+    let threshold_limit = neuron_array.threshold_limits()[idx];
+    
+    // Firing window: threshold <= MP <= threshold_limit (if limit > 0)
+    // If threshold_limit == 0, no upper bound is enforced
+    // Note: using ge() and not lt() to implement <= (since le() doesn't exist in trait)
+    let above_min = current_potential.ge(threshold);
+    let zero_limit = threshold_limit.to_f32() == 0.0; // Check if limit is zero
+    let below_max = zero_limit || !current_potential.ge(threshold_limit) || current_potential.to_f32() == threshold_limit.to_f32();
+    
+    if above_min && below_max {
         if allow_trace {
             trace!(
                 target: "feagi-npu-trace",
-                "[DYN] burst={} neuron={} area={} mp_acc={} CROSS mp_old={:.6} cand={:.6} mp_new={:.6} thr={:.6} leak={:.6} excit={:.6}",
+                "[DYN] burst={} neuron={} area={} mp_acc={} CROSS mp_old={:.6} cand={:.6} mp_new={:.6} thr={:.6} thr_limit={:.6} leak={:.6} excit={:.6}",
                 burst_count,
                 neuron_id.0,
                 cortical_idx,
@@ -255,6 +264,7 @@ fn process_single_neuron<T: NeuralValue>(
                 candidate_potential.to_f32(),
                 current_potential.to_f32(),
                 threshold.to_f32(),
+                threshold_limit.to_f32(),
                 neuron_array.leak_coefficients()[idx],
                 neuron_array.excitabilities()[idx]
             );

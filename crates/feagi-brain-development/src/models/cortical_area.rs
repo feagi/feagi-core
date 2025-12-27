@@ -53,6 +53,9 @@ pub trait CorticalAreaExt {
     /// Get firing_threshold from properties (defaults to 1.0)
     fn firing_threshold(&self) -> f32;
 
+    /// Get firing_threshold_limit from properties (defaults to 0.0 = no limit)
+    fn firing_threshold_limit(&self) -> f32;
+
     /// Get property as u32 with default
     fn get_u32_property(&self, key: &str, default: u32) -> u32;
 
@@ -106,9 +109,6 @@ pub trait CorticalAreaExt {
 
     /// Get firing_threshold_increment_z from properties
     fn firing_threshold_increment_z(&self) -> f32;
-
-    /// Get firing_threshold_limit from properties
-    fn firing_threshold_limit(&self) -> f32;
 
     /// Get consecutive_fire_count from properties
     fn consecutive_fire_count(&self) -> u32;
@@ -342,7 +342,7 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn firing_threshold_limit(&self) -> f32 {
-        self.get_f32_property("firing_threshold_limit", 1.0)
+        self.get_f32_property("firing_threshold_limit", 0.0)
     }
 
     fn consecutive_fire_count(&self) -> u32 {

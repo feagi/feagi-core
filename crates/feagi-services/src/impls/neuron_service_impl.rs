@@ -87,6 +87,11 @@ impl NeuronService for NeuronServiceImpl {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
+        let firing_threshold_limit = props
+            .and_then(|p| p.get("firing_threshold_limit"))
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0) as f32;
+
         // Add neuron via ConnectomeManager
         let neuron_id = manager
             .add_neuron(
@@ -95,6 +100,7 @@ impl NeuronService for NeuronServiceImpl {
                 params.coordinates.1,
                 params.coordinates.2,
                 firing_threshold,
+                firing_threshold_limit,
                 leak_coefficient,
                 resting_potential,
                 if is_inhibitory { 1 } else { 0 },
