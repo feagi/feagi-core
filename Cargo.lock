@@ -2000,6 +2000,7 @@ dependencies = [
  "parking_lot",
  "pollster",
  "rayon",
+ "roaring",
  "serde_json",
  "thiserror 1.0.69",
  "tracing",

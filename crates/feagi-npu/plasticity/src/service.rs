@@ -240,12 +240,13 @@ impl PlasticityService {
         }
 
         // Step 3: Detect patterns for all memory areas
-        // Note: In a real implementation, we would get firing history from the fire ledger
-        // For now, this is a placeholder showing the structure
+        // Note: Fire ledger integration provides historical firing data as RoaringBitmaps
+        // for optimal STDP performance. Use get_history_bitmaps() for best performance,
+        // or get_history() for backward compatibility with Vec<u32>.
 
         for (memory_area_idx, area_config) in memory_areas_snapshot.iter() {
-            // TODO: Get actual firing history from fire ledger
-            // For now, create empty pattern as placeholder
+            // TODO: Integrate fire ledger via get_history_bitmaps() for optimal performance
+            // Fire ledger provides: Vec<(u64, RoaringBitmap)> = timestep + compressed neuron sets
             let timestep_bitmaps: Vec<HashSet<u32>> = Vec::new();
 
             let detector =
