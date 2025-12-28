@@ -153,10 +153,13 @@ impl HeartbeatService {
         // Send heartbeat request
         socket.send(message.to_string().as_bytes(), 0)?;
 
-        // Wait for response (non-blocking with timeout)
+        // Wait for response (ROUTER replies are multipart: [empty][json] when seen by REQ)
         if socket.poll(zmq::POLLIN, 1000)? > 0 {
-            let response = socket.recv_bytes(0)?;
-            let response: serde_json::Value = serde_json::from_slice(&response)?;
+            let parts = socket.recv_multipart(0)?;
+            let last = parts
+                .last()
+                .ok_or_else(|| SdkError::Other("Heartbeat reply was empty".to_string()))?;
+            let response: serde_json::Value = serde_json::from_slice(last)?;
 
             // Heartbeat response schema varies by FEAGI version/transport:
             // - Legacy: {"status":"success", ...}

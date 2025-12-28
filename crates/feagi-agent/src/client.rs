@@ -151,6 +151,11 @@ impl AgentClient {
         let reg_socket = self.context.socket(zmq::REQ)?;
         reg_socket.set_rcvtimeo(self.config.connection_timeout_ms as i32)?;
         reg_socket.set_sndtimeo(self.config.connection_timeout_ms as i32)?;
+        // @architecture:acceptable - compatibility with FEAGI ZMQ-REST ROUTER behavior
+        // Heartbeat uses the same REQ socket as registration. If FEAGI delays a reply,
+        // strict REQ state can raise EFSM on subsequent sends. Relaxed mode prevents
+        // heartbeat from breaking the socket state machine deterministically.
+        let _ = reg_socket.set_req_relaxed(true);
         reg_socket.connect(&self.config.registration_endpoint)?;
         self.registration_socket = Some(Arc::new(Mutex::new(reg_socket)));
 

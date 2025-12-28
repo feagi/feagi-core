@@ -128,6 +128,22 @@ macro_rules! sensor_cortical_units {
                     }
                 },
 
+                #[doc = "Text input (English) - token stream encoded as absolute fractional bitplanes along Z (z=0 is MSB)."]
+                TextEnglishInput => {
+                    friendly_name: "Text Input (English)",
+                    snake_case_name: "text_english_input",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"ten",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_properties: {
+                        // 1x1x16 default: one token per FEAGI tick, encoded into 16 bitplanes (supports GPT-2 vocab via token_id+1 offset).
+                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
+                    }
+                },
+
                 #[doc = "Camera vision input"]
                 Vision => {
                     friendly_name: "Simple Vision",

@@ -321,6 +321,7 @@ impl AgentConfig {
         if self.capabilities.vision.is_none()
             && self.capabilities.motor.is_none()
             && self.capabilities.visualization.is_none()
+            && self.capabilities.sensory.is_none()
             && self.capabilities.custom.is_empty()
         {
             return Err(SdkError::InvalidConfig(
@@ -331,7 +332,10 @@ impl AgentConfig {
         // Validate agent type matches capabilities
         match self.agent_type {
             AgentType::Sensory => {
-                if self.capabilities.vision.is_none() && self.capabilities.custom.is_empty() {
+                if self.capabilities.vision.is_none()
+                    && self.capabilities.sensory.is_none()
+                    && self.capabilities.custom.is_empty()
+                {
                     return Err(SdkError::InvalidConfig(
                         "Sensory agent must have vision or custom input capability".to_string(),
                     ));
@@ -345,7 +349,9 @@ impl AgentConfig {
                 }
             }
             AgentType::Both => {
-                if (self.capabilities.vision.is_none() && self.capabilities.custom.is_empty())
+                if (self.capabilities.vision.is_none()
+                    && self.capabilities.sensory.is_none()
+                    && self.capabilities.custom.is_empty())
                     || self.capabilities.motor.is_none()
                 {
                     return Err(SdkError::InvalidConfig(

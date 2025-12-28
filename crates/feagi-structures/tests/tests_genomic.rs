@@ -252,6 +252,53 @@ mod test_motor_cortical_units {
         let unit = topology.get(&0).expect("Missing topology entry for area 0");
         assert_eq!(unit.channel_dimensions_default, [32, 32, 8]);
     }
+
+    #[test]
+    fn test_text_english_output_cortical_id_and_default_topology() {
+        let group = CorticalGroupIndex::from(0u8);
+        let ids = MotorCorticalUnit::get_cortical_ids_array_for_text_english_output(
+            FrameChangeHandling::Absolute,
+            group,
+        );
+
+        let bytes = ids[0].as_bytes();
+        assert_eq!(bytes[0], b'o', "Expected OPU cortical id prefix 'o'");
+        assert_eq!(&bytes[1..4], b"ten", "Expected subtype 'ten' for text encoding");
+
+        // IOCorticalAreaDataFlag::Misc(Absolute) => variant=10 (0x0A), frame bit=0, positioning bit=0
+        assert_eq!(bytes[4], 10, "Expected data type variant 10 (Misc) in low config byte");
+        assert_eq!(bytes[5], 0, "Expected Absolute frame handling in high config byte");
+
+        let topology = MotorCorticalUnit::TextEnglishOutput.get_unit_default_topology();
+        let unit = topology.get(&0).expect("Missing topology entry for area 0");
+        assert_eq!(unit.channel_dimensions_default, [1, 1, 16]);
+    }
+}
+
+#[cfg(test)]
+mod test_sensory_cortical_units {
+    use super::*;
+
+    #[test]
+    fn test_text_english_input_cortical_id_and_default_topology() {
+        let group = CorticalGroupIndex::from(0u8);
+        let ids = SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input(
+            FrameChangeHandling::Absolute,
+            group,
+        );
+
+        let bytes = ids[0].as_bytes();
+        assert_eq!(bytes[0], b'i', "Expected IPU cortical id prefix 'i'");
+        assert_eq!(&bytes[1..4], b"ten", "Expected subtype 'ten' for text encoding");
+
+        // IOCorticalAreaDataFlag::Misc(Absolute) => variant=10 (0x0A), frame bit=0, positioning bit=0
+        assert_eq!(bytes[4], 10, "Expected data type variant 10 (Misc) in low config byte");
+        assert_eq!(bytes[5], 0, "Expected Absolute frame handling in high config byte");
+
+        let topology = SensoryCorticalUnit::TextEnglishInput.get_unit_default_topology();
+        let unit = topology.get(&0).expect("Missing topology entry for area 0");
+        assert_eq!(unit.channel_dimensions_default, [1, 1, 16]);
+    }
 }
 
 #[cfg(test)]
