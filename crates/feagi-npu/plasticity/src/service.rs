@@ -76,7 +76,7 @@ pub enum PlasticityCommand {
         neuron_id: u32,
         area_idx: u32,
         membrane_potential: f32,
-        pattern_hash: [u8; 32],
+        pattern_hash: u64,
         is_reactivation: bool,
     },
 

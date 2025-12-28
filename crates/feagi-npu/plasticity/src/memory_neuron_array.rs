@@ -79,9 +79,9 @@ pub struct MemoryNeuronArray {
     last_activation_burst: Vec<u64>,
     activation_count: Vec<u32>,
 
-    // Pattern association
-    pattern_hash_to_index: HashMap<[u8; 32], usize>,
-    index_to_pattern_hash: HashMap<usize, [u8; 32]>,
+    // Pattern association (xxHash64 for fast, deterministic pattern identification)
+    pattern_hash_to_index: HashMap<u64, usize>,
+    index_to_pattern_hash: HashMap<usize, u64>,
 
     // Index management
     next_available_index: usize,
@@ -121,7 +121,7 @@ impl MemoryNeuronArray {
     /// Create a new memory neuron
     pub fn create_memory_neuron(
         &mut self,
-        pattern_hash: [u8; 32],
+        pattern_hash: u64,
         cortical_area_id: u32,
         current_burst: u64,
         config: &MemoryNeuronLifecycleConfig,
@@ -265,7 +265,7 @@ impl MemoryNeuronArray {
     }
 
     /// Find neuron index by pattern hash
-    pub fn find_neuron_by_pattern(&self, pattern_hash: &[u8; 32]) -> Option<usize> {
+    pub fn find_neuron_by_pattern(&self, pattern_hash: &u64) -> Option<usize> {
         self.pattern_hash_to_index
             .get(pattern_hash)
             .copied()
@@ -323,7 +323,7 @@ impl MemoryNeuronArray {
             std::mem::size_of::<f32>() +       // float32 array
             std::mem::size_of::<u64>() * 2 +   // uint64 arrays
             std::mem::size_of::<bool>() * 2    // bool arrays
-        ) + self.pattern_hash_to_index.len() * (32 + 8)  // Pattern hash mappings
+        ) + self.pattern_hash_to_index.len() * (8 + 8)  // Pattern hash mappings (u64 + usize)
           + self.area_neuron_indices.len() * 64; // Area tracking overhead
 
         MemoryNeuronStats {
@@ -424,7 +424,7 @@ mod tests {
         let mut array = MemoryNeuronArray::new(1000);
         let config = MemoryNeuronLifecycleConfig::default();
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let neuron_idx = array.create_memory_neuron(pattern_hash, 100, 0, &config);
 
         assert!(neuron_idx.is_some());
@@ -441,7 +441,7 @@ mod tests {
         let mut array = MemoryNeuronArray::new(1000);
         let config = MemoryNeuronLifecycleConfig::default();
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx1 = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -462,8 +462,7 @@ mod tests {
 
         let mut neurons = Vec::new();
         for i in 0..10 {
-            let mut pattern_hash = [0u8; 32];
-            pattern_hash[0] = i;
+            let pattern_hash = i as u64;
             let idx = array
                 .create_memory_neuron(pattern_hash, 100, 0, &config)
                 .unwrap();
@@ -482,7 +481,7 @@ mod tests {
         let mut array = MemoryNeuronArray::new(1000);
         let config = MemoryNeuronLifecycleConfig::default();
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -517,7 +516,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -548,8 +547,7 @@ mod tests {
 
         let mut neurons = Vec::new();
         for i in 0..10 {
-            let mut pattern_hash = [0u8; 32];
-            pattern_hash[0] = i;
+            let pattern_hash = i as u64;
             let idx = array
                 .create_memory_neuron(pattern_hash, 100, 0, &config)
                 .unwrap();
@@ -579,7 +577,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -608,7 +606,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -631,7 +629,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -657,7 +655,7 @@ mod tests {
         let mut array = MemoryNeuronArray::new(1000);
         let config = MemoryNeuronLifecycleConfig::default();
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -666,7 +664,7 @@ mod tests {
         assert_eq!(found, Some(idx));
 
         // Different pattern should not be found
-        let pattern_hash2 = [2u8; 32];
+        let pattern_hash2 = 0x0202020202020202u64;
         let found2 = array.find_neuron_by_pattern(&pattern_hash2);
         assert_eq!(found2, None);
     }
@@ -679,9 +677,7 @@ mod tests {
         // Create neurons in different areas
         for area in [100, 200] {
             for i in 0..5 {
-                let mut pattern_hash = [0u8; 32];
-                pattern_hash[0] = (area / 100) as u8;
-                pattern_hash[1] = i;
+                let pattern_hash = ((area as u64) << 32) | (i as u64);
                 array.create_memory_neuron(pattern_hash, area, 0, &config);
             }
         }
@@ -702,7 +698,7 @@ mod tests {
         let mut array = MemoryNeuronArray::new(1000);
         let config = MemoryNeuronLifecycleConfig::default();
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -723,7 +719,7 @@ mod tests {
             ..Default::default()
         };
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx1 = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();
@@ -734,7 +730,7 @@ mod tests {
         assert!(!array.is_active[idx1]);
 
         // Create new neuron - should reuse index
-        let pattern_hash2 = [2u8; 32];
+        let pattern_hash2 = 0x0202020202020202u64;
         let idx2 = array
             .create_memory_neuron(pattern_hash2, 100, 2, &config)
             .unwrap();
@@ -749,8 +745,7 @@ mod tests {
 
         // Create some neurons
         for i in 0..10 {
-            let mut pattern_hash = [0u8; 32];
-            pattern_hash[0] = i;
+            let pattern_hash = i as u64;
             array.create_memory_neuron(pattern_hash, 100, 0, &config);
         }
 
@@ -771,14 +766,13 @@ mod tests {
 
         // Create neurons up to capacity
         for i in 0..5 {
-            let mut pattern_hash = [0u8; 32];
-            pattern_hash[0] = i;
+            let pattern_hash = i as u64;
             let idx = array.create_memory_neuron(pattern_hash, 100, 0, &config);
             assert!(idx.is_some());
         }
 
         // Try to create beyond capacity
-        let pattern_hash = [99u8; 32];
+        let pattern_hash = 0x6363636363636363u64;
         let idx = array.create_memory_neuron(pattern_hash, 100, 0, &config);
         assert!(idx.is_none());
     }
@@ -790,8 +784,7 @@ mod tests {
 
         // Create some neurons
         for i in 0..5 {
-            let mut pattern_hash = [0u8; 32];
-            pattern_hash[0] = i;
+            let pattern_hash = i as u64;
             array.create_memory_neuron(pattern_hash, 100, 0, &config);
         }
 
@@ -814,7 +807,7 @@ mod tests {
             max_reactivations: 1000,
         };
 
-        let pattern_hash = [1u8; 32];
+        let pattern_hash = 0x0101010101010101u64;
         let idx = array
             .create_memory_neuron(pattern_hash, 100, 0, &config)
             .unwrap();

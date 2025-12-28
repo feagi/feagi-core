@@ -106,7 +106,7 @@ fn test_neuron_lifecycle_full_cycle() {
         ..Default::default()
     };
 
-    let pattern_hash = [1u8; 32];
+    let pattern_hash = 0x0101010101010101u64;  // Simple test hash
 
     // Create neuron
     let idx = memory_array
@@ -179,8 +179,7 @@ fn test_neuron_id_allocation_integration() {
     // Create multiple memory neurons
     let mut neuron_ids = Vec::new();
     for i in 0..10 {
-        let mut pattern_hash = [0u8; 32];
-        pattern_hash[0] = i;
+        let pattern_hash = i as u64;  // Simple sequential hashes
 
         let idx = memory_array
             .create_memory_neuron(pattern_hash, 100, 0, &lifecycle_config)
@@ -284,14 +283,13 @@ fn test_memory_array_capacity_and_reuse() {
 
     // Fill capacity
     for i in 0..10 {
-        let mut pattern_hash = [0u8; 32];
-        pattern_hash[0] = i;
+        let pattern_hash = i as u64;  // Simple sequential hashes
         let result = memory_array.create_memory_neuron(pattern_hash, 100, 0, &lifecycle_config);
         assert!(result.is_some());
     }
 
     // Try to exceed capacity
-    let pattern_hash = [99u8; 32];
+    let pattern_hash = 99u64;
     let result = memory_array.create_memory_neuron(pattern_hash, 100, 0, &lifecycle_config);
     assert!(result.is_none());
 
@@ -305,8 +303,7 @@ fn test_memory_array_capacity_and_reuse() {
 
     // Now we should be able to create new neurons by reusing indices
     for i in 10..20 {
-        let mut pattern_hash = [0u8; 32];
-        pattern_hash[0] = i;
+        let pattern_hash = i as u64;  // Different hashes for new neurons
         let result = memory_array.create_memory_neuron(pattern_hash, 100, 2, &lifecycle_config);
         assert!(result.is_some());
     }
