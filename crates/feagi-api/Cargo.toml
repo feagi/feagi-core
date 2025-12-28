@@ -13,6 +13,7 @@ description = "FEAGI REST API layer with HTTP and ZMQ transport adapters"
 # feagi-services is always needed (for trait definitions), but can work without tokio
 feagi-services = { version = "0.0.1-beta.1", path = "../feagi-services", default-features = false, features = ["wasm", "connectome-io"] }
 feagi-npu-neural = { version = "0.0.1-beta.1", path = "../feagi-npu/neural", default-features = false }  # For types
+feagi-npu-plasticity = { version = "0.0.1-beta.1", path = "../feagi-npu/plasticity", optional = true }  # For memory stats cache
 feagi-evolutionary = { version = "0.0.1-beta.1", path = "../feagi-evolutionary" }  # For embedded default genomes
 feagi-io = { version = "0.0.1-beta.1", path = "../feagi-io", optional = true, features = ["zmq-transport"] }  # For transport primitives and domain logic
 feagi-brain-development = { version = "0.0.1-beta.1", path = "../feagi-brain-development", optional = true }  # For examples
@@ -93,7 +94,7 @@ feagi-npu-runtime = { version = "0.0.1-beta.1", path = "../feagi-npu/runtime", f
 [features]
 default = ["http", "services"]
 http = ["axum", "tower", "tower-http", "hyper", "http-body-util", "tokio", "utoipa-swagger-ui", "services"]
-services = ["feagi-services/std", "feagi-io", "feagi-brain-development", "feagi-npu-burst-engine"]
+services = ["feagi-services/std", "feagi-io", "feagi-brain-development", "feagi-npu-burst-engine", "feagi-npu-plasticity"]
 zmq = ["feagi-io", "dep:zmq", "services"]  # feagi-io provides transport primitives, zmq for context
 security = ["chacha20poly1305", "x25519-dalek", "jsonwebtoken", "argon2"]
 tls = ["rustls", "tokio-rustls"]

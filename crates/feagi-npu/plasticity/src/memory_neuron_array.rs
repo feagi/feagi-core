@@ -281,6 +281,15 @@ impl MemoryNeuronArray {
         }
     }
 
+    /// Get cortical area ID at index
+    pub fn get_cortical_area_id(&self, neuron_idx: usize) -> Option<u32> {
+        if self.is_valid_index(neuron_idx) {
+            Some(self.cortical_area_ids[neuron_idx])
+        } else {
+            None
+        }
+    }
+
     /// Get comprehensive statistics
     pub fn get_stats(&self) -> MemoryNeuronStats {
         let n = self.next_available_index;

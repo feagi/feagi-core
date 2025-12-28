@@ -144,7 +144,22 @@ pub async fn get_health_check(
 
     // Fields requiring future service implementations
     let fitness = None; // TODO: Get from evolution service
-    let memory_area_stats = None; // TODO: Requires memory area analysis
+    
+    // Get memory area stats from plasticity service cache (O(1) read, event-driven updates)
+    let memory_area_stats = state.memory_stats_cache.as_ref().map(|cache| {
+        feagi_npu_plasticity::memory_stats_cache::get_stats_snapshot(cache)
+            .into_iter()
+            .map(|(name, stats)| {
+                let mut inner_map = HashMap::new();
+                inner_map.insert("neuron_count".to_string(), serde_json::json!(stats.neuron_count));
+                inner_map.insert("created_total".to_string(), serde_json::json!(stats.created_total));
+                inner_map.insert("deleted_total".to_string(), serde_json::json!(stats.deleted_total));
+                inner_map.insert("last_updated".to_string(), serde_json::json!(stats.last_updated));
+                (name, inner_map)
+            })
+            .collect::<HashMap<String, HashMap<String, serde_json::Value>>>()
+    });
+    
     let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
 
     // Get root region ID from ConnectomeManager (only available when services feature is enabled)

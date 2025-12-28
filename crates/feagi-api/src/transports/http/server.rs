@@ -46,6 +46,8 @@ pub struct ApiState {
     /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
     /// This is a unique identifier for each FEAGI instance/session
     pub feagi_session_timestamp: i64,
+    /// Memory area stats cache (updated by plasticity service, read by health check)
+    pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
 }
 
 /// Create the main HTTP server application

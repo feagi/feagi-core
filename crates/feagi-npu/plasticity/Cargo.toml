@@ -13,7 +13,10 @@ feagi-npu-neural = { version = "0.0.1-beta.1", path = "../neural" }  # For Neuro
 thiserror.workspace = true
 rayon.workspace = true
 ahash.workspace = true
+tracing.workspace = true  # For logging in lifecycle manager
 xxhash-rust = { version = "0.8", features = ["xxh64"] }  # Fast, deterministic, cross-platform hashing
+parking_lot = "0.12"  # For RwLock in memory stats cache
+serde = { version = "1.0", features = ["derive"] }  # For MemoryAreaStats serialization
 
 [features]
 default = []
