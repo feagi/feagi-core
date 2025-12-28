@@ -49,6 +49,7 @@ pub mod converter_flat_full;
 pub mod converter_hierarchical_to_flat;
 pub mod cortical_type_parser;
 pub mod genome;
+pub mod plasticity_detector;
 pub mod random;
 pub mod runtime;
 pub mod storage;
@@ -62,6 +63,7 @@ pub use converter_flat_full::convert_flat_to_hierarchical_full;
 pub use converter_hierarchical_to_flat::convert_hierarchical_to_flat;
 pub use cortical_type_parser::{parse_cortical_type, validate_cortical_type};
 pub use genome::parser::string_to_cortical_id;
+pub use plasticity_detector::{extract_memory_properties, genome_has_plasticity, MemoryAreaProperties};
 pub use genome::{
     load_genome_from_file, load_genome_from_json, migrate_genome, peek_quantization_precision,
     save_genome_to_file, save_genome_to_json, GenomeParser, GenomeSaver, MigrationResult,

@@ -120,6 +120,12 @@ pub struct ConnectomeManager {
     /// All neuron/synapse data queries delegate to the NPU.
     npu: Option<Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>>,
 
+    /// Optional reference to the Plasticity Manager for memory neuron registration
+    ///
+    /// This is set during initialization if the plasticity feature is enabled.
+    #[cfg(feature = "plasticity")]
+    plasticity_manager: Option<Arc<std::sync::Mutex<feagi_npu_plasticity::PlasticityLifecycleManager>>>,
+
     /// Cached neuron count (lock-free read) - updated by burst engine
     /// This prevents health checks from blocking on NPU lock
     cached_neuron_count: Arc<AtomicUsize>,
@@ -148,6 +154,8 @@ impl ConnectomeManager {
             morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: None,
+            #[cfg(feature = "plasticity")]
+            plasticity_manager: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
@@ -197,6 +205,8 @@ impl ConnectomeManager {
             morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: None,
+            #[cfg(feature = "plasticity")]
+            plasticity_manager: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
@@ -228,6 +238,8 @@ impl ConnectomeManager {
             morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
             npu: Some(npu),
+            #[cfg(feature = "plasticity")]
+            plasticity_manager: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
@@ -345,6 +357,12 @@ impl ConnectomeManager {
         self.cortical_id_to_idx.insert(cortical_id, cortical_idx);
         self.cortical_idx_to_id.insert(cortical_idx, cortical_id);
 
+        // Initialize upstream_cortical_areas property (empty array for O(1) lookup)
+        area.properties.insert(
+            "upstream_cortical_areas".to_string(),
+            serde_json::json!([])
+        );
+
         // Store area
         self.cortical_areas.insert(cortical_id, area);
 
@@ -360,6 +378,47 @@ impl ConnectomeManager {
                     cortical_idx,
                     cortical_id.as_base_64()
                 );
+            }
+        }
+
+        // Register memory cortical areas with plasticity manager (if feature enabled and connected)
+        #[cfg(feature = "plasticity")]
+        {
+            use feagi_evolutionary::extract_memory_properties;
+            
+            // Check if this is a memory area by examining its properties
+            if let Some(area) = self.cortical_areas.get(&cortical_id) {
+                if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                    if let Some(ref plasticity_mgr) = self.plasticity_manager {
+                        // Register the memory area with the plasticity manager
+                        if let Ok(mut mgr) = plasticity_mgr.lock() {
+                            use feagi_npu_plasticity::MemoryNeuronLifecycleConfig;
+                            
+                            let lifecycle_config = MemoryNeuronLifecycleConfig {
+                                initial_lifespan: mem_props.init_lifespan,
+                                lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                                longterm_threshold: mem_props.longterm_threshold,
+                                max_reactivations: 1000, // Default value
+                            };
+                            
+                            // Extract upstream areas from all cortical areas' dstmaps
+                            let upstream_areas = self.get_upstream_cortical_areas(&cortical_id);
+                            
+                            mgr.register_memory_area(
+                                cortical_idx,
+                                area.name.clone(),
+                                mem_props.temporal_depth,
+                                upstream_areas.clone(),
+                                Some(lifecycle_config),
+                            );
+                            
+                            info!(target: "feagi-bdu",
+                                "🧠 Registered memory area '{}' (idx={}, temporal_depth={}, upstream_areas={:?}) with plasticity manager",
+                                area.name, cortical_idx, mem_props.temporal_depth, upstream_areas
+                            );
+                        }
+                    }
+                }
             }
         }
 
@@ -449,6 +508,95 @@ impl ConnectomeManager {
     /// Get the number of cortical areas
     pub fn get_cortical_area_count(&self) -> usize {
         self.cortical_areas.len()
+    }
+
+    /// Get all cortical areas that have synapses targeting the specified area (upstream/afferent areas)
+    ///
+    /// Reads from the `upstream_cortical_areas` property stored on the cortical area.
+    /// This property is maintained by `add_upstream_area()` and `remove_upstream_area()`.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_cortical_id` - The cortical area ID to find upstream connections for
+    ///
+    /// # Returns
+    ///
+    /// Vec of cortical_idx values for all upstream areas
+    ///
+    pub fn get_upstream_cortical_areas(&self, target_cortical_id: &CorticalID) -> Vec<u32> {
+        if let Some(area) = self.cortical_areas.get(target_cortical_id) {
+            if let Some(upstream_prop) = area.properties.get("upstream_cortical_areas") {
+                if let Some(upstream_array) = upstream_prop.as_array() {
+                    return upstream_array
+                        .iter()
+                        .filter_map(|v| v.as_u64().map(|n| n as u32))
+                        .collect();
+                }
+            }
+            
+            // Property missing - data integrity issue
+            warn!(target: "feagi-bdu",
+                "Cortical area '{}' missing 'upstream_cortical_areas' property - treating as empty",
+                target_cortical_id.as_base_64()
+            );
+        }
+        
+        Vec::new()
+    }
+
+    /// Add an upstream cortical area to a target area's upstream list
+    ///
+    /// This should be called when synapses are created from src_cortical_idx to target_cortical_id.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_cortical_id` - The cortical area receiving connections
+    /// * `src_cortical_idx` - The cortical index of the source area
+    ///
+    pub fn add_upstream_area(&mut self, target_cortical_id: &CorticalID, src_cortical_idx: u32) {
+        if let Some(area) = self.cortical_areas.get_mut(target_cortical_id) {
+            let upstream_array = area
+                .properties
+                .entry("upstream_cortical_areas".to_string())
+                .or_insert_with(|| serde_json::json!([]));
+            
+            if let Some(arr) = upstream_array.as_array_mut() {
+                let src_value = serde_json::json!(src_cortical_idx);
+                if !arr.contains(&src_value) {
+                    arr.push(src_value);
+                    debug!(target: "feagi-bdu",
+                        "Added upstream area idx={} to cortical area '{}'",
+                        src_cortical_idx, target_cortical_id.as_base_64()
+                    );
+                }
+            }
+        }
+    }
+
+    /// Remove an upstream cortical area from a target area's upstream list
+    ///
+    /// This should be called when all synapses from src_cortical_idx to target_cortical_id are deleted.
+    ///
+    /// # Arguments
+    ///
+    /// * `target_cortical_id` - The cortical area that had connections
+    /// * `src_cortical_idx` - The cortical index of the source area to remove
+    ///
+    pub fn remove_upstream_area(&mut self, target_cortical_id: &CorticalID, src_cortical_idx: u32) {
+        if let Some(area) = self.cortical_areas.get_mut(target_cortical_id) {
+            if let Some(upstream_prop) = area.properties.get_mut("upstream_cortical_areas") {
+                if let Some(arr) = upstream_prop.as_array_mut() {
+                    let src_value = serde_json::json!(src_cortical_idx);
+                    if let Some(pos) = arr.iter().position(|v| v == &src_value) {
+                        arr.remove(pos);
+                        debug!(target: "feagi-bdu",
+                            "Removed upstream area idx={} from cortical area '{}'",
+                            src_cortical_idx, target_cortical_id.as_base_64()
+                        );
+                    }
+                }
+            }
+        }
     }
 
     /// Check if a cortical area exists
@@ -642,6 +790,16 @@ impl ConnectomeManager {
 
             // Then, apply cortical mapping to create new synapses (may be 0 for deletions)
             let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
+
+            // Update upstream area tracking based on synapse count
+            let src_idx = *self.cortical_id_to_idx.get(src_area_id).unwrap();
+            if synapse_count > 0 {
+                // Synapses exist - ensure src is in upstream list
+                self.add_upstream_area(dst_area_id, src_idx);
+            } else {
+                // No synapses - remove src from upstream list (mapping was deleted)
+                self.remove_upstream_area(dst_area_id, src_idx);
+            }
 
             info!(
                 target: "feagi-bdu",
@@ -906,6 +1064,24 @@ impl ConnectomeManager {
     ///
     pub fn get_npu(&self) -> Option<&Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>> {
         self.npu.as_ref()
+    }
+
+    /// Set the Plasticity Manager reference (optional, only if plasticity feature enabled)
+    ///
+    /// # Arguments
+    ///
+    /// * `plasticity_manager` - Arc to the Plasticity Manager
+    ///
+    #[cfg(feature = "plasticity")]
+    pub fn set_plasticity_manager(&mut self, plasticity_manager: Arc<std::sync::Mutex<feagi_npu_plasticity::PlasticityLifecycleManager>>) {
+        self.plasticity_manager = Some(plasticity_manager);
+        info!(target: "feagi-bdu", "🔗 ConnectomeManager: Plasticity Manager reference set");
+    }
+
+    /// Check if Plasticity Manager is connected
+    #[cfg(feature = "plasticity")]
+    pub fn has_plasticity_manager(&self) -> bool {
+        self.plasticity_manager.is_some()
     }
 
     /// Get neuron capacity from NPU
@@ -1242,6 +1418,7 @@ impl ConnectomeManager {
             .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
 
         let mut total_synapses = 0u32;
+        let mut upstream_updates: Vec<(CorticalID, u32)> = Vec::new(); // Collect updates to apply later
 
         // Process each destination area
         for (dst_cortical_id_str, rules) in dstmap {
@@ -1266,6 +1443,8 @@ impl ConnectomeManager {
                     continue;
                 }
             };
+
+            let mut dst_synapse_count = 0u32; // Track synapses for this specific destination
 
             // Apply each morphology rule
             for rule in rules_array {
@@ -1345,6 +1524,7 @@ impl ConnectomeManager {
                     }
                 };
 
+                dst_synapse_count += synapse_count;
                 total_synapses += synapse_count;
 
                 trace!(
@@ -1352,6 +1532,16 @@ impl ConnectomeManager {
                     "Applied {} morphology: {} -> {} = {} synapses",
                     morphology_id, src_cortical_id, dst_cortical_id, synapse_count);
             }
+            
+            // Queue upstream area update if any synapses were created
+            if dst_synapse_count > 0 {
+                upstream_updates.push((dst_cortical_id.clone(), src_cortical_idx));
+            }
+        }
+
+        // Apply all upstream area updates now that NPU borrows are complete
+        for (dst_id, src_idx) in upstream_updates {
+            self.add_upstream_area(&dst_id, src_idx);
         }
 
         trace!(
@@ -3855,6 +4045,80 @@ mod tests {
             assert_eq!(npu.get_synapse_count(), 0);
             assert!(npu.get_outgoing_synapses(s0 as u32).is_empty());
             assert!(npu.get_outgoing_synapses(s1 as u32).is_empty());
+        }
+    }
+
+    #[test]
+    fn test_upstream_area_tracking() {
+        // Test that upstream_cortical_areas property is maintained correctly
+        use crate::models::cortical_area::CorticalArea;
+        use feagi_npu_burst_engine::{DynamicNPU, RustNPU};
+        use feagi_npu_burst_engine::backend::CPUBackend;
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalAreaType, CorticalID};
+
+        // Create test manager with NPU
+        let runtime = StdRuntime;
+        let backend = CPUBackend::new();
+        let npu = RustNPU::new(runtime, backend, 10_000, 10_000, 10).expect("Failed to create NPU");
+        let dyn_npu = Arc::new(Mutex::new(DynamicNPU::F32(npu)));
+        let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
+
+        // Create source area
+        let src_id = CorticalID::try_from_bytes(b"src_area").unwrap();
+        let src_area = CorticalArea::new(
+            src_id,
+            0,
+            "Source Area".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire),
+        ).unwrap();
+        let src_idx = manager.add_cortical_area(src_area).unwrap();
+
+        // Create destination area (memory area)
+        let dst_id = CorticalID::try_from_bytes(b"dst_area").unwrap();
+        let dst_area = CorticalArea::new(
+            dst_id,
+            0,
+            "Dest Area".to_string(),
+            CorticalAreaDimensions::new(2, 2, 1).unwrap(),
+            (0, 0, 0).into(),
+            CorticalAreaType::Custom(feagi_structures::genomic::cortical_area::CustomCorticalType::LeakyIntegrateFire),
+        ).unwrap();
+        manager.add_cortical_area(dst_area).unwrap();
+
+        // Verify upstream_cortical_areas property was initialized to empty array
+        {
+            let dst_area = manager.get_cortical_area(&dst_id).unwrap();
+            let upstream = dst_area.properties.get("upstream_cortical_areas").unwrap();
+            assert!(upstream.as_array().unwrap().is_empty(), "Upstream areas should be empty initially");
+        }
+
+        // Create a mapping from src to dst
+        let mapping_data = vec![serde_json::json!({
+            "morphology_id": "block_to_block",
+            "morphology_scalar": 1,
+            "postSynapticCurrent_multiplier": 1.0,
+        })];
+        manager.update_cortical_mapping(&src_id, &dst_id, mapping_data).unwrap();
+        manager.regenerate_synapses_for_mapping(&src_id, &dst_id).unwrap();
+
+        // Verify src_idx was added to dst's upstream_cortical_areas
+        {
+            let upstream_areas = manager.get_upstream_cortical_areas(&dst_id);
+            assert_eq!(upstream_areas.len(), 1, "Should have 1 upstream area");
+            assert_eq!(upstream_areas[0], src_idx, "Upstream area should be src_idx");
+        }
+
+        // Delete the mapping
+        manager.update_cortical_mapping(&src_id, &dst_id, vec![]).unwrap();
+        manager.regenerate_synapses_for_mapping(&src_id, &dst_id).unwrap();
+
+        // Verify src_idx was removed from dst's upstream_cortical_areas
+        {
+            let upstream_areas = manager.get_upstream_cortical_areas(&dst_id);
+            assert_eq!(upstream_areas.len(), 0, "Should have 0 upstream areas after deletion");
         }
     }
 }

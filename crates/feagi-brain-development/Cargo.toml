@@ -16,6 +16,7 @@ name = "feagi_brain_development"
 # Core types from existing FEAGI crates
 feagi-npu-neural = { version = "0.0.1-beta.1", path = "../feagi-npu/neural" }  # For types (CorticalArea, Dimensions, etc.)
 feagi-evolutionary = { version = "0.0.1-beta.1", path = "../feagi-evolutionary" }
+feagi-npu-plasticity = { version = "0.0.1-beta.1", path = "../feagi-npu/plasticity", optional = true }
 # feagi-burst-engine configured per-platform below
 feagi-structures = { workspace = true }
 
@@ -62,6 +63,8 @@ feagi-npu-burst-engine = { version = "0.0.1-beta.1", path = "../feagi-npu/burst-
 default = ["parallel"]
 # Parallel processing via rayon (not available in WASM)
 parallel = ["rayon"]
+# Plasticity support (memory neurons, STDP)
+plasticity = ["dep:feagi-npu-plasticity"]
 # WASM-compatible build (disables connectome-io and parallel processing)
 wasm = []
 # Async runtime support (passed through from feagi-services)
