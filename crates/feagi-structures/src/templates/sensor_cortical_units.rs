@@ -138,6 +138,7 @@ macro_rules! sensor_cortical_units {
                     cortical_type_parameters: {
                         frame_change_handling: FrameChangeHandling,
                     },
+                    allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
                         // 1x1x16 default: one token per FEAGI tick, encoded into 16 bitplanes (supports GPT-2 vocab via token_id+1 offset).
                         0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
