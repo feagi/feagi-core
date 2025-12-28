@@ -279,8 +279,8 @@ impl VideoEncoder {
 impl SensoryEncoder for VideoEncoder {
     type Input = ImageFrame;
 
-    fn encode(&self, input: &Self::Input) -> Result<Vec<u8>> {
-        match &self.mode {
+    fn encode(&mut self, input: &Self::Input) -> Result<Vec<u8>> {
+        match &mut self.mode {
             EncoderMode::Simple {
                 processor,
                 prev_frame,
@@ -322,7 +322,7 @@ impl SensoryEncoder for VideoEncoder {
                 // Apply diff threshold
                 apply_diff_threshold_segmented(
                     &mut segmented,
-                    &mut prev_frame.clone(),
+                    prev_frame,
                     self.config.diff_threshold,
                 );
 

@@ -3,10 +3,12 @@
 
 //! Configuration for FEAGI Agent SDK
 
-use crate::error::{Result, SdkError};
+use crate::core::error::{Result, SdkError};
 use feagi_io::{
-    AgentCapabilities, AgentType, MotorCapability, VisionCapability, VisualizationCapability,
+    AgentCapabilities, AgentType, MotorCapability, SensoryCapability, VisionCapability,
+    VisualizationCapability,
 };
+use std::collections::HashMap;
 
 /// Agent configuration builder
 #[derive(Debug, Clone)]
@@ -282,6 +284,39 @@ impl AgentConfig {
             resolution,
             refresh_rate,
             bridge_proxy,
+        });
+        self
+    }
+
+    /// Add sensory capability (generic)
+    ///
+    /// This is used for non-vision sensory modalities (text, audio, etc.)
+    ///
+    /// # Arguments
+    /// * `rate_hz` - Sensory data rate in Hz
+    /// * `shm_path` - Optional shared memory path
+    /// * `cortical_mappings` - Map of cortical IDs to indices
+    ///
+    /// # Example
+    /// ```
+    /// # use feagi_agent::{AgentConfig, AgentType};
+    /// # use std::collections::HashMap;
+    /// let mut mappings = HashMap::new();
+    /// mappings.insert("iten".to_string(), 0);
+    ///
+    /// let config = AgentConfig::new("text_input", AgentType::Sensory)
+    ///     .with_sensory_capability(20.0, None, mappings);
+    /// ```
+    pub fn with_sensory_capability(
+        mut self,
+        rate_hz: f64,
+        shm_path: Option<String>,
+        cortical_mappings: HashMap<String, u32>,
+    ) -> Self {
+        self.capabilities.sensory = Some(SensoryCapability {
+            rate_hz,
+            shm_path,
+            cortical_mappings,
         });
         self
     }

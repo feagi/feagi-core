@@ -70,7 +70,7 @@ impl TextEncoder {
 impl SensoryEncoder for TextEncoder {
     type Input = u32;
 
-    fn encode(&self, token_id: &Self::Input) -> Result<Vec<u8>> {
+    fn encode(&mut self, token_id: &Self::Input) -> Result<Vec<u8>> {
         // Encode token ID to bitplanes
         let voxels = encode_token_id_to_xyzp_bitplanes(*token_id, self.topology.depth)
             .map_err(|e| SdkError::EncodingFailed(format!("Token encoding failed: {:?}", e)))?;

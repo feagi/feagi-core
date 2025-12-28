@@ -3,10 +3,10 @@
 
 //! FEAGI Agent Client implementation
 
-use crate::config::AgentConfig;
-use crate::error::{Result, SdkError};
-use crate::heartbeat::HeartbeatService;
-use crate::reconnect::{retry_with_backoff, ReconnectionStrategy};
+use crate::core::config::AgentConfig;
+use crate::core::error::{Result, SdkError};
+use crate::core::heartbeat::HeartbeatService;
+use crate::core::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -284,17 +284,82 @@ impl AgentClient {
                 .and_then(|m| m.as_str())
                 .unwrap_or("Unknown error");
 
-            // Check if already registered - try deregistration
+            // Check if already registered - try deregistration and retry
             if message.contains("already registered") {
-                warn!("[CLIENT] ⚠ Agent already registered - attempting deregistration first");
+                warn!("[CLIENT] ⚠ Agent already registered - attempting deregistration and retry");
                 self.deregister()?;
-                Err(SdkError::RegistrationFailed(
-                    "Retry after deregistration".to_string(),
-                ))
+                
+                // Retry registration after deregistration
+                info!("[CLIENT] Retrying registration after deregistration...");
+                std::thread::sleep(std::time::Duration::from_millis(100)); // Brief delay
+                
+                // Recursive retry (only once - avoid infinite loop)
+                return self.register_with_retry_once();
             } else {
                 error!("[CLIENT] ✗ Registration failed: {}", message);
                 Err(SdkError::RegistrationFailed(message.to_string()))
             }
+        }
+    }
+
+    /// Register with FEAGI (with automatic retry after deregistration)
+    fn register_with_retry_once(&mut self) -> Result<()> {
+        let registration_msg = serde_json::json!({
+            "method": "POST",
+            "path": "/v1/agent/register",
+            "body": {
+                "agent_id": self.config.agent_id,
+                "agent_type": match self.config.agent_type {
+                    AgentType::Sensory => "sensory",
+                    AgentType::Motor => "motor",
+                    AgentType::Both => "both",
+                    AgentType::Visualization => "visualization",
+                    AgentType::Infrastructure => "infrastructure",
+                },
+                "capabilities": self.config.capabilities,
+            }
+        });
+
+        let socket = self
+            .registration_socket
+            .as_ref()
+            .ok_or_else(|| SdkError::Other("Registration socket not initialized".to_string()))?;
+
+        // Send registration request and get response
+        let response = {
+            let socket = socket
+                .lock()
+                .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
+
+            debug!(
+                "[CLIENT] Sending registration request (retry) for: {}",
+                self.config.agent_id
+            );
+            socket.send(registration_msg.to_string().as_bytes(), 0)?;
+
+            // Wait for response
+            let response_bytes = socket.recv_bytes(0)?;
+            serde_json::from_slice::<serde_json::Value>(&response_bytes)?
+        }; // Lock is dropped here
+
+        // Check response status
+        let status_code = response
+            .get("status")
+            .and_then(|s| s.as_u64())
+            .unwrap_or(500);
+        if status_code == 200 {
+            self.registered = true;
+            info!("[CLIENT] ✓ Registration successful (after retry): {:?}", response);
+            Ok(())
+        } else {
+            let empty_body = serde_json::json!({});
+            let body = response.get("body").unwrap_or(&empty_body);
+            let message = body
+                .get("error")
+                .and_then(|m| m.as_str())
+                .unwrap_or("Unknown error");
+            error!("[CLIENT] ✗ Registration retry failed: {}", message);
+            Err(SdkError::RegistrationFailed(message.to_string()))
         }
     }
 

@@ -3,7 +3,7 @@
 
 //! Reconnection logic with exponential backoff
 
-use crate::error::Result;
+use crate::core::error::Result;
 use std::time::Duration;
 use tracing::{info, warn};
 

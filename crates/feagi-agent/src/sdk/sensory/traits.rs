@@ -21,7 +21,7 @@ use std::collections::HashMap;
 /// impl SensoryEncoder for MyEncoder {
 ///     type Input = MyDataType;
 ///
-///     fn encode(&self, input: &Self::Input) -> Result<Vec<u8>> {
+///     fn encode(&mut self, input: &Self::Input) -> Result<Vec<u8>> {
 ///         // Encode to FEAGI binary format
 ///         Ok(encoded_bytes)
 ///     }
@@ -43,7 +43,8 @@ pub trait SensoryEncoder: Send + Sync {
     /// Encode input data into FEAGI binary format
     ///
     /// Returns serialized XYZP voxel data ready to send to FEAGI.
-    fn encode(&self, input: &Self::Input) -> Result<Vec<u8>>;
+    /// Takes `&mut self` to allow internal state updates (e.g., frame differencing).
+    fn encode(&mut self, input: &Self::Input) -> Result<Vec<u8>>;
 
     /// Get cortical IDs this encoder produces
     fn cortical_ids(&self) -> &[CorticalID];

@@ -172,12 +172,11 @@ impl TopologyCache {
         ) {
             let dims = per_device_dims
                 .as_array()
-                .ok_or_else(|| SdkError::TopologyFetch(
-                    reqwest::Error::from(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "cortical_dimensions_per_device is not an array"
-                    ))
-                ))?;
+                .ok_or_else(|| {
+                    SdkError::InvalidConfiguration(
+                        "cortical_dimensions_per_device is not an array".to_string(),
+                    )
+                })?;
 
             if dims.len() != 3 {
                 return Err(SdkError::InvalidConfiguration(format!(

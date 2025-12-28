@@ -5,10 +5,9 @@
 
 use crate::core::{AgentConfig, AgentType};
 use crate::sdk::error::{Result, SdkError};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, IOCorticalAreaDataFlag};
 use feagi_structures::genomic::cortical_area::CorticalID;
-use feagi_structures::genomic::SensoryCorticalUnit;
 use std::collections::HashMap;
 
 /// Text encoder configuration
@@ -49,12 +48,18 @@ pub struct TextEncoderConfig {
 
 impl TextEncoderConfig {
     /// Get cortical ID for text input (iten)
+    /// 
+    /// Uses the proper feagi-structures method to generate cortical ID
     pub fn cortical_id(&self) -> CorticalID {
-        let group_index = CorticalGroupIndex::from(self.cortical_group_id);
-        SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input(
-            FrameChangeHandling::Absolute,
-            group_index,
-        )[0]
+        // Text input uses Misc data type with Absolute frame handling
+        let data_flag = IOCorticalAreaDataFlag::Misc(FrameChangeHandling::Absolute);
+        
+        data_flag.as_io_cortical_id(
+            true,                                          // is_input
+            [b't', b'e', b'n'],                           // "ten" in iten
+            CorticalUnitIndex::from(0),                   // unit index (always 0 for text)
+            CorticalGroupIndex::from(self.cortical_group_id), // group index
+        )
     }
 
     /// Convert to AgentConfig for core client
@@ -97,6 +102,47 @@ impl TextEncoderConfig {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cortical_id_generation() {
+        // Test group 0
+        let config0 = TextEncoderConfig {
+            agent_id: "test".to_string(),
+            cortical_group_id: 0,
+            feagi_host: "localhost".to_string(),
+            feagi_api_port: 8080,
+            feagi_zmq_registration_port: 30001,
+            feagi_zmq_sensory_port: 5555,
+            feagi_tick_hz: 60,
+            feagi_heartbeat_interval_s: 5.0,
+            feagi_connection_timeout_ms: 5000,
+            feagi_registration_retries: 3,
+        };
+        let id0 = config0.cortical_id();
+        println!("Group 0: {}", id0.as_base_64());
+        
+        // Test group 1 - should match genome
+        let config1 = TextEncoderConfig {
+            agent_id: "test".to_string(),
+            cortical_group_id: 1,
+            feagi_host: "localhost".to_string(),
+            feagi_api_port: 8080,
+            feagi_zmq_registration_port: 30001,
+            feagi_zmq_sensory_port: 5555,
+            feagi_tick_hz: 60,
+            feagi_heartbeat_interval_s: 5.0,
+            feagi_connection_timeout_ms: 5000,
+            feagi_registration_retries: 3,
+        };
+        let id1 = config1.cortical_id();
+        println!("Group 1: {} (expected: aXRlbgEAAAA=)", id1.as_base_64());
+        assert_eq!(id1.as_base_64(), "aXRlbgEAAAA=", "Group 1 cortical ID should match genome");
     }
 }
 
