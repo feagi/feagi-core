@@ -150,13 +150,19 @@ impl PlasticityExecutor for AsyncPlasticityExecutor {
     
     fn start(&mut self) {
         if self.running {
+            tracing::warn!(target: "plasticity", "⚠️  PlasticityExecutor already running");
             return;
         }
         
         if let Some(service) = self.service.lock().unwrap().as_ref() {
+            tracing::info!(target: "plasticity", "🚀 Initializing AsyncPlasticityExecutor...");
             service.start();
             self.running = true;
-            tracing::info!("Started async plasticity executor");
+            tracing::info!(target: "plasticity", 
+                "✅ AsyncPlasticityExecutor started successfully - ready to monitor memory areas and process STDP"
+            );
+        } else {
+            tracing::error!(target: "plasticity", "❌ Failed to start PlasticityExecutor - service not initialized");
         }
     }
     

@@ -191,7 +191,11 @@ impl PlasticityService {
         let memory_stats_cache = self.memory_stats_cache.clone();
         let npu = Arc::clone(&self.npu);  // Clone NPU reference for thread
 
+        tracing::info!(target: "plasticity", "🧠 Starting PlasticityService background thread...");
+        
         thread::spawn(move || {
+            tracing::info!(target: "plasticity", "✓ PlasticityService thread started - waiting for burst notifications");
+            
             let (lock, cvar) = &*cv;
 
             loop {
@@ -306,6 +310,11 @@ impl PlasticityService {
         // Step 3: Detect patterns for all memory areas
         // Query CPU-resident FireLedger for upstream area firing history
         for (memory_area_idx, area_config) in memory_areas_snapshot.iter() {
+            tracing::debug!(target: "plasticity",
+                "[PLASTICITY-DEBUG] Burst {} - Processing memory area {} with {} upstream areas: {:?}",
+                current_timestep, memory_area_idx, area_config.upstream_areas.len(), area_config.upstream_areas
+            );
+            
             // Query FireLedger for upstream firing history (CPU-resident, zero-copy access)
             let timestep_bitmaps: Vec<HashSet<u32>> = {
                 // Brief lock to query FireLedger - data is already CPU-resident from burst processing
@@ -315,20 +324,38 @@ impl PlasticityService {
                 area_config.upstream_areas.iter()
                     .flat_map(|&upstream_area_idx| {
                         // Get recent history for this upstream area using RoaringBitmaps
-                        npu_lock.get_fire_ledger_history_bitmaps(upstream_area_idx, area_config.temporal_depth as usize)
-                            .into_iter()
-                            .map(|(_timestep, bitmap)| {
-                                // Convert RoaringBitmap to HashSet<u32> for pattern detector
-                                bitmap.iter().collect::<HashSet<u32>>()
+                        let history = npu_lock.get_fire_ledger_history_bitmaps(upstream_area_idx, area_config.temporal_depth as usize);
+                        tracing::debug!(target: "plasticity",
+                            "[PLASTICITY-DEBUG] Burst {} - Upstream area {} has {} timesteps of history",
+                            current_timestep, upstream_area_idx, history.len()
+                        );
+                        history.into_iter()
+                            .enumerate()
+                            .map(move |(idx, (_timestep, bitmap))| {
+                                let neuron_set: HashSet<u32> = bitmap.iter().collect();
+                                tracing::debug!(target: "plasticity",
+                                    "[PLASTICITY-DEBUG] Burst {} - Upstream area {} timestep {} has {} firing neurons",
+                                    current_timestep, upstream_area_idx, idx, neuron_set.len()
+                                );
+                                neuron_set
                             })
                     })
                     .collect()
             }; // NPU lock released immediately after query
 
             if timestep_bitmaps.is_empty() {
+                tracing::debug!(target: "plasticity",
+                    "[PLASTICITY-DEBUG] Burst {} - Memory area {} has NO firing history from upstream areas - skipping",
+                    current_timestep, memory_area_idx
+                );
                 // No firing history available for upstream areas - skip pattern detection
                 continue;
             }
+            
+            tracing::debug!(target: "plasticity",
+                "[PLASTICITY-DEBUG] Burst {} - Memory area {} has {} timestep bitmaps for pattern detection",
+                current_timestep, memory_area_idx, timestep_bitmaps.len()
+            );
 
             let detector =
                 pattern_detector.get_detector(*memory_area_idx, area_config.temporal_depth);
@@ -340,6 +367,11 @@ impl PlasticityService {
                 timestep_bitmaps,
                 Some(area_config.temporal_depth),
             ) {
+                tracing::info!(target: "plasticity",
+                    "[PLASTICITY] ✓ Pattern detected for memory area {} - hash: {}",
+                    memory_area_idx, pattern.pattern_hash
+                );
+                
                 let mut s = stats.lock().unwrap();
                 s.memory_patterns_detected += 1;
                 drop(s);
@@ -382,6 +414,11 @@ impl PlasticityService {
                     }
                 } else {
                     // Create new memory neuron
+                    tracing::info!(target: "plasticity",
+                        "[PLASTICITY] 🧠 Creating NEW memory neuron for pattern {} in area {}",
+                        pattern.pattern_hash, memory_area_idx
+                    );
+                    
                     let lifecycle_config = memory_lifecycle_configs
                         .lock()
                         .unwrap()
@@ -395,6 +432,11 @@ impl PlasticityService {
                         current_timestep,
                         &lifecycle_config,
                     ) {
+                        tracing::info!(target: "plasticity",
+                            "[PLASTICITY] ✓ Memory neuron created: idx={}, pattern={}",
+                            neuron_idx, pattern.pattern_hash
+                        );
+                        
                         let mut s = stats.lock().unwrap();
                         s.memory_neurons_created += 1;
                         drop(s);
@@ -407,6 +449,11 @@ impl PlasticityService {
                         let neuron_id = array.get_neuron_id(neuron_idx).unwrap();
 
                         // Register and inject new neuron
+                        tracing::info!(target: "plasticity",
+                            "[PLASTICITY] 📤 Queueing commands: RegisterMemoryNeuron(id={}) + InjectMemoryNeuronToFCL(id={}, potential=1.5)",
+                            neuron_id, neuron_id
+                        );
+                        
                         commands.push(PlasticityCommand::RegisterMemoryNeuron {
                             neuron_id,
                             area_idx: *memory_area_idx,
@@ -428,13 +475,27 @@ impl PlasticityService {
                             area_idx: *memory_area_idx,
                             neuron_id,
                         });
+                    } else {
+                        tracing::warn!(target: "plasticity",
+                            "[PLASTICITY] ⚠️  Failed to create memory neuron for pattern {} in area {}",
+                            pattern.pattern_hash, memory_area_idx
+                        );
                     }
                 }
+            } else {
+                tracing::debug!(target: "plasticity",
+                    "[PLASTICITY-DEBUG] Burst {} - No pattern detected for memory area {}",
+                    current_timestep, memory_area_idx
+                );
             }
         }
 
         // Enqueue commands
         if !commands.is_empty() {
+            tracing::info!(target: "plasticity",
+                "[PLASTICITY] 📋 Enqueuing {} commands for execution",
+                commands.len()
+            );
             let cmd_count = commands.len();
             let mut queue = command_queue.lock().unwrap();
             let mut s = stats.lock().unwrap();

@@ -100,6 +100,10 @@ pub struct BurstLoopRunner {
     /// Parameter update queue (asynchronous, non-blocking)
     /// API pushes updates here, burst loop consumes between bursts
     pub parameter_queue: ParameterUpdateQueue,
+    /// Plasticity burst notification callback (called after each burst)
+    /// Callback receives the current burst/timestep number
+    /// Uses Fn trait object to avoid circular dependency with plasticity crate
+    plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>,
 }
 
 impl BurstLoopRunner {
@@ -294,7 +298,18 @@ impl BurstLoopRunner {
             fcl_sampler_consumer: Arc::new(Mutex::new(1)),     // Default: 1 = visualization only
             cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             parameter_queue: ParameterUpdateQueue::new(),
+            plasticity_notify: None, // Initialized later via set_plasticity_notify_callback
         }
+    }
+
+    /// Set plasticity burst notification callback (called during initialization if plasticity is enabled)
+    /// This avoids circular dependency between burst-engine and plasticity crates
+    pub fn set_plasticity_notify_callback<F>(&mut self, callback: F)
+    where
+        F: Fn(u64) + Send + Sync + 'static,
+    {
+        self.plasticity_notify = Some(Arc::new(callback));
+        info!("[BURST-RUNNER] Plasticity notification callback attached");
     }
 
     /// Attach visualization SHM writer (called from Python after registration)
@@ -381,6 +396,7 @@ impl BurstLoopRunner {
         let motor_subs = self.motor_subscriptions.clone();
         let cached_burst_count = self.cached_burst_count.clone(); // For lock-free burst count reads
         let param_queue = self.parameter_queue.clone(); // Parameter update queue
+        let plasticity_notify = self.plasticity_notify.clone(); // Clone Arc for thread
 
         self.thread_handle = Some(
             thread::Builder::new()
@@ -397,6 +413,7 @@ impl BurstLoopRunner {
                         motor_subs,
                         cached_burst_count,
                         param_queue,
+                        plasticity_notify,
                     );
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
@@ -717,6 +734,7 @@ fn burst_loop(
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
     parameter_queue: ParameterUpdateQueue,                 // Asynchronous parameter update queue
+    plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -1007,10 +1025,18 @@ fn burst_loop(
 
                         total_neurons_fired += result.neuron_count;
                         // Update cached burst count for lock-free reads
+                        let current_burst = npu_lock.get_burst_count();
                         cached_burst_count.store(
-                            npu_lock.get_burst_count(),
+                            current_burst,
                             std::sync::atomic::Ordering::Relaxed,
                         );
+                        
+                        // Notify plasticity service of completed burst (while NPU lock still held)
+                        // This allows plasticity service to immediately query FireLedger data
+                        // Callback is pre-cloned Arc, so this is just a function call (no allocation)
+                        if let Some(ref notify_fn) = plasticity_notify {
+                            notify_fn(current_burst);
+                        }
                         
                         false // Continue processing
                     }

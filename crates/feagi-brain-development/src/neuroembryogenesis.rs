@@ -822,6 +822,58 @@ impl Neuroembryogenesis {
             let manager = self.connectome_manager.read();
             manager.update_cached_synapse_count();
         }
+        
+        // CRITICAL: Register memory areas with PlasticityExecutor after all mappings are created
+        // This ensures memory areas have their complete upstream_cortical_areas lists populated.
+        #[cfg(feature = "plasticity")]
+        {
+            use feagi_evolutionary::extract_memory_properties;
+            use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
+            
+            let manager = self.connectome_manager.read();
+            if let Some(ref executor) = manager.get_plasticity_executor() {
+                info!(target: "feagi-bdu", "🧠 Registering memory areas with PlasticityExecutor...");
+                let mut registered_count = 0;
+                
+                // Iterate through all cortical areas and register memory areas
+                for area_id in manager.get_cortical_area_ids() {
+                    if let Some(area) = manager.get_cortical_area(area_id) {
+                        if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                            let upstream_areas = manager.get_upstream_cortical_areas(&area_id);
+                            
+                            if let Ok(mut exec) = executor.lock() {
+                                let lifecycle_config = MemoryNeuronLifecycleConfig {
+                                    initial_lifespan: mem_props.init_lifespan,
+                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                                    longterm_threshold: mem_props.longterm_threshold,
+                                    max_reactivations: 1000,
+                                };
+                                
+                                exec.register_memory_area(
+                                    area.cortical_idx,
+                                    area.name.clone(),
+                                    mem_props.temporal_depth,
+                                    upstream_areas.clone(),
+                                    Some(lifecycle_config),
+                                );
+                                
+                                registered_count += 1;
+                                info!(target: "feagi-bdu",
+                                    "   ✓ Registered memory area '{}' (idx={}, upstream={:?})",
+                                    area.name, area.cortical_idx, upstream_areas
+                                );
+                            }
+                        }
+                    }
+                }
+                
+                if registered_count > 0 {
+                    info!(target: "feagi-bdu", "✅ Registered {} memory area(s) with PlasticityExecutor", registered_count);
+                } else {
+                    info!(target: "feagi-bdu", "   No memory areas found in genome");
+                }
+            }
+        }
 
         // Verify against genome stats
         if expected_synapses > 0 {
