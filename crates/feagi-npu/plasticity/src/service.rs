@@ -113,6 +113,9 @@ pub struct PlasticityStats {
 pub struct PlasticityService {
     config: PlasticityConfig,
 
+    // NPU reference (for querying CPU-resident FireLedger)
+    npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+
     // Pattern detection
     pattern_detector: BatchPatternDetector,
 
@@ -138,12 +141,17 @@ pub struct PlasticityService {
 }
 
 impl PlasticityService {
-    /// Create a new plasticity service with stats cache
-    pub fn new(config: PlasticityConfig, memory_stats_cache: MemoryStatsCache) -> Self {
+    /// Create a new plasticity service with stats cache and NPU reference
+    pub fn new(
+        config: PlasticityConfig,
+        memory_stats_cache: MemoryStatsCache,
+        npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    ) -> Self {
         let pattern_detector = BatchPatternDetector::new(config.pattern_config.clone());
 
         Self {
             config,
+            npu,
             pattern_detector,
             memory_neuron_array: Arc::new(Mutex::new(MemoryNeuronArray::new(50000))),
             memory_areas: Arc::new(Mutex::new(HashMap::new())),
@@ -181,6 +189,7 @@ impl PlasticityService {
         let stats = Arc::clone(&self.stats);
         let config = self.config.clone();
         let memory_stats_cache = self.memory_stats_cache.clone();
+        let npu = Arc::clone(&self.npu);  // Clone NPU reference for thread
 
         thread::spawn(move || {
             let (lock, cvar) = &*cv;
@@ -197,6 +206,7 @@ impl PlasticityService {
                 // Compute plasticity
                 Self::compute_plasticity(
                     timestep,
+                    &npu,
                     &memory_neuron_array,
                     &memory_areas,
                     &memory_lifecycle_configs,
@@ -223,6 +233,7 @@ impl PlasticityService {
     #[allow(clippy::too_many_arguments)]
     fn compute_plasticity(
         current_timestep: u64,
+        npu: &Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
         memory_neuron_array: &Arc<Mutex<MemoryNeuronArray>>,
         memory_areas: &Arc<Mutex<HashMap<u32, MemoryAreaConfig>>>,
         memory_lifecycle_configs: &Arc<Mutex<HashMap<u32, MemoryNeuronLifecycleConfig>>>,
@@ -234,6 +245,22 @@ impl PlasticityService {
         memory_stats_cache: &MemoryStatsCache,
     ) {
         let memory_areas_snapshot = memory_areas.lock().unwrap().clone();
+
+        // Log plasticity status every 100 bursts
+        if current_timestep % 100 == 0 {
+            if memory_areas_snapshot.is_empty() {
+                tracing::warn!(target: "plasticity",
+                    "[PLASTICITY] ⚠️  Burst {} - NO MEMORY AREAS REGISTERED! Plasticity service has nothing to monitor.",
+                    current_timestep
+                );
+            } else {
+                tracing::info!(target: "plasticity",
+                    "[PLASTICITY] ✓ Burst {} - Monitoring {} memory area(s)",
+                    current_timestep,
+                    memory_areas_snapshot.len()
+                );
+            }
+        }
 
         if memory_areas_snapshot.is_empty() {
             return;
@@ -277,14 +304,31 @@ impl PlasticityService {
         }
 
         // Step 3: Detect patterns for all memory areas
-        // Note: Fire ledger integration provides historical firing data as RoaringBitmaps
-        // for optimal STDP performance. Use get_history_bitmaps() for best performance,
-        // or get_history() for backward compatibility with Vec<u32>.
-
+        // Query CPU-resident FireLedger for upstream area firing history
         for (memory_area_idx, area_config) in memory_areas_snapshot.iter() {
-            // TODO: Integrate fire ledger via get_history_bitmaps() for optimal performance
-            // Fire ledger provides: Vec<(u64, RoaringBitmap)> = timestep + compressed neuron sets
-            let timestep_bitmaps: Vec<HashSet<u32>> = Vec::new();
+            // Query FireLedger for upstream firing history (CPU-resident, zero-copy access)
+            let timestep_bitmaps: Vec<HashSet<u32>> = {
+                // Brief lock to query FireLedger - data is already CPU-resident from burst processing
+                let npu_lock = npu.lock().unwrap();
+                
+                // Collect firing history for all upstream areas
+                area_config.upstream_areas.iter()
+                    .flat_map(|&upstream_area_idx| {
+                        // Get recent history for this upstream area using RoaringBitmaps
+                        npu_lock.get_fire_ledger_history_bitmaps(upstream_area_idx, area_config.temporal_depth as usize)
+                            .into_iter()
+                            .map(|(_timestep, bitmap)| {
+                                // Convert RoaringBitmap to HashSet<u32> for pattern detector
+                                bitmap.iter().collect::<HashSet<u32>>()
+                            })
+                    })
+                    .collect()
+            }; // NPU lock released immediately after query
+
+            if timestep_bitmaps.is_empty() {
+                // No firing history available for upstream areas - skip pattern detection
+                continue;
+            }
 
             let detector =
                 pattern_detector.get_detector(*memory_area_idx, area_config.temporal_depth);

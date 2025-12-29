@@ -60,7 +60,7 @@ rand = { version = "0.8", default-features = false, features = ["getrandom"] }
 feagi-npu-burst-engine = { version = "0.0.1-beta.1", path = "../feagi-npu/burst-engine", default-features = false, features = ["wasm"] }
 
 [features]
-default = ["parallel"]
+default = ["parallel", "plasticity"]  # Standard build includes plasticity
 # Parallel processing via rayon (not available in WASM)
 parallel = ["rayon"]
 # Plasticity support (memory neurons, STDP)

@@ -120,11 +120,9 @@ pub struct ConnectomeManager {
     /// All neuron/synapse data queries delegate to the NPU.
     npu: Option<Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>>,
 
-    /// Optional reference to the Plasticity Manager for memory neuron registration
-    ///
-    /// This is set during initialization if the plasticity feature is enabled.
+    /// Plasticity executor reference (optional, only when plasticity feature is enabled)
     #[cfg(feature = "plasticity")]
-    plasticity_manager: Option<Arc<std::sync::Mutex<feagi_npu_plasticity::PlasticityLifecycleManager>>>,
+    plasticity_executor: Option<Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>>,
 
     /// Cached neuron count (lock-free read) - updated by burst engine
     /// This prevents health checks from blocking on NPU lock
@@ -155,7 +153,7 @@ impl ConnectomeManager {
             config: ConnectomeConfig::default(),
             npu: None,
             #[cfg(feature = "plasticity")]
-            plasticity_manager: None,
+            plasticity_executor: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
@@ -206,7 +204,7 @@ impl ConnectomeManager {
             config: ConnectomeConfig::default(),
             npu: None,
             #[cfg(feature = "plasticity")]
-            plasticity_manager: None,
+            plasticity_executor: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
@@ -239,7 +237,7 @@ impl ConnectomeManager {
             config: ConnectomeConfig::default(),
             npu: Some(npu),
             #[cfg(feature = "plasticity")]
-            plasticity_manager: None,
+            plasticity_executor: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
@@ -378,47 +376,6 @@ impl ConnectomeManager {
                     cortical_idx,
                     cortical_id.as_base_64()
                 );
-            }
-        }
-
-        // Register memory cortical areas with plasticity manager (if feature enabled and connected)
-        #[cfg(feature = "plasticity")]
-        {
-            use feagi_evolutionary::extract_memory_properties;
-            
-            // Check if this is a memory area by examining its properties
-            if let Some(area) = self.cortical_areas.get(&cortical_id) {
-                if let Some(mem_props) = extract_memory_properties(&area.properties) {
-                    if let Some(ref plasticity_mgr) = self.plasticity_manager {
-                        // Register the memory area with the plasticity manager
-                        if let Ok(mut mgr) = plasticity_mgr.lock() {
-                            use feagi_npu_plasticity::MemoryNeuronLifecycleConfig;
-                            
-                            let lifecycle_config = MemoryNeuronLifecycleConfig {
-                                initial_lifespan: mem_props.init_lifespan,
-                                lifespan_growth_rate: mem_props.lifespan_growth_rate,
-                                longterm_threshold: mem_props.longterm_threshold,
-                                max_reactivations: 1000, // Default value
-                            };
-                            
-                            // Extract upstream areas from all cortical areas' dstmaps
-                            let upstream_areas = self.get_upstream_cortical_areas(&cortical_id);
-                            
-                            mgr.register_memory_area(
-                                cortical_idx,
-                                area.name.clone(),
-                                mem_props.temporal_depth,
-                                upstream_areas.clone(),
-                                Some(lifecycle_config),
-                            );
-                            
-                            info!(target: "feagi-bdu",
-                                "🧠 Registered memory area '{}' (idx={}, temporal_depth={}, upstream_areas={:?}) with plasticity manager",
-                                area.name, cortical_idx, mem_props.temporal_depth, upstream_areas
-                            );
-                        }
-                    }
-                }
             }
         }
 
@@ -564,8 +521,8 @@ impl ConnectomeManager {
                 let src_value = serde_json::json!(src_cortical_idx);
                 if !arr.contains(&src_value) {
                     arr.push(src_value);
-                    debug!(target: "feagi-bdu",
-                        "Added upstream area idx={} to cortical area '{}'",
+                    info!(target: "feagi-bdu",
+                        "✓ Added upstream area idx={} to cortical area '{}'",
                         src_cortical_idx, target_cortical_id.as_base_64()
                     );
                 }
@@ -788,16 +745,70 @@ impl ConnectomeManager {
                 );
             }
 
-            // Then, apply cortical mapping to create new synapses (may be 0 for deletions)
+            // Then, apply cortical mapping to create new synapses (may be 0 for memory areas)
             let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
 
-            // Update upstream area tracking based on synapse count
+            // Update upstream area tracking based on MAPPING existence, not synapse count
+            // Memory areas have 0 synapses but still need upstream tracking for pattern detection
             let src_idx = *self.cortical_id_to_idx.get(src_area_id).unwrap();
-            if synapse_count > 0 {
-                // Synapses exist - ensure src is in upstream list
+            
+            // Check if mapping exists by looking at cortical_mapping_dst property
+            let has_mapping = self.cortical_areas.get(src_area_id)
+                .and_then(|area| area.properties.get("cortical_mapping_dst"))
+                .and_then(|v| v.as_object())
+                .and_then(|map| map.get(&dst_area_id.as_base_64()))
+                .is_some();
+            
+            info!(target: "feagi-bdu",
+                "Mapping result: {} synapses, {} -> {} (mapping_exists={}, will {}update upstream)",
+                synapse_count,
+                src_area_id.as_base_64(),
+                dst_area_id.as_base_64(),
+                has_mapping,
+                if has_mapping { "" } else { "NOT " }
+            );
+            
+            if has_mapping {
+                // Mapping exists - add to upstream tracking (for both memory and regular areas)
                 self.add_upstream_area(dst_area_id, src_idx);
+                
+                // If destination is a memory area, register it with PlasticityExecutor (automatic)
+                #[cfg(feature = "plasticity")]
+                if let Some(ref executor) = self.plasticity_executor {
+                    use feagi_evolutionary::extract_memory_properties;
+                    
+                    if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
+                        if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
+                            let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
+                            
+                            if let Ok(mut exec) = executor.lock() {
+                                use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
+                                
+                                let lifecycle_config = MemoryNeuronLifecycleConfig {
+                                    initial_lifespan: mem_props.init_lifespan,
+                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                                    longterm_threshold: mem_props.longterm_threshold,
+                                    max_reactivations: 1000,
+                                };
+                                
+                                exec.register_memory_area(
+                                    dst_area.cortical_idx,
+                                    dst_area.name.clone(),
+                                    mem_props.temporal_depth,
+                                    upstream_areas.clone(),
+                                    Some(lifecycle_config),
+                                );
+                                
+                                info!(target: "feagi-bdu",
+                                    "🧠 Auto-registered memory area '{}' (idx={}, upstream={:?})",
+                                    dst_area.name, dst_area.cortical_idx, upstream_areas
+                                );
+                            }
+                        }
+                    }
+                }
             } else {
-                // No synapses - remove src from upstream list (mapping was deleted)
+                // Mapping deleted - remove from upstream tracking
                 self.remove_upstream_area(dst_area_id, src_idx);
             }
 
@@ -1066,22 +1077,12 @@ impl ConnectomeManager {
         self.npu.as_ref()
     }
 
-    /// Set the Plasticity Manager reference (optional, only if plasticity feature enabled)
-    ///
-    /// # Arguments
-    ///
-    /// * `plasticity_manager` - Arc to the Plasticity Manager
-    ///
+    /// Set the PlasticityExecutor reference (optional, only if plasticity feature enabled)
+    /// The executor is passed as Arc<Mutex<dyn Any>> for feature-gating compatibility
     #[cfg(feature = "plasticity")]
-    pub fn set_plasticity_manager(&mut self, plasticity_manager: Arc<std::sync::Mutex<feagi_npu_plasticity::PlasticityLifecycleManager>>) {
-        self.plasticity_manager = Some(plasticity_manager);
-        info!(target: "feagi-bdu", "🔗 ConnectomeManager: Plasticity Manager reference set");
-    }
-
-    /// Check if Plasticity Manager is connected
-    #[cfg(feature = "plasticity")]
-    pub fn has_plasticity_manager(&self) -> bool {
-        self.plasticity_manager.is_some()
+    pub fn set_plasticity_executor(&mut self, executor: Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>) {
+        self.plasticity_executor = Some(executor);
+        info!(target: "feagi-bdu", "🔗 ConnectomeManager: PlasticityExecutor reference set");
     }
 
     /// Get neuron capacity from NPU

@@ -646,6 +646,29 @@ where
         }
     }
 
+    /// Get firing history for a cortical area (as RoaringBitmaps for optimal performance)
+    /// Returns Vec of (timestep, RoaringBitmap) tuples, newest first
+    pub fn get_fire_ledger_history_bitmaps(
+        &self,
+        cortical_idx: u32,
+        lookback_steps: usize,
+    ) -> Vec<(u64, roaring::RoaringBitmap)> {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu
+                .fire_structures
+                .lock()
+                .unwrap()
+                .fire_ledger
+                .get_history_bitmaps(cortical_idx, lookback_steps),
+            DynamicNPUGeneric::INT8(npu) => npu
+                .fire_structures
+                .lock()
+                .unwrap()
+                .fire_ledger
+                .get_history_bitmaps(cortical_idx, lookback_steps),
+        }
+    }
+
     pub fn batch_get_neuron_ids_from_coordinates(
         &self,
         area_id: u32,

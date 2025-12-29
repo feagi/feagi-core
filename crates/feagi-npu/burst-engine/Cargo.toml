@@ -16,9 +16,6 @@ feagi-npu-neural = { version = "0.0.1-beta.1", path = "../neural" }
 # Standard runtime implementation available via "std" feature
 feagi-npu-runtime = { version = "0.0.1-beta.1", path = "../runtime", optional = true }
 
-# Plasticity support (memory neurons, STDP)
-feagi-npu-plasticity = { version = "0.0.1-beta.1", path = "../plasticity", optional = true }
-
 feagi-state-manager = { version = "0.0.1-beta.1", path = "../../feagi-state-manager" }  # For BurstEngineState enum
 # NO DIRECT DEPENDENCY ON FEAGI-PNS (would create circular dependency)
 # Instead, uses trait abstraction (VisualizationPublisher trait) passed at runtime
@@ -48,11 +45,9 @@ cudarc = { version = "0.11", features = ["cuda-11080", "f16"], optional = true }
 half = { version = "2.4", optional = true }
 
 [features]
-default = ["connectome-io", "async-tokio", "std", "plasticity"]
+default = ["connectome-io", "async-tokio", "std"]
 # Standard library support (includes StdRuntime for DynamicNPU type alias)
 std = ["feagi-npu-runtime/std"]
-# Plasticity support (memory neurons, STDP)
-plasticity = ["feagi-npu-plasticity"]
 # Enable connectome serialization/deserialization (requires native dependencies)
 connectome-io = []  # Types are in feagi-npu-neural (always available with std feature)
 # Async runtime features
@@ -64,8 +59,6 @@ gpu = ["wgpu", "pollster", "bytemuck"]
 cuda = ["cudarc", "half"]
 # Enable all GPU backends
 all-gpu = ["gpu", "cuda"]
-# Enable plasticity integration (trait-based, no direct dependency)
-with-plasticity = []
 
 [[bench]]
 name = "backend_comparison"

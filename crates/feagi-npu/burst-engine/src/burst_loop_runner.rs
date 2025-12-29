@@ -100,10 +100,6 @@ pub struct BurstLoopRunner {
     /// Parameter update queue (asynchronous, non-blocking)
     /// API pushes updates here, burst loop consumes between bursts
     pub parameter_queue: ParameterUpdateQueue,
-    /// Plasticity lifecycle manager (optional, only when plasticity is enabled)
-    /// Manages memory neuron creation and STDP weight updates
-    #[cfg(feature = "plasticity")]
-    pub plasticity_manager: Option<Arc<Mutex<feagi_npu_plasticity::PlasticityLifecycleManager>>>,
 }
 
 impl BurstLoopRunner {
@@ -298,8 +294,6 @@ impl BurstLoopRunner {
             fcl_sampler_consumer: Arc::new(Mutex::new(1)),     // Default: 1 = visualization only
             cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
             parameter_queue: ParameterUpdateQueue::new(),
-            #[cfg(feature = "plasticity")]
-            plasticity_manager: None, // Initialized later via attach_plasticity_manager
         }
     }
 
@@ -323,22 +317,6 @@ impl BurstLoopRunner {
         let mut guard = self.motor_shm_writer.lock().unwrap();
         *guard = Some(writer);
         Ok(())
-    }
-
-    /// Attach plasticity manager (called during initialization if plasticity is enabled)
-    #[cfg(feature = "plasticity")]
-    pub fn attach_plasticity_manager(
-        &mut self,
-        manager: Arc<Mutex<feagi_npu_plasticity::PlasticityLifecycleManager>>,
-    ) {
-        self.plasticity_manager = Some(manager);
-        info!("Plasticity manager attached to burst loop runner");
-    }
-
-    /// Get plasticity manager reference (for genome integration)
-    #[cfg(feature = "plasticity")]
-    pub fn get_plasticity_manager(&self) -> Option<Arc<Mutex<feagi_npu_plasticity::PlasticityLifecycleManager>>> {
-        self.plasticity_manager.clone()
     }
 
     /// Register an agent's motor subscriptions
@@ -403,8 +381,6 @@ impl BurstLoopRunner {
         let motor_subs = self.motor_subscriptions.clone();
         let cached_burst_count = self.cached_burst_count.clone(); // For lock-free burst count reads
         let param_queue = self.parameter_queue.clone(); // Parameter update queue
-        #[cfg(feature = "plasticity")]
-        let plasticity_mgr = self.plasticity_manager.clone(); // Plasticity lifecycle manager
 
         self.thread_handle = Some(
             thread::Builder::new()
@@ -421,8 +397,6 @@ impl BurstLoopRunner {
                         motor_subs,
                         cached_burst_count,
                         param_queue,
-                        #[cfg(feature = "plasticity")]
-                        plasticity_mgr,
                     );
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
@@ -743,8 +717,6 @@ fn burst_loop(
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
     parameter_queue: ParameterUpdateQueue,                 // Asynchronous parameter update queue
-    #[cfg(feature = "plasticity")]
-    plasticity_manager: Option<Arc<Mutex<feagi_npu_plasticity::PlasticityLifecycleManager>>>,
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -1040,14 +1012,6 @@ fn burst_loop(
                             std::sync::atomic::Ordering::Relaxed,
                         );
                         
-                        // Notify plasticity service of completed burst (if enabled)
-                        #[cfg(feature = "plasticity")]
-                        if let Some(ref plasticity_mgr) = plasticity_manager {
-                            if let Ok(mgr) = plasticity_mgr.lock() {
-                                mgr.notify_burst(npu_lock.get_burst_count());
-                            }
-                        }
-                        
                         false // Continue processing
                     }
                     Err(e) => {
@@ -1064,65 +1028,6 @@ fn burst_loop(
 
         if burst_num < 5 || burst_num.is_multiple_of(100) {
             trace!("[BURST-TIMING] Burst {}: NPU lock RELEASED", burst_num);
-        }
-
-        // Process plasticity commands (if any)
-        #[cfg(feature = "plasticity")]
-        if let Some(ref plasticity_mgr) = plasticity_manager {
-            let commands = {
-                if let Ok(mgr) = plasticity_mgr.lock() {
-                    mgr.drain_commands()
-                } else {
-                    Vec::new()
-                }
-            };
-
-            if !commands.is_empty() {
-                debug!("[PLASTICITY] Processing {} commands", commands.len());
-                let npu_lock = npu.lock().unwrap();
-                
-                for cmd in commands {
-                    use feagi_npu_plasticity::PlasticityCommand;
-                    match cmd {
-                        PlasticityCommand::RegisterMemoryNeuron {
-                            neuron_id,
-                            area_idx: _,
-                            threshold: _,
-                            membrane_potential: _,
-                        } => {
-                            debug!("[PLASTICITY] Registering memory neuron: neuron_id={}", neuron_id);
-                            // Register neuron in NPU (requires NPU API support)
-                            // TODO: Implement npu_lock.register_neuron(neuron_id, area_idx, threshold, membrane_potential)
-                            // For now, log the registration
-                            warn!("[PLASTICITY] RegisterMemoryNeuron not yet fully integrated (neuron_id={})", neuron_id);
-                        }
-                        PlasticityCommand::InjectMemoryNeuronToFCL {
-                            neuron_id,
-                            area_idx: _,
-                            membrane_potential: _,
-                            pattern_hash,
-                            is_reactivation,
-                        } => {
-                            debug!("[PLASTICITY] Injecting memory neuron to FCL: neuron_id={}, pattern_hash={}, reactivation={}", neuron_id, pattern_hash, is_reactivation);
-                            // Inject to Fire Candidate List (requires NPU API support)
-                            // TODO: Implement npu_lock.inject_to_fcl(neuron_id, area_idx, membrane_potential)
-                            warn!("[PLASTICITY] InjectMemoryNeuronToFCL not yet fully integrated (neuron_id={})", neuron_id);
-                        }
-                        PlasticityCommand::UpdateWeightsDelta {
-                            synapse_indices,
-                            deltas: _,
-                        } => {
-                            debug!("[PLASTICITY] STDP weight update: {} synapses", synapse_indices.len());
-                            // Apply STDP weight deltas (future enhancement)
-                            warn!("[PLASTICITY] STDP weight updates not yet implemented");
-                        }
-                        PlasticityCommand::UpdateStateCounters { .. } => {
-                            // Stats tracking only, no NPU action needed
-                        }
-                    }
-                }
-                drop(npu_lock);
-            }
         }
 
         // Exit if shutdown was requested

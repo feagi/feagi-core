@@ -2046,7 +2046,6 @@ dependencies = [
  "criterion",
  "cudarc",
  "feagi-npu-neural",
- "feagi-npu-plasticity",
  "feagi-npu-runtime",
  "feagi-observability",
  "feagi-serialization",
@@ -2080,9 +2079,11 @@ name = "feagi-npu-plasticity"
 version = "0.0.1-beta.1"
 dependencies = [
  "ahash",
+ "feagi-npu-burst-engine",
  "feagi-npu-neural",
  "parking_lot",
  "rayon",
+ "roaring",
  "serde",
  "thiserror 1.0.69",
  "tracing",
