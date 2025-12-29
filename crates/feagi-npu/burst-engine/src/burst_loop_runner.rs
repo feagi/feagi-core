@@ -1063,100 +1063,7 @@ fn burst_loop(
                         // current fire queue (what visualization/motor paths see), so we take a
                         // non-rate-limited snapshot.
                         let fq_sample = npu_lock.force_sample_fire_queue();
-                        if let Some(ref sample) = fq_sample {
-                            // FireQueueSample layout:
-                            // (neuron_ids, coords_x, coords_y, coords_z, potentials)
-                            //
-                            // All vectors should have identical length; use neuron_ids as the canonical count.
-                            let total_neurons: usize =
-                                sample.values().map(|(neuron_ids, _, _, _, _)| neuron_ids.len()).sum();
-                            info!("[BURST-LOOP] 📸 Caching fire queue: {} areas, {} total neurons",
-                                sample.len(), total_neurons);
-
-                            // Diagnostics for BV viz stream:
-                            // We need to confirm whether the NPU has a valid `cortical_idx -> cortical_id` mapping
-                            // for fired areas (especially memory), because viz encoding relies on
-                            // `get_cortical_area_name()` and will fall back to "area_{idx}" if missing.
-                            //
-                            // IMPORTANT: This log is emitted in the same block as the 📸 cache log so it is
-                            // guaranteed to appear under the same logger configuration you’re already seeing.
-                            static VIZ_CACHE_DIAG_COUNTER: std::sync::atomic::AtomicU64 =
-                                std::sync::atomic::AtomicU64::new(0);
-                            let diag_n = VIZ_CACHE_DIAG_COUNTER
-                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-                            let mut saw_viz_issue = false;
-                            let mut area_summaries: Vec<String> = Vec::with_capacity(sample.len());
-                            for (area_idx, (neuron_ids, coords_x, coords_y, coords_z, _potentials)) in
-                                sample.iter()
-                            {
-                                let area_name = npu_lock
-                                    .get_cortical_area_name(*area_idx)
-                                    .unwrap_or_else(|| format!("area_{}", area_idx));
-                                let is_fallback_name = area_name.starts_with("area_");
-                                // Memory cortical IDs are encoded as 8-byte cortical IDs.
-                                // In practice, memory areas often use a custom cortical ID prefix `cmem...`
-                                // (e.g., "cmem1_N\0" -> base64 "Y21lbTFfX04="), so we detect memory by
-                                // decoded byte prefix rather than by base64 string prefix.
-                                let is_memory_area = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(&area_name)
-                                    .ok()
-                                    .is_some_and(|id| id.as_bytes().starts_with(b"cmem") || id.as_bytes()[0] == b'm');
-
-                                // Always build a small summary so we can confirm what names are in the sample.
-                                // Format: "<idx>:<cortical_id>:<fired>"
-                                area_summaries.push(format!(
-                                    "{}:{}:{}",
-                                    area_idx,
-                                    area_name,
-                                    neuron_ids.len()
-                                ));
-
-                                // Show immediately for memory and for missing mappings.
-                                if is_fallback_name || is_memory_area {
-                                    saw_viz_issue = true;
-                                    // NOTE: "x/y/z lens" are vector lengths, not coordinate values.
-                                    // For memory areas we also print the first XYZ value to avoid confusion.
-                                    let raw_first_xyz = if is_memory_area {
-                                        let x0 = coords_x.first().copied().unwrap_or(0);
-                                        let y0 = coords_y.first().copied().unwrap_or(0);
-                                        let z0 = coords_z.first().copied().unwrap_or(0);
-                                        let n0 = neuron_ids.first().copied().unwrap_or(0);
-                                        format!(
-                                            " raw_first_neuron_id={} raw_first_xyz=({},{},{})",
-                                            n0, x0, y0, z0
-                                        )
-                                    } else {
-                                        String::new()
-                                    };
-                                    info!(
-                                        "[VIZ] area_idx={} cortical_id='{}' fired={} fallback_name={} memory_detected={} (xyz lens: x={} y={} z={}){}",
-                                        area_idx,
-                                        area_name,
-                                        neuron_ids.len(),
-                                        is_fallback_name,
-                                        is_memory_area,
-                                        coords_x.len(),
-                                        coords_y.len(),
-                                        coords_z.len(),
-                                        raw_first_xyz,
-                                    );
-                                }
-                            }
-
-                            // Print a compact per-sample summary periodically (about once every ~2 seconds at ~15Hz).
-                            // This is the fastest way to confirm whether the memory cortical_id is actually present
-                            // in the cached fire queue sample.
-                            if diag_n % 30 == 0 {
-                                info!(
-                                    "[VIZ] (diag) sample_areas={} [{}]",
-                                    sample.len(),
-                                    area_summaries.join(", ")
-                                );
-                            } else if !saw_viz_issue && sample.len() <= 6 {
-                                // Keep a tiny breadcrumb for small samples (low noise).
-                                // This helps confirm the diagnostic loop is running even when no issues are detected.
-                                info!("[VIZ] (diag) no memory/fallback areas detected in this sample");
-                            }
+                        if fq_sample.is_some() {
                         } else {
                             trace!("[BURST-LOOP] 📸 Fire queue sample is None (no neurons fired this burst)");
                         }
@@ -1297,7 +1204,7 @@ fn burst_loop(
                     // We emit a single point at (0,0,0) (memory areas are conceptually 1x1x1) so the client
                     // can trigger its jelly animation without requiring actual per-neuron coordinates.
                     // Detect memory areas by decoding cortical ID bytes (deterministic; no hardcoded IDs).
-                    // Memory areas may be encoded as custom IDs prefixed by `cmem...` (base64 like "Y21lbTFfX04=").
+                    // Memory areas may be encoded as custom IDs prefixed by `cmem...`.
                     let is_memory_area = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(&area_name)
                         .ok()
                         .is_some_and(|id| id.as_bytes().starts_with(b"cmem") || id.as_bytes()[0] == b'm');
@@ -1305,38 +1212,6 @@ fn burst_loop(
                     // FEAGI-side diagnostics (must be easy to spot in logs):
                     // - If `area_name` falls back to "area_{idx}", Type11 serialization may drop the area.
                     // - If memory area is detected, we inject a single (0,0,0) point for BV.
-                    static VIZ_NAME_DIAG_COUNTER: std::sync::atomic::AtomicU64 =
-                        std::sync::atomic::AtomicU64::new(0);
-                    let diag_n =
-                        VIZ_NAME_DIAG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let is_fallback_name = area_name.starts_with("area_");
-                    if is_fallback_name || is_memory_area {
-                        // Throttle to avoid log spam while still being quickly visible.
-                        if diag_n % 30 == 0 || is_memory_area {
-                            let raw_first_xyz = if is_memory_area {
-                                let x0 = coords_x.first().copied().unwrap_or(0);
-                                let y0 = coords_y.first().copied().unwrap_or(0);
-                                let z0 = coords_z.first().copied().unwrap_or(0);
-                                format!(" raw_first_xyz=({},{},{}) emitted_xyz=(0,0,0)", x0, y0, z0)
-                            } else {
-                                String::new()
-                            };
-                            info!(
-                                target: "BURST-LOOP",
-                                "[VIZ] area_idx={} cortical_id='{}' fired={} fallback_name={} memory_detected={} (xyz lens: x={} y={} z={} p={}){}",
-                                area_id,
-                                area_name,
-                                neuron_ids.len(),
-                                is_fallback_name,
-                                is_memory_area,
-                                coords_x.len(),
-                                coords_y.len(),
-                                coords_z.len(),
-                                potentials.len(),
-                                raw_first_xyz,
-                            );
-                        }
-                    }
 
                     raw_snapshot.insert(
                         *area_id,
