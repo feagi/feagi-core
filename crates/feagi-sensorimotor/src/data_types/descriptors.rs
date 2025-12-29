@@ -515,6 +515,25 @@ impl Display for CornerPoints {
 
 //endregion
 
+//region Percentages
+
+/// Number of percentage values per channel
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PercentageChannelDimensionality {
+    D1 = 1,
+    D2 = 2,
+    D3 = 3,
+    D4 = 4,
+}
+
+impl PercentageChannelDimensionality {
+    pub(crate) fn as_u32(self) -> u32 {
+        self as u32
+    }
+}
+
+//endregion
+
 //region Misc
 
 define_xyz_dimensions!(MiscDataDimensions, u32, "MiscDataDimensions", 0, "The dimensions of the internal 3D array of a Misc Data Struct. Coordinates align with the position of neuron coordinates in FEAGI");

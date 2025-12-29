@@ -1,6 +1,3 @@
-use super::{
-    Percentage2DExponentialNeuronVoxelXYZPDecoder, PercentageExponentialNeuronVoxelXYZPDecoder,
-};
 use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_types::{GazeProperties, Percentage, Percentage2D};
 use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
