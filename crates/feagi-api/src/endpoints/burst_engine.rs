@@ -167,7 +167,7 @@ pub async fn get_fcl(
 pub async fn get_fire_queue(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use tracing::debug;
+    use tracing::{debug, info};
 
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
@@ -178,6 +178,16 @@ pub async fn get_fire_queue(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
 
+    if fq_sample.is_empty() {
+        debug!("[FIRE-QUEUE-API] ⚠️ Fire queue sample is EMPTY - no areas");
+    } else {
+        let total_neurons: usize = fq_sample.values()
+            .map(|(x, y, z, _, _)| x.len() + y.len() + z.len())
+            .sum();
+        info!("[FIRE-QUEUE-API] ✓ Received fire queue sample: {} areas, {} total neurons", 
+            fq_sample.len(), total_neurons);
+    }
+    
     // Get burst count for timestep
     let timestep = runtime_service
         .get_burst_count()
@@ -207,11 +217,15 @@ pub async fn get_fire_queue(
             .cloned()
             .unwrap_or_else(|| format!("area_{}", cortical_idx));
 
+        info!("[FIRE-QUEUE-API] Area {} (idx={}): {} neurons fired", cortical_id, cortical_idx, neuron_ids.len());
+        
         let ids_u64: Vec<u64> = neuron_ids.iter().map(|&id| id as u64).collect();
         total_fired += ids_u64.len();
         cortical_areas.insert(cortical_id, ids_u64);
     }
 
+    info!("[FIRE-QUEUE-API] Total fired neurons: {}", total_fired);
+    
     let mut response = HashMap::new();
     response.insert("timestep".to_string(), serde_json::json!(timestep));
     response.insert("total_fired".to_string(), serde_json::json!(total_fired));

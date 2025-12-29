@@ -117,7 +117,7 @@ impl AsyncPlasticityExecutor {
 
 impl PlasticityExecutor for AsyncPlasticityExecutor {
     fn notify_burst(&self, timestep: u64) {
-        info!("[PLASTICITY-EXEC] 🔔 notify_burst({}) called", timestep);
+        // trace!("[PLASTICITY-EXEC] 🔔 notify_burst({}) called", timestep);
         if let Some(service) = self.service.lock().unwrap().as_ref() {
             service.notify_burst(timestep);
         } else {

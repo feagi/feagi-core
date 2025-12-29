@@ -65,7 +65,9 @@ pub enum PlasticityCommand {
         deltas: Vec<f32>,
     },
 
-    /// Register memory neuron in regular neuron array
+    /// Notification that a memory neuron was created/reactivated in MemoryNeuronArray
+    /// Memory neurons are stored separately from regular neurons (not in NPU neuron array)
+    /// This command is for logging/stats only
     RegisterMemoryNeuron {
         neuron_id: u32,
         area_idx: u32,
@@ -73,7 +75,8 @@ pub enum PlasticityCommand {
         membrane_potential: f32,
     },
 
-    /// Inject memory neuron to Fire Candidate List
+    /// Inject memory neuron to Fire Candidate List for immediate firing
+    /// Memory neurons bypass threshold checks and fire when their pattern is detected
     InjectMemoryNeuronToFCL {
         neuron_id: u32,
         area_idx: u32,
@@ -172,7 +175,7 @@ impl PlasticityService {
 
     /// Notify service of new burst
     pub fn notify_burst(&self, timestep: u64) {
-        info!("[PLASTICITY-SVC] 🔔 Burst {} notification received, waking compute thread", timestep);
+        // trace!("[PLASTICITY-SVC] 🔔 Burst {} notification received, waking compute thread", timestep);
         let (lock, cvar) = &*self.cv;
         let mut data = lock.lock().unwrap();
         data.0 = true;  // ✅ Set flag to true so thread wakes up!
@@ -211,7 +214,7 @@ impl PlasticityService {
                     data.1
                 };
 
-                info!("[PLASTICITY-THREAD] 💤➡️🏃 Woke up for burst {}, starting compute_plasticity", timestep);
+                // trace!("[PLASTICITY-THREAD] 💤➡️🏃 Woke up for burst {}, starting compute_plasticity", timestep);
                 
                 // Compute plasticity
                 Self::compute_plasticity(
@@ -373,10 +376,6 @@ impl PlasticityService {
                 timestep_bitmaps,
                 Some(area_config.temporal_depth),
             ) {
-                tracing::info!(target: "plasticity",
-                    "[PLASTICITY] ✓ Pattern detected for memory area {} - hash: {}",
-                    memory_area_idx, pattern.pattern_hash
-                );
                 
                 let mut s = stats.lock().unwrap();
                 s.memory_patterns_detected += 1;
@@ -498,10 +497,6 @@ impl PlasticityService {
 
         // Enqueue commands
         if !commands.is_empty() {
-            tracing::info!(target: "plasticity",
-                "[PLASTICITY] 📋 Enqueuing {} commands for execution",
-                commands.len()
-            );
             let cmd_count = commands.len();
             let mut queue = command_queue.lock().unwrap();
             let mut s = stats.lock().unwrap();
@@ -565,7 +560,7 @@ impl PlasticityService {
         let mut queue = self.command_queue.lock().unwrap();
         let drained = queue.drain(..).collect::<Vec<_>>();
         if !drained.is_empty() {
-            info!("[PLASTICITY-SVC] 📤 Draining {} command(s) for execution", drained.len());
+            // trace!("[PLASTICITY-SVC] 📤 Draining {} command(s) for execution", drained.len());
         }
         drained
     }

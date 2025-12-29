@@ -97,6 +97,8 @@ pub struct BurstLoopRunner {
     fcl_sampler_consumer: Arc<Mutex<u32>>, // Consumer type: 1=visualization, 2=motor, 3=both
     /// Cached burst count (shared reference to NPU's atomic) for lock-free reads
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>,
+    /// Cached fire queue from last burst (for API queries)
+    cached_fire_queue: Arc<Mutex<Option<FireQueueSample>>>,
     /// Parameter update queue (asynchronous, non-blocking)
     /// API pushes updates here, burst loop consumes between bursts
     pub parameter_queue: ParameterUpdateQueue,
@@ -297,6 +299,7 @@ impl BurstLoopRunner {
             fcl_sampler_frequency: Arc::new(Mutex::new(30.0)), // Default 30Hz for visualization
             fcl_sampler_consumer: Arc::new(Mutex::new(1)),     // Default: 1 = visualization only
             cached_burst_count: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            cached_fire_queue: Arc::new(Mutex::new(None)), // Cached fire queue for API
             parameter_queue: ParameterUpdateQueue::new(),
             plasticity_notify: None, // Initialized later via set_plasticity_notify_callback
         }
@@ -395,6 +398,7 @@ impl BurstLoopRunner {
         let motor_publisher = self.motor_publisher.clone(); // Direct Rust-to-Rust trait reference (NO PYTHON CALLBACKS!)
         let motor_subs = self.motor_subscriptions.clone();
         let cached_burst_count = self.cached_burst_count.clone(); // For lock-free burst count reads
+        let cached_fire_queue = self.cached_fire_queue.clone(); // For caching fire queue data
         let param_queue = self.parameter_queue.clone(); // Parameter update queue
         let plasticity_notify = self.plasticity_notify.clone(); // Clone Arc for thread
 
@@ -412,6 +416,7 @@ impl BurstLoopRunner {
                         motor_publisher,
                         motor_subs,
                         cached_burst_count,
+                        cached_fire_queue,
                         param_queue,
                         plasticity_notify,
                     );
@@ -501,9 +506,15 @@ impl BurstLoopRunner {
     }
 
     /// Get current fire queue for monitoring
-    /// Returns the last sampled fire queue data
+    /// Returns the last cached fire queue data from previous burst
     pub fn get_fire_queue_sample(&mut self) -> Option<FireQueueSample> {
-        self.npu.lock().unwrap().sample_fire_queue()
+        let cached = self.cached_fire_queue.lock().unwrap().clone();
+        if let Some(ref sample) = cached {
+            debug!("[BURST-LOOP-RUNNER] Returning cached fire queue: {} areas", sample.len());
+        } else {
+            debug!("[BURST-LOOP-RUNNER] Cached fire queue is None");
+        }
+        cached
     }
 
     /// Get Fire Ledger window configurations for all cortical areas
@@ -733,6 +744,7 @@ fn burst_loop(
     motor_publisher: Option<Arc<dyn MotorPublisher>>, // Trait object for motor (NO PYTHON CALLBACKS!)
     motor_subscriptions: Arc<ParkingLotRwLock<ahash::AHashMap<String, ahash::AHashSet<String>>>>,
     cached_burst_count: Arc<std::sync::atomic::AtomicU64>, // For lock-free burst count reads
+    cached_fire_queue: Arc<Mutex<Option<FireQueueSample>>>, // For caching fire queue data
     parameter_queue: ParameterUpdateQueue,                 // Asynchronous parameter update queue
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
 ) {
@@ -1038,6 +1050,20 @@ fn burst_loop(
                             trace!("[BURST-LOOP] 🧠 Notifying plasticity service of burst {}", current_burst);
                             notify_fn(current_burst);
                         }
+                        
+                        // Cache fire queue sample for API queries (must be done while NPU lock is held)
+                        // Fire queue is ephemeral and gets cleared, so we sample it NOW
+                        let fq_sample = npu_lock.sample_fire_queue();
+                        if let Some(ref sample) = fq_sample {
+                            let total_neurons: usize = sample.values()
+                                .map(|(x, y, z, _, _)| x.len() + y.len() + z.len())
+                                .sum();
+                            info!("[BURST-LOOP] 📸 Caching fire queue: {} areas, {} total neurons",
+                                sample.len(), total_neurons);
+                        } else {
+                            trace!("[BURST-LOOP] 📸 Fire queue sample is None (no neurons fired this burst)");
+                        }
+                        *cached_fire_queue.lock().unwrap() = fq_sample.clone();
                         
                         false // Continue processing
                     }
