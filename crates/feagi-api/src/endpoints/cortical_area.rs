@@ -278,6 +278,7 @@ pub async fn get_cortical_area_geometry(
                         "cortical_id": area.cortical_id,
                         "cortical_name": area.name,
                         "cortical_group": area.cortical_group,
+                        "cortical_type": area.cortical_type,  // NEW: Explicitly include cortical_type for BV
                         "cortical_sub_group": area.sub_group.as_ref().unwrap_or(&String::new()),  // Return empty string instead of null
                         "coordinates_3d": [area.position.0, area.position.1, area.position.2],
                         "coordinates_2d": [0, 0],  // TODO: Extract from properties when available
@@ -384,10 +385,12 @@ pub async fn post_cortical_area_properties(
 
     match connectome_service.get_cortical_area(cortical_id).await {
         Ok(area_info) => {
-            tracing::debug!(target: "feagi-api", "Cortical area properties for {}: cortical_group={}, area_type={}", cortical_id, area_info.cortical_group, area_info.area_type);
+            tracing::debug!(target: "feagi-api", "Cortical area properties for {}: cortical_group={}, area_type={}, cortical_type={}", 
+                cortical_id, area_info.cortical_group, area_info.area_type, area_info.cortical_type);
             tracing::info!(target: "feagi-api", "[API-RESPONSE] Returning mp_driven_psp={} for area {}", area_info.mp_driven_psp, cortical_id);
             let json_value = serde_json::to_value(&area_info).unwrap_or_default();
             tracing::debug!(target: "feagi-api", "Serialized JSON keys: {:?}", json_value.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+            tracing::debug!(target: "feagi-api", "Serialized cortical_type value: {:?}", json_value.get("cortical_type"));
             Ok(Json(json_value))
         }
         Err(e) => Err(ApiError::internal(format!(
@@ -437,10 +440,17 @@ pub async fn post_multi_cortical_area_properties(
 
     for cortical_id in cortical_ids {
         if let Ok(area_info) = connectome_service.get_cortical_area(&cortical_id).await {
-            result.insert(
-                cortical_id,
-                serde_json::to_value(area_info).unwrap_or_default(),
+            tracing::debug!(target: "feagi-api", 
+                "[MULTI] Area {}: cortical_type={}, cortical_group={}, is_mem_type={:?}", 
+                cortical_id, area_info.cortical_type, area_info.cortical_group,
+                area_info.properties.get("is_mem_type")
             );
+            let json_value = serde_json::to_value(&area_info).unwrap_or_default();
+            tracing::debug!(target: "feagi-api", 
+                "[MULTI] Serialized has cortical_type: {}", 
+                json_value.get("cortical_type").is_some()
+            );
+            result.insert(cortical_id, json_value);
         }
     }
     Ok(Json(result))

@@ -55,6 +55,10 @@ pub struct CorticalAreaInfo {
     pub position: (i32, i32, i32),
     pub area_type: String,      // "Sensory", "Motor", "Memory", "Custom"
     pub cortical_group: String, // "IPU", "OPU", "CORE", "CUSTOM", "MEMORY" - uppercase classification
+    /// Explicit cortical type classification: "sensory", "motor", "memory", "custom", "core"
+    /// This field provides a clear, standardized type indicator that BV can rely on
+    /// instead of parsing cortical_group or other heuristics.
+    pub cortical_type: String,
     pub neuron_count: usize,
     pub synapse_count: usize,
     pub visible: bool,

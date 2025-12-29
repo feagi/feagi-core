@@ -361,7 +361,23 @@ impl ConnectomeService for ConnectomeServiceImpl {
             area_type: cortical_group
                 .clone()
                 .unwrap_or_else(|| "CUSTOM".to_string()),
-            cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
+            cortical_group: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+            // Determine cortical_type based on properties
+            cortical_type: {
+                use feagi_evolutionary::extract_memory_properties;
+                if extract_memory_properties(&area.properties).is_some() {
+                    "memory".to_string()
+                } else if let Some(group) = &cortical_group {
+                    match group.as_str() {
+                        "IPU" => "sensory".to_string(),
+                        "OPU" => "motor".to_string(),
+                        "CORE" => "core".to_string(),
+                        _ => "custom".to_string(),
+                    }
+                } else {
+                    "custom".to_string()
+                }
+            },
             neuron_count,
             synapse_count,
             // All neural parameters come from the actual CorticalArea struct

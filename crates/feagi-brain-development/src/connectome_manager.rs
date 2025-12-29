@@ -777,8 +777,18 @@ impl ConnectomeManager {
                 if let Some(ref executor) = self.plasticity_executor {
                     use feagi_evolutionary::extract_memory_properties;
                     
+                    info!(target: "feagi-bdu", "🔍 Checking if {} is a memory area...", dst_area_id.as_base_64());
+                    
                     if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
+                        // Debug: Log all properties for diagnostic
+                        debug!(target: "feagi-bdu", "   Properties for {}: {:?}", dst_area_id.as_base_64(), 
+                            dst_area.properties.keys().collect::<Vec<_>>());
+                        debug!(target: "feagi-bdu", "   is_mem_type = {:?}", 
+                            dst_area.properties.get("is_mem_type"));
+                        
                         if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
+                            info!(target: "feagi-bdu", "✓ {} IS a memory area - registering with PlasticityExecutor", dst_area_id.as_base_64());
+                            
                             let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
                             
                             if let Ok(mut exec) = executor.lock() {
@@ -803,9 +813,22 @@ impl ConnectomeManager {
                                     "🧠 Auto-registered memory area '{}' (idx={}, upstream={:?})",
                                     dst_area.name, dst_area.cortical_idx, upstream_areas
                                 );
+                            } else {
+                                warn!(target: "feagi-bdu", "⚠️  Failed to lock PlasticityExecutor");
                             }
+                        } else {
+                            info!(target: "feagi-bdu", "   {} is NOT a memory area (is_mem_type property missing or false)", dst_area_id.as_base_64());
                         }
+                    } else {
+                        warn!(target: "feagi-bdu", "⚠️  Destination area {} not found in cortical_areas", dst_area_id.as_base_64());
                     }
+                } else {
+                    info!(target: "feagi-bdu", "   PlasticityExecutor not available (feature disabled or not initialized)");
+                }
+                
+                #[cfg(not(feature = "plasticity"))]
+                {
+                    info!(target: "feagi-bdu", "   Plasticity feature disabled at compile time");
                 }
             } else {
                 // Mapping deleted - remove from upstream tracking
@@ -992,6 +1015,16 @@ impl ConnectomeManager {
                             )?;
                             Ok(count as usize)
                         }
+                        "memory" => {
+                            // Memory morphology: No physical synapses created
+                            // Pattern detection and memory neuron creation handled by PlasticityService
+                            use tracing::trace;
+                            trace!(target: "feagi-bdu", 
+                                "Memory morphology: {} -> {} (no physical synapses, plasticity-driven)",
+                                src_idx, dst_idx
+                            );
+                            Ok(0)
+                        }
                         _ => {
                             // Other function morphologies not yet implemented
                             use tracing::debug;
@@ -1083,6 +1116,12 @@ impl ConnectomeManager {
     pub fn set_plasticity_executor(&mut self, executor: Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>) {
         self.plasticity_executor = Some(executor);
         info!(target: "feagi-bdu", "🔗 ConnectomeManager: PlasticityExecutor reference set");
+    }
+    
+    /// Get the PlasticityExecutor reference (if plasticity feature enabled)
+    #[cfg(feature = "plasticity")]
+    pub fn get_plasticity_executor(&self) -> Option<&Arc<std::sync::Mutex<feagi_npu_plasticity::AsyncPlasticityExecutor>>> {
+        self.plasticity_executor.as_ref()
     }
 
     /// Get neuron capacity from NPU
@@ -1534,10 +1573,9 @@ impl ConnectomeManager {
                     morphology_id, src_cortical_id, dst_cortical_id, synapse_count);
             }
             
-            // Queue upstream area update if any synapses were created
-            if dst_synapse_count > 0 {
-                upstream_updates.push((dst_cortical_id.clone(), src_cortical_idx));
-            }
+            // Queue upstream area update for ANY mapping (even if no synapses created)
+            // This is critical for memory areas which have mappings but no physical synapses
+            upstream_updates.push((dst_cortical_id.clone(), src_cortical_idx));
         }
 
         // Apply all upstream area updates now that NPU borrows are complete

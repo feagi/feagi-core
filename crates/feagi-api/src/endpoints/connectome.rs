@@ -24,13 +24,27 @@ pub async fn get_cortical_areas_list_detailed(
     let connectome_service = state.connectome_service.as_ref();
     match connectome_service.list_cortical_areas().await {
         Ok(areas) => {
+            tracing::info!(target: "feagi-api", 
+                "[DETAILED-LIST] Returning {} cortical areas", areas.len()
+            );
+            
             let detailed: HashMap<String, serde_json::Value> = areas
                 .into_iter()
                 .map(|area| {
-                    (
-                        area.cortical_id.clone(),
-                        serde_json::to_value(area).unwrap_or_default(),
-                    )
+                    tracing::debug!(target: "feagi-api",
+                        "[DETAILED-LIST] Area {}: cortical_type='{}', is_mem_type={:?}",
+                        area.cortical_id, area.cortical_type, 
+                        area.properties.get("is_mem_type")
+                    );
+                    
+                    let json_value = serde_json::to_value(&area).unwrap_or_default();
+                    
+                    tracing::debug!(target: "feagi-api",
+                        "[DETAILED-LIST] Serialized area {} has cortical_type: {}",
+                        area.cortical_id, json_value.get("cortical_type").is_some()
+                    );
+                    
+                    (area.cortical_id.clone(), json_value)
                 })
                 .collect();
             Ok(Json(detailed))
