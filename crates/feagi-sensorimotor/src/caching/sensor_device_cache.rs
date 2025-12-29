@@ -42,7 +42,7 @@ use feagi_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
-use crate::configuration::jsonable::UnitDefinition;
+use crate::configuration::jsonable::{InputOutputDefinition, UnitDefinition};
 
 #[allow(unused_macros)] // Macro may be used in future
 macro_rules! sensor_unit_functions {
@@ -416,19 +416,18 @@ macro_rules! sensor_unit_functions {
     };
 }
 
+
 pub struct SensorDeviceCache {
     stream_caches: HashMap<(SensoryCorticalUnit, CorticalUnitIndex), SensoryChannelStreamCaches>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
-    #[allow(dead_code)] // Part of public API
     neurons_encoded_signal: FeagiSignal<CorticalMappedXYZPNeuronVoxels>,
-    #[allow(dead_code)] // Part of public API
     bytes_encoded_signal: FeagiSignal<FeagiByteContainer>,
 }
 
-impl std::fmt::Debug for SensorDeviceCache {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for SensorDeviceCache {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SensorDeviceCache")
             .field("stream_caches_count", &self.stream_caches.len())
             .field("neuron_data", &self.neuron_data)
@@ -444,7 +443,6 @@ impl Default for SensorDeviceCache {
     }
 }
 
-#[allow(unused_must_use)] // Macro generates code that returns Result, but we don't need to handle it
 impl SensorDeviceCache {
     pub fn new() -> Self {
         SensorDeviceCache {
@@ -455,6 +453,16 @@ impl SensorDeviceCache {
             neurons_encoded_signal: FeagiSignal::new(),
             bytes_encoded_signal: FeagiSignal::new(),
         }
+    }
+
+    // Clears all registered devices and cache, to allow setting up again
+    pub fn reset(&mut self) {
+        self.stream_caches.clear();
+        self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
+        self.byte_data = FeagiByteContainer::new_empty();
+        self.previous_burst = Instant::now();
+        self.neurons_encoded_signal  = FeagiSignal::new();
+        self.bytes_encoded_signal = FeagiSignal::new();
     }
 
     sensor_cortical_units!(sensor_unit_functions);
@@ -618,7 +626,31 @@ impl SensorDeviceCache {
     //endregion
 
 
+    //region  JSON import / export
 
+    pub(crate) fn set_from_input_definition(&mut self, replacing_definition: &InputOutputDefinition) -> Result<(), FeagiDataError> {
+        self.reset();
+        let input_units = replacing_definition.get_input_units();
+        for input_unit in input_units {
+            let sensory_unit = *input_unit.0;
+            let unit_definitions = input_unit.1;
+            for unit_definition in unit_definitions {
+                self.register(sensory_unit,
+                              unit_definition.cortical_unit_index,
+                              /* Box<(dyn NeuronVoxelXYZPEncoder + 'static)> */,
+                              CorticalChannelCount::new(unit_definition.device_grouping.len() as u32),
+                              /* WrappedIOData */)?
+            }
+
+
+        };
+    }
+
+    pub(crate) fn export_to_input_definition(self, filling_definition: &mut InputOutputDefinition) -> Result<(), FeagiDataError> {
+
+    }
+
+    //endregion
 
     //region Internal
 
@@ -648,12 +680,6 @@ impl SensorDeviceCache {
     }
 
 
-    fn register_unit_definition(&mut self, sensor_type: SensoryCorticalUnit, definition: UnitDefinition) -> Result<(), FeagiDataError> {
-
-
-
-
-    }
 
     //region Data
 

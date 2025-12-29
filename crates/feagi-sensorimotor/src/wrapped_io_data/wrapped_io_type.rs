@@ -9,6 +9,7 @@ use crate::data_types::{
 use crate::wrapped_io_data::WrappedIOData;
 use feagi_structures::FeagiDataError;
 use std::mem::discriminant;
+use serde::{Deserialize, Serialize};
 
 /// Type descriptor for wrapped I/O data.
 ///
@@ -26,7 +27,7 @@ use std::mem::discriminant;
 /// let io_type = WrappedIOType::Percentage;
 /// let blank_data = io_type.create_blank_data_of_type().unwrap();
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[allow(non_camel_case_types)]
 pub enum WrappedIOType {
     Boolean,

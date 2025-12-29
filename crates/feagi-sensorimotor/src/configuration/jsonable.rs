@@ -5,6 +5,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelIndex
 use feagi_structures::genomic::cortical_area::IOCorticalAreaDataFlag;
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use crate::data_pipeline::PipelineStageProperties;
+use crate::wrapped_io_data::WrappedIOType;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InputOutputDefinition {
@@ -102,10 +103,19 @@ pub struct DeviceGrouping {
     pub(crate) pipeline_stages: Vec<PipelineStageProperties>
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NeuronCoding {
+    pub(crate) data_type: WrappedIOType,
+}
+
+
+
+
 /// A Dictionary structure that allows developers to tag custom information to
 /// device groupings (channels).
 pub type DeviceProperties = HashMap<String, DevicePropertyValue>;
 
+/// User defined key for custom properties per channel, which can be useful in describing hardware
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 #[derive(Debug, Clone)]

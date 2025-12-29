@@ -81,7 +81,6 @@ impl NeuronVoxelXYZPEncoder for PercentageExponentialNeuronVoxelXYZPEncoder {
 }
 
 impl PercentageExponentialNeuronVoxelXYZPEncoder {
-    #[allow(dead_code)]
     pub fn new_box(
         cortical_write_target: CorticalID,
         z_resolution: NeuronDepth,
