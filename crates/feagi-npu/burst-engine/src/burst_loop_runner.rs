@@ -1035,6 +1035,7 @@ fn burst_loop(
                         // This allows plasticity service to immediately query FireLedger data
                         // Callback is pre-cloned Arc, so this is just a function call (no allocation)
                         if let Some(ref notify_fn) = plasticity_notify {
+                            trace!("[BURST-LOOP] 🧠 Notifying plasticity service of burst {}", current_burst);
                             notify_fn(current_burst);
                         }
                         

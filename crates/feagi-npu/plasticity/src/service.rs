@@ -18,6 +18,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
+use tracing::info;
 
 use crate::memory_neuron_array::{MemoryNeuronArray, MemoryNeuronLifecycleConfig};
 use crate::memory_stats_cache::{self, MemoryStatsCache};
@@ -171,8 +172,10 @@ impl PlasticityService {
 
     /// Notify service of new burst
     pub fn notify_burst(&self, timestep: u64) {
+        info!("[PLASTICITY-SVC] 🔔 Burst {} notification received, waking compute thread", timestep);
         let (lock, cvar) = &*self.cv;
         let mut data = lock.lock().unwrap();
+        data.0 = true;  // ✅ Set flag to true so thread wakes up!
         data.1 = timestep;
         cvar.notify_all();
     }
@@ -204,9 +207,12 @@ impl PlasticityService {
                     while !data.0 {
                         data = cvar.wait(data).unwrap();
                     }
+                    data.0 = false;  // ✅ Reset flag so we wait again after processing
                     data.1
                 };
 
+                info!("[PLASTICITY-THREAD] 💤➡️🏃 Woke up for burst {}, starting compute_plasticity", timestep);
+                
                 // Compute plasticity
                 Self::compute_plasticity(
                     timestep,
@@ -557,7 +563,11 @@ impl PlasticityService {
     /// This should be called after each burst to process plasticity commands
     pub fn drain_commands(&self) -> Vec<PlasticityCommand> {
         let mut queue = self.command_queue.lock().unwrap();
-        queue.drain(..).collect()
+        let drained = queue.drain(..).collect::<Vec<_>>();
+        if !drained.is_empty() {
+            info!("[PLASTICITY-SVC] 📤 Draining {} command(s) for execution", drained.len());
+        }
+        drained
     }
 
     /// Get memory neuron array reference
