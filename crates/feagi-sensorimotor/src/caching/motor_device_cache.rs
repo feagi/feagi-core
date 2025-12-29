@@ -238,12 +238,14 @@ macro_rules! motor_unit_functions {
                 ) -> Result<(), FeagiDataError>
             {
                 let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
-                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
-                        PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                        PercentageNeuronPositioning::Fractional => PercentageExponentialNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                    }
-                };
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
+                    cortical_id,
+                    z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning,
+                    false,
+                    PercentageChannelDimensionality::D1
+                )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
                 self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
@@ -271,13 +273,15 @@ macro_rules! motor_unit_functions {
                 ) -> Result<(), FeagiDataError>
             {
                 let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
-                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
-                        PercentageNeuronPositioning::Linear => Percentage3DLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                        PercentageNeuronPositioning::Fractional => Percentage3DExponentialNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                    }
-                };
 
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
+                    cortical_id,
+                    z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning,
+                    false,
+                    PercentageChannelDimensionality::D3
+                )?;
                 let initial_val: WrappedIOData = WrappedIOData::Percentage_3D(Percentage3D::new_zero());
                 self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
                 Ok(())
@@ -304,12 +308,14 @@ macro_rules! motor_unit_functions {
                 ) -> Result<(), FeagiDataError>
             {
                 let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
-                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
-                        PercentageNeuronPositioning::Linear => SignedPercentageLinearNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                        PercentageNeuronPositioning::Fractional => SignedPercentageExponentialNeuronVoxelXYZPDecoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                    }
-                };
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
+                    cortical_id,
+                    z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning,
+                    true,
+                    PercentageChannelDimensionality::D1
+                )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0));
                 self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;

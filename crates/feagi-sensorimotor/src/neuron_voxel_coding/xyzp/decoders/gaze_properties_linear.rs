@@ -28,7 +28,7 @@ pub struct GazePropertiesLinearNeuronVoxelXYZPDecoder {
 }
 
 impl NeuronVoxelXYZPDecoder for GazePropertiesLinearNeuronVoxelXYZPDecoder {
-    fn get_decoded_data_type(&self) -> WrappedIOType {
+    fn get_decodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::GazeProperties
     }
 

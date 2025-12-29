@@ -16,7 +16,7 @@ pub struct MiscDataNeuronVoxelXYZPDecoder {
 }
 
 impl NeuronVoxelXYZPDecoder for MiscDataNeuronVoxelXYZPDecoder {
-    fn get_decoded_data_type(&self) -> WrappedIOType {
+    fn get_decodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::MiscData(Some(self.misc_dimensions))
     }
 

@@ -10,6 +10,7 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
+use serde_json::Value;
 
 const ECCENTRICITY_CHANNEL_WIDTH: u32 = 2;
 const MODULARITY_CHANNEL_WIDTH: u32 = 1;
@@ -25,8 +26,13 @@ pub struct GazePropertiesExponentialNeuronVoxelXYZPDecoder {
 }
 
 impl NeuronVoxelXYZPDecoder for GazePropertiesExponentialNeuronVoxelXYZPDecoder {
-    fn get_decoded_data_type(&self) -> WrappedIOType {
+    fn get_decodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::GazeProperties
+    }
+
+    fn get_as_json(&self) -> serde_json::Map<String, Value> {
+        let mut output = self.get_base_json_internal();
+
     }
 
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(

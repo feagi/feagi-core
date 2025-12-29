@@ -1,43 +1,26 @@
-#[allow(unused_imports)] // These imports are used by macro-generated code
+use crate::data_types::descriptors::PercentageChannelDimensionality;
 use crate::data_pipeline::per_channel_stream_caches::SensoryChannelStreamCaches;
-#[allow(unused_imports)] // Used by macro-generated code
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
-#[allow(unused_imports)] // Used by macro-generated code
 use crate::data_types::descriptors::{
     ImageFrameProperties, MiscDataDimensions, SegmentedImageFrameProperties,
 };
-#[allow(unused_imports)] // Used by macro-generated code
 use crate::data_types::{
     GazeProperties, ImageFrame, MiscData, Percentage, Percentage3D, SegmentedImageFrame,
     SignedPercentage4D,
 };
-#[allow(unused_imports)] // Used by macro-generated code
-use crate::neuron_voxel_coding::xyzp::encoders::{
-    BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder,
-    MiscDataNeuronVoxelXYZPEncoder, Percentage3DExponentialNeuronVoxelXYZPEncoder,
-    Percentage3DLinearNeuronVoxelXYZPEncoder, PercentageExponentialNeuronVoxelXYZPEncoder,
-    PercentageLinearNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder,
-    SignedPercentage4DExponentialNeuronVoxelXYZPEncoder,
-    SignedPercentage4DLinearNeuronVoxelXYZPEncoder,
-};
-#[allow(unused_imports)] // Used by macro-generated code
+use crate::neuron_voxel_coding::xyzp::encoders::*;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
-#[allow(unused_imports)] // Used by macro-generated code
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_serialization::FeagiByteContainer;
-#[allow(unused_imports)] // Used by macro-generated code
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-#[allow(unused_imports)] // Used by macro-generated code
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-#[allow(unused_imports)] // Used by macro-generated code
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
-#[allow(unused_imports)] // Used by macro-generated code
 use feagi_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
@@ -241,12 +224,14 @@ macro_rules! sensor_unit_functions {
                 ) -> Result<(), FeagiDataError>
             {
                 let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = {
-                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
-                        PercentageNeuronPositioning::Linear => PercentageLinearNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                        PercentageNeuronPositioning::Fractional => PercentageExponentialNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                    }
-                };
+                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
+                    cortical_id,
+                    z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning,
+                    false,
+                    PercentageChannelDimensionality::D1
+                )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
                 self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
@@ -274,12 +259,14 @@ macro_rules! sensor_unit_functions {
                 ) -> Result<(), FeagiDataError>
             {
                 let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = {
-                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
-                        PercentageNeuronPositioning::Linear => Percentage3DLinearNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                        PercentageNeuronPositioning::Fractional => Percentage3DExponentialNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                    }
-                };
+                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
+                    cortical_id,
+                    z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning,
+                    false,
+                    PercentageChannelDimensionality::D3
+                )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
                 self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
@@ -307,12 +294,14 @@ macro_rules! sensor_unit_functions {
                 ) -> Result<(), FeagiDataError>
             {
                 let cortical_id: CorticalID = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = {
-                    match percentage_neuron_positioning { // TODO fix naming of exponential / fractional
-                        PercentageNeuronPositioning::Linear => SignedPercentage4DLinearNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                        PercentageNeuronPositioning::Fractional => SignedPercentage4DExponentialNeuronVoxelXYZPEncoder::new_box(cortical_id, z_neuron_resolution, number_channels)?,
-                    }
-                };
+                 let encoder: Box<dyn NeuronVoxelXYZPEncoder + Sync + Send> = PercentageNeuronVoxelXYZPEncoder::new_box(
+                    cortical_id,
+                    z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning,
+                    true,
+                    PercentageChannelDimensionality::D4
+                )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
                 self.register(SensoryCorticalUnit::$sensory_unit, unit, encoder, number_channels, initial_val)?;
@@ -635,6 +624,9 @@ impl SensorDeviceCache {
             let sensory_unit = *input_unit.0;
             let unit_definitions = input_unit.1;
             for unit_definition in unit_definitions {
+
+
+
                 self.register(sensory_unit,
                               unit_definition.cortical_unit_index,
                               /* Box<(dyn NeuronVoxelXYZPEncoder + 'static)> */,

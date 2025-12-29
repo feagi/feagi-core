@@ -302,7 +302,7 @@ impl PercentageNeuronVoxelXYZPDecoder {
 }
 
 impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
-    fn get_decoded_data_type(&self) -> WrappedIOType {
+    fn get_decodable_data_type(&self) -> WrappedIOType {
         match (self.is_signed, self.number_percentages) {
             (false, PercentageChannelDimensionality::D1) => WrappedIOType::Percentage,
             (false, PercentageChannelDimensionality::D2) => WrappedIOType::Percentage_2D,
