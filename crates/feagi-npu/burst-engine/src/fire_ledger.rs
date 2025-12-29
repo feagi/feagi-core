@@ -8,26 +8,13 @@
  * you may not use this file except in compliance with the License.
  */
 
-//! Fire Ledger - Historical firing data for STDP and debugging
+//! FireLedger - Dense, burst-aligned firing history for memory + STDP.
 //!
-//! Architecture:
-//! - Zero-copy design: Directly archives Fire Queue data
-//! - Circular buffer per cortical area (configurable window size)
-//! - RoaringBitmap for compressed, efficient neuron set storage
-//! - Thread-safe via Rust ownership
-//!
-//! RoaringBitmap Benefits:
-//! - ~10x faster set operations (union, intersection) for STDP
-//! - 50-90% memory reduction for dense firing patterns (vision)
-//! - Hardware-agnostic compressed format
-//! - Cross-platform deterministic serialization
-//!
-//! Usage:
-//! ```rust
-//! let mut fire_ledger = RustFireLedger::new(20); // Default 20-timestep window
-//! fire_ledger.archive_burst(timestep, &fire_queue);
-//! let history = fire_ledger.get_history(cortical_idx, 10);
-//! ```
+//! Key semantics:
+//! - Dense: tracked areas receive a frame every burst (explicit empty frames when silent).
+//! - Burst-aligned: windows are defined by timestep range, not "last N firing events".
+//! - Tracked-only: history is stored only for explicitly tracked cortical areas.
+//! - Deterministic: no implicit defaults; errors are explicit.
 
 use ahash::AHashMap;
 use roaring::RoaringBitmap;
@@ -35,175 +22,275 @@ use std::collections::VecDeque;
 
 use crate::fire_structures::FireQueue;
 
-/// Fire Ledger - maintains historical firing data per cortical area
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum FireLedgerError {
+    #[error("window size must be > 0")]
+    InvalidWindowSize,
+
+    #[error("depth must be > 0")]
+    InvalidDepth,
+
+    #[error("non-monotonic timestep: current={current}, requested={requested}")]
+    NonMonotonicTimestep { current: u64, requested: u64 },
+
+    #[error("area {cortical_idx} is not tracked")]
+    AreaNotTracked { cortical_idx: u32 },
+
+    #[error("requested end_timestep={end_timestep} exceeds current_timestep={current_timestep}")]
+    EndTimestepInFuture {
+        end_timestep: u64,
+        current_timestep: u64,
+    },
+
+    #[error(
+        "insufficient history for area {cortical_idx}: need [{start}..{end}], but have [{have_start}..{have_end}]"
+    )]
+    InsufficientHistory {
+        cortical_idx: u32,
+        start: u64,
+        end: u64,
+        have_start: u64,
+        have_end: u64,
+    },
+
+    #[error("requested depth {depth} exceeds tracked window size {window_size} for area {cortical_idx}")]
+    DepthExceedsWindow {
+        cortical_idx: u32,
+        depth: usize,
+        window_size: usize,
+    },
+}
+
+/// Dense, tracked-area firing history.
 #[derive(Debug, Clone)]
-pub struct RustFireLedger {
-    /// Firing history per cortical area
-    cortical_histories: AHashMap<u32, CorticalHistory>,
-
-    /// Default window size for new areas
-    default_window_size: usize,
-
-    /// Current timestep
+pub struct FireLedger {
+    tracked: AHashMap<u32, TrackedAreaHistory>,
     current_timestep: u64,
+    capacity_hint: usize,
 }
 
-/// Circular buffer of firing data for a single cortical area
 #[derive(Debug, Clone)]
-struct CorticalHistory {
-    /// Circular buffer of timesteps
-    timesteps: VecDeque<u64>,
-
-    /// Circular buffer of neuron ID bitmaps (parallel with timesteps)
-    neuron_bitmaps: VecDeque<RoaringBitmap>,
-
-    /// Maximum number of timesteps to retain
+struct TrackedAreaHistory {
     window_size: usize,
+    frames: VecDeque<(u64, RoaringBitmap)>, // oldest -> newest
 }
 
-impl RustFireLedger {
-    /// Create a new Fire Ledger with default window size
-    pub fn new(default_window_size: usize) -> Self {
+impl FireLedger {
+    /// Create a new FireLedger.
+    ///
+    /// `capacity_hint` is used only for internal allocations.
+    pub fn new(capacity_hint: usize) -> Self {
         Self {
-            cortical_histories: AHashMap::new(),
-            default_window_size,
+            tracked: AHashMap::new(),
             current_timestep: 0,
+            capacity_hint,
         }
     }
 
-    /// Archive a burst's firing data (ZERO COPY from Fire Queue!)
-    pub fn archive_burst(&mut self, timestep: u64, fire_queue: &FireQueue) {
-        self.current_timestep = timestep;
-
-        // Archive each cortical area's firing data
-        for (&cortical_idx, neurons) in &fire_queue.neurons_by_area {
-            // Build RoaringBitmap from neuron IDs
-            let bitmap: RoaringBitmap = neurons.iter().map(|n| n.neuron_id.0).collect();
-
-            // Get or create history for this area
-            let history = self
-                .cortical_histories
-                .entry(cortical_idx)
-                .or_insert_with(|| CorticalHistory::new(self.default_window_size));
-
-            // Archive to circular buffer
-            history.add_timestep(timestep, bitmap);
-        }
-    }
-
-    /// Get firing history for a cortical area
-    /// Returns Vec of (timestep, neuron_ids) tuples, newest first
-    pub fn get_history(&self, cortical_idx: u32, lookback_steps: usize) -> Vec<(u64, Vec<u32>)> {
-        if let Some(history) = self.cortical_histories.get(&cortical_idx) {
-            history.get_recent(lookback_steps)
-        } else {
-            Vec::new()
-        }
-    }
-
-    /// Get firing history as RoaringBitmaps (zero-copy, optimal for STDP)
-    /// Returns Vec of (timestep, RoaringBitmap) tuples, newest first
-    pub fn get_history_bitmaps(&self, cortical_idx: u32, lookback_steps: usize) -> Vec<(u64, RoaringBitmap)> {
-        if let Some(history) = self.cortical_histories.get(&cortical_idx) {
-            history.get_recent_bitmaps(lookback_steps)
-        } else {
-            Vec::new()
-        }
-    }
-
-    /// Get window size for a specific cortical area
-    pub fn get_area_window_size(&self, cortical_idx: u32) -> usize {
-        self.cortical_histories
-            .get(&cortical_idx)
-            .map(|h| h.window_size)
-            .unwrap_or(self.default_window_size)
-    }
-
-    /// Configure window size for a specific cortical area
-    pub fn configure_area_window(&mut self, cortical_idx: u32, window_size: usize) {
-        if let Some(history) = self.cortical_histories.get_mut(&cortical_idx) {
-            history.resize_window(window_size);
-        } else {
-            // Create new history with custom window size
-            self.cortical_histories
-                .insert(cortical_idx, CorticalHistory::new(window_size));
-        }
-    }
-
-    /// Get all configured area window sizes
-    pub fn get_all_window_configs(&self) -> Vec<(u32, usize)> {
-        self.cortical_histories
-            .iter()
-            .map(|(&idx, hist)| (idx, hist.window_size))
-            .collect()
-    }
-
-    /// Get current timestep
     pub fn current_timestep(&self) -> u64 {
         self.current_timestep
     }
+
+    /// Track a cortical area with an explicit window size.
+    ///
+    /// This is an exact setting (not max/merge). If multiple subsystems depend on the same area,
+    /// the caller must pass the final resolved requirement.
+    pub fn track_area(&mut self, cortical_idx: u32, window_size: usize) -> Result<(), FireLedgerError> {
+        if window_size == 0 {
+            return Err(FireLedgerError::InvalidWindowSize);
+        }
+
+        match self.tracked.get_mut(&cortical_idx) {
+            Some(hist) => hist.resize_window(window_size),
+            None => {
+                let mut hist = TrackedAreaHistory::new(window_size, self.capacity_hint);
+                // Deterministic initialization: if we already have a current_timestep, prefill a dense
+                // empty window ending at current_timestep so queries can succeed immediately.
+                if self.current_timestep > 0 {
+                    let start = self
+                        .current_timestep
+                        .saturating_sub(window_size as u64)
+                        .saturating_add(1);
+                    for t in start..=self.current_timestep {
+                        hist.push_frame(t, RoaringBitmap::new());
+                    }
+                }
+                self.tracked.insert(cortical_idx, hist);
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn untrack_area(&mut self, cortical_idx: u32) -> bool {
+        self.tracked.remove(&cortical_idx).is_some()
+    }
+
+    /// Get the tracked window size for a cortical area.
+    pub fn get_tracked_window(&self, cortical_idx: u32) -> Result<usize, FireLedgerError> {
+        self.tracked
+            .get(&cortical_idx)
+            .map(|h| h.window_size)
+            .ok_or(FireLedgerError::AreaNotTracked { cortical_idx })
+    }
+
+    /// Tracked windows (sorted for deterministic output).
+    pub fn get_tracked_windows(&self) -> Vec<(u32, usize)> {
+        let mut out: Vec<(u32, usize)> = self
+            .tracked
+            .iter()
+            .map(|(&idx, hist)| (idx, hist.window_size))
+            .collect();
+        out.sort_unstable_by_key(|(idx, _)| *idx);
+        out
+    }
+
+    /// Archive firing data for a burst.
+    ///
+    /// Dense semantics:
+    /// - For each tracked area, a frame is written for every timestep.
+    /// - Gaps in timesteps are filled with empty frames.
+    pub fn archive_burst(&mut self, timestep: u64, fire_queue: &FireQueue) -> Result<(), FireLedgerError> {
+        if self.current_timestep != 0 && timestep <= self.current_timestep {
+            return Err(FireLedgerError::NonMonotonicTimestep {
+                current: self.current_timestep,
+                requested: timestep,
+            });
+        }
+
+        if self.tracked.is_empty() {
+            self.current_timestep = timestep;
+            return Ok(());
+        }
+
+        // Build bitmaps only for tracked areas that fired this timestep.
+        let mut fired_bitmaps: AHashMap<u32, RoaringBitmap> =
+            AHashMap::with_capacity(self.tracked.len());
+        for (&cortical_idx, neurons) in &fire_queue.neurons_by_area {
+            if self.tracked.contains_key(&cortical_idx) {
+                let bitmap: RoaringBitmap = neurons.iter().map(|n| n.neuron_id.0).collect();
+                fired_bitmaps.insert(cortical_idx, bitmap);
+            }
+        }
+
+        // Fill missing timesteps with empty frames for all tracked areas.
+        if self.current_timestep > 0 && timestep > self.current_timestep + 1 {
+            for missing_t in (self.current_timestep + 1)..timestep {
+                for hist in self.tracked.values_mut() {
+                    hist.push_frame(missing_t, RoaringBitmap::new());
+                }
+            }
+        }
+
+        // Write this timestep.
+        for (&cortical_idx, hist) in self.tracked.iter_mut() {
+            let bitmap = fired_bitmaps
+                .remove(&cortical_idx)
+                .unwrap_or_else(RoaringBitmap::new);
+            hist.push_frame(timestep, bitmap);
+        }
+
+        self.current_timestep = timestep;
+        Ok(())
+    }
+
+    /// Get a dense, burst-aligned window of bitmaps for a tracked area.
+    ///
+    /// Returns exactly `depth` frames covering `[end_timestep - depth + 1 .. end_timestep]`.
+    pub fn get_dense_window_bitmaps(
+        &self,
+        cortical_idx: u32,
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, RoaringBitmap)>, FireLedgerError> {
+        if depth == 0 {
+            return Err(FireLedgerError::InvalidDepth);
+        }
+        if end_timestep > self.current_timestep {
+            return Err(FireLedgerError::EndTimestepInFuture {
+                end_timestep,
+                current_timestep: self.current_timestep,
+            });
+        }
+
+        let hist = self
+            .tracked
+            .get(&cortical_idx)
+            .ok_or(FireLedgerError::AreaNotTracked { cortical_idx })?;
+
+        if depth > hist.window_size {
+            return Err(FireLedgerError::DepthExceedsWindow {
+                cortical_idx,
+                depth,
+                window_size: hist.window_size,
+            });
+        }
+
+        let start = end_timestep.saturating_sub(depth as u64).saturating_add(1);
+        let (have_start, have_end) = hist.range_bounds().ok_or(FireLedgerError::InsufficientHistory {
+            cortical_idx,
+            start,
+            end: end_timestep,
+            have_start: 0,
+            have_end: 0,
+        })?;
+
+        if start < have_start || end_timestep > have_end {
+            return Err(FireLedgerError::InsufficientHistory {
+                cortical_idx,
+                start,
+                end: end_timestep,
+                have_start,
+                have_end,
+            });
+        }
+
+        let start_idx = (start - have_start) as usize;
+        let end_idx = start_idx + depth - 1;
+
+        let mut out = Vec::with_capacity(depth);
+        for idx in start_idx..=end_idx {
+            let Some((t, bm)) = hist.frames.get(idx) else {
+                return Err(FireLedgerError::InsufficientHistory {
+                    cortical_idx,
+                    start,
+                    end: end_timestep,
+                    have_start,
+                    have_end,
+                });
+            };
+            out.push((*t, bm.clone()));
+        }
+        Ok(out)
+    }
 }
 
-impl CorticalHistory {
-    /// Create a new cortical history with specified window size
-    fn new(window_size: usize) -> Self {
+impl TrackedAreaHistory {
+    fn new(window_size: usize, capacity_hint: usize) -> Self {
+        let cap = window_size.max(1).min(capacity_hint.max(1));
         Self {
-            timesteps: VecDeque::with_capacity(window_size),
-            neuron_bitmaps: VecDeque::with_capacity(window_size),
             window_size,
+            frames: VecDeque::with_capacity(cap),
         }
     }
 
-    /// Add a timestep's firing data (maintains circular buffer)
-    fn add_timestep(&mut self, timestep: u64, bitmap: RoaringBitmap) {
-        // If at capacity, remove oldest
-        if self.timesteps.len() >= self.window_size {
-            self.timesteps.pop_front();
-            self.neuron_bitmaps.pop_front();
-        }
-
-        // Add new data
-        self.timesteps.push_back(timestep);
-        self.neuron_bitmaps.push_back(bitmap);
-    }
-
-    /// Get recent firing history as Vec<u32> (newest first) - for backward compatibility
-    fn get_recent(&self, lookback_steps: usize) -> Vec<(u64, Vec<u32>)> {
-        let available = self.timesteps.len();
-        let count = lookback_steps.min(available);
-
-        // Collect from newest to oldest
-        let mut result = Vec::with_capacity(count);
-        for i in (available.saturating_sub(count)..available).rev() {
-            let neuron_ids: Vec<u32> = self.neuron_bitmaps[i].iter().collect();
-            result.push((self.timesteps[i], neuron_ids));
-        }
-
-        result
-    }
-
-    /// Get recent firing history as RoaringBitmaps (newest first) - optimal for STDP
-    fn get_recent_bitmaps(&self, lookback_steps: usize) -> Vec<(u64, RoaringBitmap)> {
-        let available = self.timesteps.len();
-        let count = lookback_steps.min(available);
-
-        // Collect from newest to oldest
-        let mut result = Vec::with_capacity(count);
-        for i in (available.saturating_sub(count)..available).rev() {
-            result.push((self.timesteps[i], self.neuron_bitmaps[i].clone()));
-        }
-
-        result
-    }
-
-    /// Resize the window (may truncate old data)
     fn resize_window(&mut self, new_size: usize) {
         self.window_size = new_size;
+        while self.frames.len() > new_size {
+            self.frames.pop_front();
+        }
+    }
 
-        // Truncate if new size is smaller
-        while self.timesteps.len() > new_size {
-            self.timesteps.pop_front();
-            self.neuron_bitmaps.pop_front();
+    fn range_bounds(&self) -> Option<(u64, u64)> {
+        let (start, _) = self.frames.front()?;
+        let (end, _) = self.frames.back()?;
+        Some((*start, *end))
+    }
+
+    fn push_frame(&mut self, timestep: u64, bitmap: RoaringBitmap) {
+        self.frames.push_back((timestep, bitmap));
+        while self.frames.len() > self.window_size {
+            self.frames.pop_front();
         }
     }
 }
@@ -215,119 +302,93 @@ mod tests {
     use feagi_npu_neural::types::NeuronId;
 
     #[test]
-    fn test_fire_ledger_basic() {
-        let mut ledger = RustFireLedger::new(5);
+    fn test_dense_history_includes_silence() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 5).unwrap();
 
-        // Create mock fire queue with some neurons
-        let mut fire_queue = FireQueue::new();
-        let neuron1 = FiringNeuron {
+        // t=1: fired {100,200}
+        let mut fq1 = FireQueue::new();
+        fq1.add_neuron(FiringNeuron {
             neuron_id: NeuronId(100),
             membrane_potential: 1.5,
             cortical_idx: 1,
             x: 0,
             y: 0,
             z: 0,
-        };
-        let neuron2 = FiringNeuron {
+        });
+        fq1.add_neuron(FiringNeuron {
             neuron_id: NeuronId(200),
             membrane_potential: 1.2,
             cortical_idx: 1,
             x: 1,
             y: 0,
             z: 0,
-        };
+        });
+        ledger.archive_burst(1, &fq1).unwrap();
 
-        fire_queue.add_neuron(neuron1);
-        fire_queue.add_neuron(neuron2);
+        // t=2: silent (empty fire queue)
+        let fq2 = FireQueue::new();
+        ledger.archive_burst(2, &fq2).unwrap();
 
-        // Archive burst
-        ledger.archive_burst(1, &fire_queue);
+        // t=3: fired {200}
+        let mut fq3 = FireQueue::new();
+        fq3.add_neuron(FiringNeuron {
+            neuron_id: NeuronId(200),
+            membrane_potential: 1.0,
+            cortical_idx: 1,
+            x: 0,
+            y: 0,
+            z: 0,
+        });
+        ledger.archive_burst(3, &fq3).unwrap();
 
-        // Retrieve history
-        let history = ledger.get_history(1, 10);
-        assert_eq!(history.len(), 1);
-        assert_eq!(history[0].0, 1); // timestep
-        assert_eq!(history[0].1.len(), 2); // 2 neurons
-        assert!(history[0].1.contains(&100));
-        assert!(history[0].1.contains(&200));
-
-        // Verify RoaringBitmap API also works
-        let bitmap_history = ledger.get_history_bitmaps(1, 10);
-        assert_eq!(bitmap_history.len(), 1);
-        assert_eq!(bitmap_history[0].0, 1); // timestep
-        assert_eq!(bitmap_history[0].1.len(), 2); // 2 neurons
-        assert!(bitmap_history[0].1.contains(100));
-        assert!(bitmap_history[0].1.contains(200));
+        let window = ledger.get_dense_window_bitmaps(1, 3, 3).unwrap();
+        assert_eq!(window.len(), 3);
+        assert_eq!(window[0].0, 1);
+        assert_eq!(window[1].0, 2);
+        assert_eq!(window[2].0, 3);
+        assert_eq!(window[0].1.len(), 2);
+        assert_eq!(window[1].1.len(), 0);
+        assert_eq!(window[2].1.len(), 1);
     }
 
     #[test]
-    fn test_fire_ledger_circular_buffer() {
-        let mut ledger = RustFireLedger::new(3); // Only keep 3 timesteps
+    fn test_gap_fill_with_empty_frames() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 5).unwrap();
 
-        // Archive 5 bursts
-        for t in 1..=5 {
-            let mut fire_queue = FireQueue::new();
-            let neuron = FiringNeuron {
-                neuron_id: NeuronId(t as u32 * 100),
-                membrane_potential: 1.0,
-                cortical_idx: 1,
-                x: 0,
-                y: 0,
-                z: 0,
-            };
-            fire_queue.add_neuron(neuron);
-            ledger.archive_burst(t, &fire_queue);
-        }
+        let mut fq1 = FireQueue::new();
+        fq1.add_neuron(FiringNeuron {
+            neuron_id: NeuronId(1),
+            membrane_potential: 1.0,
+            cortical_idx: 1,
+            x: 0,
+            y: 0,
+            z: 0,
+        });
+        ledger.archive_burst(1, &fq1).unwrap();
 
-        // Should only have last 3 timesteps (3, 4, 5)
-        let history = ledger.get_history(1, 10);
-        assert_eq!(history.len(), 3);
-        assert_eq!(history[0].0, 5); // Newest first
-        assert_eq!(history[1].0, 4);
-        assert_eq!(history[2].0, 3);
+        // Jump to t=4 (gap fill t=2..3)
+        let fq4 = FireQueue::new();
+        ledger.archive_burst(4, &fq4).unwrap();
+
+        let window = ledger.get_dense_window_bitmaps(1, 4, 4).unwrap();
+        assert_eq!(
+            window.iter().map(|(t, _)| *t).collect::<Vec<_>>(),
+            vec![1, 2, 3, 4]
+        );
+        assert_eq!(window[1].1.len(), 0);
+        assert_eq!(window[2].1.len(), 0);
     }
 
     #[test]
-    fn test_fire_ledger_empty_area() {
-        let ledger = RustFireLedger::new(20);
+    fn test_insufficient_history_errors() {
+        let mut ledger = FireLedger::new(16);
+        ledger.track_area(1, 3).unwrap();
+        let fq1 = FireQueue::new();
+        ledger.archive_burst(1, &fq1).unwrap();
 
-        // Query non-existent area
-        let history = ledger.get_history(999, 10);
-        assert_eq!(history.len(), 0);
-
-        // Verify RoaringBitmap API returns empty too
-        let bitmap_history = ledger.get_history_bitmaps(999, 10);
-        assert_eq!(bitmap_history.len(), 0);
-    }
-
-    #[test]
-    fn test_roaring_bitmap_efficiency() {
-        let mut ledger = RustFireLedger::new(5);
-
-        // Simulate dense vision input (128x128 = 16384 neurons, ~50% firing)
-        let mut fire_queue = FireQueue::new();
-        for i in (0..16384).step_by(2) {
-            let neuron = FiringNeuron {
-                neuron_id: NeuronId(i),
-                membrane_potential: 1.0,
-                cortical_idx: 100,
-                x: i / 128,
-                y: i % 128,
-                z: 0,
-            };
-            fire_queue.add_neuron(neuron);
-        }
-
-        ledger.archive_burst(1, &fire_queue);
-
-        // Verify we can retrieve all neurons efficiently
-        let bitmap_history = ledger.get_history_bitmaps(100, 1);
-        assert_eq!(bitmap_history.len(), 1);
-        assert_eq!(bitmap_history[0].1.len(), 8192); // 50% of 16384
-
-        // Verify Vec<u32> API still works
-        let vec_history = ledger.get_history(100, 1);
-        assert_eq!(vec_history.len(), 1);
-        assert_eq!(vec_history[0].1.len(), 8192);
+        let err = ledger.get_dense_window_bitmaps(1, 1, 3).unwrap_err();
+        assert!(matches!(err, FireLedgerError::InsufficientHistory { .. }));
     }
 }

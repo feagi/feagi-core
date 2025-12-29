@@ -22,6 +22,7 @@ use feagi_npu_burst_engine::RustNPU;
 use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
 use feagi_npu_neural::SynapseType;
 use feagi_npu_runtime::StdRuntime;
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
 // ═══════════════════════════════════════════════════════════
 // Helper Functions
@@ -33,27 +34,33 @@ fn create_simple_network() -> RustNPU<StdRuntime, f32, CPUBackend> {
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20).unwrap();
 
+    // Register cortical areas for neuron→area mapping (required by propagation engine)
+    npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+    npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(3, CoreCorticalType::Death.to_cortical_id().as_base_64());
+    npu.register_cortical_area(4, CoreCorticalType::Death.to_cortical_id().as_base_64());
+
     // Power area (cortical_area=1) - 3 neurons
     for i in 0..3 {
-        npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
             .unwrap();
     }
 
     // Input layer (cortical_area=2) - 5 neurons
     for i in 0..5 {
-        npu.add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 2, i, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 2, i, 0, 0)
             .unwrap();
     }
 
     // Hidden layer (cortical_area=3) - 5 neurons
     for i in 0..5 {
-        npu.add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 3, i, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 3, i, 0, 0)
             .unwrap();
     }
 
     // Output layer (cortical_area=4) - 3 neurons
     for i in 0..3 {
-        npu.add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 4, i, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 4, i, 0, 0)
             .unwrap();
     }
 
@@ -166,10 +173,10 @@ fn test_fire_ledger_across_bursts() {
     let mut npu = create_simple_network();
 
     // Configure fire ledger for all areas
-    npu.configure_fire_ledger_window(1, 10); // Power
-    npu.configure_fire_ledger_window(2, 10); // Input
-    npu.configure_fire_ledger_window(3, 10); // Hidden
-    npu.configure_fire_ledger_window(4, 10); // Output
+    npu.configure_fire_ledger_window(1, 10).unwrap(); // Power
+    npu.configure_fire_ledger_window(2, 10).unwrap(); // Input
+    npu.configure_fire_ledger_window(3, 10).unwrap(); // Hidden
+    npu.configure_fire_ledger_window(4, 10).unwrap(); // Output
 
     // Process 5 bursts with sensory input
     for _ in 0..5 {
@@ -177,13 +184,9 @@ fn test_fire_ledger_across_bursts() {
         npu.process_burst().unwrap();
     }
 
-    // Check fire ledger history
-    let power_history = npu.get_fire_ledger_history(1, 5);
-    assert!(!power_history.is_empty(), "Power area should have history");
-    assert!(
-        power_history.len() <= 5,
-        "History should not exceed lookback"
-    );
+    // Check fire ledger history (dense, burst-aligned)
+    let power_window = npu.get_fire_ledger_dense_window_bitmaps(1, 5, 5).unwrap();
+    assert_eq!(power_window.len(), 5, "Power window should cover 5 bursts");
 }
 
 #[test]
@@ -191,19 +194,20 @@ fn test_multi_burst_chain_propagation() {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
+    npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
     // Create a chain: N1 -> N2 -> N3 -> N4
     let n1 = npu
-        .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+        .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
         .unwrap();
     let n2 = npu
-        .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 1, 0, 0)
+        .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 1, 0, 0)
         .unwrap();
     let n3 = npu
-        .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 2, 0, 0)
+        .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 2, 0, 0)
         .unwrap();
     let n4 = npu
-        .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 3, 0, 0)
+        .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 3, 0, 0)
         .unwrap();
 
     // Strong connections
@@ -255,10 +259,11 @@ fn test_refractory_period_across_bursts() {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
+    npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
     // Neuron with 3-burst refractory period
     let neuron = npu
-        .add_neuron(1.0, 0.0, 0.0, 0, 3, 1.0, 0, 0, true, 2, 0, 0, 0)
+        .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 3, 1.0, 0, 0, true, 2, 0, 0, 0)
         .unwrap();
 
     // Burst 1: Fire neuron
@@ -280,20 +285,21 @@ fn test_mixed_excitatory_inhibitory_network() {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
+    npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
     // Excitatory neuron
     let excitatory = npu
-        .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+        .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
         .unwrap();
 
     // Inhibitory neuron
     let inhibitory = npu
-        .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 1, 0, 0)
+        .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 1, 0, 0)
         .unwrap();
 
     // Target neuron
     let target = npu
-        .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 2, 0, 0)
+        .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 2, 0, 0)
         .unwrap();
 
     // Both connect to target
@@ -363,10 +369,11 @@ fn test_dynamic_network_modification() {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 10).unwrap();
+    npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
     // Start with 5 neurons
     for i in 0..5 {
-        npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
             .unwrap();
     }
 
@@ -377,7 +384,7 @@ fn test_dynamic_network_modification() {
 
     // Add more neurons mid-processing
     for i in 5..10 {
-        npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
             .unwrap();
     }
 
@@ -414,10 +421,11 @@ fn test_zero_leak_neuron_persistence() {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let mut npu = RustNPU::new(runtime, backend, 100, 1000, 10).unwrap();
+    npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
     // Neuron with zero leak (potential persists)
     let neuron = npu
-        .add_neuron(10.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 2, 0, 0, 0)
+        .add_neuron(10.0, 0.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 2, 0, 0, 0)
         .unwrap();
 
     // Accumulate potential over multiple bursts

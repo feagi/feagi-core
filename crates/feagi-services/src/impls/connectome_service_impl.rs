@@ -346,6 +346,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let cortical_group = area.get_cortical_group();
 
         // Note: decode_cortical_id removed - IPU/OPU metadata now in CorticalID
+        let memory_props = {
+            use feagi_evolutionary::extract_memory_properties;
+            extract_memory_properties(&area.properties)
+        };
 
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
@@ -364,8 +368,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             cortical_group: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
             // Determine cortical_type based on properties
             cortical_type: {
-                use feagi_evolutionary::extract_memory_properties;
-                if extract_memory_properties(&area.properties).is_some() {
+                if memory_props.is_some() {
                     "memory".to_string()
                 } else if let Some(group) = &cortical_group {
                     match group.as_str() {
@@ -408,6 +411,7 @@ impl ConnectomeService for ConnectomeServiceImpl {
             init_lifespan: area.init_lifespan(),
             lifespan_growth_rate: area.lifespan_growth_rate() as f64,
             longterm_mem_threshold: area.longterm_mem_threshold(),
+            temporal_depth: memory_props.map(|p| p.temporal_depth.max(1)),
             properties: area.properties.clone(),
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
             cortical_subtype: None, // Note: decode_cortical_id removed

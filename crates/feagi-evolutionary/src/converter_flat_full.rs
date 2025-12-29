@@ -383,6 +383,32 @@ fn process_dstmap(
                     );
                     continue;
                 }
+
+                // Strict plasticity validation (no backward compatibility):
+                // If plasticity_flag=true, the full plasticity parameter set must be present.
+                if rule_obj.get("plasticity_flag").and_then(|v| v.as_bool()) == Some(true) {
+                    let required = [
+                        "plasticity_constant",
+                        "ltp_multiplier",
+                        "ltd_multiplier",
+                        "plasticity_window",
+                    ];
+                    let missing: Vec<&str> = required
+                        .iter()
+                        .copied()
+                        .filter(|k| !rule_obj.contains_key(*k))
+                        .collect();
+                    if !missing.is_empty() {
+                        warn!(
+                            target: "feagi-evo",
+                            "Invalid plastic dstmap rule object for destination {}: missing keys {:?}",
+                            destination_area,
+                            missing
+                        );
+                        continue;
+                    }
+                }
+
                 converted_rules.push(Value::Object(rule_obj.clone()));
                 continue;
             }
@@ -402,7 +428,21 @@ fn process_dstmap(
                 continue;
             }
 
-            // Parse rule: [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag, ...]
+            // Parse rule (flat array format):
+            // [morphology_id, morphology_scalar, psc_multiplier, plasticity_flag,
+            //  plasticity_constant, ltp_multiplier, ltd_multiplier, plasticity_window]
+            //
+            // NOTE: We do not maintain backward compatibility here. If a genome uses the array
+            // representation it must include the full parameter set (including plasticity_window).
+            if rule_array.len() < 8 {
+                warn!(
+                    target: "feagi-evo",
+                    "Invalid mapping recipe format (need 8 elements, including plasticity_window): {:?}",
+                    rule_array
+                );
+                continue;
+            }
+
             let mut rule_dict = serde_json::Map::new();
 
             rule_dict.insert("morphology_id".to_string(), rule_array[0].clone());
@@ -413,19 +453,11 @@ fn process_dstmap(
             );
             rule_dict.insert("plasticity_flag".to_string(), rule_array[3].clone());
 
-            // Optional plasticity parameters with defaults
-            rule_dict.insert(
-                "plasticity_constant".to_string(),
-                rule_array.get(4).cloned().unwrap_or(json!(1)),
-            );
-            rule_dict.insert(
-                "ltp_multiplier".to_string(),
-                rule_array.get(5).cloned().unwrap_or(json!(1)),
-            );
-            rule_dict.insert(
-                "ltd_multiplier".to_string(),
-                rule_array.get(6).cloned().unwrap_or(json!(1)),
-            );
+            // Plasticity parameters (required in new design)
+            rule_dict.insert("plasticity_constant".to_string(), rule_array[4].clone());
+            rule_dict.insert("ltp_multiplier".to_string(), rule_array[5].clone());
+            rule_dict.insert("ltd_multiplier".to_string(), rule_array[6].clone());
+            rule_dict.insert("plasticity_window".to_string(), rule_array[7].clone());
 
             converted_rules.push(Value::Object(rule_dict));
         }
@@ -463,8 +495,8 @@ mod tests {
     fn test_dstmap_parsing() {
         let dstmap_flat = json!({
             "dest_area": [
-                ["block_to_block", 1, 1.0, true, 1, 1, 1],
-                ["projector", 2, 0.5, false]
+                ["block_to_block", 1, 1.0, true, 1, 1, 1, 4],
+                ["projector", 2, 0.5, false, 1, 1, 1, 1]
             ]
         });
 
@@ -477,8 +509,10 @@ mod tests {
         assert_eq!(dest_rules.len(), 2);
         assert_eq!(dest_rules[0]["morphology_id"], "block_to_block");
         assert_eq!(dest_rules[0]["plasticity_constant"], 1);
+        assert_eq!(dest_rules[0]["plasticity_window"], 4);
         assert_eq!(dest_rules[1]["morphology_id"], "projector");
-        assert_eq!(dest_rules[1]["plasticity_constant"], 1); // Default
+        assert_eq!(dest_rules[1]["plasticity_constant"], 1);
+        assert_eq!(dest_rules[1]["plasticity_window"], 1);
     }
 
     #[test]

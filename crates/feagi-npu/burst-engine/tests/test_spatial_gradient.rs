@@ -6,13 +6,22 @@
 //! These tests verify that firing thresholds can be spatially varied across
 //! a cortical area using the increment_x, increment_y, and increment_z parameters.
 
+use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_burst_engine::RustNPU;
-use feagi_npu_runtime::NeuronStorage;
+use feagi_npu_runtime::StdRuntime;
+use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
 #[test]
 fn test_firing_threshold_spatial_gradient_3d() {
     // Create NPU with capacity for test neurons
-    let mut npu = RustNPU::<f32>::new(1000);
+    let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(
+        StdRuntime,
+        CPUBackend::new(),
+        1000,
+        10,
+        1,
+    )
+    .unwrap();
     
     // Create a 3x3x2 cortical area (18 voxels, 1 neuron per voxel = 18 neurons)
     // Base threshold = 10.0
@@ -28,6 +37,12 @@ fn test_firing_threshold_spatial_gradient_3d() {
     let increment_x = 1.0;
     let increment_y = 2.0;
     let increment_z = 5.0;
+
+    // Required for neuron→area mapping during creation
+    npu.register_cortical_area(
+        cortical_idx,
+        CoreCorticalType::Death.to_cortical_id().as_base_64(),
+    );
     
     let neuron_count = npu.create_cortical_area_neurons(
         cortical_idx,
@@ -52,10 +67,6 @@ fn test_firing_threshold_spatial_gradient_3d() {
     
     assert_eq!(neuron_count, 18, "Should create 18 neurons (3x3x2)");
     
-    // Get neuron storage to verify thresholds
-    let storage = npu.neuron_storage();
-    let thresholds = storage.thresholds();
-    
     // Expected threshold calculation:
     // threshold(x, y, z) = base + x*inc_x + y*inc_y + z*inc_z
     //                    = 10.0 + x*1.0 + y*2.0 + z*5.0
@@ -70,7 +81,9 @@ fn test_firing_threshold_spatial_gradient_3d() {
                     + (y as f32 * increment_y)
                     + (z as f32 * increment_z);
                 
-                let actual_threshold = thresholds[neuron_idx];
+                let actual_threshold = npu
+                    .get_neuron_property_by_index(neuron_idx, "threshold")
+                    .expect("Threshold should exist");
                 
                 assert!(
                     (actual_threshold - expected_threshold).abs() < 0.001,
@@ -85,15 +98,22 @@ fn test_firing_threshold_spatial_gradient_3d() {
     
     // Verify some specific neurons:
     // Neuron at (0,0,0) index 0: 10.0 + 0 + 0 + 0 = 10.0
-    assert!((thresholds[0] - 10.0).abs() < 0.001);
+    let threshold_0 = npu
+        .get_neuron_property_by_index(0, "threshold")
+        .expect("Threshold should exist");
+    assert!((threshold_0 - 10.0).abs() < 0.001);
     // Neuron at (2,2,1) index 17: 10.0 + 2 + 4 + 5 = 21.0
-    assert!((thresholds[17] - 21.0).abs() < 0.001);
+    let threshold_17 = npu
+        .get_neuron_property_by_index(17, "threshold")
+        .expect("Threshold should exist");
+    assert!((threshold_17 - 21.0).abs() < 0.001);
 }
 
 #[test]
 fn test_firing_threshold_no_gradient() {
     // Test that when all increments are 0.0, all neurons get the base threshold
-    let mut npu = RustNPU::<f32>::new(100);
+    let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1).unwrap();
+    npu.register_cortical_area(1, CoreCorticalType::Death.to_cortical_id().as_base_64());
     
     let neuron_count = npu.create_cortical_area_neurons(
         1,      // cortical_idx
@@ -107,11 +127,11 @@ fn test_firing_threshold_no_gradient() {
     
     assert_eq!(neuron_count, 8);
     
-    let storage = npu.neuron_storage();
-    let thresholds = storage.thresholds();
-    
     // All neurons should have threshold = 50.0
-    for (idx, &threshold) in thresholds.iter().enumerate() {
+    for idx in 0..neuron_count as usize {
+        let threshold = npu
+            .get_neuron_property_by_index(idx, "threshold")
+            .expect("Threshold should exist");
         assert!(
             (threshold - 50.0).abs() < 0.001,
             "Neuron {} should have threshold 50.0, got {:.1}",
@@ -123,7 +143,8 @@ fn test_firing_threshold_no_gradient() {
 #[test]
 fn test_firing_threshold_single_axis_gradient() {
     // Test gradient on X axis only
-    let mut npu = RustNPU::<f32>::new(100);
+    let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1).unwrap();
+    npu.register_cortical_area(1, CoreCorticalType::Death.to_cortical_id().as_base_64());
     
     let neuron_count = npu.create_cortical_area_neurons(
         1,
@@ -138,16 +159,16 @@ fn test_firing_threshold_single_axis_gradient() {
     
     assert_eq!(neuron_count, 5);
     
-    let storage = npu.neuron_storage();
-    let thresholds = storage.thresholds();
-    
     // Expected: 100, 110, 120, 130, 140
     for x in 0..5 {
         let expected = 100.0 + (x as f32 * 10.0);
+        let actual = npu
+            .get_neuron_property_by_index(x, "threshold")
+            .expect("Threshold should exist");
         assert!(
-            (thresholds[x] - expected).abs() < 0.001,
+            (actual - expected).abs() < 0.001,
             "Neuron at x={} should have threshold {:.1}, got {:.1}",
-            x, expected, thresholds[x]
+            x, expected, actual
         );
     }
 }
@@ -155,7 +176,8 @@ fn test_firing_threshold_single_axis_gradient() {
 #[test]
 fn test_firing_threshold_multiple_neurons_per_voxel() {
     // Test that all neurons in the same voxel get the same threshold
-    let mut npu = RustNPU::<f32>::new(100);
+    let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1).unwrap();
+    npu.register_cortical_area(1, CoreCorticalType::Death.to_cortical_id().as_base_64());
     
     let neuron_count = npu.create_cortical_area_neurons(
         1,
@@ -170,24 +192,28 @@ fn test_firing_threshold_multiple_neurons_per_voxel() {
     
     assert_eq!(neuron_count, 6);
     
-    let storage = npu.neuron_storage();
-    let thresholds = storage.thresholds();
-    
     // First 3 neurons at x=0 should have threshold 20.0
     for idx in 0..3 {
-        assert!((thresholds[idx] - 20.0).abs() < 0.001);
+        let threshold = npu
+            .get_neuron_property_by_index(idx, "threshold")
+            .expect("Threshold should exist");
+        assert!((threshold - 20.0).abs() < 0.001);
     }
     
     // Next 3 neurons at x=1 should have threshold 25.0
     for idx in 3..6 {
-        assert!((thresholds[idx] - 25.0).abs() < 0.001);
+        let threshold = npu
+            .get_neuron_property_by_index(idx, "threshold")
+            .expect("Threshold should exist");
+        assert!((threshold - 25.0).abs() < 0.001);
     }
 }
 
 #[test]
 fn test_firing_threshold_negative_gradient() {
     // Test that negative increments work (threshold decreases with position)
-    let mut npu = RustNPU::<f32>::new(100);
+    let mut npu = RustNPU::<StdRuntime, f32, CPUBackend>::new(StdRuntime, CPUBackend::new(), 100, 10, 1).unwrap();
+    npu.register_cortical_area(1, CoreCorticalType::Death.to_cortical_id().as_base_64());
     
     let neuron_count = npu.create_cortical_area_neurons(
         1,
@@ -202,12 +228,18 @@ fn test_firing_threshold_negative_gradient() {
     
     assert_eq!(neuron_count, 3);
     
-    let storage = npu.neuron_storage();
-    let thresholds = storage.thresholds();
-    
     // Expected: 100, 90, 80
-    assert!((thresholds[0] - 100.0).abs() < 0.001);
-    assert!((thresholds[1] - 90.0).abs() < 0.001);
-    assert!((thresholds[2] - 80.0).abs() < 0.001);
+    let threshold_0 = npu
+        .get_neuron_property_by_index(0, "threshold")
+        .expect("Threshold should exist");
+    let threshold_1 = npu
+        .get_neuron_property_by_index(1, "threshold")
+        .expect("Threshold should exist");
+    let threshold_2 = npu
+        .get_neuron_property_by_index(2, "threshold")
+        .expect("Threshold should exist");
+    assert!((threshold_0 - 100.0).abs() < 0.001);
+    assert!((threshold_1 - 90.0).abs() < 0.001);
+    assert!((threshold_2 - 80.0).abs() < 0.001);
 }
 

@@ -21,8 +21,8 @@ fn test_psp_uniformity_false_divides_psp() {
     let mut npu = RustNPU::new(runtime, backend, 100, 100, 5).expect("Failed to create NPU");
 
     // Register two cortical areas (use valid cortical types)
-    let area_a = CoreCorticalType::Memory.to_cortical_id();
-    let area_b = CoreCorticalType::Reflexive.to_cortical_id();
+    let area_a = CoreCorticalType::Power.to_cortical_id();
+    let area_b = CoreCorticalType::Death.to_cortical_id();
     
     npu.register_cortical_area(2, area_a.as_base_64());
     npu.register_cortical_area(3, area_b.as_base_64());
@@ -30,6 +30,7 @@ fn test_psp_uniformity_false_divides_psp() {
     // Create source neuron in area A
     let source_neuron = npu.add_neuron(
         1.0,   // threshold
+        0.0,   // threshold_limit (0 = no limit)
         0.0,   // leak
         0.0,   // resting
         0,     // neuron_type
@@ -37,20 +38,29 @@ fn test_psp_uniformity_false_divides_psp() {
         1.0,   // excitability
         0,     // consecutive_fire_limit
         0,     // snooze
-        true,  // is_valid
-        1,     // burst_count
+        true,  // mp_charge_accumulation
         2,     // cortical_area (area A)
         0,     // x
         0,     // y
+        0,     // z
     ).expect("Failed to add source neuron");
 
     // Create 5 target neurons in area B
     let mut target_neurons = Vec::new();
     for i in 0..5 {
         let target = npu.add_neuron(
-            1.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1,
-            3,  // cortical_area (area B)
-            i, 0,
+            1.0, // threshold
+            0.0, // threshold_limit (0 = no limit)
+            0.0, // leak
+            0.0, // resting
+            0,   // neuron_type
+            0,   // refractory
+            1.0, // excitability
+            0,   // consecutive_fire_limit
+            0,   // snooze
+            true, // mp_charge_accumulation
+            3,   // cortical_area (area B)
+            i, 0, 0,
         ).expect("Failed to add target neuron");
         target_neurons.push(target);
     }
@@ -93,26 +103,44 @@ fn test_psp_uniformity_true_applies_full_psp() {
     let mut npu = RustNPU::new(runtime, backend, 100, 100, 5).expect("Failed to create NPU");
 
     // Register two cortical areas (use valid cortical types)
-    let area_a = CoreCorticalType::Memory.to_cortical_id();
-    let area_b = CoreCorticalType::Reflexive.to_cortical_id();
+    let area_a = CoreCorticalType::Power.to_cortical_id();
+    let area_b = CoreCorticalType::Death.to_cortical_id();
     
     npu.register_cortical_area(2, area_a.as_base_64());
     npu.register_cortical_area(3, area_b.as_base_64());
 
     // Create source neuron in area A
     let source_neuron = npu.add_neuron(
-        1.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1,
-        2,  // cortical_area (area A)
-        0, 0,
+        1.0, // threshold
+        0.0, // threshold_limit (0 = no limit)
+        0.0, // leak
+        0.0, // resting
+        0,   // neuron_type
+        0,   // refractory
+        1.0, // excitability
+        0,   // consecutive_fire_limit
+        0,   // snooze
+        true, // mp_charge_accumulation
+        2,   // cortical_area (area A)
+        0, 0, 0,
     ).expect("Failed to add source neuron");
 
     // Create 5 target neurons in area B
     let mut target_neurons = Vec::new();
     for i in 0..5 {
         let target = npu.add_neuron(
-            1.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1,
-            3,  // cortical_area (area B)
-            i, 0,
+            1.0, // threshold
+            0.0, // threshold_limit (0 = no limit)
+            0.0, // leak
+            0.0, // resting
+            0,   // neuron_type
+            0,   // refractory
+            1.0, // excitability
+            0,   // consecutive_fire_limit
+            0,   // snooze
+            true, // mp_charge_accumulation
+            3,   // cortical_area (area B)
+            i, 0, 0,
         ).expect("Failed to add target neuron");
         target_neurons.push(target);
     }
@@ -160,15 +188,48 @@ fn test_psp_uniformity_default_is_false() {
 
     // Create neurons
     let source = npu.add_neuron(
-        1.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1, 2, 0, 0,
+        1.0, // threshold
+        0.0, // threshold_limit (0 = no limit)
+        0.0, // leak
+        0.0, // resting
+        0,   // neuron_type
+        0,   // refractory
+        1.0, // excitability
+        0,   // consecutive_fire_limit
+        0,   // snooze
+        true, // mp_charge_accumulation
+        2,   // cortical_area
+        0, 0, 0,
     ).expect("Failed to add source neuron");
 
     let target1 = npu.add_neuron(
-        1.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1, 2, 1, 0,
+        1.0, // threshold
+        0.0, // threshold_limit (0 = no limit)
+        0.0, // leak
+        0.0, // resting
+        0,   // neuron_type
+        0,   // refractory
+        1.0, // excitability
+        0,   // consecutive_fire_limit
+        0,   // snooze
+        true, // mp_charge_accumulation
+        2,   // cortical_area
+        1, 0, 0,
     ).expect("Failed to add target1");
 
     let target2 = npu.add_neuron(
-        1.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1, 2, 2, 0,
+        1.0, // threshold
+        0.0, // threshold_limit (0 = no limit)
+        0.0, // leak
+        0.0, // resting
+        0,   // neuron_type
+        0,   // refractory
+        1.0, // excitability
+        0,   // consecutive_fire_limit
+        0,   // snooze
+        true, // mp_charge_accumulation
+        2,   // cortical_area
+        2, 0, 0,
     ).expect("Failed to add target2");
 
     // Create synapses

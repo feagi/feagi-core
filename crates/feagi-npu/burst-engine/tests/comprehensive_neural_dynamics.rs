@@ -59,7 +59,7 @@ use ahash::AHashMap;
 fn create_test_npu() -> RustNPU<StdRuntime, f32, CPUBackend> {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
-    let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20);    
+    let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20).unwrap();
     // Register test areas 1-20 (avoiding area 1 being treated as Power auto-inject area)
     // Use unique cortical IDs to avoid conflicts
     for area_id in 1..=20 {
@@ -86,6 +86,7 @@ fn add_test_neuron(
 ) -> NeuronId {
     npu.add_neuron(
         threshold,
+        0.0, // threshold_limit (0 = no limit)
         leak,
         0.0, // resting_potential
         0,   // neuron_type
@@ -108,7 +109,9 @@ fn add_test_synapse(
     conductance: SynapticConductance,
     synapse_type: SynapseType,
 ) {
-    npu.add_synapse(source, target, weight, conductance, synapse_type);    npu.rebuild_synapse_index();
+    npu.add_synapse(source, target, weight, conductance, synapse_type)
+        .unwrap();
+    npu.rebuild_synapse_index();
 }
 
 // ============================================================================
@@ -135,10 +138,15 @@ fn test_psp_below_threshold_no_fire() {
     );    
     // Burst 1: Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    let result1 = npu.process_burst();    assert!(result1.fired_neurons.contains(&source), "Source should fire");
+    let result1 = npu.process_burst().unwrap();
+    assert!(
+        result1.fired_neurons.contains(&source),
+        "Source should fire"
+    );
     
     // Burst 2: Target should NOT fire (PSP=1.0 < threshold=1.1)
-    let result2 = npu.process_burst();    assert!(!result2.fired_neurons.contains(&target),
+    let result2 = npu.process_burst().unwrap();
+    assert!(!result2.fired_neurons.contains(&target),
         "Target should NOT fire when PSP (1.0) < threshold (1.1)");
 }
 
@@ -160,10 +168,10 @@ fn test_psp_equals_threshold_fires() {
     );    
     // Burst 1: Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    let result1 = npu.process_burst();    assert!(result1.fired_neurons.contains(&source));
+    let result1 = npu.process_burst().unwrap();    assert!(result1.fired_neurons.contains(&source));
     
     // Burst 2: Target SHOULD fire (PSP=100 >= threshold=100)
-    let result2 = npu.process_burst();    assert!(result2.fired_neurons.contains(&target),
+    let result2 = npu.process_burst().unwrap();    assert!(result2.fired_neurons.contains(&target),
         "Target should fire when PSP (100) >= threshold (100)");
 }
 
@@ -184,9 +192,9 @@ fn test_psp_above_threshold_fires() {
     );    
     // Burst 1: Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 2: Target SHOULD fire (PSP=100 > threshold=50)
-    let result2 = npu.process_burst();    assert!(result2.fired_neurons.contains(&target),
+    let result2 = npu.process_burst().unwrap();    assert!(result2.fired_neurons.contains(&target),
         "Target should fire when PSP (100) > threshold (50)");
 }
 
@@ -211,15 +219,15 @@ fn test_mp_accumulation_false_resets_each_burst() {
     );    
     // Burst 1: Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 2: Target gets PSP=100, but threshold=200, should NOT fire
-    let result2 = npu.process_burst();    assert!(!result2.fired_neurons.contains(&target));
+    let result2 = npu.process_burst().unwrap();    assert!(!result2.fired_neurons.contains(&target));
     
     // Burst 3: Fire source again
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 4: Target should STILL NOT fire (mp reset to 0 each burst)
-    let result4 = npu.process_burst();    assert!(!result4.fired_neurons.contains(&target),
+    let result4 = npu.process_burst().unwrap();    assert!(!result4.fired_neurons.contains(&target),
         "Target should NOT fire with mp_accumulation=false, PSP does not accumulate");
 }
 
@@ -241,15 +249,15 @@ fn test_mp_accumulation_true_accumulates_across_bursts() {
     );    
     // Burst 1: Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 2: Target gets PSP=100, but threshold=200, should NOT fire yet
-    let result2 = npu.process_burst();    assert!(!result2.fired_neurons.contains(&target));
+    let result2 = npu.process_burst().unwrap();    assert!(!result2.fired_neurons.contains(&target));
     
     // Burst 3: Fire source again
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 4: Target should NOW fire (accumulated 100 + 100 = 200 >= threshold)
-    let result4 = npu.process_burst();    assert!(result4.fired_neurons.contains(&target),
+    let result4 = npu.process_burst().unwrap();    assert!(result4.fired_neurons.contains(&target),
         "Target should fire with mp_accumulation=true, PSP accumulates (100+100=200 >= 200)");
 }
 
@@ -265,10 +273,10 @@ fn test_no_leak_preserves_potential() {
     
     // Inject 100, wait, check if still 100
     npu.inject_sensory_with_potentials(&[(target, 100.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Check membrane potential after 3 bursts
     for _ in 0..3 {
-        npu.process_burst();    }
+        npu.process_burst().unwrap();    }
     
     let mp = npu.get_neuron_property_by_index(target.0 as usize, "membrane_potential")
         .expect("Should have membrane potential");
@@ -285,9 +293,9 @@ fn test_partial_leak_decays_potential() {
     
     // Inject 100, wait, check decay
     npu.inject_sensory_with_potentials(&[(target, 100.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // After 1 burst with leak=0.5: mp = 100 + 0.5 * (0 - 100) = 100 - 50 = 50
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     let mp = npu.get_neuron_property_by_index(target.0 as usize, "membrane_potential")
         .expect("Should have membrane potential");
     
@@ -303,9 +311,9 @@ fn test_full_leak_resets_to_resting() {
     
     // Inject 100, wait, check full decay
     npu.inject_sensory_with_potentials(&[(target, 100.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // After 1 burst with leak=1.0: mp = 100 + 1.0 * (0 - 100) = 0
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     let mp = npu.get_neuron_property_by_index(target.0 as usize, "membrane_potential")
         .expect("Should have membrane potential");
     
@@ -336,9 +344,9 @@ fn test_psp_uniformity_false_divides_among_synapses() {
     
     // Burst 1: Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 2: Each target should receive PSP/2 = 100/2 = 50
-    let result2 = npu.process_burst();    
+    let result2 = npu.process_burst().unwrap();    
     // Both should fire (50 >= 50 threshold)
     assert!(result2.fired_neurons.contains(&target1) || result2.fired_neurons.contains(&target2),
         "At least one target should fire with divided PSP");
@@ -363,9 +371,9 @@ fn test_psp_uniformity_true_full_to_each_synapse() {
     
     // Burst 1: Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 2: Each target should receive full PSP = 100
-    let result2 = npu.process_burst();    
+    let result2 = npu.process_burst().unwrap();    
     // Both should fire (100 >= 100 threshold)
     assert!(result2.fired_neurons.contains(&target1),
         "Target1 should fire with full PSP");
@@ -387,7 +395,7 @@ fn test_multiple_synapses_from_same_source() {
     
     // Set PSP uniformity to true for area 10 so each synapse gets full PSP
     let mut psp_flags = ahash::AHashMap::new();
-    let area_10_id = CorticalID::try_from_base_64(&CoreCorticalType::Death.to_cortical_id().as_base_64());    psp_flags.insert(area_10_id, true);
+    let area_10_id = CorticalID::try_from_base_64(&CoreCorticalType::Death.to_cortical_id().as_base_64()).unwrap();    psp_flags.insert(area_10_id, true);
     npu.set_psp_uniform_distribution_flags(psp_flags);
     
     // Add 2 synapses from same source to same target (PSP=100 each)
@@ -396,9 +404,9 @@ fn test_multiple_synapses_from_same_source() {
     
     // Burst 1: Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 2: Target should receive 100+100=200 (accumulated in FCL)
-    let result2 = npu.process_burst();    assert!(result2.fired_neurons.contains(&target),
+    let result2 = npu.process_burst().unwrap();    assert!(result2.fired_neurons.contains(&target),
         "Target should fire when multiple synapses accumulate (100+100=200 >= 200)");
 }
 
@@ -416,9 +424,9 @@ fn test_multiple_synapses_from_different_sources() {
     
     // Burst 1: Fire both sources
     npu.inject_sensory_with_potentials(&[(source1, 2.0), (source2, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Burst 2: Target should receive 100+100=200
-    let result2 = npu.process_burst();    assert!(result2.fired_neurons.contains(&target),
+    let result2 = npu.process_burst().unwrap();    assert!(result2.fired_neurons.contains(&target),
         "Target should fire when inputs from multiple sources converge (100+100=200 >= 200)");
 }
 
@@ -437,9 +445,9 @@ fn test_excitatory_synapse_increases_potential() {
     
     // Fire source
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Target should fire (PSP=100 >= 100)
-    let result = npu.process_burst();    assert!(result.fired_neurons.contains(&target),
+    let result = npu.process_burst().unwrap();    assert!(result.fired_neurons.contains(&target),
         "Excitatory synapse should increase potential and cause firing");
 }
 
@@ -457,9 +465,9 @@ fn test_inhibitory_synapse_decreases_potential() {
     
     // Fire both
     npu.inject_sensory_with_potentials(&[(excitatory, 2.0), (inhibitory, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Target should NOT fire (100 - 100 = 0 < 100)
-    let result = npu.process_burst();    assert!(!result.fired_neurons.contains(&target),
+    let result = npu.process_burst().unwrap();    assert!(!result.fired_neurons.contains(&target),
         "Inhibitory synapse should cancel excitatory (100-100=0 < 100)");
 }
 
@@ -477,9 +485,9 @@ fn test_mixed_excitatory_inhibitory_net_effect() {
     
     // Fire both
     npu.inject_sensory_with_potentials(&[(excitatory, 2.0), (inhibitory, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Target SHOULD fire (200 - 50 = 150 >= 100)
-    let result = npu.process_burst();    assert!(result.fired_neurons.contains(&target),
+    let result = npu.process_burst().unwrap();    assert!(result.fired_neurons.contains(&target),
         "Net effect of mixed synapses should be 200-50=150, causing firing");
 }
 
@@ -495,18 +503,18 @@ fn test_refractory_period_blocks_firing() {
     
     // Burst 1: Fire neuron
     npu.inject_sensory_with_potentials(&[(neuron, 2.0)]);
-    let result1 = npu.process_burst();    assert!(result1.fired_neurons.contains(&neuron));
+    let result1 = npu.process_burst().unwrap();    assert!(result1.fired_neurons.contains(&neuron));
     
     // Bursts 2-4: Should be in refractory (blocked)
     for burst in 2..=4 {
         npu.inject_sensory_with_potentials(&[(neuron, 2.0)]);
-        let result = npu.process_burst();        assert_eq!(result.burst, burst);
+        let result = npu.process_burst().unwrap();        assert_eq!(result.burst, burst);
         // Neuron blocked by refractory
     }
     
     // Burst 5: Should be able to fire again (refractory expired)
     npu.inject_sensory_with_potentials(&[(neuron, 2.0)]);
-    let result5 = npu.process_burst();    assert!(result5.fired_neurons.contains(&neuron),
+    let result5 = npu.process_burst().unwrap();    assert!(result5.fired_neurons.contains(&neuron),
         "Neuron should fire again after refractory period expires");
 }
 
@@ -528,15 +536,15 @@ fn test_chain_propagation_with_delay() {
     
     // Burst 1: Fire N1
     npu.inject_sensory_with_potentials(&[(n1, 2.0)]);
-    let result1 = npu.process_burst();    assert!(result1.fired_neurons.contains(&n1));
+    let result1 = npu.process_burst().unwrap();    assert!(result1.fired_neurons.contains(&n1));
     assert!(!result1.fired_neurons.contains(&n2)); // Not yet
     
     // Burst 2: N2 should fire (from N1)
-    let result2 = npu.process_burst();    assert!(result2.fired_neurons.contains(&n2));
+    let result2 = npu.process_burst().unwrap();    assert!(result2.fired_neurons.contains(&n2));
     assert!(!result2.fired_neurons.contains(&n3)); // Not yet
     
     // Burst 3: N3 should fire (from N2)
-    let result3 = npu.process_burst();    assert!(result3.fired_neurons.contains(&n3),
+    let result3 = npu.process_burst().unwrap();    assert!(result3.fired_neurons.contains(&n3),
         "Chain should propagate with 1-burst delay at each step");
 }
 
@@ -555,9 +563,9 @@ fn test_zero_weight_no_propagation() {
     add_test_synapse(&mut npu, source, target, SynapticWeight(0), SynapticConductance(10), SynapseType::Excitatory);
     
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Target should NOT fire (zero PSP)
-    let result = npu.process_burst();    assert!(!result.fired_neurons.contains(&target),
+    let result = npu.process_burst().unwrap();    assert!(!result.fired_neurons.contains(&target),
         "Zero weight should result in no propagation");
 }
 
@@ -572,9 +580,9 @@ fn test_maximum_psp_saturates() {
     add_test_synapse(&mut npu, source, target, SynapticWeight(255), SynapticConductance(255), SynapseType::Excitatory);
     
     npu.inject_sensory_with_potentials(&[(source, 2.0)]);
-    npu.process_burst();    
+    npu.process_burst().unwrap();    
     // Target SHOULD fire (65,025 >> 10,000)
-    let result = npu.process_burst();    assert!(result.fired_neurons.contains(&target),
+    let result = npu.process_burst().unwrap();    assert!(result.fired_neurons.contains(&target),
         "Maximum PSP (255×255=65025) should cause firing");
 }
 
@@ -583,14 +591,25 @@ fn test_excitability_zero_prevents_firing() {
     let mut npu = create_test_npu();
     
     // Create neuron with excitability = 0 (never fires)
-    let neuron = npu.add_neuron(
-        1.0, 0.0, 0.0, 0, 0,
-        0.0, // excitability = 0
-        0, 0, false, 1, 0, 0, 0,
-    );    
+    let neuron = npu
+        .add_neuron(
+            1.0, // threshold
+            0.0, // threshold_limit (0 = no limit)
+            0.0, // leak
+            0.0, // resting
+            0,   // neuron_type
+            0,   // refractory
+            0.0, // excitability = 0 (never fires)
+            0,   // consecutive_fire_limit
+            0,   // snooze
+            false, // mp_charge_accumulation
+            2,   // cortical_area (avoid power auto-injection area 1)
+            0, 0, 0,
+        )
+        .unwrap();
     // Inject well above threshold
     npu.inject_sensory_with_potentials(&[(neuron, 100.0)]);
-    let result = npu.process_burst();    
+    let result = npu.process_burst().unwrap();    
     assert!(!result.fired_neurons.contains(&neuron),
         "Neuron with excitability=0 should never fire");
 }
@@ -617,7 +636,7 @@ fn test_complex_network_convergence_divergence() {
     
     // Set PSP uniformity for area 10 and 11 so each synapse gets full PSP
     let mut psp_flags = ahash::AHashMap::new();
-    let area_10_id = CorticalID::try_from_base_64(&CoreCorticalType::Death.to_cortical_id().as_base_64());    let area_11_id = CorticalID::try_from_base_64(&CoreCorticalType::Power.to_cortical_id().as_base_64());
+    let area_10_id = CorticalID::try_from_base_64(&CoreCorticalType::Death.to_cortical_id().as_base_64()).unwrap();    let area_11_id = CorticalID::try_from_base_64(&CoreCorticalType::Power.to_cortical_id().as_base_64()).unwrap();
     psp_flags.insert(area_10_id, true);
     psp_flags.insert(area_11_id, true);
     npu.set_psp_uniform_distribution_flags(psp_flags);
@@ -632,15 +651,15 @@ fn test_complex_network_convergence_divergence() {
     
     // Burst 1: Fire S1 and S2
     npu.inject_sensory_with_potentials(&[(s1, 2.0), (s2, 2.0)]);
-    let result1 = npu.process_burst();    assert!(result1.fired_neurons.contains(&s1));
+    let result1 = npu.process_burst().unwrap();    assert!(result1.fired_neurons.contains(&s1));
     assert!(result1.fired_neurons.contains(&s2));
     
     // Burst 2: Hub should fire (100+100=200 >= 200)
-    let result2 = npu.process_burst();    assert!(result2.fired_neurons.contains(&hub),
+    let result2 = npu.process_burst().unwrap();    assert!(result2.fired_neurons.contains(&hub),
         "Hub should fire from convergent inputs");
     
     // Burst 3: Both targets should fire (divergence)
-    let result3 = npu.process_burst();    assert!(result3.fired_neurons.contains(&t1),
+    let result3 = npu.process_burst().unwrap();    assert!(result3.fired_neurons.contains(&t1),
         "Target 1 should fire from hub");
     assert!(result3.fired_neurons.contains(&t2),
         "Target 2 should fire from hub");
@@ -659,17 +678,17 @@ fn test_feedback_loop_with_refractory() {
     
     // Burst 1: Fire N1
     npu.inject_sensory_with_potentials(&[(n1, 150.0)]);
-    let result1 = npu.process_burst();    assert!(result1.fired_neurons.contains(&n1));
+    let result1 = npu.process_burst().unwrap();    assert!(result1.fired_neurons.contains(&n1));
     
     // Burst 2: N2 fires from N1
-    let result2 = npu.process_burst();    assert!(result2.fired_neurons.contains(&n2));
+    let result2 = npu.process_burst().unwrap();    assert!(result2.fired_neurons.contains(&n2));
     
     // Burst 3: N1 blocked (refractory), N2 also blocked
-    let result3 = npu.process_burst();    assert_eq!(result3.burst, 3);
+    let result3 = npu.process_burst().unwrap();    assert_eq!(result3.burst, 3);
     // Both in refractory
     
     // Burst 4: N1 can fire again from N2's burst 2
-    let _result4 = npu.process_burst();    // Refractory should prevent continuous oscillation
+    let _result4 = npu.process_burst().unwrap();    // Refractory should prevent continuous oscillation
     
     println!("Feedback loop tested with refractory preventing runaway");
 }

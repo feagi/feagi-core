@@ -701,6 +701,274 @@ impl GenomeServiceImpl {
             warn!(target: "feagi-services", "Parameter queue not available - updates will not affect neurons");
         }
 
+        // Persist parameter-only updates into the live ConnectomeManager so API reads (and BV UI)
+        // reflect the same values that are applied to the NPU.
+        //
+        // IMPORTANT: The parameter queue updates runtime neuron state; ConnectomeManager is the
+        // source-of-truth for cortical-area *reported* properties.
+        {
+            let mut manager = self.connectome.write();
+            if let Some(area) = manager.get_cortical_area_mut(&cortical_id_typed) {
+                for (key, value) in &changes {
+                    match key.as_str() {
+                        // Thresholds
+                        "firing_threshold" | "neuron_fire_threshold" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties
+                                    .insert("firing_threshold".to_string(), serde_json::json!(v));
+                            }
+                        }
+                        "firing_threshold_limit" | "neuron_firing_threshold_limit" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold_limit".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        // Spatial gradient increments
+                        "firing_threshold_increment_x" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold_increment_x".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "firing_threshold_increment_y" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold_increment_y".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "firing_threshold_increment_z" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "firing_threshold_increment_z".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
+                            if let Some(arr) = value.as_array() {
+                                if arr.len() == 3 {
+                                    if let (Some(x), Some(y), Some(z)) = (
+                                        arr[0].as_f64(),
+                                        arr[1].as_f64(),
+                                        arr[2].as_f64(),
+                                    ) {
+                                        area.properties.insert(
+                                            "firing_threshold_increment_x".to_string(),
+                                            serde_json::json!(x),
+                                        );
+                                        area.properties.insert(
+                                            "firing_threshold_increment_y".to_string(),
+                                            serde_json::json!(y),
+                                        );
+                                        area.properties.insert(
+                                            "firing_threshold_increment_z".to_string(),
+                                            serde_json::json!(z),
+                                        );
+                                    }
+                                }
+                            } else if let Some(obj) = value.as_object() {
+                                if let (Some(x), Some(y), Some(z)) = (
+                                    obj.get("x").and_then(|v| v.as_f64()),
+                                    obj.get("y").and_then(|v| v.as_f64()),
+                                    obj.get("z").and_then(|v| v.as_f64()),
+                                ) {
+                                    area.properties.insert(
+                                        "firing_threshold_increment_x".to_string(),
+                                        serde_json::json!(x),
+                                    );
+                                    area.properties.insert(
+                                        "firing_threshold_increment_y".to_string(),
+                                        serde_json::json!(y),
+                                    );
+                                    area.properties.insert(
+                                        "firing_threshold_increment_z".to_string(),
+                                        serde_json::json!(z),
+                                    );
+                                }
+                            }
+                        }
+
+                        // Timing/decay
+                        "refractory_period" | "neuron_refractory_period" | "refrac" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "refractory_period".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "leak_coefficient" | "neuron_leak_coefficient" | "leak" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "leak_coefficient".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+
+                        // Burst gating
+                        "consecutive_fire_cnt_max"
+                        | "neuron_consecutive_fire_count"
+                        | "consecutive_fire_count" => {
+                            if let Some(v) = value.as_u64() {
+                                // ConnectomeManager getters expect `consecutive_fire_limit`.
+                                area.properties.insert(
+                                    "consecutive_fire_limit".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "snooze_length" | "neuron_snooze_period" | "snooze_period" => {
+                            if let Some(v) = value.as_u64() {
+                                // ConnectomeManager getters expect `snooze_period`.
+                                area.properties.insert(
+                                    "snooze_period".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+
+                        // Excitability (BV uses percent UI but sends 0..=1 to the API)
+                        "neuron_excitability" | "excitability" => {
+                            if let Some(v) = value.as_f64() {
+                                if (0.0..=1.0).contains(&v) {
+                                    area.properties.insert(
+                                        "neuron_excitability".to_string(),
+                                        serde_json::json!(v),
+                                    );
+                                } else {
+                                    warn!(
+                                        target: "feagi-services",
+                                        "[FAST-UPDATE] Ignoring neuron_excitability={} for area {} (expected 0..=1)",
+                                        v,
+                                        cortical_id
+                                    );
+                                }
+                            }
+                        }
+
+                        // PSP + degeneration + plasticity
+                        "postsynaptic_current" | "neuron_post_synaptic_potential" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "postsynaptic_current".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "postsynaptic_current_max" | "neuron_post_synaptic_potential_max" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "postsynaptic_current_max".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "degeneration" | "neuron_degeneracy_coefficient" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties
+                                    .insert("degeneration".to_string(), serde_json::json!(v));
+                            }
+                        }
+                        "plasticity_constant" | "neuron_plasticity_constant" => {
+                            if let Some(v) = value.as_f64() {
+                                area.properties.insert(
+                                    "plasticity_constant".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "psp_uniform_distribution" | "neuron_psp_uniform_distribution" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "psp_uniform_distribution".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+
+                        // Memory parameters (used by plasticity registration + API display)
+                        "init_lifespan" | "neuron_init_lifespan" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "init_lifespan".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "lifespan_growth_rate" | "neuron_lifespan_growth_rate" => {
+                            // Accept integer and float representations.
+                            if let Some(v) = value.as_f64().or_else(|| value.as_u64().map(|u| u as f64)) {
+                                area.properties.insert(
+                                    "lifespan_growth_rate".to_string(),
+                                    serde_json::json!(v as f32),
+                                );
+                            }
+                        }
+                        "longterm_mem_threshold" | "neuron_longterm_mem_threshold" => {
+                            if let Some(v) = value.as_u64() {
+                                area.properties.insert(
+                                    "longterm_mem_threshold".to_string(),
+                                    serde_json::json!(v as u32),
+                                );
+                            }
+                        }
+                        "temporal_depth" => {
+                            if let Some(v) = value.as_u64() {
+                                if v == 0 {
+                                    warn!(
+                                        target: "feagi-services",
+                                        "[FAST-UPDATE] Ignoring temporal_depth=0 for area {} (temporal_depth must be >= 1)",
+                                        cortical_id
+                                    );
+                                } else {
+                                    area.properties.insert(
+                                        "temporal_depth".to_string(),
+                                        serde_json::json!(v as u32),
+                                    );
+                                }
+                            }
+                        }
+
+                        // Membrane potential / runtime flags
+                        "mp_charge_accumulation" | "neuron_mp_charge_accumulation" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "mp_charge_accumulation".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+                        "mp_driven_psp" | "neuron_mp_driven_psp" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties
+                                    .insert("mp_driven_psp".to_string(), serde_json::json!(v));
+                            }
+                        }
+
+                        // Burst engine
+                        "burst_engine_active" => {
+                            if let Some(v) = value.as_bool() {
+                                area.properties.insert(
+                                    "burst_engine_active".to_string(),
+                                    serde_json::json!(v),
+                                );
+                            }
+                        }
+
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
         if let Some(genome) = self.current_genome.write().as_mut() {
             if let Some(area) = genome.cortical_areas.get_mut(&cortical_id_typed) {
@@ -890,6 +1158,22 @@ impl GenomeServiceImpl {
                                     "longterm_mem_threshold".to_string(),
                                     serde_json::json!(v as u32),
                                 );
+                            }
+                        }
+                        "temporal_depth" => {
+                            if let Some(v) = value.as_u64() {
+                                if v == 0 {
+                                    warn!(
+                                        target: "feagi-services",
+                                        "[GENOME-UPDATE] Ignoring temporal_depth=0 for area {} (temporal_depth must be >= 1)",
+                                        cortical_id
+                                    );
+                                } else {
+                                    area.properties.insert(
+                                        "temporal_depth".to_string(),
+                                        serde_json::json!(v as u32),
+                                    );
+                                }
                             }
                         }
                         "firing_threshold_increment" | "neuron_fire_threshold_increment" => {
@@ -1785,6 +2069,10 @@ impl GenomeServiceImpl {
             init_lifespan: area.init_lifespan(),
             lifespan_growth_rate: area.lifespan_growth_rate() as f64,
             longterm_mem_threshold: area.longterm_mem_threshold(),
+            temporal_depth: {
+                use feagi_evolutionary::extract_memory_properties;
+                extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
+            },
             properties: HashMap::new(),
             // IPU/OPU-specific fields (None for genome service - not decoded here)
             cortical_subtype: None,
@@ -1904,6 +2192,10 @@ impl GenomeServiceImpl {
             init_lifespan: area.init_lifespan(),
             lifespan_growth_rate: area.lifespan_growth_rate() as f64,
             longterm_mem_threshold: area.longterm_mem_threshold(),
+            temporal_depth: {
+                use feagi_evolutionary::extract_memory_properties;
+                extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
+            },
             properties: HashMap::new(),
             // IPU/OPU-specific fields (None for genome service - not decoded here)
             cortical_subtype: None,

@@ -914,8 +914,10 @@ pub async fn get_fire_ledger_area_window_size(
         }
     }
 
-    // Return default if not found
-    Ok(Json(20))
+    Err(ApiError::not_found(
+        "FireLedgerArea",
+        &format!("cortical_idx={}", area_id),
+    ))
 }
 
 /// Set fire ledger window size for a specific cortical area.
@@ -990,20 +992,10 @@ pub async fn get_fire_ledger_history(
         .get("lookback_steps")
         .and_then(|s| s.parse::<i32>().ok());
 
-    // TODO: Implement fire ledger history retrieval from NPU
-    // For now, return placeholder
-    let mut response = HashMap::new();
-    response.insert("success".to_string(), serde_json::json!(true));
-    response.insert("area_id".to_string(), serde_json::json!(area_id));
-    response.insert("cortical_idx".to_string(), serde_json::json!(cortical_idx));
-    response.insert("history".to_string(), serde_json::json!([]));
-    response.insert("window_size".to_string(), serde_json::json!(20));
-    response.insert(
-        "note".to_string(),
-        serde_json::json!("Fire ledger history not yet implemented"),
-    );
-
-    Ok(Json(response))
+    Err(ApiError::internal(format!(
+        "Fire ledger history retrieval is not yet implemented (requested cortical_idx={})",
+        cortical_idx
+    )))
 }
 
 // ============================================================================

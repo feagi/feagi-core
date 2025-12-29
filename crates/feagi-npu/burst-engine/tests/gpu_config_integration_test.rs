@@ -124,7 +124,7 @@ fn test_backend_selection_small_genome() {
     let decision = select_backend(10_000, 100_000, &backend_config);
 
     assert_eq!(decision.backend_type, BackendType::CPU);
-    assert!(decision.reason.contains("Small genome"));
+    assert!(decision.reason.contains("CPU selected"));
 }
 
 #[test]

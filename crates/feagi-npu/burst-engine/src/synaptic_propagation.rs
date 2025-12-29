@@ -405,6 +405,8 @@ mod tests {
         // Set neuron mapping
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let mut mapping = AHashMap::new();
+        mapping.insert(NeuronId(1), CoreCorticalType::Power.to_cortical_id());
+        mapping.insert(NeuronId(2), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(10), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(11), CoreCorticalType::Power.to_cortical_id());
         engine.set_neuron_mapping(mapping);
@@ -434,6 +436,8 @@ mod tests {
 
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let mut mapping = AHashMap::new();
+        mapping.insert(NeuronId(1), CoreCorticalType::Power.to_cortical_id());
+        mapping.insert(NeuronId(2), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(10), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(11), CoreCorticalType::Power.to_cortical_id());
         engine.set_neuron_mapping(mapping);

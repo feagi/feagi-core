@@ -10,13 +10,13 @@ use feagi_npu_burst_engine::backend::CPUBackend;
 use feagi_npu_runtime::StdRuntime;
 use feagi_npu_neural::types::{SynapticWeight, SynapticConductance};
 use feagi_npu_neural::synapse::SynapseType;
-use feagi_structures::types::{CorticalID, CoreCorticalType};
+use feagi_structures::genomic::cortical_area::{CorticalID, CoreCorticalType};
 
 #[test]
 fn test_projector_psp_division_issue() {
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
-    let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20);
+    let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 20).unwrap();
     
     // Register cortical areas (avoid area=1 for power injection)
     npu.register_cortical_area(10, CoreCorticalType::Death.to_cortical_id().as_base_64());  // Area A
@@ -25,6 +25,7 @@ fn test_projector_psp_division_issue() {
     // Create neuron in Area A (source)
     let neuron_a = npu.add_neuron(
         10.0,  // threshold (high so it only fires from direct injection)
+        0.0,   // threshold_limit (0 = no limit)
         0.0,   // leak
         0.0,   // resting_potential
         0,     // neuron_type
@@ -42,11 +43,11 @@ fn test_projector_psp_division_issue() {
     for i in 0..10 {
         let neuron = npu.add_neuron(
             10.0,  // threshold = 10
+            0.0,   // threshold_limit (0 = no limit)
             0.0,   // leak
             0.0,   // resting_potential
             0,     // neuron_type
             0,     // refractory_period
-            1.0,   // excitability
             1.0,   // excitability
             0,     // consecutive_fire_limit
             0,     // snooze_period
@@ -89,13 +90,13 @@ fn test_projector_psp_division_issue() {
     
     println!("\n=== Burst 1: Fire neuron A ===");
     npu.inject_sensory_with_potentials(&[(neuron_a, 20.0)]);
-    let result1 = npu.process_burst();
+    let result1 = npu.process_burst().unwrap();
     println!("Burst 1 fired {} neurons", result1.fired_neurons.len());
     println!("Neuron A fired: {}", result1.fired_neurons.contains(&neuron_a));
     assert!(result1.fired_neurons.contains(&neuron_a), "Neuron A should fire from injection");
     
     println!("\n=== Burst 2: Check Area B propagation ===");
-    let result2 = npu.process_burst();
+    let result2 = npu.process_burst().unwrap();
     println!("Burst 2 fired {} neurons", result2.fired_neurons.len());
     
     // Check each neuron in B

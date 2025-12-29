@@ -832,7 +832,6 @@ impl Neuroembryogenesis {
             
             let manager = self.connectome_manager.read();
             if let Some(ref executor) = manager.get_plasticity_executor() {
-                info!(target: "feagi-bdu", "🧠 Registering memory areas with PlasticityExecutor...");
                 let mut registered_count = 0;
                 
                 // Iterate through all cortical areas and register memory areas
@@ -851,27 +850,18 @@ impl Neuroembryogenesis {
                                 
                                 exec.register_memory_area(
                                     area.cortical_idx,
-                                    area.name.clone(),
+                                    area_id.as_base_64(),
                                     mem_props.temporal_depth,
                                     upstream_areas.clone(),
                                     Some(lifecycle_config),
                                 );
                                 
                                 registered_count += 1;
-                                info!(target: "feagi-bdu",
-                                    "   ✓ Registered memory area '{}' (idx={}, upstream={:?})",
-                                    area.name, area.cortical_idx, upstream_areas
-                                );
                             }
                         }
                     }
                 }
-                
-                if registered_count > 0 {
-                    info!(target: "feagi-bdu", "✅ Registered {} memory area(s) with PlasticityExecutor", registered_count);
-                } else {
-                    info!(target: "feagi-bdu", "   No memory areas found in genome");
-                }
+                let _ = registered_count; // count retained for future metrics if needed
             }
         }
 

@@ -105,7 +105,9 @@ pub struct MemoryAreaProperties {
 impl Default for MemoryAreaProperties {
     fn default() -> Self {
         Self {
-            temporal_depth: 3,
+            // Enforce minimum temporal depth of 1; 0 is not a valid configuration because
+            // the pattern detector needs at least one timestep of history.
+            temporal_depth: 1,
             longterm_threshold: 100,
             lifespan_growth_rate: 1.0,
             init_lifespan: 9,
@@ -137,7 +139,8 @@ pub fn extract_memory_properties(
         temporal_depth: properties
             .get("temporal_depth")
             .and_then(|v| v.as_u64())
-            .unwrap_or(3) as u32,
+            .unwrap_or(1)
+            .max(1) as u32,
         longterm_threshold: properties
             .get("longterm_mem_threshold")
             .and_then(|v| v.as_u64())
@@ -253,7 +256,7 @@ mod tests {
         properties.insert("is_mem_type".to_string(), json!(true));
 
         let mem_props = extract_memory_properties(&properties).expect("Should extract properties");
-        assert_eq!(mem_props.temporal_depth, 3);
+        assert_eq!(mem_props.temporal_depth, 1);
         assert_eq!(mem_props.longterm_threshold, 100);
         assert_eq!(mem_props.lifespan_growth_rate, 1.0);
         assert_eq!(mem_props.init_lifespan, 9);

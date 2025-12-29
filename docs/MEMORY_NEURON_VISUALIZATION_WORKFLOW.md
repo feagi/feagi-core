@@ -238,7 +238,20 @@ pub fn create_memory_neuron(
 }
 ```
 
-**Registration** (Plasticity→NPU):
+## Status Note (Important)
+
+This document describes the **intended/target workflow** for memory neuron visualization.
+
+As of the current implementation:
+- Plasticity can **detect patterns** and **emit** `PlasticityCommand::{RegisterMemoryNeuron, InjectMemoryNeuronToFCL}`.
+- The burst engine does **not** currently consume/apply these commands.
+- `feagi-npu/plasticity` allocates memory neuron IDs in a **separate numeric range** (e.g. `50_000_000+`), while the burst engine currently assumes `NeuronId == index into NPU neuron_storage`.
+
+Until command application + memory-neuron registration are implemented, memory neurons **cannot** reliably participate in the NPU dynamics / `FireQueue` pipeline as described below.
+
+---
+
+### Registration (Target: Plasticity → Burst Engine → NPU)
 ```rust
 // PlasticityCommand sent to burst engine
 PlasticityCommand::RegisterMemoryNeuron {
@@ -248,17 +261,12 @@ PlasticityCommand::RegisterMemoryNeuron {
     membrane_potential: 0.0,
 }
 
-// NPU registers memory neuron like any other neuron
-npu.add_neuron(
-    threshold, leak, resting, refrac_period,
-    consec_limit, snooze_length, excitability,
-    x, y, z, // Coordinates in memory cortical area space
-    is_mem_elig, cortical_id, neuron_idx, neuron_sub_idx,
-    neuron_id
-);
+// Target behavior:
+// - Burst engine consumes this command and registers a corresponding neuron into the NPU's neuron_storage
+// - The resulting NPU neuron_id must be valid for the NPU dynamics path (NeuronId == storage index today)
 ```
 
-**Activation** (Pattern Recognition):
+### Activation (Target: Pattern Recognition)
 ```rust
 // When pattern detected, inject to FCL
 PlasticityCommand::InjectMemoryNeuronToFCL {
@@ -268,7 +276,9 @@ PlasticityCommand::InjectMemoryNeuronToFCL {
     pattern_hash: 0xABCD1234,
 }
 
-// NPU injects to FCL → neuron fires in next burst → appears in Fire Queue → visualized
+// Target behavior:
+// - Burst engine injects to FCL
+// - Neuron participates in dynamics on the next burst and appears in FireQueue for visualization
 ```
 
 ### Memory Neuron Visualization Characteristics

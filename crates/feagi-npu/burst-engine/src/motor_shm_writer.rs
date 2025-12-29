@@ -18,7 +18,7 @@
 //! - NO Python in hot path!
 //!
 //! Format (matches Python _ShmRingWriter / FEAGIMOT):
-//! ```
+//! ```text
 //! Header (256 bytes):
 //!   [0:8]    Magic number "FEAGIMOT" (8 bytes ASCII)
 //!   [8:12]   Version (u32)

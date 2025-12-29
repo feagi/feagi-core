@@ -109,6 +109,10 @@ pub struct CorticalAreaInfo {
     pub lifespan_growth_rate: f64,
     #[serde(rename = "neuron_longterm_mem_threshold")]
     pub longterm_mem_threshold: u32,
+    /// Memory pattern detection lookback depth for memory cortical areas.
+    /// Omitted for non-memory areas.
+    #[serde(rename = "temporal_depth", skip_serializing_if = "Option::is_none")]
+    pub temporal_depth: Option<u32>,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)

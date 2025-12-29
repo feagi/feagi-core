@@ -145,20 +145,37 @@ pub async fn get_health_check(
     // Fields requiring future service implementations
     let fitness = None; // TODO: Get from evolution service
     
-    // Get memory area stats from plasticity service cache (O(1) read, event-driven updates)
-    let memory_area_stats = state.memory_stats_cache.as_ref().map(|cache| {
-        feagi_npu_plasticity::memory_stats_cache::get_stats_snapshot(cache)
-            .into_iter()
-            .map(|(name, stats)| {
-                let mut inner_map = HashMap::new();
-                inner_map.insert("neuron_count".to_string(), serde_json::json!(stats.neuron_count));
-                inner_map.insert("created_total".to_string(), serde_json::json!(stats.created_total));
-                inner_map.insert("deleted_total".to_string(), serde_json::json!(stats.deleted_total));
-                inner_map.insert("last_updated".to_string(), serde_json::json!(stats.last_updated));
-                (name, inner_map)
-            })
-            .collect::<HashMap<String, HashMap<String, serde_json::Value>>>()
-    });
+    // Get memory area stats from plasticity service cache (event-driven updates).
+    //
+    // IMPORTANT: BV expects both:
+    // - per-area stats keyed by cortical_id (base64), and
+    // - a global `memory_neuron_count` that matches the sum of per-area `neuron_count`.
+    let (memory_area_stats, memory_neuron_count_from_cache) = state
+        .memory_stats_cache
+        .as_ref()
+        .map(|cache| {
+            let snapshot = feagi_npu_plasticity::memory_stats_cache::get_stats_snapshot(cache);
+            let total = snapshot
+                .values()
+                .map(|s| s.neuron_count as i64)
+                .sum::<i64>();
+            let per_area = snapshot
+                .into_iter()
+                .map(|(name, stats)| {
+                    let mut inner_map = HashMap::new();
+                    inner_map.insert("neuron_count".to_string(), serde_json::json!(stats.neuron_count));
+                    inner_map.insert("created_total".to_string(), serde_json::json!(stats.created_total));
+                    inner_map.insert("deleted_total".to_string(), serde_json::json!(stats.deleted_total));
+                    inner_map.insert("last_updated".to_string(), serde_json::json!(stats.last_updated));
+                    (name, inner_map)
+                })
+                .collect::<HashMap<String, HashMap<String, serde_json::Value>>>();
+            (Some(per_area), Some(total))
+        })
+        .unwrap_or((None, None));
+
+    // Prefer the plasticity cache-derived total to avoid discrepancies.
+    let memory_neuron_count = memory_neuron_count_from_cache.or(memory_neuron_count);
     
     let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
 

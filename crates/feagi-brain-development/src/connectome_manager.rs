@@ -716,7 +716,7 @@ impl ConnectomeManager {
 
         {
             // First, delete existing synapses between these areas (mapping removal must prune synapses).
-            {
+            let pruned_synapse_count: usize = {
                 let src_idx = *self.cortical_id_to_idx.get(src_area_id).ok_or_else(|| {
                     BduError::InvalidArea(format!("No cortical idx for source area {}", src_area_id))
                 })?;
@@ -743,7 +743,8 @@ impl ConnectomeManager {
                     src_area_id,
                     dst_area_id
                 );
-            }
+                removed
+            };
 
             // Then, apply cortical mapping to create new synapses (may be 0 for memory areas)
             let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
@@ -777,19 +778,40 @@ impl ConnectomeManager {
                 if let Some(ref executor) = self.plasticity_executor {
                     use feagi_evolutionary::extract_memory_properties;
                     
-                    info!(target: "feagi-bdu", "🔍 Checking if {} is a memory area...", dst_area_id.as_base_64());
-                    
                     if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
-                        // Debug: Log all properties for diagnostic
-                        debug!(target: "feagi-bdu", "   Properties for {}: {:?}", dst_area_id.as_base_64(), 
-                            dst_area.properties.keys().collect::<Vec<_>>());
-                        debug!(target: "feagi-bdu", "   is_mem_type = {:?}", 
-                            dst_area.properties.get("is_mem_type"));
-                        
                         if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
-                            info!(target: "feagi-bdu", "✓ {} IS a memory area - registering with PlasticityExecutor", dst_area_id.as_base_64());
-                            
                             let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
+
+                            // Ensure FireLedger tracks the upstream areas with at least the required temporal depth.
+                            // Dense, burst-aligned tracking is required for correct memory pattern hashing.
+                            if let Some(ref npu_arc) = self.npu {
+                                if let Ok(mut npu) = npu_arc.lock() {
+                                    let existing_configs = npu.get_all_fire_ledger_configs();
+                                    for &upstream_idx in &upstream_areas {
+                                        let existing = existing_configs
+                                            .iter()
+                                            .find(|(idx, _)| *idx == upstream_idx)
+                                            .map(|(_, w)| *w)
+                                            .unwrap_or(0);
+
+                                        let desired = mem_props.temporal_depth as usize;
+                                        let resolved = existing.max(desired);
+                                        if resolved != existing {
+                                            if let Err(e) = npu.configure_fire_ledger_window(upstream_idx, resolved) {
+                                                warn!(
+                                                    target: "feagi-bdu",
+                                                    "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
+                                                    upstream_idx,
+                                                    resolved,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
+                                }
+                            }
                             
                             if let Ok(mut exec) = executor.lock() {
                                 use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
@@ -803,32 +825,25 @@ impl ConnectomeManager {
                                 
                                 exec.register_memory_area(
                                     dst_area.cortical_idx,
-                                    dst_area.name.clone(),
+                                    dst_area_id.as_base_64(),
                                     mem_props.temporal_depth,
                                     upstream_areas.clone(),
                                     Some(lifecycle_config),
                                 );
-                                
-                                info!(target: "feagi-bdu",
-                                    "🧠 Auto-registered memory area '{}' (idx={}, upstream={:?})",
-                                    dst_area.name, dst_area.cortical_idx, upstream_areas
-                                );
                             } else {
-                                warn!(target: "feagi-bdu", "⚠️  Failed to lock PlasticityExecutor");
+                                warn!(target: "feagi-bdu", "Failed to lock PlasticityExecutor");
                             }
-                        } else {
-                            info!(target: "feagi-bdu", "   {} is NOT a memory area (is_mem_type property missing or false)", dst_area_id.as_base_64());
                         }
                     } else {
-                        warn!(target: "feagi-bdu", "⚠️  Destination area {} not found in cortical_areas", dst_area_id.as_base_64());
+                        warn!(target: "feagi-bdu", "Destination area {} not found in cortical_areas", dst_area_id.as_base_64());
                     }
                 } else {
-                    info!(target: "feagi-bdu", "   PlasticityExecutor not available (feature disabled or not initialized)");
+                    info!(target: "feagi-bdu", "PlasticityExecutor not available (feature disabled or not initialized)");
                 }
                 
                 #[cfg(not(feature = "plasticity"))]
                 {
-                    info!(target: "feagi-bdu", "   Plasticity feature disabled at compile time");
+                    info!(target: "feagi-bdu", "Plasticity feature disabled at compile time");
                 }
             } else {
                 // Mapping deleted - remove from upstream tracking
@@ -844,6 +859,33 @@ impl ConnectomeManager {
             );
 
             // CRITICAL: Rebuild synapse index so new synapses are visible to queries and propagation!
+            //
+            // Optimization + stability guard:
+            // If we pruned 0 and created 0, there is no synapse state change to index.
+            // Skipping the rebuild avoids unnecessary contention on the NPU mutex (important under burst load).
+            if pruned_synapse_count == 0 && synapse_count == 0 {
+                info!(
+                    target: "feagi-bdu",
+                    "Skipped synapse index rebuild for mapping {} -> {} (no synapse changes)",
+                    src_area_id,
+                    dst_area_id
+                );
+                return Ok(synapse_count);
+            }
+
+            // If we created synapses, the synapse index is already rebuilt while holding the NPU lock
+            // inside `apply_single_morphology_rule()`. Avoid a second NPU mutex acquisition here, which
+            // can block under burst-loop load and make BV think FEAGI "crashed".
+            if synapse_count > 0 {
+                info!(
+                    target: "feagi-bdu",
+                    "Skipped synapse index rebuild for mapping {} -> {} (rebuilt during synaptogenesis)",
+                    src_area_id,
+                    dst_area_id
+                );
+                return Ok(synapse_count);
+            }
+
             let mut npu = npu_arc.lock().unwrap();
             npu.rebuild_synapse_index();
             info!(
@@ -1013,6 +1055,9 @@ impl ConnectomeManager {
                                 conductance,  // PSP from source area, NOT hardcoded!
                                 synapse_attractivity,  // From rule, not hardcoded
                             )?;
+                            // Ensure the propagation engine sees the newly created synapses immediately,
+                            // and avoid a second outer NPU mutex acquisition later in the mapping update path.
+                            npu.rebuild_synapse_index();
                             Ok(count as usize)
                         }
                         "memory" => {
@@ -1051,6 +1096,9 @@ impl ConnectomeManager {
                             conductance, // PSP from source area, NOT hardcoded!
                             synapse_attractivity, // From rule, not hardcoded
                         )?;
+                        // Ensure the propagation engine sees the newly created synapses immediately,
+                        // and avoid a second outer NPU mutex acquisition later in the mapping update path.
+                        npu.rebuild_synapse_index();
                         Ok(count as usize)
                     } else {
                         Ok(0)
@@ -1527,6 +1575,23 @@ impl ConnectomeManager {
                     .and_then(|v| v.as_str())
                     .unwrap_or("unknown");
 
+                // STDP (per mapping A→B) configuration
+                //
+                // If this mapping rule is marked plastic, register mapping parameters with the NPU and
+                // ensure FireLedger tracks both source and destination areas with the required window.
+                let plasticity_flag = match rule_obj.get("plasticity_flag").and_then(|v| v.as_bool()) {
+                    Some(v) => v,
+                    None => {
+                        warn!(
+                            target: "feagi-bdu",
+                            "Missing or invalid plasticity_flag in mapping rule {} -> {}",
+                            src_cortical_id,
+                            dst_cortical_id
+                        );
+                        false
+                    }
+                };
+
                 // IMPORTANT:
                 // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
                 // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
@@ -1553,6 +1618,82 @@ impl ConnectomeManager {
                 let mut npu_lock = npu
                     .lock()
                     .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+
+                if plasticity_flag {
+                    let plasticity_window = rule_obj
+                        .get("plasticity_window")
+                        .and_then(|v| v.as_u64())
+                        .ok_or_else(|| {
+                            BduError::Internal(format!(
+                                "Missing plasticity_window in plastic mapping rule {} -> {}",
+                                src_cortical_id, dst_cortical_id
+                            ))
+                        })? as usize;
+                    let plasticity_constant = rule_obj
+                        .get("plasticity_constant")
+                        .and_then(|v| v.as_i64())
+                        .ok_or_else(|| {
+                            BduError::Internal(format!(
+                                "Missing plasticity_constant in plastic mapping rule {} -> {}",
+                                src_cortical_id, dst_cortical_id
+                            ))
+                        })?;
+                    let ltp_multiplier = rule_obj
+                        .get("ltp_multiplier")
+                        .and_then(|v| v.as_i64())
+                        .ok_or_else(|| {
+                            BduError::Internal(format!(
+                                "Missing ltp_multiplier in plastic mapping rule {} -> {}",
+                                src_cortical_id, dst_cortical_id
+                            ))
+                        })?;
+                    let ltd_multiplier = rule_obj
+                        .get("ltd_multiplier")
+                        .and_then(|v| v.as_i64())
+                        .ok_or_else(|| {
+                            BduError::Internal(format!(
+                                "Missing ltd_multiplier in plastic mapping rule {} -> {}",
+                                src_cortical_id, dst_cortical_id
+                            ))
+                        })?;
+
+                    let params = feagi_npu_burst_engine::npu::StdpMappingParams {
+                        plasticity_window,
+                        plasticity_constant,
+                        ltp_multiplier,
+                        ltd_multiplier,
+                    };
+
+                    npu_lock
+                        .register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params)
+                        .map_err(|e| {
+                            BduError::Internal(format!(
+                                "Failed to register STDP mapping {} -> {}: {}",
+                                src_cortical_id, dst_cortical_id, e
+                            ))
+                        })?;
+
+                    // FireLedger tracking for STDP (ensure A and B are tracked at least to plasticity_window)
+                    let existing_configs = npu_lock.get_all_fire_ledger_configs();
+                    for area_idx in [src_cortical_idx, dst_cortical_idx] {
+                        let existing = existing_configs
+                            .iter()
+                            .find(|(idx, _)| *idx == area_idx)
+                            .map(|(_, w)| *w)
+                            .unwrap_or(0);
+                        let resolved = existing.max(plasticity_window);
+                        if resolved != existing {
+                            npu_lock
+                                .configure_fire_ledger_window(area_idx, resolved)
+                                .map_err(|e| {
+                                    BduError::Internal(format!(
+                                        "Failed to configure FireLedger window for area idx={} (requested={}): {}",
+                                        area_idx, resolved, e
+                                    ))
+                                })?;
+                        }
+                    }
+                }
 
                 let scalar = rule_obj
                     .get("morphology_scalar")
@@ -3945,6 +4086,7 @@ mod tests {
                 0,
                 0,     // coordinates
                 100.0, // firing_threshold
+                0.0,   // firing_threshold_limit (0 = no limit)
                 0.1,   // leak_coefficient
                 -60.0, // resting_potential
                 0,     // neuron_type
@@ -3963,6 +4105,7 @@ mod tests {
                 0,
                 0, // coordinates
                 100.0,
+                0.0, // firing_threshold_limit (0 = no limit)
                 0.1,
                 -60.0,
                 0,
@@ -4079,16 +4222,16 @@ mod tests {
 
         // Add a couple neurons to each area
         let s0 = manager
-            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .add_neuron(&src_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
             .unwrap();
         let s1 = manager
-            .add_neuron(&src_id, 1, 0, 0, 1.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .add_neuron(&src_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
             .unwrap();
         let t0 = manager
-            .add_neuron(&dst_id, 0, 0, 0, 1.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .add_neuron(&dst_id, 0, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
             .unwrap();
         let t1 = manager
-            .add_neuron(&dst_id, 1, 0, 0, 1.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
+            .add_neuron(&dst_id, 1, 0, 0, 1.0, 0.0, 0.1, 0.0, 0, 1, 1.0, 3, 1, false)
             .unwrap();
 
         // Create synapses that represent an established mapping between the two areas
@@ -4132,8 +4275,12 @@ mod tests {
         let dyn_npu = Arc::new(Mutex::new(DynamicNPU::F32(npu)));
         let mut manager = ConnectomeManager::new_for_testing_with_npu(dyn_npu.clone());
 
+        // Seed the morphology registry with core morphologies so mapping regeneration can run.
+        // (new_for_testing_with_npu() intentionally starts empty.)
+        feagi_evolutionary::templates::add_core_morphologies(&mut manager.morphology_registry);
+
         // Create source area
-        let src_id = CorticalID::try_from_bytes(b"src_area").unwrap();
+        let src_id = CorticalID::try_from_bytes(b"csrc0000").unwrap();
         let src_area = CorticalArea::new(
             src_id,
             0,
@@ -4145,7 +4292,7 @@ mod tests {
         let src_idx = manager.add_cortical_area(src_area).unwrap();
 
         // Create destination area (memory area)
-        let dst_id = CorticalID::try_from_bytes(b"dst_area").unwrap();
+        let dst_id = CorticalID::try_from_bytes(b"cdst0000").unwrap();
         let dst_area = CorticalArea::new(
             dst_id,
             0,
@@ -4165,7 +4312,7 @@ mod tests {
 
         // Create a mapping from src to dst
         let mapping_data = vec![serde_json::json!({
-            "morphology_id": "block_to_block",
+            "morphology_id": "memory",
             "morphology_scalar": 1,
             "postSynapticCurrent_multiplier": 1.0,
         })];

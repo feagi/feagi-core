@@ -481,6 +481,19 @@ where
         dispatch_mut!(self, rebuild_synapse_index())
     }
 
+    pub fn register_stdp_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        params: crate::npu::StdpMappingParams,
+    ) -> Result<()> {
+        dispatch_mut!(self, register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params))
+    }
+
+    pub fn unregister_stdp_mapping(&mut self, src_cortical_idx: u32, dst_cortical_idx: u32) -> bool {
+        dispatch_mut!(self, unregister_stdp_mapping(src_cortical_idx, dst_cortical_idx))
+    }
+
     pub fn get_neuron_capacity(&self) -> usize {
         match self {
             DynamicNPUGeneric::F32(npu) => {
@@ -628,7 +641,7 @@ where
         }
     }
 
-    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
+    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) -> Result<()> {
         match self {
             DynamicNPUGeneric::F32(npu) => {
                 npu.configure_fire_ledger_window(cortical_idx, window_size)
@@ -646,26 +659,20 @@ where
         }
     }
 
-    /// Get firing history for a cortical area (as RoaringBitmaps for optimal performance)
-    /// Returns Vec of (timestep, RoaringBitmap) tuples, newest first
-    pub fn get_fire_ledger_history_bitmaps(
+    /// Get a dense, burst-aligned window of firing history as RoaringBitmaps.
+    pub fn get_fire_ledger_dense_window_bitmaps(
         &self,
         cortical_idx: u32,
-        lookback_steps: usize,
-    ) -> Vec<(u64, roaring::RoaringBitmap)> {
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, roaring::RoaringBitmap)>> {
         match self {
-            DynamicNPUGeneric::F32(npu) => npu
-                .fire_structures
-                .lock()
-                .unwrap()
-                .fire_ledger
-                .get_history_bitmaps(cortical_idx, lookback_steps),
-            DynamicNPUGeneric::INT8(npu) => npu
-                .fire_structures
-                .lock()
-                .unwrap()
-                .fire_ledger
-                .get_history_bitmaps(cortical_idx, lookback_steps),
+            DynamicNPUGeneric::F32(npu) => {
+                npu.get_fire_ledger_dense_window_bitmaps(cortical_idx, end_timestep, depth)
+            }
+            DynamicNPUGeneric::INT8(npu) => {
+                npu.get_fire_ledger_dense_window_bitmaps(cortical_idx, end_timestep, depth)
+            }
         }
     }
 

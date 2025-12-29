@@ -324,33 +324,88 @@ impl PlasticityService {
                 current_timestep, memory_area_idx, area_config.upstream_areas.len(), area_config.upstream_areas
             );
             
-            // Query FireLedger for upstream firing history (CPU-resident, zero-copy access)
+            // Query FireLedger for upstream firing history (CPU-resident, dense burst-aligned windows)
             let timestep_bitmaps: Vec<HashSet<u32>> = {
+                let temporal_depth = area_config.temporal_depth as usize;
+
                 // Brief lock to query FireLedger - data is already CPU-resident from burst processing
                 let npu_lock = npu.lock().unwrap();
-                
-                // Collect firing history for all upstream areas
-                area_config.upstream_areas.iter()
-                    .flat_map(|&upstream_area_idx| {
-                        // Get recent history for this upstream area using RoaringBitmaps
-                        let history = npu_lock.get_fire_ledger_history_bitmaps(upstream_area_idx, area_config.temporal_depth as usize);
-                        tracing::debug!(target: "plasticity",
-                            "[PLASTICITY-DEBUG] Burst {} - Upstream area {} has {} timesteps of history",
-                            current_timestep, upstream_area_idx, history.len()
-                        );
-                        history.into_iter()
-                            .enumerate()
-                            .map(move |(idx, (_timestep, bitmap))| {
-                                let neuron_set: HashSet<u32> = bitmap.iter().collect();
+
+                if temporal_depth == 0 || area_config.upstream_areas.is_empty() {
+                    Vec::new()
+                } else {
+                    // Deterministic: upstream areas are processed in sorted order so hashing is stable.
+                    let mut upstream_sorted = area_config.upstream_areas.clone();
+                    upstream_sorted.sort_unstable();
+
+                    // Fetch a dense window for each upstream area (same [t-D+1..t] range).
+                    let mut windows: Vec<(u32, Vec<(u64, roaring::RoaringBitmap)>)> = Vec::new();
+                    let mut windows_ok = true;
+                    for &upstream_area_idx in &upstream_sorted {
+                        let window = match npu_lock.get_fire_ledger_dense_window_bitmaps(
+                            upstream_area_idx,
+                            current_timestep,
+                            temporal_depth,
+                        ) {
+                            Ok(w) => w,
+                            Err(e) => {
                                 tracing::debug!(target: "plasticity",
-                                    "[PLASTICITY-DEBUG] Burst {} - Upstream area {} timestep {} has {} firing neurons",
-                                    current_timestep, upstream_area_idx, idx, neuron_set.len()
+                                    "[PLASTICITY-DEBUG] Burst {} - Upstream area {} dense window unavailable (depth={}): {}",
+                                    current_timestep, upstream_area_idx, temporal_depth, e
                                 );
-                                neuron_set
-                            })
-                    })
-                    .collect()
-            }; // NPU lock released immediately after query
+                                windows_ok = false;
+                                break;
+                            }
+                        };
+                        tracing::debug!(target: "plasticity",
+                            "[PLASTICITY-DEBUG] Burst {} - Upstream area {} window covers {}..{} ({} frames)",
+                            current_timestep,
+                            upstream_area_idx,
+                            window.first().map(|(t, _)| *t).unwrap_or(0),
+                            window.last().map(|(t, _)| *t).unwrap_or(0),
+                            window.len()
+                        );
+                        windows.push((upstream_area_idx, window));
+                    }
+
+                    if !windows_ok || windows.is_empty() {
+                        Vec::new()
+                    } else {
+                        // Validate alignment: all upstream windows must share the same timesteps.
+                        let reference_timesteps: Vec<u64> =
+                            windows[0].1.iter().map(|(t, _)| *t).collect();
+                        let mut aligned = true;
+                        for (area_idx, w) in &windows[1..] {
+                            let ts: Vec<u64> = w.iter().map(|(t, _)| *t).collect();
+                            if ts != reference_timesteps {
+                                aligned = false;
+                                tracing::warn!(target: "plasticity",
+                                    "[PLASTICITY] Misaligned FireLedger windows for memory area {} at burst {}: upstream {} timesteps {:?} != {:?}",
+                                    memory_area_idx, current_timestep, area_idx, ts, reference_timesteps
+                                );
+                                break;
+                            }
+                        }
+
+                        if !aligned {
+                            Vec::new()
+                        } else {
+                            // Flatten as: for each timestep (oldest->newest), for each upstream area (sorted),
+                            // append that area's fired-neuron set at that timestep.
+                            let mut out: Vec<HashSet<u32>> =
+                                Vec::with_capacity(reference_timesteps.len() * upstream_sorted.len());
+                            for frame_i in 0..reference_timesteps.len() {
+                                for (_area_idx, w) in &windows {
+                                    let (_t, bitmap) = &w[frame_i];
+                                    let neuron_set: HashSet<u32> = bitmap.iter().collect();
+                                    out.push(neuron_set);
+                                }
+                            }
+                            out
+                        }
+                    }
+                }
+            };
 
             if timestep_bitmaps.is_empty() {
                 tracing::debug!(target: "plasticity",

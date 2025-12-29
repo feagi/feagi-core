@@ -42,6 +42,7 @@ fn add_test_neuron(
 ) -> NeuronId {
     npu.add_neuron(
         threshold,
+        0.0, // threshold_limit (0 = no limit)
         leak,
         0.0, // resting_potential
         0,   // neuron_type

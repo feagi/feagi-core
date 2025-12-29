@@ -523,11 +523,16 @@ impl BurstLoopRunner {
     }
 
     /// Configure Fire Ledger window size for a specific cortical area
-    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
+    pub fn configure_fire_ledger_window(
+        &mut self,
+        cortical_idx: u32,
+        window_size: usize,
+    ) -> Result<(), String> {
         self.npu
             .lock()
             .unwrap()
-            .configure_fire_ledger_window(cortical_idx, window_size);
+            .configure_fire_ledger_window(cortical_idx, window_size)
+            .map_err(|e| format!("{e}"))
     }
 
     /// Get FCL/FQ sampler configuration

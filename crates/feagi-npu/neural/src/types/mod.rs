@@ -30,7 +30,7 @@ pub use spatial::Position;
 pub use synapse_types::{Synapse, SynapticConductance, SynapticContribution, SynapticWeight};
 // Dimensions moved to feagi_structures::genomic::cortical_area::CorticalAreaDimensions
 pub use error::{Error, FeagiError, Result};
-pub use fire::{FireCandidateList, FireLedger, FireQueue};
+pub use fire::{FireCandidateList, FireQueue};
 // CorticalArea, BrainRegion, RegionType, BrainRegionHierarchy moved to feagi_data_structures
 pub use id_manager::NeuronArrayType;
 

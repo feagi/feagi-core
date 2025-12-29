@@ -4,6 +4,16 @@
 **Reviewer**: FEAGI AI Assistant  
 **Status**: ✅ All Documentation Reviewed and Updated
 
+## Update (Dec 29, 2025): Superseded by FireLedger Architecture Rewrite
+
+This document describes a historical migration that preserved backward compatibility.
+FEAGI has since adopted a **no-backward-compatibility** policy for the upcoming FireLedger rewrite.
+
+The current source of truth for the new FireLedger design (memory + STDP, dense tracked history,
+additive u8 clamped LTP/LTD, per-mapping `plasticity_window`) is:
+
+- `feagi-core/crates/feagi-npu/burst-engine/FIRE_LEDGER_ROARING_MIGRATION.md` (top section)
+
 ## Executive Summary
 
 Comprehensive review of all documentation to identify and update any stale references to the old `Vec<u32>` Fire Ledger implementation. The migration to `RoaringBitmap` was completed successfully with minimal documentation impact.
@@ -150,12 +160,13 @@ The documentation ecosystem had **zero stale references** to `Vec<u32>` implemen
 
 ## Key Architectural Insight
 
-The **minimal documentation impact** of this migration validates the architectural decision to:
+The **minimal documentation impact** of the Dec 27 migration validated the architectural decision to:
 
 1. **Encapsulate implementation details** within the module
-2. **Maintain backward-compatible API** (`get_history()` still returns `Vec<u32>`)
-3. **Add new optimized API** (`get_history_bitmaps()`) without breaking changes
-4. **Document at module level**, not in external architecture docs
+2. **Document at module level**, not in external architecture docs
+
+Historical note: the Dec 27 migration preserved a backward-compatible Vec-based API, but the
+Dec 29 FireLedger rewrite explicitly adopts **no backward compatibility** and will remove those APIs.
 
 ## Verification Checklist
 
@@ -166,7 +177,7 @@ The **minimal documentation impact** of this migration validates the architectur
 - [x] Stale `Vec<u32>` Fire Ledger references: **0 found**
 - [x] Updated comments for clarity: **2 files**
 - [x] Created migration documentation: **1 file**
-- [x] Backward compatibility maintained: **✅ Yes**
+- [x] Backward compatibility maintained (Dec 27 migration only): **✅ Yes**
 
 ## Recommendations
 
