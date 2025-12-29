@@ -1086,8 +1086,37 @@ impl ConnectomeManager {
     /// * `npu` - Arc to the Rust NPU
     ///
     pub fn set_npu(&mut self, npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>) {
-        self.npu = Some(npu);
+        self.npu = Some(Arc::clone(&npu));
         info!(target: "feagi-bdu","🔗 ConnectomeManager: NPU reference set");
+
+        // CRITICAL: Backfill cortical area registrations into NPU.
+        //
+        // Cortical areas can be created/loaded before the NPU is attached (startup ordering).
+        // Those areas won't be registered via `add_cortical_area()` (it registers only if NPU is present),
+        // which causes visualization encoding to fall back to "area_{idx}" and subsequently drop the area
+        // (base64 decode fails), making BV appear to "miss" firing activity for that cortical area.
+        let existing_area_count = self.cortical_id_to_idx.len();
+        if existing_area_count > 0 {
+            match npu.lock() {
+                Ok(mut npu_lock) => {
+                    for (cortical_id, cortical_idx) in self.cortical_id_to_idx.iter() {
+                        npu_lock.register_cortical_area(*cortical_idx, cortical_id.as_base_64());
+                    }
+                    info!(
+                        target: "feagi-bdu",
+                        "🔁 Backfilled {} cortical area registrations into NPU",
+                        existing_area_count
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        target: "feagi-bdu",
+                        "⚠️ Failed to lock NPU for cortical area backfill registration: {}",
+                        e
+                    );
+                }
+            }
+        }
 
         // Initialize cached stats immediately
         self.update_all_cached_stats();

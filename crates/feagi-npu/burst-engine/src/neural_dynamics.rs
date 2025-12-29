@@ -436,6 +436,7 @@ mod tests {
         let id = neurons
             .add_neuron(
                 1.0,  // threshold
+                0.0,  // threshold_limit
                 0.0,  // leak_coefficient
                 0.0,  // resting_potential
                 0,    // neuron_type
@@ -467,7 +468,7 @@ mod tests {
         let mut neurons = StdNeuronArray::new(10);
 
         let id = neurons
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         let mut fcl = FireCandidateList::new();
@@ -485,7 +486,7 @@ mod tests {
         let mut neurons = StdNeuronArray::new(10);
 
         let id = neurons
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // Set refractory countdown
@@ -507,6 +508,7 @@ mod tests {
         let id = neurons
             .add_neuron(
                 10.0, // High threshold (won't fire)
+                0.0,  // threshold_limit
                 0.5,  // leak_coefficient (50% leak toward resting)
                 0.0,  // resting_potential
                 0,    // neuron_type
@@ -541,7 +543,7 @@ mod tests {
         let mut ids = Vec::new();
         for i in 0..10 {
             let id = neurons
-                .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+                .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
                 .unwrap();
             ids.push(id);
         }

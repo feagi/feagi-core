@@ -1052,14 +1052,111 @@ fn burst_loop(
                         }
                         
                         // Cache fire queue sample for API queries (must be done while NPU lock is held)
-                        // Fire queue is ephemeral and gets cleared, so we sample it NOW
-                        let fq_sample = npu_lock.sample_fire_queue();
+                        //
+                        // IMPORTANT:
+                        // Do NOT use `sample_fire_queue()` here.
+                        // `RustNPU::process_burst()` already calls `fq_sampler.sample(...)` internally,
+                        // so calling `sample_fire_queue()` immediately after can return `None` due to
+                        // sampler deduplication/rate limiting even when neurons DID fire.
+                        //
+                        // The API endpoint `/v1/burst_engine/fire_queue` should reflect the real
+                        // current fire queue (what visualization/motor paths see), so we take a
+                        // non-rate-limited snapshot.
+                        let fq_sample = npu_lock.force_sample_fire_queue();
                         if let Some(ref sample) = fq_sample {
-                            let total_neurons: usize = sample.values()
-                                .map(|(x, y, z, _, _)| x.len() + y.len() + z.len())
-                                .sum();
+                            // FireQueueSample layout:
+                            // (neuron_ids, coords_x, coords_y, coords_z, potentials)
+                            //
+                            // All vectors should have identical length; use neuron_ids as the canonical count.
+                            let total_neurons: usize =
+                                sample.values().map(|(neuron_ids, _, _, _, _)| neuron_ids.len()).sum();
                             info!("[BURST-LOOP] 📸 Caching fire queue: {} areas, {} total neurons",
                                 sample.len(), total_neurons);
+
+                            // Diagnostics for BV viz stream:
+                            // We need to confirm whether the NPU has a valid `cortical_idx -> cortical_id` mapping
+                            // for fired areas (especially memory), because viz encoding relies on
+                            // `get_cortical_area_name()` and will fall back to "area_{idx}" if missing.
+                            //
+                            // IMPORTANT: This log is emitted in the same block as the 📸 cache log so it is
+                            // guaranteed to appear under the same logger configuration you’re already seeing.
+                            static VIZ_CACHE_DIAG_COUNTER: std::sync::atomic::AtomicU64 =
+                                std::sync::atomic::AtomicU64::new(0);
+                            let diag_n = VIZ_CACHE_DIAG_COUNTER
+                                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+                            let mut saw_viz_issue = false;
+                            let mut area_summaries: Vec<String> = Vec::with_capacity(sample.len());
+                            for (area_idx, (neuron_ids, coords_x, coords_y, coords_z, _potentials)) in
+                                sample.iter()
+                            {
+                                let area_name = npu_lock
+                                    .get_cortical_area_name(*area_idx)
+                                    .unwrap_or_else(|| format!("area_{}", area_idx));
+                                let is_fallback_name = area_name.starts_with("area_");
+                                // Memory cortical IDs are encoded as 8-byte cortical IDs.
+                                // In practice, memory areas often use a custom cortical ID prefix `cmem...`
+                                // (e.g., "cmem1_N\0" -> base64 "Y21lbTFfX04="), so we detect memory by
+                                // decoded byte prefix rather than by base64 string prefix.
+                                let is_memory_area = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(&area_name)
+                                    .ok()
+                                    .is_some_and(|id| id.as_bytes().starts_with(b"cmem") || id.as_bytes()[0] == b'm');
+
+                                // Always build a small summary so we can confirm what names are in the sample.
+                                // Format: "<idx>:<cortical_id>:<fired>"
+                                area_summaries.push(format!(
+                                    "{}:{}:{}",
+                                    area_idx,
+                                    area_name,
+                                    neuron_ids.len()
+                                ));
+
+                                // Show immediately for memory and for missing mappings.
+                                if is_fallback_name || is_memory_area {
+                                    saw_viz_issue = true;
+                                    // NOTE: "x/y/z lens" are vector lengths, not coordinate values.
+                                    // For memory areas we also print the first XYZ value to avoid confusion.
+                                    let raw_first_xyz = if is_memory_area {
+                                        let x0 = coords_x.first().copied().unwrap_or(0);
+                                        let y0 = coords_y.first().copied().unwrap_or(0);
+                                        let z0 = coords_z.first().copied().unwrap_or(0);
+                                        let n0 = neuron_ids.first().copied().unwrap_or(0);
+                                        format!(
+                                            " raw_first_neuron_id={} raw_first_xyz=({},{},{})",
+                                            n0, x0, y0, z0
+                                        )
+                                    } else {
+                                        String::new()
+                                    };
+                                    info!(
+                                        "[VIZ] area_idx={} cortical_id='{}' fired={} fallback_name={} memory_detected={} (xyz lens: x={} y={} z={}){}",
+                                        area_idx,
+                                        area_name,
+                                        neuron_ids.len(),
+                                        is_fallback_name,
+                                        is_memory_area,
+                                        coords_x.len(),
+                                        coords_y.len(),
+                                        coords_z.len(),
+                                        raw_first_xyz,
+                                    );
+                                }
+                            }
+
+                            // Print a compact per-sample summary periodically (about once every ~2 seconds at ~15Hz).
+                            // This is the fastest way to confirm whether the memory cortical_id is actually present
+                            // in the cached fire queue sample.
+                            if diag_n % 30 == 0 {
+                                info!(
+                                    "[VIZ] (diag) sample_areas={} [{}]",
+                                    sample.len(),
+                                    area_summaries.join(", ")
+                                );
+                            } else if !saw_viz_issue && sample.len() <= 6 {
+                                // Keep a tiny breadcrumb for small samples (low noise).
+                                // This helps confirm the diagnostic loop is running even when no issues are detected.
+                                info!("[VIZ] (diag) no memory/fallback areas detected in this sample");
+                            }
                         } else {
                             trace!("[BURST-LOOP] 📸 Fire queue sample is None (no neurons fired this burst)");
                         }
@@ -1195,16 +1292,82 @@ fn burst_loop(
 
                     total_neurons += neuron_ids.len();
 
+                    // Minimal memory visualization support:
+                    // If this cortical_id is a MEMORY area, BV only needs the area to appear in the Type 11 stream.
+                    // We emit a single point at (0,0,0) (memory areas are conceptually 1x1x1) so the client
+                    // can trigger its jelly animation without requiring actual per-neuron coordinates.
+                    // Detect memory areas by decoding cortical ID bytes (deterministic; no hardcoded IDs).
+                    // Memory areas may be encoded as custom IDs prefixed by `cmem...` (base64 like "Y21lbTFfX04=").
+                    let is_memory_area = feagi_structures::genomic::cortical_area::CorticalID::try_from_base_64(&area_name)
+                        .ok()
+                        .is_some_and(|id| id.as_bytes().starts_with(b"cmem") || id.as_bytes()[0] == b'm');
+
+                    // FEAGI-side diagnostics (must be easy to spot in logs):
+                    // - If `area_name` falls back to "area_{idx}", Type11 serialization may drop the area.
+                    // - If memory area is detected, we inject a single (0,0,0) point for BV.
+                    static VIZ_NAME_DIAG_COUNTER: std::sync::atomic::AtomicU64 =
+                        std::sync::atomic::AtomicU64::new(0);
+                    let diag_n =
+                        VIZ_NAME_DIAG_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    let is_fallback_name = area_name.starts_with("area_");
+                    if is_fallback_name || is_memory_area {
+                        // Throttle to avoid log spam while still being quickly visible.
+                        if diag_n % 30 == 0 || is_memory_area {
+                            let raw_first_xyz = if is_memory_area {
+                                let x0 = coords_x.first().copied().unwrap_or(0);
+                                let y0 = coords_y.first().copied().unwrap_or(0);
+                                let z0 = coords_z.first().copied().unwrap_or(0);
+                                format!(" raw_first_xyz=({},{},{}) emitted_xyz=(0,0,0)", x0, y0, z0)
+                            } else {
+                                String::new()
+                            };
+                            info!(
+                                target: "BURST-LOOP",
+                                "[VIZ] area_idx={} cortical_id='{}' fired={} fallback_name={} memory_detected={} (xyz lens: x={} y={} z={} p={}){}",
+                                area_id,
+                                area_name,
+                                neuron_ids.len(),
+                                is_fallback_name,
+                                is_memory_area,
+                                coords_x.len(),
+                                coords_y.len(),
+                                coords_z.len(),
+                                potentials.len(),
+                                raw_first_xyz,
+                            );
+                        }
+                    }
+
                     raw_snapshot.insert(
                         *area_id,
                         RawFireQueueData {
                             cortical_area_idx: *area_id,
                             cortical_area_name: area_name,
-                            neuron_ids: neuron_ids.clone(),
-                            coords_x: coords_x.clone(),
-                            coords_y: coords_y.clone(),
-                            coords_z: coords_z.clone(),
-                            potentials: potentials.clone(),
+                            neuron_ids: if is_memory_area {
+                                vec![neuron_ids[0]]
+                            } else {
+                                neuron_ids.clone()
+                            },
+                            coords_x: if is_memory_area {
+                                vec![0]
+                            } else {
+                                coords_x.clone()
+                            },
+                            coords_y: if is_memory_area {
+                                vec![0]
+                            } else {
+                                coords_y.clone()
+                            },
+                            coords_z: if is_memory_area {
+                                vec![0]
+                            } else {
+                                coords_z.clone()
+                            },
+                            potentials: if is_memory_area {
+                                vec![1.0]
+                            } else {
+                                potentials.clone()
+                            },
                         },
                     );
                 }
@@ -1615,5 +1778,92 @@ mod tests {
 
         runner.stop();
         assert!(!runner.is_running());
+    }
+
+    #[test]
+    fn test_fire_queue_api_cache_uses_non_deduped_snapshot() {
+        // Regression test for `/v1/burst_engine/fire_queue`:
+        //
+        // `RustNPU::process_burst()` already samples the FQ sampler internally (Phase 5).
+        // If the burst loop then tries to call `sample_fire_queue()` again, it can get `None`
+        // due to deduplication, causing the HTTP endpoint to show an empty fire queue even
+        // when neurons fired (while visualization/motor still see activity).
+
+        struct NoViz;
+        impl VisualizationPublisher for NoViz {
+            fn publish_raw_fire_queue(&self, _fire_data: RawFireQueueSnapshot) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        struct NoMotor;
+        impl MotorPublisher for NoMotor {
+            fn publish_motor(&self, _agent_id: &str, _data: &[u8]) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        use feagi_npu_runtime::StdRuntime;
+        use feagi_structures::genomic::cortical_area::CoreCorticalType;
+
+        // Build an NPU with one neuron we can deterministically force to fire.
+        let mut rust_npu =
+            <crate::RustNPU<StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(100, 1000, 10);
+
+        // Avoid power auto-injection by NOT using cortical_area index 1.
+        rust_npu.register_cortical_area(
+            2,
+            CoreCorticalType::Death.to_cortical_id().as_base_64(),
+        );
+
+        let neuron = rust_npu
+            .add_neuron(
+                1.0,  // threshold
+                0.0,  // threshold_limit
+                0.0,  // leak_coefficient
+                0.0,  // resting_potential
+                0,    // neuron_type
+                0,    // refractory_period
+                1.0,  // excitability
+                0,    // consecutive_fire_limit
+                0,    // snooze_period
+                true, // mp_charge_accumulation
+                2,    // cortical_area
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        // Stage a strong sensory injection so it survives Phase-1 FCL clear and fires on burst 1.
+        rust_npu.inject_sensory_with_potentials(&[(neuron, 128.0)]);
+
+        let npu = Arc::new(Mutex::new(DynamicNPU::F32(rust_npu)));
+        let mut runner = BurstLoopRunner::new::<NoViz, NoMotor>(npu, None, None, 5.0);
+
+        runner.start().unwrap();
+
+        // Wait for first burst to complete (runner executes burst immediately, then sleeps).
+        let start = Instant::now();
+        while runner.get_burst_count() < 1 && start.elapsed() < Duration::from_secs(1) {
+            thread::sleep(Duration::from_millis(5));
+        }
+
+        let fq_sample = runner
+            .get_fire_queue_sample()
+            .expect("Expected cached fire queue sample after first burst");
+
+        let fired_in_area = fq_sample
+            .get(&2)
+            .map(|(neuron_ids, _, _, _, _)| neuron_ids.iter().any(|&id| id == neuron.0))
+            .unwrap_or(false);
+
+        runner.stop();
+
+        assert!(
+            fired_in_area,
+            "Expected neuron {} to appear in cached fire queue for cortical_idx=2",
+            neuron.0
+        );
     }
 }

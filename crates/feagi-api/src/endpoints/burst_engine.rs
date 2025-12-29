@@ -206,9 +206,10 @@ pub async fn get_fire_queue(
         .map(|a| (a.cortical_idx, a.cortical_id.clone()))
         .collect();
 
-    // Convert cortical_idx to cortical_id
-    let mut cortical_areas: HashMap<String, Vec<u64>> = HashMap::new();
-    let mut total_fired = 0;
+    // Convert cortical_idx to cortical_id and report only per-area fired neuron COUNT.
+    // Caller explicitly does not need individual neuron IDs.
+    let mut cortical_areas: HashMap<String, u64> = HashMap::new();
+    let mut total_fired: u64 = 0;
 
     for (cortical_idx, (neuron_ids, _, _, _, _)) in fq_sample {
         // Use actual cortical_id from mapping, fallback to area_{idx} if not found
@@ -217,11 +218,14 @@ pub async fn get_fire_queue(
             .cloned()
             .unwrap_or_else(|| format!("area_{}", cortical_idx));
 
-        info!("[FIRE-QUEUE-API] Area {} (idx={}): {} neurons fired", cortical_id, cortical_idx, neuron_ids.len());
-        
-        let ids_u64: Vec<u64> = neuron_ids.iter().map(|&id| id as u64).collect();
-        total_fired += ids_u64.len();
-        cortical_areas.insert(cortical_id, ids_u64);
+        let fired_count = neuron_ids.len() as u64;
+        info!(
+            "[FIRE-QUEUE-API] Area {} (idx={}): {} neurons fired",
+            cortical_id, cortical_idx, fired_count
+        );
+
+        total_fired += fired_count;
+        cortical_areas.insert(cortical_id, fired_count);
     }
 
     info!("[FIRE-QUEUE-API] Total fired neurons: {}", total_fired);
