@@ -13,7 +13,7 @@
 use crate::memory_stats_cache::MemoryStatsCache;
 use crate::service::{PlasticityCommand, PlasticityConfig, PlasticityService};
 use std::sync::{Arc, Mutex};
-use tracing::{info, warn};
+use tracing::warn;
 
 /// Trait for executing plasticity computation
 ///
@@ -86,7 +86,7 @@ pub struct AsyncPlasticityExecutor {
     memory_stats_cache: MemoryStatsCache,
     
     /// Configuration for the plasticity service
-    config: PlasticityConfig,
+    _config: PlasticityConfig,
     
     /// Running state
     running: bool,
@@ -104,7 +104,7 @@ impl AsyncPlasticityExecutor {
         Self {
             service: Arc::new(Mutex::new(Some(service))),
             memory_stats_cache,
-            config,
+            _config: config,
             running: false,
         }
     }

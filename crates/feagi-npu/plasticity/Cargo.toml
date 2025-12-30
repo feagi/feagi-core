@@ -21,7 +21,11 @@ serde = { version = "1.0", features = ["derive"] }  # For MemoryAreaStats serial
 roaring = "0.10"  # For FireLedger bitmap compatibility
 
 [features]
-default = []
+default = ["std"]
+std = []
+
+[dev-dependencies]
+feagi-npu-runtime = { version = "0.0.1-beta.1", path = "../runtime", features = ["std"] }
 
 
 

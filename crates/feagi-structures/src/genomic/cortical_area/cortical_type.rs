@@ -30,14 +30,16 @@ impl fmt::Display for CorticalAreaType {
 //region Core
 /// Core cortical area types for fundamental brain functions.
 ///
-/// Represents essential processing regions that manage the agent's power
-/// and termination states.
+/// Represents essential processing regions that manage the agent's power,
+/// termination states, and fatigue monitoring.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CoreCorticalType {
     /// Termination/death signal processing
     Death,
     /// Power management processing
     Power,
+    /// Brain fatigue indicator - activates when neuron/synapse arrays exceed 85% capacity
+    Fatigue,
 }
 
 impl CoreCorticalType {
@@ -47,6 +49,7 @@ impl CoreCorticalType {
         match cortical_id_bytes {
             b"___death" => Ok(CoreCorticalType::Death),
             b"___power" => Ok(CoreCorticalType::Power),
+            b"___fatig" => Ok(CoreCorticalType::Fatigue),
             _ => Err(FeagiDataError::BadParameters(format!(
                 "Unable to cast cortical ID bytes '{}' to a core cortical type!",
                 String::from_utf8_lossy(cortical_id_bytes)
@@ -62,6 +65,9 @@ impl CoreCorticalType {
             Self::Power => CorticalID {
                 bytes: *b"___power",
             },
+            Self::Fatigue => CorticalID {
+                bytes: *b"___fatig",
+            },
         }
     }
 }
@@ -71,6 +77,7 @@ impl fmt::Display for CoreCorticalType {
         let ch = match self {
             CoreCorticalType::Death => "Death",
             CoreCorticalType::Power => "Power",
+            CoreCorticalType::Fatigue => "Fatigue",
         };
         write!(f, "CoreCorticalType({})", ch)
     }

@@ -18,12 +18,16 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use tracing::info;
 
 use crate::memory_neuron_array::{MemoryNeuronArray, MemoryNeuronLifecycleConfig};
 use crate::memory_stats_cache::{self, MemoryStatsCache};
 use crate::pattern_detector::{BatchPatternDetector, PatternConfig};
 use crate::stdp::STDPConfig;
+
+// State manager access for fatigue reporting
+// TODO: Add feagi_state_manager dependency when wiring up state manager access
+// #[cfg(feature = "std")]
+// use feagi_state_manager::MemoryMappedState;
 
 /// Plasticity configuration
 #[derive(Debug, Clone)]
@@ -33,6 +37,9 @@ pub struct PlasticityConfig {
 
     /// Maximum operations per burst
     pub max_ops_per_burst: usize,
+
+    /// Memory neuron array capacity
+    pub memory_array_capacity: usize,
 
     /// STDP configuration
     pub stdp: Option<STDPConfig>,
@@ -49,6 +56,7 @@ impl Default for PlasticityConfig {
         Self {
             queue_capacity: 1000,
             max_ops_per_burst: 100,
+            memory_array_capacity: 50000,
             stdp: Some(STDPConfig::default()),
             pattern_config: PatternConfig::default(),
             memory_lifecycle_config: MemoryNeuronLifecycleConfig::default(),
@@ -152,12 +160,13 @@ impl PlasticityService {
         npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
     ) -> Self {
         let pattern_detector = BatchPatternDetector::new(config.pattern_config.clone());
+        let memory_array_capacity = config.memory_array_capacity;
 
         Self {
             config,
             npu,
             pattern_detector,
-            memory_neuron_array: Arc::new(Mutex::new(MemoryNeuronArray::new(50000))),
+            memory_neuron_array: Arc::new(Mutex::new(MemoryNeuronArray::new(memory_array_capacity))),
             memory_areas: Arc::new(Mutex::new(HashMap::new())),
             memory_lifecycle_configs: Arc::new(Mutex::new(HashMap::new())),
             memory_area_names: Arc::new(Mutex::new(HashMap::new())),
@@ -282,7 +291,19 @@ impl PlasticityService {
         let mut commands = Vec::new();
         let mut array = memory_neuron_array.lock().unwrap();
 
-        // Step 1: Age all memory neurons
+        // Step 1: Check for long-term memory conversion BEFORE aging.
+        //
+        // Rationale:
+        // If a neuron’s lifespan is already at/above the long-term threshold (e.g., init=100, threshold=100),
+        // we must convert it before decrementing lifespan; otherwise it becomes 99 and never qualifies.
+        let converted_neurons =
+            array.check_longterm_conversion(config.memory_lifecycle_config.longterm_threshold);
+        if !converted_neurons.is_empty() {
+            let mut s = stats.lock().unwrap();
+            s.memory_neurons_converted_ltm += converted_neurons.len();
+        }
+
+        // Step 2: Age all memory neurons (non-long-term only)
         let died_neurons = array.age_memory_neurons(current_timestep);
         if !died_neurons.is_empty() {
             let mut s = stats.lock().unwrap();
@@ -292,7 +313,7 @@ impl PlasticityService {
             // Update memory stats cache for deleted neurons (group by area)
             let area_names_map = memory_area_names.lock().unwrap();
             let mut area_death_counts: HashMap<u32, usize> = HashMap::new();
-            
+
             for died_idx in died_neurons {
                 if let Some(area_idx) = array.get_cortical_area_id(died_idx) {
                     *area_death_counts.entry(area_idx).or_insert(0) += 1;
@@ -306,14 +327,9 @@ impl PlasticityService {
                     }
                 }
             }
-        }
 
-        // Step 2: Check for long-term memory conversion
-        let converted_neurons =
-            array.check_longterm_conversion(config.memory_lifecycle_config.longterm_threshold);
-        if !converted_neurons.is_empty() {
-            let mut s = stats.lock().unwrap();
-            s.memory_neurons_converted_ltm += converted_neurons.len();
+            // Update memory utilization in state manager after deletions
+            Self::update_memory_utilization_in_state_manager(&array, &config);
         }
 
         // Step 3: Detect patterns for all memory areas
@@ -474,7 +490,7 @@ impl PlasticityService {
                     }
                 } else {
                     // Create new memory neuron
-                    tracing::info!(target: "plasticity",
+                    tracing::debug!(target: "plasticity",
                         "[PLASTICITY] 🧠 Creating NEW memory neuron for pattern {} in area {}",
                         pattern.pattern_hash, memory_area_idx
                     );
@@ -492,7 +508,7 @@ impl PlasticityService {
                         current_timestep,
                         &lifecycle_config,
                     ) {
-                        tracing::info!(target: "plasticity",
+                        tracing::debug!(target: "plasticity",
                             "[PLASTICITY] ✓ Memory neuron created: idx={}, pattern={}",
                             neuron_idx, pattern.pattern_hash
                         );
@@ -509,7 +525,7 @@ impl PlasticityService {
                         let neuron_id = array.get_neuron_id(neuron_idx).unwrap();
 
                         // Register and inject new neuron
-                        tracing::info!(target: "plasticity",
+                        tracing::trace!(target: "plasticity",
                             "[PLASTICITY] 📤 Queueing commands: RegisterMemoryNeuron(id={}) + InjectMemoryNeuronToFCL(id={}, potential=1.5)",
                             neuron_id, neuron_id
                         );
@@ -535,10 +551,23 @@ impl PlasticityService {
                             area_idx: *memory_area_idx,
                             neuron_id,
                         });
+
+                        // Update memory utilization in state manager after creation
+                        Self::update_memory_utilization_in_state_manager(&array, &config);
                     } else {
+                        // Get diagnostic information to understand failure cause
+                        let array_stats = array.get_stats();
+                        let id_stats = array.get_id_allocation_stats();
                         tracing::warn!(target: "plasticity",
-                            "[PLASTICITY] ⚠️  Failed to create memory neuron for pattern {} in area {}",
-                            pattern.pattern_hash, memory_area_idx
+                            "[PLASTICITY] ⚠️  Failed to create memory neuron for pattern {} in area {} - Array: {}/{} active ({} LTM, {} reusable), ID: {}/{} allocated",
+                            pattern.pattern_hash,
+                            memory_area_idx,
+                            array_stats.active_neurons,
+                            array_stats.total_capacity,
+                            array_stats.longterm_neurons,
+                            array_stats.reusable_indices,
+                            id_stats.memory_allocated,
+                            id_stats.memory_capacity
                         );
                     }
                 }
@@ -624,6 +653,48 @@ impl PlasticityService {
     pub fn get_memory_neuron_array(&self) -> Arc<Mutex<MemoryNeuronArray>> {
         Arc::clone(&self.memory_neuron_array)
     }
+
+    /// Update memory neuron utilization in state manager
+    ///
+    /// Calculates memory neuron utilization percentage and updates the state manager.
+    /// This should be called after memory neuron creation/deletion operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `array` - Reference to the memory neuron array
+    /// * `config` - Plasticity configuration containing memory array capacity
+    #[cfg(feature = "std")]
+    fn update_memory_utilization_in_state_manager(
+        array: &MemoryNeuronArray,
+        config: &PlasticityConfig,
+    ) {
+        let stats = array.get_stats();
+        let memory_neuron_count = stats.active_neurons;
+        let memory_neuron_capacity = config.memory_array_capacity;
+
+        let memory_neuron_util = if memory_neuron_capacity > 0 {
+            ((memory_neuron_count as f64 / memory_neuron_capacity as f64) * 100.0).round() as u8
+        } else {
+            0
+        };
+
+        // TODO: Access state manager singleton to update memory utilization
+        // For now, this is a placeholder - will be wired up when state manager access is available
+        // Example:
+        // if let Some(state_manager) = StateManager::instance() {
+        //     state_manager.get_core_state().set_memory_neuron_util(memory_neuron_util);
+        //     // Trigger fatigue index recalculation in ConnectomeManager
+        //     if let Ok(manager) = ConnectomeManager::instance().read() {
+        //         manager.update_fatigue_index();
+        //     }
+        // }
+
+        tracing::trace!(
+            target: "plasticity",
+            "[FATIGUE] Memory neuron utilization: {}% ({}/{} active)",
+            memory_neuron_util, memory_neuron_count, memory_neuron_capacity
+        );
+    }
 }
 
 // BatchPatternDetector Clone is implemented in pattern_detector.rs
@@ -631,11 +702,20 @@ impl PlasticityService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::memory_stats_cache::create_memory_stats_cache;
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_burst_engine::DynamicNPU;
+    use feagi_npu_runtime::StdRuntime;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn test_plasticity_service_creation() {
         let config = PlasticityConfig::default();
-        let service = PlasticityService::new(config);
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(Mutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+        ));
+        let service = PlasticityService::new(config, cache, npu);
 
         let stats = service.get_stats();
         assert_eq!(stats.memory_neurons_created, 0);
@@ -644,9 +724,13 @@ mod tests {
     #[test]
     fn test_register_memory_area() {
         let config = PlasticityConfig::default();
-        let service = PlasticityService::new(config);
+        let cache = create_memory_stats_cache();
+        let npu = Arc::new(Mutex::new(
+            DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+        ));
+        let service = PlasticityService::new(config, cache, npu);
 
-        let result = service.register_memory_area(100, 3, vec![1, 2], None);
+        let result = service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None);
         assert!(result);
 
         let areas = service.memory_areas.lock().unwrap();

@@ -297,6 +297,14 @@ where
         dispatch_mut!(self, set_power_amount(amount))
     }
 
+    pub fn set_fatigue_active(&mut self, active: bool) {
+        dispatch_mut!(self, set_fatigue_active(active))
+    }
+
+    pub fn is_fatigue_active(&self) -> bool {
+        dispatch!(self, is_fatigue_active())
+    }
+
     pub fn get_burst_count(&self) -> u64 {
         dispatch!(self, get_burst_count())
     }

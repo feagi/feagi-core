@@ -230,11 +230,21 @@ fn test_stdp_with_pattern_detection() {
 
 #[test]
 fn test_plasticity_service_basic_workflow() {
+    use feagi_npu_burst_engine::backend::CPUBackend;
+    use feagi_npu_burst_engine::DynamicNPU;
+    use feagi_npu_runtime::StdRuntime;
+    use std::sync::{Arc, Mutex};
+    use feagi_npu_plasticity::create_memory_stats_cache;
+
     let config = PlasticityConfig::default();
-    let service = PlasticityService::new(config);
+    let cache = create_memory_stats_cache();
+    let npu = Arc::new(Mutex::new(
+        DynamicNPU::new_f32(StdRuntime::new(), CPUBackend::new(), 16, 16, 8).unwrap(),
+    ));
+    let service = PlasticityService::new(config, cache, npu);
 
     // Register a memory area
-    let success = service.register_memory_area(100, 3, vec![1, 2], None);
+    let success = service.register_memory_area(100, "mem_00".to_string(), 3, vec![1, 2], None);
     assert!(success);
 
     // Notify of a burst

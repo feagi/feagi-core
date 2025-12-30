@@ -873,7 +873,7 @@ impl Neuroembryogenesis {
                                 }
                             }
                             
-                            if let Ok(mut exec) = executor.lock() {
+                            if let Ok(exec) = executor.lock() {
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
                                     initial_lifespan: mem_props.init_lifespan,
                                     lifespan_growth_rate: mem_props.lifespan_growth_rate,

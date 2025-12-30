@@ -168,6 +168,9 @@ pub struct RustNPU<
 
     // Configuration (AtomicU32 for f32 as u32 bits)
     power_amount: std::sync::atomic::AtomicU32, // f32::to_bits()
+
+    // Fatigue state (atomic for lock-free reads during burst injection)
+    fatigue_active: std::sync::atomic::AtomicBool,
 }
 
 /// Fire-related structures grouped together for single mutex
@@ -250,6 +253,7 @@ impl<
             backend: std::sync::Mutex::new(backend),
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
+            fatigue_active: std::sync::atomic::AtomicBool::new(false),
         })
     }
 }
@@ -354,6 +358,17 @@ impl<
     /// Get power injection amount (lock-free atomic operation)
     pub fn get_power_amount(&self) -> f32 {
         f32::from_bits(self.power_amount.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// Set fatigue active state (lock-free atomic operation)
+    pub fn set_fatigue_active(&self, active: bool) {
+        self.fatigue_active
+            .store(active, std::sync::atomic::Ordering::Release);
+    }
+
+    /// Get fatigue active state (lock-free atomic operation)
+    pub fn is_fatigue_active(&self) -> bool {
+        self.fatigue_active.load(std::sync::atomic::Ordering::Acquire)
     }
 
     /// Get burst count (lock-free atomic operation)
@@ -1217,6 +1232,7 @@ impl<
         
         let injection_result = {
             let synapse_storage = self.synapse_storage.read().unwrap();
+            let fatigue_active = self.fatigue_active.load(std::sync::atomic::Ordering::Acquire);
             phase1_injection_with_synapses(
                 &mut fire_structures.fire_candidate_list,
                 &mut *neuron_storage,
@@ -1225,6 +1241,7 @@ impl<
                 power_amount,
                 &*synapse_storage,
                 &pending_mutex,
+                fatigue_active,
             )?
         };
         fire_structures.pending_sensory_injections = pending_mutex.into_inner().unwrap();
@@ -2847,6 +2864,7 @@ impl<
 #[allow(dead_code)] // In development - used for monitoring/debugging
 struct InjectionResult {
     power_injections: usize,
+    fatigue_injections: usize,
     synaptic_injections: usize,
     sensory_injections: usize,
 }
@@ -2867,6 +2885,7 @@ fn phase1_injection_with_synapses<
     power_amount: f32,
     synapse_storage: &S,
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
+    fatigue_active: bool,
 ) -> Result<InjectionResult> {
     // Clear FCL from previous burst
     fcl.clear();
@@ -3004,6 +3023,33 @@ fn phase1_injection_with_synapses<
         LAST_POWER_COUNT.store(power_count, Ordering::Relaxed);
     }
 
+    // 1.5. Fatigue Injection (conditional, extremely light)
+    // Check fatigue_active boolean - if true, inject fatigue neurons (cortical_area = 2)
+    let mut fatigue_count = 0;
+
+    if fatigue_active {
+        // Scan all neurons for _fatigue cortical area (cortical_idx = 2)
+        for array_idx in 0..neuron_storage.count() {
+            let neuron_id = array_idx as u32;
+            if array_idx < neuron_storage.count() && neuron_storage.valid_mask()[array_idx] {
+                let cortical_area = neuron_storage.cortical_areas()[array_idx];
+
+                // Check if this is a fatigue neuron (cortical_area = 2)
+                if cortical_area == 2 {
+                    fcl.add_candidate(NeuronId(neuron_id), power_amount);
+                    fatigue_count += 1;
+                }
+            }
+        }
+
+        if fatigue_count > 0 {
+            trace!(
+                "[FATIGUE-INJECTION] ⚠️  Fatigue detected! Injected {} fatigue neurons into FCL",
+                fatigue_count
+            );
+        }
+    }
+
     // 2. Synaptic Propagation
     if !previous_fire_queue.is_empty() {
         let fired_ids = previous_fire_queue.get_all_neuron_ids();
@@ -3050,6 +3096,7 @@ fn phase1_injection_with_synapses<
 
     Ok(InjectionResult {
         power_injections: power_count,
+        fatigue_injections: fatigue_count,
         synaptic_injections: synaptic_count,
         sensory_injections: sensory_count,
     })

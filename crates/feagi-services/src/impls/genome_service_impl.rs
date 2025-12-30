@@ -1468,6 +1468,97 @@ impl GenomeServiceImpl {
             }
         }
 
+        // If memory-related parameters were updated, immediately apply them to the runtime
+        // plasticity subsystem (and FireLedger tracking), otherwise changes only take effect after save+reload.
+        //
+        // BV behavior observed:
+        // - Update via API updates RuntimeGenome + ConnectomeManager
+        // - PlasticityService keeps running with the old temporal_depth/lifecycle config until genome reload
+        //
+        // This block re-registers the memory area configuration in the live executor.
+        #[cfg(feature = "plasticity")]
+        {
+            let memory_param_changed = changes.keys().any(|k| {
+                matches!(
+                    k.as_str(),
+                    "init_lifespan"
+                        | "neuron_init_lifespan"
+                        | "lifespan_growth_rate"
+                        | "neuron_lifespan_growth_rate"
+                        | "longterm_mem_threshold"
+                        | "neuron_longterm_mem_threshold"
+                        | "temporal_depth"
+                )
+            });
+
+            if memory_param_changed {
+                use feagi_evolutionary::extract_memory_properties;
+                use feagi_npu_plasticity::{MemoryNeuronLifecycleConfig, PlasticityExecutor};
+
+                let manager = self.connectome.read();
+                if let Some(area) = manager.get_cortical_area(&cortical_id_typed) {
+                    if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                        // Update FireLedger upstream tracking for this memory area (monotonic-increase).
+                        // Note: FireLedger track_area is an *exact* setting; this uses max(existing, desired)
+                        // to avoid shrinking windows that may be required elsewhere (e.g., other memory areas).
+                        if let Some(npu_arc) = manager.get_npu().cloned() {
+                            if let Ok(mut npu) = npu_arc.lock() {
+                                let upstream_areas = manager.get_upstream_cortical_areas(&cortical_id_typed);
+                                let existing_configs = npu.get_all_fire_ledger_configs();
+                                let desired = mem_props.temporal_depth as usize;
+
+                                for upstream_idx in upstream_areas.iter().copied() {
+                                    let existing = existing_configs
+                                        .iter()
+                                        .find(|(idx, _)| *idx == upstream_idx)
+                                        .map(|(_, w)| *w)
+                                        .unwrap_or(0);
+                                    let resolved = existing.max(desired);
+                                    if resolved != existing {
+                                        if let Err(e) = npu.configure_fire_ledger_window(upstream_idx, resolved) {
+                                            warn!(
+                                                target: "feagi-services",
+                                                "[GENOME-UPDATE] Failed to configure FireLedger window for upstream idx={} (requested={}): {}",
+                                                upstream_idx,
+                                                resolved,
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            } else {
+                                warn!(target: "feagi-services", "[GENOME-UPDATE] Failed to lock NPU for FireLedger update");
+                            }
+                        }
+
+                        // Re-register memory area config in PlasticityExecutor so temporal_depth/lifecycle changes apply immediately.
+                        if let Some(executor) = manager.get_plasticity_executor() {
+                            if let Ok(exec) = executor.lock() {
+                                let upstream_areas =
+                                    manager.get_upstream_cortical_areas(&cortical_id_typed);
+                                let lifecycle_config = MemoryNeuronLifecycleConfig {
+                                    initial_lifespan: mem_props.init_lifespan,
+                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                                    longterm_threshold: mem_props.longterm_threshold,
+                                    max_reactivations: 1000,
+                                };
+
+                                exec.register_memory_area(
+                                    cortical_idx,
+                                    cortical_id.to_string(),
+                                    mem_props.temporal_depth,
+                                    upstream_areas,
+                                    Some(lifecycle_config),
+                                );
+                            } else {
+                                warn!(target: "feagi-services", "[GENOME-UPDATE] Failed to lock PlasticityExecutor for memory-area update");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         info!(target: "feagi-services", "[FAST-UPDATE] Parameter update complete");
 
         // Return updated info

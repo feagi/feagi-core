@@ -17,6 +17,21 @@ use crate::common::{ApiError, ApiResult, Json, State};
 
 #[allow(non_snake_case)] // Field name matches Python API for compatibility
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct FatigueInfo {
+    /// Fatigue index (0-100) - maximum utilization across all fatigue criteria
+    pub fatigue_index: Option<u8>,
+    /// Whether fatigue is currently active (triggers fatigue neuron injection)
+    pub fatigue_active: Option<bool>,
+    /// Regular neuron utilization percentage (0-100)
+    pub regular_neuron_util: Option<u8>,
+    /// Memory neuron utilization percentage (0-100)
+    pub memory_neuron_util: Option<u8>,
+    /// Synapse utilization percentage (0-100)
+    pub synapse_util: Option<u8>,
+}
+
+#[allow(non_snake_case)] // Field name matches Python API for compatibility
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct HealthCheckResponse {
     pub burst_engine: bool,
     pub connected_agents: Option<i32>,
@@ -43,6 +58,9 @@ pub struct HealthCheckResponse {
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
+    /// Fatigue information (index, active state, and breakdown of contributing elements)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fatigue: Option<FatigueInfo>,
 }
 
 // ============================================================================
@@ -187,6 +205,24 @@ pub async fn get_health_check(
     #[cfg(not(feature = "services"))]
     let brain_regions_root = None; // WASM: Use connectome service instead
 
+    // Get fatigue information from state manager
+    // TODO: Access state manager singleton to get fatigue data
+    // For now, return None - will be wired up when state manager access is available
+    // Example:
+    // if let Some(state_manager) = feagi_state_manager::StateManager::instance() {
+    //     let core_state = state_manager.get_core_state();
+    //     Some(FatigueInfo {
+    //         fatigue_index: Some(core_state.get_fatigue_index()),
+    //         fatigue_active: Some(core_state.is_fatigue_active()),
+    //         regular_neuron_util: Some(core_state.get_regular_neuron_util()),
+    //         memory_neuron_util: Some(core_state.get_memory_neuron_util()),
+    //         synapse_util: Some(core_state.get_synapse_util()),
+    //     })
+    // } else {
+    //     None
+    // }
+    let fatigue = None;
+
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,
         connected_agents,
@@ -211,6 +247,7 @@ pub async fn get_health_check(
         memory_area_stats,
         amalgamation_pending,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
+        fatigue,
     }))
 }
 

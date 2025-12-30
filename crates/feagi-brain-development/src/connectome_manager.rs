@@ -134,6 +134,9 @@ pub struct ConnectomeManager {
 
     /// Is the connectome initialized (has cortical areas)?
     initialized: bool,
+
+    /// Last fatigue index calculation time (for rate limiting)
+    last_fatigue_calculation: Arc<Mutex<std::time::Instant>>,
 }
 
 /// Type alias for neuron batch data: (x, y, z, threshold, threshold_limit, leak, resting, neuron_type, refractory_period, excitability, consecutive_fire_limit, snooze_period, mp_charge_accumulation)
@@ -147,7 +150,7 @@ impl ConnectomeManager {
             cortical_id_to_idx: HashMap::new(),
             cortical_idx_to_id: HashMap::new(),
             // CRITICAL: Reserve indices 0 (_death) and 1 (_power) - start regular areas at 2
-            next_cortical_idx: 2,
+            next_cortical_idx: 3, // Reserve 0=_death, 1=_power, 2=_fatigue
             brain_regions: BrainRegionHierarchy::new(),
             morphology_registry: feagi_evolutionary::MorphologyRegistry::new(),
             config: ConnectomeConfig::default(),
@@ -157,6 +160,7 @@ impl ConnectomeManager {
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
+            last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))), // Initialize to allow first calculation
         }
     }
 
@@ -208,6 +212,7 @@ impl ConnectomeManager {
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
+            last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))),
         }
     }
 
@@ -241,6 +246,7 @@ impl ConnectomeManager {
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
             initialized: false,
+            last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))),
         }
     }
 
@@ -287,15 +293,17 @@ impl ConnectomeManager {
             )));
         }
 
-        // CRITICAL: Reserve cortical_idx 0 for _death, 1 for _power
+        // CRITICAL: Reserve cortical_idx 0 for _death, 1 for _power, 2 for _fatigue
         // Use feagi-data-processing types as single source of truth
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
 
         let death_id = CoreCorticalType::Death.to_cortical_id();
         let power_id = CoreCorticalType::Power.to_cortical_id();
+        let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
 
         let is_death_area = area.cortical_id == death_id;
         let is_power_area = area.cortical_id == power_id;
+        let is_fatigue_area = area.cortical_id == fatigue_id;
 
         if is_death_area {
             trace!(
@@ -311,20 +319,27 @@ impl ConnectomeManager {
                 area.cortical_id
             );
             area.cortical_idx = 1;
+        } else if is_fatigue_area {
+            trace!(
+                target: "feagi-bdu",
+                "[CORE-AREA] Assigning RESERVED cortical_idx=2 to _fatigue area (id={})",
+                area.cortical_id
+            );
+            area.cortical_idx = 2;
         } else {
-            // Regular areas: assign cortical_idx if not set (will be ≥2 due to next_cortical_idx=2 initialization)
+            // Regular areas: assign cortical_idx if not set (will be ≥3 due to next_cortical_idx=3 initialization)
             if area.cortical_idx == 0 {
                 area.cortical_idx = self.next_cortical_idx;
                 self.next_cortical_idx += 1;
                 trace!(
                     target: "feagi-bdu",
-                    "[REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be ≥2)",
+                    "[REGULAR-AREA] Assigned cortical_idx={} to area '{}' (should be ≥3)",
                     area.cortical_idx,
                     area.cortical_id.as_base_64()
                 );
             } else {
                 // Check for reserved index collision
-                if area.cortical_idx == 0 || area.cortical_idx == 1 {
+                if area.cortical_idx == 0 || area.cortical_idx == 1 || area.cortical_idx == 2 {
                     warn!(
                         "Regular area '{}' attempted to use RESERVED cortical_idx={}! Reassigning to next available.",
                         area.cortical_id, area.cortical_idx);
@@ -813,7 +828,7 @@ impl ConnectomeManager {
                                 }
                             }
                             
-                            if let Ok(mut exec) = executor.lock() {
+                            if let Ok(exec) = executor.lock() {
                                 use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
                                 
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
@@ -1231,6 +1246,89 @@ impl ConnectomeManager {
         0
     }
 
+    /// Update fatigue index based on utilization of neuron and synapse arrays
+    ///
+    /// Calculates fatigue index as max(regular_neuron_util%, memory_neuron_util%, synapse_util%)
+    /// Applies hysteresis: triggers at 85%, clears at 80%
+    /// Rate limited to max once per 2 seconds to protect against rapid changes
+    ///
+    /// # Returns
+    ///
+    /// * `Option<u8>` - New fatigue index (0-100) if calculation was performed, None if rate limited
+    pub fn update_fatigue_index(&self) -> Option<u8> {
+        // Rate limiting: max once per 2 seconds
+        let mut last_calc = match self.last_fatigue_calculation.lock() {
+            Ok(guard) => guard,
+            Err(_) => return None, // Lock poisoned, skip calculation
+        };
+
+        let now = std::time::Instant::now();
+        if now.duration_since(*last_calc).as_secs() < 2 {
+            return None; // Rate limited
+        }
+        *last_calc = now;
+        drop(last_calc);
+
+        // Get regular neuron utilization
+        let regular_neuron_count = self.get_neuron_count();
+        let regular_neuron_capacity = self.get_neuron_capacity();
+        let regular_neuron_util = if regular_neuron_capacity > 0 {
+            ((regular_neuron_count as f64 / regular_neuron_capacity as f64) * 100.0).round() as u8
+        } else {
+            0
+        };
+
+        // Get memory neuron utilization from state manager
+        // TODO: Access state manager singleton to get memory neuron utilization
+        // For now, we'll need to add this access - memory_util should be updated by PlasticityManager
+        let memory_neuron_util = 0u8; // Placeholder - will be updated when state manager access is added
+
+        // Get synapse utilization
+        let synapse_count = self.get_synapse_count();
+        let synapse_capacity = self.get_synapse_capacity();
+        let synapse_util = if synapse_capacity > 0 {
+            ((synapse_count as f64 / synapse_capacity as f64) * 100.0).round() as u8
+        } else {
+            0
+        };
+
+        // Calculate fatigue index as max of all utilizations
+        let fatigue_index = regular_neuron_util.max(memory_neuron_util).max(synapse_util);
+
+        // Apply hysteresis: trigger at 85%, clear at 80%
+        let current_fatigue_active = false; // TODO: Get from state manager
+        let new_fatigue_active = if fatigue_index >= 85 {
+            true
+        } else if fatigue_index < 80 {
+            false
+        } else {
+            current_fatigue_active // Keep current state in hysteresis zone
+        };
+
+        // Update state manager with all values
+        // TODO: Access state manager singleton to update values
+        // state_manager.set_fatigue_index(fatigue_index);
+        // state_manager.set_fatigue_active(new_fatigue_active);
+        // state_manager.set_regular_neuron_util(regular_neuron_util);
+        // state_manager.set_memory_neuron_util(memory_neuron_util);
+        // state_manager.set_synapse_util(synapse_util);
+
+        // Update NPU's atomic boolean
+        if let Some(ref npu) = self.npu {
+            if let Ok(mut npu_lock) = npu.lock() {
+                npu_lock.set_fatigue_active(new_fatigue_active);
+            }
+        }
+
+        trace!(
+            target: "feagi-bdu",
+            "[FATIGUE] Index={}, Active={}, Regular={}%, Memory={}%, Synapse={}%",
+            fatigue_index, new_fatigue_active, regular_neuron_util, memory_neuron_util, synapse_util
+        );
+
+        Some(fatigue_index)
+    }
+
     // ======================================================================
     // Neuron/Synapse Creation Methods (Delegates to NPU)
     // ======================================================================
@@ -1561,7 +1659,7 @@ impl ConnectomeManager {
                 }
             };
 
-            let mut dst_synapse_count = 0u32; // Track synapses for this specific destination
+            let mut _dst_synapse_count = 0u32; // Track synapses for this specific destination
 
             // Apply each morphology rule
             for rule in rules_array {
@@ -1734,7 +1832,7 @@ impl ConnectomeManager {
                     }
                 };
 
-                dst_synapse_count += synapse_count;
+                _dst_synapse_count += synapse_count;
                 total_synapses += synapse_count;
 
                 trace!(
@@ -2278,8 +2376,8 @@ impl ConnectomeManager {
         self.cortical_id_to_idx.clear();
         self.cortical_idx_to_id.clear();
         // CRITICAL: Reserve indices 0 (_death) and 1 (_power)
-        self.next_cortical_idx = 2;
-        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 2 (reserves 0=_death, 1=_power)");
+        self.next_cortical_idx = 3;
+        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 3 (reserves 0=_death, 1=_power, 2=_fatigue)");
         self.brain_regions = crate::models::BrainRegionHierarchy::new();
 
         // Add cortical areas
@@ -2465,8 +2563,8 @@ impl ConnectomeManager {
         self.cortical_id_to_idx.clear();
         self.cortical_idx_to_id.clear();
         // CRITICAL: Reserve indices 0 (_death) and 1 (_power)
-        self.next_cortical_idx = 2;
-        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 2 (reserves 0=_death, 1=_power)");
+        self.next_cortical_idx = 3;
+        info!("🔧 [BRAIN-RESET] Cortical mapping cleared, next_cortical_idx reset to 3 (reserves 0=_death, 1=_power, 2=_fatigue)");
 
         // Clear brain regions
         self.brain_regions = BrainRegionHierarchy::new();

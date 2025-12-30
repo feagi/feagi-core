@@ -16,7 +16,7 @@
 //! - Thread-safe operations
 //! - Efficient memory management with index reuse
 
-use crate::neuron_id_manager::NeuronIdManager;
+use crate::neuron_id_manager::{AllocationStats, NeuronIdManager};
 use std::collections::{HashMap, HashSet};
 
 /// Memory neuron lifecycle configuration
@@ -345,6 +345,11 @@ impl MemoryNeuronArray {
             avg_lifespan,
             avg_activation_count,
         }
+    }
+
+    /// Get ID manager allocation statistics
+    pub fn get_id_allocation_stats(&self) -> AllocationStats {
+        self.id_manager.get_allocation_stats()
     }
 
     /// Get available index (reuse or allocate new)
