@@ -167,7 +167,7 @@ pub async fn get_fcl(
 pub async fn get_fire_queue(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use tracing::debug;
+    use tracing::{debug, info};
 
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
@@ -178,6 +178,16 @@ pub async fn get_fire_queue(
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get fire queue: {}", e)))?;
 
+    if fq_sample.is_empty() {
+        debug!("[FIRE-QUEUE-API] ⚠️ Fire queue sample is EMPTY - no areas");
+    } else {
+        let total_neurons: usize = fq_sample.values()
+            .map(|(x, y, z, _, _)| x.len() + y.len() + z.len())
+            .sum();
+        info!("[FIRE-QUEUE-API] ✓ Received fire queue sample: {} areas, {} total neurons", 
+            fq_sample.len(), total_neurons);
+    }
+    
     // Get burst count for timestep
     let timestep = runtime_service
         .get_burst_count()
@@ -196,9 +206,10 @@ pub async fn get_fire_queue(
         .map(|a| (a.cortical_idx, a.cortical_id.clone()))
         .collect();
 
-    // Convert cortical_idx to cortical_id
-    let mut cortical_areas: HashMap<String, Vec<u64>> = HashMap::new();
-    let mut total_fired = 0;
+    // Convert cortical_idx to cortical_id and report only per-area fired neuron COUNT.
+    // Caller explicitly does not need individual neuron IDs.
+    let mut cortical_areas: HashMap<String, u64> = HashMap::new();
+    let mut total_fired: u64 = 0;
 
     for (cortical_idx, (neuron_ids, _, _, _, _)) in fq_sample {
         // Use actual cortical_id from mapping, fallback to area_{idx} if not found
@@ -207,11 +218,18 @@ pub async fn get_fire_queue(
             .cloned()
             .unwrap_or_else(|| format!("area_{}", cortical_idx));
 
-        let ids_u64: Vec<u64> = neuron_ids.iter().map(|&id| id as u64).collect();
-        total_fired += ids_u64.len();
-        cortical_areas.insert(cortical_id, ids_u64);
+        let fired_count = neuron_ids.len() as u64;
+        info!(
+            "[FIRE-QUEUE-API] Area {} (idx={}): {} neurons fired",
+            cortical_id, cortical_idx, fired_count
+        );
+
+        total_fired += fired_count;
+        cortical_areas.insert(cortical_id, fired_count);
     }
 
+    info!("[FIRE-QUEUE-API] Total fired neurons: {}", total_fired);
+    
     let mut response = HashMap::new();
     response.insert("timestep".to_string(), serde_json::json!(timestep));
     response.insert("total_fired".to_string(), serde_json::json!(total_fired));
@@ -896,8 +914,10 @@ pub async fn get_fire_ledger_area_window_size(
         }
     }
 
-    // Return default if not found
-    Ok(Json(20))
+    Err(ApiError::not_found(
+        "FireLedgerArea",
+        &format!("cortical_idx={}", area_id),
+    ))
 }
 
 /// Set fire ledger window size for a specific cortical area.
@@ -972,20 +992,10 @@ pub async fn get_fire_ledger_history(
         .get("lookback_steps")
         .and_then(|s| s.parse::<i32>().ok());
 
-    // TODO: Implement fire ledger history retrieval from NPU
-    // For now, return placeholder
-    let mut response = HashMap::new();
-    response.insert("success".to_string(), serde_json::json!(true));
-    response.insert("area_id".to_string(), serde_json::json!(area_id));
-    response.insert("cortical_idx".to_string(), serde_json::json!(cortical_idx));
-    response.insert("history".to_string(), serde_json::json!([]));
-    response.insert("window_size".to_string(), serde_json::json!(20));
-    response.insert(
-        "note".to_string(),
-        serde_json::json!("Fire ledger history not yet implemented"),
-    );
-
-    Ok(Json(response))
+    Err(ApiError::internal(format!(
+        "Fire ledger history retrieval is not yet implemented (requested cortical_idx={})",
+        cortical_idx
+    )))
 }
 
 // ============================================================================

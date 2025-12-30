@@ -46,6 +46,8 @@ pub struct ApiState {
     /// FEAGI session timestamp in milliseconds (Unix timestamp when FEAGI started)
     /// This is a unique identifier for each FEAGI instance/session
     pub feagi_session_timestamp: i64,
+    /// Memory area stats cache (updated by plasticity service, read by health check)
+    pub memory_stats_cache: Option<feagi_npu_plasticity::MemoryStatsCache>,
 }
 
 /// Create the main HTTP server application
@@ -108,8 +110,12 @@ pub fn create_http_server(state: ApiState) -> Router {
                 .on_eos(|_trailers: Option<&axum::http::HeaderMap>, stream_duration: std::time::Duration, _span: &tracing::Span| {
                     tracing::trace!(target: "feagi-api", "Stream ended, duration={:?}", stream_duration);
                 })
-                .on_failure(|_error: tower_http::classify::ServerErrorsFailureClass, latency: std::time::Duration, _span: &tracing::Span| {
-                    tracing::error!(target: "feagi-api", "Request failed, latency={:?}", latency);
+                .on_failure(|error: tower_http::classify::ServerErrorsFailureClass, latency: std::time::Duration, _span: &tracing::Span| {
+                    tracing::error!(
+                        target: "feagi-api", 
+                        "Request failed: error_class={:?}, latency={:?}", 
+                        error, latency
+                    );
                 })
         )
 }
@@ -991,8 +997,8 @@ async fn log_request_response_bodies(
 ) -> Result<Response, StatusCode> {
     let (parts, body) = request.into_parts();
 
-    // Only log bodies for POST/PUT/PATCH requests
-    let should_log_request = matches!(parts.method.as_str(), "POST" | "PUT" | "PATCH");
+    // Only log bodies for POST/PUT/PATCH/DELETE requests
+    let should_log_request = matches!(parts.method.as_str(), "POST" | "PUT" | "PATCH" | "DELETE");
 
     let body_bytes = if should_log_request {
         // Collect body bytes

@@ -271,13 +271,34 @@ impl SensoryStream {
                 let mut msg = zmq::Message::new();
                 match sock.recv(&mut msg, 0) {
                     Ok(()) => {
+                        // REAL-TIME SEMANTICS:
+                        // Even with RCVHWM=1, under load FEAGI can momentarily process an older message
+                        // while a newer one arrives. Drain any queued messages and process only the newest
+                        // payload to prevent drift that looks like buffering.
+                        let mut newest_bytes: Vec<u8> = msg.to_vec();
+                        let mut drained_newer: u64 = 0;
+                        loop {
+                            let mut next = zmq::Message::new();
+                            match sock.recv(&mut next, zmq::DONTWAIT) {
+                                Ok(()) => {
+                                    newest_bytes = next.to_vec();
+                                    drained_newer += 1;
+                                }
+                                Err(zmq::Error::EAGAIN) => break,
+                                Err(e) => {
+                                    warn!("🦀 [ZMQ-SENSORY] [WARN] Drain recv error: {}", e);
+                                    break;
+                                }
+                            }
+                        }
+
                         drop(sock_guard); // Release lock before processing
 
                         *total_messages.lock() += 1;
                         message_count += 1;
 
                         // Process the binary data
-                        let message_bytes: &[u8] = msg.as_ref();
+                        let message_bytes: &[u8] = newest_bytes.as_slice();
                         let t_zmq_receive_start = std::time::Instant::now();
                         debug!(
                             "🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes",
@@ -302,8 +323,9 @@ impl SensoryStream {
                                     let total_msg = *total_messages.lock();
                                     let total_n = *total_neurons.lock();
                                     debug!(
-                                        "[ZMQ-SENSORY] Stats: {} messages, {} neurons total, last msg: {:.2}ms, {} bytes, {} neurons",
+                                        "[ZMQ-SENSORY] Stats: {} messages, {} neurons total, last msg: {:.2}ms, {} bytes, {} neurons, drained_newer={}",
                                         total_msg, total_n, t_zmq_total.as_secs_f64() * 1000.0, message_bytes.len(), neuron_count
+                                        ,drained_newer
                                     );
                                 }
                             }
@@ -432,32 +454,32 @@ impl SensoryStream {
         // The NPU owns coordinate-to-ID conversion and does it efficiently in batch
 
         let mut total_injected = 0;
+        // REAL-TIME: Treat each incoming sensory message as the "latest frame".
+        // Clear any staged sensory injections before applying this message so FEAGI does not
+        // accumulate multiple frames between bursts (drift that looks like buffering).
+        let mut npu = npu_arc.lock().unwrap();
+        npu.clear_pending_sensory_injections();
 
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
-            // Step 1: Extract raw XYZP data (NO LOCKS)
+            // Extract raw XYZP data (NO LOCKS)
             let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
-            let num_neurons = neuron_arrays.len();
-
-            // Build XYZP array
-            let xyzp_data: Vec<(u32, u32, u32, f32)> = (0..num_neurons)
-                .map(|i| (x_coords[i], y_coords[i], z_coords[i], potentials[i]))
-                .collect();
-
-            // Step 2: Quick lock - NPU handles everything (name resolution + coordinate conversion + injection)
-            let mut npu = npu_arc.lock().unwrap();
 
             // NPU handles: CorticalID → cortical_idx lookup, coordinates → neuron IDs, injection
-            let injected = npu.inject_sensory_xyzp_by_id(cortical_id, &xyzp_data);
+            let injected = npu.inject_sensory_xyzp_arrays_by_id(
+                cortical_id,
+                x_coords,
+                y_coords,
+                z_coords,
+                potentials,
+            );
             total_injected += injected;
-
-            drop(npu);
 
             // Only log missing neurons at debug level (common case, not an error)
             if injected == 0 {
                 debug!(
                     "[ZMQ-SENSORY] No neurons injected for area '{}' ({} coords)",
                     cortical_id.as_base_64(),
-                    xyzp_data.len()
+                    neuron_arrays.len()
                 );
             }
         }

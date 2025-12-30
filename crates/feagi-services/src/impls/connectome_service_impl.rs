@@ -22,18 +22,66 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, info, trace, warn};
 
+/// Update a cortical area's `cortical_mapping_dst` property in-place.
+///
+/// - When `mapping_data` is empty: remove the destination entry, and if the
+///   container becomes empty remove `cortical_mapping_dst` entirely.
+/// - When `mapping_data` is non-empty: insert/overwrite the destination entry.
+fn update_cortical_mapping_dst_in_properties(
+    properties: &mut HashMap<String, serde_json::Value>,
+    dst_area_id: &str,
+    mapping_data: &[serde_json::Value],
+) -> ServiceResult<()> {
+    if mapping_data.is_empty() {
+        let Some(existing) = properties.get_mut("cortical_mapping_dst") else {
+            return Ok(());
+        };
+        let Some(mapping_dst) = existing.as_object_mut() else {
+            return Err(ServiceError::Backend(
+                "cortical_mapping_dst is not a JSON object".to_string(),
+            ));
+        };
+
+        mapping_dst.remove(dst_area_id);
+        if mapping_dst.is_empty() {
+            properties.remove("cortical_mapping_dst");
+        }
+        return Ok(());
+    }
+
+    let entry = properties
+        .entry("cortical_mapping_dst".to_string())
+        .or_insert_with(|| serde_json::json!({}));
+
+    let Some(mapping_dst) = entry.as_object_mut() else {
+        return Err(ServiceError::Backend(
+            "cortical_mapping_dst is not a JSON object".to_string(),
+        ));
+    };
+
+    mapping_dst.insert(dst_area_id.to_string(), serde_json::json!(mapping_data));
+    Ok(())
+}
+
 /// Default implementation of ConnectomeService
 pub struct ConnectomeServiceImpl {
     connectome: Arc<RwLock<ConnectomeManager>>,
+    /// Currently loaded genome (source of truth for genome persistence)
+    /// Shared with GenomeServiceImpl to ensure cortical mappings are saved
+    current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
     /// Optional reference to RuntimeService for accessing NPU (for connectome I/O)
     #[cfg(feature = "connectome-io")]
     runtime_service: Arc<RwLock<Option<Arc<dyn crate::traits::RuntimeService + Send + Sync>>>>,
 }
 
 impl ConnectomeServiceImpl {
-    pub fn new(connectome: Arc<RwLock<ConnectomeManager>>) -> Self {
+    pub fn new(
+        connectome: Arc<RwLock<ConnectomeManager>>,
+        current_genome: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
+    ) -> Self {
         Self {
             connectome,
+            current_genome,
             #[cfg(feature = "connectome-io")]
             runtime_service: Arc::new(RwLock::new(None)),
         }
@@ -191,6 +239,13 @@ impl ConnectomeService for ConnectomeServiceImpl {
                 serde_json::json!(burst_engine_active),
             );
         }
+        
+        // Extract parent_region_id before moving properties
+        let parent_region_id = params.properties.as_ref()
+            .and_then(|props| props.get("parent_region_id"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        
         if let Some(properties) = params.properties {
             area.properties = properties;
         }
@@ -200,6 +255,24 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .write()
             .add_cortical_area(area)
             .map_err(ServiceError::from)?;
+
+        // CRITICAL: If parent_region_id is specified, add this cortical area
+        // to the parent brain region's cortical_areas set so it persists in genome
+        if let Some(region_id) = parent_region_id {
+            let mut manager = self.connectome.write();
+            if let Some(region) = manager.get_brain_region_mut(&region_id) {
+                region.add_area(cortical_id_typed);
+                info!(target: "feagi-services", 
+                    "Added cortical area {} to parent region {}", 
+                    params.cortical_id, region_id
+                );
+            } else {
+                warn!(target: "feagi-services", 
+                    "Parent region {} not found for cortical area {}", 
+                    region_id, params.cortical_id
+                );
+            }
+        }
 
         // Return info
         self.get_cortical_area(&params.cortical_id).await
@@ -273,6 +346,10 @@ impl ConnectomeService for ConnectomeServiceImpl {
         let cortical_group = area.get_cortical_group();
 
         // Note: decode_cortical_id removed - IPU/OPU metadata now in CorticalID
+        let memory_props = {
+            use feagi_evolutionary::extract_memory_properties;
+            extract_memory_properties(&area.properties)
+        };
 
         Ok(CorticalAreaInfo {
             cortical_id: cortical_id.to_string(),
@@ -288,7 +365,22 @@ impl ConnectomeService for ConnectomeServiceImpl {
             area_type: cortical_group
                 .clone()
                 .unwrap_or_else(|| "CUSTOM".to_string()),
-            cortical_group: cortical_group.unwrap_or_else(|| "CUSTOM".to_string()),
+            cortical_group: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+            // Determine cortical_type based on properties
+            cortical_type: {
+                if memory_props.is_some() {
+                    "memory".to_string()
+                } else if let Some(group) = &cortical_group {
+                    match group.as_str() {
+                        "IPU" => "sensory".to_string(),
+                        "OPU" => "motor".to_string(),
+                        "CORE" => "core".to_string(),
+                        _ => "custom".to_string(),
+                    }
+                } else {
+                    "custom".to_string()
+                }
+            },
             neuron_count,
             synapse_count,
             // All neural parameters come from the actual CorticalArea struct
@@ -296,17 +388,30 @@ impl ConnectomeService for ConnectomeServiceImpl {
             sub_group: area.sub_group(),
             neurons_per_voxel: area.neurons_per_voxel(),
             postsynaptic_current: area.postsynaptic_current() as f64,
+            postsynaptic_current_max: area.postsynaptic_current_max() as f64,
             plasticity_constant: area.plasticity_constant() as f64,
             degeneration: area.degeneration() as f64,
-            psp_uniform_distribution: area.psp_uniform_distribution() != 0.0,
-            firing_threshold_increment: area.firing_threshold_increment() as f64,
+            psp_uniform_distribution: area.psp_uniform_distribution(),
+            mp_driven_psp: area.mp_driven_psp(),
+            firing_threshold: area.firing_threshold() as f64,
+            firing_threshold_increment: [
+                area.firing_threshold_increment_x() as f64,
+                area.firing_threshold_increment_y() as f64,
+                area.firing_threshold_increment_z() as f64,
+            ],
             firing_threshold_limit: area.firing_threshold_limit() as f64,
             consecutive_fire_count: area.consecutive_fire_count(),
             snooze_period: area.snooze_period() as u32,
             refractory_period: area.refractory_period() as u32,
             leak_coefficient: area.leak_coefficient() as f64,
             leak_variability: area.leak_variability() as f64,
+            mp_charge_accumulation: area.mp_charge_accumulation(),
+            neuron_excitability: area.neuron_excitability() as f64,
             burst_engine_active: area.burst_engine_active(),
+            init_lifespan: area.init_lifespan(),
+            lifespan_growth_rate: area.lifespan_growth_rate() as f64,
+            longterm_mem_threshold: area.longterm_mem_threshold(),
+            temporal_depth: memory_props.map(|p| p.temporal_depth.max(1)),
             properties: area.properties.clone(),
             // IPU/OPU-specific decoded fields (only populated for IPU/OPU areas)
             cortical_subtype: None, // Note: decode_cortical_id removed
@@ -315,6 +420,51 @@ impl ConnectomeService for ConnectomeServiceImpl {
             unit_id: None,
             group_id: None,
             parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
+            // Extract dev_count and cortical_dimensions_per_device from properties for IPU/OPU
+            dev_count: area
+                .properties
+                .get("dev_count")
+                .and_then(|v| v.as_u64().map(|n| n as usize)),
+            cortical_dimensions_per_device: {
+                // Try to get from properties first
+                let from_properties = area
+                    .properties
+                    .get("cortical_dimensions_per_device")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| {
+                        if arr.len() == 3 {
+                            Some((
+                                arr[0].as_u64()? as usize,
+                                arr[1].as_u64()? as usize,
+                                arr[2].as_u64()? as usize,
+                            ))
+                        } else {
+                            None
+                        }
+                    });
+                
+                // If not in properties, compute from dimensions and dev_count for IPU/OPU areas
+                if from_properties.is_none() {
+                    if let Some(dev_count) = area
+                        .properties
+                        .get("dev_count")
+                        .and_then(|v| v.as_u64().map(|n| n as usize))
+                    {
+                        if dev_count > 0 {
+                            let total_width = area.dimensions.width as usize;
+                            let height = area.dimensions.height as usize;
+                            let depth = area.dimensions.depth as usize;
+                            Some((total_width / dev_count, height, depth))
+                        } else {
+                            from_properties
+                        }
+                    } else {
+                        from_properties
+                    }
+                } else {
+                    from_properties
+                }
+            },
         })
     }
 
@@ -585,6 +735,28 @@ impl ConnectomeService for ConnectomeServiceImpl {
             ServiceError::InvalidInput(format!("Invalid destination cortical ID: {}", e))
         })?;
 
+        // Update RuntimeGenome if available (CRITICAL for save/load persistence!)
+        if let Some(genome) = self.current_genome.write().as_mut() {
+            if let Some(src_area) = genome.cortical_areas.get_mut(&src_id) {
+                update_cortical_mapping_dst_in_properties(
+                    &mut src_area.properties,
+                    &dst_area_id,
+                    &mapping_data,
+                )?;
+                info!(
+                    target: "feagi-services",
+                    "[GENOME-UPDATE] Updated cortical_mapping_dst for {} -> {} (connections={})",
+                    src_area_id,
+                    dst_area_id,
+                    mapping_data.len()
+                );
+            } else {
+                warn!(target: "feagi-services", "[GENOME-UPDATE] Source area {} not found in RuntimeGenome", src_area_id);
+            }
+        } else {
+            warn!(target: "feagi-services", "[GENOME-UPDATE] No RuntimeGenome loaded - mapping will not persist");
+        }
+
         // Update the cortical_mapping_dst property in ConnectomeManager
         let mut manager = self.connectome.write();
         manager
@@ -599,6 +771,8 @@ impl ConnectomeService for ConnectomeServiceImpl {
         info!(target: "feagi-services", "Cortical mapping updated: {} synapses created", synapse_count);
         Ok(synapse_count)
     }
+
+    // Note: unit tests for mapping persistence behavior are below in this module.
 
     // ========================================================================
     // CONNECTOME I/O OPERATIONS
@@ -667,5 +841,58 @@ impl ConnectomeService for ConnectomeServiceImpl {
         Err(ServiceError::NotImplemented(
             "Connectome import via service layer requires NPU replacement coordination. Use NPU.import_connectome_with_config() during application initialization, or implement a 'replace NPU' operation that coordinates with BurstLoopRunner.".to_string(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::update_cortical_mapping_dst_in_properties;
+    use crate::types::ServiceResult;
+    use std::collections::HashMap;
+
+    #[test]
+    fn empty_mapping_deletes_destination_key_and_prunes_container() -> ServiceResult<()> {
+        let mut props: HashMap<String, serde_json::Value> = HashMap::new();
+        props.insert(
+            "cortical_mapping_dst".to_string(),
+            serde_json::json!({
+                "dstA": [{"morphology_id": "m1"}],
+                "dstB": []
+            }),
+        );
+
+        update_cortical_mapping_dst_in_properties(&mut props, "dstA", &[])?;
+        let dst = props
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+            .expect("cortical_mapping_dst should remain with dstB");
+        assert!(!dst.contains_key("dstA"));
+        assert!(dst.contains_key("dstB"));
+
+        // Now remove last remaining destination, container should be removed entirely
+        update_cortical_mapping_dst_in_properties(&mut props, "dstB", &[])?;
+        assert!(!props.contains_key("cortical_mapping_dst"));
+        Ok(())
+    }
+
+    #[test]
+    fn non_empty_mapping_sets_destination_key() -> ServiceResult<()> {
+        let mut props: HashMap<String, serde_json::Value> = HashMap::new();
+        update_cortical_mapping_dst_in_properties(
+            &mut props,
+            "dstX",
+            &[serde_json::json!({"morphology_id": "m1"})],
+        )?;
+
+        let dst = props
+            .get("cortical_mapping_dst")
+            .and_then(|v| v.as_object())
+            .expect("cortical_mapping_dst should exist");
+        let arr = dst
+            .get("dstX")
+            .and_then(|v| v.as_array())
+            .expect("dstX should be an array");
+        assert_eq!(arr.len(), 1);
+        Ok(())
     }
 }

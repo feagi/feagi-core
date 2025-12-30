@@ -129,18 +129,14 @@ fn synaptic_propagation_main(@builtin(global_invocation_id) global_id: vec3<u32>
         let psp = postsynaptic_potentials[synapse_idx];
         let synapse_type = synapse_types[synapse_idx];
         
-        // Calculate contribution (standardized LIF formula)
-        // Normalize weight and psp to [0,1] range
-        let weight_f32 = f32(weight) / 255.0;
-        let psp_f32 = f32(psp) / 255.0;
-        
-        // Apply sign (0 = excitatory = +1, 1 = inhibitory = -1)
-        let sign = select(-1.0, 1.0, synapse_type == 0u);
-        let contribution = sign * weight_f32 * psp_f32;
-        // Result range: -1.0 to +1.0
-        
-        // Convert to fixed-point integer (multiply by 1000 for precision)
-        let contribution_fixed = i32(contribution * 1000.0);
+        // Canonical synaptic contribution:
+        // - weight and psp are stored as u8 (0..255) and treated as ABSOLUTE units.
+        // - contribution = sign × weight × psp  (range: -65,025..+65,025)
+        // - store fixed-point i32 scaled by 1000 for atomic accumulation.
+        let w_i32 = i32(weight);
+        let p_i32 = i32(psp);
+        let sign_i32 = select(-1, 1, synapse_type == 0u); // 0=excitatory, 1=inhibitory
+        let contribution_fixed = sign_i32 * w_i32 * p_i32 * 1000;
         
         // Atomic accumulate to target neuron
         // Using atomics allows multiple fired neurons to contribute simultaneously
@@ -197,14 +193,12 @@ fn synaptic_propagation_by_synapse(@builtin(global_invocation_id) global_id: vec
     let psp = postsynaptic_potentials[synapse_idx];
     let synapse_type = synapse_types[synapse_idx];
     
-    // Normalize to [0,1] and apply sign
-    let weight_f32 = f32(weight) / 255.0;
-    let psp_f32 = f32(psp) / 255.0;
-    let sign = select(-1.0, 1.0, synapse_type == 0u);
-    let contribution = sign * weight_f32 * psp_f32;
-    // Result range: -1.0 to +1.0
-    
-    let contribution_fixed = i32(contribution * 1000.0);
+    // Canonical synaptic contribution (legacy shader path):
+    // - weight and psp are ABSOLUTE u8 units (0..255), no normalization.
+    let w_i32 = i32(weight);
+    let p_i32 = i32(psp);
+    let sign_i32 = select(-1, 1, synapse_type == 0u);
+    let contribution_fixed = sign_i32 * w_i32 * p_i32 * 1000;
     atomicAdd(&membrane_potentials[target_neuron], contribution_fixed);
 }
 

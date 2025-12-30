@@ -19,23 +19,23 @@ mod cuda_small_realistic_tests {
         let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 100).unwrap();
 
         // Power neuron (cortical_area=1) - 1 neuron
-        npu.add_neuron(0.5, 0.0, 0.0, 0, 1, 1.0, 0, 0, true, 1, 0, 0, 0)
+        npu.add_neuron(0.5, 0.0, 0.0, 0.0, 0, 1, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // Area A (cortical_area=2) - 100 neurons with 5% excitability
         for i in 0..100 {
-            npu.add_neuron(1.0, 0.1, 0.0, 0, 3, 0.05, 0, 0, true, 2, i, 0, 0)
+            npu.add_neuron(1.0, 0.0, 0.1, 0.0, 0, 3, 0.05, 0, 0, true, 2, i, 0, 0)
                 .unwrap();
         }
 
         // Area B (cortical_area=3) - 100 neurons
         for i in 0..100 {
-            npu.add_neuron(1.0, 0.1, 0.0, 0, 3, 0.05, 0, 0, true, 3, i, 0, 0)
+            npu.add_neuron(1.0, 0.0, 0.1, 0.0, 0, 3, 0.05, 0, 0, true, 3, i, 0, 0)
                 .unwrap();
         }
 
         // Area C gauge (cortical_area=4) - 1 neuron
-        npu.add_neuron(1.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, true, 4, 0, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, true, 4, 0, 0, 0)
             .unwrap();
 
         // Power → Area A synapses (50 connections)
@@ -85,20 +85,20 @@ mod cuda_small_realistic_tests {
 
         let runtime = StdRuntime;
         let backend = CPUBackend::new();
-        let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 100);
+        let mut npu = RustNPU::new(runtime, backend, 1000, 10000, 100).unwrap();
 
         // Same network as CPU
-        npu.add_neuron(0.5, 0.0, 0.0, 0, 1, 1.0, 0, 0, true, 1, 0, 0, 0)
+        npu.add_neuron(0.5, 0.0, 0.0, 0.0, 0, 1, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         for i in 0..100 {
-            npu.add_neuron(1.0, 0.1, 0.0, 0, 3, 0.05, 0, 0, true, 2, i, 0, 0)
+            npu.add_neuron(1.0, 0.0, 0.1, 0.0, 0, 3, 0.05, 0, 0, true, 2, i, 0, 0)
                 .unwrap();
         }
         for i in 0..100 {
-            npu.add_neuron(1.0, 0.1, 0.0, 0, 3, 0.05, 0, 0, true, 3, i, 0, 0)
+            npu.add_neuron(1.0, 0.0, 0.1, 0.0, 0, 3, 0.05, 0, 0, true, 3, i, 0, 0)
                 .unwrap();
         }
-        npu.add_neuron(1.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, true, 4, 0, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0, 0, true, 4, 0, 0, 0)
             .unwrap();
 
         for target_offset in 0..50 {

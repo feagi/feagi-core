@@ -4,11 +4,16 @@
 name: Staging PR Tests
 
 on:
-  pull_request_target:
-    branches: staging
+  pull_request:
+    branches: [ staging ]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 env:
   CARGO_TERM_COLOR: always
+
+# Least-privilege: PR test workflow must not have write permissions.
+permissions:
+  contents: read
 
 jobs:
   test:
@@ -17,9 +22,6 @@ jobs:
     steps:
     - name: Checkout PR code
       uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.pull_request.head.repo.full_name }}
-        ref: ${{ github.event.pull_request.head.ref }}
     
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -39,6 +41,23 @@ jobs:
     
     - name: Run tests (lib only)
       run: cargo test --workspace --lib --verbose
+    
+      - name: Run Comprehensive Neural Dynamics Tests
+        working-directory: crates/feagi-npu/burst-engine
+        run: |
+          echo "::group::Running Comprehensive Neural Dynamics Test Suite"
+          cargo test --test comprehensive_neural_dynamics --no-fail-fast -- --test-threads=1 --nocapture
+          echo "::endgroup::"
+          echo "::group::Running Extended Neural Dynamics Tests (Consecutive Limits, Threshold Dynamics)"
+          cargo test --test comprehensive_neural_dynamics_extended --no-fail-fast -- --test-threads=1 --nocapture
+          echo "::endgroup::"
+      
+    - name: Run NPU Integration Tests
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "::group::Running NPU Integration Tests"
+        cargo test --tests --no-fail-fast
+        echo "::endgroup::"
     
     - name: Check if builds
       run: cargo build --workspace --lib --verbose

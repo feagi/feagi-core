@@ -29,8 +29,11 @@ pub struct NeuronArray<T: NeuralValue> {
     /// Membrane potentials (quantized to T)
     pub membrane_potentials: Vec<T>,
 
-    /// Firing thresholds (quantized to T)
+    /// Firing thresholds (quantized to T) - minimum MP to fire
     pub thresholds: Vec<T>,
+
+    /// Firing threshold limits (quantized to T) - maximum MP to fire (0 = no limit)
+    pub threshold_limits: Vec<T>,
 
     /// Leak coefficients (kept as f32 for precision)
     pub leak_coefficients: Vec<f32>,
@@ -79,6 +82,7 @@ impl<T: NeuralValue> NeuronArray<T> {
             count: 0,
             membrane_potentials: Vec::with_capacity(capacity),
             thresholds: Vec::with_capacity(capacity),
+            threshold_limits: Vec::with_capacity(capacity),
             leak_coefficients: Vec::with_capacity(capacity),
             resting_potentials: Vec::with_capacity(capacity),
             neuron_types: Vec::with_capacity(capacity),
@@ -96,6 +100,7 @@ impl<T: NeuralValue> NeuronArray<T> {
         // Resize to capacity with default values
         result.membrane_potentials.resize(capacity, T::zero());
         result.thresholds.resize(capacity, T::from_f32(1.0));
+        result.threshold_limits.resize(capacity, T::zero()); // 0 = no limit
         result.leak_coefficients.resize(capacity, 0.1);
         result.resting_potentials.resize(capacity, T::zero());
         result.neuron_types.resize(capacity, 0);
@@ -124,6 +129,7 @@ impl<T: NeuralValue> NeuronArray<T> {
         NeuronStorage::add_neuron(
             self,
             threshold,
+            T::zero(), // threshold_limit (0 = no limit)
             leak,
             T::zero(), // resting potential
             0,         // neuron type (excitatory)
@@ -250,6 +256,10 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         &self.thresholds[..self.count]
     }
 
+    fn threshold_limits(&self) -> &[Self::Value] {
+        &self.threshold_limits[..self.count]
+    }
+
     fn leak_coefficients(&self) -> &[f32] {
         &self.leak_coefficients[..self.count]
     }
@@ -311,6 +321,11 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     fn thresholds_mut(&mut self) -> &mut [Self::Value] {
         let count = self.count;
         &mut self.thresholds[..count]
+    }
+
+    fn threshold_limits_mut(&mut self) -> &mut [Self::Value] {
+        let count = self.count;
+        &mut self.threshold_limits[..count]
     }
 
     fn leak_coefficients_mut(&mut self) -> &mut [f32] {
@@ -381,6 +396,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     fn add_neuron(
         &mut self,
         threshold: Self::Value,
+        threshold_limit: Self::Value,
         leak: f32,
         resting: Self::Value,
         neuron_type: i32,
@@ -400,6 +416,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         if idx >= self.membrane_potentials.len() {
             self.membrane_potentials.push(T::zero());
             self.thresholds.push(threshold);
+            self.threshold_limits.push(threshold_limit);
             self.leak_coefficients.push(leak);
             self.resting_potentials.push(resting);
             self.neuron_types.push(neuron_type);
@@ -417,6 +434,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             self.valid_mask.push(true);
         } else {
             self.thresholds[idx] = threshold;
+            self.threshold_limits[idx] = threshold_limit;
             self.leak_coefficients[idx] = leak;
             self.resting_potentials[idx] = resting;
             self.neuron_types[idx] = neuron_type;
@@ -439,6 +457,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     fn add_neurons_batch(
         &mut self,
         thresholds: &[Self::Value],
+        threshold_limits: &[Self::Value],
         leak_coefficients: &[f32],
         resting_potentials: &[Self::Value],
         neuron_types: &[i32],
@@ -455,7 +474,8 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         let n = thresholds.len();
 
         // Validate all slices are same length
-        if leak_coefficients.len() != n
+        if threshold_limits.len() != n
+            || leak_coefficients.len() != n
             || resting_potentials.len() != n
             || neuron_types.len() != n
             || refractory_periods.len() != n
@@ -476,6 +496,7 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         for i in 0..n {
             self.add_neuron(
                 thresholds[i],
+                threshold_limits[i],
                 leak_coefficients[i],
                 resting_potentials[i],
                 neuron_types[i],

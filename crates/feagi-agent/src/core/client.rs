@@ -3,13 +3,15 @@
 
 //! FEAGI Agent Client implementation
 
-use crate::config::AgentConfig;
-use crate::error::{Result, SdkError};
-use crate::heartbeat::HeartbeatService;
-use crate::reconnect::{retry_with_backoff, ReconnectionStrategy};
+use crate::core::config::AgentConfig;
+use crate::core::error::{Result, SdkError};
+use crate::core::heartbeat::HeartbeatService;
+use crate::core::reconnect::{retry_with_backoff, ReconnectionStrategy};
 use feagi_io::AgentType;
 use std::sync::{Arc, Mutex};
-use tracing::{debug, error, info, warn};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::SystemTime;
+use tracing::{debug, error, info, trace, warn};
 
 /// Main FEAGI Agent Client
 ///
@@ -149,6 +151,11 @@ impl AgentClient {
         let reg_socket = self.context.socket(zmq::REQ)?;
         reg_socket.set_rcvtimeo(self.config.connection_timeout_ms as i32)?;
         reg_socket.set_sndtimeo(self.config.connection_timeout_ms as i32)?;
+        // @architecture:acceptable - compatibility with FEAGI ZMQ-REST ROUTER behavior
+        // Heartbeat uses the same REQ socket as registration. If FEAGI delays a reply,
+        // strict REQ state can raise EFSM on subsequent sends. Relaxed mode prevents
+        // heartbeat from breaking the socket state machine deterministically.
+        let _ = reg_socket.set_req_relaxed(true);
         reg_socket.connect(&self.config.registration_endpoint)?;
         self.registration_socket = Some(Arc::new(Mutex::new(reg_socket)));
 
@@ -277,17 +284,82 @@ impl AgentClient {
                 .and_then(|m| m.as_str())
                 .unwrap_or("Unknown error");
 
-            // Check if already registered - try deregistration
+            // Check if already registered - try deregistration and retry
             if message.contains("already registered") {
-                warn!("[CLIENT] ⚠ Agent already registered - attempting deregistration first");
+                warn!("[CLIENT] ⚠ Agent already registered - attempting deregistration and retry");
                 self.deregister()?;
-                Err(SdkError::RegistrationFailed(
-                    "Retry after deregistration".to_string(),
-                ))
+                
+                // Retry registration after deregistration
+                info!("[CLIENT] Retrying registration after deregistration...");
+                std::thread::sleep(std::time::Duration::from_millis(100)); // Brief delay
+                
+                // Recursive retry (only once - avoid infinite loop)
+                return self.register_with_retry_once();
             } else {
                 error!("[CLIENT] ✗ Registration failed: {}", message);
                 Err(SdkError::RegistrationFailed(message.to_string()))
             }
+        }
+    }
+
+    /// Register with FEAGI (with automatic retry after deregistration)
+    fn register_with_retry_once(&mut self) -> Result<()> {
+        let registration_msg = serde_json::json!({
+            "method": "POST",
+            "path": "/v1/agent/register",
+            "body": {
+                "agent_id": self.config.agent_id,
+                "agent_type": match self.config.agent_type {
+                    AgentType::Sensory => "sensory",
+                    AgentType::Motor => "motor",
+                    AgentType::Both => "both",
+                    AgentType::Visualization => "visualization",
+                    AgentType::Infrastructure => "infrastructure",
+                },
+                "capabilities": self.config.capabilities,
+            }
+        });
+
+        let socket = self
+            .registration_socket
+            .as_ref()
+            .ok_or_else(|| SdkError::Other("Registration socket not initialized".to_string()))?;
+
+        // Send registration request and get response
+        let response = {
+            let socket = socket
+                .lock()
+                .map_err(|e| SdkError::ThreadError(format!("Failed to lock socket: {}", e)))?;
+
+            debug!(
+                "[CLIENT] Sending registration request (retry) for: {}",
+                self.config.agent_id
+            );
+            socket.send(registration_msg.to_string().as_bytes(), 0)?;
+
+            // Wait for response
+            let response_bytes = socket.recv_bytes(0)?;
+            serde_json::from_slice::<serde_json::Value>(&response_bytes)?
+        }; // Lock is dropped here
+
+        // Check response status
+        let status_code = response
+            .get("status")
+            .and_then(|s| s.as_u64())
+            .unwrap_or(500);
+        if status_code == 200 {
+            self.registered = true;
+            info!("[CLIENT] ✓ Registration successful (after retry): {:?}", response);
+            Ok(())
+        } else {
+            let empty_body = serde_json::json!({});
+            let body = response.get("body").unwrap_or(&empty_body);
+            let message = body
+                .get("error")
+                .and_then(|m| m.as_str())
+                .unwrap_or("Unknown error");
+            error!("[CLIENT] ✗ Registration retry failed: {}", message);
+            Err(SdkError::RegistrationFailed(message.to_string()))
         }
     }
 
@@ -459,6 +531,60 @@ impl AgentClient {
         Ok(())
     }
 
+    /// Send pre-serialized sensory bytes to FEAGI (real-time semantics).
+    ///
+    /// This is intended for high-performance clients (e.g., Python SDK brain_input)
+    /// that already produce FeagiByteContainer bytes via Rust-side encoding caches.
+    ///
+    /// Real-time policy:
+    /// - Uses ZMQ DONTWAIT to avoid blocking the caller.
+    /// - On backpressure (EAGAIN), the message is dropped (latest-only semantics).
+    pub fn send_sensory_bytes(&self, bytes: Vec<u8>) -> Result<()> {
+        if !self.registered {
+            return Err(SdkError::NotRegistered);
+        }
+
+        let socket = self
+            .sensory_socket
+            .as_ref()
+            .ok_or_else(|| SdkError::Other("Sensory socket not initialized".to_string()))?;
+
+        match socket.send(&bytes, zmq::DONTWAIT) {
+            Ok(()) => {
+                debug!("[CLIENT] Sent {} bytes sensory (raw)", bytes.len());
+                Ok(())
+            }
+            Err(zmq::Error::EAGAIN) => {
+                // REAL-TIME: Drop on pressure (do not block and do not buffer history)
+                static DROPPED: AtomicU64 = AtomicU64::new(0);
+                static LAST_LOG_MS: AtomicU64 = AtomicU64::new(0);
+
+                let dropped = DROPPED.fetch_add(1, Ordering::Relaxed) + 1;
+                let now_ms = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+
+                let last_ms = LAST_LOG_MS.load(Ordering::Relaxed);
+                // Rate-limit warnings (max once per 5s) to avoid log spam on sustained pressure.
+                if now_ms.saturating_sub(last_ms) >= 5_000
+                    && LAST_LOG_MS
+                        .compare_exchange(last_ms, now_ms, Ordering::Relaxed, Ordering::Relaxed)
+                        .is_ok()
+                {
+                    warn!(
+                        "[CLIENT] Sensory backpressure: dropped_messages={} last_payload_bytes={}",
+                        dropped,
+                        bytes.len()
+                    );
+                }
+
+                Ok(())
+            }
+            Err(e) => Err(SdkError::Zmq(e)),
+        }
+    }
+
     /// Receive motor data from FEAGI (non-blocking)
     ///
     /// Returns None if no data is available.
@@ -485,7 +611,7 @@ impl AgentClient {
         }
 
         let socket = self.motor_socket.as_ref().ok_or_else(|| {
-            info!("[CLIENT] ❌ receive_motor_data() called but motor_socket is None!");
+            error!("[CLIENT] receive_motor_data() called but motor_socket is None");
             SdkError::Other("Motor socket not initialized (not a motor agent?)".to_string())
         })?;
 
@@ -493,16 +619,16 @@ impl AgentClient {
         // First frame is the topic (agent_id), second frame is the motor data
         match socket.recv_bytes(zmq::DONTWAIT) {
             Ok(topic) => {
-                info!(
-                    "[CLIENT] 📥 Received first frame: {} bytes: '{}'",
+                trace!(
+                    "[CLIENT] Received first frame: {} bytes: '{}'",
                     topic.len(),
                     String::from_utf8_lossy(&topic)
                 );
 
                 // Verify topic matches our agent_id (redundant due to SUB filter, but safe)
                 if topic != self.config.agent_id.as_bytes() {
-                    info!(
-                        "[CLIENT] ⚠️ Received motor data for different agent: expected '{}', got '{}'",
+                    warn!(
+                        "[CLIENT] Received motor data for different agent: expected '{}', got '{}'",
                         self.config.agent_id,
                         String::from_utf8_lossy(&topic)
                     );
@@ -511,25 +637,17 @@ impl AgentClient {
 
                 // Check if more frames are available (should be for multipart)
                 let data = if socket.get_rcvmore().map_err(SdkError::Zmq)? {
-                    info!(
-                        "[CLIENT] 📥 More frames available, receiving second frame (motor data)..."
-                    );
+                    trace!("[CLIENT] Receiving second frame (motor data)");
                     // Receive second frame (actual motor data)
                     let data = socket.recv_bytes(0).map_err(|e| {
-                        info!("[CLIENT] ❌ Failed to receive second frame: {}", e);
+                        error!("[CLIENT] Failed to receive second frame: {}", e);
                         SdkError::Zmq(e)
                     })?;
-                    info!(
-                        "[CLIENT] 📥 Received motor data frame: {} bytes",
-                        data.len()
-                    );
+                    trace!("[CLIENT] Received motor data frame: {} bytes", data.len());
                     data
                 } else {
-                    info!("[CLIENT] ⚠️ NO MORE FRAMES! Old FEAGI (single-part message)");
-                    info!(
-                        "[CLIENT] 📥 Using first frame as motor data ({} bytes)",
-                        topic.len()
-                    );
+                    debug!("[CLIENT] No more frames; using single-part motor message");
+                    trace!("[CLIENT] Using first frame as motor data ({} bytes)", topic.len());
                     // Fallback: treat first frame as data (backward compatibility with old FEAGI)
                     topic
                 };

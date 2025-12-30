@@ -9,6 +9,8 @@ use crate::transports::core::common::ServerConfig;
 use crate::transports::core::prelude::*;
 use parking_lot::Mutex;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 use tokio::runtime::Runtime;
 use tracing::{error, info};
 
@@ -230,12 +232,33 @@ impl WebSocketStreams {
         &self,
         fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
     ) -> Result<()> {
+        // Diagnostics: time serialize + compress to detect a publish-path slowdown that
+        // can cause client-side drift if messages queue up downstream.
+        static PUBLISH_COUNT: AtomicU64 = AtomicU64::new(0);
+        let publish_idx = PUBLISH_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+
+        let t0 = Instant::now();
+
         // Serialize the fire queue data to FeagiByteContainer format (same as ZMQ)
         let serialized = Self::serialize_fire_queue(&fire_data)
             .map_err(|e| IOError::Transport(format!("Failed to serialize fire queue: {}", e)))?;
+        let serialize_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
         // ✅ Compress with LZ4 (BV expects LZ4-compressed msgpack, same as ZMQ)
+        let t1 = Instant::now();
         let compressed = compression::compress_lz4(&serialized)?;
+        let compress_ms = t1.elapsed().as_secs_f64() * 1000.0;
+
+        if publish_idx == 1 || publish_idx % 300 == 0 {
+            info!(
+                "[WS-VIZ] publish_idx={} serialize_ms={:.2} compress_ms={:.2} bytes_raw={} bytes_lz4={}",
+                publish_idx,
+                serialize_ms,
+                compress_ms,
+                serialized.len(),
+                compressed.len()
+            );
+        }
 
         // Publish compressed data to WebSocket clients
         self.publish_visualization(&compressed)

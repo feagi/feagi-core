@@ -17,6 +17,21 @@ use crate::common::{ApiError, ApiResult, Json, State};
 
 #[allow(non_snake_case)] // Field name matches Python API for compatibility
 #[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct FatigueInfo {
+    /// Fatigue index (0-100) - maximum utilization across all fatigue criteria
+    pub fatigue_index: Option<u8>,
+    /// Whether fatigue is currently active (triggers fatigue neuron injection)
+    pub fatigue_active: Option<bool>,
+    /// Regular neuron utilization percentage (0-100)
+    pub regular_neuron_util: Option<u8>,
+    /// Memory neuron utilization percentage (0-100)
+    pub memory_neuron_util: Option<u8>,
+    /// Synapse utilization percentage (0-100)
+    pub synapse_util: Option<u8>,
+}
+
+#[allow(non_snake_case)] // Field name matches Python API for compatibility
+#[derive(Debug, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct HealthCheckResponse {
     pub burst_engine: bool,
     pub connected_agents: Option<i32>,
@@ -43,6 +58,9 @@ pub struct HealthCheckResponse {
     /// Root brain region ID (UUID string) for O(1) root lookup
     #[serde(skip_serializing_if = "Option::is_none")]
     pub brain_regions_root: Option<String>,
+    /// Fatigue information (index, active state, and breakdown of contributing elements)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fatigue: Option<FatigueInfo>,
 }
 
 // ============================================================================
@@ -144,7 +162,39 @@ pub async fn get_health_check(
 
     // Fields requiring future service implementations
     let fitness = None; // TODO: Get from evolution service
-    let memory_area_stats = None; // TODO: Requires memory area analysis
+    
+    // Get memory area stats from plasticity service cache (event-driven updates).
+    //
+    // IMPORTANT: BV expects both:
+    // - per-area stats keyed by cortical_id (base64), and
+    // - a global `memory_neuron_count` that matches the sum of per-area `neuron_count`.
+    let (memory_area_stats, memory_neuron_count_from_cache) = state
+        .memory_stats_cache
+        .as_ref()
+        .map(|cache| {
+            let snapshot = feagi_npu_plasticity::memory_stats_cache::get_stats_snapshot(cache);
+            let total = snapshot
+                .values()
+                .map(|s| s.neuron_count as i64)
+                .sum::<i64>();
+            let per_area = snapshot
+                .into_iter()
+                .map(|(name, stats)| {
+                    let mut inner_map = HashMap::new();
+                    inner_map.insert("neuron_count".to_string(), serde_json::json!(stats.neuron_count));
+                    inner_map.insert("created_total".to_string(), serde_json::json!(stats.created_total));
+                    inner_map.insert("deleted_total".to_string(), serde_json::json!(stats.deleted_total));
+                    inner_map.insert("last_updated".to_string(), serde_json::json!(stats.last_updated));
+                    (name, inner_map)
+                })
+                .collect::<HashMap<String, HashMap<String, serde_json::Value>>>();
+            (Some(per_area), Some(total))
+        })
+        .unwrap_or((None, None));
+
+    // Prefer the plasticity cache-derived total to avoid discrepancies.
+    let memory_neuron_count = memory_neuron_count_from_cache.or(memory_neuron_count);
+    
     let amalgamation_pending = None; // TODO: Get from evolution/genome merging service
 
     // Get root region ID from ConnectomeManager (only available when services feature is enabled)
@@ -154,6 +204,36 @@ pub async fn get_health_check(
         .get_root_region_id();
     #[cfg(not(feature = "services"))]
     let brain_regions_root = None; // WASM: Use connectome service instead
+
+    // Get fatigue information from state manager
+    // Note: feagi-state-manager is included in the "services" feature
+    #[cfg(feature = "services")]
+    let fatigue = {
+        use feagi_state_manager::StateManager;
+        // Initialize singleton on first access (Lazy will handle this)
+        match StateManager::instance().try_read() {
+            Some(state_manager) => {
+                let core_state = state_manager.get_core_state();
+                Some(FatigueInfo {
+                    fatigue_index: Some(core_state.get_fatigue_index()),
+                    fatigue_active: Some(core_state.is_fatigue_active()),
+                    regular_neuron_util: Some(core_state.get_regular_neuron_util()),
+                    memory_neuron_util: Some(core_state.get_memory_neuron_util()),
+                    synapse_util: Some(core_state.get_synapse_util()),
+                })
+            }
+            None => {
+                // State manager is locked, return None (shouldn't happen in normal operation)
+                tracing::warn!(target: "feagi-api", "StateManager is locked, cannot read fatigue data");
+                None
+            }
+        }
+    };
+    #[cfg(not(feature = "services"))]
+    let fatigue = {
+        tracing::debug!(target: "feagi-api", "Services feature not enabled, fatigue data unavailable");
+        None
+    };
 
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,
@@ -179,6 +259,7 @@ pub async fn get_health_check(
         memory_area_stats,
         amalgamation_pending,
         brain_regions_root, // NEW: Root region ID for O(1) lookup
+        fatigue,
     }))
 }
 

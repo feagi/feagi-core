@@ -20,7 +20,7 @@ Licensed under the Apache License, Version 2.0
 
 use crate::connectome_manager::ConnectomeManager;
 use crate::models::{CorticalArea, CorticalID};
-use crate::types::BduResult;
+use crate::types::{BduError, BduResult};
 use feagi_evolutionary::RuntimeGenome;
 use feagi_npu_neural::types::{Precision, QuantizationSpec};
 use parking_lot::RwLock;
@@ -802,6 +802,100 @@ impl Neuroembryogenesis {
                 p.synapses_created = total_synapses_created;
                 p.progress = progress_pct;
             });
+        }
+
+        // CRITICAL: Rebuild the NPU synapse index so newly created synapses are visible to
+        // queries (e.g. get_outgoing_synapses / synapse counts) and propagation.
+        //
+        // Note: We do this once at the end for performance.
+        let npu_arc = {
+            let manager = self.connectome_manager.read();
+            manager.get_npu().cloned()
+        };
+        if let Some(npu_arc) = npu_arc {
+            let mut npu_lock = npu_arc
+                .lock()
+                .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+            npu_lock.rebuild_synapse_index();
+
+            // Refresh cached counts after index rebuild.
+            let manager = self.connectome_manager.read();
+            manager.update_cached_synapse_count();
+        }
+        
+        // CRITICAL: Register memory areas with PlasticityExecutor after all mappings are created
+        // This ensures memory areas have their complete upstream_cortical_areas lists populated.
+        #[cfg(feature = "plasticity")]
+        {
+            use feagi_evolutionary::extract_memory_properties;
+            use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
+            
+            let manager = self.connectome_manager.read();
+            if let Some(ref executor) = manager.get_plasticity_executor() {
+                let mut registered_count = 0;
+                
+                // Iterate through all cortical areas and register memory areas
+                for area_id in manager.get_cortical_area_ids() {
+                    if let Some(area) = manager.get_cortical_area(area_id) {
+                        if let Some(mem_props) = extract_memory_properties(&area.properties) {
+                            let upstream_areas = manager.get_upstream_cortical_areas(&area_id);
+
+                            // Ensure FireLedger tracks upstream areas with at least the required temporal depth.
+                            // Dense, burst-aligned tracking is required for correct memory pattern hashing.
+                            if let Some(ref npu_arc) = manager.get_npu() {
+                                if let Ok(mut npu) = npu_arc.lock() {
+                                    let existing_configs = npu.get_all_fire_ledger_configs();
+                                    for &upstream_idx in &upstream_areas {
+                                        let existing = existing_configs
+                                            .iter()
+                                            .find(|(idx, _)| *idx == upstream_idx)
+                                            .map(|(_, w)| *w)
+                                            .unwrap_or(0);
+
+                                        let desired = mem_props.temporal_depth as usize;
+                                        let resolved = existing.max(desired);
+                                        if resolved != existing {
+                                            if let Err(e) =
+                                                npu.configure_fire_ledger_window(upstream_idx, resolved)
+                                            {
+                                                warn!(
+                                                    target: "feagi-bdu",
+                                                    "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
+                                                    upstream_idx,
+                                                    resolved,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
+                                }
+                            }
+                            
+                            if let Ok(exec) = executor.lock() {
+                                let lifecycle_config = MemoryNeuronLifecycleConfig {
+                                    initial_lifespan: mem_props.init_lifespan,
+                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                                    longterm_threshold: mem_props.longterm_threshold,
+                                    max_reactivations: 1000,
+                                };
+                                
+                                exec.register_memory_area(
+                                    area.cortical_idx,
+                                    area_id.as_base_64(),
+                                    mem_props.temporal_depth,
+                                    upstream_areas.clone(),
+                                    Some(lifecycle_config),
+                                );
+                                
+                                registered_count += 1;
+                            }
+                        }
+                    }
+                }
+                let _ = registered_count; // count retained for future metrics if needed
+            }
         }
 
         // Verify against genome stats

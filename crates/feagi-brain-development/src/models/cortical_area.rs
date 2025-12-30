@@ -53,6 +53,9 @@ pub trait CorticalAreaExt {
     /// Get firing_threshold from properties (defaults to 1.0)
     fn firing_threshold(&self) -> f32;
 
+    /// Get firing_threshold_limit from properties (defaults to 0.0 = no limit)
+    fn firing_threshold_limit(&self) -> f32;
+
     /// Get property as u32 with default
     fn get_u32_property(&self, key: &str, default: u32) -> u32;
 
@@ -87,7 +90,7 @@ pub trait CorticalAreaExt {
     fn postsynaptic_current(&self) -> f32;
 
     /// Get psp_uniform_distribution from properties
-    fn psp_uniform_distribution(&self) -> f32;
+    fn psp_uniform_distribution(&self) -> bool;
 
     /// Get degeneration from properties
     fn degeneration(&self) -> f32;
@@ -98,14 +101,41 @@ pub trait CorticalAreaExt {
     /// Get firing_threshold_increment from properties
     fn firing_threshold_increment(&self) -> f32;
 
-    /// Get firing_threshold_limit from properties
-    fn firing_threshold_limit(&self) -> f32;
+    /// Get firing_threshold_increment_x from properties
+    fn firing_threshold_increment_x(&self) -> f32;
+
+    /// Get firing_threshold_increment_y from properties
+    fn firing_threshold_increment_y(&self) -> f32;
+
+    /// Get firing_threshold_increment_z from properties
+    fn firing_threshold_increment_z(&self) -> f32;
 
     /// Get consecutive_fire_count from properties
     fn consecutive_fire_count(&self) -> u32;
 
     /// Get leak_variability from properties
     fn leak_variability(&self) -> f32;
+
+    /// Get neuron_excitability from properties
+    fn neuron_excitability(&self) -> f32;
+
+    /// Get postsynaptic_current_max from properties
+    fn postsynaptic_current_max(&self) -> f32;
+
+    /// Get mp_charge_accumulation from properties
+    fn mp_charge_accumulation(&self) -> bool;
+
+    /// Get mp_driven_psp from properties
+    fn mp_driven_psp(&self) -> bool;
+
+    /// Get init_lifespan from properties (memory parameter)
+    fn init_lifespan(&self) -> u32;
+
+    /// Get lifespan_growth_rate from properties (memory parameter)
+    fn lifespan_growth_rate(&self) -> f32;
+
+    /// Get longterm_mem_threshold from properties (memory parameter)
+    fn longterm_mem_threshold(&self) -> u32;
 }
 
 impl CorticalAreaExt for CorticalArea {
@@ -280,11 +310,11 @@ impl CorticalAreaExt for CorticalArea {
     }
 
     fn postsynaptic_current(&self) -> f32 {
-        self.get_f32_property("postsynaptic_current", 0.0)
+        self.get_f32_property("postsynaptic_current", 1.0)
     }
 
-    fn psp_uniform_distribution(&self) -> f32 {
-        self.get_f32_property("psp_uniform_distribution", 0.0)
+    fn psp_uniform_distribution(&self) -> bool {
+        self.get_bool_property("psp_uniform_distribution", false)
     }
 
     fn degeneration(&self) -> f32 {
@@ -299,8 +329,20 @@ impl CorticalAreaExt for CorticalArea {
         self.get_f32_property("firing_threshold_increment", 0.0)
     }
 
+    fn firing_threshold_increment_x(&self) -> f32 {
+        self.get_f32_property("firing_threshold_increment_x", 0.0)
+    }
+
+    fn firing_threshold_increment_y(&self) -> f32 {
+        self.get_f32_property("firing_threshold_increment_y", 0.0)
+    }
+
+    fn firing_threshold_increment_z(&self) -> f32 {
+        self.get_f32_property("firing_threshold_increment_z", 0.0)
+    }
+
     fn firing_threshold_limit(&self) -> f32 {
-        self.get_f32_property("firing_threshold_limit", 1.0)
+        self.get_f32_property("firing_threshold_limit", 0.0)
     }
 
     fn consecutive_fire_count(&self) -> u32 {
@@ -309,6 +351,34 @@ impl CorticalAreaExt for CorticalArea {
 
     fn leak_variability(&self) -> f32 {
         self.get_f32_property("leak_variability", 0.0)
+    }
+
+    fn neuron_excitability(&self) -> f32 {
+        self.get_f32_property("neuron_excitability", 100.0)
+    }
+
+    fn postsynaptic_current_max(&self) -> f32 {
+        self.get_f32_property("postsynaptic_current_max", 0.0)
+    }
+
+    fn mp_charge_accumulation(&self) -> bool {
+        self.get_bool_property("mp_charge_accumulation", false)
+    }
+
+    fn mp_driven_psp(&self) -> bool {
+        self.get_bool_property("mp_driven_psp", false)
+    }
+
+    fn init_lifespan(&self) -> u32 {
+        self.get_u32_property("init_lifespan", 0)
+    }
+
+    fn lifespan_growth_rate(&self) -> f32 {
+        self.get_f32_property("lifespan_growth_rate", 0.0)
+    }
+
+    fn longterm_mem_threshold(&self) -> u32 {
+        self.get_u32_property("longterm_mem_threshold", 0)
     }
 }
 

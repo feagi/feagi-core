@@ -55,6 +55,10 @@ pub struct CorticalAreaInfo {
     pub position: (i32, i32, i32),
     pub area_type: String,      // "Sensory", "Motor", "Memory", "Custom"
     pub cortical_group: String, // "IPU", "OPU", "CORE", "CUSTOM", "MEMORY" - uppercase classification
+    /// Explicit cortical type classification: "sensory", "motor", "memory", "custom", "core"
+    /// This field provides a clear, standardized type indicator that BV can rely on
+    /// instead of parsing cortical_group or other heuristics.
+    pub cortical_type: String,
     pub neuron_count: usize,
     pub synapse_count: usize,
     pub visible: bool,
@@ -65,18 +69,50 @@ pub struct CorticalAreaInfo {
     )]
     pub sub_group: Option<String>,
     pub neurons_per_voxel: u32,
+    #[serde(rename = "neuron_post_synaptic_potential")]
     pub postsynaptic_current: f64,
+    #[serde(rename = "neuron_post_synaptic_potential_max")]
+    pub postsynaptic_current_max: f64,
+    #[serde(rename = "neuron_plasticity_constant")]
     pub plasticity_constant: f64,
+    #[serde(rename = "neuron_degeneracy_coefficient")]
     pub degeneration: f64,
+    #[serde(rename = "neuron_psp_uniform_distribution")]
     pub psp_uniform_distribution: bool,
-    pub firing_threshold_increment: f64,
+    #[serde(rename = "neuron_mp_driven_psp")]
+    pub mp_driven_psp: bool,
+    #[serde(rename = "neuron_fire_threshold")]
+    pub firing_threshold: f64,
+    #[serde(rename = "neuron_fire_threshold_increment")]
+    pub firing_threshold_increment: [f64; 3],
+    #[serde(rename = "neuron_firing_threshold_limit")]
     pub firing_threshold_limit: f64,
+    #[serde(rename = "neuron_consecutive_fire_count")]
     pub consecutive_fire_count: u32,
+    #[serde(rename = "neuron_snooze_period")]
     pub snooze_period: u32,
+    #[serde(rename = "neuron_refractory_period")]
     pub refractory_period: u32,
+    #[serde(rename = "neuron_leak_coefficient")]
     pub leak_coefficient: f64,
+    #[serde(rename = "neuron_leak_variability")]
     pub leak_variability: f64,
+    #[serde(rename = "neuron_mp_charge_accumulation")]
+    pub mp_charge_accumulation: bool,
+    #[serde(rename = "neuron_excitability")]
+    pub neuron_excitability: f64,
+    #[serde(rename = "neuron_burst_engine_active")]
     pub burst_engine_active: bool,
+    #[serde(rename = "neuron_init_lifespan")]
+    pub init_lifespan: u32,
+    #[serde(rename = "neuron_lifespan_growth_rate")]
+    pub lifespan_growth_rate: f64,
+    #[serde(rename = "neuron_longterm_mem_threshold")]
+    pub longterm_mem_threshold: u32,
+    /// Memory pattern detection lookback depth for memory cortical areas.
+    /// Omitted for non-memory areas.
+    #[serde(rename = "temporal_depth", skip_serializing_if = "Option::is_none")]
+    pub temporal_depth: Option<u32>,
     pub properties: HashMap<String, serde_json::Value>,
 
     // IPU/OPU-specific decoded cortical ID fields (optional, only populated for IPU/OPU)
@@ -104,6 +140,17 @@ pub struct CorticalAreaInfo {
     /// This is required by Brain Visualizer to correctly place cortical areas in the 3D scene
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent_region_id: Option<String>,
+
+    /// Number of devices/channels for IPU/OPU areas (e.g., number of cameras for vision)
+    /// This is the total device count that was specified when creating the area
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dev_count: Option<usize>,
+
+    /// Per-device/per-channel dimensions for IPU/OPU areas
+    /// For a multi-channel area, this represents the dimensions of a single channel
+    /// The total width is: cortical_dimensions_per_device.width * dev_count
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cortical_dimensions_per_device: Option<(usize, usize, usize)>,
 }
 
 /// Parameters for creating a cortical area

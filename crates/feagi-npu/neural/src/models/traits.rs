@@ -56,13 +56,14 @@ pub trait NeuronModel: Send + Sync {
     ///
     /// # Arguments
     ///
-    /// * `weight` - Synaptic weight normalized to [0, 1] range
-    /// * `psp` - Postsynaptic potential (from source area's pstcr_), normalized to [0, 1]
+    /// * `weight` - Synaptic weight in **absolute u8 units** (0..255), passed as f32 via direct cast
+    /// * `psp` - Postsynaptic potential in **absolute u8 units** (0..255), passed as f32 via direct cast
     /// * `synapse_type` - Excitatory or Inhibitory
     ///
     /// # Returns
     ///
-    /// Contribution to target neuron's membrane potential (can be positive or negative)
+    /// Contribution to target neuron's membrane potential (can be positive or negative).
+    /// Canonical range for a single synapse is \([-65{,}025, +65{,}025]\) for inhibitory/excitatory.
     ///
     /// # Performance Note
     ///

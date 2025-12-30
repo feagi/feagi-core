@@ -3,10 +3,12 @@
 
 //! Configuration for FEAGI Agent SDK
 
-use crate::error::{Result, SdkError};
+use crate::core::error::{Result, SdkError};
 use feagi_io::{
-    AgentCapabilities, AgentType, MotorCapability, VisionCapability, VisualizationCapability,
+    AgentCapabilities, AgentType, MotorCapability, SensoryCapability, VisionCapability,
+    VisualizationCapability,
 };
+use std::collections::HashMap;
 
 /// Agent configuration builder
 #[derive(Debug, Clone)]
@@ -101,7 +103,7 @@ impl AgentConfig {
     /// ```
     /// # use feagi_agent::{AgentConfig, AgentType};
     /// let config = AgentConfig::new("camera", AgentType::Sensory)
-    ///     .with_feagi_endpoints("192.168.1.100", 30001, 5558, 30005, 5562, 5563);
+    ///     .with_feagi_endpoints("192.168.1.100", 30001, 5558, 5564, 5562, 5563);
     /// ```
     #[deprecated(
         since = "0.1.0",
@@ -113,7 +115,7 @@ impl AgentConfig {
         // Users should migrate to with_feagi_endpoints() or individual endpoint setters
         self.registration_endpoint = format!("tcp://{}:30001", host);
         self.sensory_endpoint = format!("tcp://{}:5558", host);
-        self.motor_endpoint = format!("tcp://{}:30005", host);
+        self.motor_endpoint = format!("tcp://{}:5564", host);
         self.visualization_endpoint = format!("tcp://{}:5562", host);
         self.control_endpoint = format!("tcp://{}:5563", host);
         self
@@ -132,7 +134,7 @@ impl AgentConfig {
     ///         "192.168.1.100",
     ///         30001,  // registration_port
     ///         5558,   // sensory_port
-    ///         30005,  // motor_port
+    ///         5564,   // motor_port
     ///         5562,   // visualization_port
     ///         5563    // control_port
     ///     );
@@ -286,6 +288,39 @@ impl AgentConfig {
         self
     }
 
+    /// Add sensory capability (generic)
+    ///
+    /// This is used for non-vision sensory modalities (text, audio, etc.)
+    ///
+    /// # Arguments
+    /// * `rate_hz` - Sensory data rate in Hz
+    /// * `shm_path` - Optional shared memory path
+    /// * `cortical_mappings` - Map of cortical IDs to indices
+    ///
+    /// # Example
+    /// ```
+    /// # use feagi_agent::{AgentConfig, AgentType};
+    /// # use std::collections::HashMap;
+    /// let mut mappings = HashMap::new();
+    /// mappings.insert("iten".to_string(), 0);
+    ///
+    /// let config = AgentConfig::new("text_input", AgentType::Sensory)
+    ///     .with_sensory_capability(20.0, None, mappings);
+    /// ```
+    pub fn with_sensory_capability(
+        mut self,
+        rate_hz: f64,
+        shm_path: Option<String>,
+        cortical_mappings: HashMap<String, u32>,
+    ) -> Self {
+        self.capabilities.sensory = Some(SensoryCapability {
+            rate_hz,
+            shm_path,
+            cortical_mappings,
+        });
+        self
+    }
+
     /// Add custom capability
     ///
     /// # Example
@@ -321,6 +356,7 @@ impl AgentConfig {
         if self.capabilities.vision.is_none()
             && self.capabilities.motor.is_none()
             && self.capabilities.visualization.is_none()
+            && self.capabilities.sensory.is_none()
             && self.capabilities.custom.is_empty()
         {
             return Err(SdkError::InvalidConfig(
@@ -331,7 +367,10 @@ impl AgentConfig {
         // Validate agent type matches capabilities
         match self.agent_type {
             AgentType::Sensory => {
-                if self.capabilities.vision.is_none() && self.capabilities.custom.is_empty() {
+                if self.capabilities.vision.is_none()
+                    && self.capabilities.sensory.is_none()
+                    && self.capabilities.custom.is_empty()
+                {
                     return Err(SdkError::InvalidConfig(
                         "Sensory agent must have vision or custom input capability".to_string(),
                     ));
@@ -345,7 +384,9 @@ impl AgentConfig {
                 }
             }
             AgentType::Both => {
-                if (self.capabilities.vision.is_none() && self.capabilities.custom.is_empty())
+                if (self.capabilities.vision.is_none()
+                    && self.capabilities.sensory.is_none()
+                    && self.capabilities.custom.is_empty())
                     || self.capabilities.motor.is_none()
                 {
                     return Err(SdkError::InvalidConfig(

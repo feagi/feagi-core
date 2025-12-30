@@ -31,6 +31,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
+                    $(allowed_frame_change_handling: [$($allowed_frame:ident),* $(,)?],)?
                     cortical_area_properties: {
                         $($cortical_sub_unit_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
@@ -152,6 +153,28 @@ macro_rules! define_sensory_cortical_units_enum {
                                 );
                             )*
                             topology
+                        }
+                    )*
+                }
+            }
+
+            /// Returns the accepted wrapped IO data type name for this sensory unit type.
+            pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => stringify!($accepted_wrapped_io_data_type),
+                    )*
+                }
+            }
+
+            /// Returns the allowed frame change handling modes from the template, if restricted.
+            /// If None is returned, all frame change handling modes are allowed.
+            /// If Some is returned, only the specified modes are valid.
+            pub fn get_allowed_frame_change_handling(&self) -> Option<&'static [FrameChangeHandling]> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+                            $crate::get_allowed_frame_change_handling_impl!($($($allowed_frame),*)?)
                         }
                     )*
                 }

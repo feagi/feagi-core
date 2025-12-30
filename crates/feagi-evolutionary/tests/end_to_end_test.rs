@@ -78,7 +78,8 @@ fn test_complete_genome_workflow() {
     assert!(loaded_genome.cortical_areas.contains_key(&test_id));
     assert!(loaded_genome.morphologies.contains("block_to_block"));
     assert!(loaded_genome.morphologies.contains("projector"));
-    assert_eq!(loaded_genome.metadata.version, "2.0");
+    // Version is upgraded to 3.0 (flat format) when saving
+    assert_eq!(loaded_genome.metadata.version, "3.0");
 
     println!("✅ Complete genome workflow test passed!");
     println!(
@@ -165,4 +166,86 @@ fn test_flat_to_hierarchical_conversion() {
     assert_eq!(genome.cortical_areas.len(), 1);
 
     println!("✅ Flat-to-hierarchical conversion test passed!");
+}
+
+#[test]
+fn test_flat_dstmap_object_rules_preserved() {
+    use serde_json::json;
+
+    // This matches the real-world case where:
+    // - Genome blueprint is flat (keys like "_____10c-<id>-cx-...")
+    // - dstmap-d stores rules as objects (not legacy arrays)
+    //
+    // Historically, `converter_flat_full::process_dstmap` expected array rules and would drop
+    // object rules, resulting in "no cortical mapping" and zero synapses during synaptogenesis.
+    let flat = json!({
+        "genome_id": "flat_dstmap_object_rules_test",
+        "genome_title": "Flat dstmap object-rules test",
+        "version": "3.0",
+        "blueprint": {
+            // src: vision_C (base64 cortical id)
+            "_____10c-aXN2aQkABAA=-cx-__name-t": "vision_C",
+            "_____10c-aXN2aQkABAA=-cx-_group-t": "IPU",
+            "_____10c-aXN2aQkABAA=-cx-___bbx-i": 8,
+            "_____10c-aXN2aQkABAA=-cx-___bby-i": 8,
+            "_____10c-aXN2aQkABAA=-cx-___bbz-i": 1,
+            "_____10c-aXN2aQkABAA=-cx-rcordx-i": 0,
+            "_____10c-aXN2aQkABAA=-cx-rcordy-i": 0,
+            "_____10c-aXN2aQkABAA=-cx-rcordz-i": 0,
+            "_____10c-aXN2aQkABAA=-cx-dstmap-d": {
+                // dst: oimg Unit 0 (base64 cortical id)
+                "b2ltZwkAAAA=": [
+                    {
+                        "morphology_id": "projector",
+                        "morphology_scalar": [1, 1, 1],
+                        "postSynapticCurrent_multiplier": 1,
+                        "plasticity_flag": false
+                    }
+                ]
+            },
+            // dst area definition (must exist for end-to-end validation)
+            "_____10c-b2ltZwkAAAA=-cx-__name-t": "oimg Unit 0",
+            "_____10c-b2ltZwkAAAA=-cx-_group-t": "CUSTOM",
+            "_____10c-b2ltZwkAAAA=-cx-___bbx-i": 8,
+            "_____10c-b2ltZwkAAAA=-cx-___bby-i": 8,
+            "_____10c-b2ltZwkAAAA=-cx-___bbz-i": 1,
+            "_____10c-b2ltZwkAAAA=-cx-rcordx-i": 10,
+            "_____10c-b2ltZwkAAAA=-cx-rcordy-i": 0,
+            "_____10c-b2ltZwkAAAA=-cx-rcordz-i": 0
+        },
+        "neuron_morphologies": {
+            "projector": { "class": "core", "type": "functions", "parameters": {} }
+        },
+        "physiology": { "simulation_timestep": 0.025, "max_age": 10000000, "quantization_precision": "fp32" },
+        "stats": { "innate_cortical_area_count": 2, "innate_neuron_count": 0, "innate_synapse_count": 0 },
+        "signatures": { "genome": "0000000000000000", "blueprint": "0000000000000000", "physiology": "0000000000000000" },
+        "timestamp": 1234567890.0
+    });
+
+    let json_str = serde_json::to_string_pretty(&flat).unwrap();
+    let genome = feagi_evolutionary::load_genome_from_json(&json_str).expect("Failed to load genome");
+
+    let src_id = feagi_evolutionary::string_to_cortical_id("aXN2aQkABAA=").expect("Valid base64 src id");
+    let dst_id_b64 = "b2ltZwkAAAA=";
+
+    let src_area = genome
+        .cortical_areas
+        .get(&src_id)
+        .expect("Source area should exist");
+
+    let dstmap = src_area
+        .properties
+        .get("cortical_mapping_dst")
+        .and_then(|v| v.as_object())
+        .expect("cortical_mapping_dst should be present and an object");
+
+    let rules = dstmap
+        .get(dst_id_b64)
+        .and_then(|v| v.as_array())
+        .expect("dst rules should be an array");
+
+    assert_eq!(rules.len(), 1);
+    assert_eq!(rules[0]["morphology_id"], "projector");
+    assert_eq!(rules[0]["postSynapticCurrent_multiplier"], 1);
+    assert_eq!(rules[0]["plasticity_flag"], false);
 }

@@ -43,7 +43,7 @@ service interfaces that can be used by any adapter (REST API, ZMQ, embedded).
 
 Adapters depend on service traits, not implementations:
 
-```rust
+```rust,ignore
 use feagi_services::{NeuronService, ServiceResult, CreateNeuronParams};
 
 async fn handle_http_request(
@@ -65,7 +65,7 @@ async fn handle_http_request(
 
 Implementations use domain logic (BDU, NPU, Evo):
 
-```rust
+```rust,ignore
 use feagi_services::{NeuronService, ServiceResult};
 use feagi_brain_development::ConnectomeManager;
 

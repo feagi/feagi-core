@@ -42,8 +42,10 @@ async fn create_test_server() -> axum::Router {
     )));
 
     // Create services
-    let genome_service = Arc::new(GenomeServiceImpl::new(Arc::clone(&manager)));
-    let connectome_service = Arc::new(ConnectomeServiceImpl::new(Arc::clone(&manager)));
+    let genome_service_impl = Arc::new(GenomeServiceImpl::new(Arc::clone(&manager)));
+    let current_genome = genome_service_impl.get_current_genome_arc();
+    let genome_service = genome_service_impl;
+    let connectome_service = Arc::new(ConnectomeServiceImpl::new(Arc::clone(&manager), current_genome.clone()));
     // For tests, use empty version info
     let version_info = feagi_services::types::VersionInfo::default();
     let system_service = Arc::new(SystemServiceImpl::new(

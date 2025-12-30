@@ -371,6 +371,7 @@ pub async fn post_upload(
     )
 )]
 pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde_json::Value>> {
+    info!("🦀 [API] GET /v1/genome/download - Downloading current genome");
     let genome_service = state.genome_service.as_ref();
 
     // Get genome as JSON string
@@ -380,12 +381,16 @@ pub async fn get_download(State(state): State<ApiState>) -> ApiResult<Json<serde
             genome_title: None,
         })
         .await
-        .map_err(|e| ApiError::internal(format!("Failed to export genome: {}", e)))?;
+        .map_err(|e| {
+            tracing::error!("Failed to export genome: {}", e);
+            ApiError::internal(format!("Failed to export genome: {}", e))
+        })?;
 
     // Parse to Value for JSON response
     let genome_value: serde_json::Value = serde_json::from_str(&genome_json_str)
         .map_err(|e| ApiError::internal(format!("Failed to parse genome JSON: {}", e)))?;
 
+    info!("✅ Genome download complete, {} bytes", genome_json_str.len());
     Ok(Json(genome_value))
 }
 
@@ -645,19 +650,57 @@ pub async fn get_cortical_template(
         let num_areas = motor_unit.get_number_cortical_areas();
         let topology = motor_unit.get_unit_default_topology();
 
-        // Get supported data types for this motor unit
-        // Most motor units support SignedPercentage with both frame modes and both positioning modes
+        // Get supported data types for this motor unit based on its template definition
         let mut data_types = vec![];
-        for frame in [
-            FrameChangeHandling::Absolute,
-            FrameChangeHandling::Incremental,
-        ] {
-            for positioning in [
-                PercentageNeuronPositioning::Linear,
-                PercentageNeuronPositioning::Fractional,
-            ] {
-                let dt = IOCorticalAreaDataFlag::SignedPercentage(frame, positioning);
-                data_types.push(data_type_to_json(dt));
+        
+        // Determine which data type variant this motor unit accepts
+        // Check the template's accepted_wrapped_io_data_type
+        let accepted_type = motor_unit.get_accepted_wrapped_io_data_type();
+        
+        match accepted_type {
+            "MiscData" => {
+                // MiscData only supports Misc variant with frame handling (no positioning)
+                
+                // Get allowed frame change handling values from template metadata
+                // If None, all values are allowed. If Some, only those values are allowed.
+                let allowed_frames = motor_unit.get_allowed_frame_change_handling();
+                let frames: Vec<FrameChangeHandling> = match allowed_frames {
+                    Some(allowed) => allowed.to_vec(),
+                    None => vec![
+                        FrameChangeHandling::Absolute,
+                        FrameChangeHandling::Incremental,
+                    ],
+                };
+                
+                for frame in frames {
+                    let dt = IOCorticalAreaDataFlag::Misc(frame);
+                    data_types.push(data_type_to_json(dt));
+                }
+            }
+            "ImageFrame" => {
+                // ImageFrame uses CartesianPlane with frame handling (no positioning)
+                for frame in [
+                    FrameChangeHandling::Absolute,
+                    FrameChangeHandling::Incremental,
+                ] {
+                    let dt = IOCorticalAreaDataFlag::CartesianPlane(frame);
+                    data_types.push(data_type_to_json(dt));
+                }
+            }
+            _ => {
+                // Default: SignedPercentage for most motor outputs
+                for frame in [
+                    FrameChangeHandling::Absolute,
+                    FrameChangeHandling::Incremental,
+                ] {
+                    for positioning in [
+                        PercentageNeuronPositioning::Linear,
+                        PercentageNeuronPositioning::Fractional,
+                    ] {
+                        let dt = IOCorticalAreaDataFlag::SignedPercentage(frame, positioning);
+                        data_types.push(data_type_to_json(dt));
+                    }
+                }
             }
         }
 
@@ -682,18 +725,52 @@ pub async fn get_cortical_template(
         let num_areas = sensory_unit.get_number_cortical_areas();
         let topology = sensory_unit.get_unit_default_topology();
 
-        // Sensory units can support various data types depending on their nature
+        // Get supported data types for this sensory unit based on its template definition
         let mut data_types = vec![];
-        for frame in [
-            FrameChangeHandling::Absolute,
-            FrameChangeHandling::Incremental,
-        ] {
-            for positioning in [
-                PercentageNeuronPositioning::Linear,
-                PercentageNeuronPositioning::Fractional,
-            ] {
-                let dt = IOCorticalAreaDataFlag::Percentage(frame, positioning);
-                data_types.push(data_type_to_json(dt));
+        
+        // Determine which data type variant this sensory unit accepts
+        let accepted_type = sensory_unit.get_accepted_wrapped_io_data_type();
+        
+        match accepted_type {
+            "MiscData" => {
+                // MiscData only supports Misc variant with frame handling (no positioning)
+                
+                // Get allowed frame change handling values from template metadata
+                // If None, all values are allowed. If Some, only those values are allowed.
+                let allowed_frames = sensory_unit.get_allowed_frame_change_handling();
+                let frames: Vec<FrameChangeHandling> = match allowed_frames {
+                    Some(allowed) => allowed.to_vec(),
+                    None => vec![
+                        FrameChangeHandling::Absolute,
+                        FrameChangeHandling::Incremental,
+                    ],
+                };
+                
+                for frame in frames {
+                    let dt = IOCorticalAreaDataFlag::Misc(frame);
+                    data_types.push(data_type_to_json(dt));
+                }
+            }
+            _ => {
+                // Other types support Percentage variants with both frame and positioning
+                let allowed_frames = sensory_unit.get_allowed_frame_change_handling();
+                let frames: Vec<FrameChangeHandling> = match allowed_frames {
+                    Some(allowed) => allowed.to_vec(),
+                    None => vec![
+                        FrameChangeHandling::Absolute,
+                        FrameChangeHandling::Incremental,
+                    ],
+                };
+                
+                for frame in frames {
+                    for positioning in [
+                        PercentageNeuronPositioning::Linear,
+                        PercentageNeuronPositioning::Fractional,
+                    ] {
+                        let dt = IOCorticalAreaDataFlag::Percentage(frame, positioning);
+                        data_types.push(data_type_to_json(dt));
+                    }
+                }
             }
         }
 

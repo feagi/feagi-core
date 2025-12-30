@@ -278,6 +278,7 @@ pub async fn get_cortical_area_geometry(
                         "cortical_id": area.cortical_id,
                         "cortical_name": area.name,
                         "cortical_group": area.cortical_group,
+                        "cortical_type": area.cortical_type,  // NEW: Explicitly include cortical_type for BV
                         "cortical_sub_group": area.sub_group.as_ref().unwrap_or(&String::new()),  // Return empty string instead of null
                         "coordinates_3d": [area.position.0, area.position.1, area.position.2],
                         "coordinates_2d": [0, 0],  // TODO: Extract from properties when available
@@ -384,9 +385,12 @@ pub async fn post_cortical_area_properties(
 
     match connectome_service.get_cortical_area(cortical_id).await {
         Ok(area_info) => {
-            tracing::debug!(target: "feagi-api", "Cortical area properties for {}: cortical_group={}, area_type={}", cortical_id, area_info.cortical_group, area_info.area_type);
+            tracing::debug!(target: "feagi-api", "Cortical area properties for {}: cortical_group={}, area_type={}, cortical_type={}", 
+                cortical_id, area_info.cortical_group, area_info.area_type, area_info.cortical_type);
+            tracing::info!(target: "feagi-api", "[API-RESPONSE] Returning mp_driven_psp={} for area {}", area_info.mp_driven_psp, cortical_id);
             let json_value = serde_json::to_value(&area_info).unwrap_or_default();
             tracing::debug!(target: "feagi-api", "Serialized JSON keys: {:?}", json_value.as_object().map(|o| o.keys().collect::<Vec<_>>()));
+            tracing::debug!(target: "feagi-api", "Serialized cortical_type value: {:?}", json_value.get("cortical_type"));
             Ok(Json(json_value))
         }
         Err(e) => Err(ApiError::internal(format!(
@@ -436,10 +440,17 @@ pub async fn post_multi_cortical_area_properties(
 
     for cortical_id in cortical_ids {
         if let Ok(area_info) = connectome_service.get_cortical_area(&cortical_id).await {
-            result.insert(
-                cortical_id,
-                serde_json::to_value(area_info).unwrap_or_default(),
+            tracing::debug!(target: "feagi-api", 
+                "[MULTI] Area {}: cortical_type={}, cortical_group={}, is_mem_type={:?}", 
+                cortical_id, area_info.cortical_type, area_info.cortical_group,
+                area_info.properties.get("is_mem_type")
             );
+            let json_value = serde_json::to_value(&area_info).unwrap_or_default();
+            tracing::debug!(target: "feagi-api", 
+                "[MULTI] Serialized has cortical_type: {}", 
+                json_value.get("cortical_type").is_some()
+            );
+            result.insert(cortical_id, json_value);
         }
     }
     Ok(Json(result))
@@ -662,6 +673,17 @@ pub async fn post_cortical_area(
             dimensions.0 * dimensions.1 * dimensions.2 * neurons_per_voxel as usize
         );
 
+        // Store device_count and per-device dimensions in properties for BV compatibility
+        let mut properties = HashMap::new();
+        properties.insert(
+            "dev_count".to_string(),
+            serde_json::Value::Number(serde_json::Number::from(device_count)),
+        );
+        properties.insert(
+            "cortical_dimensions_per_device".to_string(),
+            serde_json::json!([dimensions.0, dimensions.1, dimensions.2]),
+        );
+
         let params = CreateCorticalAreaParams {
             cortical_id: cortical_id.clone(),
             name: format!("{} Unit {}", cortical_type_key, unit_idx),
@@ -683,7 +705,7 @@ pub async fn post_cortical_area(
             leak_coefficient: Some(0.0),
             leak_variability: Some(0.0),
             burst_engine_active: Some(true),
-            properties: Some(HashMap::new()),
+            properties: Some(properties),
         };
 
         creation_params.push(params);
@@ -991,13 +1013,57 @@ pub async fn post_clone(
     path = "/v1/cortical_area/multi/cortical_area",
     tag = "cortical_area"
 )]
-#[allow(unused_variables)] // In development
 pub async fn put_multi_cortical_area(
     State(state): State<ApiState>,
-    Json(request): Json<HashMap<String, serde_json::Value>>,
+    Json(mut request): Json<HashMap<String, serde_json::Value>>,
 ) -> ApiResult<Json<HashMap<String, String>>> {
-    // TODO: Update multiple cortical areas
-    Err(ApiError::internal("Not yet implemented"))
+    let genome_service = state.genome_service.as_ref();
+
+    // Extract cortical_id_list
+    let cortical_ids: Vec<String> = request
+        .get("cortical_id_list")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| ApiError::invalid_input("cortical_id_list required"))?
+        .iter()
+        .filter_map(|v| v.as_str().map(String::from))
+        .collect();
+
+    if cortical_ids.is_empty() {
+        return Err(ApiError::invalid_input("cortical_id_list cannot be empty"));
+    }
+
+    // Remove cortical_id_list from changes (it's not a property to update)
+    request.remove("cortical_id_list");
+
+    // Update each cortical area with the same properties
+    for cortical_id in &cortical_ids {
+        match genome_service
+            .update_cortical_area(cortical_id, request.clone())
+            .await
+        {
+            Ok(_) => {
+                tracing::info!("Updated cortical area: {}", cortical_id);
+            }
+            Err(e) => {
+                tracing::error!("Failed to update cortical area {}: {}", cortical_id, e);
+                return Err(ApiError::internal(format!(
+                    "Failed to update cortical area {}: {}",
+                    cortical_id, e
+                )));
+            }
+        }
+    }
+
+    Ok(Json(HashMap::from([
+        (
+            "message".to_string(),
+            format!("Updated {} cortical areas", cortical_ids.len()),
+        ),
+        (
+            "cortical_ids".to_string(),
+            cortical_ids.join(", "),
+        ),
+    ])))
 }
 
 /// Delete multiple cortical areas by their IDs. (Not yet implemented)

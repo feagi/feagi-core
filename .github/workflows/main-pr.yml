@@ -4,11 +4,16 @@
 name: Main PR Tests
 
 on:
-  pull_request_target:
-    branches: main
+  pull_request:
+    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
 
 env:
   CARGO_TERM_COLOR: always
+
+# Least-privilege: PR test workflow must not have write permissions.
+permissions:
+  contents: read
 
 jobs:
   comprehensive-tests:
@@ -17,9 +22,6 @@ jobs:
     steps:
     - name: Checkout PR code
       uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.pull_request.head.repo.full_name }}
-        ref: ${{ github.event.pull_request.head.ref }}
     
     - name: Check branch name format
       run: |
@@ -140,6 +142,43 @@ jobs:
     
     - name: Run all tests (lib only, examples have known API migration issues)
       run: cargo test --workspace --lib --verbose
+    
+    - name: Run Comprehensive Neural Dynamics Tests (CRITICAL)
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "::group::Running Comprehensive Neural Dynamics Test Suite"
+        echo "⚠️  CRITICAL: These tests gate merges to main"
+        cargo test --test comprehensive_neural_dynamics --no-fail-fast -- --test-threads=1 --nocapture
+        echo "::endgroup::"
+      
+    - name: Run NPU Integration Tests
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "::group::Running NPU Integration Tests"
+        cargo test --tests --no-fail-fast
+        echo "::endgroup::"
+    
+    - name: Generate Neural Dynamics Test Report
+      if: always()
+      working-directory: crates/feagi-npu/burst-engine
+      run: |
+        echo "# Neural Dynamics Test Report" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "## Test Coverage" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        cargo test --test comprehensive_neural_dynamics -- --list | grep "test_" | wc -l | xargs -I {} echo "Total Tests: {}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Test Categories" >> $GITHUB_STEP_SUMMARY
+        echo "- Threshold scenarios (PSP <, =, > threshold)" >> $GITHUB_STEP_SUMMARY
+        echo "- MP accumulation (true/false)" >> $GITHUB_STEP_SUMMARY
+        echo "- Leak coefficients (0.0, 0.5, 1.0)" >> $GITHUB_STEP_SUMMARY
+        echo "- PSP uniformity (divide vs full)" >> $GITHUB_STEP_SUMMARY
+        echo "- Multiple synapses" >> $GITHUB_STEP_SUMMARY
+        echo "- Synapse types (excitatory, inhibitory, mixed)" >> $GITHUB_STEP_SUMMARY
+        echo "- Refractory periods" >> $GITHUB_STEP_SUMMARY
+        echo "- Complex network scenarios" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "📋 See detailed findings: [TEST_FINDINGS.md](feagi-core/crates/feagi-npu/burst-engine/tests/TEST_FINDINGS.md)" >> $GITHUB_STEP_SUMMARY
     
     - name: Run tests in release mode (lib only)
       run: cargo test --workspace --lib --release --verbose

@@ -30,14 +30,16 @@
 //! Phase 1: Injection → Phase 2: Dynamics → Phase 3: Archival → Phase 5: Cleanup
 //! ```
 
-use crate::fire_ledger::RustFireLedger;
+use crate::fire_ledger::FireLedger;
 use crate::fire_structures::FireQueue;
 use crate::fq_sampler::{FQSampler, SamplingMode};
 use crate::neural_dynamics::*;
 use crate::synaptic_propagation::SynapticPropagationEngine;
 use ahash::AHashMap;
+use ahash::AHashSet;
 use feagi_npu_neural::types::*;
 use feagi_structures::genomic::cortical_area::CorticalID;
+use roaring::RoaringBitmap;
 use tracing::{debug, error, info, trace, warn};
 
 // Import Runtime trait for generic runtime abstraction
@@ -49,6 +51,32 @@ use feagi_npu_runtime::StdRuntime;
 
 /// Type alias for fire queue sample data structure
 type FireQueueSample = AHashMap<u32, (Vec<u32>, Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>)>;
+
+/// Key for a cortical mapping A→B (cortical_idx indices).
+type CorticalMappingKey = (u32, u32);
+
+/// STDP parameters for a plastic cortical mapping A→B.
+///
+/// Note: Synaptic weights are `u8` (0..255). Updates are additive and clamped.
+#[derive(Debug, Clone, Copy)]
+pub struct StdpMappingParams {
+    pub plasticity_window: usize,
+    pub plasticity_constant: i64,
+    pub ltp_multiplier: i64,
+    pub ltd_multiplier: i64,
+}
+
+impl StdpMappingParams {
+    pub fn delta_plus_u8(&self) -> u8 {
+        let delta = self.plasticity_constant.saturating_mul(self.ltp_multiplier);
+        delta.clamp(0, u8::MAX as i64) as u8
+    }
+
+    pub fn delta_minus_u8(&self) -> u8 {
+        let delta = self.plasticity_constant.saturating_mul(self.ltd_multiplier);
+        delta.clamp(0, u8::MAX as i64) as u8
+    }
+}
 
 /// Burst processing result
 #[derive(Debug, Clone)]
@@ -126,6 +154,10 @@ pub struct RustNPU<
     // Propagation engine (RwLock: burst reads, rare updates)
     pub(crate) propagation_engine: std::sync::RwLock<SynapticPropagationEngine>,
 
+    // STDP configuration/index (RwLock: burst reads, rare writes on genome/mapping updates)
+    pub(crate) stdp_mappings: std::sync::RwLock<AHashMap<CorticalMappingKey, StdpMappingParams>>,
+    pub(crate) stdp_mapping_index: std::sync::RwLock<AHashMap<CorticalMappingKey, Vec<usize>>>,
+
     // Compute backend (Mutex: exclusive access during burst processing)
     // No longer Box<dyn> - monomorphized for better performance
     #[allow(dead_code)]
@@ -136,6 +168,9 @@ pub struct RustNPU<
 
     // Configuration (AtomicU32 for f32 as u32 bits)
     power_amount: std::sync::atomic::AtomicU32, // f32::to_bits()
+
+    // Fatigue state (atomic for lock-free reads during burst injection)
+    fatigue_active: std::sync::atomic::AtomicBool,
 }
 
 /// Fire-related structures grouped together for single mutex
@@ -143,9 +178,18 @@ pub(crate) struct FireStructures {
     pub(crate) fire_candidate_list: FireCandidateList,
     pub(crate) current_fire_queue: FireQueue,
     pub(crate) previous_fire_queue: FireQueue,
-    pub(crate) fire_ledger: RustFireLedger,
+    pub(crate) fire_ledger: FireLedger,
     pub(crate) fq_sampler: FQSampler,
     pub(crate) pending_sensory_injections: Vec<(NeuronId, f32)>,
+    /// Staged memory neuron injections to be applied at the start of the next burst.
+    ///
+    /// Memory neurons live in a reserved ID range (50_000_000+) and are not present in the
+    /// regular `NeuronStorage` array. They are executed via a dedicated forced-fire path
+    /// in `neural_dynamics`.
+    pub(crate) pending_memory_injections: Vec<(NeuronId, u32, f32)>, // (id, cortical_idx, potential)
+    /// Per-burst metadata for memory neuron candidates (id -> cortical_idx).
+    /// Populated during Phase 1 from `pending_memory_injections` and cleared each burst.
+    pub(crate) memory_candidate_cortical_idx: AHashMap<u32, u32>,
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
 }
 
@@ -195,16 +239,21 @@ impl<
                 fire_candidate_list: FireCandidateList::new(),
                 current_fire_queue: FireQueue::new(),
                 previous_fire_queue: FireQueue::new(),
-                fire_ledger: RustFireLedger::new(fire_ledger_window),
+                fire_ledger: FireLedger::new(fire_ledger_window),
                 fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
                 pending_sensory_injections: Vec::with_capacity(10000),
+                pending_memory_injections: Vec::with_capacity(1024),
+                memory_candidate_cortical_idx: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
             }),
             area_id_to_name: std::sync::RwLock::new(AHashMap::new()),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
+            stdp_mappings: std::sync::RwLock::new(AHashMap::new()),
+            stdp_mapping_index: std::sync::RwLock::new(AHashMap::new()),
             backend: std::sync::Mutex::new(backend),
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
+            fatigue_active: std::sync::atomic::AtomicBool::new(false),
         })
     }
 }
@@ -311,6 +360,17 @@ impl<
         f32::from_bits(self.power_amount.load(std::sync::atomic::Ordering::Relaxed))
     }
 
+    /// Set fatigue active state (lock-free atomic operation)
+    pub fn set_fatigue_active(&self, active: bool) {
+        self.fatigue_active
+            .store(active, std::sync::atomic::Ordering::Release);
+    }
+
+    /// Get fatigue active state (lock-free atomic operation)
+    pub fn is_fatigue_active(&self) -> bool {
+        self.fatigue_active.load(std::sync::atomic::Ordering::Acquire)
+    }
+
     /// Get burst count (lock-free atomic operation)
     pub fn get_burst_count(&self) -> u64 {
         self.burst_count.load(std::sync::atomic::Ordering::Relaxed)
@@ -328,6 +388,7 @@ impl<
     pub fn add_neuron(
         &mut self,
         threshold: T,          // Quantized threshold
+        threshold_limit: T,    // Quantized threshold limit (0 = no limit)
         leak_coefficient: f32, // Kept as f32 for precision
         resting_potential: T,  // Quantized resting potential
         neuron_type: i32,
@@ -347,6 +408,7 @@ impl<
             .unwrap()
             .add_neuron(
                 threshold,
+                threshold_limit,
                 leak_coefficient,
                 resting_potential,
                 neuron_type,
@@ -409,6 +471,7 @@ impl<
     pub fn add_neurons_batch(
         &mut self,
         thresholds: Vec<T>,          // Quantized thresholds
+        threshold_limits: Vec<T>,    // Quantized threshold limits (0 = no limit)
         leak_coefficients: Vec<f32>, // Kept as f32 for precision
         resting_potentials: Vec<T>,  // Quantized resting potentials
         neuron_types: Vec<i32>,
@@ -430,6 +493,7 @@ impl<
         // Call the TRUE batch method on neuron_storage (100-1000x faster!)
         match self.neuron_storage.write().unwrap().add_neurons_batch(
             &thresholds,
+            &threshold_limits,
             &leak_coefficients,
             &resting_potentials,
             &neuron_types,
@@ -522,7 +586,11 @@ impl<
     /// * `height` - Y dimension
     /// * `depth` - Z dimension
     /// * `neurons_per_voxel` - Neurons per spatial position
-    /// * `default_threshold` - Default firing threshold
+    /// * `default_threshold` - Base firing threshold at (0,0,0) position
+    /// * `threshold_increment_x` - Threshold increment per X position
+    /// * `threshold_increment_y` - Threshold increment per Y position
+    /// * `threshold_increment_z` - Threshold increment per Z position
+    /// * `default_threshold_limit` - Default firing threshold limit (maximum MP to fire, 0 = no limit)
     /// * `default_leak_coefficient` - Default leak rate
     /// * `default_resting_potential` - Default resting potential
     /// * `default_neuron_type` - Default neuron type
@@ -544,6 +612,10 @@ impl<
         depth: u32,
         neurons_per_voxel: u32,
         default_threshold: f32,
+        threshold_increment_x: f32,
+        threshold_increment_y: f32,
+        threshold_increment_z: f32,
+        default_threshold_limit: f32,
         default_leak_coefficient: f32,
         default_resting_potential: f32,
         default_neuron_type: i32,
@@ -570,9 +642,44 @@ impl<
         }
 
         let alloc_start = Instant::now();
+        // ✅ SPATIAL GRADIENT: Calculate thresholds based on (x,y,z) position
+        // Base threshold at (0,0,0), incremented by position dot product with increment vector
+        // threshold(x,y,z) = base + x*increment_x + y*increment_y + z*increment_z
+        let mut thresholds = Vec::with_capacity(total_neurons);
+        let mut threshold_limits = Vec::with_capacity(total_neurons);
+        
+        // Pre-compute if we have spatial gradients
+        let has_x_gradient = threshold_increment_x.abs() > f32::EPSILON;
+        let has_y_gradient = threshold_increment_y.abs() > f32::EPSILON;
+        let has_z_gradient = threshold_increment_z.abs() > f32::EPSILON;
+        let has_any_gradient = has_x_gradient || has_y_gradient || has_z_gradient;
+        
+        if has_any_gradient {
+            // Calculate position-based thresholds (spatial gradient)
+            for x in 0..width {
+                for y in 0..height {
+                    for z in 0..depth {
+                        // Calculate threshold for this voxel position
+                        let threshold_at_pos = default_threshold
+                            + (x as f32 * threshold_increment_x)
+                            + (y as f32 * threshold_increment_y)
+                            + (z as f32 * threshold_increment_z);
+                        
+                        // Apply to all neurons in this voxel
+                        for _ in 0..neurons_per_voxel {
+                            thresholds.push(T::from_f32(threshold_at_pos));
+                            threshold_limits.push(T::from_f32(default_threshold_limit));
+                        }
+                    }
+                }
+            }
+        } else {
+            // Uniform thresholds (no spatial gradient) - faster path
+            thresholds.resize(total_neurons, T::from_f32(default_threshold));
+            threshold_limits.resize(total_neurons, T::from_f32(default_threshold_limit));
+        }
+        
         // ✅ SIMD-OPTIMIZED: Fill uniform values with bulk operations (LLVM auto-vectorizes!)
-        // Convert f32 defaults to T
-        let thresholds = vec![T::from_f32(default_threshold); total_neurons];
         let leak_coefficients = vec![default_leak_coefficient; total_neurons];
         let resting_potentials = vec![T::from_f32(default_resting_potential); total_neurons];
         let neuron_types = vec![default_neuron_type; total_neurons];
@@ -608,6 +715,7 @@ impl<
         // Call existing batch creation (already optimized with SIMD)
         let (success_count, failed) = self.add_neurons_batch(
             thresholds,
+            threshold_limits,
             leak_coefficients,
             resting_potentials,
             neuron_types,
@@ -659,7 +767,7 @@ impl<
         conductance: SynapticConductance,
         synapse_type: SynapseType,
     ) -> Result<usize> {
-        self.synapse_storage
+        let result = self.synapse_storage
             .write()
             .unwrap()
             .add_synapse(
@@ -669,7 +777,13 @@ impl<
                 conductance.0,
                 synapse_type as u8,
             )
-            .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))
+            .map_err(|e| FeagiError::RuntimeError(format!("Failed to add synapse: {:?}", e)))?;
+        
+        // NOTE: This does NOT rebuild the synapse index for performance reasons.
+        // Callers should call rebuild_synapse_index() once after bulk synapse additions.
+        // For single synapse additions in tests, call rebuild_synapse_index() manually.
+        
+        Ok(result)
     }
 
     /// Batch add synapses (SIMD-optimized)
@@ -719,6 +833,13 @@ impl<
 
     /// Remove a synapse by source and target
     ///
+    /// Remove a synapse by source and target
+    ///
+    /// NOTE: This does NOT rebuild the synapse index for performance reasons.
+    /// Callers should call rebuild_synapse_index() once after bulk removals.
+    /// Until rebuilt, propagation engine will skip deleted synapses via valid_mask check,
+    /// but this wastes CPU cycles iterating stale index entries.
+    ///
     /// Note: This searches for the synapse index first, which is O(n).
     /// For better performance, use remove_synapses_between() for batch operations.
     pub fn remove_synapse(&mut self, source: NeuronId, target: NeuronId) -> bool {
@@ -760,6 +881,8 @@ impl<
 
     /// Batch remove synapses between source and target neuron sets
     ///
+    /// NOTE: This does NOT rebuild the synapse index. Call rebuild_synapse_index() after bulk removals.
+    ///
     /// Note: The trait method only supports single source-target pairs.
     /// This method calls remove_synapses_between() for each source-target combination.
     ///
@@ -779,6 +902,56 @@ impl<
             }
         }
         total_removed
+    }
+
+    /// Efficiently remove synapses from a set of source neurons to a set of target neurons.
+    ///
+    /// This is intended for cortical mapping updates/removals where synapses must be pruned
+    /// deterministically without destroying other outgoing synapses from the same source area.
+    ///
+    /// Implementation detail:
+    /// - Uses the propagation engine's `synapse_index` to iterate only synapses reachable from
+    ///   the given source neurons.
+    /// - Marks matching synapses invalid via `valid_mask` (no compaction).
+    ///
+    /// NOTE: This does NOT rebuild the synapse index. Call `rebuild_synapse_index()` after bulk removals.
+    pub fn remove_synapses_from_sources_to_targets(
+        &mut self,
+        sources: Vec<NeuronId>,
+        targets: Vec<NeuronId>,
+    ) -> usize {
+        if sources.is_empty() || targets.is_empty() {
+            return 0;
+        }
+
+        let target_set: AHashSet<u32> = targets.into_iter().map(|n| n.0).collect();
+
+        // Lock order: synapse_storage -> propagation_engine (matches rebuild path to avoid deadlocks)
+        let mut synapse_storage = self.synapse_storage.write().unwrap();
+        let prop_engine = self.propagation_engine.read().unwrap();
+
+        let mut removed = 0usize;
+        for source in sources {
+            let Some(indices) = prop_engine.synapse_index.get(&source) else {
+                continue;
+            };
+            for &syn_idx in indices {
+                if syn_idx >= synapse_storage.count() {
+                    continue;
+                }
+                if !synapse_storage.valid_mask()[syn_idx] {
+                    continue;
+                }
+                let target = synapse_storage.target_neurons()[syn_idx];
+                if target_set.contains(&target) {
+                    if synapse_storage.remove_synapse(syn_idx).is_ok() {
+                        removed += 1;
+                    }
+                }
+            }
+        }
+
+        removed
     }
 
     /// Update synapse weight
@@ -829,6 +1002,41 @@ impl<
             .write()
             .unwrap()
             .set_neuron_mapping(mapping);
+    }
+
+    /// Set mp_driven_psp flags for cortical areas
+    /// When enabled for an area, synaptic PSP will be dynamically set from source neuron's membrane potential
+    pub fn set_mp_driven_psp_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_mp_driven_psp_flags(flags);
+    }
+
+    /// Set mp_driven_psp for a single cortical area (in-place).
+    pub fn set_mp_driven_psp_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_mp_driven_psp_flag(cortical_id, enabled);
+    }
+
+    /// Set psp_uniform_distribution flags for cortical areas
+    /// When false (default): PSP value is divided among all outgoing synapses from the source neuron
+    /// When true: Full PSP value is applied to each outgoing synapse
+    pub fn set_psp_uniform_distribution_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_psp_uniform_distribution_flags(flags);
+    }
+
+    /// Set psp_uniform_distribution for a single cortical area (in-place).
+    pub fn set_psp_uniform_distribution_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
+        self.propagation_engine
+            .write()
+            .unwrap()
+            .set_psp_uniform_distribution_flag(cortical_id, enabled);
     }
 
     // ===== SENSORY INJECTION API =====
@@ -948,6 +1156,27 @@ impl<
 
     // ===== END SENSORY INJECTION API =====
 
+    // ===== MEMORY NEURON INJECTION API =====
+
+    /// Stage a memory neuron injection to be applied at the start of the next burst.
+    ///
+    /// Memory neurons are identified by an ID in the reserved memory range (50_000_000+). They are
+    /// not stored in the regular neuron array; instead they are force-fired by the dynamics layer.
+    pub fn inject_memory_neuron_to_fcl(&mut self, neuron_id: u32, cortical_idx: u32, potential: f32) {
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures
+            .pending_memory_injections
+            .push((NeuronId(neuron_id), cortical_idx, potential));
+    }
+
+    /// Register a dynamic (non-storage-backed) neuron’s cortical mapping for synaptic propagation.
+    ///
+    /// Required for memory neuron IDs (50_000_000+) so propagation can resolve source/destination areas.
+    pub fn register_dynamic_neuron_mapping(&mut self, neuron_id: u32, cortical_id: CorticalID) {
+        let mut engine = self.propagation_engine.write().unwrap();
+        engine.neuron_to_area.insert(NeuronId(neuron_id), cortical_id);
+    }
+
     // ===== POWER INJECTION =====
     // Power neurons are identified by cortical_idx = 1 in the neuron array
     // No separate list needed - single source of truth!
@@ -970,31 +1199,69 @@ impl<
 
         // Lock neuron/synapse arrays for reading (allows concurrent sensory injection to fire_structures)
         let mut neuron_storage = self.neuron_storage.write().unwrap();
-        let synapse_storage = self.synapse_storage.read().unwrap();
         let mut propagation_engine = self.propagation_engine.write().unwrap();
 
         // Lock fire structures (FCL, FQ, Fire Ledger)
         let mut fire_structures = self.fire_structures.lock().unwrap();
 
         // Phase 1: Injection (power + synaptic propagation + staged sensory)
-        // Clone previous_fire_queue to avoid multiple borrows
-        let previous_fq = fire_structures.previous_fire_queue.clone();
-        let pending_mutex =
-            std::sync::Mutex::new(fire_structures.pending_sensory_injections.clone());
-        let injection_result = phase1_injection_with_synapses(
-            &mut fire_structures.fire_candidate_list,
-            &mut *neuron_storage,
-            &mut propagation_engine,
-            &previous_fq,
-            power_amount,
-            &*synapse_storage,
-            &pending_mutex,
-        )?;
+        // Use CURRENT_fire_queue (which contains fired neurons from the PREVIOUS burst after swap)
+        // Note: At burst N start, current_fire_queue contains burst N-1's results (set at end of burst N-1)
+        let previous_fq = fire_structures.current_fire_queue.clone();
+        // PERFORMANCE + REAL-TIME:
+        // Avoid cloning `pending_sensory_injections` (O(n) copy) on every burst.
+        // Under dense sensory injection (e.g., diffThreshold=0), this clone can dominate burst time
+        // and create visible drift that looks like buffering.
+        //
+        // Instead, move the staged injections out (preserving capacity) and let Phase 1 drain it.
+        // Any injections arriving while the burst loop holds `fire_structures` will already block
+        // on the lock; after Phase 1 completes we restore the vector back.
+        let mut pending_sensory = Vec::new();
+        std::mem::swap(
+            &mut pending_sensory,
+            &mut fire_structures.pending_sensory_injections,
+        );
+        let pending_mutex = std::sync::Mutex::new(pending_sensory);
+
+        // Drain staged memory neuron injections (t+1 semantics)
+        let mut pending_memory = Vec::new();
+        std::mem::swap(
+            &mut pending_memory,
+            &mut fire_structures.pending_memory_injections,
+        );
+        
+        let injection_result = {
+            let synapse_storage = self.synapse_storage.read().unwrap();
+            let fatigue_active = self.fatigue_active.load(std::sync::atomic::Ordering::Acquire);
+            phase1_injection_with_synapses(
+                &mut fire_structures.fire_candidate_list,
+                &mut *neuron_storage,
+                &mut propagation_engine,
+                &previous_fq,
+                power_amount,
+                &*synapse_storage,
+                &pending_mutex,
+                fatigue_active,
+            )?
+        };
         fire_structures.pending_sensory_injections = pending_mutex.into_inner().unwrap();
+
+        // Apply memory neuron injections after Phase 1 (so they’re not affected by Phase 1 staging logic).
+        // These become candidates for Phase 2 and will be force-fired by the dynamics layer.
+        fire_structures.memory_candidate_cortical_idx.clear();
+        for (neuron_id, cortical_idx, potential) in pending_memory.drain(..) {
+            fire_structures
+                .memory_candidate_cortical_idx
+                .insert(neuron_id.0, cortical_idx);
+            fire_structures.fire_candidate_list.add_candidate(neuron_id, potential);
+        }
+        // Restore vector back (empty, but preserves capacity for future injections).
+        fire_structures.pending_memory_injections = pending_memory;
 
         // Phase 2: Neural Dynamics (membrane potential updates, threshold checks, firing)
         let dynamics_result = process_neural_dynamics(
             &fire_structures.fire_candidate_list,
+            Some(&fire_structures.memory_candidate_cortical_idx),
             &mut *neuron_storage,
             burst_count,
         )?;
@@ -1002,7 +1269,12 @@ impl<
         // Phase 3: Archival (ZERO-COPY archive to Fire Ledger)
         fire_structures
             .fire_ledger
-            .archive_burst(burst_count, &dynamics_result.fire_queue);
+            .archive_burst(burst_count, &dynamics_result.fire_queue)
+            .map_err(|e| FeagiError::RuntimeError(format!("FireLedger archive failed: {e}")))?;
+
+        // Phase 3.5: Synaptic Plasticity (STDP-like) updates
+        // Uses FireLedger window ending at this burst and applies weight updates to affect burst t+1.
+        self.apply_stdp_updates_for_burst(burst_count, &fire_structures.fire_ledger)?;
 
         // Phase 4: Swap fire queues (current becomes previous for next burst)
         fire_structures.previous_fire_queue = fire_structures.current_fire_queue.clone();
@@ -1284,6 +1556,94 @@ impl<
         found_count
     }
 
+    /// Inject sensory neurons using separate XYZP arrays (optimized; avoids building a tuple Vec upstream).
+    ///
+    /// This is a performance-focused variant of `inject_sensory_xyzp_by_id` intended for hot paths
+    /// (e.g., high-rate vision) where upstream code already has SoA buffers (x/y/z/p).
+    ///
+    /// Semantics are identical to `inject_sensory_xyzp_by_id`:
+    /// - Batch coordinate lookup
+    /// - Filter missing neurons
+    /// - Inject found neurons with provided potentials
+    pub fn inject_sensory_xyzp_arrays_by_id(
+        &mut self,
+        cortical_id: &CorticalID,
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+        potentials: &[f32],
+    ) -> usize {
+        use tracing::error;
+
+        if x_coords.len() != y_coords.len()
+            || x_coords.len() != z_coords.len()
+            || x_coords.len() != potentials.len()
+        {
+            error!(
+                "[NPU] Invalid XYZP arrays: x={}, y={}, z={}, p={}",
+                x_coords.len(),
+                y_coords.len(),
+                z_coords.len(),
+                potentials.len()
+            );
+            return 0;
+        }
+
+        let cortical_id_str = cortical_id.to_string();
+        let cortical_id_base64 = cortical_id.as_base_64();
+
+        let cortical_area = match self.get_cortical_area_id(&cortical_id_str) {
+            Some(id) => id,
+            None => match self.get_cortical_area_id(&cortical_id_base64) {
+                Some(id) => id,
+                None => {
+                    error!(
+                        "[NPU] Unknown cortical area: '{}' (base64: {})",
+                        cortical_id_str, cortical_id_base64
+                    );
+                    return 0;
+                }
+            },
+        };
+
+        // Build coords once (x/y/z) for batch lookup.
+        let mut coords: Vec<(u32, u32, u32)> = Vec::with_capacity(x_coords.len());
+        for i in 0..x_coords.len() {
+            coords.push((x_coords[i], y_coords[i], z_coords[i]));
+        }
+
+        let neuron_ids = self
+            .neuron_storage
+            .read()
+            .unwrap()
+            .batch_coordinate_lookup(cortical_area, &coords);
+
+        let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
+        for (i, opt_idx) in neuron_ids.iter().enumerate() {
+            if let Some(idx) = opt_idx {
+                neuron_potential_pairs.push((NeuronId(*idx as u32), potentials[i]));
+            }
+        }
+        let found_count = neuron_potential_pairs.len();
+
+        if !neuron_potential_pairs.is_empty() {
+            self.inject_sensory_with_potentials(&neuron_potential_pairs);
+        }
+
+        found_count
+    }
+
+    /// Clear any staged (pending) sensory injections.
+    ///
+    /// @architecture:acceptable - real-time semantics
+    /// Under high-rate sensory streams (e.g., vision), multiple incoming messages can arrive
+    /// between burst boundaries. Keeping all of them causes drift that looks like buffering.
+    /// This clears the staged queue so only the newest sensory message is applied on the next burst.
+    pub fn clear_pending_sensory_injections(&mut self) {
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures.pending_sensory_injections.clear();
+    }
+
     /// Inject sensory neurons using cortical area name (backward compatibility)
     /// For hot paths, use inject_sensory_xyzp_by_id() to avoid string allocations
     pub fn inject_sensory_xyzp(
@@ -1520,13 +1880,15 @@ impl<
                 fire_candidate_list: FireCandidateList::new(),
                 current_fire_queue: FireQueue::new(),
                 previous_fire_queue: FireQueue::new(),
-                fire_ledger: RustFireLedger::new(snapshot.fire_ledger_window),
+                fire_ledger: FireLedger::new(snapshot.fire_ledger_window),
                 fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
                 pending_sensory_injections: Vec::with_capacity(10000),
                 last_fcl_snapshot: Vec::new(),
             }),
             area_id_to_name: std::sync::RwLock::new(snapshot.cortical_area_names),
             propagation_engine: std::sync::RwLock::new(SynapticPropagationEngine::new()),
+            stdp_mappings: std::sync::RwLock::new(AHashMap::new()),
+            stdp_mapping_index: std::sync::RwLock::new(AHashMap::new()),
             backend: std::sync::Mutex::new(backend),
             burst_count: std::sync::atomic::AtomicU64::new(snapshot.burst_count),
             power_amount: std::sync::atomic::AtomicU32::new(snapshot.power_amount.to_bits()),
@@ -1718,6 +2080,92 @@ impl<
             if neuron_storage_write.valid_mask()[idx]
                 && neuron_storage_write.cortical_areas()[idx] == cortical_area
             {
+                neuron_storage_write.thresholds_mut()[idx] = T::from_f32(threshold);
+                updated_count += 1;
+            }
+        }
+
+        updated_count
+    }
+
+    /// Update firing threshold limit (upper bound) for all neurons in a cortical area.
+    ///
+    /// Semantics:
+    /// - limit == 0.0: no upper bound (neuron fires if MP >= threshold)
+    /// - limit  > 0.0: neuron fires only if threshold <= MP <= limit
+    ///
+    /// This defines the firing window for neurons in the area.
+    pub fn update_cortical_area_threshold_limit(
+        &mut self,
+        cortical_area: u32,
+        limit: f32,
+    ) -> usize {
+        let mut updated_count = 0;
+        let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+        
+        for idx in 0..neuron_storage_write.count() {
+            if neuron_storage_write.valid_mask()[idx]
+                && neuron_storage_write.cortical_areas()[idx] == cortical_area
+            {
+                neuron_storage_write.threshold_limits_mut()[idx] = T::from_f32(limit);
+                updated_count += 1;
+            }
+        }
+
+        updated_count
+    }
+
+    /// Update thresholds with spatial gradient for all neurons in a cortical area.
+    ///
+    /// Applies position-based threshold calculation WITHOUT rebuilding neurons:
+    /// `threshold = base + (x * inc_x) + (y * inc_y) + (z * inc_z)`
+    ///
+    /// This allows dynamic adjustment of spatial gradients without neuron recreation.
+    /// Uses each neuron's stored (x, y, z) position for calculation.
+    ///
+    /// # Arguments
+    /// * `cortical_area` - Cortical area index
+    /// * `base_threshold` - Base firing threshold
+    /// * `increment_x/y/z` - Spatial gradient increments
+    ///
+    /// # Returns
+    /// Number of neurons updated
+    pub fn update_cortical_area_threshold_with_gradient(
+        &mut self,
+        cortical_area: u32,
+        base_threshold: f32,
+        increment_x: f32,
+        increment_y: f32,
+        increment_z: f32,
+    ) -> usize {
+        let mut updated_count = 0;
+
+        // Fast path: if all increments are 0, just set uniform threshold
+        if increment_x == 0.0 && increment_y == 0.0 && increment_z == 0.0 {
+            return self.update_cortical_area_threshold(cortical_area, base_threshold);
+        }
+
+        // Acquire write lock once for all updates
+        let mut neuron_storage_write = self.neuron_storage.write().unwrap();
+
+        for idx in 0..neuron_storage_write.count() {
+            if neuron_storage_write.valid_mask()[idx]
+                && neuron_storage_write.cortical_areas()[idx] == cortical_area
+            {
+                // Read neuron's actual stored position (interleaved: x,y,z,x,y,z,...)
+                let coord_idx = idx * 3;
+                let coords = neuron_storage_write.coordinates();
+                let x = coords[coord_idx];
+                let y = coords[coord_idx + 1];
+                let z = coords[coord_idx + 2];
+
+                // Calculate position-based threshold
+                let threshold = base_threshold
+                    + (x as f32 * increment_x)
+                    + (y as f32 * increment_y)
+                    + (z as f32 * increment_z);
+
+                // Update threshold (coordinates borrow is dropped here)
                 neuron_storage_write.thresholds_mut()[idx] = T::from_f32(threshold);
                 updated_count += 1;
             }
@@ -2221,6 +2669,162 @@ impl<
         let synapse_storage = self.synapse_storage.read().unwrap();
         let mut prop_engine = self.propagation_engine.write().unwrap();
         prop_engine.build_synapse_index(&*synapse_storage);
+        drop(prop_engine);
+        drop(synapse_storage);
+
+        // Keep STDP mapping index in sync with synapse topology.
+        self.rebuild_stdp_mapping_index();
+    }
+
+    /// Register or update STDP parameters for a plastic cortical mapping A→B.
+    pub fn register_stdp_mapping(
+        &mut self,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        params: StdpMappingParams,
+    ) -> Result<()> {
+        if params.plasticity_window == 0 {
+            return Err(FeagiError::RuntimeError(
+                "plasticity_window must be > 0".to_string(),
+            ));
+        }
+        let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
+        self.stdp_mappings.write().unwrap().insert(key, params);
+        Ok(())
+    }
+
+    /// Unregister STDP parameters for a cortical mapping A→B.
+    pub fn unregister_stdp_mapping(&mut self, src_cortical_idx: u32, dst_cortical_idx: u32) -> bool {
+        let key: CorticalMappingKey = (src_cortical_idx, dst_cortical_idx);
+        self.stdp_mappings.write().unwrap().remove(&key).is_some()
+    }
+
+    fn rebuild_stdp_mapping_index(&mut self) {
+        let mappings = self.stdp_mappings.read().unwrap().clone();
+        if mappings.is_empty() {
+            *self.stdp_mapping_index.write().unwrap() = AHashMap::new();
+            return;
+        }
+
+        let synapse_storage = self.synapse_storage.read().unwrap();
+        let neuron_storage = self.neuron_storage.read().unwrap();
+
+        let mut index: AHashMap<CorticalMappingKey, Vec<usize>> =
+            AHashMap::with_capacity(mappings.len());
+
+        for syn_idx in 0..synapse_storage.count() {
+            if !synapse_storage.valid_mask()[syn_idx] {
+                continue;
+            }
+
+            let src_neuron = synapse_storage.source_neurons()[syn_idx] as usize;
+            let dst_neuron = synapse_storage.target_neurons()[syn_idx] as usize;
+            if src_neuron >= neuron_storage.count() || dst_neuron >= neuron_storage.count() {
+                continue;
+            }
+            if !neuron_storage.valid_mask()[src_neuron] || !neuron_storage.valid_mask()[dst_neuron] {
+                continue;
+            }
+
+            let src_area = neuron_storage.cortical_areas()[src_neuron];
+            let dst_area = neuron_storage.cortical_areas()[dst_neuron];
+            let key: CorticalMappingKey = (src_area, dst_area);
+
+            if mappings.contains_key(&key) {
+                index.entry(key).or_default().push(syn_idx);
+            }
+        }
+
+        *self.stdp_mapping_index.write().unwrap() = index;
+    }
+
+    fn apply_stdp_updates_for_burst(
+        &self,
+        burst_timestep: u64,
+        fire_ledger: &crate::fire_ledger::FireLedger,
+    ) -> Result<()> {
+        let mappings = self.stdp_mappings.read().unwrap().clone();
+        if mappings.is_empty() {
+            return Ok(());
+        }
+
+        let mapping_index = self.stdp_mapping_index.read().unwrap().clone();
+        if mapping_index.is_empty() {
+            return Ok(());
+        }
+
+        // Precompute window activity sets per mapping.
+        let mut activity_sets: AHashMap<CorticalMappingKey, (RoaringBitmap, RoaringBitmap)> =
+            AHashMap::with_capacity(mappings.len());
+
+        for (key @ (src_area, dst_area), params) in &mappings {
+            let depth = params.plasticity_window;
+            let src_window = match fire_ledger.get_dense_window_bitmaps(*src_area, burst_timestep, depth) {
+                Ok(w) => w,
+                Err(_) => continue, // insufficient history / not tracked yet
+            };
+            let dst_window = match fire_ledger.get_dense_window_bitmaps(*dst_area, burst_timestep, depth) {
+                Ok(w) => w,
+                Err(_) => continue,
+            };
+
+            let mut src_active = RoaringBitmap::new();
+            for (_t, bm) in src_window {
+                src_active |= bm;
+            }
+            let mut dst_active = RoaringBitmap::new();
+            for (_t, bm) in dst_window {
+                dst_active |= bm;
+            }
+
+            activity_sets.insert(*key, (src_active, dst_active));
+        }
+
+        if activity_sets.is_empty() {
+            return Ok(());
+        }
+
+        // Apply weight updates.
+        let mut synapse_storage = self.synapse_storage.write().unwrap();
+
+        for (key, params) in mappings {
+            let Some((src_active, dst_active)) = activity_sets.get(&key) else {
+                continue;
+            };
+            let Some(syn_indices) = mapping_index.get(&key) else {
+                continue;
+            };
+
+            let delta_plus = params.delta_plus_u8();
+            let delta_minus = params.delta_minus_u8();
+            if delta_plus == 0 && delta_minus == 0 {
+                continue;
+            }
+
+            for &syn_idx in syn_indices {
+                if syn_idx >= synapse_storage.count() || !synapse_storage.valid_mask()[syn_idx] {
+                    continue;
+                }
+
+                let src_neuron = synapse_storage.source_neurons()[syn_idx];
+                let dst_neuron = synapse_storage.target_neurons()[syn_idx];
+
+                let src_present = src_active.contains(src_neuron);
+                let dst_present = dst_active.contains(dst_neuron);
+
+                if src_present && dst_present {
+                    let old = synapse_storage.weights()[syn_idx];
+                    let new_w = old.saturating_add(delta_plus);
+                    synapse_storage.weights_mut()[syn_idx] = new_w;
+                } else if src_present ^ dst_present {
+                    let old = synapse_storage.weights()[syn_idx];
+                    let new_w = old.saturating_sub(delta_minus);
+                    synapse_storage.weights_mut()[syn_idx] = new_w;
+                }
+            }
+        }
+
+        Ok(())
     }
 
     /// Get neuron state for diagnostics (CFC, extended refractory, potential, etc.)
@@ -2260,6 +2864,7 @@ impl<
 #[allow(dead_code)] // In development - used for monitoring/debugging
 struct InjectionResult {
     power_injections: usize,
+    fatigue_injections: usize,
     synaptic_injections: usize,
     sensory_injections: usize,
 }
@@ -2280,6 +2885,7 @@ fn phase1_injection_with_synapses<
     power_amount: f32,
     synapse_storage: &S,
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
+    fatigue_active: bool,
 ) -> Result<InjectionResult> {
     // Clear FCL from previous burst
     fcl.clear();
@@ -2417,12 +3023,67 @@ fn phase1_injection_with_synapses<
         LAST_POWER_COUNT.store(power_count, Ordering::Relaxed);
     }
 
+    // 1.5. Fatigue Injection (conditional, extremely light)
+    // Check fatigue_active boolean - if true, inject fatigue neurons (cortical_area = 2)
+    let mut fatigue_count = 0;
+
+    if fatigue_active {
+        // Scan all neurons for _fatigue cortical area (cortical_idx = 2)
+        for array_idx in 0..neuron_storage.count() {
+            let neuron_id = array_idx as u32;
+            if array_idx < neuron_storage.count() && neuron_storage.valid_mask()[array_idx] {
+                let cortical_area = neuron_storage.cortical_areas()[array_idx];
+
+                // Check if this is a fatigue neuron (cortical_area = 2)
+                if cortical_area == 2 {
+                    fcl.add_candidate(NeuronId(neuron_id), power_amount);
+                    fatigue_count += 1;
+                }
+            }
+        }
+
+        if fatigue_count > 0 {
+            trace!(
+                "[FATIGUE-INJECTION] ⚠️  Fatigue detected! Injected {} fatigue neurons into FCL",
+                fatigue_count
+            );
+        }
+    }
+
     // 2. Synaptic Propagation
     if !previous_fire_queue.is_empty() {
         let fired_ids = previous_fire_queue.get_all_neuron_ids();
 
+        // Build membrane potential map for fired neurons (needed for mp_driven_psp feature)
+        //
+        // IMPORTANT:
+        // - We must use the *firing-time* membrane potential, not the current neuron_storage value.
+        //   Neurons reset their membrane potential after firing, so neuron_storage will typically
+        //   contain 0 by the time we propagate (which breaks mp_driven_psp).
+        // - FireQueue stores the membrane potential captured at the moment of firing.
+        //
+        // Conversion contract:
+        // - Synaptic propagation expects a u8 conductance (0..=255).
+        // - Some pipelines use absolute-u8 MP (0..=255), while others may accumulate in u8×u8 space.
+        //   To stay deterministic and preserve dynamic range, we downscale only when values exceed
+        //   the representable u8 range.
+        let mut neuron_mps: ahash::AHashMap<NeuronId, u8> = ahash::AHashMap::new();
+        let u8_max_f32 = u8::MAX as f32;
+        for neurons in previous_fire_queue.neurons_by_area.values() {
+            for neuron in neurons {
+                let mp_f32 = neuron.membrane_potential;
+                let mp_scaled = if mp_f32 > u8_max_f32 {
+                    mp_f32 / u8_max_f32
+                } else {
+                    mp_f32
+                };
+                let mp_u8 = mp_scaled.clamp(0.0, u8_max_f32).round() as u8;
+                neuron_mps.insert(neuron.neuron_id, mp_u8);
+            }
+        }
+
         // Call synaptic propagation engine (ZERO-COPY: pass synapse_storage by reference)
-        let propagation_result = propagation_engine.propagate(&fired_ids, synapse_storage)?;
+        let propagation_result = propagation_engine.propagate(&fired_ids, synapse_storage, &neuron_mps)?;
 
         // Inject propagated potentials into FCL
         for (_cortical_area, targets) in propagation_result {
@@ -2435,6 +3096,7 @@ fn phase1_injection_with_synapses<
 
     Ok(InjectionResult {
         power_injections: power_count,
+        fatigue_injections: fatigue_count,
         synaptic_injections: synaptic_count,
         sensory_injections: sensory_count,
     })
@@ -2449,45 +3111,51 @@ impl<
         B: crate::backend::ComputeBackend<T, R::NeuronStorage<T>, R::SynapseStorage>,
     > RustNPU<R, T, B>
 {
-    /// Get firing history for a cortical area from Fire Ledger
-    /// Returns Vec of (timestep, Vec<neuron_id>) tuples, newest first
-    pub fn get_fire_ledger_history(
+    /// Get a dense, burst-aligned window of firing history as RoaringBitmaps.
+    ///
+    /// Returns exactly `depth` frames covering `[end_timestep - depth + 1 .. end_timestep]`.
+    pub fn get_fire_ledger_dense_window_bitmaps(
         &self,
         cortical_idx: u32,
-        lookback_steps: usize,
-    ) -> Vec<(u64, Vec<u32>)> {
+        end_timestep: u64,
+        depth: usize,
+    ) -> Result<Vec<(u64, RoaringBitmap)>> {
         self.fire_structures
             .lock()
             .unwrap()
             .fire_ledger
-            .get_history(cortical_idx, lookback_steps)
+            .get_dense_window_bitmaps(cortical_idx, end_timestep, depth)
+            .map_err(|e| FeagiError::RuntimeError(format!("FireLedger query failed: {e}")))
     }
 
-    /// Get Fire Ledger window size for a cortical area
-    pub fn get_fire_ledger_window_size(&self, cortical_idx: u32) -> usize {
+    /// Get the tracked FireLedger window size for a cortical area.
+    pub fn get_fire_ledger_window_size(&self, cortical_idx: u32) -> Result<usize> {
         self.fire_structures
             .lock()
             .unwrap()
             .fire_ledger
-            .get_area_window_size(cortical_idx)
+            .get_tracked_window(cortical_idx)
+            .map_err(|e| FeagiError::RuntimeError(format!("FireLedger query failed: {e}")))
     }
 
-    /// Configure Fire Ledger window size for a specific cortical area
-    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) {
+    /// Track a cortical area in the FireLedger with an explicit window size.
+    pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) -> Result<()> {
         self.fire_structures
             .lock()
             .unwrap()
             .fire_ledger
-            .configure_area_window(cortical_idx, window_size);
+            .track_area(cortical_idx, window_size)
+            .map_err(|e| FeagiError::RuntimeError(format!("FireLedger track failed: {e}")))?;
+        Ok(())
     }
 
-    /// Get all configured Fire Ledger window sizes
+    /// Get all tracked FireLedger window sizes (tracked areas only).
     pub fn get_all_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
         self.fire_structures
             .lock()
             .unwrap()
             .fire_ledger
-            .get_all_window_configs()
+            .get_tracked_windows()
     }
 }
 
@@ -2724,10 +3392,10 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let id1 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         let id2 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
             .unwrap();
 
         assert_eq!(id1.0, 0);
@@ -2745,7 +3413,7 @@ mod tests {
 
         for i in 0..10 {
             let id = npu
-                .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+                .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
                 .unwrap();
             assert_eq!(id.0, i);
         }
@@ -2763,22 +3431,22 @@ mod tests {
 
         // High threshold
         let _n1 = npu
-            .add_neuron(10.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(10.0, 0.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // High leak
         let _n2 = npu
-            .add_neuron(1.0, 0.9, 0.0, 0, 0, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.9, 0.0, 0, 0, 1.0, 0, 0, true, 1, 1, 0, 0)
             .unwrap();
 
         // Long refractory period
         let _n3 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 100, 1.0, 0, 0, true, 1, 2, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 100, 1.0, 0, 0, true, 1, 2, 0, 0)
             .unwrap();
 
         // Low excitability
         let _n4 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 0.1, 0, 0, true, 1, 3, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 0.1, 0, 0, true, 1, 3, 0, 0)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 4);
@@ -2795,13 +3463,13 @@ mod tests {
         npu.register_cortical_area(3, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let _power = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         let _area2 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
             .unwrap();
         let _area3 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 3, 0, 0, 0)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 3);
@@ -2816,7 +3484,7 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let _n1 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 5, 10, 15)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 5, 10, 15)
             .unwrap();
 
         assert_eq!(npu.get_neuron_count(), 1);
@@ -2835,10 +3503,10 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         let n2 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
             .unwrap();
 
         npu.add_synapse(
@@ -2862,13 +3530,13 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         let n2 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
             .unwrap();
         let n3 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 2, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 2, 0, 0)
             .unwrap();
 
         npu.add_synapse(
@@ -2908,10 +3576,10 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         let n2 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
             .unwrap();
 
         npu.add_synapse(
@@ -2935,10 +3603,10 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         let n2 = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
             .unwrap();
 
         npu.add_synapse(
@@ -2964,10 +3632,10 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         let n2 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
             .unwrap();
 
         assert!(!npu.remove_synapse(n1, n2));
@@ -2987,7 +3655,7 @@ mod tests {
 
         // Add a power neuron
         let _power_neuron = npu
-            .add_neuron(1.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // Process burst with power injection
@@ -3024,13 +3692,13 @@ mod tests {
 
         // Add 5 power neurons (cortical_area=1)
         for i in 0..5 {
-            npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+            npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
                 .unwrap();
         }
 
         // Add 5 regular neurons (cortical_area=2)
         for i in 0..5 {
-            npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, i, 0, 0)
+            npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, i, 0, 0)
                 .unwrap();
         }
 
@@ -3049,7 +3717,7 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         // Add power neuron with high threshold
-        npu.add_neuron(5.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+        npu.add_neuron(5.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // Set high power amount
@@ -3058,6 +3726,236 @@ mod tests {
         // Should fire immediately (10.0 > 5.0 threshold)
         let result = npu.process_burst().unwrap();
         assert_eq!(result.neuron_count, 1);
+    }
+
+    #[test]
+    fn test_mp_charge_accumulation_false_respects_threshold() {
+        use feagi_npu_neural::{SynapticWeight, SynapticConductance, SynapseType};
+        
+        // REGRESSION TEST: Verify that neurons with mp_charge_accumulation=false
+        // do NOT fire when PSP < threshold, even if they had residual potential
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+        
+        // Use simple area IDs  - Power and Death are standard areas
+        npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
+        
+        // Area A: 1x1x1 with threshold 1.0, mp_acc=false
+        let neuron_a = npu
+            .add_neuron(
+                1.0,   // threshold
+                0.0,   // threshold_limit (0 = no limit)
+                0.0,   // leak_coefficient (no leak)
+                0.0,   // resting_potential
+                0,     // neuron_type
+                0,     // refractory_period (fire every burst)
+                1.0,   // excitability (always fire)
+                0,     // consecutive_fire_limit (unlimited)
+                0,     // snooze_period
+                false, // mp_charge_accumulation=FALSE (reset each burst)
+                1,     // cortical_area (Power area)
+                0, 0, 0,
+            )
+            .unwrap();
+        
+        // Area B: 1x1x1 with threshold 1.1, mp_acc=false
+        let neuron_b = npu
+            .add_neuron(
+                1.1,   // threshold (HIGHER than PSP)
+                0.0,   // threshold_limit (0 = no limit)
+                0.0,   // leak_coefficient (no leak)
+                0.0,   // resting_potential
+                0,     // neuron_type
+                0,     // refractory_period
+                1.0,   // excitability (always fire if threshold met)
+                0,     // consecutive_fire_limit
+                0,     // snooze_period
+                false, // mp_charge_accumulation=FALSE (reset each burst)
+                2,     // cortical_area (Death area - just a test area)
+                0, 0, 0,
+            )
+            .unwrap();
+        
+        // Connect A → B with conductance=1.0 (PSP)
+        // CRITICAL: Using weight=1, conductance=1 → PSP = 1×1 = 1.0
+        npu.add_synapse(
+            neuron_a,
+            neuron_b,
+            SynapticWeight(1),          // weight = 1
+            SynapticConductance(1),     // conductance = 1 → PSP = 1×1 = 1.0
+            SynapseType::Excitatory,    // synapse_type (excitatory)
+        ).unwrap();
+        npu.rebuild_synapse_index();
+        
+        // Burst 1: Inject neuron_a manually to make it fire
+        // NOTE: Synaptic propagation is applied on burst t+1 (Phase 1 uses previous burst's fire queue).
+        npu.inject_sensory_with_potentials(&[(neuron_a, 1.5)]);
+        let result1 = npu.process_burst().unwrap();
+        
+        println!("Burst 1 Results:");
+        println!("  - Fired neurons: {:?}", result1.fired_neurons);
+        println!("  - Synaptic injections: {}", result1.synaptic_injections);
+        println!("  - Neurons processed: {}", result1.neurons_processed);
+        
+        // Neuron A should fire (1.5 > 1.0 threshold)
+        assert!(result1.fired_neurons.contains(&neuron_a), 
+                "Neuron A should fire with 1.5 input");
+        
+        // Burst 1 should NOT include synaptic propagation yet (previous fire queue was empty).
+        assert_eq!(
+            result1.synaptic_injections, 0,
+            "No synaptic propagation should occur on the first burst"
+        );
+
+        // Burst 2: Fire neuron A again.
+        // This burst should receive synaptic input to neuron B from burst 1.
+        npu.inject_sensory_with_potentials(&[(neuron_a, 1.5)]);
+        let result2 = npu.process_burst().unwrap();
+        
+        println!("Burst 2: Fired neurons: {:?}", result2.fired_neurons);
+        
+        // Check if synaptic propagation happened (from burst 1 → burst 2).
+        assert!(
+            result2.synaptic_injections > 0,
+            "Synapse from A to B should have propagated on burst 2 (t+1)"
+        );
+
+        // Neuron A should fire again
+        assert!(result2.fired_neurons.contains(&neuron_a));
+
+        // Neuron B should NOT fire (PSP=1.0 < 1.1 threshold) on burst 2
+        assert!(
+            !result2.fired_neurons.contains(&neuron_b),
+            "BUG: Neuron B fired with PSP=1.0 but threshold=1.1! mp_charge_accumulation=false not respected"
+        );
+
+        // Verify membrane potentials after burst 2
+        {
+            let neuron_storage = npu.neuron_storage.read().unwrap();
+            let mp_a = neuron_storage.membrane_potentials()[neuron_a.0 as usize].to_f32();
+            let mp_b = neuron_storage.membrane_potentials()[neuron_b.0 as usize].to_f32();
+
+            // Neuron A fired, so it should be reset to 0
+            assert_eq!(mp_a, 0.0, "Neuron A should have 0 membrane potential after firing");
+
+            // Neuron B should have received ~1.0 PSP on burst 2 (from burst 1 firing of A)
+            println!("Neuron B membrane potential after burst 2: {} (expected: 1.0 from PSP)", mp_b);
+            assert!((mp_b - 1.0).abs() < 0.01, "Neuron B should have ~1.0 potential from PSP");
+        } // Drop the read lock here
+
+        // Burst 3: Fire neuron A again (B receives another PSP from burst 2).
+        npu.inject_sensory_with_potentials(&[(neuron_a, 1.5)]);
+        let result3 = npu.process_burst().unwrap();
+
+        // Neuron A should fire again
+        assert!(result3.fired_neurons.contains(&neuron_a));
+
+        // Neuron B should STILL NOT fire (mp_charge_accumulation=false should prevent carry-over)
+        assert!(
+            !result3.fired_neurons.contains(&neuron_b),
+            "BUG: Neuron B fired on burst 3! Membrane potential not reset despite mp_charge_accumulation=false"
+        );
+    }
+
+    #[test]
+    fn test_mp_driven_psp_uses_firing_time_membrane_potential() {
+        use feagi_npu_neural::{SynapticConductance, SynapseType, SynapticWeight};
+
+        // REGRESSION TEST:
+        // mp_driven_psp must use the firing-time MP captured in FireQueue, NOT neuron_storage MP
+        // (neuron_storage MP is reset to 0 after firing).
+        let mut npu =
+            <RustNPU<feagi_npu_runtime::StdRuntime, f32, crate::backend::CPUBackend>>::new_cpu_only(
+                100, 1000, 10,
+            );
+
+        // Avoid power auto-injection by NOT using cortical_area index 1.
+        // We still use a valid CorticalID string for propagation-engine mapping.
+        let cortical_id = CoreCorticalType::Death.to_cortical_id();
+        npu.register_cortical_area(2, cortical_id.as_base_64());
+        npu.register_cortical_area(3, cortical_id.as_base_64());
+
+        // Source neuron in cortical_area=2 (will be the mp_driven_psp source area).
+        let neuron_src = npu
+            .add_neuron(
+                1.0, // threshold
+                0.0, // threshold_limit (0 = no limit)
+                0.0, // leak_coefficient
+                0.0, // resting_potential
+                0,   // neuron_type
+                0,   // refractory_period
+                1.0, // excitability
+                0,   // consecutive_fire_limit
+                0,   // snooze_period
+                true, // mp_charge_accumulation
+                2,   // cortical_area
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        // Target neuron in cortical_area=3. Threshold=100 so it will fire only if it receives
+        // a conductance roughly >= 100 from mp_driven_psp propagation.
+        let neuron_dst = npu
+            .add_neuron(
+                100.0, // threshold
+                0.0,   // threshold_limit (0 = no limit)
+                0.0,   // leak_coefficient
+                0.0,   // resting_potential
+                0,     // neuron_type
+                0,     // refractory_period
+                1.0,   // excitability
+                0,     // consecutive_fire_limit
+                0,     // snooze_period
+                true,  // mp_charge_accumulation
+                3,     // cortical_area
+                0,
+                0,
+                0,
+            )
+            .unwrap();
+
+        // Connect src → dst. With mp_driven_psp enabled, the synapse conductance is ignored
+        // and replaced by the source neuron's MP (converted to u8).
+        npu.add_synapse(
+            neuron_src,
+            neuron_dst,
+            SynapticWeight(1),
+            SynapticConductance(1),
+            SynapseType::Excitatory,
+        )
+        .unwrap();
+        npu.rebuild_synapse_index();
+
+        // Enable mp_driven_psp on the source cortical ID.
+        let mut flags = ahash::AHashMap::new();
+        flags.insert(cortical_id, true);
+        npu.set_mp_driven_psp_flags(flags);
+
+        // Burst 1: force src to fire with MP=128.0 (captured in FireQueue before reset).
+        // IMPORTANT: Use staged sensory injection so it survives Phase-1 FCL clear.
+        npu.inject_sensory_with_potentials(&[(neuron_src, 128.0)]);
+        let result1 = npu.process_burst().unwrap();
+        assert!(
+            result1.fired_neurons.contains(&neuron_src),
+            "Source neuron should fire with injected MP=128.0"
+        );
+
+        // Burst 2: no injection. Propagation should use the firing-time MP from burst 1 and
+        // stimulate dst enough to cross its threshold.
+        let result2 = npu.process_burst().unwrap();
+        assert!(
+            result2.synaptic_injections > 0,
+            "Expected synaptic propagation on burst 2"
+        );
+        assert!(
+            result2.fired_neurons.contains(&neuron_dst),
+            "Target neuron should fire when mp_driven_psp uses src firing-time MP"
+        );
     }
 
     #[test]
@@ -3070,7 +3968,7 @@ mod tests {
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         // Add only regular neurons (no power area)
-        npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
             .unwrap();
 
         let result = npu.process_burst().unwrap();
@@ -3099,7 +3997,7 @@ mod tests {
 
         // Simulate genome load: Add power neurons
         for i in 0..10 {
-            npu.add_neuron(0.5, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+            npu.add_neuron(0.5, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
                 .unwrap();
         }
 
@@ -3132,7 +4030,7 @@ mod tests {
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let neuron = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
             .unwrap();
 
         npu.inject_sensory_with_potentials(&[(neuron, 0.5)]);
@@ -3151,13 +4049,13 @@ mod tests {
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let n1 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
             .unwrap();
         let n2 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 1, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 1, 0, 0)
             .unwrap();
         let n3 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 2, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 2, 0, 0)
             .unwrap();
 
         npu.inject_sensory_with_potentials(&[(n1, 0.5), (n2, 0.3), (n3, 0.8)]);
@@ -3175,7 +4073,7 @@ mod tests {
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         let neuron = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
             .unwrap();
 
         npu.inject_sensory_with_potentials(&[(neuron, 0.3)]);
@@ -3197,17 +4095,18 @@ mod tests {
                 100, 1000, 10,
             );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
+        npu.configure_fire_ledger_window(1, 10).unwrap();
 
         let _neuron = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // Process burst
         npu.process_burst().unwrap();
 
-        // Check fire ledger
-        let history = npu.get_fire_ledger_history(1, 10);
-        assert!(!history.is_empty());
+        // Check fire ledger (dense, tracked)
+        let window = npu.get_fire_ledger_dense_window_bitmaps(1, 1, 1).unwrap();
+        assert_eq!(window.len(), 1);
     }
 
     #[test]
@@ -3218,9 +4117,9 @@ mod tests {
             );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
-        npu.configure_fire_ledger_window(1, 50);
+        npu.configure_fire_ledger_window(1, 50).unwrap();
 
-        let window_size = npu.get_fire_ledger_window_size(1);
+        let window_size = npu.get_fire_ledger_window_size(1).unwrap();
         assert_eq!(window_size, 50);
     }
 
@@ -3236,7 +4135,7 @@ mod tests {
             );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
-        npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         npu.set_visualization_subscribers(true);
@@ -3290,7 +4189,7 @@ mod tests {
             );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
-        npu.add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // Before any burst
@@ -3332,7 +4231,7 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let n1 = npu
-            .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
             .unwrap();
         let nonexistent = NeuronId(999);
 
@@ -3378,7 +4277,7 @@ mod tests {
         let mut neurons = Vec::new();
         for i in 0..100 {
             let neuron = npu
-                .add_neuron(1.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, i, 0, 0)
+                .add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, i, 0, 0)
                 .unwrap();
             neurons.push((neuron, 0.5));
         }

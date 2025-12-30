@@ -10,6 +10,17 @@ use paste;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
+// Helper macro to handle optional allowed_frame_change_handling
+#[macro_export]
+macro_rules! get_allowed_frame_change_handling_impl {
+    () => {
+        None
+    };
+    ($($allowed:ident),+) => {
+        Some(&[$(FrameChangeHandling::$allowed),+] as &'static [FrameChangeHandling])
+    };
+}
+
 macro_rules! define_motor_cortical_units_enum {
     (
         MotorCorticalUnit {
@@ -24,6 +35,7 @@ macro_rules! define_motor_cortical_units_enum {
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
+                    $(allowed_frame_change_handling: [$($allowed_frame:ident),* $(,)?],)?
                     cortical_area_properties: {
                         $($cortical_sub_unit_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
@@ -67,6 +79,16 @@ macro_rules! define_motor_cortical_units_enum {
                 match self {
                     $(
                         MotorCorticalUnit::$variant_name => $snake_case_name,
+                    )*
+                }
+            }
+
+            /// Get the accepted wrapped IO data type for this motor cortical unit.
+            /// Returns the string name of the data type (e.g., "MiscData", "SignedPercentageData").
+            pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str {
+                match self {
+                    $(
+                        MotorCorticalUnit::$variant_name => stringify!($accepted_wrapped_io_data_type),
                     )*
                 }
             }
@@ -145,6 +167,19 @@ macro_rules! define_motor_cortical_units_enum {
                                 );
                             )*
                             topology
+                        }
+                    )*
+                }
+            }
+
+            /// Returns the allowed FrameChangeHandling values for this motor cortical unit.
+            /// If None, all FrameChangeHandling values are allowed.
+            /// If Some, only the specified values are allowed.
+            pub fn get_allowed_frame_change_handling(&self) -> Option<&'static [FrameChangeHandling]> {
+                match self {
+                    $(
+                        MotorCorticalUnit::$variant_name => {
+                            $crate::get_allowed_frame_change_handling_impl!($($($allowed_frame),*)?)
                         }
                     )*
                 }

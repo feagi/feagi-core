@@ -69,6 +69,54 @@ macro_rules! motor_cortical_units {
                     }
                 },
 
+                #[doc = "Text output (English) - token stream encoded as absolute fractional bitplanes along Z (z=0 is MSB)."]
+                TextEnglishOutput => {
+                    friendly_name: "Text Output (English)",
+                    snake_case_name: "text_english_output",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"ten",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        // 1x1x16 default: one token per FEAGI tick, encoded into 16 bitplanes (supports GPT-2 vocab via token_id+1 offset).
+                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
+                    }
+                },
+
+                #[doc = "Object semantic segmentation output (bitplane class encoding)"]
+                ObjectSegmentation => {
+                    friendly_name: "Object Segmentation",
+                    snake_case_name: "object_segmentation",
+                    accepted_wrapped_io_data_type: MiscData,
+                    cortical_id_unit_reference: *b"seg",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    allowed_frame_change_handling: [Absolute],
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                    }
+                },
+
+                #[doc = "Visual thoughts output - RGB image generation from brain activity"]
+                SimpleVisionOutput => {
+                    friendly_name: "Simple Vision Output",
+                    snake_case_name: "simple_vision_output",
+                    accepted_wrapped_io_data_type: ImageFrame,
+                    cortical_id_unit_reference: *b"img",
+                    number_cortical_areas: 1,
+                    cortical_type_parameters: {
+                        frame_change_handling: FrameChangeHandling,
+                    },
+                    cortical_area_properties: {
+                        0 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
+                    }
+                },
+
             }
         }
     };

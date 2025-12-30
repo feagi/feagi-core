@@ -451,13 +451,14 @@ impl CUDABackend {
 
         debug!("📤 Uploading FCL to GPU ({} candidates)...", fcl.len());
 
-        // Convert FCL to atomic i32 array (fixed-point)
+        // Convert FCL to atomic i32 array (fixed-point).
+        // Canonical scale: 1000 (matches WGPU backend and CUDA kernels).
         let mut fcl_host = vec![0i32; self.current_neuron_count];
         for (neuron_id, potential) in fcl.iter() {
             let idx = neuron_id.0 as usize;
             if idx < self.current_neuron_count {
-                // Convert to fixed-point (multiply by 1M for 6 decimal precision)
-                fcl_host[idx] = (potential * 1000000.0) as i32;
+                // Convert to fixed-point (multiply by 1000)
+                fcl_host[idx] = (potential * 1000.0) as i32;
             }
         }
 
@@ -490,7 +491,7 @@ impl CUDABackend {
         fcl.clear();
         for (neuron_id, &atomic_val) in fcl_host.iter().enumerate() {
             if atomic_val != 0 {
-                let potential = (atomic_val as f32) / 1000000.0; // Scale back from fixed-point (1M scale)
+                let potential = (atomic_val as f32) / 1000.0; // Scale back from fixed-point (1000 scale)
                 fcl.add_candidate(NeuronId(neuron_id as u32), potential);
             }
         }

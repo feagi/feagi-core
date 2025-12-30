@@ -239,7 +239,9 @@ impl RuntimeService for RuntimeServiceImpl {
         window_size: usize,
     ) -> ServiceResult<()> {
         let mut runner = self.burst_runner.write();
-        runner.configure_fire_ledger_window(cortical_idx, window_size);
+        runner
+            .configure_fire_ledger_window(cortical_idx, window_size)
+            .map_err(|e| ServiceError::Internal(format!("Failed to configure fire ledger window: {e}")))?;
 
         info!(target: "feagi-services", "Configured Fire Ledger window for area {}: {} bursts",
             cortical_idx, window_size);

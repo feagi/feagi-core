@@ -27,6 +27,12 @@ pub struct ParameterUpdate {
     pub parameter_name: String,
     /// New value
     pub value: Value,
+    /// Optional cortical area dimensions (for spatial gradient updates)
+    pub dimensions: Option<(u32, u32, u32)>, // (width, height, depth)
+    /// Optional neurons_per_voxel (for spatial gradient updates)
+    pub neurons_per_voxel: Option<u32>,
+    /// Optional base_threshold (for spatial gradient updates)
+    pub base_threshold: Option<f32>,
 }
 
 /// Thread-safe queue for parameter updates

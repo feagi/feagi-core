@@ -716,8 +716,9 @@ impl RustNPU {
                     let weight = self.synapse_array.weights[syn_idx];
                     let psp = self.synapse_array.conductances[syn_idx];  // PSP, not conductance
                     
-                    // Calculate contribution (model-agnostic)
-                    let contribution = (weight as f32 / 255.0) * (psp as f32 / 255.0);
+                    // Calculate contribution (model-agnostic, canonical absolute-u8 contract)
+                    // contribution = weight × psp  (both are absolute u8 units 0..255)
+                    let contribution = (weight as f32) * (psp as f32);
                     
                     // Accumulate to FCL with model type lookup (cached!)
                     fcl.add_candidate(target_global_id, contribution, id_router);
@@ -836,7 +837,7 @@ let contribution = weight * psp;
 
 ```rust
 // ✅ All Backends (standardized)
-let contribution = weight * psp;  // Both normalized 0-1
+let contribution = weight * psp;  // Both absolute u8 units (0..255), direct-cast to f32
 ```
 
 **If scaling needed**: Adjust `psp` values in genome, not hardcode in dynamics.

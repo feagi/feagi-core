@@ -34,6 +34,7 @@ macro_rules! motor_unit_functions {
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
+                    $(allowed_frame_change_handling: [$($allowed_frame:ident),* $(,)?],)?
                     cortical_area_properties: {
                         $($area_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
@@ -355,6 +356,32 @@ macro_rules! motor_unit_functions {
         motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, MiscData);
     };
 
+    // Arm for WrappedIOType::ImageFrame
+    (@generate_functions
+        $motor_unit:ident,
+        $snake_case_name:expr,
+        ImageFrame
+    ) => {
+        ::paste::paste! {
+            pub fn [<$snake_case_name _register>](
+                &mut self,
+                group: CorticalGroupIndex,
+                number_channels: CorticalChannelCount,
+                frame_change_handling: FrameChangeHandling,
+                image_properties: ImageFrameProperties,
+                ) -> Result<(), FeagiDataError>
+            {
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, group)[0];
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = CartesianPlaneNeuronVoxelXYZPDecoder::new_box(cortical_id, &image_properties, number_channels)?;
+
+                let initial_val: WrappedIOData = WrappedIOType::ImageFrame(Some(image_properties)).create_blank_data_of_type()?;
+                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
+                Ok(())
+            }
+        }
+
+        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, ImageFrame);
+    };
 }
 
 pub struct MotorDeviceCache {

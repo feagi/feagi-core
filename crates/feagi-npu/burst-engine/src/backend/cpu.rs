@@ -75,8 +75,10 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
                 }
 
                 let target_id = synapse_storage.target_neurons()[syn_idx];
-                let weight = synapse_storage.weights()[syn_idx] as f32 / 255.0; // Normalize to [0,1]
-                let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32 / 255.0;
+                // Canonical synaptic units: u8 (0..255) stored in synapse arrays.
+                // We use direct cast to f32 (NO /255 normalization) to match the rest of FEAGI.
+                let weight = synapse_storage.weights()[syn_idx] as f32;
+                let psp = synapse_storage.postsynaptic_potentials()[syn_idx] as f32;
                 let synapse_type = if synapse_storage.types()[syn_idx] == 0 {
                     SynapseType::Excitatory
                 } else {
@@ -84,7 +86,7 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
                 };
 
                 // ✅ Use neuron model trait (LIF formula)
-                // Result range: -1.0 to +1.0 (both weight and psp normalized [0,1])
+                // Result range: -65,025.0 to +65,025.0 (255 × 255) for excitatory/inhibitory.
                 let contribution =
                     self.neuron_model
                         .compute_synaptic_contribution(weight, psp, synapse_type);
@@ -105,7 +107,8 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // FCL-aware: Process only FCL neurons (existing neural_dynamics already supports this!)
-        let result = neural_dynamics::process_neural_dynamics(fcl, neuron_storage, burst_count)?;
+        let result =
+            neural_dynamics::process_neural_dynamics(fcl, None, neuron_storage, burst_count)?;
 
         // Extract neuron IDs from fire queue
         let fired_neurons: Vec<u32> = result
@@ -141,11 +144,13 @@ mod tests {
 
     #[test]
     fn test_cpu_backend_synaptic_propagation() {
+        use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType as NeuralSynapseType};
         let mut backend = CPUBackend::new();
 
         // Create minimal test data
-        let fired_neurons = vec![0, 1];
-        let synapse_storage = StdSynapseArray::new(100);
+        let fired_neurons = vec![1];
+        let mut synapse_storage = StdSynapseArray::new(4);
+        synapse_storage.add_synapse_simple(1, 2, 2, 3, SynapseType::Excitatory); // 2×3 = 6
         let mut fcl = FireCandidateList::new();
 
         // Should not panic
@@ -155,5 +160,10 @@ mod tests {
         );
 
         assert!(result.is_ok());
+        assert_eq!(fcl.get(NeuronId(2)), Some(6.0));
+        assert_eq!(
+            fcl.get(NeuronId(2)),
+            Some(compute_synaptic_contribution(2, 3, NeuralSynapseType::Excitatory))
+        );
     }
 }

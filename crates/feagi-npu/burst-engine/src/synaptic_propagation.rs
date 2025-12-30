@@ -43,9 +43,53 @@ use feagi_npu_neural::types::*;
 use feagi_npu_runtime::SynapseStorage;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use rayon::prelude::*;
+use std::sync::OnceLock;
 
 // Use platform-agnostic synaptic algorithms (now in feagi-neural)
 use feagi_npu_neural::synapse::{compute_synaptic_contribution, SynapseType as FeagiSynapseType};
+use tracing::trace;
+
+/// Runtime-gated tracing config for synaptic propagation.
+/// Enable with:
+/// - FEAGI_NPU_TRACE_SYNAPSE=1
+/// Optional filters:
+/// - FEAGI_NPU_TRACE_SRC=<u32 neuron_id>
+/// - FEAGI_NPU_TRACE_DST=<u32 neuron_id>
+struct SynapseTraceCfg {
+    enabled: bool,
+    src_filter: Option<u32>,
+    dst_filter: Option<u32>,
+}
+
+fn synapse_trace_cfg() -> &'static SynapseTraceCfg {
+    static CFG: OnceLock<SynapseTraceCfg> = OnceLock::new();
+    CFG.get_or_init(|| {
+        let enabled = std::env::var("FEAGI_NPU_TRACE_SYNAPSE")
+            .ok()
+            .as_deref()
+            .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+
+        let src_filter = std::env::var("FEAGI_NPU_TRACE_SRC").ok().and_then(|v| v.parse().ok());
+        let dst_filter = std::env::var("FEAGI_NPU_TRACE_DST").ok().and_then(|v| v.parse().ok());
+
+        SynapseTraceCfg {
+            enabled,
+            src_filter,
+            dst_filter,
+        }
+    })
+}
+
+fn power_cortical_id() -> &'static CorticalID {
+    static POWER: OnceLock<CorticalID> = OnceLock::new();
+    POWER.get_or_init(|| {
+        // "_power" is special-cased and stored as base64 in the genome parser.
+        // See feagi-evolutionary parser docs; this value is stable.
+        CorticalID::try_from_base_64("X19fcG93ZXI=")
+            .expect("Power cortical ID base64 must be valid")
+    })
+}
 
 /// Synapse lookup index: maps source neuron → list of synapse indices
 pub type SynapseIndex = AHashMap<NeuronId, Vec<usize>>;
@@ -59,6 +103,12 @@ pub struct SynapticPropagationEngine {
     pub synapse_index: SynapseIndex,
     /// Neuron → Cortical Area mapping
     pub neuron_to_area: AHashMap<NeuronId, CorticalID>,
+    /// Cortical Area → mp_driven_psp flag mapping
+    pub area_mp_driven_psp: AHashMap<CorticalID, bool>,
+    /// Cortical Area → psp_uniform_distribution flag mapping
+    /// When false: PSP is divided among all outgoing synapses
+    /// When true: Full PSP value is applied to each synapse
+    pub area_psp_uniform_distribution: AHashMap<CorticalID, bool>,
     /// Performance stats
     total_propagations: u64,
     total_synapses_processed: u64,
@@ -70,6 +120,8 @@ impl SynapticPropagationEngine {
         Self {
             synapse_index: AHashMap::new(),
             neuron_to_area: AHashMap::new(),
+            area_mp_driven_psp: AHashMap::new(),
+            area_psp_uniform_distribution: AHashMap::new(),
             total_propagations: 0,
             total_synapses_processed: 0,
         }
@@ -95,9 +147,42 @@ impl SynapticPropagationEngine {
         self.neuron_to_area = mapping;
     }
 
+    /// Set the mp_driven_psp flags for cortical areas
+    /// When enabled for an area, PSP will be dynamically set from source neuron's membrane potential
+    pub fn set_mp_driven_psp_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
+        self.area_mp_driven_psp = flags;
+    }
+
+    /// Update mp_driven_psp flag for a single cortical area (in-place).
+    ///
+    /// This avoids rebuilding/replacing the entire flags map when toggling one area.
+    pub fn set_mp_driven_psp_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
+        self.area_mp_driven_psp.insert(cortical_id, enabled);
+    }
+
+    /// Set the psp_uniform_distribution flags for cortical areas
+    /// When false (default): PSP value is divided among all outgoing synapses from the source neuron
+    /// When true: Full PSP value is applied to each outgoing synapse
+    pub fn set_psp_uniform_distribution_flags(&mut self, flags: AHashMap<CorticalID, bool>) {
+        self.area_psp_uniform_distribution = flags;
+    }
+
+    /// Update psp_uniform_distribution flag for a single cortical area (in-place).
+    ///
+    /// This avoids rebuilding/replacing the entire flags map when toggling one area.
+    pub fn set_psp_uniform_distribution_flag(&mut self, cortical_id: CorticalID, enabled: bool) {
+        self.area_psp_uniform_distribution.insert(cortical_id, enabled);
+    }
+
     /// Compute synaptic propagation for a set of fired neurons
     ///
     /// This is the MAIN PERFORMANCE-CRITICAL function that replaces the Python bottleneck.
+    ///
+    /// # Parameters
+    /// - `fired_neurons`: List of neurons that fired this burst
+    /// - `synapse_storage`: Synapse array (weights, PSPs, types)
+    /// - `neuron_membrane_potentials`: Source neuron → membrane potential (0-255)
+    ///   Used when `mp_driven_psp` is enabled for the source cortical area
     ///
     /// # Performance Notes
     /// - Uses Rayon for parallel processing
@@ -108,6 +193,7 @@ impl SynapticPropagationEngine {
         &mut self,
         fired_neurons: &[NeuronId],
         synapse_storage: &impl SynapseStorage,
+        neuron_membrane_potentials: &AHashMap<NeuronId, u8>,
     ) -> Result<PropagationResult> {
         self.total_propagations += 1;
 
@@ -130,6 +216,16 @@ impl SynapticPropagationEngine {
         let total_synapses = synapse_indices.len();
         self.total_synapses_processed += total_synapses as u64;
 
+        // PRE-COMPUTE: For each source neuron, count outgoing synapses (needed for PSP division)
+        // This is only needed when psp_uniform_distribution = false
+        let source_synapse_counts: AHashMap<NeuronId, usize> = synapse_indices
+            .iter()
+            .map(|&syn_idx| NeuronId(synapse_storage.source_neurons()[syn_idx]))
+            .fold(AHashMap::new(), |mut acc, source_id| {
+                *acc.entry(source_id).or_insert(0) += 1;
+                acc
+            });
+
         // PHASE 2: COMPUTE - Calculate contributions in parallel (TRUE SIMD!)
         // This is where Python spent 165ms doing inefficient numpy ops
         // ZERO-COPY: Access StdSynapseArray fields directly (Structure-of-Arrays)
@@ -147,18 +243,92 @@ impl SynapticPropagationEngine {
                 // Get target cortical area
                 let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
 
-                // Calculate contribution using platform-agnostic function from feagi-synapse
+                // Get source neuron
+                let source_neuron = NeuronId(synapse_storage.source_neurons()[syn_idx]);
+
+                // Get source cortical area
+                let source_area = self.neuron_to_area.get(&source_neuron)?;
+
+                // Logging: exclude power sources to avoid noise (cortical_idx=1 maps to _power).
+                let trace_cfg = synapse_trace_cfg();
+                let allow_trace = trace_cfg.enabled
+                    && *source_area != *power_cortical_id()
+                    && trace_cfg
+                        .src_filter
+                        .map(|id| id == source_neuron.0)
+                        .unwrap_or(true)
+                    && trace_cfg
+                        .dst_filter
+                        .map(|id| id == target_neuron.0)
+                        .unwrap_or(true);
+
+                // Calculate base PSP: Use source neuron's MP if mp_driven_psp is enabled, else use static synapse PSP
+                let mp_driven = self
+                    .area_mp_driven_psp
+                    .get(source_area)
+                    .copied()
+                    .unwrap_or(false);
+                let base_psp = if mp_driven {
+                    // mp_driven_psp enabled: use source neuron's current membrane potential
+                    neuron_membrane_potentials.get(&source_neuron).copied().unwrap_or(0)
+                } else {
+                    // mp_driven_psp disabled: use static PSP from synapse
+                    synapse_storage.postsynaptic_potentials()[syn_idx]
+                };
+
+                // Calculate base contribution using platform-agnostic function from feagi-synapse
                 let weight = synapse_storage.weights()[syn_idx];
-                let psp = synapse_storage.postsynaptic_potentials()[syn_idx];
                 let synapse_type = match synapse_storage.types()[syn_idx] {
                     0 => FeagiSynapseType::Excitatory,
                     _ => FeagiSynapseType::Inhibitory,
                 };
 
-                let contribution =
-                    SynapticContribution(compute_synaptic_contribution(weight, psp, synapse_type));
+                let base_contribution = compute_synaptic_contribution(weight, base_psp, synapse_type);
 
-                Some((target_neuron, cortical_area, contribution))
+                // Apply PSP uniformity: divide CONTRIBUTION (not PSP) if uniformity is false
+                // This preserves precision by doing float division instead of u8 integer division
+                let uniform = self
+                    .area_psp_uniform_distribution
+                    .get(source_area)
+                    .copied()
+                    .unwrap_or(false);
+                let final_contribution = if uniform {
+                    // PSP uniformity = true: Each synapse contributes full amount
+                    base_contribution
+                } else {
+                    // PSP uniformity = false: Total contribution is divided among all outgoing synapses
+                    let synapse_count = source_synapse_counts.get(&source_neuron).copied().unwrap_or(1);
+                    if synapse_count > 1 {
+                        // Divide contribution by number of outgoing synapses (float division preserves precision!)
+                        // Example: 1.0 / 10 = 0.1 (not 0 like u8 division would give)
+                        base_contribution / synapse_count as f32
+                    } else {
+                        base_contribution
+                    }
+                };
+
+                if allow_trace {
+                    let outgoing = source_synapse_counts.get(&source_neuron).copied().unwrap_or(1);
+                    trace!(
+                        target: "feagi-npu-trace",
+                        "[SYNAPSE] syn_idx={} src={} dst={} src_area={:?} dst_area={:?} type={:?} weight={} psp_used={} mp_driven={} uniform={} outgoing={} base_contrib={:.3} final_contrib={:.3}",
+                        syn_idx,
+                        source_neuron.0,
+                        target_neuron.0,
+                        source_area,
+                        cortical_area,
+                        synapse_type,
+                        weight,
+                        base_psp,
+                        mp_driven,
+                        uniform,
+                        outgoing,
+                        base_contribution,
+                        final_contribution
+                    );
+                }
+
+                Some((target_neuron, cortical_area, SynapticContribution(final_contribution)))
             })
             .collect();
 
@@ -235,13 +405,16 @@ mod tests {
         // Set neuron mapping
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let mut mapping = AHashMap::new();
+        mapping.insert(NeuronId(1), CoreCorticalType::Power.to_cortical_id());
+        mapping.insert(NeuronId(2), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(10), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(11), CoreCorticalType::Power.to_cortical_id());
         engine.set_neuron_mapping(mapping);
 
         // Propagate from neuron 1
         let fired = vec![NeuronId(1)];
-        let result = engine.propagate(&fired, &synapses).unwrap();
+        let neuron_mps = AHashMap::new(); // Empty MPs for this test
+        let result = engine.propagate(&fired, &synapses, &neuron_mps).unwrap();
 
         // Should have 2 contributions in area 1
         assert_eq!(result.len(), 1);
@@ -263,13 +436,16 @@ mod tests {
 
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         let mut mapping = AHashMap::new();
+        mapping.insert(NeuronId(1), CoreCorticalType::Power.to_cortical_id());
+        mapping.insert(NeuronId(2), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(10), CoreCorticalType::Power.to_cortical_id());
         mapping.insert(NeuronId(11), CoreCorticalType::Power.to_cortical_id());
         engine.set_neuron_mapping(mapping);
 
         // Propagate from multiple neurons in parallel
         let fired = vec![NeuronId(1), NeuronId(2)];
-        let result = engine.propagate(&fired, &synapses).unwrap();
+        let neuron_mps = AHashMap::new(); // Empty MPs for this test
+        let result = engine.propagate(&fired, &synapses, &neuron_mps).unwrap();
 
         let area1_id = CoreCorticalType::Power.to_cortical_id();
         let area1_contributions = result.get(&area1_id).unwrap();

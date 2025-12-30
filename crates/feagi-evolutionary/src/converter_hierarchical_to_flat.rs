@@ -14,7 +14,6 @@ Licensed under the Apache License, Version 2.0
 use crate::{EvoResult, RuntimeGenome};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use tracing::warn;
 
 /// Convert hierarchical genome (RuntimeGenome) to flat format (3.0)
 ///
@@ -171,37 +170,54 @@ fn convert_area_to_flat(
 ) -> EvoResult<()> {
     let prefix = format!("_____10c-{}", cortical_id_base64);
 
-    // Name (only if not already in properties)
+    // CRITICAL: Always write core fields first (dimensions, position, name) from CorticalArea struct
+    // These are structural properties that MUST be present
+
+    // Dimensions (block_boundaries) - always write from struct
+    flat_blueprint.insert(
+        format!("{}-cx-___bbx-i", prefix),
+        json!(area.dimensions.width),
+    );
+    flat_blueprint.insert(
+        format!("{}-cx-___bby-i", prefix),
+        json!(area.dimensions.height),
+    );
+    flat_blueprint.insert(
+        format!("{}-cx-___bbz-i", prefix),
+        json!(area.dimensions.depth),
+    );
+
+    // Position (relative_coordinate) - always write from struct
+    flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.x));
+    flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), json!(area.position.y));
+    flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), json!(area.position.z));
+
+    // Name - always write from struct (unless overridden in properties)
     if !area.properties.contains_key("cortical_name") {
         flat_blueprint.insert(format!("{}-cx-__name-t", prefix), json!(area.name));
     }
 
-    // Dimensions (block_boundaries) - only if not already in properties
-    if !area.properties.contains_key("block_boundaries") {
-        flat_blueprint.insert(
-            format!("{}-cx-___bbx-i", prefix),
-            json!(area.dimensions.width),
-        );
-        flat_blueprint.insert(
-            format!("{}-cx-___bby-i", prefix),
-            json!(area.dimensions.height),
-        );
-        flat_blueprint.insert(
-            format!("{}-cx-___bbz-i", prefix),
-            json!(area.dimensions.depth),
-        );
-    }
-
-    // Position (relative_coordinate) - only if not already in properties
-    if !area.properties.contains_key("relative_coordinate") {
-        flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), json!(area.position.x));
-        flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), json!(area.position.y));
-        flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), json!(area.position.z));
+    // CRITICAL: Derive cortical_group from cortical_type if not in properties
+    // This ensures the saved genome correctly reflects the area's type classification.
+    // The cortical_type (BrainInput, BrainOutput, etc.) is the source of truth,
+    // and cortical_group is the flat format representation (_group-t: "IPU", "OPU", etc.)
+    // Without this, areas default to "CUSTOM" regardless of their actual type.
+    let mut properties_with_group = area.properties.clone();
+    if !properties_with_group.contains_key("cortical_group") {
+        use feagi_structures::genomic::cortical_area::CorticalAreaType;
+        let cortical_group = match area.cortical_type {
+            CorticalAreaType::BrainInput(_) => "IPU",
+            CorticalAreaType::BrainOutput(_) => "OPU",
+            CorticalAreaType::Memory(_) => "MEMORY",
+            CorticalAreaType::Core(_) => "CORE",
+            CorticalAreaType::Custom(_) => "CUSTOM",
+        };
+        properties_with_group.insert("cortical_group".to_string(), json!(cortical_group));
     }
 
     // Convert all properties from area.properties using reverse mapping
     // This includes cortical_group (_group-t) which should come from properties, not area_type
-    convert_properties_to_flat(&prefix, &area.properties, flat_blueprint)?;
+    convert_properties_to_flat(&prefix, &properties_with_group, flat_blueprint)?;
 
     Ok(())
 }
@@ -230,7 +246,7 @@ fn convert_properties_to_flat(
         ("leak_coefficient", ("leak_c-f", "nx")),
         ("leak_variability", ("leak_v-f", "nx")),
         ("consecutive_fire_cnt_max", ("c_fr_c-i", "nx")),
-        ("snooze_length", ("snooze-f", "nx")), // FIXED: was snooze-i
+        ("snooze_length", ("snooze-i", "nx")),
         ("group_id", ("_group-t", "cx")),
         ("sub_group_id", ("subgrp-t", "cx")),
         ("degeneration", ("de_gen-f", "cx")),
@@ -249,6 +265,72 @@ fn convert_properties_to_flat(
     .cloned()
     .collect();
 
+    // Define default values for ALL required properties
+    // This ensures saved genomes always have complete property sets
+    let required_defaults: HashMap<&str, Value> = [
+        ("per_voxel_neuron_cnt", json!(1)),
+        ("visualization", json!(true)),
+        ("synapse_attractivity", json!(100.0)),
+        ("postsynaptic_current", json!(1.0)),
+        ("postsynaptic_current_max", json!(35.0)),
+        ("firing_threshold", json!(0.1)),
+        ("firing_threshold_increment_x", json!(0.0)),
+        ("firing_threshold_increment_y", json!(0.0)),
+        ("firing_threshold_increment_z", json!(0.0)),
+        ("firing_threshold_limit", json!(0.0)),
+        ("refractory_period", json!(0)),
+        ("leak_coefficient", json!(0.0)),
+        ("leak_variability", json!(0.0)),
+        ("consecutive_fire_cnt_max", json!(0)),
+        ("snooze_length", json!(0)),
+        ("group_id", json!("CUSTOM")),
+        ("sub_group_id", json!("")),
+        ("degeneration", json!(0.0)),
+        ("psp_uniform_distribution", json!(false)),
+        ("mp_charge_accumulation", json!(false)),
+        ("mp_driven_psp", json!(false)),
+        ("is_mem_type", json!(false)),
+        ("longterm_mem_threshold", json!(100)),
+        ("lifespan_growth_rate", json!(1)),
+        ("init_lifespan", json!(9)),
+        ("neuron_excitability", json!(100.0)),
+    ]
+    .iter()
+    .map(|(k, v)| (*k, v.clone()))
+    .collect();
+
+    // First, write all required properties (using defaults if not present)
+    for (prop_key, (suffix, scope)) in &property_mapping {
+        let value = properties
+            .get(*prop_key)
+            .cloned()
+            .or_else(|| required_defaults.get(prop_key).cloned())
+            .unwrap_or_else(|| json!(null));
+
+        // Debug logging for key properties
+        let debug_props = ["mp_driven_psp", "snooze_length", "consecutive_fire_cnt_max", 
+                          "firing_threshold_increment_x", "firing_threshold", "leak_coefficient"];
+        if debug_props.contains(prop_key) {
+            if let Some(prop_value) = properties.get(*prop_key) {
+                tracing::info!(
+                    "[GENOME-CONVERT] Found {}={} in properties for area {}, writing to flat format",
+                    prop_key, prop_value, prefix
+                );
+            } else {
+                let default_val = required_defaults.get(*prop_key).unwrap_or(&json!(null));
+                tracing::info!(
+                    "[GENOME-CONVERT] {} not in properties for area {}, using default={}",
+                    prop_key, prefix, default_val
+                );
+            }
+        }
+
+        if !value.is_null() {
+            flat_blueprint.insert(format!("{}-{}-{}", prefix, scope, suffix), value);
+        }
+    }
+
+    // Then handle special cases (these override or supplement the above)
     for (key, value) in properties {
         if key == "cortical_mapping_dst" {
             // dstmap keys are already in base64 format (converted during genome load)
@@ -264,36 +346,12 @@ fn convert_properties_to_flat(
                 }
             }
         } else if key == "block_boundaries" {
-            // Handle block_boundaries - split array into separate keys
-            if let Some(bounds) = value.as_array() {
-                if bounds.len() >= 3 {
-                    flat_blueprint.insert(format!("{}-cx-___bbx-i", prefix), bounds[0].clone());
-                    flat_blueprint.insert(format!("{}-cx-___bby-i", prefix), bounds[1].clone());
-                    flat_blueprint.insert(format!("{}-cx-___bbz-i", prefix), bounds[2].clone());
-                }
-            }
+            // Skip - already handled in convert_area_to_flat
         } else if key == "relative_coordinate" {
-            // Handle relative_coordinate - split array into separate keys
-            if let Some(coords) = value.as_array() {
-                if coords.len() >= 3 {
-                    flat_blueprint.insert(format!("{}-cx-rcordx-i", prefix), coords[0].clone());
-                    flat_blueprint.insert(format!("{}-cx-rcordy-i", prefix), coords[1].clone());
-                    flat_blueprint.insert(format!("{}-cx-rcordz-i", prefix), coords[2].clone());
-                }
-            }
+            // Skip - already handled in convert_area_to_flat
         } else if key == "cortical_group" {
-            // Map cortical_group to _group-t
+            // Map cortical_group to _group-t (overrides group_id default)
             flat_blueprint.insert(format!("{}-cx-_group-t", prefix), value.clone());
-        } else if let Some((suffix, scope)) = property_mapping.get(key.as_str()) {
-            // Use reverse mapping
-            flat_blueprint.insert(format!("{}-{}-{}", prefix, scope, suffix), value.clone());
-        } else {
-            // Skip unknown properties - don't add them to flat format
-            // (The original flat genome only has known properties)
-            warn!(
-                "Skipping unknown property '{}' in cortical area (not in flat format)",
-                key
-            );
         }
     }
 
@@ -392,5 +450,86 @@ mod tests {
         assert!(flat["blueprint"].is_object());
         assert!(flat["neuron_morphologies"].is_object());
         assert!(flat["physiology"].is_object());
+    }
+
+    #[test]
+    fn test_cortical_group_derived_from_type() {
+        use feagi_structures::genomic::cortical_area::{
+            CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
+            IOCorticalAreaDataFlag, io_cortical_area_data_type::FrameChangeHandling,
+        };
+        use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
+
+        let mut genome = RuntimeGenome {
+            metadata: GenomeMetadata {
+                genome_id: "test_genome".to_string(),
+                genome_title: "Test Genome".to_string(),
+                genome_description: "Test cortical_group derivation".to_string(),
+                version: "2.0".to_string(),
+                timestamp: 1234567890.0,
+                brain_regions_root: None,
+            },
+            cortical_areas: HashMap::new(),
+            brain_regions: HashMap::new(),
+            morphologies: crate::MorphologyRegistry::new(),
+            physiology: PhysiologyConfig::default(),
+            signatures: GenomeSignatures {
+                genome: "0000000000000000".to_string(),
+                blueprint: "0000000000000000".to_string(),
+                physiology: "0000000000000000".to_string(),
+                morphologies: None,
+            },
+            stats: GenomeStats::default(),
+        };
+
+        // Create test areas with different cortical types
+        let opu_id = CorticalID::try_from_base_64("b2ltZwkAAAA=").unwrap();
+        let opu_area = CorticalArea::new(
+            opu_id.clone(),
+            0,
+            "Test OPU".to_string(),
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
+            GenomeCoordinate3D { x: 0, y: 0, z: 0 },
+            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::CartesianPlane(
+                FrameChangeHandling::Absolute
+            )),
+        ).unwrap();
+
+        let ipu_id = CorticalID::try_from_base_64("aXN2aQkABAA=").unwrap();
+        let ipu_area = CorticalArea::new(
+            ipu_id.clone(),
+            1,
+            "Test IPU".to_string(),
+            CorticalAreaDimensions::new(10, 10, 1).unwrap(),
+            GenomeCoordinate3D { x: 0, y: 0, z: 0 },
+            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
+                FrameChangeHandling::Absolute
+            )),
+        ).unwrap();
+
+        genome.cortical_areas.insert(opu_id.clone(), opu_area);
+        genome.cortical_areas.insert(ipu_id.clone(), ipu_area);
+
+        // Convert to flat format
+        let flat = convert_hierarchical_to_flat(&genome).unwrap();
+
+        // Verify cortical_group is correctly derived from cortical_type
+        let blueprint = flat["blueprint"].as_object().unwrap();
+        
+        // Check OPU area
+        let opu_group_key = "_____10c-b2ltZwkAAAA=-cx-_group-t";
+        assert_eq!(
+            blueprint[opu_group_key],
+            "OPU",
+            "OPU area should have _group-t set to OPU"
+        );
+
+        // Check IPU area
+        let ipu_group_key = "_____10c-aXN2aQkABAA=-cx-_group-t";
+        assert_eq!(
+            blueprint[ipu_group_key],
+            "IPU",
+            "IPU area should have _group-t set to IPU"
+        );
     }
 }

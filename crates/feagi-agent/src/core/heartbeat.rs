@@ -3,7 +3,7 @@
 
 //! Heartbeat service for maintaining agent liveness
 
-use crate::error::{Result, SdkError};
+use crate::core::error::{Result, SdkError};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
@@ -153,12 +153,27 @@ impl HeartbeatService {
         // Send heartbeat request
         socket.send(message.to_string().as_bytes(), 0)?;
 
-        // Wait for response (non-blocking with timeout)
+        // Wait for response (ROUTER replies are multipart: [empty][json] when seen by REQ)
         if socket.poll(zmq::POLLIN, 1000)? > 0 {
-            let response = socket.recv_bytes(0)?;
-            let response: serde_json::Value = serde_json::from_slice(&response)?;
+            let parts = socket.recv_multipart(0)?;
+            let last = parts
+                .last()
+                .ok_or_else(|| SdkError::Other("Heartbeat reply was empty".to_string()))?;
+            let response: serde_json::Value = serde_json::from_slice(last)?;
 
-            if response.get("status").and_then(|s| s.as_str()) == Some("success") {
+            // Heartbeat response schema varies by FEAGI version/transport:
+            // - Legacy: {"status":"success", ...}
+            // - HTTP-style: {"status":200,"body":{"message":"ok"}, ...}
+            //
+            // Treat both as success deterministically.
+            let status_value = response.get("status");
+            let is_success = match status_value {
+                Some(serde_json::Value::String(s)) => s == "success" || s == "ok",
+                Some(serde_json::Value::Number(n)) => n.as_u64() == Some(200),
+                _ => false,
+            };
+
+            if is_success {
                 debug!("[HEARTBEAT] ✓ Heartbeat acknowledged for {}", agent_id);
                 Ok(())
             } else {

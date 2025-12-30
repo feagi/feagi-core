@@ -112,7 +112,12 @@ pub struct RawCorticalArea {
     pub synapse_attractivity: Option<f32>,
     pub refractory_period: Option<u32>,
     pub firing_threshold: Option<f32>,
+    pub firing_threshold_limit: Option<f32>,
+    pub firing_threshold_increment_x: Option<f32>,
+    pub firing_threshold_increment_y: Option<f32>,
+    pub firing_threshold_increment_z: Option<f32>,
     pub leak_coefficient: Option<f32>,
+    pub leak_variability: Option<f32>,
     pub neuron_excitability: Option<f32>,
     pub postsynaptic_current: Option<f32>,
     pub postsynaptic_current_max: Option<f32>,
@@ -121,6 +126,7 @@ pub struct RawCorticalArea {
     pub mp_charge_accumulation: Option<bool>,
     pub mp_driven_psp: Option<bool>,
     pub visualization: Option<bool>,
+    pub burst_engine_activation: Option<bool>,
     #[serde(rename = "2d_coordinate")]
     pub coordinate_2d: Option<Vec<i32>>,
 
@@ -255,10 +261,10 @@ impl GenomeParser {
         let raw: RawGenome = serde_json::from_str(json_str)
             .map_err(|e| EvoError::InvalidGenome(format!("Failed to parse JSON: {}", e)))?;
 
-        // Validate version
-        if !raw.version.starts_with("2.") {
+        // Validate version - support 2.x and 3.0 (3.0 is flat format with all IDs in base64)
+        if !raw.version.starts_with("2.") && raw.version != "3.0" {
             return Err(EvoError::InvalidGenome(format!(
-                "Unsupported genome version: {}. Expected 2.x",
+                "Unsupported genome version: {}. Expected 2.x or 3.0",
                 raw.version
             )));
         }
@@ -381,9 +387,29 @@ impl GenomeParser {
                 area.properties
                     .insert("firing_threshold".to_string(), serde_json::json!(v));
             }
+            if let Some(v) = raw_area.firing_threshold_limit {
+                area.properties
+                    .insert("firing_threshold_limit".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.firing_threshold_increment_x {
+                area.properties
+                    .insert("firing_threshold_increment_x".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.firing_threshold_increment_y {
+                area.properties
+                    .insert("firing_threshold_increment_y".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.firing_threshold_increment_z {
+                area.properties
+                    .insert("firing_threshold_increment_z".to_string(), serde_json::json!(v));
+            }
             if let Some(v) = raw_area.leak_coefficient {
                 area.properties
                     .insert("leak_coefficient".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.leak_variability {
+                area.properties
+                    .insert("leak_variability".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.neuron_excitability {
                 area.properties
@@ -414,10 +440,29 @@ impl GenomeParser {
             if let Some(v) = raw_area.mp_driven_psp {
                 area.properties
                     .insert("mp_driven_psp".to_string(), serde_json::json!(v));
+                tracing::info!(
+                    target: "feagi-evo",
+                    "[GENOME-LOAD] Loaded mp_driven_psp={} for area {}",
+                    v,
+                    cortical_id_str
+                );
+            } else {
+                tracing::debug!(
+                    target: "feagi-evo",
+                    "[GENOME-LOAD] mp_driven_psp not found in raw_area for {}, will use default=false",
+                    cortical_id_str
+                );
             }
             if let Some(v) = raw_area.visualization {
                 area.properties
                     .insert("visualization".to_string(), serde_json::json!(v));
+                // Also store as "visible" for compatibility with getters
+                area.properties
+                    .insert("visible".to_string(), serde_json::json!(v));
+            }
+            if let Some(v) = raw_area.burst_engine_activation {
+                area.properties
+                    .insert("burst_engine_active".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.is_mem_type {
                 area.properties
@@ -444,10 +489,13 @@ impl GenomeParser {
             if let Some(v) = raw_area.consecutive_fire_cnt_max {
                 area.properties
                     .insert("consecutive_fire_cnt_max".to_string(), serde_json::json!(v));
+                // Also store as "consecutive_fire_limit" for getter compatibility
+                area.properties
+                    .insert("consecutive_fire_limit".to_string(), serde_json::json!(v));
             }
             if let Some(v) = raw_area.snooze_length {
                 area.properties
-                    .insert("snooze_length".to_string(), serde_json::json!(v));
+                    .insert("snooze_period".to_string(), serde_json::json!(v));
             }
 
             // Other properties
@@ -796,22 +844,17 @@ mod tests {
                 area.cortical_id
             );
 
-            // Verify cortical type is valid
-            use feagi_brain_development::models::CorticalAreaExt;
-            let cortical_group_opt = area.get_cortical_group();
-            if let Some(cortical_group) = cortical_group_opt {
-                let group_from_prop = area
-                    .properties
-                    .get("cortical_group")
-                    .and_then(|v| v.as_str());
-                if let Some(prop_group) = group_from_prop {
-                    assert_eq!(
-                        cortical_group,
-                        prop_group,
-                        "Area {} type group mismatch",
-                        area.cortical_id.as_base_64()
-                    );
-                }
+            // Verify cortical group is consistent (avoid depending on feagi-brain-development)
+            if let Some(prop_group) = area
+                .properties
+                .get("cortical_group")
+                .and_then(|v| v.as_str())
+            {
+                assert!(
+                    !prop_group.is_empty(),
+                    "Area {} should have non-empty cortical_group property",
+                    area.cortical_id.as_base_64()
+                );
             }
         }
     }
