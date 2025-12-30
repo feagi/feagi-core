@@ -6,10 +6,12 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::fmt::Debug;
 use std::time::Instant;
-use crate::configuration::jsonable::{DecoderProperties};
+use crate::configuration::jsonable::{DecoderProperties, EncoderProperties};
 
 pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
     fn get_encodable_data_type(&self) -> WrappedIOType;
+
+    fn get_as_properties(&self) -> EncoderProperties;
 
     /// Writes data to NeuronXYZPVoxelArray(s) of the relevant cortical area(s), where each element in pipelines is the channel. Assumes write_target been cleared of neuron data
     fn write_neuron_data_multi_channel_from_processed_cache(

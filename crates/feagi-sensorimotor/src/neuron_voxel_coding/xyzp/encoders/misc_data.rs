@@ -13,6 +13,7 @@ use feagi_structures::neuron_voxels::xyzp::{
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
+use crate::configuration::jsonable::EncoderProperties;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -25,6 +26,10 @@ pub struct MiscDataNeuronVoxelXYZPEncoder {
 impl NeuronVoxelXYZPEncoder for MiscDataNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::MiscData(Some(self.misc_data_dimensions))
+    }
+
+    fn get_as_properties(&self) -> EncoderProperties {
+        EncoderProperties::MiscData(self.misc_data_dimensions)
     }
 
     fn write_neuron_data_multi_channel_from_processed_cache(

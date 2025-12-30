@@ -8,63 +8,66 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::Percen
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality, SegmentedImageFrameProperties};
 use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
-use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
+use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
+use crate::neuron_voxel_coding::xyzp::encoders::{BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder, PercentageNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
 use crate::wrapped_io_data::WrappedIOType;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InputOutputDefinition {
-    input_units: HashMap<SensoryCorticalUnit, Vec<UnitDefinition>>,
-    output_units: HashMap<MotorCorticalUnit, Vec<UnitDefinition>>
+    input_units: HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>>,
+    output_units: HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>>
 }
 
 impl InputOutputDefinition {
-    pub fn get_input_units(&self) -> &HashMap<SensoryCorticalUnit, Vec<UnitDefinition>> {
+    pub fn get_input_units(&self) -> &HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>> {
         &self.input_units
     }
 
-    pub fn get_output_units(&self) -> &HashMap<MotorCorticalUnit, Vec<UnitDefinition>> {
+    pub fn get_output_units(&self) -> &HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>> {
         &self.output_units
     }
 
     pub fn verify_valid_structure(&self) -> Result<(), FeagiDataError> {
-        fn check_units(unit_definitions: &Vec<UnitDefinition>) -> Result<(), FeagiDataError> {
+        for units_and_encoders in self.input_units.values() {
             let mut unit_indexes: Vec<CorticalUnitIndex> = Vec::new();
-            for unit in unit_definitions {
-                unit.verify_valid_structure()?;
-                if unit_indexes.contains(&unit.cortical_unit_index) {
+            for unit in units_and_encoders {
+                unit.0.verify_valid_structure()?;
+                if unit_indexes.contains(&unit.0.cortical_unit_index) {
                     return Err(FeagiDataError::DeserializationError("Duplicate cortical unit indexes found!".into()))
                 }
-                unit_indexes.push(unit.cortical_unit_index);
+                unit_indexes.push(unit.0.cortical_unit_index);
             }
-            Ok(())
         }
-
-        for units in self.input_units.values() {
-            check_units(units)?;
-        }
-        for units in self.output_units.values() {
-            check_units(units)?;
+        for units_and_decoders in self.output_units.values() {
+            let mut unit_indexes: Vec<CorticalUnitIndex> = Vec::new();
+            for unit in units_and_decoders {
+                unit.0.verify_valid_structure()?;
+                if unit_indexes.contains(&unit.0.cortical_unit_index) {
+                    return Err(FeagiDataError::DeserializationError("Duplicate cortical unit indexes found!".into()))
+                }
+                unit_indexes.push(unit.0.cortical_unit_index);
+            }
         }
 
         Ok(())
     }
 
-    pub fn insert_motor(&mut self, motor: MotorCorticalUnit, unit_definition: UnitDefinition) {
+    pub fn insert_motor(&mut self, motor: MotorCorticalUnit, unit_definition: UnitDefinition, decoder_properties: DecoderProperties) {
         if !self.output_units.contains_key(&motor) {
-            self.output_units.insert(motor.clone(), vec![unit_definition]);
+            self.output_units.insert(motor.clone(), vec![(unit_definition, decoder_properties)]);
             return;
         }
         let vec = self.output_units.get_mut(&motor).unwrap();
-        vec.push(unit_definition);
+        vec.push((unit_definition, decoder_properties));
     }
 
-    pub fn insert_sensor(&mut self, sensor: SensoryCorticalUnit, unit_definition: UnitDefinition) {
+    pub fn insert_sensor(&mut self, sensor: SensoryCorticalUnit, unit_definition: UnitDefinition, encoder_properties: EncoderProperties) {
         if !self.input_units.contains_key(&sensor) {
-            self.input_units.insert(sensor.clone(), vec![unit_definition]);
+            self.input_units.insert(sensor.clone(), vec![(unit_definition, encoder_properties)]);
             return;
         }
         let vec = self.input_units.get_mut(&sensor).unwrap();
-        vec.push(unit_definition);
+        vec.push((unit_definition, encoder_properties));
     }
 
 }
@@ -108,6 +111,75 @@ pub struct DeviceGrouping {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum EncoderProperties {
+    Boolean,
+    CartesianPlane(ImageFrameProperties),
+    MiscData(MiscDataDimensions),
+    Percentage(NeuronDepth, PercentageNeuronPositioning, bool, PercentageChannelDimensionality),
+    SegmentedImageFrame(SegmentedImageFrameProperties),
+}
+
+impl EncoderProperties {
+    pub fn to_box_encoder(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
+        match self {
+            EncoderProperties::Boolean => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
+                }
+                BooleanNeuronVoxelXYZPEncoder::new_box(
+                    *cortical_ids.get(0).unwrap(),
+                    number_channels,
+                )
+            }
+            EncoderProperties::CartesianPlane(image_frame) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
+                }
+                CartesianPlaneNeuronVoxelXYZPEncoder::new_box(
+                    *cortical_ids.get(0).unwrap(),
+                    image_frame,
+                    number_channels
+                )
+            }
+            EncoderProperties::MiscData(misc_data_dimensions) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
+                }
+                MiscDataNeuronVoxelXYZPEncoder::new_box(
+                    *cortical_ids.get(0).unwrap(),
+                    *misc_data_dimensions,
+                    number_channels
+                )
+            }
+            EncoderProperties::Percentage(neuron_depth, percentage, is_signed, number_dimensions) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
+                }
+                PercentageNeuronVoxelXYZPEncoder::new_box(
+                    *cortical_ids.get(0).unwrap(),
+                    *neuron_depth,
+                    number_channels,
+                    *percentage,
+                    *is_signed,
+                    *number_dimensions
+                )
+            }
+            EncoderProperties::SegmentedImageFrame(segmented_properties) => {
+                if cortical_ids.len() != 9 {
+                    return Err(FeagiDataError::InternalError("Expected nine cortical ids!".to_string()));
+                }
+                let cortical_ids: [CorticalID; 9] = (*cortical_ids).try_into().map_err(|_| FeagiDataError::InternalError("Unable to get cortical ids!".to_string()))?;
+                SegmentedImageFrameNeuronVoxelXYZPEncoder::new_box(
+                    cortical_ids,
+                    *segmented_properties,
+                    number_channels
+                )
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DecoderProperties {
     MiscData(MiscDataDimensions),
     Percentage(NeuronDepth, PercentageNeuronPositioning, bool, PercentageChannelDimensionality),
@@ -115,7 +187,7 @@ pub enum DecoderProperties {
 }
 
 impl DecoderProperties {
-    pub fn to_encoder_box(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+    pub fn to_box_decoder(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         match self {
             DecoderProperties::MiscData(misc_data_dimensions) => {
                 if cortical_ids.len() != 1 {

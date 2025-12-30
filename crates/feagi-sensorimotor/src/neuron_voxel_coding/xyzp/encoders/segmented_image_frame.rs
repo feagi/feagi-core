@@ -5,7 +5,7 @@ use crate::data_types::descriptors::SegmentedImageFrameProperties;
 use crate::data_types::SegmentedImageFrame;
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::WrappedIOType;
-use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelCount;
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, NeuronDepth};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::{
     CorticalMappedXYZPNeuronVoxels, NeuronVoxelXYZPArrays,
@@ -13,6 +13,7 @@ use feagi_structures::neuron_voxels::xyzp::{
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
+use crate::configuration::jsonable::EncoderProperties;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -26,6 +27,12 @@ impl NeuronVoxelXYZPEncoder for SegmentedImageFrameNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
         // Since changing Image Frame Properties often mean changing channel size, we shouldn't allow doing that
         WrappedIOType::SegmentedImageFrame(Some(self.segmented_image_properties))
+    }
+
+    fn get_as_properties(&self) -> EncoderProperties {
+        EncoderProperties::SegmentedImageFrame(
+            self.segmented_image_properties,
+        )
     }
 
     fn write_neuron_data_multi_channel_from_processed_cache(

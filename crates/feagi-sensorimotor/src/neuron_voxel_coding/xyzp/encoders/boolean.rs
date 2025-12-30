@@ -9,6 +9,7 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
+use crate::configuration::jsonable::{DecoderProperties, EncoderProperties};
 
 const NEURON_TRUE_VAL: f32 = 1.0;
 const NEURON_FALSE_VAL: f32 = 0.0;
@@ -30,6 +31,10 @@ pub struct BooleanNeuronVoxelXYZPEncoder {
 impl NeuronVoxelXYZPEncoder for BooleanNeuronVoxelXYZPEncoder {
     fn get_encodable_data_type(&self) -> WrappedIOType {
         WrappedIOType::Boolean
+    }
+
+    fn get_as_properties(&self) -> EncoderProperties {
+        EncoderProperties::Boolean
     }
 
     fn write_neuron_data_multi_channel_from_processed_cache(

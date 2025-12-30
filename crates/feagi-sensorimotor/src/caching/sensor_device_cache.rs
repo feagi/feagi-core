@@ -617,6 +617,7 @@ impl SensorDeviceCache {
 
     //region  JSON import / export
 
+    /*
     pub(crate) fn set_from_input_definition(&mut self, replacing_definition: &InputOutputDefinition) -> Result<(), FeagiDataError> {
         self.reset();
         let input_units = replacing_definition.get_input_units();
@@ -624,23 +625,27 @@ impl SensorDeviceCache {
             let sensory_unit = *input_unit.0;
             let unit_definitions = input_unit.1;
             for unit_definition in unit_definitions {
+                let channel_count = CorticalChannelCount::new(unit_definition.0.device_grouping.len() as u32)?;
+                let cortical_ids = sensory_unit.
 
-
-
-                self.register(sensory_unit,
-                              unit_definition.cortical_unit_index,
-                              /* Box<(dyn NeuronVoxelXYZPEncoder + 'static)> */,
-                              CorticalChannelCount::new(unit_definition.device_grouping.len() as u32),
-                              /* WrappedIOData */)?
+                self.register(
+                    sensory_unit,
+                    unit_definition.0.cortical_unit_index,
+                    unit_definition.1.to_box_encoder(channel_count)?,
+                    channel_count,
+                    WrappedIOData)?
             }
 
 
         };
     }
 
+
     pub(crate) fn export_to_input_definition(self, filling_definition: &mut InputOutputDefinition) -> Result<(), FeagiDataError> {
 
     }
+
+     */
 
     //endregion
 
