@@ -21,6 +21,7 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+use crate::configuration::jsonable::DecoderProperties;
 use crate::data_types::descriptors::PercentageChannelDimensionality;
 
 const WIDTH_GIVEN_POSITIVE_Z_ROW: u32 = 1;
@@ -315,6 +316,15 @@ impl NeuronVoxelXYZPDecoder for PercentageNeuronVoxelXYZPDecoder {
         }
     }
 
+    fn get_as_properties(&self) -> DecoderProperties {
+        DecoderProperties::Percentage(
+            NeuronDepth::new(self.channel_dimensions.depth).unwrap(),
+            self.interpolation,
+            self.is_signed,
+            self.number_percentages,
+        )
+    }
+    
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
         &mut self,
         neurons_to_read: &CorticalMappedXYZPNeuronVoxels,

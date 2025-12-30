@@ -205,12 +205,14 @@ macro_rules! motor_unit_functions {
                 let eccentricity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
                 let modularity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[1];
 
-                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = {
-                    match percentage_neuron_positioning {
-                        PercentageNeuronPositioning::Linear => GazePropertiesLinearNeuronVoxelXYZPDecoder::new_box(eccentricity_cortical_id, modularity_cortical_id, eccentricity_z_neuron_resolution, modulation_z_neuron_resolution, number_channels)?,
-                        PercentageNeuronPositioning::Fractional => GazePropertiesExponentialNeuronVoxelXYZPDecoder::new_box(eccentricity_cortical_id, modularity_cortical_id, eccentricity_z_neuron_resolution, modulation_z_neuron_resolution, number_channels)?
-                    }
-                };
+                let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
+                    eccentricity_cortical_id,
+                    modularity_cortical_id,
+                    eccentricity_z_neuron_resolution,
+                    modulation_z_neuron_resolution,
+                    number_channels,
+                    percentage_neuron_positioning,
+                )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::GazeProperties(GazeProperties::create_default_centered());
                 self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;

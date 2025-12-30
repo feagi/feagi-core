@@ -6,11 +6,10 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::fmt::Debug;
 use std::time::Instant;
+use crate::configuration::jsonable::{DecoderProperties};
 
 pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
     fn get_encodable_data_type(&self) -> WrappedIOType;
-
-    fn get_as_json(&self) -> serde_json::Map<String, serde_json::Value>;
 
     /// Writes data to NeuronXYZPVoxelArray(s) of the relevant cortical area(s), where each element in pipelines is the channel. Assumes write_target been cleared of neuron data
     fn write_neuron_data_multi_channel_from_processed_cache(
@@ -24,7 +23,7 @@ pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
 pub trait NeuronVoxelXYZPDecoder: Debug + Sync + Send {
     fn get_decodable_data_type(&self) -> WrappedIOType;
 
-    fn get_as_json(&self) -> serde_json::Map<String, serde_json::Value>;
+    fn get_as_properties(&self) -> DecoderProperties;
 
     /// Writes data to the respective channel of PipelineStageRunner to the input cache, and marks if the channel has been changed or not, with data read from the neurons
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(
@@ -35,9 +34,4 @@ pub trait NeuronVoxelXYZPDecoder: Debug + Sync + Send {
         channel_changed: &mut Vec<bool>,
     ) -> Result<(), FeagiDataError>;
 
-    fn get_base_json_internal(&self) -> serde_json::Map<String, serde_json::Value> {
-        let mut output = serde_json::value::Map::new();
-        _ = output.insert("decoder_type".to_string(), serde_json::to_value(self.get_decodable_data_type()).unwrap());
-        output
-    }
 }

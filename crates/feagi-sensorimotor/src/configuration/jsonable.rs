@@ -1,11 +1,14 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use feagi_structures::FeagiDataError;
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelIndex, CorticalUnitIndex};
-use feagi_structures::genomic::cortical_area::IOCorticalAreaDataFlag;
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth};
+use feagi_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaDataFlag};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
 use crate::data_pipeline::PipelineStageProperties;
-use crate::data_types::descriptors::ImageFrameProperties;
+use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality, SegmentedImageFrameProperties};
+use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
+use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOType;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -104,10 +107,55 @@ pub struct DeviceGrouping {
     pub(crate) pipeline_stages: Vec<PipelineStageProperties>
 }
 
-pub enum EncoderProperties {
-    Boolean,
-    CartesianPlane(ImageFrameProperties), /WIP
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum DecoderProperties {
+    MiscData(MiscDataDimensions),
+    Percentage(NeuronDepth, PercentageNeuronPositioning, bool, PercentageChannelDimensionality),
+    GazeProperties(NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // eccentricity z depth, modularity z depth
+}
 
+impl DecoderProperties {
+    pub fn to_encoder_box(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
+        match self {
+            DecoderProperties::MiscData(misc_data_dimensions) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
+                }
+                MiscDataNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.get(0).unwrap(), // Eccentricity
+                    *misc_data_dimensions,
+                    number_channels
+                )
+            }
+            DecoderProperties::Percentage(neuron_depth, percentage_neuron_positioning, is_signed, dimension_count) => {
+                if cortical_ids.len() != 1 {
+                    return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
+                }
+                PercentageNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.get(0).unwrap(), // Eccentricity
+                    *neuron_depth,
+                    number_channels,
+                    *percentage_neuron_positioning,
+                    *is_signed,
+                    *dimension_count
+                )
+            }
+            DecoderProperties::GazeProperties(eccentricity_neuron_depth, modularity_neuron_depth, percentage_neuron_positioning) => {
+                if cortical_ids.len() != 2 {
+                    return Err(FeagiDataError::InternalError("Expected two cortical ids!".to_string()));
+                }
+                GazePropertiesNeuronVoxelXYZPDecoder::new_box(
+                    *cortical_ids.get(0).unwrap(), // Eccentricity
+                    *cortical_ids.get(1).unwrap(),  // Modularity
+                    *eccentricity_neuron_depth,
+                    *modularity_neuron_depth,
+                    number_channels,
+                    *percentage_neuron_positioning
+                )
+            }
+
+        }
+    }
 }
 
 

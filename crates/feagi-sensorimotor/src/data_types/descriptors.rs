@@ -10,7 +10,7 @@ use feagi_structures::{
     define_xy_coordinates, define_xy_dimensions, define_xyz_dimensions, define_xyz_mapping,
 };
 use std::fmt::Display;
-
+use serde::{Deserialize, Serialize};
 //region Images
 
 //region Image XY
@@ -518,7 +518,7 @@ impl Display for CornerPoints {
 //region Percentages
 
 /// Number of percentage values per channel
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PercentageChannelDimensionality {
     D1 = 1,
     D2 = 2,
