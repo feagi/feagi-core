@@ -294,16 +294,16 @@ impl StateManager {
 // ===== Singleton Pattern =====
 
 /// Global singleton instance of StateManager
+/// 
+/// This is initialized lazily on first access. The initialization is thread-safe
+/// and non-blocking. If initialization fails, it will panic (which should never happen).
 #[cfg(feature = "std")]
 static INSTANCE: Lazy<Arc<RwLock<StateManager>>> = Lazy::new(|| {
     // Initialize StateManager - this should never fail in normal operation
+    // StateManager::new() just creates structs, so it's fast and non-blocking
     let state_manager = StateManager::new()
         .or_else(|_| StateManager::with_default_fcl_window(20))
-        .unwrap_or_else(|e| {
-            // Last resort: panic with error message if both attempts fail
-            // This should never happen in practice
-            panic!("Failed to initialize StateManager: {:?}", e);
-        });
+        .expect("Failed to initialize StateManager - this should never happen");
     Arc::new(RwLock::new(state_manager))
 });
 

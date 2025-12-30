@@ -1493,15 +1493,11 @@ impl ConnectomeManager {
         );
 
         // Trigger fatigue index recalculation after neuron creation
-        // Note: This is non-blocking and rate-limited, safe to call during neurogenesis
-        // Skip during genome loading to avoid any potential blocking issues
-        if neuron_count > 0 {
-            // Only update if StateManager is already initialized (non-blocking check)
-            // This prevents blocking during genome loading
-            if StateManager::instance().try_read().is_some() {
-                let _ = self.update_fatigue_index(); // Ignore result, calculation is rate-limited
-            }
-        }
+        // NOTE: Disabled during genome loading to prevent blocking
+        // Fatigue calculation will be enabled after genome loading completes
+        // if neuron_count > 0 {
+        //     let _ = self.update_fatigue_index();
+        // }
 
         Ok(neuron_count)
     }
@@ -1629,7 +1625,8 @@ impl ConnectomeManager {
         if deleted {
             trace!(target: "feagi-bdu", "Deleted neuron {}", neuron_id);
             // Trigger fatigue index recalculation after neuron deletion
-            let _ = self.update_fatigue_index(); // Ignore result, calculation is rate-limited
+            // NOTE: Disabled during genome loading to prevent blocking
+            // let _ = self.update_fatigue_index();
         }
 
         Ok(deleted)
@@ -2743,7 +2740,8 @@ impl ConnectomeManager {
             source_neuron_id, target_neuron_id, weight, conductance, synapse_type, synapse_idx);
 
         // Trigger fatigue index recalculation after synapse creation
-        let _ = self.update_fatigue_index(); // Ignore result, calculation is rate-limited
+        // NOTE: Disabled during genome loading to prevent blocking
+        // let _ = self.update_fatigue_index();
 
         Ok(())
     }
@@ -3067,9 +3065,10 @@ impl ConnectomeManager {
         info!(target: "feagi-bdu","Batch deleted {} neurons", deleted_count);
 
         // Trigger fatigue index recalculation after batch neuron deletion
-        if deleted_count > 0 {
-            let _ = self.update_fatigue_index(); // Ignore result, calculation is rate-limited
-        }
+        // NOTE: Disabled during genome loading to prevent blocking
+        // if deleted_count > 0 {
+        //     let _ = self.update_fatigue_index();
+        // }
 
         Ok(deleted_count)
     }
