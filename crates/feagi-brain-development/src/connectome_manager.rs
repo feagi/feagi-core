@@ -1462,6 +1462,11 @@ impl ConnectomeManager {
             cortical_id.as_base_64()
         );
 
+        // Trigger fatigue index recalculation after neuron creation
+        if neuron_count > 0 {
+            self.update_fatigue_index();
+        }
+
         Ok(neuron_count)
     }
 
@@ -1587,6 +1592,8 @@ impl ConnectomeManager {
 
         if deleted {
             trace!(target: "feagi-bdu", "Deleted neuron {}", neuron_id);
+            // Trigger fatigue index recalculation after neuron deletion
+            self.update_fatigue_index();
         }
 
         Ok(deleted)
@@ -2699,6 +2706,9 @@ impl ConnectomeManager {
         debug!(target: "feagi-bdu", "Created synapse: {} -> {} (weight: {}, conductance: {}, type: {}, idx: {})",
             source_neuron_id, target_neuron_id, weight, conductance, synapse_type, synapse_idx);
 
+        // Trigger fatigue index recalculation after synapse creation
+        self.update_fatigue_index();
+
         Ok(())
     }
 
@@ -3019,6 +3029,11 @@ impl ConnectomeManager {
         }
 
         info!(target: "feagi-bdu","Batch deleted {} neurons", deleted_count);
+
+        // Trigger fatigue index recalculation after batch neuron deletion
+        if deleted_count > 0 {
+            self.update_fatigue_index();
+        }
 
         Ok(deleted_count)
     }

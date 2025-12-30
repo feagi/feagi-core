@@ -249,6 +249,11 @@ impl StateManager {
         self.fcl_cache.set(cortical_area, window_size)
     }
 
+    /// Get reference to core state (for direct access to atomic operations)
+    pub fn get_core_state(&self) -> &MemoryMappedState {
+        &self.core_state
+    }
+
     // ===== Persistence =====
 
     /// Create a snapshot of current state
