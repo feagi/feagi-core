@@ -365,17 +365,17 @@ macro_rules! motor_unit_functions {
         ::paste::paste! {
             pub fn [<$snake_case_name _register>](
                 &mut self,
-                group: CorticalGroupIndex,
+                unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
                 frame_change_handling: FrameChangeHandling,
                 image_properties: ImageFrameProperties,
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, group)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = CartesianPlaneNeuronVoxelXYZPDecoder::new_box(cortical_id, &image_properties, number_channels)?;
 
                 let initial_val: WrappedIOData = WrappedIOType::ImageFrame(Some(image_properties)).create_blank_data_of_type()?;
-                self.register(MotorCorticalUnit::$motor_unit, group, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
                 Ok(())
             }
         }

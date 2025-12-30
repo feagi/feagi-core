@@ -4,8 +4,9 @@ mod gaze_properties_decoder;
 mod misc_data;
 mod percentage_decoder;
 
+mod cartesian_plane;
+
 pub(crate) use gaze_properties_decoder::GazePropertiesNeuronVoxelXYZPDecoder;
 pub(crate) use misc_data::MiscDataNeuronVoxelXYZPDecoder;
-
-// Percentage decoder (uses PercentageNeuronPositioning and PercentageChannelDimensionality from other modules)
 pub(crate) use percentage_decoder::PercentageNeuronVoxelXYZPDecoder;
+pub(crate) use cartesian_plane::CartesianPlaneNeuronVoxelXYZPDecoder;
