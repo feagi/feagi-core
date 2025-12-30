@@ -678,16 +678,16 @@ impl PlasticityService {
             0
         };
 
-        // TODO: Access state manager singleton to update memory utilization
-        // For now, this is a placeholder - will be wired up when state manager access is available
-        // Example:
-        // if let Some(state_manager) = StateManager::instance() {
-        //     state_manager.get_core_state().set_memory_neuron_util(memory_neuron_util);
-        //     // Trigger fatigue index recalculation in ConnectomeManager
-        //     if let Ok(manager) = ConnectomeManager::instance().read() {
-        //         manager.update_fatigue_index();
-        //     }
-        // }
+        // Update state manager with memory neuron utilization
+        // Note: ConnectomeManager will read this value when it recalculates fatigue index
+        // (triggered by neuron/synapse operations, not directly from here to avoid circular dependency)
+        #[cfg(feature = "feagi-state-manager")]
+        {
+            use feagi_state_manager::StateManager;
+            if let Some(state_manager) = StateManager::instance().try_write() {
+                state_manager.get_core_state().set_memory_neuron_util(memory_neuron_util);
+            }
+        }
 
         tracing::trace!(
             target: "plasticity",

@@ -50,6 +50,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(feature = "std")]
+use once_cell::sync::Lazy;
+#[cfg(feature = "std")]
+use std::sync::Arc;
+#[cfg(feature = "std")]
+use parking_lot::RwLock;
+
 /// Crate version from Cargo.toml
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -281,6 +288,40 @@ impl StateManager {
     /// Load state from file (returns snapshot)
     pub fn load_from_file(path: &std::path::Path) -> Result<StateSnapshot> {
         StateSnapshot::load_from_file(path)
+    }
+}
+
+// ===== Singleton Pattern =====
+
+/// Global singleton instance of StateManager
+#[cfg(feature = "std")]
+static INSTANCE: Lazy<Arc<RwLock<StateManager>>> = Lazy::new(|| {
+    Arc::new(RwLock::new(
+        StateManager::new().unwrap_or_else(|_| {
+            // Fallback: create with default config if initialization fails
+            StateManager::with_default_fcl_window(20).unwrap()
+        })
+    ))
+});
+
+#[cfg(feature = "std")]
+impl StateManager {
+    /// Get the global singleton instance of StateManager
+    ///
+    /// This provides thread-safe access to the shared state manager.
+    /// The instance is lazily initialized on first access.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use feagi_state_manager::StateManager;
+    ///
+    /// let state = StateManager::instance();
+    /// let manager = state.read();
+    /// manager.set_fatigue_index(85);
+    /// ```
+    pub fn instance() -> Arc<RwLock<StateManager>> {
+        Arc::clone(&INSTANCE)
     }
 }
 

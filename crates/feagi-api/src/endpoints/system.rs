@@ -206,21 +206,23 @@ pub async fn get_health_check(
     let brain_regions_root = None; // WASM: Use connectome service instead
 
     // Get fatigue information from state manager
-    // TODO: Access state manager singleton to get fatigue data
-    // For now, return None - will be wired up when state manager access is available
-    // Example:
-    // if let Some(state_manager) = feagi_state_manager::StateManager::instance() {
-    //     let core_state = state_manager.get_core_state();
-    //     Some(FatigueInfo {
-    //         fatigue_index: Some(core_state.get_fatigue_index()),
-    //         fatigue_active: Some(core_state.is_fatigue_active()),
-    //         regular_neuron_util: Some(core_state.get_regular_neuron_util()),
-    //         memory_neuron_util: Some(core_state.get_memory_neuron_util()),
-    //         synapse_util: Some(core_state.get_synapse_util()),
-    //     })
-    // } else {
-    //     None
-    // }
+    #[cfg(feature = "feagi-state-manager")]
+    let fatigue = {
+        use feagi_state_manager::StateManager;
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            let core_state = state_manager.get_core_state();
+            Some(FatigueInfo {
+                fatigue_index: Some(core_state.get_fatigue_index()),
+                fatigue_active: Some(core_state.is_fatigue_active()),
+                regular_neuron_util: Some(core_state.get_regular_neuron_util()),
+                memory_neuron_util: Some(core_state.get_memory_neuron_util()),
+                synapse_util: Some(core_state.get_synapse_util()),
+            })
+        } else {
+            None
+        }
+    };
+    #[cfg(not(feature = "feagi-state-manager"))]
     let fatigue = None;
 
     Ok(Json(HealthCheckResponse {

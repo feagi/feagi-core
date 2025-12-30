@@ -41,6 +41,10 @@ use crate::types::{BduError, BduResult};
 use feagi_npu_neural::types::NeuronId;
 use feagi_structures::genomic::cortical_area::CorticalID;
 
+// State manager access for fatigue calculation
+// Note: feagi-state-manager is always available when std is enabled (it's a default feature)
+use feagi_state_manager::StateManager;
+
 // NPU integration (optional dependency)
 // use feagi_npu_burst_engine::RustNPU; // Now using DynamicNPU
 
@@ -1279,9 +1283,13 @@ impl ConnectomeManager {
         };
 
         // Get memory neuron utilization from state manager
-        // TODO: Access state manager singleton to get memory neuron utilization
-        // For now, we'll need to add this access - memory_util should be updated by PlasticityManager
-        let memory_neuron_util = 0u8; // Placeholder - will be updated when state manager access is added
+        let memory_neuron_util = {
+            if let Some(state_manager) = StateManager::instance().try_read() {
+                state_manager.get_core_state().get_memory_neuron_util()
+            } else {
+                0u8 // Default if state manager is locked
+            }
+        };
 
         // Get synapse utilization
         let synapse_count = self.get_synapse_count();
@@ -1296,7 +1304,14 @@ impl ConnectomeManager {
         let fatigue_index = regular_neuron_util.max(memory_neuron_util).max(synapse_util);
 
         // Apply hysteresis: trigger at 85%, clear at 80%
-        let current_fatigue_active = false; // TODO: Get from state manager
+        let current_fatigue_active = {
+            if let Some(state_manager) = StateManager::instance().try_read() {
+                state_manager.get_core_state().is_fatigue_active()
+            } else {
+                false // Default if state manager is locked
+            }
+        };
+
         let new_fatigue_active = if fatigue_index >= 85 {
             true
         } else if fatigue_index < 80 {
@@ -1306,12 +1321,14 @@ impl ConnectomeManager {
         };
 
         // Update state manager with all values
-        // TODO: Access state manager singleton to update values
-        // state_manager.set_fatigue_index(fatigue_index);
-        // state_manager.set_fatigue_active(new_fatigue_active);
-        // state_manager.set_regular_neuron_util(regular_neuron_util);
-        // state_manager.set_memory_neuron_util(memory_neuron_util);
-        // state_manager.set_synapse_util(synapse_util);
+        if let Some(state_manager) = StateManager::instance().try_write() {
+            let core_state = state_manager.get_core_state();
+            core_state.set_fatigue_index(fatigue_index);
+            core_state.set_fatigue_active(new_fatigue_active);
+            core_state.set_regular_neuron_util(regular_neuron_util);
+            core_state.set_memory_neuron_util(memory_neuron_util);
+            core_state.set_synapse_util(synapse_util);
+        }
 
         // Update NPU's atomic boolean
         if let Some(ref npu) = self.npu {
