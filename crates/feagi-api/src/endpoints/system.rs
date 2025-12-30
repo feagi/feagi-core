@@ -206,24 +206,34 @@ pub async fn get_health_check(
     let brain_regions_root = None; // WASM: Use connectome service instead
 
     // Get fatigue information from state manager
-    #[cfg(feature = "feagi-state-manager")]
+    // Note: feagi-state-manager is included in the "services" feature
+    #[cfg(feature = "services")]
     let fatigue = {
         use feagi_state_manager::StateManager;
-        if let Some(state_manager) = StateManager::instance().try_read() {
-            let core_state = state_manager.get_core_state();
-            Some(FatigueInfo {
-                fatigue_index: Some(core_state.get_fatigue_index()),
-                fatigue_active: Some(core_state.is_fatigue_active()),
-                regular_neuron_util: Some(core_state.get_regular_neuron_util()),
-                memory_neuron_util: Some(core_state.get_memory_neuron_util()),
-                synapse_util: Some(core_state.get_synapse_util()),
-            })
-        } else {
-            None
+        // Initialize singleton on first access (Lazy will handle this)
+        match StateManager::instance().try_read() {
+            Some(state_manager) => {
+                let core_state = state_manager.get_core_state();
+                Some(FatigueInfo {
+                    fatigue_index: Some(core_state.get_fatigue_index()),
+                    fatigue_active: Some(core_state.is_fatigue_active()),
+                    regular_neuron_util: Some(core_state.get_regular_neuron_util()),
+                    memory_neuron_util: Some(core_state.get_memory_neuron_util()),
+                    synapse_util: Some(core_state.get_synapse_util()),
+                })
+            }
+            None => {
+                // State manager is locked, return None (shouldn't happen in normal operation)
+                tracing::warn!(target: "feagi-api", "StateManager is locked, cannot read fatigue data");
+                None
+            }
         }
     };
-    #[cfg(not(feature = "feagi-state-manager"))]
-    let fatigue = None;
+    #[cfg(not(feature = "services"))]
+    let fatigue = {
+        tracing::debug!(target: "feagi-api", "Services feature not enabled, fatigue data unavailable");
+        None
+    };
 
     Ok(Json(HealthCheckResponse {
         burst_engine: burst_engine_active,
