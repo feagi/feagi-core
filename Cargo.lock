@@ -1844,10 +1844,12 @@ dependencies = [
  "feagi-npu-plasticity",
  "feagi-sensorimotor",
  "feagi-serialization",
+ "feagi-services",
  "feagi-state-manager",
  "feagi-structures",
  "ndarray",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

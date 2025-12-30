@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 use crate::models::{BrainRegion, BrainRegionHierarchy, CorticalArea, CorticalAreaDimensions};
 use crate::types::{BduError, BduResult};
@@ -2427,6 +2427,10 @@ impl ConnectomeManager {
                 self.cortical_idx_to_id.get(&cortical_idx).unwrap(), cortical_idx);
         }
 
+        // Ensure core cortical areas exist (death, power, fatigue)
+        // These are required for brain operation and must always be present
+        self.ensure_core_cortical_areas()?;
+
         // Add brain regions (hierarchy)
         for (region, parent_id) in parsed.brain_regions {
             let region_id = region.region_id;
@@ -2440,6 +2444,116 @@ impl ConnectomeManager {
 
         info!(target: "feagi-bdu","🧬 ✅ Genome loaded successfully!");
 
+        Ok(())
+    }
+
+    /// Ensure core cortical areas (_death, _power, _fatigue) exist
+    ///
+    /// Core areas are required for brain operation:
+    /// - `_death` (cortical_idx=0): Manages neuron death and cleanup
+    /// - `_power` (cortical_idx=1): Provides power injection for burst engine
+    /// - `_fatigue` (cortical_idx=2): Monitors brain fatigue and triggers sleep mode
+    ///
+    /// If any core area is missing from the genome, it will be automatically created
+    /// with default properties (1x1x1 dimensions, minimal configuration).
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(())` if all core areas exist or were successfully created
+    /// * `Err(BduError)` if creation fails
+    pub fn ensure_core_cortical_areas(&mut self) -> BduResult<()> {
+        info!(target: "feagi-bdu", "🔧 [CORE-AREA] Ensuring core cortical areas exist...");
+        
+        use feagi_structures::genomic::cortical_area::{
+            CoreCorticalType, CorticalArea, CorticalAreaDimensions, CorticalAreaType,
+        };
+
+        // Core areas are always 1x1x1 as per requirements
+        let core_dimensions = CorticalAreaDimensions::new(1, 1, 1)
+            .map_err(|e| BduError::Internal(format!("Failed to create core area dimensions: {}", e)))?;
+
+        // Default position for core areas (origin)
+        let core_position = (0, 0, 0).into();
+
+        // Check and create _death (cortical_idx=0)
+        let death_id = CoreCorticalType::Death.to_cortical_id();
+        if !self.cortical_areas.contains_key(&death_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _death area (cortical_idx=0)");
+            let death_area = CorticalArea::new(
+                death_id,
+                0, // Will be overridden by add_cortical_area to 0
+                "_death".to_string(),
+                core_dimensions.clone(),
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Death),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _death area: {}", e)))?;
+            match self.add_cortical_area(death_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _death area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _death area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _death area already exists");
+        }
+
+        // Check and create _power (cortical_idx=1)
+        let power_id = CoreCorticalType::Power.to_cortical_id();
+        if !self.cortical_areas.contains_key(&power_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _power area (cortical_idx=1)");
+            let power_area = CorticalArea::new(
+                power_id,
+                1, // Will be overridden by add_cortical_area to 1
+                "_power".to_string(),
+                core_dimensions.clone(),
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Power),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _power area: {}", e)))?;
+            match self.add_cortical_area(power_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _power area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _power area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _power area already exists");
+        }
+
+        // Check and create _fatigue (cortical_idx=2)
+        let fatigue_id = CoreCorticalType::Fatigue.to_cortical_id();
+        if !self.cortical_areas.contains_key(&fatigue_id) {
+            info!(target: "feagi-bdu", "🔧 [CORE-AREA] Creating missing _fatigue area (cortical_idx=2)");
+            let fatigue_area = CorticalArea::new(
+                fatigue_id,
+                2, // Will be overridden by add_cortical_area to 2
+                "_fatigue".to_string(),
+                core_dimensions,
+                core_position,
+                CorticalAreaType::Core(CoreCorticalType::Fatigue),
+            )
+            .map_err(|e| BduError::Internal(format!("Failed to create _fatigue area: {}", e)))?;
+            match self.add_cortical_area(fatigue_area) {
+                Ok(idx) => {
+                    info!(target: "feagi-bdu", "  ✅ Created _fatigue area with cortical_idx={}", idx);
+                }
+                Err(e) => {
+                    error!(target: "feagi-bdu", "  ❌ Failed to add _fatigue area: {}", e);
+                    return Err(e);
+                }
+            }
+        } else {
+            info!(target: "feagi-bdu", "  ✓ _fatigue area already exists");
+        }
+
+        info!(target: "feagi-bdu", "🔧 [CORE-AREA] Core area check complete");
         Ok(())
     }
 
@@ -2506,89 +2620,15 @@ impl ConnectomeManager {
     ///
     /// Development progress information
     ///
-    pub fn load_from_genome_file<P: AsRef<std::path::Path>>(
-        &mut self,
-        genome_path: P,
-    ) -> BduResult<crate::neuroembryogenesis::DevelopmentProgress> {
-        use feagi_evolutionary::load_genome_from_file;
-
-        info!(target: "feagi-bdu","Loading genome from: {:?}", genome_path.as_ref());
-        let genome = load_genome_from_file(genome_path)?;
-
-        self.load_from_genome(genome)
-    }
-
-    /// Load genome and develop brain
-    ///
-    /// This is the core genome loading method that:
-    /// 1. Prepares for new genome (clears existing state)
-    /// 2. Runs neuroembryogenesis to develop the brain
-    ///
-    /// # Arguments
-    ///
-    /// * `genome` - RuntimeGenome to load
-    ///
-    /// # Returns
-    ///
-    /// Development progress information
-    ///
-    pub fn load_from_genome(
-        &mut self,
-        genome: feagi_evolutionary::RuntimeGenome,
-    ) -> BduResult<crate::neuroembryogenesis::DevelopmentProgress> {
-        // Prepare for new genome (clear existing state)
-        self.prepare_for_new_genome()?;
-
-        // Calculate and resize memory if needed
-        self.resize_for_genome(&genome)?;
-
-        // CRITICAL FIX: This function is called with write lock already held from spawn_blocking.
-        // We CANNOT call ConnectomeManager::instance() here because it would try to get ANOTHER
-        // write lock on the same RwLock, causing a deadlock!
-        // Instead, create neuroembryogenesis using the singleton instance directly.
-        // BUT: We need to pass self's Arc reference, not create a new one.
-        // Since we're inside a method that already has &mut self, we need to work with the singleton.
-        // The solution: Call instance() but use it correctly - we're already holding the write lock
-        // from the caller, so we need to ensure neuroembryogenesis uses the SAME Arc reference.
-
-        // Get the singleton instance (same Arc as self.connectome in GenomeServiceImpl)
-        let manager_arc = ConnectomeManager::instance();
-
-        // CRITICAL: We're already holding a write lock from spawn_blocking.
-        // Neuroembryogenesis will try to acquire its own write locks.
-        // This is OK because parking_lot::RwLock allows nested write locks from the same thread!
-        // But wait - we're in spawn_blocking, which is a different thread...
-        // Actually, the issue is that neuroembryogenesis will try to acquire write locks
-        // on the SAME Arc<RwLock<>>, which will deadlock if we're already holding a write lock.
-
-        // SOLUTION: Don't hold the write lock during develop_from_genome.
-        // Instead, release it and let neuroembryogenesis acquire its own locks.
-        // But we can't do that because we're in a &mut self method...
-
-        // ACTUAL SOLUTION: Create a temporary Arc wrapper for neuroembryogenesis
-        // that uses the same underlying ConnectomeManager, but allows it to acquire its own locks.
-        // OR: Refactor neuroembryogenesis to not need its own Arc.
-
-        // For now, let's try a different approach: pass self directly to neuroembryogenesis
-        // But neuroembryogenesis expects Arc<RwLock<ConnectomeManager>>...
-
-        // TEMPORARY FIX: Use the singleton instance. This should work because parking_lot
-        // allows multiple write locks from the same thread (reentrant).
-        // But we're in spawn_blocking, so it's a different thread...
-
-        // Let me check if parking_lot supports reentrant locks...
-        // Actually, parking_lot::RwLock is NOT reentrant by default.
-
-        // REAL FIX: Refactor so that load_from_genome doesn't need to hold the write lock
-        // throughout the entire operation. Instead, release it and let neuroembryogenesis
-        // manage its own locks.
-
-        // For now, let's ensure we're using the same instance and that locks are properly scoped.
-        let mut neuro = crate::neuroembryogenesis::Neuroembryogenesis::new(manager_arc);
-        neuro.develop_from_genome(&genome)?;
-
-        Ok(neuro.get_progress())
-    }
+    // NOTE: load_from_genome_file() and load_from_genome() have been REMOVED.
+    // All genome loading must now go through GenomeService::load_genome() which:
+    // - Stores RuntimeGenome for persistence
+    // - Updates genome metadata
+    // - Provides async/await support
+    // - Includes timeout protection
+    // - Ensures core cortical areas exist
+    //
+    // See: feagi-services/src/impls/genome_service_impl.rs::load_genome()
 
     /// Prepare for loading a new genome
     ///

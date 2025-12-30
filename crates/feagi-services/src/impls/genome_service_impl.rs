@@ -136,6 +136,15 @@ impl GenomeService for GenomeServiceImpl {
                     ServiceError::Backend(format!("Neuroembryogenesis failed: {}", e))
                 })?;
 
+                // Ensure core cortical areas exist after neuroembryogenesis
+                // (they may have been added during corticogenesis, but we ensure they exist)
+                {
+                    let mut manager = manager_arc.write();
+                    manager.ensure_core_cortical_areas().map_err(|e| {
+                        ServiceError::Backend(format!("Failed to ensure core cortical areas: {}", e))
+                    })?;
+                }
+
                 // After neuroembryogenesis, update genome metadata with root_region_id
                 let root_region_id = manager_arc.read().get_root_region_id();
                 if let Some(root_id) = root_region_id {
