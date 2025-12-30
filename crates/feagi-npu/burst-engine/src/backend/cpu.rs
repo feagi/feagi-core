@@ -107,7 +107,8 @@ impl<T: NeuralValue, N: NeuronStorage<Value = T>, S: SynapseStorage> ComputeBack
         burst_count: u64,
     ) -> Result<(Vec<u32>, usize, usize)> {
         // FCL-aware: Process only FCL neurons (existing neural_dynamics already supports this!)
-        let result = neural_dynamics::process_neural_dynamics(fcl, neuron_storage, burst_count)?;
+        let result =
+            neural_dynamics::process_neural_dynamics(fcl, None, neuron_storage, burst_count)?;
 
         // Extract neuron IDs from fire queue
         let fired_neurons: Vec<u32> = result

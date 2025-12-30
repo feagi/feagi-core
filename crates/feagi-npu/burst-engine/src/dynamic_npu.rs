@@ -641,6 +641,26 @@ where
         }
     }
 
+    /// Stage a memory neuron injection (50_000_000+ IDs) to the next burst’s FCL.
+    pub fn inject_memory_neuron_to_fcl(&mut self, neuron_id: u32, cortical_idx: u32, potential: f32) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.inject_memory_neuron_to_fcl(neuron_id, cortical_idx, potential),
+            DynamicNPUGeneric::INT8(npu) => npu.inject_memory_neuron_to_fcl(neuron_id, cortical_idx, potential),
+        }
+    }
+
+    /// Register a dynamic (non-storage-backed) neuron’s cortical mapping (needed for memory neurons).
+    pub fn register_dynamic_neuron_mapping(
+        &mut self,
+        neuron_id: u32,
+        cortical_id: feagi_structures::genomic::cortical_area::CorticalID,
+    ) {
+        match self {
+            DynamicNPUGeneric::F32(npu) => npu.register_dynamic_neuron_mapping(neuron_id, cortical_id),
+            DynamicNPUGeneric::INT8(npu) => npu.register_dynamic_neuron_mapping(neuron_id, cortical_id),
+        }
+    }
+
     pub fn configure_fire_ledger_window(&mut self, cortical_idx: u32, window_size: usize) -> Result<()> {
         match self {
             DynamicNPUGeneric::F32(npu) => {

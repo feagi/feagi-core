@@ -178,6 +178,15 @@ pub(crate) struct FireStructures {
     pub(crate) fire_ledger: FireLedger,
     pub(crate) fq_sampler: FQSampler,
     pub(crate) pending_sensory_injections: Vec<(NeuronId, f32)>,
+    /// Staged memory neuron injections to be applied at the start of the next burst.
+    ///
+    /// Memory neurons live in a reserved ID range (50_000_000+) and are not present in the
+    /// regular `NeuronStorage` array. They are executed via a dedicated forced-fire path
+    /// in `neural_dynamics`.
+    pub(crate) pending_memory_injections: Vec<(NeuronId, u32, f32)>, // (id, cortical_idx, potential)
+    /// Per-burst metadata for memory neuron candidates (id -> cortical_idx).
+    /// Populated during Phase 1 from `pending_memory_injections` and cleared each burst.
+    pub(crate) memory_candidate_cortical_idx: AHashMap<u32, u32>,
     pub(crate) last_fcl_snapshot: Vec<(NeuronId, f32)>,
 }
 
@@ -230,6 +239,8 @@ impl<
                 fire_ledger: FireLedger::new(fire_ledger_window),
                 fq_sampler: FQSampler::new(1000.0, SamplingMode::Unified),
                 pending_sensory_injections: Vec::with_capacity(10000),
+                pending_memory_injections: Vec::with_capacity(1024),
+                memory_candidate_cortical_idx: AHashMap::new(),
                 last_fcl_snapshot: Vec::new(),
             }),
             area_id_to_name: std::sync::RwLock::new(AHashMap::new()),
@@ -1130,6 +1141,27 @@ impl<
 
     // ===== END SENSORY INJECTION API =====
 
+    // ===== MEMORY NEURON INJECTION API =====
+
+    /// Stage a memory neuron injection to be applied at the start of the next burst.
+    ///
+    /// Memory neurons are identified by an ID in the reserved memory range (50_000_000+). They are
+    /// not stored in the regular neuron array; instead they are force-fired by the dynamics layer.
+    pub fn inject_memory_neuron_to_fcl(&mut self, neuron_id: u32, cortical_idx: u32, potential: f32) {
+        let mut fire_structures = self.fire_structures.lock().unwrap();
+        fire_structures
+            .pending_memory_injections
+            .push((NeuronId(neuron_id), cortical_idx, potential));
+    }
+
+    /// Register a dynamic (non-storage-backed) neuron’s cortical mapping for synaptic propagation.
+    ///
+    /// Required for memory neuron IDs (50_000_000+) so propagation can resolve source/destination areas.
+    pub fn register_dynamic_neuron_mapping(&mut self, neuron_id: u32, cortical_id: CorticalID) {
+        let mut engine = self.propagation_engine.write().unwrap();
+        engine.neuron_to_area.insert(NeuronId(neuron_id), cortical_id);
+    }
+
     // ===== POWER INJECTION =====
     // Power neurons are identified by cortical_idx = 1 in the neuron array
     // No separate list needed - single source of truth!
@@ -1175,6 +1207,13 @@ impl<
             &mut fire_structures.pending_sensory_injections,
         );
         let pending_mutex = std::sync::Mutex::new(pending_sensory);
+
+        // Drain staged memory neuron injections (t+1 semantics)
+        let mut pending_memory = Vec::new();
+        std::mem::swap(
+            &mut pending_memory,
+            &mut fire_structures.pending_memory_injections,
+        );
         
         let injection_result = {
             let synapse_storage = self.synapse_storage.read().unwrap();
@@ -1190,9 +1229,22 @@ impl<
         };
         fire_structures.pending_sensory_injections = pending_mutex.into_inner().unwrap();
 
+        // Apply memory neuron injections after Phase 1 (so they’re not affected by Phase 1 staging logic).
+        // These become candidates for Phase 2 and will be force-fired by the dynamics layer.
+        fire_structures.memory_candidate_cortical_idx.clear();
+        for (neuron_id, cortical_idx, potential) in pending_memory.drain(..) {
+            fire_structures
+                .memory_candidate_cortical_idx
+                .insert(neuron_id.0, cortical_idx);
+            fire_structures.fire_candidate_list.add_candidate(neuron_id, potential);
+        }
+        // Restore vector back (empty, but preserves capacity for future injections).
+        fire_structures.pending_memory_injections = pending_memory;
+
         // Phase 2: Neural Dynamics (membrane potential updates, threshold checks, firing)
         let dynamics_result = process_neural_dynamics(
             &fire_structures.fire_candidate_list,
+            Some(&fire_structures.memory_candidate_cortical_idx),
             &mut *neuron_storage,
             burst_count,
         )?;

@@ -839,6 +839,39 @@ impl Neuroembryogenesis {
                     if let Some(area) = manager.get_cortical_area(area_id) {
                         if let Some(mem_props) = extract_memory_properties(&area.properties) {
                             let upstream_areas = manager.get_upstream_cortical_areas(&area_id);
+
+                            // Ensure FireLedger tracks upstream areas with at least the required temporal depth.
+                            // Dense, burst-aligned tracking is required for correct memory pattern hashing.
+                            if let Some(ref npu_arc) = manager.get_npu() {
+                                if let Ok(mut npu) = npu_arc.lock() {
+                                    let existing_configs = npu.get_all_fire_ledger_configs();
+                                    for &upstream_idx in &upstream_areas {
+                                        let existing = existing_configs
+                                            .iter()
+                                            .find(|(idx, _)| *idx == upstream_idx)
+                                            .map(|(_, w)| *w)
+                                            .unwrap_or(0);
+
+                                        let desired = mem_props.temporal_depth as usize;
+                                        let resolved = existing.max(desired);
+                                        if resolved != existing {
+                                            if let Err(e) =
+                                                npu.configure_fire_ledger_window(upstream_idx, resolved)
+                                            {
+                                                warn!(
+                                                    target: "feagi-bdu",
+                                                    "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
+                                                    upstream_idx,
+                                                    resolved,
+                                                    e
+                                                );
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
+                                }
+                            }
                             
                             if let Ok(mut exec) = executor.lock() {
                                 let lifecycle_config = MemoryNeuronLifecycleConfig {
