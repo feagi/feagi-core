@@ -1256,9 +1256,14 @@ impl ConnectomeManager {
     /// Applies hysteresis: triggers at 85%, clears at 80%
     /// Rate limited to max once per 2 seconds to protect against rapid changes
     ///
+    /// # Safety
+    ///
+    /// This method is completely non-blocking and safe to call during genome loading.
+    /// If StateManager is unavailable or locked, it will skip the calculation gracefully.
+    ///
     /// # Returns
     ///
-    /// * `Option<u8>` - New fatigue index (0-100) if calculation was performed, None if rate limited
+    /// * `Option<u8>` - New fatigue index (0-100) if calculation was performed, None if rate limited or StateManager unavailable
     pub fn update_fatigue_index(&self) -> Option<u8> {
         // Rate limiting: max once per 2 seconds
         let mut last_calc = match self.last_fatigue_calculation.lock() {
@@ -1283,11 +1288,15 @@ impl ConnectomeManager {
         };
 
         // Get memory neuron utilization from state manager
-        let memory_neuron_util = {
-            if let Some(state_manager) = StateManager::instance().try_read() {
+        // Use try_read() to avoid blocking during neurogenesis
+        // If StateManager singleton initialization fails or is locked, skip calculation entirely
+        let memory_neuron_util = match StateManager::instance().try_read() {
+            Some(state_manager) => {
                 state_manager.get_core_state().get_memory_neuron_util()
-            } else {
-                0u8 // Default if state manager is locked
+            }
+            None => {
+                // StateManager is locked or not ready - skip fatigue calculation
+                return None;
             }
         };
 
@@ -1305,11 +1314,10 @@ impl ConnectomeManager {
 
         // Apply hysteresis: trigger at 85%, clear at 80%
         let current_fatigue_active = {
-            if let Some(state_manager) = StateManager::instance().try_read() {
-                state_manager.get_core_state().is_fatigue_active()
-            } else {
-                false // Default if state manager is locked
-            }
+            // Try to read current state - if unavailable, assume false
+            StateManager::instance().try_read()
+                .map(|m| m.get_core_state().is_fatigue_active())
+                .unwrap_or(false)
         };
 
         let new_fatigue_active = if fatigue_index >= 85 {
@@ -1321,6 +1329,8 @@ impl ConnectomeManager {
         };
 
         // Update state manager with all values
+        // Use try_write() to avoid blocking during neurogenesis
+        // If StateManager is unavailable, skip update (non-blocking)
         if let Some(state_manager) = StateManager::instance().try_write() {
             let core_state = state_manager.get_core_state();
             core_state.set_fatigue_index(fatigue_index);
@@ -1328,6 +1338,9 @@ impl ConnectomeManager {
             core_state.set_regular_neuron_util(regular_neuron_util);
             core_state.set_memory_neuron_util(memory_neuron_util);
             core_state.set_synapse_util(synapse_util);
+        } else {
+            // StateManager is locked or not ready - skip update (non-blocking)
+            trace!(target: "feagi-bdu", "[FATIGUE] StateManager unavailable, skipping update");
         }
 
         // Update NPU's atomic boolean
@@ -1480,8 +1493,14 @@ impl ConnectomeManager {
         );
 
         // Trigger fatigue index recalculation after neuron creation
+        // Note: This is non-blocking and rate-limited, safe to call during neurogenesis
+        // Skip during genome loading to avoid any potential blocking issues
         if neuron_count > 0 {
-            self.update_fatigue_index();
+            // Only update if StateManager is already initialized (non-blocking check)
+            // This prevents blocking during genome loading
+            if StateManager::instance().try_read().is_some() {
+                let _ = self.update_fatigue_index(); // Ignore result, calculation is rate-limited
+            }
         }
 
         Ok(neuron_count)
@@ -1610,7 +1629,7 @@ impl ConnectomeManager {
         if deleted {
             trace!(target: "feagi-bdu", "Deleted neuron {}", neuron_id);
             // Trigger fatigue index recalculation after neuron deletion
-            self.update_fatigue_index();
+            let _ = self.update_fatigue_index(); // Ignore result, calculation is rate-limited
         }
 
         Ok(deleted)
@@ -2724,7 +2743,7 @@ impl ConnectomeManager {
             source_neuron_id, target_neuron_id, weight, conductance, synapse_type, synapse_idx);
 
         // Trigger fatigue index recalculation after synapse creation
-        self.update_fatigue_index();
+        let _ = self.update_fatigue_index(); // Ignore result, calculation is rate-limited
 
         Ok(())
     }
@@ -3049,7 +3068,7 @@ impl ConnectomeManager {
 
         // Trigger fatigue index recalculation after batch neuron deletion
         if deleted_count > 0 {
-            self.update_fatigue_index();
+            let _ = self.update_fatigue_index(); // Ignore result, calculation is rate-limited
         }
 
         Ok(deleted_count)

@@ -296,12 +296,15 @@ impl StateManager {
 /// Global singleton instance of StateManager
 #[cfg(feature = "std")]
 static INSTANCE: Lazy<Arc<RwLock<StateManager>>> = Lazy::new(|| {
-    Arc::new(RwLock::new(
-        StateManager::new().unwrap_or_else(|_| {
-            // Fallback: create with default config if initialization fails
-            StateManager::with_default_fcl_window(20).unwrap()
-        })
-    ))
+    // Initialize StateManager - this should never fail in normal operation
+    let state_manager = StateManager::new()
+        .or_else(|_| StateManager::with_default_fcl_window(20))
+        .unwrap_or_else(|e| {
+            // Last resort: panic with error message if both attempts fail
+            // This should never happen in practice
+            panic!("Failed to initialize StateManager: {:?}", e);
+        });
+    Arc::new(RwLock::new(state_manager))
 });
 
 #[cfg(feature = "std")]
@@ -310,6 +313,11 @@ impl StateManager {
     ///
     /// This provides thread-safe access to the shared state manager.
     /// The instance is lazily initialized on first access.
+    ///
+    /// # Safety
+    ///
+    /// This method is safe to call from any thread. The singleton is initialized
+    /// on first access using `once_cell::sync::Lazy`, which is thread-safe.
     ///
     /// # Example
     ///
@@ -321,6 +329,9 @@ impl StateManager {
     /// manager.set_fatigue_index(85);
     /// ```
     pub fn instance() -> Arc<RwLock<StateManager>> {
+        // Force initialization by accessing the Lazy value
+        // This is safe because Lazy::new() is thread-safe and only executes once
+        let _ = &*INSTANCE;
         Arc::clone(&INSTANCE)
     }
 }
