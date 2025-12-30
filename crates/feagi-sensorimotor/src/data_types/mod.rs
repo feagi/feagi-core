@@ -16,7 +16,7 @@ mod gaze_properties;
 mod image_frame;
 mod misc_data;
 mod percentages;
-mod text_token;
+//mod text_token;
 pub mod processing;
 mod segmented_image_frame;
 
@@ -24,6 +24,7 @@ pub use gaze_properties::GazeProperties;
 pub use image_frame::ImageFrame;
 pub use misc_data::MiscData;
 pub use percentages::*;
+/*
 pub use text_token::{
     decode_token_id_from_misc_data,
     decode_token_id_from_xyzp_bitplanes,
@@ -31,5 +32,6 @@ pub use text_token::{
     encode_token_id_to_xyzp_bitplanes,
     TextToken,
 };
+ */
 pub(crate) use processing::*;
 pub use segmented_image_frame::SegmentedImageFrame;
