@@ -55,7 +55,7 @@ pub struct PercentageNeuronVoxelXYZPEncoder {
     interpolation: PercentageNeuronPositioning,
     is_signed: bool,
     number_percentages: PercentageChannelDimensionality,
-    number_channels: u32,
+    _number_channels: u32,
     scratch_space: ScratchSpace,
     scratch_space_negative: ScratchSpace,
 }
@@ -86,7 +86,7 @@ impl PercentageNeuronVoxelXYZPEncoder {
             interpolation,
             is_signed,
             number_percentages,
-            number_channels: *number_channels,
+            _number_channels: *number_channels,
             scratch_space: ScratchSpace::new(number_percentages, num_channels),
             scratch_space_negative: ScratchSpace::new(number_percentages, num_channels),
         };

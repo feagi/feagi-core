@@ -902,14 +902,28 @@ impl RegistrationHandler {
                 let sensory_unit = self.find_sensory_unit_by_identifier(unit_identifier)?;
                 let number_areas = sensory_unit.get_number_cortical_areas();
 
-                // For now, support deterministic creation for single-area units (covers `iten`).
-                if number_areas != 1 {
+                // For multi-area units (like segmented_vision with 9 areas), skip auto-creation
+                // but still process mappings if vision capability already created the areas
+                let should_skip_creation = number_areas != 1;
+                let has_vision_capability = capabilities.vision.is_some();
+                
+                if should_skip_creation && !has_vision_capability {
                     warn!(
                         "🦀 [REGISTRATION] Sensory unit {} has {} areas; skipping auto-create via sensory.cortical_mappings (use vision-capability path for multi-area units)",
                         sensory_unit.get_snake_case_name(),
                         number_areas
                     );
                     continue;
+                }
+                
+                // For multi-area units with vision capability, skip creation but still verify existence
+                let skip_creation = should_skip_creation && has_vision_capability;
+                if skip_creation {
+                    info!(
+                        "🦀 [REGISTRATION] Sensory unit {} has {} areas; vision capability should have created areas, verifying existence",
+                        sensory_unit.get_snake_case_name(),
+                        number_areas
+                    );
                 }
 
                 // Check if this specific cortical ID exists
@@ -955,7 +969,7 @@ impl RegistrationHandler {
                         dimensions: Some((dims[0] as usize, dims[1] as usize, dims[2] as usize)),
                         message: None,
                     });
-                } else if self.auto_create_missing_areas {
+                } else if !skip_creation && self.auto_create_missing_areas {
                     let create_params = feagi_services::types::CreateCorticalAreaParams {
                         cortical_id: cortical_id_base64.clone(),
                         name: area_name.clone(),
@@ -1353,17 +1367,24 @@ impl RegistrationHandler {
                         .cortical_mappings
                         .iter()
                         .filter_map(|(name, &idx)| {
-                            match CorticalID::try_from_bytes(&{
-                                let mut bytes = [b'\0'; 8]; // Use null bytes, not spaces
-                                let name_bytes = name.as_bytes();
-                                let copy_len = name_bytes.len().min(8);
-                                bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
-                                bytes
-                            }) {
+                            // Try base64 first (standard format from SDK), then fall back to raw bytes
+                            match CorticalID::try_from_base_64(name) {
                                 Ok(id) => Some((id, idx)),
-                                Err(e) => {
-                                    warn!("[REGISTRATION] Invalid cortical ID '{}': {:?}", name, e);
-                                    None
+                                Err(_) => {
+                                    // Fallback: try parsing as raw bytes (for legacy compatibility)
+                                    match CorticalID::try_from_bytes(&{
+                                        let mut bytes = [b'\0'; 8]; // Use null bytes, not spaces
+                                        let name_bytes = name.as_bytes();
+                                        let copy_len = name_bytes.len().min(8);
+                                        bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+                                        bytes
+                                    }) {
+                                        Ok(id) => Some((id, idx)),
+                                        Err(e) => {
+                                            warn!("[REGISTRATION] Invalid cortical ID '{}': {:?}", name, e);
+                                            None
+                                        }
+                                    }
                                 }
                             }
                         })

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use feagi_structures::FeagiDataError;
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelDimensions, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth};
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth};
 use feagi_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaDataFlag};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
@@ -10,8 +10,8 @@ use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, P
 use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::neuron_voxel_coding::xyzp::encoders::{BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder, PercentageNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
-use crate::wrapped_io_data::WrappedIOType;
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InputOutputDefinition {
     input_units: HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>>,
@@ -19,14 +19,17 @@ pub struct InputOutputDefinition {
 }
 
 impl InputOutputDefinition {
+    #[allow(dead_code)]
     pub fn get_input_units(&self) -> &HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>> {
         &self.input_units
     }
 
+    #[allow(dead_code)]
     pub fn get_output_units(&self) -> &HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>> {
         &self.output_units
     }
 
+    #[allow(dead_code)]
     pub fn verify_valid_structure(&self) -> Result<(), FeagiDataError> {
         for units_and_encoders in self.input_units.values() {
             let mut unit_indexes: Vec<CorticalUnitIndex> = Vec::new();
@@ -52,6 +55,7 @@ impl InputOutputDefinition {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn insert_motor(&mut self, motor: MotorCorticalUnit, unit_definition: UnitDefinition, decoder_properties: DecoderProperties) {
         if !self.output_units.contains_key(&motor) {
             self.output_units.insert(motor.clone(), vec![(unit_definition, decoder_properties)]);
@@ -61,6 +65,7 @@ impl InputOutputDefinition {
         vec.push((unit_definition, decoder_properties));
     }
 
+    #[allow(dead_code)]
     pub fn insert_sensor(&mut self, sensor: SensoryCorticalUnit, unit_definition: UnitDefinition, encoder_properties: EncoderProperties) {
         if !self.input_units.contains_key(&sensor) {
             self.input_units.insert(sensor.clone(), vec![(unit_definition, encoder_properties)]);
@@ -74,6 +79,7 @@ impl InputOutputDefinition {
 
 
 
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UnitDefinition {
     pub(crate) friendly_name: String,
@@ -83,6 +89,7 @@ pub struct UnitDefinition {
 }
 
 impl UnitDefinition {
+    #[allow(dead_code)]
     pub fn verify_valid_structure(&self) -> Result<(), FeagiDataError> {
         if self.device_grouping.is_empty() {
             return Err(FeagiDataError::DeserializationError("Cannot have a cortical unit of 0 device grouping!".to_string()));
@@ -95,13 +102,14 @@ impl UnitDefinition {
                 }
             }
 
-            let stages = &device_grouping.pipeline_stages;
+            let _stages = &device_grouping.pipeline_stages;
             // TODO check stage compatibility
         }
         Ok(())
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceGrouping {
     pub(crate) friendly_name: String,
@@ -110,6 +118,7 @@ pub struct DeviceGrouping {
     pub(crate) pipeline_stages: Vec<PipelineStageProperties>
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EncoderProperties {
     Boolean,
@@ -120,6 +129,7 @@ pub enum EncoderProperties {
 }
 
 impl EncoderProperties {
+    #[allow(dead_code)]
     pub fn to_box_encoder(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         match self {
             EncoderProperties::Boolean => {
@@ -179,6 +189,7 @@ impl EncoderProperties {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum DecoderProperties {
     MiscData(MiscDataDimensions),
@@ -187,6 +198,7 @@ pub enum DecoderProperties {
 }
 
 impl DecoderProperties {
+    #[allow(dead_code)]
     pub fn to_box_decoder(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         match self {
             DecoderProperties::MiscData(misc_data_dimensions) => {
@@ -233,9 +245,11 @@ impl DecoderProperties {
 
 /// A Dictionary structure that allows developers to tag custom information to
 /// device groupings (channels).
+#[allow(dead_code)]
 pub type DeviceProperties = HashMap<String, DevicePropertyValue>;
 
 /// User defined key for custom properties per channel, which can be useful in describing hardware
+#[allow(dead_code)]
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 #[derive(Debug, Clone)]

@@ -9,8 +9,10 @@ use std::time::Instant;
 use crate::configuration::jsonable::{DecoderProperties, EncoderProperties};
 
 pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
+    #[allow(dead_code)]
     fn get_encodable_data_type(&self) -> WrappedIOType;
 
+    #[allow(dead_code)]
     fn get_as_properties(&self) -> EncoderProperties;
 
     /// Writes data to NeuronXYZPVoxelArray(s) of the relevant cortical area(s), where each element in pipelines is the channel. Assumes write_target been cleared of neuron data
@@ -23,8 +25,10 @@ pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
 }
 
 pub trait NeuronVoxelXYZPDecoder: Debug + Sync + Send {
+    #[allow(dead_code)]
     fn get_decodable_data_type(&self) -> WrappedIOType;
 
+    #[allow(dead_code)]
     fn get_as_properties(&self) -> DecoderProperties;
 
     /// Writes data to the respective channel of PipelineStageRunner to the input cache, and marks if the channel has been changed or not, with data read from the neurons

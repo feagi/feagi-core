@@ -30,7 +30,7 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 /// let encoded = encoder.encode(&token_id)?;
 /// ```
 pub struct TextEncoder {
-    config: TextEncoderConfig,
+    _config: TextEncoderConfig,
     cortical_id: CorticalID,
     topology: CorticalTopology,
 }
@@ -55,7 +55,7 @@ impl TextEncoder {
         let topology = topology_cache.get_topology(&cortical_id).await?;
 
         Ok(Self {
-            config,
+            _config: config,
             cortical_id,
             topology,
         })

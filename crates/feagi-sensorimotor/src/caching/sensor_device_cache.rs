@@ -25,7 +25,9 @@ use feagi_structures::{sensor_cortical_units, FeagiDataError, FeagiSignal};
 use std::collections::HashMap;
 use std::fmt;
 use std::time::Instant;
-use crate::configuration::jsonable::{InputOutputDefinition, UnitDefinition};
+// InputOutputDefinition is used in commented-out code (lines 622, 645)
+// Uncomment when implementing set_from_input_definition and export_to_input_definition
+// use crate::configuration::jsonable::InputOutputDefinition;
 
 #[allow(unused_macros)] // Macro may be used in future
 macro_rules! sensor_unit_functions {
@@ -433,6 +435,7 @@ impl Default for SensorDeviceCache {
     }
 }
 
+#[allow(unused_must_use)]
 impl SensorDeviceCache {
     pub fn new() -> Self {
         SensorDeviceCache {

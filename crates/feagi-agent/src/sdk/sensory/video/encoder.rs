@@ -41,7 +41,7 @@ use feagi_structures::neuron_voxels::xyzp::{
 pub struct VideoEncoder {
     config: VideoEncoderConfig,
     cortical_ids: Vec<CorticalID>,
-    topologies: Vec<CorticalTopology>,
+    _topologies: Vec<CorticalTopology>,
     mode: EncoderMode,
 }
 
@@ -49,7 +49,7 @@ enum EncoderMode {
     Simple {
         processor: ImageFrameProcessor,
         prev_frame: ImageFrame,
-        input_props: ImageFrameProperties,
+        _input_props: ImageFrameProperties,
         output_props: ImageFrameProperties,
     },
     Segmented {
@@ -105,7 +105,7 @@ impl VideoEncoder {
         Ok(Self {
             config,
             cortical_ids,
-            topologies,
+            _topologies: topologies,
             mode,
         })
     }
@@ -141,7 +141,7 @@ impl VideoEncoder {
         Ok(EncoderMode::Simple {
             processor,
             prev_frame,
-            input_props,
+            _input_props: input_props,
             output_props,
         })
     }

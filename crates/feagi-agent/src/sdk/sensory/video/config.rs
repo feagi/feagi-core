@@ -116,7 +116,7 @@ impl VideoEncoderConfig {
             cortical_mappings.insert(id.as_base_64(), idx as u32);
         }
 
-        let config = AgentConfig::new(self.agent_id.clone(), AgentType::Sensory)
+        let mut config = AgentConfig::new(self.agent_id.clone(), AgentType::Sensory)
             .with_registration_endpoint(format!(
                 "tcp://{}:{}",
                 self.feagi_host, self.feagi_zmq_registration_port
@@ -129,6 +129,32 @@ impl VideoEncoderConfig {
             .with_connection_timeout_ms(self.feagi_connection_timeout_ms)
             .with_registration_retries(self.feagi_registration_retries)
             .with_sensory_capability(self.feagi_tick_hz as f64, None, cortical_mappings);
+
+        // For segmented vision (9 areas), add vision capability to auto-create areas
+        // The sensory mappings will still be used to register with burst engine
+        if matches!(self.encoding_strategy, VideoEncodingStrategy::SegmentedVision) {
+            // Use the first cortical ID as the target (segmented vision uses isvi)
+            if let Some(first_id) = cortical_ids.first() {
+                // Extract the area name from the cortical ID (e.g., "isvi" from bytes)
+                let id_bytes = first_id.as_bytes();
+                let area_name = if id_bytes[0] == b'i' {
+                    // Extract area name from bytes 1-4 (e.g., "svi" -> "isvi")
+                    String::from_utf8_lossy(&id_bytes[0..4.min(id_bytes.len())])
+                        .trim_end_matches('\0')
+                        .trim_end_matches('_')
+                        .to_string()
+                } else {
+                    "isvi".to_string() // Default for segmented vision
+                };
+                
+                config = config.with_vision_capability(
+                    "camera",
+                    (self.source_width as usize, self.source_height as usize),
+                    3, // RGB channels
+                    area_name,
+                );
+            }
+        }
 
         Ok(config)
     }

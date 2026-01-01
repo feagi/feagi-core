@@ -48,7 +48,7 @@ pub struct OsegData {
 
 /// Perception decoder for motor data
 pub struct PerceptionDecoder {
-    config: PerceptionDecoderConfig,
+    _config: PerceptionDecoderConfig,
     cortical_ids: [CorticalID; 3],
     topologies: [CorticalTopology; 3],
     tokenizer: Option<tokenizers::Tokenizer>,
@@ -87,7 +87,7 @@ impl PerceptionDecoder {
         };
 
         Ok(Self {
-            config,
+            _config: config,
             cortical_ids,
             topologies,
             tokenizer,
