@@ -76,8 +76,8 @@ impl VideoEncoder {
     ) -> Result<Self> {
         config.validate()?;
 
-        let group_index = feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex::from(config.cortical_group_id);
-        let cortical_ids = config.encoding_strategy.cortical_ids(group_index);
+        let unit_index = feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex::from(config.cortical_unit_id);
+        let cortical_ids = config.encoding_strategy.cortical_ids(unit_index);
 
         // Fetch topologies
         let topologies = topology_cache.get_topologies(&cortical_ids).await?;

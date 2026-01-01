@@ -5,7 +5,7 @@
 
 use crate::core::{AgentConfig, AgentType};
 use crate::sdk::error::{Result, SdkError};
-use feagi_structures::genomic::cortical_area::descriptors::{CorticalGroupIndex, CorticalUnitIndex};
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalUnitIndex, CorticalSubUnitIndex};
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, IOCorticalAreaDataFlag};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use std::collections::HashMap;
@@ -18,7 +18,7 @@ use std::collections::HashMap;
 ///
 /// let config = TextEncoderConfig {
 ///     agent_id: "text-input-01".to_string(),
-///     cortical_group_id: 0,
+///     cortical_unit_id: 0,
 ///     feagi_host: "localhost".to_string(),
 ///     feagi_api_port: 8080,
 ///     feagi_zmq_registration_port: 30001,
@@ -33,7 +33,7 @@ use std::collections::HashMap;
 pub struct TextEncoderConfig {
     // Identity
     pub agent_id: String,
-    pub cortical_group_id: u8,
+    pub cortical_unit_id: u8,  // Cortical unit index (which unit of this type)
 
     // FEAGI network configuration
     pub feagi_host: String,
@@ -57,8 +57,8 @@ impl TextEncoderConfig {
         data_flag.as_io_cortical_id(
             true,                                          // is_input
             [b't', b'e', b'n'],                           // "ten" in iten
-            CorticalUnitIndex::from(0),                   // unit index (always 0 for text)
-            CorticalGroupIndex::from(self.cortical_group_id), // group index
+            CorticalUnitIndex::from(self.cortical_unit_id), // unit index
+            CorticalSubUnitIndex::from(0),                // subunit index (always 0 for text)
         )
     }
 
@@ -114,7 +114,7 @@ mod tests {
         // Test group 0
         let config0 = TextEncoderConfig {
             agent_id: "test".to_string(),
-            cortical_group_id: 0,
+            cortical_unit_id: 0,
             feagi_host: "localhost".to_string(),
             feagi_api_port: 8080,
             feagi_zmq_registration_port: 30001,
@@ -130,7 +130,7 @@ mod tests {
         // Test group 1 - should match genome
         let config1 = TextEncoderConfig {
             agent_id: "test".to_string(),
-            cortical_group_id: 1,
+            cortical_unit_id: 1,
             feagi_host: "localhost".to_string(),
             feagi_api_port: 8080,
             feagi_zmq_registration_port: 30001,

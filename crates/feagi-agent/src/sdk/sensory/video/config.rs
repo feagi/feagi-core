@@ -5,7 +5,7 @@
 
 use crate::core::{AgentConfig, AgentType};
 use crate::sdk::error::{Result, SdkError};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
@@ -22,17 +22,17 @@ pub enum VideoEncodingStrategy {
 
 impl VideoEncodingStrategy {
     /// Get cortical IDs for this encoding strategy
-    pub fn cortical_ids(&self, group: CorticalGroupIndex) -> Vec<CorticalID> {
+    pub fn cortical_ids(&self, unit: CorticalUnitIndex) -> Vec<CorticalID> {
         match self {
             Self::SimpleVision => SensoryCorticalUnit::get_cortical_ids_array_for_simple_vision(
                 FrameChangeHandling::Absolute,
-                group,
+                unit,
             )
             .to_vec(),
             Self::SegmentedVision => {
                 SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
                     FrameChangeHandling::Absolute,
-                    group,
+                    unit,
                 )
                 .to_vec()
             }
@@ -56,7 +56,7 @@ impl VideoEncodingStrategy {
 ///
 /// let config = VideoEncoderConfig {
 ///     agent_id: "video-camera-01".to_string(),
-///     cortical_group_id: 0,
+///     cortical_unit_id: 0,
 ///     encoding_strategy: VideoEncodingStrategy::SimpleVision,
 ///     source_width: 640,
 ///     source_height: 480,
@@ -77,7 +77,7 @@ impl VideoEncodingStrategy {
 pub struct VideoEncoderConfig {
     // Identity
     pub agent_id: String,
-    pub cortical_group_id: u8,
+    pub cortical_unit_id: u8,  // Cortical unit index (which unit of this type)
 
     // Encoding strategy
     pub encoding_strategy: VideoEncodingStrategy,
@@ -105,10 +105,10 @@ pub struct VideoEncoderConfig {
 impl VideoEncoderConfig {
     /// Convert to AgentConfig for core client
     pub fn to_agent_config(&self) -> Result<AgentConfig> {
-        let group_index = CorticalGroupIndex::from(self.cortical_group_id);
+        let unit_index = CorticalUnitIndex::from(self.cortical_unit_id);
 
         // Get cortical IDs for this encoding strategy
-        let cortical_ids = self.encoding_strategy.cortical_ids(group_index);
+        let cortical_ids = self.encoding_strategy.cortical_ids(unit_index);
 
         // Build cortical mappings for registration
         let mut cortical_mappings = HashMap::new();

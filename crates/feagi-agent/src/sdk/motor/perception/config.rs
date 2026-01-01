@@ -5,7 +5,7 @@
 
 use crate::core::{AgentConfig, AgentType};
 use crate::sdk::error::{Result, SdkError};
-use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::MotorCorticalUnit;
@@ -18,7 +18,7 @@ use feagi_structures::genomic::MotorCorticalUnit;
 ///
 /// let config = PerceptionDecoderConfig {
 ///     agent_id: "perception-inspector".to_string(),
-///     cortical_group_id: 0,
+///     cortical_unit_id: 0,
 ///     feagi_host: "localhost".to_string(),
 ///     feagi_api_port: 8080,
 ///     feagi_zmq_registration_port: 30001,
@@ -34,7 +34,7 @@ use feagi_structures::genomic::MotorCorticalUnit;
 pub struct PerceptionDecoderConfig {
     // Identity
     pub agent_id: String,
-    pub cortical_group_id: u8,
+    pub cortical_unit_id: u8,  // Cortical unit index (which unit of this type)
 
     // FEAGI network configuration
     pub feagi_host: String,
@@ -51,19 +51,19 @@ pub struct PerceptionDecoderConfig {
 impl PerceptionDecoderConfig {
     /// Get cortical IDs for perception (oseg, oimg, oten)
     pub fn cortical_ids(&self) -> [CorticalID; 3] {
-        let group_index = CorticalGroupIndex::from(self.cortical_group_id);
+        let unit_index = CorticalUnitIndex::from(self.cortical_unit_id);
         [
             MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation(
                 FrameChangeHandling::Absolute,
-                group_index,
+                unit_index,
             )[0],
             MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output(
                 FrameChangeHandling::Absolute,
-                group_index,
+                unit_index,
             )[0],
             MotorCorticalUnit::get_cortical_ids_array_for_text_english_output(
                 FrameChangeHandling::Absolute,
-                group_index,
+                unit_index,
             )[0],
         ]
     }
