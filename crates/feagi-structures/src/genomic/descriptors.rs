@@ -1,4 +1,4 @@
-use crate::{define_index, define_xy_coordinates, define_xyz_coordinates};
+use crate::{define_xy_coordinates, define_xyz_coordinates};
 
 define_xy_coordinates!(
     GenomeCoordinate2D,

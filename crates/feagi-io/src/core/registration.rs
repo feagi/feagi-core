@@ -16,7 +16,7 @@ pub use feagi_services::types::registration::{
     AreaStatus, CorticalAreaAvailability, CorticalAreaStatus, RegistrationRequest,
     RegistrationResponse, TransportConfig,
 };
-use feagi_structures::genomic::cortical_area::descriptors::CorticalGroupIndex;
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalUnitIndex, CorticalSubUnitIndex};
 use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
@@ -298,7 +298,7 @@ impl RegistrationHandler {
         unit: SensoryCorticalUnit,
         frame_change_handling: FrameChangeHandling,
         percentage_neuron_positioning: feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
-        group: CorticalGroupIndex,
+        group: CorticalUnitIndex,
     ) -> Result<Vec<CorticalID>, String> {
         // Dispatch to the appropriate get_cortical_ids_array_for method based on unit type
         // This is systematic (covers all types) not hardcoded for one specific type
@@ -520,7 +520,7 @@ impl RegistrationHandler {
 
             // Extract group index from IO cortical ID (byte 7)
             let group_index = cortical_id_bytes[7];
-            let group: CorticalGroupIndex = group_index.into();
+            let group: CorticalUnitIndex = group_index.into();
 
             // Find matching SensoryCorticalUnit by unit identifier
             let sensory_unit = self.find_sensory_unit_by_identifier(unit_identifier)?;
@@ -571,7 +571,7 @@ impl RegistrationHandler {
 
                     // Get dimensions and position from topology
                     let (width, height, channels, x, y, z) =
-                        if let Some(unit_topology) = topology.get(&i) {
+                        if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(i as u8)) {
                             let dims = unit_topology.channel_dimensions_default;
                             let pos = unit_topology.relative_position;
                             (
@@ -718,7 +718,7 @@ impl RegistrationHandler {
                 // Get topology for single area (index 0)
                 let topology = sensory_unit.get_unit_default_topology();
                 let (width, height, channels, x, y, z) =
-                    if let Some(unit_topology) = topology.get(&0) {
+                    if let Some(unit_topology) = topology.get(&CorticalSubUnitIndex::from(0u8)) {
                         let dims = unit_topology.channel_dimensions_default;
                         let pos = unit_topology.relative_position;
                         (
@@ -897,7 +897,7 @@ impl RegistrationHandler {
                     cortical_id_bytes[2],
                     cortical_id_bytes[3],
                 ];
-                let _group: CorticalGroupIndex = cortical_id_bytes[7].into();
+                let _group: CorticalUnitIndex = cortical_id_bytes[7].into();
 
                 let sensory_unit = self.find_sensory_unit_by_identifier(unit_identifier)?;
                 let number_areas = sensory_unit.get_number_cortical_areas();
@@ -931,7 +931,7 @@ impl RegistrationHandler {
 
                 // Derive deterministic name/dimensions from the unit template topology
                 let topology = sensory_unit.get_unit_default_topology();
-                let unit_topology = topology.get(&0).ok_or_else(|| {
+                let unit_topology = topology.get(&CorticalSubUnitIndex::from(0u8)).ok_or_else(|| {
                     format!(
                         "Sensory unit {} missing topology entry for area 0",
                         sensory_unit.get_snake_case_name()

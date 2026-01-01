@@ -12,6 +12,7 @@ use std::collections::HashMap;
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
+use feagi_structures::genomic::cortical_area::descriptors::CorticalSubUnitIndex;
 
 // ============================================================================
 // REQUEST/RESPONSE MODELS
@@ -614,7 +615,7 @@ pub async fn post_cortical_area(
     let mut creation_params = Vec::new();
     for unit_idx in 0..num_units {
         // Get dimensions for this unit from topology
-        let dimensions = if let Some(topo) = unit_topology.get(&unit_idx) {
+        let dimensions = if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
             let dims = topo.channel_dimensions_default;
             (dims[0] as usize, dims[1] as usize, dims[2] as usize)
         } else {
@@ -622,7 +623,7 @@ pub async fn post_cortical_area(
         };
 
         // Calculate position for this unit
-        let position = if let Some(topo) = unit_topology.get(&unit_idx) {
+        let position = if let Some(topo) = unit_topology.get(&CorticalSubUnitIndex::from(unit_idx as u8)) {
             let rel_pos = topo.relative_position;
             (
                 coordinates_3d[0] + rel_pos[0],
@@ -1268,7 +1269,7 @@ pub async fn get_ipu_types(
             .into_iter()
             .map(|(idx, topo)| {
                 (
-                    idx,
+                    *idx as usize,
                     UnitTopologyData {
                         relative_position: topo.relative_position,
                         dimensions: topo.channel_dimensions_default,
@@ -1339,7 +1340,7 @@ pub async fn get_opu_types(
             .into_iter()
             .map(|(idx, topo)| {
                 (
-                    idx,
+                    *idx as usize,
                     UnitTopologyData {
                         relative_position: topo.relative_position,
                         dimensions: topo.channel_dimensions_default,
