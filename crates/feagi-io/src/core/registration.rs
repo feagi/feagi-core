@@ -1241,23 +1241,41 @@ impl RegistrationHandler {
         let cortical_areas_availability = self.ensure_cortical_areas_exist(&capabilities)?;
 
         // Allocate SHM paths ONLY if agent didn't explicitly choose a non-SHM transport
+        // AND the agent didn't explicitly set shm_path to None (which indicates ZMQ-only)
         let mut shm_paths = HashMap::new();
         let mut allocated_capabilities = capabilities.clone();
 
-        let should_provide_shm = match request.chosen_transport.as_deref() {
+        // Check if agent explicitly wants SHM (either via chosen_transport or by providing shm_path)
+        let agent_wants_shm = match request.chosen_transport.as_deref() {
             Some("websocket") | Some("zmq") => false, // Agent explicitly chose non-SHM transport
-            Some("shm") | Some("hybrid") | None => true, // Agent wants SHM or didn't specify
+            Some("shm") | Some("hybrid") => true,      // Agent explicitly wants SHM
+            None => {
+                // If agent didn't specify transport, check if they provided shm_path
+                // If shm_path is None, agent is using ZMQ-only (don't auto-allocate SHM)
+                // If shm_path is Some, agent wants SHM (or already has a path)
+                capabilities.sensory.as_ref()
+                    .and_then(|s| s.shm_path.as_ref())
+                    .is_some()
+            },
             Some(_) => false,                         // Unknown transport, don't offer SHM
         };
 
-        if should_provide_shm {
+        if agent_wants_shm {
             if let Some(ref mut sensory) = allocated_capabilities.sensory {
-                let shm_path = format!(
-                    "{}/feagi-shm-{}-sensory.bin",
-                    self.shm_base_path, request.agent_id
-                );
-                sensory.shm_path = Some(shm_path.clone());
-                shm_paths.insert("sensory".to_string(), shm_path);
+                // Only auto-allocate if agent didn't already provide a path
+                if sensory.shm_path.is_none() {
+                    let shm_path = format!(
+                        "{}/feagi-shm-{}-sensory.bin",
+                        self.shm_base_path, request.agent_id
+                    );
+                    sensory.shm_path = Some(shm_path.clone());
+                    shm_paths.insert("sensory".to_string(), shm_path);
+                } else {
+                    // Agent provided a path, use it
+                    if let Some(ref path) = sensory.shm_path {
+                        shm_paths.insert("sensory".to_string(), path.clone());
+                    }
+                }
             }
 
             if allocated_capabilities.motor.is_some() {
@@ -1345,9 +1363,12 @@ impl RegistrationHandler {
             &*self.agent_registry as *const _
         );
 
-        // Register with burst engine's sensory agent manager (if sensory capability exists)
+        // Register with burst engine's sensory agent manager (if sensory capability exists AND using SHM)
+        // NOTE: ZMQ-only agents are handled by the ZMQ sensory receiver, not the burst engine's SHM manager
         if let Some(ref sensory) = agent_info.capabilities.sensory {
             if let Some(sensory_mgr_lock) = self.sensory_agent_manager.lock().as_ref() {
+                // Only register with burst engine if agent is using SHM (shm_path is Some)
+                // ZMQ-only agents (shm_path is None) are handled by the ZMQ sensory receiver
                 if let Some(shm_path) = &sensory.shm_path {
                     info!(
                         "🦀 [REGISTRATION] 🔍 [LOCK-TRACE] Registering {} with burst engine: {} @ {}Hz",
@@ -1408,7 +1429,8 @@ impl RegistrationHandler {
                         request.agent_id, register_duration
                     );
                 } else {
-                    warn!("🦀 [REGISTRATION] ⚠️  Sensory capability exists but no SHM path");
+                    // This is expected for ZMQ-only agents - they're handled by the ZMQ sensory receiver, not the burst engine's SHM manager
+                    debug!("🦀 [REGISTRATION] Agent {} using ZMQ-only transport (handled by ZMQ sensory receiver, not burst engine SHM manager)", request.agent_id);
                 }
             } else {
                 warn!("🦀 [REGISTRATION] ⚠️  Sensory agent manager not connected - skipping burst engine registration");
