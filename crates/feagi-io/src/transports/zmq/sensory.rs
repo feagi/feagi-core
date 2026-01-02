@@ -300,10 +300,15 @@ impl SensoryStream {
                         // Process the binary data
                         let message_bytes: &[u8] = newest_bytes.as_slice();
                         let t_zmq_receive_start = std::time::Instant::now();
+                        let receive_timestamp = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_millis() as u64;
                         debug!(
-                            "🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes",
+                            "🦀 [ZMQ-SENSORY] 📥 Received message #{}: {} bytes, timestamp: {}",
                             message_count,
-                            message_bytes.len()
+                            message_bytes.len(),
+                            receive_timestamp
                         );
 
                         // Try to deserialize as binary XYZP data (using feagi-data-processing)
@@ -316,16 +321,25 @@ impl SensoryStream {
                         ) {
                             Ok(neuron_count) => {
                                 *total_neurons.lock() += neuron_count as u64;
+                                let t_zmq_total = t_zmq_receive_start.elapsed();
+                                let processing_time_ms = t_zmq_total.as_secs_f64() * 1000.0;
 
-                                // Log stats periodically (every 100 messages)
+                                // Log stats periodically (every 100 messages) with performance metrics
                                 if message_count.is_multiple_of(100) {
-                                    let t_zmq_total = t_zmq_receive_start.elapsed();
                                     let total_msg = *total_messages.lock();
                                     let total_n = *total_neurons.lock();
+                                    let avg_neurons_per_msg = if total_msg > 0 { total_n / total_msg } else { 0 };
                                     debug!(
-                                        "[ZMQ-SENSORY] Stats: {} messages, {} neurons total, last msg: {:.2}ms, {} bytes, {} neurons, drained_newer={}",
-                                        total_msg, total_n, t_zmq_total.as_secs_f64() * 1000.0, message_bytes.len(), neuron_count
-                                        ,drained_newer
+                                        "[ZMQ-SENSORY] Stats: {} messages, {} neurons total (avg: {}), last msg: {:.2}ms, {} bytes, {} neurons, drained_newer={}",
+                                        total_msg, total_n, avg_neurons_per_msg, processing_time_ms, message_bytes.len(), neuron_count, drained_newer
+                                    );
+                                }
+                                
+                                // Log performance warning if processing takes too long (affects frame rate)
+                                if processing_time_ms > 33.0 && message_count <= 10 || message_count.is_multiple_of(100) {
+                                    warn!(
+                                        "[ZMQ-SENSORY] ⚠️ Slow processing: {:.2}ms for {} neurons (target: <33ms for 30fps)",
+                                        processing_time_ms, neuron_count
                                     );
                                 }
                             }
@@ -455,14 +469,37 @@ impl SensoryStream {
 
         let mut total_injected = 0;
         // REAL-TIME: Treat each incoming sensory message as the "latest frame".
-        // Clear any staged sensory injections before applying this message so FEAGI does not
-        // accumulate multiple frames between bursts (drift that looks like buffering).
+        // For temporal smoothing: Apply gradual ramp-up to new potentials for large frames.
+        // This prevents visual flashing when large scene changes occur (many neurons firing at once).
         let mut npu = npu_arc.lock().unwrap();
+        
+        // Temporal smoothing parameters
+        // For large frames, reduce potential to create gradual ramp-up over multiple frames
+        // This prevents instant massive activation that causes visual flashing
+        const SMOOTHING_RAMP_FACTOR: f32 = 0.4; // Apply 40% of target potential per frame (ramps over 2-3 frames)
+        const LARGE_FRAME_THRESHOLD: usize = 500; // Lower threshold - apply smoothing to more frames
+        
+        // REAL-TIME: Clear any staged sensory injections before applying this message so FEAGI does not
+        // accumulate multiple frames between bursts (drift that looks like buffering).
+        // Note: We clear to maintain real-time semantics, but apply smoothing to the new frame itself.
         npu.clear_pending_sensory_injections();
 
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
             // Extract raw XYZP data (NO LOCKS)
             let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
+
+            // Apply temporal smoothing: for large frames, reduce potentials to create gradual ramp-up
+            // This prevents instant flashes when large scene changes occur (469KB frames)
+            // The smoothing creates a ramp-up effect over 2-3 frames instead of instant activation
+            let smoothed_potentials: Vec<f32> = if potentials.len() > LARGE_FRAME_THRESHOLD {
+                // Large frame: apply smoothing to prevent massive simultaneous activation
+                // Reducing potential means neurons fire at lower intensity, creating gradual ramp-up
+                // Over subsequent frames, if the same neurons are active, they'll reach full potential
+                potentials.iter().map(|&p| p * SMOOTHING_RAMP_FACTOR).collect()
+            } else {
+                // Small frame: use full potential (already smooth, no need to reduce)
+                potentials.to_vec()
+            };
 
             // NPU handles: CorticalID → cortical_idx lookup, coordinates → neuron IDs, injection
             let injected = npu.inject_sensory_xyzp_arrays_by_id(
@@ -470,7 +507,7 @@ impl SensoryStream {
                 x_coords,
                 y_coords,
                 z_coords,
-                potentials,
+                &smoothed_potentials,
             );
             total_injected += injected;
 

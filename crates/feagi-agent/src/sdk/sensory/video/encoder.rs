@@ -224,20 +224,26 @@ impl VideoEncoder {
     ///
     /// Only applies to segmented vision mode. Ignored for simple vision.
     pub fn set_gaze(&mut self, x: f32, y: f32, modulation: f32) -> Result<()> {
-        if let EncoderMode::Segmented {
-            ref mut segmentator,
-            ref mut gaze,
-            ..
-        } = self.mode
-        {
-            let new_gaze = GazeProperties::new(
-                Percentage2D::try_from((x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)))?,
-                Percentage::new_from_0_1(modulation.clamp(0.0, 1.0))?,
-            );
-            *gaze = new_gaze;
-            segmentator.update_gaze(&new_gaze)?;
+        match &mut self.mode {
+            EncoderMode::Segmented {
+                ref mut segmentator,
+                ref mut gaze,
+                ..
+            } => {
+                let new_gaze = GazeProperties::new(
+                    Percentage2D::try_from((x.clamp(0.0, 1.0), y.clamp(0.0, 1.0)))?,
+                    Percentage::new_from_0_1(modulation.clamp(0.0, 1.0))?,
+                );
+                *gaze = new_gaze;
+                segmentator.update_gaze(&new_gaze)?;
+                Ok(())
+            }
+            EncoderMode::Simple { .. } => {
+                Err(SdkError::InvalidConfiguration(
+                    "Gaze properties only apply to SegmentedVision encoding".to_string(),
+                ))
+            }
         }
-        Ok(())
     }
 
     /// Update brightness/contrast
@@ -273,6 +279,17 @@ impl VideoEncoder {
             }
         }
         Ok(())
+    }
+
+    /// Update diff threshold for change detection
+    pub fn set_diff_threshold(&mut self, threshold: u8) -> Result<()> {
+        self.config.diff_threshold = threshold;
+        Ok(())
+    }
+
+    /// Check if encoder is in SegmentedVision mode
+    pub fn is_segmented_vision(&self) -> bool {
+        matches!(self.mode, EncoderMode::Segmented { .. })
     }
 }
 
