@@ -312,6 +312,7 @@ impl SensoryStream {
                         );
 
                         // Try to deserialize as binary XYZP data (using feagi-data-processing)
+                        let t_deserialize_start = std::time::Instant::now();
                         match Self::deserialize_and_inject_xyzp(
                             message_bytes,
                             &npu,
@@ -321,24 +322,25 @@ impl SensoryStream {
                         ) {
                             Ok(neuron_count) => {
                                 *total_neurons.lock() += neuron_count as u64;
+                                let t_deserialize_ms = t_deserialize_start.elapsed().as_secs_f64() * 1000.0;
                                 let t_zmq_total = t_zmq_receive_start.elapsed();
                                 let processing_time_ms = t_zmq_total.as_secs_f64() * 1000.0;
 
-                                // Log stats periodically (every 100 messages) with performance metrics
-                                if message_count.is_multiple_of(100) {
+                                // Log detailed performance metrics (first 10, then every 50th for better visibility)
+                                if message_count <= 10 || message_count.is_multiple_of(50) {
                                     let total_msg = *total_messages.lock();
                                     let total_n = *total_neurons.lock();
                                     let avg_neurons_per_msg = if total_msg > 0 { total_n / total_msg } else { 0 };
-                                    debug!(
-                                        "[ZMQ-SENSORY] Stats: {} messages, {} neurons total (avg: {}), last msg: {:.2}ms, {} bytes, {} neurons, drained_newer={}",
-                                        total_msg, total_n, avg_neurons_per_msg, processing_time_ms, message_bytes.len(), neuron_count, drained_newer
+                                    info!(
+                                        "[PERF][FEAGI-ZMQ] Message #{}: {} bytes → {} neurons, deserialize+inject={:.2}ms, total={:.2}ms, avg_neurons={}, drained_newer={}",
+                                        message_count, message_bytes.len(), neuron_count, t_deserialize_ms, processing_time_ms, avg_neurons_per_msg, drained_newer
                                     );
                                 }
                                 
                                 // Log performance warning if processing takes too long (affects frame rate)
-                                if processing_time_ms > 33.0 && message_count <= 10 || message_count.is_multiple_of(100) {
+                                if processing_time_ms > 33.0 && (message_count <= 10 || message_count.is_multiple_of(100)) {
                                     warn!(
-                                        "[ZMQ-SENSORY] ⚠️ Slow processing: {:.2}ms for {} neurons (target: <33ms for 30fps)",
+                                        "[PERF][FEAGI-ZMQ] ⚠️ Slow processing: {:.2}ms for {} neurons (target: <33ms for 30fps)",
                                         processing_time_ms, neuron_count
                                     );
                                 }
@@ -467,6 +469,7 @@ impl SensoryStream {
         // ✅ CLEAN ARCHITECTURE: IOSystem just transports XYZP, NPU handles all neural logic
         // The NPU owns coordinate-to-ID conversion and does it efficiently in batch
 
+        let t_inject_start = std::time::Instant::now();
         let mut total_injected = 0;
         // REAL-TIME: Treat each incoming sensory message as the "latest frame".
         // For temporal smoothing: Apply gradual ramp-up to new potentials for large frames.
@@ -535,6 +538,15 @@ impl SensoryStream {
                     neuron_arrays.len()
                 );
             }
+        }
+        
+        let t_inject_ms = t_inject_start.elapsed().as_secs_f64() * 1000.0;
+        // Log injection timing for large frames or periodically (use info! for visibility)
+        if total_injected > 1000 || total_injected == 0 || t_inject_ms > 10.0 {
+            info!(
+                "[PERF][FEAGI-INJECT] Injected {} neurons in {:.2}ms",
+                total_injected, t_inject_ms
+            );
         }
 
         Ok(total_injected)
