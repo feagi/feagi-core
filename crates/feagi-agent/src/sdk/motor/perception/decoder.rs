@@ -11,6 +11,7 @@ use feagi_sensorimotor::data_types::decode_token_id_from_xyzp_bitplanes;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use serde::Serialize;
+use tracing;
 
 /// Perception frame output
 #[derive(Debug, Clone, Serialize)]
@@ -50,12 +51,16 @@ pub struct OsegData {
 pub struct PerceptionDecoder {
     _config: PerceptionDecoderConfig,
     cortical_ids: [CorticalID; 3],
-    topologies: [CorticalTopology; 3],
+    topologies: [Option<CorticalTopology>; 3],
     tokenizer: Option<tokenizers::Tokenizer>,
 }
 
 impl PerceptionDecoder {
     /// Create a new perception decoder
+    ///
+    /// This method attempts to fetch topologies for all three cortical areas (oseg, oimg, oten),
+    /// but will succeed even if some are missing. The decoder will only decode data for areas
+    /// that exist in the topology.
     pub async fn new(
         config: PerceptionDecoderConfig,
         topology_cache: &crate::sdk::base::TopologyCache,
@@ -65,16 +70,36 @@ impl PerceptionDecoder {
 
         let cortical_ids = config.cortical_ids();
 
-        // Fetch topologies
-        let topologies_vec = topology_cache
-            .get_topologies(&cortical_ids)
-            .await?;
-
-        let topologies: [CorticalTopology; 3] = [
-            topologies_vec[0].clone(),
-            topologies_vec[1].clone(),
-            topologies_vec[2].clone(),
-        ];
+        // Fetch topologies individually - allow missing areas
+        // This allows the decoder to work with partial cortical area sets
+        let mut topologies: [Option<CorticalTopology>; 3] = [None, None, None];
+        
+        for (idx, cortical_id) in cortical_ids.iter().enumerate() {
+            match topology_cache.get_topology(cortical_id).await {
+                Ok(topology) => {
+                    topologies[idx] = Some(topology);
+                }
+                Err(crate::sdk::error::SdkError::TopologyNotFound(_)) => {
+                    // Area doesn't exist - this is OK, decoder will skip it
+                    tracing::warn!(
+                        "Cortical area {} (idx {}) not found in topology - decoder will skip this area",
+                        cortical_id.as_base_64(),
+                        idx
+                    );
+                }
+                Err(e) => {
+                    // Other errors (network, etc.) are still failures
+                    return Err(e);
+                }
+            }
+        }
+        
+        // Check if at least one area exists
+        if topologies.iter().all(|t| t.is_none()) {
+            return Err(crate::sdk::error::SdkError::InvalidConfiguration(
+                "None of the required cortical areas (oseg, oimg, oten) exist in the topology".to_string(),
+            ));
+        }
 
         // Load tokenizer if path provided
         let tokenizer = if let Some(path) = tokenizer_path {
@@ -93,6 +118,16 @@ impl PerceptionDecoder {
             tokenizer,
         })
     }
+
+    /// Get which cortical areas are available
+    /// Returns a tuple of (oseg_available, oimg_available, oten_available)
+    pub fn available_areas(&self) -> (bool, bool, bool) {
+        (
+            self.topologies[0].is_some(),
+            self.topologies[1].is_some(),
+            self.topologies[2].is_some(),
+        )
+    }
 }
 
 impl MotorDecoder for PerceptionDecoder {
@@ -104,45 +139,50 @@ impl MotorDecoder for PerceptionDecoder {
             .unwrap_or_default()
             .as_millis() as u64;
 
-        // Decode oseg
-        let oseg = data.mappings.get(&self.cortical_ids[0]).map(|voxels| {
-            let (x, y, z, p) = voxels.borrow_xyzp_vectors();
-            OsegData {
-                width: self.topologies[0].width,
-                height: self.topologies[0].height,
-                depth: self.topologies[0].depth,
-                channels: self.topologies[0].channels,
-                x: x.clone(),
-                y: y.clone(),
-                z: z.clone(),
-                p: p.clone(),
-            }
+        // Decode oseg (only if topology exists)
+        let oseg = self.topologies[0].as_ref().and_then(|topo| {
+            data.mappings.get(&self.cortical_ids[0]).map(|voxels| {
+                let (x, y, z, p) = voxels.borrow_xyzp_vectors();
+                OsegData {
+                    width: topo.width,
+                    height: topo.height,
+                    depth: topo.depth,
+                    channels: topo.channels,
+                    x: x.clone(),
+                    y: y.clone(),
+                    z: z.clone(),
+                    p: p.clone(),
+                }
+            })
         });
 
-        // Decode oimg
-        let oimg = data.mappings.get(&self.cortical_ids[1]).map(|voxels| {
-            let (x, y, z, p) = voxels.borrow_xyzp_vectors();
-            OimgData {
-                width: self.topologies[1].width,
-                height: self.topologies[1].height,
-                depth: self.topologies[1].depth,
-                channels: self.topologies[1].channels,
-                x: x.clone(),
-                y: y.clone(),
-                z: z.clone(),
-                p: p.clone(),
-            }
+        // Decode oimg (only if topology exists)
+        let oimg = self.topologies[1].as_ref().and_then(|topo| {
+            data.mappings.get(&self.cortical_ids[1]).map(|voxels| {
+                let (x, y, z, p) = voxels.borrow_xyzp_vectors();
+                OimgData {
+                    width: topo.width,
+                    height: topo.height,
+                    depth: topo.depth,
+                    channels: topo.channels,
+                    x: x.clone(),
+                    y: y.clone(),
+                    z: z.clone(),
+                    p: p.clone(),
+                }
+            })
         });
 
-        // Decode oten
-        let oten_token_id = data
-            .mappings
-            .get(&self.cortical_ids[2])
-            .and_then(|voxels| {
-                decode_token_id_from_xyzp_bitplanes(voxels, self.topologies[2].depth)
-                    .ok()
-                    .flatten()
-            });
+        // Decode oten (only if topology exists)
+        let oten_token_id = self.topologies[2].as_ref().and_then(|topo| {
+            data.mappings
+                .get(&self.cortical_ids[2])
+                .and_then(|voxels| {
+                    decode_token_id_from_xyzp_bitplanes(voxels, topo.depth)
+                        .ok()
+                        .flatten()
+                })
+        });
 
         let oten_text = if let (Some(token_id), Some(ref tokenizer)) =
             (oten_token_id, &self.tokenizer)
