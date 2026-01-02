@@ -307,10 +307,10 @@ impl SensoryEncoder for VideoEncoder {
                 let mut processed = ImageFrame::new_from_image_frame_properties(output_props)?;
                 processor.process_image(input, &mut processed)?;
 
-                // Apply diff threshold
+                // Apply diff threshold (modifies prev_frame in place, no clone needed)
                 apply_diff_threshold_image(
                     &mut processed,
-                    &mut prev_frame.clone(),
+                    prev_frame,
                     self.config.diff_threshold,
                 );
 

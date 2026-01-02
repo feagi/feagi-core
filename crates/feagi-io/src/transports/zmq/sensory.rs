@@ -476,13 +476,23 @@ impl SensoryStream {
         // Temporal smoothing parameters
         // For large frames, reduce potential to create gradual ramp-up over multiple frames
         // This prevents instant massive activation that causes visual flashing
-        const SMOOTHING_RAMP_FACTOR: f32 = 0.4; // Apply 40% of target potential per frame (ramps over 2-3 frames)
-        const LARGE_FRAME_THRESHOLD: usize = 500; // Lower threshold - apply smoothing to more frames
+        // OPTIMIZATION: Reduced smoothing for lower latency while still preventing flashing
+        const SMOOTHING_RAMP_FACTOR: f32 = 0.85; // Apply 85% of target potential per frame (faster ramp-up, less delay)
+        const LARGE_FRAME_THRESHOLD: usize = 5000; // Higher threshold - only smooth very large frames (>5000 neurons)
         
         // REAL-TIME: Clear any staged sensory injections before applying this message so FEAGI does not
         // accumulate multiple frames between bursts (drift that looks like buffering).
         // Note: We clear to maintain real-time semantics, but apply smoothing to the new frame itself.
-        npu.clear_pending_sensory_injections();
+        // OPTIMIZATION: Only clear if we have a large frame (small frames don't need clearing)
+        // This reduces unnecessary work for small frames and improves latency
+        let total_neurons: usize = cortical_mapped.mappings.values()
+            .map(|arrays| arrays.len())
+            .sum();
+        
+        // Only clear pending injections for large frames to reduce overhead
+        if total_neurons > LARGE_FRAME_THRESHOLD {
+            npu.clear_pending_sensory_injections();
+        }
 
         for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
             // Extract raw XYZP data (NO LOCKS)
@@ -490,25 +500,31 @@ impl SensoryStream {
 
             // Apply temporal smoothing: for large frames, reduce potentials to create gradual ramp-up
             // This prevents instant flashes when large scene changes occur (469KB frames)
-            // The smoothing creates a ramp-up effect over 2-3 frames instead of instant activation
-            let smoothed_potentials: Vec<f32> = if potentials.len() > LARGE_FRAME_THRESHOLD {
+            // OPTIMIZATION: Avoid allocation - use iterator directly or modify in place
+            let injected = if potentials.len() > LARGE_FRAME_THRESHOLD {
                 // Large frame: apply smoothing to prevent massive simultaneous activation
-                // Reducing potential means neurons fire at lower intensity, creating gradual ramp-up
-                // Over subsequent frames, if the same neurons are active, they'll reach full potential
-                potentials.iter().map(|&p| p * SMOOTHING_RAMP_FACTOR).collect()
+                // OPTIMIZATION: Create smoothed vector only when needed (large frames)
+                let smoothed_potentials: Vec<f32> = potentials.iter()
+                    .map(|&p| p * SMOOTHING_RAMP_FACTOR)
+                    .collect();
+                
+                npu.inject_sensory_xyzp_arrays_by_id(
+                    cortical_id,
+                    x_coords,
+                    y_coords,
+                    z_coords,
+                    &smoothed_potentials,
+                )
             } else {
-                // Small frame: use full potential (already smooth, no need to reduce)
-                potentials.to_vec()
+                // Small frame: use full potential directly (no allocation needed)
+                npu.inject_sensory_xyzp_arrays_by_id(
+                    cortical_id,
+                    x_coords,
+                    y_coords,
+                    z_coords,
+                    potentials,
+                )
             };
-
-            // NPU handles: CorticalID → cortical_idx lookup, coordinates → neuron IDs, injection
-            let injected = npu.inject_sensory_xyzp_arrays_by_id(
-                cortical_id,
-                x_coords,
-                y_coords,
-                z_coords,
-                &smoothed_potentials,
-            );
             total_injected += injected;
 
             // Only log missing neurons at debug level (common case, not an error)
