@@ -518,6 +518,29 @@ impl<T: NeuralValue, const N: usize> NeuronStorage for NeuronArray<T, N> {
             .map(|(x, _y, _z)| self.get_neuron_at_coordinate(cortical_area, *x, 0, 0))
             .collect()
     }
+
+    /// Optimized version that accepts separate slices to avoid tuple allocation
+    fn batch_coordinate_lookup_from_slices(
+        &self,
+        cortical_area: u32,
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+    ) -> Vec<Option<usize>> {
+        // Validate input lengths match
+        if x_coords.len() != y_coords.len() || x_coords.len() != z_coords.len() {
+            return vec![None; x_coords.len().max(y_coords.len()).max(z_coords.len())];
+        }
+
+        // For embedded implementation, use the same approach as standard method
+        // but avoid building tuples
+        x_coords
+            .iter()
+            .zip(y_coords.iter())
+            .zip(z_coords.iter())
+            .map(|((&x, &_y), &_z)| self.get_neuron_at_coordinate(cortical_area, x, 0, 0))
+            .collect()
+    }
 }
 
 #[cfg(test)]

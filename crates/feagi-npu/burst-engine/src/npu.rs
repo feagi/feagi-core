@@ -1101,6 +1101,13 @@ impl<
     pub fn inject_sensory_with_potentials(&mut self, neurons: &[(NeuronId, f32)]) {
         let mut fire_structures = self.fire_structures.lock().unwrap();
         if let Some(pending) = Some(&mut fire_structures.pending_sensory_injections) {
+            // OPTIMIZATION: Reserve capacity to avoid reallocations during extend_from_slice
+            // This reduces memory allocations and improves performance for high-frequency sensory streams
+            let current_len = pending.len();
+            let additional_capacity = neurons.len();
+            if pending.capacity() < current_len + additional_capacity {
+                pending.reserve(additional_capacity);
+            }
             pending.extend_from_slice(neurons);
 
             // 🔍 DEBUG: Log first staging
@@ -1606,24 +1613,23 @@ impl<
             },
         };
 
-        // Build coords once (x/y/z) for batch lookup.
-        let mut coords: Vec<(u32, u32, u32)> = Vec::with_capacity(x_coords.len());
-        for i in 0..x_coords.len() {
-            coords.push((x_coords[i], y_coords[i], z_coords[i]));
-        }
-
+        // OPTIMIZATION: Use batch_coordinate_lookup_from_slices to avoid allocating Vec<(u32, u32, u32)>
+        // This eliminates one Vec allocation per frame, significantly improving performance for high-frequency streams
         let neuron_ids = self
             .neuron_storage
             .read()
             .unwrap()
-            .batch_coordinate_lookup(cortical_area, &coords);
+            .batch_coordinate_lookup_from_slices(cortical_area, x_coords, y_coords, z_coords);
 
-        let mut neuron_potential_pairs = Vec::with_capacity(neuron_ids.len());
-        for (i, opt_idx) in neuron_ids.iter().enumerate() {
-            if let Some(idx) = opt_idx {
-                neuron_potential_pairs.push((NeuronId(*idx as u32), potentials[i]));
-            }
-        }
+        // OPTIMIZATION: Use iterator chain to build pairs more efficiently
+        // This is more idiomatic and allows better compiler optimizations
+        let neuron_potential_pairs: Vec<(NeuronId, f32)> = neuron_ids
+            .iter()
+            .enumerate()
+            .filter_map(|(i, opt_idx)| {
+                opt_idx.map(|idx| (NeuronId(idx as u32), potentials[i]))
+            })
+            .collect();
         let found_count = neuron_potential_pairs.len();
 
         if !neuron_potential_pairs.is_empty() {

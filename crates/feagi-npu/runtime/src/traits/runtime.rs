@@ -273,6 +273,28 @@ pub trait NeuronStorage: Send + Sync {
         cortical_area: u32,
         coords: &[(u32, u32, u32)],
     ) -> Vec<Option<usize>>;
+
+    /// Optimized batch lookup neurons by coordinates from separate slices
+    /// This avoids allocating a Vec of tuples when coordinates are already in separate arrays
+    /// Performance: Eliminates one Vec allocation per frame (significant for high-frequency sensory streams)
+    #[cfg(any(feature = "std", feature = "alloc"))]
+    fn batch_coordinate_lookup_from_slices(
+        &self,
+        cortical_area: u32,
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+    ) -> Vec<Option<usize>> {
+        // Default implementation: build tuples and call the standard method
+        // Implementations should override this for better performance
+        let coords: Vec<(u32, u32, u32)> = x_coords
+            .iter()
+            .zip(y_coords.iter())
+            .zip(z_coords.iter())
+            .map(|((&x, &y), &z)| (x, y, z))
+            .collect();
+        self.batch_coordinate_lookup(cortical_area, &coords)
+    }
 }
 
 /// Synapse storage trait: Abstracts System-of-Arrays (SoA) for synapses

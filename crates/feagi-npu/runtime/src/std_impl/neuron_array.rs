@@ -574,10 +574,13 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         // Sequential iteration has better cache locality than parallel for this workload
         // AHashMap provides 2-3x faster hashing than default SipHash
 
-        // Pre-allocate hash map with capacity hint (reduces reallocations)
-        // Estimate: typically 10-50% of coords match, but use coords.len() as safe upper bound
+        // OPTIMIZATION: Use better capacity estimate to reduce hash map reallocations
+        // Estimate: typically all or most neurons in area will be in the map, so use max of
+        // coordinate count and a reasonable estimate based on total neurons
+        // This avoids counting pass while still providing good capacity hint
+        let capacity_estimate = coords.len().max(self.count / 4); // Assume area has at least 25% of neurons
         let mut coord_map: AHashMap<(u32, u32, u32), usize> =
-            AHashMap::with_capacity(coords.len().min(self.count));
+            AHashMap::with_capacity(capacity_estimate);
 
         // Sequential iteration: better cache locality, compiler can auto-vectorize
         // Access patterns: valid_mask[idx], cortical_areas[idx], coordinates[idx*3..idx*3+3]
@@ -599,6 +602,48 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
         coords
             .iter()
             .map(|&coord| coord_map.get(&coord).copied())
+            .collect()
+    }
+
+    /// Optimized version that accepts separate slices to avoid tuple allocation
+    fn batch_coordinate_lookup_from_slices(
+        &self,
+        cortical_area: u32,
+        x_coords: &[u32],
+        y_coords: &[u32],
+        z_coords: &[u32],
+    ) -> Vec<Option<usize>> {
+        // Validate input lengths match
+        if x_coords.len() != y_coords.len() || x_coords.len() != z_coords.len() {
+            return vec![None; x_coords.len().max(y_coords.len()).max(z_coords.len())];
+        }
+
+        // OPTIMIZATION: Use better capacity estimate to reduce hash map reallocations
+        // Estimate: typically all or most neurons in area will be in the map, so use max of
+        // coordinate count and a reasonable estimate based on total neurons
+        // This avoids counting pass while still providing good capacity hint
+        let capacity_estimate = x_coords.len().max(self.count / 4); // Assume area has at least 25% of neurons
+        let mut coord_map: AHashMap<(u32, u32, u32), usize> =
+            AHashMap::with_capacity(capacity_estimate);
+
+        // Build coordinate map from neuron storage
+        for idx in 0..self.count {
+            if !self.valid_mask[idx] || self.cortical_areas[idx] != cortical_area {
+                continue;
+            }
+            let coord_base = idx * 3;
+            let x = self.coordinates[coord_base];
+            let y = self.coordinates[coord_base + 1];
+            let z = self.coordinates[coord_base + 2];
+            coord_map.insert((x, y, z), idx);
+        }
+
+        // Fast O(1) lookups using slices directly (no tuple allocation)
+        x_coords
+            .iter()
+            .zip(y_coords.iter())
+            .zip(z_coords.iter())
+            .map(|((&x, &y), &z)| coord_map.get(&(x, y, z)).copied())
             .collect()
     }
 }
