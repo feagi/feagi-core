@@ -176,10 +176,8 @@ pub struct RustNPU<
     // Fatigue state (atomic for lock-free reads during burst injection)
     fatigue_active: std::sync::atomic::AtomicBool,
 
-    // CRITICAL PERFORMANCE: Cached power neuron IDs (cortical_area = 1)
-    // Updated when neurons are added/removed, avoids scanning all neurons every burst
-    // This is especially important for large neuron counts (3M+) where scanning is expensive
-    power_neuron_cache: std::sync::RwLock<Vec<NeuronId>>,
+    // REMOVED: power_neuron_cache - no longer needed with deterministic IDs
+    // Power neuron is always neuron ID 1 (area 1 → neuron 1), so we can access it directly
 }
 
 /// Fire-related structures grouped together for single mutex
@@ -263,7 +261,7 @@ impl<
             burst_count: std::sync::atomic::AtomicU64::new(0),
             power_amount: std::sync::atomic::AtomicU32::new(1.0f32.to_bits()),
             fatigue_active: std::sync::atomic::AtomicBool::new(false),
-            power_neuron_cache: std::sync::RwLock::new(Vec::new()),
+            // No power neuron cache needed - using deterministic ID (neuron 1)
         })
     }
 }
@@ -462,10 +460,7 @@ impl<
             .neuron_to_area
             .insert(neuron_id, cortical_id);
 
-        // CRITICAL PERFORMANCE: Cache power neurons (cortical_area = 1) to avoid scanning all neurons
-        if cortical_area == 1 {
-            self.power_neuron_cache.write().unwrap().push(neuron_id);
-        }
+        // No cache needed - power neuron is always neuron ID 1 (deterministic)
 
         Ok(neuron_id)
     }
@@ -581,12 +576,7 @@ impl<
 
                 // CRITICAL PERFORMANCE: Cache power neurons (cortical_area = 1) to avoid scanning all neurons
                 // This is especially important for large neuron counts (3M+) where scanning is expensive
-                let mut power_cache = self.power_neuron_cache.write().unwrap();
-                for (i, &neuron_id) in neuron_ids.iter().enumerate() {
-                    if cortical_areas[i] == 1 {
-                        power_cache.push(neuron_id);
-                    }
-                }
+                // No cache needed - power neuron is always neuron ID 1 (deterministic)
 
                 // ✅ ARCHITECTURE FIX: Return only success COUNT, not full Vec<u32> of IDs
                 // Python doesn't need IDs - Rust owns all neuron data!
@@ -1268,7 +1258,7 @@ impl<
         let injection_result = {
             let synapse_storage = self.synapse_storage.read().unwrap();
             let fatigue_active = self.fatigue_active.load(std::sync::atomic::Ordering::Acquire);
-            let power_cache = self.power_neuron_cache.read().unwrap();
+            // No cache needed - directly access neuron 1 (deterministic ID)
             phase1_injection_with_synapses(
                 &mut fire_structures.fire_candidate_list,
                 &mut *neuron_storage,
@@ -1278,7 +1268,6 @@ impl<
                 &*synapse_storage,
                 &pending_mutex,
                 fatigue_active,
-                &power_cache,
             )?
         };
         let phase1_duration = phase1_start.elapsed();
@@ -2732,7 +2721,7 @@ impl<
 
         // CRITICAL PERFORMANCE: Remove from power neuron cache if it was a power neuron
         if is_power {
-            self.power_neuron_cache.write().unwrap().retain(|&id| id.0 != neuron_id);
+            // No cache needed - power neuron is always neuron ID 1 (deterministic)
         }
 
         true
@@ -2745,12 +2734,24 @@ impl<
         idx < neuron_storage.count() && neuron_storage.valid_mask()[idx]
     }
 
-    /// Rebuild power neuron cache (useful after major structural changes)
+    /// Check if power neuron exists (using deterministic ID: neuron 1)
     /// 
-    /// This scans all neurons to rebuild the cache. Use sparingly - only after
-    /// operations that might have invalidated the cache (e.g., batch deletions).
-    /// For normal operations, the cache is maintained incrementally.
-    /// Rebuild power neuron cache using deterministic neuron ID
+    /// This is O(1) - no scanning needed since power neuron is always neuron ID 1
+    pub fn check_power_neuron_exists(&self) -> bool {
+        let neuron_storage = self.neuron_storage.read().unwrap();
+        let count = neuron_storage.count();
+        
+        // Direct O(1) access to neuron 1 (deterministic ID)
+        if 1 < count {
+            let is_valid = neuron_storage.valid_mask()[1];
+            let cortical_area = neuron_storage.cortical_areas()[1];
+            is_valid && cortical_area == 1
+        } else {
+            false
+        }
+    }
+
+    /// Rebuild power neuron cache (no-op - kept for API compatibility)
     /// 
     /// ARCHITECTURE: Core areas have deterministic neuron IDs:
     /// - Area 0 (_death) → neuron ID 0
@@ -2758,76 +2759,11 @@ impl<
     /// - Area 2 (_fatigue) → neuron ID 2
     /// 
     /// This eliminates the need to scan all neurons (O(1) instead of O(n))
+    /// Power injection now uses direct O(1) access to neuron 1 - no cache needed!
     pub fn rebuild_power_neuron_cache(&mut self) {
-        // CRITICAL PERFORMANCE: Try deterministic neuron ID first (area 1 → neuron ID 1)
-        // If that fails (e.g., core areas not created in order), fall back to scanning
-        let power_neuron_id = NeuronId(1);
-        let power_neuron_idx = power_neuron_id.0 as usize;
-        
-        let neuron_storage = self.neuron_storage.read().unwrap();
-        let count = neuron_storage.count();
-        
-        // Try deterministic ID first (O(1))
-        let power_neurons = if power_neuron_idx < count {
-            let is_valid = neuron_storage.valid_mask()[power_neuron_idx];
-            let cortical_area = neuron_storage.cortical_areas()[power_neuron_idx];
-            
-            if is_valid && cortical_area == 1 {
-                // Success: deterministic ID works!
-                vec![power_neuron_id]
-            } else {
-                // Deterministic ID failed - fall back to scanning (only when needed)
-                // This happens if core areas weren't created in order (0, 1, 2) or other neurons were created first
-                warn!(
-                    "[NPU] Power neuron not at deterministic ID 1 (belongs to area {}). Scanning all neurons...",
-                    cortical_area
-                );
-                
-                // Scan for power neurons (O(n) but only when deterministic ID fails)
-                let mut found = Vec::new();
-                for idx in 0..count {
-                    if neuron_storage.valid_mask()[idx] && neuron_storage.cortical_areas()[idx] == 1 {
-                        found.push(NeuronId(idx as u32));
-                    }
-                }
-                found
-            }
-        } else {
-            // Neuron ID 1 doesn't exist - scan for power neurons
-            warn!(
-                "[NPU] Neuron ID 1 doesn't exist (count: {}). Scanning for power neurons...",
-                count
-            );
-            
-            let mut found = Vec::new();
-            for idx in 0..count {
-                if neuron_storage.valid_mask()[idx] && neuron_storage.cortical_areas()[idx] == 1 {
-                    found.push(NeuronId(idx as u32));
-                }
-            }
-            found
-        };
-        drop(neuron_storage);
-        
-        let cache_len = power_neurons.len();
-        let used_deterministic = cache_len == 1 && power_neurons[0] == NeuronId(1);
-        *self.power_neuron_cache.write().unwrap() = power_neurons;
-        
-        if cache_len == 0 {
-            warn!(
-                "[NPU] ⚠️ No power neurons found! Power injection will fail."
-            );
-        } else if used_deterministic {
-            info!(
-                "[NPU] Rebuilt power neuron cache: {} neurons (deterministic ID: 1, O(1) lookup)",
-                cache_len
-            );
-        } else {
-            info!(
-                "[NPU] Rebuilt power neuron cache: {} neurons (scanned, deterministic ID failed)",
-                cache_len
-            );
-        }
+        // No-op: Power neuron is always neuron ID 1 (deterministic), no cache needed
+        // This function is kept for API compatibility but does nothing
+        // Power injection now uses direct O(1) access to neuron 1 in phase1_injection_with_synapses
     }
 
     /// Get neuron coordinates (x, y, z)
@@ -3162,7 +3098,6 @@ fn phase1_injection_with_synapses<
     synapse_storage: &S,
     pending_sensory: &std::sync::Mutex<Vec<(NeuronId, f32)>>,
     fatigue_active: bool,
-    power_neuron_cache: &std::sync::RwLockReadGuard<'_, Vec<NeuronId>>,
 ) -> Result<InjectionResult> {
     // Clear FCL from previous burst
     fcl.clear();
@@ -3194,13 +3129,13 @@ fn phase1_injection_with_synapses<
     }
 
     // 1. Power Injection + Membrane Potential Reset - OPTIMIZED FOR LARGE COUNTS
-    // CRITICAL PERFORMANCE FIX: For large neuron counts (3M+), use cache for power neurons
-    // and only reset neurons that actually fired (from fire queue)
+    // CRITICAL PERFORMANCE FIX: Direct O(1) access to power neuron (neuron ID 1, deterministic)
+    // No cache needed - power neuron is always neuron ID 1
     static FIRST_LOG: std::sync::Once = std::sync::Once::new();
     FIRST_LOG.call_once(|| {
         info!("╔══════════════════════════════════════════════════════════════");
-        info!("║ [POWER-INJECTION] 🔋 USING CACHED POWER NEURONS (NO SCANNING)");
-        info!("║ Power neurons cached on creation - zero scanning overhead!");
+        info!("║ [POWER-INJECTION] 🔋 DIRECT ACCESS TO NEURON 1 (DETERMINISTIC ID)");
+        info!("║ Power neuron is always neuron ID 1 - O(1) access, no cache needed!");
         info!("╚══════════════════════════════════════════════════════════════");
     });
 
@@ -3212,14 +3147,10 @@ fn phase1_injection_with_synapses<
     let power_start = std::time::Instant::now();
 
     if should_do_full_scan {
-        // Small neuron count: Use cache for power neurons, scan for reset
-        // Use cached power neurons (no scanning needed even for small counts)
-        for &neuron_id in power_neuron_cache.iter() {
-            let idx = neuron_id.0 as usize;
-            if idx < neuron_count && neuron_storage.valid_mask()[idx] {
-                fcl.add_candidate(neuron_id, power_amount);
-                power_count += 1;
-            }
+        // Small neuron count: Direct O(1) access to power neuron (neuron ID 1, deterministic)
+        if 1 < neuron_count && neuron_storage.valid_mask()[1] && neuron_storage.cortical_areas()[1] == 1 {
+            fcl.add_candidate(NeuronId(1), power_amount);
+            power_count += 1;
         }
 
         // Reset membrane potential for non-accumulating neurons
@@ -3243,16 +3174,11 @@ fn phase1_injection_with_synapses<
             }
         }
 
-        // 2. Use cached power neurons - NO SCANNING NEEDED!
-        // This is the key optimization: with 3M+ neurons, we avoid scanning all of them
-        // Power neurons are cached when created/deleted, so we just inject from cache
-        for &neuron_id in power_neuron_cache.iter() {
-            // Verify neuron is still valid (might have been deleted)
-            let idx = neuron_id.0 as usize;
-            if idx < neuron_count && neuron_storage.valid_mask()[idx] {
-                fcl.add_candidate(neuron_id, power_amount);
-                power_count += 1;
-            }
+        // 2. Direct access to power neuron (neuron ID 1, deterministic) - O(1)!
+        // No cache needed - power neuron is always neuron ID 1
+        if 1 < neuron_count && neuron_storage.valid_mask()[1] && neuron_storage.cortical_areas()[1] == 1 {
+            fcl.add_candidate(NeuronId(1), power_amount);
+            power_count += 1;
         }
     }
     

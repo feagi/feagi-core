@@ -2240,34 +2240,8 @@ impl GenomeServiceImpl {
             );
         }
         
-        // CRITICAL PERFORMANCE: Rebuild power neuron cache after major structural changes
-        // This ensures the cache is accurate after deleting/creating millions of neurons
-        // ARCHITECTURE: Uses deterministic neuron ID (area 1 → neuron ID 1) - O(1) lookup, no scanning
-        info!("[STRUCTURAL-REBUILD] Rebuilding power neuron cache (deterministic ID lookup)...");
-        let cache_rebuild_start = std::time::Instant::now();
-        {
-            let mut npu_lock = npu_arc
-                .lock()
-                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
-            
-            npu_lock.rebuild_power_neuron_cache();
-            // Lock released here when scope ends (event-based: operation 100% complete)
-        }
-        let cache_rebuild_duration = cache_rebuild_start.elapsed();
-        info!(
-            "[STRUCTURAL-REBUILD] Power neuron cache rebuild complete in {:.2}s (NPU lock released)",
-            cache_rebuild_duration.as_secs_f64()
-        );
-        if cache_rebuild_duration.as_millis() > 10 {
-            warn!(
-                "[STRUCTURAL-REBUILD] ⚠️ Slow power neuron cache rebuild: {:.2}s (should be <1ms with deterministic ID)",
-                cache_rebuild_duration.as_secs_f64()
-            );
-        }
-        info!(
-            "[STRUCTURAL-REBUILD] Power neuron cache rebuild complete in {:.2}s",
-            cache_rebuild_duration.as_secs_f64()
-        );
+        // No power neuron cache rebuild needed - power neuron is always neuron ID 1 (deterministic)
+        // Direct O(1) access in phase1_injection_with_synapses, no cache required!
 
         info!(
             "[STRUCTURAL-REBUILD] ✅ Complete: {} neurons, {} outgoing, {} incoming synapses",
