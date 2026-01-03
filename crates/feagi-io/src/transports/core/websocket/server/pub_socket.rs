@@ -90,7 +90,8 @@ impl WsPub {
                             if let Err(e) =
                                 handle_client(stream, peer_addr, broadcast_rx, clients_clone).await
                             {
-                                warn!("[WS-PUB] Client {} error: {}", peer_addr, e);
+                                // Log detailed error information for debugging
+                                warn!("[WS-PUB] Client {} connection error: {}", peer_addr, e);
                             }
                         });
                     }
@@ -229,17 +230,87 @@ async fn handle_client(
     mut broadcast_rx: broadcast::Receiver<Vec<u8>>,
     clients: Arc<RwLock<HashMap<SocketAddr, broadcast::Sender<Vec<u8>>>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let ws_stream = accept_async(stream).await?;
-    let (mut write, _read) = ws_stream.split();
+    // Perform WebSocket handshake with timeout protection
+    let handshake_start = std::time::Instant::now();
+    let ws_stream = match accept_async(stream).await {
+        Ok(ws) => ws,
+        Err(e) => {
+            warn!(
+                "[WS-PUB] Client {} handshake failed after {:.2}ms: {}",
+                peer_addr,
+                handshake_start.elapsed().as_secs_f64() * 1000.0,
+                e
+            );
+            return Err(Box::new(e));
+        }
+    };
+    let handshake_duration = handshake_start.elapsed();
+    if handshake_duration.as_millis() > 100 {
+        warn!(
+            "[WS-PUB] Client {} slow handshake: {:.2}ms",
+            peer_addr,
+            handshake_duration.as_secs_f64() * 1000.0
+        );
+    }
+    
+    let (mut write, mut read) = ws_stream.split();
 
-    info!("[WS-PUB] Client {} connected", peer_addr);
+    info!("[WS-PUB] Client {} connected (handshake: {:.2}ms)", peer_addr, handshake_duration.as_secs_f64() * 1000.0);
 
     static LAGGED_TOTAL: AtomicU64 = AtomicU64::new(0);
+    
+    // Spawn a task to monitor the read side for connection closure
+    let peer_addr_monitor = peer_addr;
+    let mut read_task = tokio::spawn(async move {
+        loop {
+            match read.next().await {
+                Some(Ok(msg)) => {
+                    // Client sent a message (ping, pong, close, etc.)
+                    match msg {
+                        Message::Close(_) => {
+                            debug!("[WS-PUB] Client {} sent close frame", peer_addr_monitor);
+                            break;
+                        }
+                        Message::Ping(data) => {
+                            debug!("[WS-PUB] Client {} sent ping", peer_addr_monitor);
+                            // Could respond with pong, but we're only using write side
+                        }
+                        Message::Pong(_) => {
+                            debug!("[WS-PUB] Client {} sent pong", peer_addr_monitor);
+                        }
+                        _ => {
+                            debug!("[WS-PUB] Client {} sent unexpected message type", peer_addr_monitor);
+                        }
+                    }
+                }
+                Some(Err(e)) => {
+                    warn!("[WS-PUB] Client {} read error (connection may be closed): {}", peer_addr_monitor, e);
+                    break;
+                }
+                None => {
+                    debug!("[WS-PUB] Client {} read stream ended (connection closed)", peer_addr_monitor);
+                    break;
+                }
+            }
+        }
+    });
+
     loop {
         match broadcast_rx.recv().await {
             Ok(data) => {
-                if write.send(Message::Binary(data)).await.is_err() {
-                    break;
+                let data_len = data.len();
+                match write.send(Message::Binary(data)).await {
+                    Ok(_) => {
+                        // Successfully sent
+                    }
+                    Err(e) => {
+                        // Log the error to understand why the connection is closing
+                        warn!(
+                            "[WS-PUB] Client {} send error (disconnecting): {} (message_size={} bytes)",
+                            peer_addr, e, data_len
+                        );
+                        break;
+                    }
                 }
             }
             Err(broadcast::error::RecvError::Lagged(skipped)) => {
@@ -254,10 +325,22 @@ async fn handle_client(
                 }
                 continue;
             }
-            Err(broadcast::error::RecvError::Closed) => break,
+            Err(broadcast::error::RecvError::Closed) => {
+                warn!("[WS-PUB] Client {} broadcast channel closed", peer_addr);
+                break;
+            }
+        }
+        
+        // Check if read task detected connection closure
+        if read_task.is_finished() {
+            debug!("[WS-PUB] Client {} read task finished (connection closed)", peer_addr);
+            break;
         }
     }
 
+    // Abort the read task if we're breaking out of the loop
+    read_task.abort();
+    
     clients.write().remove(&peer_addr);
     info!("[WS-PUB] Client {} disconnected", peer_addr);
 

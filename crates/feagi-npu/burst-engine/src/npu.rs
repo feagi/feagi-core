@@ -639,6 +639,108 @@ impl<
         default_snooze_period: u16,
         default_mp_charge_accumulation: bool,
     ) -> Result<u32> {
+        // Call with z_offset=0 (default behavior)
+        self.create_cortical_area_neurons_with_z_offset(
+            cortical_idx,
+            width,
+            height,
+            depth,
+            neurons_per_voxel,
+            default_threshold,
+            threshold_increment_x,
+            threshold_increment_y,
+            threshold_increment_z,
+            default_threshold_limit,
+            default_leak_coefficient,
+            default_resting_potential,
+            default_neuron_type,
+            default_refractory_period,
+            default_excitability,
+            default_consecutive_fire_limit,
+            default_snooze_period,
+            default_mp_charge_accumulation,
+            0, // z_offset = 0 (start at z=0)
+        )
+    }
+
+    /// Create neurons for a cortical area with optional z-offset (for batched creation)
+    /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
+    /// y_offset: Starting y-coordinate (allows creating neurons at specific row ranges)
+    /// This enables batched neuron creation that releases the NPU lock between batches
+    pub fn create_cortical_area_neurons_with_z_offset(
+        &mut self,
+        cortical_idx: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+        neurons_per_voxel: u32,
+        default_threshold: f32,
+        threshold_increment_x: f32,
+        threshold_increment_y: f32,
+        threshold_increment_z: f32,
+        default_threshold_limit: f32,
+        default_leak_coefficient: f32,
+        default_resting_potential: f32,
+        default_neuron_type: i32,
+        default_refractory_period: u16,
+        default_excitability: f32,
+        default_consecutive_fire_limit: u16,
+        default_snooze_period: u16,
+        default_mp_charge_accumulation: bool,
+        z_offset: u32,
+    ) -> Result<u32> {
+        // Call with y_offset=0 (default behavior)
+        self.create_cortical_area_neurons_with_offsets(
+            cortical_idx,
+            width,
+            height,
+            depth,
+            neurons_per_voxel,
+            default_threshold,
+            threshold_increment_x,
+            threshold_increment_y,
+            threshold_increment_z,
+            default_threshold_limit,
+            default_leak_coefficient,
+            default_resting_potential,
+            default_neuron_type,
+            default_refractory_period,
+            default_excitability,
+            default_consecutive_fire_limit,
+            default_snooze_period,
+            default_mp_charge_accumulation,
+            0, // y_offset = 0
+            z_offset,
+        )
+    }
+
+    /// Create neurons for a cortical area with optional y and z offsets (for batched creation)
+    /// y_offset: Starting y-coordinate (allows creating neurons at specific row ranges)
+    /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
+    /// This enables fine-grained batched neuron creation that releases the NPU lock frequently
+    pub fn create_cortical_area_neurons_with_offsets(
+        &mut self,
+        cortical_idx: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+        neurons_per_voxel: u32,
+        default_threshold: f32,
+        threshold_increment_x: f32,
+        threshold_increment_y: f32,
+        threshold_increment_z: f32,
+        default_threshold_limit: f32,
+        default_leak_coefficient: f32,
+        default_resting_potential: f32,
+        default_neuron_type: i32,
+        default_refractory_period: u16,
+        default_excitability: f32,
+        default_consecutive_fire_limit: u16,
+        default_snooze_period: u16,
+        default_mp_charge_accumulation: bool,
+        y_offset: u32,
+        z_offset: u32,
+    ) -> Result<u32> {
         use std::time::Instant;
         let fn_start = Instant::now();
 
@@ -673,11 +775,13 @@ impl<
             for x in 0..width {
                 for y in 0..height {
                     for z in 0..depth {
-                        // Calculate threshold for this voxel position
+                        // Calculate threshold for this voxel position (with y_offset and z_offset)
+                        let actual_y = y + y_offset;
+                        let actual_z = z + z_offset;
                         let threshold_at_pos = default_threshold
                             + (x as f32 * threshold_increment_x)
-                            + (y as f32 * threshold_increment_y)
-                            + (z as f32 * threshold_increment_z);
+                            + (actual_y as f32 * threshold_increment_y)
+                            + (actual_z as f32 * threshold_increment_z);
                         
                         // Apply to all neurons in this voxel
                         for _ in 0..neurons_per_voxel {
@@ -709,15 +813,15 @@ impl<
         let mut y_coords = vec![0u32; total_neurons];
         let mut z_coords = vec![0u32; total_neurons];
 
-        // Generate coordinates in cache-friendly order with direct writes
+        // Generate coordinates in cache-friendly order with direct writes (with y_offset and z_offset)
         let mut idx = 0;
         for x in 0..width {
             for y in 0..height {
                 for z in 0..depth {
                     for _ in 0..neurons_per_voxel {
                         x_coords[idx] = x;
-                        y_coords[idx] = y;
-                        z_coords[idx] = z;
+                        y_coords[idx] = y + y_offset; // Apply y_offset to actual y-coordinate
+                        z_coords[idx] = z + z_offset; // Apply z_offset to actual z-coordinate
                         idx += 1;
                     }
                 }
@@ -1777,25 +1881,74 @@ impl<
 
         // OPTIMIZATION: Use batch_coordinate_lookup_from_slices to avoid allocating Vec<(u32, u32, u32)>
         // This eliminates one Vec allocation per frame, significantly improving performance for high-frequency streams
-        let neuron_ids = self
-            .neuron_storage
-            .read()
-            .unwrap()
-            .batch_coordinate_lookup_from_slices(cortical_area, x_coords, y_coords, z_coords);
+        let coord_lookup_start = std::time::Instant::now();
+        let neuron_ids = {
+            let _span = tracing::span!(tracing::Level::DEBUG, "batch_coordinate_lookup", num_coords = x_coords.len()).entered();
+            self.neuron_storage
+                .read()
+                .unwrap()
+                .batch_coordinate_lookup_from_slices(cortical_area, x_coords, y_coords, z_coords)
+        };
+        let coord_lookup_duration = coord_lookup_start.elapsed();
+        if coord_lookup_duration.as_millis() > 50 {
+            tracing::warn!(
+                "[NPU-INJECT] ⚠️ Slow coordinate lookup: {:.2}ms for {} coordinates",
+                coord_lookup_duration.as_secs_f64() * 1000.0,
+                x_coords.len()
+            );
+        }
 
         // OPTIMIZATION: Use iterator chain to build pairs more efficiently
         // This is more idiomatic and allows better compiler optimizations
-        let neuron_potential_pairs: Vec<(NeuronId, f32)> = neuron_ids
-            .iter()
-            .enumerate()
-            .filter_map(|(i, opt_idx)| {
-                opt_idx.map(|idx| (NeuronId(idx as u32), potentials[i]))
-            })
-            .collect();
+        let pair_build_start = std::time::Instant::now();
+        let neuron_potential_pairs: Vec<(NeuronId, f32)> = {
+            let _span = tracing::span!(tracing::Level::DEBUG, "build_neuron_potential_pairs", num_neuron_ids = neuron_ids.len()).entered();
+            neuron_ids
+                .iter()
+                .enumerate()
+                .filter_map(|(i, opt_idx)| {
+                    opt_idx.map(|idx| (NeuronId(idx as u32), potentials[i]))
+                })
+                .collect()
+        };
+        let pair_build_duration = pair_build_start.elapsed();
         let found_count = neuron_potential_pairs.len();
+        if pair_build_duration.as_millis() > 10 {
+            tracing::warn!(
+                "[NPU-INJECT] ⚠️ Slow pair building: {:.2}ms for {} pairs",
+                pair_build_duration.as_secs_f64() * 1000.0,
+                found_count
+            );
+        }
 
+        let inject_start = std::time::Instant::now();
         if !neuron_potential_pairs.is_empty() {
+            let _span = tracing::span!(tracing::Level::DEBUG, "inject_sensory_with_potentials", num_pairs = neuron_potential_pairs.len()).entered();
             self.inject_sensory_with_potentials(&neuron_potential_pairs);
+        }
+        let inject_duration = inject_start.elapsed();
+        if inject_duration.as_millis() > 10 {
+            tracing::warn!(
+                "[NPU-INJECT] ⚠️ Slow injection: {:.2}ms for {} pairs",
+                inject_duration.as_secs_f64() * 1000.0,
+                found_count
+            );
+        }
+        
+        // Log total timing breakdown for large injections
+        let total_duration = coord_lookup_start.elapsed();
+        if total_duration.as_millis() > 100 {
+            tracing::debug!(
+                "[NPU-INJECT] Timing breakdown: total={:.2}ms | coord_lookup={:.2}ms ({:.1}%) | pair_build={:.2}ms ({:.1}%) | inject={:.2}ms ({:.1}%) | neurons={}",
+                total_duration.as_secs_f64() * 1000.0,
+                coord_lookup_duration.as_secs_f64() * 1000.0,
+                (coord_lookup_duration.as_secs_f64() / total_duration.as_secs_f64()) * 100.0,
+                pair_build_duration.as_secs_f64() * 1000.0,
+                (pair_build_duration.as_secs_f64() / total_duration.as_secs_f64()) * 100.0,
+                inject_duration.as_secs_f64() * 1000.0,
+                (inject_duration.as_secs_f64() / total_duration.as_secs_f64()) * 100.0,
+                found_count
+            );
         }
 
         found_count

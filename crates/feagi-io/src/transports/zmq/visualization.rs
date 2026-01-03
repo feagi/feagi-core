@@ -317,7 +317,7 @@ impl VisualizationStream {
     /// Serialize raw fire queue data to FeagiByteContainer format
     /// This runs on the PNS worker thread, NOT the burst engine thread
     fn serialize_fire_queue(
-        fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot,
+        fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
     ) -> Result<Vec<u8>, String> {
         use feagi_serialization::FeagiByteContainer;
         use feagi_structures::genomic::cortical_area::CorticalID;
@@ -341,12 +341,14 @@ impl VisualizationStream {
                     )
                 })?;
 
-            // Create neuron voxel arrays (cloning vectors since we're on a different thread)
+            // Create neuron voxel arrays - MOVE vectors instead of cloning (takes ownership)
+            // CRITICAL PERFORMANCE: This eliminates expensive cloning for large areas
+            // Even though we're on a different thread, we can still move the data
             let neuron_arrays = NeuronVoxelXYZPArrays::new_from_vectors(
-                area_data.coords_x.clone(),
-                area_data.coords_y.clone(),
-                area_data.coords_z.clone(),
-                area_data.potentials.clone(),
+                area_data.coords_x,   // Move instead of clone
+                area_data.coords_y,   // Move instead of clone
+                area_data.coords_z,   // Move instead of clone
+                area_data.potentials, // Move instead of clone
             )
             .map_err(|e| format!("Failed to create neuron arrays: {:?}", e))?;
 
@@ -395,7 +397,8 @@ impl VisualizationStream {
             let serialize_start = std::time::Instant::now();
 
             // Serialize using FeagiByteContainer
-            let serialized = match Self::serialize_fire_queue(&item.raw_fire_data) {
+            // CRITICAL PERFORMANCE: Move raw_fire_data to avoid cloning vectors
+            let serialized = match Self::serialize_fire_queue(item.raw_fire_data) {
                 Ok(bytes) => bytes,
                 Err(e) => {
                     error!("[ZMQ-VIZ] ❌ Serialization failed: {}", e);

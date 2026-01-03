@@ -2102,13 +2102,150 @@ impl GenomeServiceImpl {
         }
         
         let creation_start = std::time::Instant::now();
-        let neurons_created = {
+        
+        // CRITICAL PERFORMANCE: For very large areas (>1M neurons), batch by depth layers AND within layers
+        // to release NPU lock frequently and allow burst loop to run
+        let neurons_created = if total_neurons > 1_000_000 {
+            // Batch by depth layers (z-dimension) - each layer is processed separately
+            // Additionally, batch within each layer if layer is large (>100k neurons)
+            let mut total_created = 0u32;
+            let depth = area_data.0.depth;
+            let width = area_data.0.width;
+            let height = area_data.0.height;
+            let neurons_per_voxel = area_data.1;
+            let neurons_per_layer = (width * height * neurons_per_voxel) as usize;
+            const BATCH_SIZE: usize = 10_000; // Process neurons in batches of 10k within each layer (reduces lock hold time)
+            
+            // Determine if we need to batch within layers
+            let needs_inner_batching = neurons_per_layer > 50_000; // Lower threshold for inner batching
+            
+            info!(
+                "[STRUCTURAL-REBUILD] Batching neuron creation: {} layers × {} neurons/layer = {} total{}",
+                depth, neurons_per_layer, total_neurons,
+                if needs_inner_batching { " (with inner-layer batching)" } else { "" }
+            );
+            
+            for z_layer in 0..depth {
+                if needs_inner_batching {
+                    // Large layer: batch within the layer by processing rows in chunks
+                    let mut layer_created = 0u32;
+                    let neurons_per_row = (width * neurons_per_voxel) as usize;
+                    let rows_per_batch = (BATCH_SIZE / neurons_per_row).max(1);
+                    let total_row_batches = (height as usize + rows_per_batch - 1) / rows_per_batch;
+                    
+                    if z_layer == 0 {
+                        info!(
+                            "[STRUCTURAL-REBUILD] Inner-layer batching: {} rows/layer, {} rows/batch, ~{} batches/layer",
+                            height, rows_per_batch, total_row_batches
+                        );
+                    }
+                    
+                    for (batch_idx, row_start) in (0..height).step_by(rows_per_batch).enumerate() {
+                        let row_end = (row_start + rows_per_batch as u32).min(height);
+                        let rows_in_batch = row_end - row_start;
+                        let neurons_in_batch = (rows_in_batch * width * neurons_per_voxel) as usize;
+                        
+                        let batch_start = std::time::Instant::now();
+                        
+                        // Acquire lock, create batch of rows, release lock
+                        let batch_created = {
+                            let mut npu_lock = npu_arc_for_creation
+                                .lock()
+                                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+                            
+                            // Create neurons for this batch of rows (height=rows_in_batch, y_offset=row_start, z_offset=z_layer)
+                            npu_lock.create_cortical_area_neurons_with_offsets(
+                                cortical_idx,
+                                width,
+                                rows_in_batch,
+                                1, // depth=1 (single z-layer)
+                                neurons_per_voxel,
+                                area_data.2, // default_threshold
+                                area_data.3, // threshold_increment_x
+                                area_data.4, // threshold_increment_y
+                                area_data.5, // threshold_increment_z
+                                area_data.6, // default_threshold_limit
+                                area_data.7, // default_leak_coefficient
+                                0.0, // default_resting_potential
+                                0, // default_neuron_type
+                                area_data.9, // default_refractory_period
+                                area_data.8, // default_excitability
+                                area_data.10, // default_consecutive_fire_limit
+                                area_data.11, // default_snooze_period
+                                area_data.12, // default_mp_charge_accumulation
+                                row_start, // y_offset: create neurons starting at this y-coordinate
+                                z_layer, // z_offset: create neurons at this z-coordinate
+                            )
+                            .map_err(|e| ServiceError::Backend(format!("NPU neuron creation failed for layer {} rows {}-{}: {}", z_layer, row_start, row_end, e)))?
+                        };
+                        
+                        let batch_duration = batch_start.elapsed();
+                        layer_created += batch_created;
+                        
+                        // Log if batch took too long (helps identify if batching is working)
+                        if batch_duration.as_millis() > 100 && (batch_idx == 0 || batch_idx == total_row_batches - 1) {
+                            tracing::debug!(
+                                "[STRUCTURAL-REBUILD] Layer {} batch {}/{}: {} neurons in {:.1}ms (rows {}-{})",
+                                z_layer, batch_idx + 1, total_row_batches, neurons_in_batch,
+                                batch_duration.as_millis(), row_start, row_end
+                            );
+                        }
+                    }
+                    
+                    total_created += layer_created;
+                } else {
+                    // Small layer: create entire layer in one batch
+                    let layer_created = {
+                        let mut npu_lock = npu_arc_for_creation
+                            .lock()
+                            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+                        
+                        // Create neurons for this z-layer only (depth=1, z_offset=z_layer)
+                        npu_lock.create_cortical_area_neurons_with_z_offset(
+                            cortical_idx,
+                            width,
+                            height,
+                            1, // depth=1 (single layer)
+                            neurons_per_voxel,
+                            area_data.2, // default_threshold
+                            area_data.3, // threshold_increment_x
+                            area_data.4, // threshold_increment_y
+                            area_data.5, // threshold_increment_z
+                            area_data.6, // default_threshold_limit
+                            area_data.7, // default_leak_coefficient
+                            0.0, // default_resting_potential
+                            0, // default_neuron_type
+                            area_data.9, // default_refractory_period
+                            area_data.8, // default_excitability
+                            area_data.10, // default_consecutive_fire_limit
+                            area_data.11, // default_snooze_period
+                            area_data.12, // default_mp_charge_accumulation
+                            z_layer, // z_offset: create neurons at this z-coordinate
+                        )
+                        .map_err(|e| ServiceError::Backend(format!("NPU neuron creation failed for layer {}: {}", z_layer, e)))?
+                    };
+                    
+                    total_created += layer_created;
+                }
+                
+                // Log progress every 5 layers or on last layer
+                if (z_layer + 1) % 5 == 0 || z_layer == depth - 1 {
+                    let progress = ((z_layer + 1) as f32 / depth as f32) * 100.0;
+                    info!(
+                        "[STRUCTURAL-REBUILD] Progress: {}/{} layers ({}%) - {} neurons created",
+                        z_layer + 1, depth, progress as u32, total_created
+                    );
+                }
+            }
+            
+            total_created
+        } else {
+            // Small area: create all neurons in one batch (single lock acquisition)
             let mut npu_lock = npu_arc_for_creation
                 .lock()
                 .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
             
-            // Create neurons - lock held until this function returns (event-based completion)
-            let result = npu_lock.create_cortical_area_neurons(
+            npu_lock.create_cortical_area_neurons(
                 cortical_idx,
                 area_data.0.width,
                 area_data.0.height,
@@ -2128,10 +2265,7 @@ impl GenomeServiceImpl {
                 area_data.11,
                 area_data.12,
             )
-            .map_err(|e| ServiceError::Backend(format!("NPU neuron creation failed: {}", e)))?;
-            
-            // Lock automatically released here when function returns (creation 100% complete)
-            result
+            .map_err(|e| ServiceError::Backend(format!("NPU neuron creation failed: {}", e)))?
         };
         
         let creation_duration = creation_start.elapsed();

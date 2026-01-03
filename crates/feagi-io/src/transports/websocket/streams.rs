@@ -240,7 +240,8 @@ impl WebSocketStreams {
         let t0 = Instant::now();
 
         // Serialize the fire queue data to FeagiByteContainer format (same as ZMQ)
-        let serialized = Self::serialize_fire_queue(&fire_data)
+        // CRITICAL PERFORMANCE: Take ownership to avoid cloning vectors (moves them instead)
+        let serialized = Self::serialize_fire_queue(fire_data)
             .map_err(|e| IOError::Transport(format!("Failed to serialize fire queue: {}", e)))?;
         let serialize_ms = t0.elapsed().as_secs_f64() * 1000.0;
 
@@ -266,8 +267,10 @@ impl WebSocketStreams {
 
     /// Serialize raw fire queue data to FeagiByteContainer format
     /// Same logic as ZMQ visualization stream
+    /// 
+    /// CRITICAL PERFORMANCE: Takes ownership of fire_data to move vectors instead of cloning
     fn serialize_fire_queue(
-        fire_data: &feagi_npu_burst_engine::RawFireQueueSnapshot,
+        fire_data: feagi_npu_burst_engine::RawFireQueueSnapshot,
     ) -> std::result::Result<Vec<u8>, String> {
         use feagi_serialization::FeagiByteContainer;
         use feagi_structures::genomic::cortical_area::CorticalID;
@@ -291,12 +294,13 @@ impl WebSocketStreams {
                     )
                 })?;
 
-            // Create neuron voxel arrays
+            // Create neuron voxel arrays - MOVE vectors instead of cloning (takes ownership)
+            // This eliminates expensive cloning for large areas
             let neuron_arrays = NeuronVoxelXYZPArrays::new_from_vectors(
-                area_data.coords_x.clone(),
-                area_data.coords_y.clone(),
-                area_data.coords_z.clone(),
-                area_data.potentials.clone(),
+                area_data.coords_x,   // Move instead of clone
+                area_data.coords_y,   // Move instead of clone
+                area_data.coords_z,   // Move instead of clone
+                area_data.potentials, // Move instead of clone
             )
             .map_err(|e| format!("Failed to create neuron arrays: {:?}", e))?;
 
@@ -316,14 +320,20 @@ impl WebSocketStreams {
     pub fn publish_visualization(&self, data: &[u8]) -> Result<()> {
         let viz_pub = self.viz_pub.lock();
         if let Some(pub_server) = viz_pub.as_ref() {
+            // CRITICAL: publish_simple is non-blocking (uses broadcast channel)
+            // If it fails, it's likely because the server isn't running, not because of blocking
             pub_server
                 .publish_simple(data)
-                .map_err(|e| IOError::Transport(format!("WebSocket viz publish failed: {}", e)))?;
+                .map_err(|e| {
+                    let error_msg = format!("WebSocket viz publish failed: {}", e);
+                    error!("[WS-VIZ] {}", error_msg);
+                    IOError::Transport(error_msg)
+                })?;
             Ok(())
         } else {
-            Err(IOError::Transport(
-                "Visualization publisher not started".to_string(),
-            ))
+            let error_msg = "Visualization publisher not started".to_string();
+            error!("[WS-VIZ] {}", error_msg);
+            Err(IOError::Transport(error_msg))
         }
     }
 

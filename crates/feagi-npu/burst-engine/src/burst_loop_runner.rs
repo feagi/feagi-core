@@ -1361,8 +1361,24 @@ fn burst_loop(
                 // NOTE: Cache is refreshed externally via refresh_cortical_id_mappings() when areas are created/updated
                 // For now, if cache is empty, we'll use fallback (area_{idx}) - this is acceptable as visualization
                 // only needs cortical_id once, and it will be refreshed on next area creation/update
-                let cortical_id_mappings = cached_cortical_id_mappings.lock().unwrap();
-                let chunk_sizes = cached_chunk_sizes.lock().unwrap();
+                
+                // CRITICAL PERFORMANCE: Clone both maps to release locks immediately
+                // This prevents holding locks during expensive heatmap aggregation and vector cloning
+                let chunk_sizes_clone = {
+                    let chunk_sizes = cached_chunk_sizes.lock().unwrap();
+                    if chunk_sizes.is_empty() {
+                        None
+                    } else {
+                        Some(chunk_sizes.clone())
+                    }
+                };
+                
+                // CRITICAL PERFORMANCE: Clone cortical_id mappings to release lock immediately
+                // This prevents lock contention when ConnectomeManager tries to refresh the cache
+                let cortical_id_mappings_clone = {
+                    let mappings = cached_cortical_id_mappings.lock().unwrap();
+                    mappings.clone()
+                };
 
                 for (area_id, (neuron_ids, coords_x, coords_y, coords_z, potentials)) in
                     fire_data_arc.iter()
@@ -1375,7 +1391,7 @@ fn burst_loop(
                     // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue), use CoreCorticalType
                     // even if cache is empty, so BV can identify them correctly
                     // For other areas, skip if not in cache (cache should be populated from ConnectomeManager)
-                    let cortical_id = match cortical_id_mappings.get(area_id) {
+                    let cortical_id = match cortical_id_mappings_clone.get(area_id) {
                         Some(id) => id.clone(),
                         None => {
                             // Fallback for reserved core areas (BV needs correct cortical_id to identify them)
@@ -1404,23 +1420,37 @@ fn burst_loop(
                     };
 
                     // Check if this area should use heatmap aggregation
+                    // CRITICAL PERFORMANCE: Only clone vectors when NOT using heatmap (heatmap creates new vectors)
+                    // For areas without heatmap, we must clone because we're reading from Arc (can't move)
+                    // OPTIMIZATION: For small numbers of fired neurons, cloning is fast. For large numbers,
+                    // heatmap aggregation should be used to reduce data size.
                     let (final_coords_x, final_coords_y, final_coords_z, final_potentials, final_neuron_ids) = 
-                        if let Some(&chunk_size) = chunk_sizes.get(area_id) {
-                            // Apply heatmap aggregation for large areas
-                            let (chunk_x, chunk_y, chunk_z, chunk_p, _chunk_counts) = 
-                                aggregate_into_heatmap_chunks(
-                                    neuron_ids,
-                                    coords_x,
-                                    coords_y,
-                                    coords_z,
-                                    potentials,
-                                    chunk_size,
-                                );
-                            // For heatmap, use chunk indices as neuron IDs (or sequential IDs)
-                            let chunk_ids: Vec<u32> = (0..chunk_x.len() as u32).collect();
-                            (chunk_x, chunk_y, chunk_z, chunk_p, chunk_ids)
+                        if let Some(ref chunk_sizes) = chunk_sizes_clone {
+                            if let Some(&chunk_size) = chunk_sizes.get(area_id) {
+                                // Apply heatmap aggregation for large areas (creates new aggregated vectors)
+                                // This reduces data size significantly for areas with many fired neurons
+                                let (chunk_x, chunk_y, chunk_z, chunk_p, _chunk_counts) = 
+                                    aggregate_into_heatmap_chunks(
+                                        neuron_ids,
+                                        coords_x,
+                                        coords_y,
+                                        coords_z,
+                                        potentials,
+                                        chunk_size,
+                                    );
+                                // For heatmap, use chunk indices as neuron IDs (or sequential IDs)
+                                let chunk_ids: Vec<u32> = (0..chunk_x.len() as u32).collect();
+                                (chunk_x, chunk_y, chunk_z, chunk_p, chunk_ids)
+                            } else {
+                                // No heatmap for this area - must clone because we're reading from Arc (can't move)
+                                // NOTE: This is only expensive if many neurons fired. If only a few neurons fired,
+                                // the vectors are small and cloning is fast.
+                                (coords_x.clone(), coords_y.clone(), coords_z.clone(), potentials.clone(), neuron_ids.clone())
+                            }
                         } else {
-                            // No heatmap - use original data
+                            // No heatmap configured at all - must clone because we're reading from Arc (can't move)
+                            // NOTE: This is only expensive if many neurons fired. If only a few neurons fired,
+                            // the vectors are small and cloning is fast.
                             (coords_x.clone(), coords_y.clone(), coords_z.clone(), potentials.clone(), neuron_ids.clone())
                         };
 
@@ -1543,14 +1573,18 @@ fn burst_loop(
                         // SHM is typically only used for local visualization without PNS
                         // Rebuild raw_snapshot from fire_data_arc for SHM
                         let mut shm_snapshot = RawFireQueueSnapshot::new();
-                        let cortical_id_mappings = cached_cortical_id_mappings.lock().unwrap();
+                        // CRITICAL PERFORMANCE: Clone mappings to release lock immediately
+                        let cortical_id_mappings_shm = {
+                            let mappings = cached_cortical_id_mappings.lock().unwrap();
+                            mappings.clone()
+                        };
                         for (area_id, (neuron_ids, coords_x, coords_y, coords_z, potentials)) in
                             fire_data_arc.iter()
                         {
                             if neuron_ids.is_empty() {
                                 continue;
                             }
-                            let cortical_id = match cortical_id_mappings.get(area_id) {
+                            let cortical_id = match cortical_id_mappings_shm.get(area_id) {
                                 Some(id) => id.clone(),
                                 None => {
                                     use feagi_structures::genomic::cortical_area::CoreCorticalType;
@@ -1622,8 +1656,12 @@ fn burst_loop(
                     (**fire_data_arc).len()
                 );
                 
-                // CRITICAL PERFORMANCE FIX: Use cached cortical_id mappings (no NPU lock needed!)
-                let cortical_id_mappings = cached_cortical_id_mappings.lock().unwrap();
+                // CRITICAL PERFORMANCE FIX: Clone mappings to release lock immediately
+                // This prevents lock contention when ConnectomeManager tries to refresh the cache
+                let cortical_id_mappings_motor = {
+                    let mappings = cached_cortical_id_mappings.lock().unwrap();
+                    mappings.clone()
+                };
                 
                 // Convert to RawFireQueueSnapshot (clone data for motor processing)
                 let mut motor_snapshot = RawFireQueueSnapshot::new();
@@ -1638,7 +1676,7 @@ fn burst_loop(
                     // CRITICAL: For reserved areas (0=_death, 1=_power, 2=_fatigue), use CoreCorticalType
                     // even if cache is empty, so BV can identify them correctly
                     // For other areas, skip if not in cache (cache should be populated from ConnectomeManager)
-                    let cortical_id = match cortical_id_mappings.get(area_id) {
+                    let cortical_id = match cortical_id_mappings_motor.get(area_id) {
                         Some(id) => id.clone(),
                         None => {
                             // Fallback for reserved core areas (BV needs correct cortical_id to identify them)

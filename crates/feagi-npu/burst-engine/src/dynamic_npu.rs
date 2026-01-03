@@ -331,8 +331,109 @@ where
         default_snooze_period: u16,
         default_mp_charge_accumulation: bool,
     ) -> Result<u32> {
+        // Call with z_offset=0 (default behavior)
+        self.create_cortical_area_neurons_with_z_offset(
+            cortical_idx,
+            width,
+            height,
+            depth,
+            neurons_per_voxel,
+            default_threshold,
+            threshold_increment_x,
+            threshold_increment_y,
+            threshold_increment_z,
+            default_threshold_limit,
+            default_leak_coefficient,
+            default_resting_potential,
+            default_neuron_type,
+            default_refractory_period,
+            default_excitability,
+            default_consecutive_fire_limit,
+            default_snooze_period,
+            default_mp_charge_accumulation,
+            0, // z_offset = 0
+        )
+    }
+
+    /// Create neurons for a cortical area with optional z-offset (for batched creation)
+    /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_cortical_area_neurons_with_z_offset(
+        &mut self,
+        cortical_idx: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+        neurons_per_voxel: u32,
+        default_threshold: f32,
+        threshold_increment_x: f32,
+        threshold_increment_y: f32,
+        threshold_increment_z: f32,
+        default_threshold_limit: f32,
+        default_leak_coefficient: f32,
+        default_resting_potential: f32,
+        default_neuron_type: i32,
+        default_refractory_period: u16,
+        default_excitability: f32,
+        default_consecutive_fire_limit: u16,
+        default_snooze_period: u16,
+        default_mp_charge_accumulation: bool,
+        z_offset: u32,
+    ) -> Result<u32> {
+        // Call with y_offset=0 (default behavior)
+        self.create_cortical_area_neurons_with_offsets(
+            cortical_idx,
+            width,
+            height,
+            depth,
+            neurons_per_voxel,
+            default_threshold,
+            threshold_increment_x,
+            threshold_increment_y,
+            threshold_increment_z,
+            default_threshold_limit,
+            default_leak_coefficient,
+            default_resting_potential,
+            default_neuron_type,
+            default_refractory_period,
+            default_excitability,
+            default_consecutive_fire_limit,
+            default_snooze_period,
+            default_mp_charge_accumulation,
+            0, // y_offset = 0
+            z_offset,
+        )
+    }
+
+    /// Create neurons for a cortical area with optional y and z offsets (for batched creation)
+    /// y_offset: Starting y-coordinate (allows creating neurons at specific row ranges)
+    /// z_offset: Starting z-coordinate (allows creating neurons at specific depth layers)
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_cortical_area_neurons_with_offsets(
+        &mut self,
+        cortical_idx: u32,
+        width: u32,
+        height: u32,
+        depth: u32,
+        neurons_per_voxel: u32,
+        default_threshold: f32,
+        threshold_increment_x: f32,
+        threshold_increment_y: f32,
+        threshold_increment_z: f32,
+        default_threshold_limit: f32,
+        default_leak_coefficient: f32,
+        default_resting_potential: f32,
+        default_neuron_type: i32,
+        default_refractory_period: u16,
+        default_excitability: f32,
+        default_consecutive_fire_limit: u16,
+        default_snooze_period: u16,
+        default_mp_charge_accumulation: bool,
+        y_offset: u32,
+        z_offset: u32,
+    ) -> Result<u32> {
         match self {
-            DynamicNPUGeneric::F32(npu) => npu.create_cortical_area_neurons(
+            DynamicNPUGeneric::F32(npu) => npu.create_cortical_area_neurons_with_offsets(
                 cortical_idx,
                 width,
                 height,
@@ -351,8 +452,10 @@ where
                 default_consecutive_fire_limit,
                 default_snooze_period,
                 default_mp_charge_accumulation,
+                y_offset,
+                z_offset,
             ),
-            DynamicNPUGeneric::INT8(npu) => npu.create_cortical_area_neurons(
+            DynamicNPUGeneric::INT8(npu) => npu.create_cortical_area_neurons_with_offsets(
                 cortical_idx,
                 width,
                 height,
@@ -371,6 +474,8 @@ where
                 default_consecutive_fire_limit,
                 default_snooze_period,
                 default_mp_charge_accumulation,
+                y_offset,
+                z_offset,
             ),
         }
     }

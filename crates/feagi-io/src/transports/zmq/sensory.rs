@@ -7,7 +7,7 @@
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use std::thread;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info, warn, span, Level};
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]
@@ -471,72 +471,157 @@ impl SensoryStream {
 
         let t_inject_start = std::time::Instant::now();
         let mut total_injected = 0;
-        // REAL-TIME: Treat each incoming sensory message as the "latest frame".
-        // For temporal smoothing: Apply gradual ramp-up to new potentials for large frames.
-        // This prevents visual flashing when large scene changes occur (many neurons firing at once).
-        let mut npu = npu_arc.lock().unwrap();
         
         // Temporal smoothing parameters
-        // For large frames, reduce potential to create gradual ramp-up over multiple frames
-        // This prevents instant massive activation that causes visual flashing
-        // OPTIMIZATION: Reduced smoothing for lower latency while still preventing flashing
-        const SMOOTHING_RAMP_FACTOR: f32 = 0.85; // Apply 85% of target potential per frame (faster ramp-up, less delay)
-        const LARGE_FRAME_THRESHOLD: usize = 5000; // Higher threshold - only smooth very large frames (>5000 neurons)
+        const SMOOTHING_RAMP_FACTOR: f32 = 0.85; // Apply 85% of target potential per frame
+        const LARGE_FRAME_THRESHOLD: usize = 5000; // Only smooth very large frames (>5000 neurons)
+        const BATCH_SIZE: usize = 10_000; // Process neurons in batches to release NPU lock frequently (reduced from 50k)
         
-        // REAL-TIME: Clear any staged sensory injections before applying this message so FEAGI does not
-        // accumulate multiple frames between bursts (drift that looks like buffering).
-        // Note: We clear to maintain real-time semantics, but apply smoothing to the new frame itself.
-        // OPTIMIZATION: Only clear if we have a large frame (small frames don't need clearing)
-        // This reduces unnecessary work for small frames and improves latency
+        // Calculate total neurons for batching decision
         let total_neurons: usize = cortical_mapped.mappings.values()
             .map(|arrays| arrays.len())
             .sum();
         
-        // Only clear pending injections for large frames to reduce overhead
-        if total_neurons > LARGE_FRAME_THRESHOLD {
-            npu.clear_pending_sensory_injections();
-        }
-
-        for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
-            // Extract raw XYZP data (NO LOCKS)
-            let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
-
-            // Apply temporal smoothing: for large frames, reduce potentials to create gradual ramp-up
-            // This prevents instant flashes when large scene changes occur (469KB frames)
-            // OPTIMIZATION: Avoid allocation - use iterator directly or modify in place
-            let injected = if potentials.len() > LARGE_FRAME_THRESHOLD {
-                // Large frame: apply smoothing to prevent massive simultaneous activation
-                // OPTIMIZATION: Create smoothed vector only when needed (large frames)
-                let smoothed_potentials: Vec<f32> = potentials.iter()
-                    .map(|&p| p * SMOOTHING_RAMP_FACTOR)
-                    .collect();
+        // CRITICAL: For very large injections (>100k neurons), use batched processing
+        // to release NPU lock periodically and allow burst loop to run
+        if total_neurons > 100_000 {
+            // Clear pending injections once before batching (with lock)
+            {
+                let mut npu = npu_arc.lock().unwrap();
+                npu.clear_pending_sensory_injections();
+            }
+            
+            // Process each cortical area in batches
+            for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
+                let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
+                let num_neurons = x_coords.len();
                 
-                npu.inject_sensory_xyzp_arrays_by_id(
-                    cortical_id,
-                    x_coords,
-                    y_coords,
-                    z_coords,
-                    &smoothed_potentials,
-                )
-            } else {
-                // Small frame: use full potential directly (no allocation needed)
-                npu.inject_sensory_xyzp_arrays_by_id(
-                    cortical_id,
-                    x_coords,
-                    y_coords,
-                    z_coords,
-                    potentials,
-                )
-            };
-            total_injected += injected;
-
-            // Only log missing neurons at debug level (common case, not an error)
-            if injected == 0 {
-                debug!(
-                    "[ZMQ-SENSORY] No neurons injected for area '{}' ({} coords)",
-                    cortical_id.as_base_64(),
-                    neuron_arrays.len()
-                );
+                if num_neurons == 0 {
+                    continue;
+                }
+                
+                // Apply smoothing if needed (pre-compute once for entire area)
+                let smoothed_potentials: Option<Vec<f32>> = if num_neurons > LARGE_FRAME_THRESHOLD {
+                    Some(potentials.iter().map(|&p| p * SMOOTHING_RAMP_FACTOR).collect())
+                } else {
+                    None
+                };
+                
+                // Process in batches
+                let num_batches = (num_neurons + BATCH_SIZE - 1) / BATCH_SIZE;
+                let batch_start_time = std::time::Instant::now();
+                
+                for (batch_idx, batch_start) in (0..num_neurons).step_by(BATCH_SIZE).enumerate() {
+                    let batch_end = (batch_start + BATCH_SIZE).min(num_neurons);
+                    let batch_size = batch_end - batch_start;
+                    let batch_x = &x_coords[batch_start..batch_end];
+                    let batch_y = &y_coords[batch_start..batch_end];
+                    let batch_z = &z_coords[batch_start..batch_end];
+                    let batch_p = if let Some(ref smoothed) = smoothed_potentials {
+                        &smoothed[batch_start..batch_end]
+                    } else {
+                        &potentials[batch_start..batch_end]
+                    };
+                    
+                    // Acquire lock, inject batch, release lock (allows burst loop to run between batches)
+                    let batch_span = span!(
+                        Level::DEBUG,
+                        "sensory_injection_batch",
+                        batch_idx = batch_idx + 1,
+                        num_batches = num_batches,
+                        batch_size = batch_size,
+                        cortical_area = %cortical_id.as_base_64()
+                    );
+                    let _batch_guard = batch_span.enter();
+                    
+                    let lock_acquisition_start = std::time::Instant::now();
+                    let injected = {
+                        let lock_span = span!(Level::DEBUG, "npu_lock_acquisition");
+                        let _lock_guard = lock_span.enter();
+                        let mut npu = npu_arc.lock().unwrap();
+                        let lock_duration = lock_acquisition_start.elapsed();
+                        if lock_duration.as_millis() > 10 {
+                            warn!(
+                                "[ZMQ-SENSORY] ⚠️ Slow NPU lock acquisition: {:.2}ms (batch {}/{})",
+                                lock_duration.as_secs_f64() * 1000.0,
+                                batch_idx + 1,
+                                num_batches
+                            );
+                        }
+                        
+                        let inject_span = span!(Level::DEBUG, "inject_sensory_xyzp_arrays");
+                        let _inject_guard = inject_span.enter();
+                        npu.inject_sensory_xyzp_arrays_by_id(
+                            cortical_id,
+                            batch_x,
+                            batch_y,
+                            batch_z,
+                            batch_p,
+                        )
+                    };
+                    let batch_duration = lock_acquisition_start.elapsed();
+                    total_injected += injected;
+                    
+                    // Log slow batches or progress for very large injections
+                    if batch_duration.as_millis() > 100 {
+                        warn!(
+                            "[ZMQ-SENSORY] ⚠️ Slow batch: {}/{} ({} neurons) took {:.2}ms for area {}",
+                            batch_idx + 1, num_batches, batch_size, batch_duration.as_secs_f64() * 1000.0,
+                            cortical_id.as_base_64()
+                        );
+                    } else if num_batches > 10 && (batch_idx + 1) % 10 == 0 {
+                        let elapsed = batch_start_time.elapsed();
+                        let progress = ((batch_idx + 1) as f32 / num_batches as f32) * 100.0;
+                        info!(
+                            "[ZMQ-SENSORY] Progress: {}/{} batches ({}%) for area {} - {} neurons injected in {:.2}s",
+                            batch_idx + 1, num_batches, progress as u32, cortical_id.as_base_64(),
+                            total_injected, elapsed.as_secs_f64()
+                        );
+                    }
+                }
+            }
+        } else {
+            // Small injection: process normally (single lock acquisition)
+            let mut npu = npu_arc.lock().unwrap();
+            
+            // Clear pending injections for large frames
+            if total_neurons > LARGE_FRAME_THRESHOLD {
+                npu.clear_pending_sensory_injections();
+            }
+            
+            for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
+                let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
+                
+                let injected = if potentials.len() > LARGE_FRAME_THRESHOLD {
+                    let smoothed_potentials: Vec<f32> = potentials.iter()
+                        .map(|&p| p * SMOOTHING_RAMP_FACTOR)
+                        .collect();
+                    
+                    npu.inject_sensory_xyzp_arrays_by_id(
+                        cortical_id,
+                        x_coords,
+                        y_coords,
+                        z_coords,
+                        &smoothed_potentials,
+                    )
+                } else {
+                    npu.inject_sensory_xyzp_arrays_by_id(
+                        cortical_id,
+                        x_coords,
+                        y_coords,
+                        z_coords,
+                        potentials,
+                    )
+                };
+                total_injected += injected;
+                
+                if injected == 0 {
+                    debug!(
+                        "[ZMQ-SENSORY] No neurons injected for area '{}' ({} coords)",
+                        cortical_id.as_base_64(),
+                        x_coords.len()
+                    );
+                }
             }
         }
         
