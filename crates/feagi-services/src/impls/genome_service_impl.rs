@@ -2242,9 +2242,8 @@ impl GenomeServiceImpl {
         
         // CRITICAL PERFORMANCE: Rebuild power neuron cache after major structural changes
         // This ensures the cache is accurate after deleting/creating millions of neurons
-        // Without this, the cache might have stale entries that slow down validation
-        // NOTE: This scans all neurons (5.7M) which can be slow - lock held until scan completes
-        info!("[STRUCTURAL-REBUILD] Rebuilding power neuron cache (scanning {} neurons)...", neurons_created);
+        // ARCHITECTURE: Uses deterministic neuron ID (area 1 → neuron ID 1) - O(1) lookup, no scanning
+        info!("[STRUCTURAL-REBUILD] Rebuilding power neuron cache (deterministic ID lookup)...");
         let cache_rebuild_start = std::time::Instant::now();
         {
             let mut npu_lock = npu_arc
@@ -2259,11 +2258,10 @@ impl GenomeServiceImpl {
             "[STRUCTURAL-REBUILD] Power neuron cache rebuild complete in {:.2}s (NPU lock released)",
             cache_rebuild_duration.as_secs_f64()
         );
-        if cache_rebuild_duration.as_millis() > 100 {
+        if cache_rebuild_duration.as_millis() > 10 {
             warn!(
-                "[STRUCTURAL-REBUILD] ⚠️ Slow power neuron cache rebuild: {:.2}s (scanned {} neurons)",
-                cache_rebuild_duration.as_secs_f64(),
-                neurons_created
+                "[STRUCTURAL-REBUILD] ⚠️ Slow power neuron cache rebuild: {:.2}s (should be <1ms with deterministic ID)",
+                cache_rebuild_duration.as_secs_f64()
             );
         }
         info!(
@@ -2285,8 +2283,129 @@ impl GenomeServiceImpl {
             info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
 
-        // Return updated info
-        Self::get_cortical_area_info_blocking(cortical_id, &connectome)
+        // CRITICAL PERFORMANCE: For large areas, skip expensive get_synapse_count_in_area
+        // which iterates through all neurons (5.7M!) holding the NPU lock for hundreds of ms
+        // Use known synapse counts from rebuild instead (we just calculated them)
+        if neurons_created > 100_000 {
+            info!(
+                "[STRUCTURAL-REBUILD] Using known counts for large area ({} neurons) to avoid expensive NPU lock",
+                neurons_created
+            );
+            // Get area info but use known counts (avoid expensive NPU iteration)
+            let manager = connectome.read();
+            let area = manager
+                .get_cortical_area(&cortical_id_typed)
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: cortical_id.to_string(),
+                })?;
+            let cortical_idx = manager
+                .get_cortical_idx(&cortical_id_typed)
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: cortical_id.to_string(),
+                })?;
+            
+            // Use known counts from rebuild (no expensive NPU lock needed)
+            let neuron_count = neurons_created as usize;
+            let synapse_count = (outgoing_synapses + incoming_synapses) as usize;
+            let cortical_group = area.get_cortical_group();
+            
+            // Build full response using area properties (same as get_cortical_area_info_blocking)
+            Ok(CorticalAreaInfo {
+                cortical_id: area.cortical_id.as_base_64(),
+                cortical_id_s: area.cortical_id.to_string(),
+                cortical_idx,
+                name: area.name.clone(),
+                dimensions: (
+                    area.dimensions.width as usize,
+                    area.dimensions.height as usize,
+                    area.dimensions.depth as usize,
+                ),
+                position: area.position.into(),
+                area_type: cortical_group
+                    .clone()
+                    .unwrap_or_else(|| "CUSTOM".to_string()),
+                cortical_group: cortical_group.clone().unwrap_or_else(|| "CUSTOM".to_string()),
+                cortical_type: {
+                    use feagi_evolutionary::extract_memory_properties;
+                    if extract_memory_properties(&area.properties).is_some() {
+                        "memory".to_string()
+                    } else if let Some(group) = &cortical_group {
+                        match group.as_str() {
+                            "IPU" => "sensory".to_string(),
+                            "OPU" => "motor".to_string(),
+                            "CORE" => "core".to_string(),
+                            _ => "custom".to_string(),
+                        }
+                    } else {
+                        "custom".to_string()
+                    }
+                },
+                neuron_count,
+                synapse_count,
+                visible: area.visible(),
+                sub_group: area.sub_group(),
+                neurons_per_voxel: area.neurons_per_voxel(),
+                postsynaptic_current: area.postsynaptic_current() as f64,
+                postsynaptic_current_max: area.postsynaptic_current_max() as f64,
+                plasticity_constant: area.plasticity_constant() as f64,
+                degeneration: area.degeneration() as f64,
+                psp_uniform_distribution: area.psp_uniform_distribution(),
+                mp_driven_psp: area.mp_driven_psp(),
+                firing_threshold: area.firing_threshold() as f64,
+                firing_threshold_increment: [
+                    area.firing_threshold_increment_x() as f64,
+                    area.firing_threshold_increment_y() as f64,
+                    area.firing_threshold_increment_z() as f64,
+                ],
+                firing_threshold_limit: area.firing_threshold_limit() as f64,
+                consecutive_fire_count: area.consecutive_fire_count(),
+                snooze_period: area.snooze_period() as u32,
+                refractory_period: area.refractory_period() as u32,
+                leak_coefficient: area.leak_coefficient() as f64,
+                leak_variability: area.leak_variability() as f64,
+                mp_charge_accumulation: area.mp_charge_accumulation(),
+                neuron_excitability: area.neuron_excitability() as f64,
+                burst_engine_active: area.burst_engine_active(),
+                init_lifespan: area.init_lifespan(),
+                lifespan_growth_rate: area.lifespan_growth_rate() as f64,
+                longterm_mem_threshold: area.longterm_mem_threshold(),
+                temporal_depth: {
+                    use feagi_evolutionary::extract_memory_properties;
+                    extract_memory_properties(&area.properties).map(|p| p.temporal_depth.max(1))
+                },
+                properties: HashMap::new(),
+                cortical_subtype: None,
+                encoding_type: None,
+                encoding_format: None,
+                unit_id: None,
+                group_id: None,
+                parent_region_id: manager.get_parent_region_id_for_area(&cortical_id_typed),
+                dev_count: area
+                    .properties
+                    .get("dev_count")
+                    .and_then(|v| v.as_u64().map(|n| n as usize)),
+                cortical_dimensions_per_device: area
+                    .properties
+                    .get("cortical_dimensions_per_device")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| {
+                        if arr.len() == 3 {
+                            Some((
+                                arr[0].as_u64()? as usize,
+                                arr[1].as_u64()? as usize,
+                                arr[2].as_u64()? as usize,
+                            ))
+                        } else {
+                            None
+                        }
+                    }),
+            })
+        } else {
+            // For smaller areas, use the full info retrieval
+            Self::get_cortical_area_info_blocking(cortical_id, &connectome)
+        }
     }
 
     /// Helper to get cortical area info (blocking version for spawn_blocking contexts)

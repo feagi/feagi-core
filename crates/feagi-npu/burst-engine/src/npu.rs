@@ -2759,36 +2759,47 @@ impl<
     /// 
     /// This eliminates the need to scan all neurons (O(1) instead of O(n))
     pub fn rebuild_power_neuron_cache(&mut self) {
-        let neuron_storage = self.neuron_storage.read().unwrap();
-        
         // CRITICAL PERFORMANCE: Use deterministic neuron ID for power area (area 1 → neuron ID 1)
-        // No scanning needed - just verify neuron ID 1 exists and belongs to power area
+        // O(1) lookup - no scanning needed, just verify neuron ID 1 exists and belongs to power area
         let power_neuron_id = NeuronId(1);
         let power_neuron_idx = power_neuron_id.0 as usize;
         
-        let power_neurons = if power_neuron_idx < neuron_storage.capacity()
-            && neuron_storage.valid_mask().get(power_neuron_idx).copied().unwrap_or(false)
-            && neuron_storage.cortical_areas()[power_neuron_idx] == 1
-        {
-            vec![power_neuron_id]
+        let neuron_storage = self.neuron_storage.read().unwrap();
+        let count = neuron_storage.count(); // Use count() not capacity() - faster and more accurate
+        
+        // Quick bounds check using count (O(1))
+        let power_neurons = if power_neuron_idx < count {
+            // Direct array access - O(1)
+            let is_valid = neuron_storage.valid_mask()[power_neuron_idx];
+            let cortical_area = neuron_storage.cortical_areas()[power_neuron_idx];
+            
+            if is_valid && cortical_area == 1 {
+                vec![power_neuron_id]
+            } else {
+                // Power neuron not at deterministic ID or invalid
+                warn!(
+                    "[NPU] Power neuron at ID 1 is invalid or belongs to area {} (expected 1)",
+                    cortical_area
+                );
+                Vec::new()
+            }
         } else {
-            // Power neuron not found at deterministic ID - this should not happen in normal operation
+            // Neuron ID 1 doesn't exist yet (should not happen if core areas initialized correctly)
             warn!(
-                "[NPU] Power neuron not found at deterministic ID 1 (area 1). Cache will be empty."
+                "[NPU] Power neuron not found at deterministic ID 1 (neuron count: {})",
+                count
             );
             Vec::new()
         };
-        
-        let cache_len = power_neurons.len();
-        let has_power_neuron = !power_neurons.is_empty();
         drop(neuron_storage);
         
+        let cache_len = power_neurons.len();
         *self.power_neuron_cache.write().unwrap() = power_neurons;
         
         info!(
-            "[NPU] Rebuilt power neuron cache: {} neurons (deterministic ID: {})",
+            "[NPU] Rebuilt power neuron cache: {} neurons (deterministic ID: {}, O(1) lookup)",
             cache_len,
-            if has_power_neuron { "1" } else { "none" }
+            if cache_len > 0 { "1" } else { "none" }
         );
     }
 
