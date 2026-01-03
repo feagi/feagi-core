@@ -136,6 +136,14 @@ pub struct ConnectomeManager {
     /// This prevents health checks from blocking on NPU lock
     cached_synapse_count: Arc<AtomicUsize>,
 
+    /// Per-area neuron count cache (lock-free reads) - updated when neurons are created/deleted
+    /// This prevents health checks from blocking on NPU lock
+    cached_neuron_counts_per_area: Arc<RwLock<HashMap<CorticalID, AtomicUsize>>>,
+
+    /// Per-area synapse count cache (lock-free reads) - updated when synapses are created/deleted
+    /// This prevents health checks from blocking on NPU lock
+    cached_synapse_counts_per_area: Arc<RwLock<HashMap<CorticalID, AtomicUsize>>>,
+
     /// Is the connectome initialized (has cortical areas)?
     initialized: bool,
 
@@ -163,6 +171,8 @@ impl ConnectomeManager {
             plasticity_executor: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
+            cached_neuron_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
+            cached_synapse_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             initialized: false,
             last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))), // Initialize to allow first calculation
         }
@@ -215,6 +225,8 @@ impl ConnectomeManager {
             plasticity_executor: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
+            cached_neuron_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
+            cached_synapse_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             initialized: false,
             last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))),
         }
@@ -249,6 +261,8 @@ impl ConnectomeManager {
             plasticity_executor: None,
             cached_neuron_count: Arc::new(AtomicUsize::new(0)),
             cached_synapse_count: Arc::new(AtomicUsize::new(0)),
+            cached_neuron_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
+            cached_synapse_counts_per_area: Arc::new(RwLock::new(HashMap::new())),
             initialized: false,
             last_fatigue_calculation: Arc::new(Mutex::new(std::time::Instant::now() - std::time::Duration::from_secs(10))),
         }
@@ -382,6 +396,15 @@ impl ConnectomeManager {
 
         // Store area
         self.cortical_areas.insert(cortical_id, area);
+
+        // CRITICAL: Initialize per-area count caches to 0 (lock-free for readers)
+        // This allows healthcheck endpoints to read counts without NPU lock
+        {
+            let mut neuron_cache = self.cached_neuron_counts_per_area.write();
+            neuron_cache.insert(cortical_id, AtomicUsize::new(0));
+            let mut synapse_cache = self.cached_synapse_counts_per_area.write();
+            synapse_cache.insert(cortical_id, AtomicUsize::new(0));
+        }
 
         // CRITICAL: Register cortical area in NPU during corticogenesis
         // This must happen BEFORE neurogenesis so neurons can look up their cortical IDs
@@ -1501,6 +1524,19 @@ impl ConnectomeManager {
             cortical_id.as_base_64()
         );
 
+        // CRITICAL: Update per-area neuron count cache (lock-free for readers)
+        // This allows healthcheck endpoints to read counts without NPU lock
+        {
+            let mut cache = self.cached_neuron_counts_per_area.write();
+            cache
+                .entry(*cortical_id)
+                .or_insert_with(|| AtomicUsize::new(0))
+                .store(neuron_count as usize, Ordering::Relaxed);
+        }
+
+        // Update total neuron count cache
+        self.cached_neuron_count.fetch_add(neuron_count as usize, Ordering::Relaxed);
+
         // Trigger fatigue index recalculation after neuron creation
         // NOTE: Disabled during genome loading to prevent blocking
         // Fatigue calculation will be enabled after genome loading completes
@@ -1861,15 +1897,34 @@ impl ConnectomeManager {
                         )?
                     }
                     "block_to_block" => {
-                        crate::connectivity::synaptogenesis::apply_block_connection_morphology(
-                            &mut npu_lock,
-                            src_cortical_idx,
-                            dst_cortical_idx,
-                            scalar, // scaling_factor
-                            weight,
-                            conductance,
-                            synapse_attractivity,
-                        )?
+                        // CRITICAL PERFORMANCE: For large areas (>100k neurons), use batched version
+                        // that releases NPU lock between batches to prevent blocking burst loop
+                        let src_neuron_count = npu_lock.get_neurons_in_cortical_area(src_cortical_idx).len();
+                        if src_neuron_count > 100_000 {
+                            // Release lock and use batched version
+                            drop(npu_lock);
+                            
+                            crate::connectivity::synaptogenesis::apply_block_connection_morphology_batched(
+                                npu,
+                                src_cortical_idx,
+                                dst_cortical_idx,
+                                scalar, // scaling_factor
+                                weight,
+                                conductance,
+                                synapse_attractivity,
+                            )?
+                        } else {
+                            // Small area: use regular version (faster for small counts)
+                            crate::connectivity::synaptogenesis::apply_block_connection_morphology(
+                                &mut npu_lock,
+                                src_cortical_idx,
+                                dst_cortical_idx,
+                                scalar, // scaling_factor
+                                weight,
+                                conductance,
+                                synapse_attractivity,
+                            )?
+                        }
                     }
                     _ => {
                         trace!(
@@ -1906,6 +1961,19 @@ impl ConnectomeManager {
             total_synapses,
             src_cortical_id
         );
+
+        // CRITICAL: Update per-area synapse count cache (lock-free for readers)
+        // This allows healthcheck endpoints to read counts without NPU lock
+        if total_synapses > 0 {
+            let mut cache = self.cached_synapse_counts_per_area.write();
+            cache
+                .entry(*src_cortical_id)
+                .or_insert_with(|| AtomicUsize::new(0))
+                .fetch_add(total_synapses as usize, Ordering::Relaxed);
+        }
+
+        // Update total synapse count cache
+        self.cached_synapse_count.fetch_add(total_synapses as usize, Ordering::Relaxed);
 
         Ok(total_synapses)
     }
@@ -2164,24 +2232,28 @@ impl ConnectomeManager {
     ///
     /// Number of neurons in the area, or 0 if area doesn't exist or NPU not connected
     ///
+    /// Get neuron count for a specific cortical area (lock-free cached read)
+    ///
+    /// # Arguments
+    ///
+    /// * `cortical_id` - The cortical area ID
+    ///
+    /// # Returns
+    ///
+    /// The number of neurons in the area (from cache, never blocks on NPU lock)
+    ///
+    /// # Performance
+    ///
+    /// This is a lock-free atomic read that never blocks, even during burst processing.
+    /// Count is maintained in ConnectomeManager and updated when neurons are created/deleted.
+    ///
     pub fn get_neuron_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        // Get cortical_idx from cortical_id
-        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
-            Some(idx) => *idx,
-            None => return 0,
-        };
-
-        // Optimized: Get count directly without creating Vec of all neuron IDs
-        // This is much faster for large areas (millions of neurons)
-        if let Some(ref npu) = self.npu {
-            if let Ok(npu_lock) = npu.lock() {
-                npu_lock.get_neurons_in_cortical_area(cortical_idx).len()
-            } else {
-                0
-            }
-        } else {
-            0
-        }
+        // CRITICAL: Read from cache (lock-free) - never query NPU for healthcheck endpoints
+        let cache = self.cached_neuron_counts_per_area.read();
+        cache
+            .get(cortical_id)
+            .map(|count| count.load(Ordering::Relaxed))
+            .unwrap_or(0)
     }
 
     /// Get all cortical areas that have neurons
@@ -2217,7 +2289,7 @@ impl ConnectomeManager {
         self.get_neuron_count_in_area(cortical_id) > 0
     }
 
-    /// Get total synapse count for a specific cortical area (outgoing only)
+    /// Get total synapse count for a specific cortical area (outgoing only) - lock-free cached read
     ///
     /// # Arguments
     ///
@@ -2225,42 +2297,20 @@ impl ConnectomeManager {
     ///
     /// # Returns
     ///
-    /// Total number of outgoing synapses from neurons in this area
+    /// Total number of outgoing synapses from neurons in this area (from cache, never blocks on NPU lock)
     ///
     /// # Performance
     ///
-    /// Optimized to use a single NPU lock for the entire operation to avoid blocking
-    /// the burst loop. For large areas (>1M neurons), this is much faster than
-    /// iterating with individual locks per neuron.
+    /// This is a lock-free atomic read that never blocks, even during burst processing.
+    /// Count is maintained in ConnectomeManager and updated when synapses are created/deleted.
     ///
     pub fn get_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        // Get cortical_idx from cortical_id
-        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
-            Some(idx) => *idx,
-            None => return 0,
-        };
-
-        if let Some(ref npu) = self.npu {
-            // CRITICAL: Use single NPU lock for entire operation to avoid blocking burst loop
-            if let Ok(npu_lock) = npu.lock() {
-                // Get all neurons in the area (single lock)
-                let neuron_ids: Vec<u32> = npu_lock
-                    .get_neurons_in_cortical_area(cortical_idx)
-                    .into_iter()
-                    .collect();
-
-                // Count synapses for all neurons in a single lock
-                let mut total = 0;
-                for neuron_id in neuron_ids {
-                    total += npu_lock.get_outgoing_synapses(neuron_id).len();
-                }
-                total
-            } else {
-                0
-            }
-        } else {
-            0
-        }
+        // CRITICAL: Read from cache (lock-free) - never query NPU for healthcheck endpoints
+        let cache = self.cached_synapse_counts_per_area.read();
+        cache
+            .get(cortical_id)
+            .map(|count| count.load(Ordering::Relaxed))
+            .unwrap_or(0)
     }
 
     /// Check if two neurons are connected (source → target)

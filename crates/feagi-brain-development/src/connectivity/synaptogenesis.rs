@@ -38,6 +38,8 @@ use crate::connectivity::rules::{
 use crate::types::BduResult;
 use feagi_npu_neural::types::{NeuronId, SynapticConductance, SynapticWeight};
 use feagi_npu_neural::SynapseType;
+use std::sync::Arc;
+use tracing::info;
 // use feagi_npu_burst_engine::npu::RustNPU; // Now using DynamicNPU
 
 /// Apply projector morphology directly on NPU
@@ -133,6 +135,131 @@ pub fn apply_projector_morphology(
     Ok(synapse_count)
 }
 
+/// Apply block connection morphology with batched processing (releases NPU lock between batches)
+/// 
+/// This version is optimized for large neuron counts (>100k) and releases the NPU lock
+/// between batches to allow the burst loop to run, preventing 4-17 second blocking.
+pub fn apply_block_connection_morphology_batched(
+    npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    src_area_id: u32,
+    dst_area_id: u32,
+    scaling_factor: u32,
+    weight: u8,
+    conductance: u8,
+    synapse_attractivity: u8,
+) -> BduResult<u32> {
+    use crate::rng::get_rng;
+    use rand::Rng;
+    let mut rng = get_rng();
+    
+    const BATCH_SIZE: usize = 50_000; // Process 50k synapses per batch
+    
+    // Step 1: Query all neuron data (with lock)
+    let (src_neurons, src_dimensions, dst_dimensions, dst_pos_map) = {
+        let mut npu_lock = npu.lock().map_err(|e| {
+            crate::types::BduError::Internal(format!("Failed to lock NPU: {}", e))
+        })?;
+        
+        let src_neurons = npu_lock.get_neurons_in_cortical_area(src_area_id);
+        if src_neurons.is_empty() {
+            return Ok(0);
+        }
+        
+        let src_dimensions = calculate_area_dimensions(&*npu_lock, src_area_id);
+        let dst_dimensions = calculate_area_dimensions(&*npu_lock, dst_area_id);
+        
+        let mut dst_pos_map = std::collections::HashMap::new();
+        for dst_nid in npu_lock.get_neurons_in_cortical_area(dst_area_id) {
+            if let Some(coords) = npu_lock.get_neuron_coordinates(dst_nid) {
+                dst_pos_map.insert(coords, dst_nid);
+            }
+        }
+        
+        // Collect source neuron positions (need to query while lock is held)
+        let mut src_neuron_data = Vec::new();
+        for src_nid in &src_neurons {
+            if let Some(src_pos) = npu_lock.get_neuron_coordinates(*src_nid) {
+                src_neuron_data.push((*src_nid, src_pos));
+            }
+        }
+        
+        (src_neuron_data, src_dimensions, dst_dimensions, dst_pos_map)
+    };
+    
+    // Step 2: Pre-compute all synapse operations (NO LOCK - this is fast)
+    let mut synapse_ops: Vec<(u32, u32)> = Vec::new();
+    for (src_nid, src_pos) in src_neurons {
+        let dst_pos = syn_block_connection(
+            "",
+            "",
+            src_pos,
+            src_dimensions,
+            dst_dimensions,
+            scaling_factor,
+        )?;
+
+        if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
+            if rng.gen_range(0..100) < synapse_attractivity {
+                synapse_ops.push((src_nid, dst_nid));
+            }
+        }
+    }
+    
+    if synapse_ops.is_empty() {
+        return Ok(0);
+    }
+    
+    let total_synapses = synapse_ops.len();
+    if total_synapses > BATCH_SIZE {
+        info!(
+            target: "feagi-bdu",
+            "Batching synapse creation: {} synapses in batches of {} (releasing NPU lock between batches)",
+            total_synapses, BATCH_SIZE
+        );
+    }
+    
+    // Step 3: Create synapses in batches, releasing lock between batches
+    let mut synapse_count = 0u32;
+    for (batch_idx, batch) in synapse_ops.chunks(BATCH_SIZE).enumerate() {
+        // Re-acquire NPU lock for this batch
+        let mut npu_lock = npu.lock().map_err(|e| {
+            crate::types::BduError::Internal(format!("Failed to lock NPU for batch {}: {}", batch_idx, e))
+        })?;
+        
+        // Create synapses in this batch
+        for &(src_nid, dst_nid) in batch {
+            if npu_lock
+                .add_synapse(
+                    NeuronId(src_nid),
+                    NeuronId(dst_nid),
+                    SynapticWeight(weight),
+                    SynapticConductance(conductance),
+                    SynapseType::Excitatory,
+                )
+                .is_ok()
+            {
+                synapse_count += 1;
+            }
+        }
+        
+        // Release lock (drop npu_lock) - burst loop can run now!
+        drop(npu_lock);
+        
+        // Log progress for large batches
+        if total_synapses > BATCH_SIZE && (batch_idx + 1) % 10 == 0 {
+            info!(
+                target: "feagi-bdu",
+                "Synapse creation progress: {}/{} batches, {} synapses created",
+                batch_idx + 1,
+                (total_synapses + BATCH_SIZE - 1) / BATCH_SIZE,
+                synapse_count
+            );
+        }
+    }
+    
+    Ok(synapse_count)
+}
+
 /// Apply expander morphology directly on NPU
 pub fn apply_expander_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
@@ -193,6 +320,10 @@ pub fn apply_expander_morphology(
 }
 
 /// Apply block connection morphology directly on NPU
+/// 
+/// NOTE: This function holds the NPU lock for the entire duration.
+/// For large neuron counts (>100k), consider using the batched version
+/// that releases the lock between batches.
 pub fn apply_block_connection_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,
