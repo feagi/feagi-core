@@ -101,8 +101,11 @@ impl ConnectomeServiceImpl {
         if let Some(ref burst_runner) = self.burst_runner {
             let manager = self.connectome.read();
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
+            let chunk_sizes = manager.get_all_chunk_sizes();
             let mapping_count = mappings.len();
-            burst_runner.write().refresh_cortical_id_mappings(mappings);
+            let burst_runner_write = burst_runner.write();
+            burst_runner_write.refresh_cortical_id_mappings(mappings);
+            burst_runner_write.refresh_chunk_sizes(chunk_sizes);
             debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
@@ -491,6 +494,21 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     from_properties
                 }
             },
+            heatmap_chunk_size: area
+                .properties
+                .get("heatmap_chunk_size")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| {
+                    if arr.len() == 3 {
+                        Some((
+                            arr[0].as_u64()? as u32,
+                            arr[1].as_u64()? as u32,
+                            arr[2].as_u64()? as u32,
+                        ))
+                    } else {
+                        None
+                    }
+                }),
         })
     }
 

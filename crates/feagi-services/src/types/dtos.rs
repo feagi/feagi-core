@@ -151,6 +151,14 @@ pub struct CorticalAreaInfo {
     /// The total width is: cortical_dimensions_per_device.width * dev_count
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cortical_dimensions_per_device: Option<(usize, usize, usize)>,
+
+    /// Heatmap chunk size for large-area visualization (x, y, z)
+    /// This defines the voxel chunk size used for heatmap aggregation when rendering
+    /// very large cortical areas (>1M neurons). BV uses this to render spatial patterns
+    /// at a coarser resolution to maintain performance.
+    /// Example: For 512×512×22 area, chunk_size might be (16, 16, 16) → 32×32×2 = 2,048 chunks
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub heatmap_chunk_size: Option<(u32, u32, u32)>,
 }
 
 /// Parameters for creating a cortical area

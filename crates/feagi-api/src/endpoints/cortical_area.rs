@@ -308,6 +308,8 @@ pub async fn get_cortical_area_geometry(
                         "snooze_period": area.snooze_period,
                         // Parent region ID (required by Brain Visualizer)
                         "parent_region_id": area.parent_region_id,
+                        // Heatmap chunk size for large-area visualization (optional)
+                        "heatmap_chunk_size": area.heatmap_chunk_size.map(|(x, y, z)| serde_json::json!([x, y, z])),
                     });
                     (area.cortical_id.clone(), data)
                 })

@@ -113,6 +113,9 @@ pub struct BurstLoopRunner {
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>,
     /// Burst count when mappings were last refreshed
     last_cortical_id_refresh: Arc<Mutex<u64>>,
+    /// Cached cortical_idx -> heatmap_chunk_size mappings (from ConnectomeManager)
+    /// Used to determine when to apply heatmap aggregation for large areas
+    cached_chunk_sizes: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>,
 }
 
 impl BurstLoopRunner {
@@ -300,6 +303,7 @@ impl BurstLoopRunner {
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
             cached_cortical_id_mappings: Arc::new(Mutex::new(ahash::AHashMap::new())),
             last_cortical_id_refresh: Arc::new(Mutex::new(0)),
+            cached_chunk_sizes: Arc::new(Mutex::new(ahash::AHashMap::new())),
             viz_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_viz_shm_writer
             motor_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_motor_shm_writer
             viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
@@ -412,6 +416,7 @@ impl BurstLoopRunner {
         let plasticity_notify = self.plasticity_notify.clone(); // Clone Arc for thread
         let cached_cortical_id_mappings = self.cached_cortical_id_mappings.clone();
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
+        let cached_chunk_sizes = self.cached_chunk_sizes.clone();
 
         self.thread_handle = Some(
             thread::Builder::new()
@@ -432,6 +437,7 @@ impl BurstLoopRunner {
                         plasticity_notify,
                         cached_cortical_id_mappings,
                         last_cortical_id_refresh,
+                        cached_chunk_sizes,
                     );
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
@@ -599,12 +605,91 @@ impl BurstLoopRunner {
             current_burst
         );
     }
+
+    /// Refresh cortical_idx -> heatmap_chunk_size mappings from ConnectomeManager
+    /// This should be called when cortical areas are created/updated
+    pub fn refresh_chunk_sizes(&self, chunk_sizes: ahash::AHashMap<u32, (u32, u32, u32)>) {
+        *self.cached_chunk_sizes.lock().unwrap() = chunk_sizes;
+        debug!(
+            "[BURST-LOOP] Refreshed chunk sizes: {} areas",
+            self.cached_chunk_sizes.lock().unwrap().len()
+        );
+    }
 }
 
 impl Drop for BurstLoopRunner {
     fn drop(&mut self) {
         self.stop();
     }
+}
+
+/// Aggregate fire queue data into heatmap chunks for large-area visualization
+///
+/// This function aggregates neuron firing data into coarser spatial chunks to reduce
+/// message size for very large cortical areas (>1M neurons). Each chunk represents
+/// a spatial region and contains aggregated activity (average potential, count).
+///
+/// # Arguments
+///
+/// * `neuron_ids` - Neuron IDs that fired
+/// * `coords_x`, `coords_y`, `coords_z` - Neuron coordinates
+/// * `potentials` - Membrane potentials
+/// * `chunk_size` - Chunk dimensions (x, y, z)
+///
+/// # Returns
+///
+/// Aggregated data: (chunk_coords_x, chunk_coords_y, chunk_coords_z, chunk_potentials, chunk_counts)
+fn aggregate_into_heatmap_chunks(
+    neuron_ids: &[u32],
+    coords_x: &[u32],
+    coords_y: &[u32],
+    coords_z: &[u32],
+    potentials: &[f32],
+    chunk_size: (u32, u32, u32),
+) -> (Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>, Vec<u32>) {
+    let (chunk_x, chunk_y, chunk_z) = chunk_size;
+    
+    // Use HashMap to aggregate chunks: chunk_coord -> (sum_potential, count)
+    let mut chunk_map: ahash::AHashMap<(u32, u32, u32), (f32, u32)> = ahash::AHashMap::new();
+    
+    for i in 0..neuron_ids.len() {
+        let x = coords_x[i];
+        let y = coords_y[i];
+        let z = coords_z[i];
+        let p = potentials[i];
+        
+        // Calculate chunk coordinates
+        let chunk_x_coord = x / chunk_x;
+        let chunk_y_coord = y / chunk_y;
+        let chunk_z_coord = z / chunk_z;
+        
+        let chunk_key = (chunk_x_coord, chunk_y_coord, chunk_z_coord);
+        
+        // Aggregate: sum potentials and count neurons
+        let entry = chunk_map.entry(chunk_key).or_insert((0.0, 0));
+        entry.0 += p;
+        entry.1 += 1;
+    }
+    
+    // Convert aggregated chunks to vectors
+    let mut chunk_coords_x = Vec::with_capacity(chunk_map.len());
+    let mut chunk_coords_y = Vec::with_capacity(chunk_map.len());
+    let mut chunk_coords_z = Vec::with_capacity(chunk_map.len());
+    let mut chunk_potentials = Vec::with_capacity(chunk_map.len());
+    let mut chunk_counts = Vec::with_capacity(chunk_map.len());
+    
+    for ((cx, cy, cz), (sum_p, count)) in chunk_map {
+        // Store chunk center coordinates (middle of chunk)
+        chunk_coords_x.push(cx * chunk_x + chunk_x / 2);
+        chunk_coords_y.push(cy * chunk_y + chunk_y / 2);
+        chunk_coords_z.push(cz * chunk_z + chunk_z / 2);
+        
+        // Average potential (sum / count)
+        chunk_potentials.push(sum_p / count as f32);
+        chunk_counts.push(count);
+    }
+    
+    (chunk_coords_x, chunk_coords_y, chunk_coords_z, chunk_potentials, chunk_counts)
 }
 
 /// Helper function to encode fire queue data to XYZP format
@@ -782,6 +867,7 @@ fn burst_loop(
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
+    cached_chunk_sizes: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>, // Cached cortical_idx -> chunk_size
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -1276,6 +1362,7 @@ fn burst_loop(
                 // For now, if cache is empty, we'll use fallback (area_{idx}) - this is acceptable as visualization
                 // only needs cortical_id once, and it will be refreshed on next area creation/update
                 let cortical_id_mappings = cached_cortical_id_mappings.lock().unwrap();
+                let chunk_sizes = cached_chunk_sizes.lock().unwrap();
 
                 for (area_id, (neuron_ids, coords_x, coords_y, coords_z, potentials)) in
                     fire_data_arc.iter()
@@ -1316,7 +1403,28 @@ fn burst_loop(
                         }
                     };
 
-                    total_neurons += neuron_ids.len();
+                    // Check if this area should use heatmap aggregation
+                    let (final_coords_x, final_coords_y, final_coords_z, final_potentials, final_neuron_ids) = 
+                        if let Some(&chunk_size) = chunk_sizes.get(area_id) {
+                            // Apply heatmap aggregation for large areas
+                            let (chunk_x, chunk_y, chunk_z, chunk_p, _chunk_counts) = 
+                                aggregate_into_heatmap_chunks(
+                                    neuron_ids,
+                                    coords_x,
+                                    coords_y,
+                                    coords_z,
+                                    potentials,
+                                    chunk_size,
+                                );
+                            // For heatmap, use chunk indices as neuron IDs (or sequential IDs)
+                            let chunk_ids: Vec<u32> = (0..chunk_x.len() as u32).collect();
+                            (chunk_x, chunk_y, chunk_z, chunk_p, chunk_ids)
+                        } else {
+                            // No heatmap - use original data
+                            (coords_x.clone(), coords_y.clone(), coords_z.clone(), potentials.clone(), neuron_ids.clone())
+                        };
+
+                    total_neurons += final_neuron_ids.len();
 
                     // Minimal memory visualization support:
                     // If this cortical_id is a MEMORY area, BV only needs the area to appear in the Type 11 stream.
@@ -1334,35 +1442,36 @@ fn burst_loop(
 
                     // CRITICAL PERFORMANCE: Only clone vectors if needed (memory areas use small vectors)
                     // For normal areas, we must clone because we're reading from Arc (can't move)
+                    // For heatmap areas, we already have the aggregated data
                     raw_snapshot.insert(
                         *area_id,
                         RawFireQueueData {
                             cortical_area_idx: *area_id,
                             cortical_id: cortical_id,
                             neuron_ids: if is_memory_area {
-                                vec![neuron_ids[0]]
+                                vec![final_neuron_ids[0]]
                             } else {
-                                neuron_ids.clone()
+                                final_neuron_ids
                             },
                             coords_x: if is_memory_area {
                                 vec![0]
                             } else {
-                                coords_x.clone()
+                                final_coords_x
                             },
                             coords_y: if is_memory_area {
                                 vec![0]
                             } else {
-                                coords_y.clone()
+                                final_coords_y
                             },
                             coords_z: if is_memory_area {
                                 vec![0]
                             } else {
-                                coords_z.clone()
+                                final_coords_z
                             },
                             potentials: if is_memory_area {
                                 vec![1.0]
                             } else {
-                                potentials.clone()
+                                final_potentials
                             },
                         },
                     );
@@ -1716,7 +1825,7 @@ fn burst_loop(
                 MOTOR_DISABLED_LOGGED.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         } // Close motor block
-        
+
         let post_burst_duration = post_burst_start.elapsed();
         // Lower threshold to catch smaller slowdowns (10ms instead of 100ms)
         // This will help us identify where the 100-600ms is coming from
@@ -1789,7 +1898,7 @@ fn burst_loop(
             let mut last_end = LAST_ITERATION_END.lock().unwrap();
             *last_end = Some(Instant::now());
         }
-        
+
         // Adaptive sleep (RTOS-friendly timing)
         // Strategy: <5Hz = chunked sleep, 5-100Hz = hybrid, >100Hz = busy-wait
         // CRITICAL: Break sleep into chunks to allow responsive shutdown

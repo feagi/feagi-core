@@ -75,8 +75,11 @@ impl GenomeServiceImpl {
         if let Some(ref burst_runner) = self.burst_runner {
             let manager = self.connectome.read();
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
+            let chunk_sizes = manager.get_all_chunk_sizes();
             let mapping_count = mappings.len();
-            burst_runner.write().refresh_cortical_id_mappings(mappings);
+            let burst_runner_write = burst_runner.write();
+            burst_runner_write.refresh_cortical_id_mappings(mappings);
+            burst_runner_write.refresh_chunk_sizes(chunk_sizes);
             info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
@@ -1929,7 +1932,7 @@ impl GenomeServiceImpl {
             * new_dimensions.height as usize
             * new_dimensions.depth as usize;
         let estimated_neurons = total_voxels * new_density as usize;
-        
+
         info!(
             "[STRUCTURAL-REBUILD] Dimension: {:?} -> {:?}",
             old_dimensions, new_dimensions
@@ -2375,10 +2378,25 @@ impl GenomeServiceImpl {
                             None
                         }
                     }),
+                heatmap_chunk_size: area
+                    .properties
+                    .get("heatmap_chunk_size")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| {
+                        if arr.len() == 3 {
+                            Some((
+                                arr[0].as_u64()? as u32,
+                                arr[1].as_u64()? as u32,
+                                arr[2].as_u64()? as u32,
+                            ))
+                        } else {
+                            None
+                        }
+                    }),
             })
         } else {
             // For smaller areas, use the full info retrieval
-            Self::get_cortical_area_info_blocking(cortical_id, &connectome)
+        Self::get_cortical_area_info_blocking(cortical_id, &connectome)
         }
     }
 
@@ -2504,6 +2522,21 @@ impl GenomeServiceImpl {
                         None
                     }
                 }),
+            heatmap_chunk_size: area
+                .properties
+                .get("heatmap_chunk_size")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| {
+                    if arr.len() == 3 {
+                        Some((
+                            arr[0].as_u64()? as u32,
+                            arr[1].as_u64()? as u32,
+                            arr[2].as_u64()? as u32,
+                        ))
+                    } else {
+                        None
+                    }
+                }),
         })
     }
 
@@ -2622,6 +2655,21 @@ impl GenomeServiceImpl {
                             arr[0].as_u64()? as usize,
                             arr[1].as_u64()? as usize,
                             arr[2].as_u64()? as usize,
+                        ))
+                    } else {
+                        None
+                    }
+                }),
+            heatmap_chunk_size: area
+                .properties
+                .get("heatmap_chunk_size")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| {
+                    if arr.len() == 3 {
+                        Some((
+                            arr[0].as_u64()? as u32,
+                            arr[1].as_u64()? as u32,
+                            arr[2].as_u64()? as u32,
                         ))
                     } else {
                         None
