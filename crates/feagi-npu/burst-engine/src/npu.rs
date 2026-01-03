@@ -2759,48 +2759,75 @@ impl<
     /// 
     /// This eliminates the need to scan all neurons (O(1) instead of O(n))
     pub fn rebuild_power_neuron_cache(&mut self) {
-        // CRITICAL PERFORMANCE: Use deterministic neuron ID for power area (area 1 → neuron ID 1)
-        // O(1) lookup - no scanning needed, just verify neuron ID 1 exists and belongs to power area
+        // CRITICAL PERFORMANCE: Try deterministic neuron ID first (area 1 → neuron ID 1)
+        // If that fails (e.g., core areas not created in order), fall back to scanning
         let power_neuron_id = NeuronId(1);
         let power_neuron_idx = power_neuron_id.0 as usize;
         
         let neuron_storage = self.neuron_storage.read().unwrap();
-        let count = neuron_storage.count(); // Use count() not capacity() - faster and more accurate
+        let count = neuron_storage.count();
         
-        // Quick bounds check using count (O(1))
+        // Try deterministic ID first (O(1))
         let power_neurons = if power_neuron_idx < count {
-            // Direct array access - O(1)
             let is_valid = neuron_storage.valid_mask()[power_neuron_idx];
             let cortical_area = neuron_storage.cortical_areas()[power_neuron_idx];
             
             if is_valid && cortical_area == 1 {
+                // Success: deterministic ID works!
                 vec![power_neuron_id]
             } else {
-                // Power neuron not at deterministic ID or invalid
+                // Deterministic ID failed - fall back to scanning (only when needed)
+                // This happens if core areas weren't created in order (0, 1, 2) or other neurons were created first
                 warn!(
-                    "[NPU] Power neuron at ID 1 is invalid or belongs to area {} (expected 1)",
+                    "[NPU] Power neuron not at deterministic ID 1 (belongs to area {}). Scanning all neurons...",
                     cortical_area
                 );
-                Vec::new()
+                
+                // Scan for power neurons (O(n) but only when deterministic ID fails)
+                let mut found = Vec::new();
+                for idx in 0..count {
+                    if neuron_storage.valid_mask()[idx] && neuron_storage.cortical_areas()[idx] == 1 {
+                        found.push(NeuronId(idx as u32));
+                    }
+                }
+                found
             }
         } else {
-            // Neuron ID 1 doesn't exist yet (should not happen if core areas initialized correctly)
+            // Neuron ID 1 doesn't exist - scan for power neurons
             warn!(
-                "[NPU] Power neuron not found at deterministic ID 1 (neuron count: {})",
+                "[NPU] Neuron ID 1 doesn't exist (count: {}). Scanning for power neurons...",
                 count
             );
-            Vec::new()
+            
+            let mut found = Vec::new();
+            for idx in 0..count {
+                if neuron_storage.valid_mask()[idx] && neuron_storage.cortical_areas()[idx] == 1 {
+                    found.push(NeuronId(idx as u32));
+                }
+            }
+            found
         };
         drop(neuron_storage);
         
         let cache_len = power_neurons.len();
+        let used_deterministic = cache_len == 1 && power_neurons[0] == NeuronId(1);
         *self.power_neuron_cache.write().unwrap() = power_neurons;
         
-        info!(
-            "[NPU] Rebuilt power neuron cache: {} neurons (deterministic ID: {}, O(1) lookup)",
-            cache_len,
-            if cache_len > 0 { "1" } else { "none" }
-        );
+        if cache_len == 0 {
+            warn!(
+                "[NPU] ⚠️ No power neurons found! Power injection will fail."
+            );
+        } else if used_deterministic {
+            info!(
+                "[NPU] Rebuilt power neuron cache: {} neurons (deterministic ID: 1, O(1) lookup)",
+                cache_len
+            );
+        } else {
+            info!(
+                "[NPU] Rebuilt power neuron cache: {} neurons (scanned, deterministic ID failed)",
+                cache_len
+            );
+        }
     }
 
     /// Get neuron coordinates (x, y, z)
