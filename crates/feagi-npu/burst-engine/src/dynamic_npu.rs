@@ -489,6 +489,11 @@ where
         dispatch_mut!(self, rebuild_synapse_index())
     }
 
+    /// Rebuild power neuron cache (useful after major structural changes)
+    pub fn rebuild_power_neuron_cache(&mut self) {
+        dispatch_mut!(self, rebuild_power_neuron_cache())
+    }
+
     pub fn register_stdp_mapping(
         &mut self,
         src_cortical_idx: u32,

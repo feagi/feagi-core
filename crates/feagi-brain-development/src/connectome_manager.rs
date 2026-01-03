@@ -476,6 +476,15 @@ impl ConnectomeManager {
         self.cortical_idx_to_id.get(&cortical_idx)
     }
 
+    /// Get all cortical_idx -> cortical_id mappings (for burst loop caching)
+    /// Returns a HashMap of cortical_idx -> cortical_id (base64 string)
+    pub fn get_all_cortical_idx_to_id_mappings(&self) -> ahash::AHashMap<u32, String> {
+        self.cortical_idx_to_id
+            .iter()
+            .map(|(idx, id)| (*idx, id.as_base_64()))
+            .collect()
+    }
+
     /// Get all cortical area IDs
     pub fn get_cortical_area_ids(&self) -> Vec<&CorticalID> {
         self.cortical_areas.keys().collect()
@@ -2156,7 +2165,23 @@ impl ConnectomeManager {
     /// Number of neurons in the area, or 0 if area doesn't exist or NPU not connected
     ///
     pub fn get_neuron_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        self.get_neurons_in_area(cortical_id).len()
+        // Get cortical_idx from cortical_id
+        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
+            Some(idx) => *idx,
+            None => return 0,
+        };
+
+        // Optimized: Get count directly without creating Vec of all neuron IDs
+        // This is much faster for large areas (millions of neurons)
+        if let Some(ref npu) = self.npu {
+            if let Ok(npu_lock) = npu.lock() {
+                npu_lock.get_neurons_in_cortical_area(cortical_idx).len()
+            } else {
+                0
+            }
+        } else {
+            0
+        }
     }
 
     /// Get all cortical areas that have neurons
@@ -2202,15 +2227,40 @@ impl ConnectomeManager {
     ///
     /// Total number of outgoing synapses from neurons in this area
     ///
+    /// # Performance
+    ///
+    /// Optimized to use a single NPU lock for the entire operation to avoid blocking
+    /// the burst loop. For large areas (>1M neurons), this is much faster than
+    /// iterating with individual locks per neuron.
+    ///
     pub fn get_synapse_count_in_area(&self, cortical_id: &CorticalID) -> usize {
-        let neurons = self.get_neurons_in_area(cortical_id);
-        let mut total = 0;
+        // Get cortical_idx from cortical_id
+        let cortical_idx = match self.cortical_id_to_idx.get(cortical_id) {
+            Some(idx) => *idx,
+            None => return 0,
+        };
 
-        for neuron_id in neurons {
-            total += self.get_outgoing_synapses(neuron_id).len();
+        if let Some(ref npu) = self.npu {
+            // CRITICAL: Use single NPU lock for entire operation to avoid blocking burst loop
+            if let Ok(npu_lock) = npu.lock() {
+                // Get all neurons in the area (single lock)
+                let neuron_ids: Vec<u32> = npu_lock
+                    .get_neurons_in_cortical_area(cortical_idx)
+                    .into_iter()
+                    .collect();
+
+                // Count synapses for all neurons in a single lock
+                let mut total = 0;
+                for neuron_id in neuron_ids {
+                    total += npu_lock.get_outgoing_synapses(neuron_id).len();
+                }
+                total
+            } else {
+                0
+            }
+        } else {
+            0
         }
-
-        total
     }
 
     /// Check if two neurons are connected (source → target)

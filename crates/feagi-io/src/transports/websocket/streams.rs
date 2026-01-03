@@ -282,12 +282,12 @@ impl WebSocketStreams {
                 continue;
             }
 
-            // Create CorticalID from area name
+            // Create CorticalID from cortical_id (base64 encoded)
             let cortical_id =
-                CorticalID::try_from_base_64(&area_data.cortical_area_name).map_err(|e| {
+                CorticalID::try_from_base_64(&area_data.cortical_id).map_err(|e| {
                     format!(
                         "Failed to decode CorticalID from base64 '{}': {:?}",
-                        area_data.cortical_area_name, e
+                        area_data.cortical_id, e
                     )
                 })?;
 

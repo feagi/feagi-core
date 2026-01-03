@@ -13,6 +13,7 @@ use crate::types::*;
 use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::ConnectomeManager;
+use feagi_npu_burst_engine::BurstLoopRunner;
 use feagi_structures::genomic::brain_regions::{BrainRegion, RegionID, RegionType};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions};
@@ -72,6 +73,8 @@ pub struct ConnectomeServiceImpl {
     /// Optional reference to RuntimeService for accessing NPU (for connectome I/O)
     #[cfg(feature = "connectome-io")]
     runtime_service: Arc<RwLock<Option<Arc<dyn crate::traits::RuntimeService + Send + Sync>>>>,
+    /// Optional burst runner for refreshing cortical_id cache
+    burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
 }
 
 impl ConnectomeServiceImpl {
@@ -84,6 +87,23 @@ impl ConnectomeServiceImpl {
             current_genome,
             #[cfg(feature = "connectome-io")]
             runtime_service: Arc::new(RwLock::new(None)),
+            burst_runner: None,
+        }
+    }
+
+    /// Set the burst runner for cache refresh
+    pub fn set_burst_runner(&mut self, burst_runner: Arc<RwLock<BurstLoopRunner>>) {
+        self.burst_runner = Some(burst_runner);
+    }
+
+    /// Refresh cortical_id cache in burst runner
+    fn refresh_burst_runner_cache(&self) {
+        if let Some(ref burst_runner) = self.burst_runner {
+            let manager = self.connectome.read();
+            let mappings = manager.get_all_cortical_idx_to_id_mappings();
+            let mapping_count = mappings.len();
+            burst_runner.write().refresh_cortical_id_mappings(mappings);
+            debug!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
 
@@ -256,6 +276,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .add_cortical_area(area)
             .map_err(ServiceError::from)?;
 
+        // Refresh burst runner cache after creating area
+        self.refresh_burst_runner_cache();
+
         // CRITICAL: If parent_region_id is specified, add this cortical area
         // to the parent brain region's cortical_areas set so it persists in genome
         if let Some(region_id) = parent_region_id {
@@ -289,6 +312,9 @@ impl ConnectomeService for ConnectomeServiceImpl {
             .write()
             .remove_cortical_area(&cortical_id_typed)
             .map_err(ServiceError::from)?;
+
+        // Refresh burst runner cache after deleting area
+        self.refresh_burst_runner_cache();
 
         Ok(())
     }

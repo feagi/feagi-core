@@ -14,7 +14,7 @@ use async_trait::async_trait;
 use feagi_brain_development::models::CorticalAreaExt;
 use feagi_brain_development::neuroembryogenesis::Neuroembryogenesis;
 use feagi_brain_development::ConnectomeManager;
-use feagi_npu_burst_engine::ParameterUpdateQueue;
+use feagi_npu_burst_engine::{BurstLoopRunner, ParameterUpdateQueue};
 use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalAreaDimensions, CorticalID};
 use parking_lot::RwLock;
 use serde_json::Value;
@@ -35,6 +35,8 @@ pub struct GenomeServiceImpl {
     genome_load_counter: Arc<RwLock<i32>>,
     /// Timestamp of when the current genome was loaded
     genome_load_timestamp: Arc<RwLock<Option<i64>>>,
+    /// Optional burst runner for refreshing cortical_id cache
+    burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
 }
 
 impl GenomeServiceImpl {
@@ -45,6 +47,7 @@ impl GenomeServiceImpl {
             current_genome: Arc::new(RwLock::new(None)),
             genome_load_counter: Arc::new(RwLock::new(0)),
             genome_load_timestamp: Arc::new(RwLock::new(None)),
+            burst_runner: None,
         }
     }
 
@@ -58,6 +61,23 @@ impl GenomeServiceImpl {
             current_genome: Arc::new(RwLock::new(None)),
             genome_load_counter: Arc::new(RwLock::new(0)),
             genome_load_timestamp: Arc::new(RwLock::new(None)),
+            burst_runner: None,
+        }
+    }
+
+    /// Set the burst runner for cache refresh
+    pub fn set_burst_runner(&mut self, burst_runner: Arc<RwLock<BurstLoopRunner>>) {
+        self.burst_runner = Some(burst_runner);
+    }
+
+    /// Refresh cortical_id cache in burst runner
+    fn refresh_burst_runner_cache(&self) {
+        if let Some(ref burst_runner) = self.burst_runner {
+            let manager = self.connectome.read();
+            let mappings = manager.get_all_cortical_idx_to_id_mappings();
+            let mapping_count = mappings.len();
+            burst_runner.write().refresh_cortical_id_mappings(mappings);
+            info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
 
@@ -221,6 +241,9 @@ impl GenomeService for GenomeServiceImpl {
             let brain_region_count = brain_region_ids.len();
             (cortical_area_count, brain_region_count)
         };
+
+        // Refresh burst runner cache after genome load
+        self.refresh_burst_runner_cache();
 
         Ok(GenomeInfo {
             genome_id: "current".to_string(),
@@ -544,6 +567,9 @@ impl GenomeService for GenomeServiceImpl {
         info!(target: "feagi-services",
               "✅ Created {} cortical areas: {} neurons, {} synapses",
               params.len(), neurons_created, synapses_created);
+
+        // Refresh burst runner cache after creating areas
+        self.refresh_burst_runner_cache();
 
         // Step 5: Fetch and return area information
         let mut created_areas = Vec::new();
@@ -1704,9 +1730,10 @@ impl GenomeServiceImpl {
         let connectome = Arc::clone(&self.connectome);
         let genome_store = Arc::clone(&self.current_genome);
         let cortical_id_owned = cortical_id.to_string();
+        let burst_runner_clone = self.burst_runner.clone();
 
         tokio::task::spawn_blocking(move || {
-            Self::do_localized_rebuild(&cortical_id_owned, changes, connectome, genome_store)
+            Self::do_localized_rebuild(&cortical_id_owned, changes, connectome, genome_store, burst_runner_clone)
         })
         .await
         .map_err(|e| ServiceError::Backend(format!("Rebuild task panicked: {}", e)))?
@@ -1718,6 +1745,7 @@ impl GenomeServiceImpl {
         changes: HashMap<String, Value>,
         connectome: Arc<RwLock<ConnectomeManager>>,
         genome_store: Arc<RwLock<Option<feagi_evolutionary::RuntimeGenome>>>,
+        burst_runner: Option<Arc<RwLock<BurstLoopRunner>>>,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(
             "[STRUCTURAL-REBUILD] Starting localized rebuild for {}",
@@ -1897,6 +1925,11 @@ impl GenomeServiceImpl {
             )
         };
 
+        let total_voxels = new_dimensions.width as usize
+            * new_dimensions.height as usize
+            * new_dimensions.depth as usize;
+        let estimated_neurons = total_voxels * new_density as usize;
+        
         info!(
             "[STRUCTURAL-REBUILD] Dimension: {:?} -> {:?}",
             old_dimensions, new_dimensions
@@ -1905,6 +1938,13 @@ impl GenomeServiceImpl {
             "[STRUCTURAL-REBUILD] Density: {} -> {} neurons/voxel",
             old_density, new_density
         );
+        
+        if estimated_neurons > 1_000_000 {
+            warn!(
+                "[STRUCTURAL-REBUILD] ⚠️ Large area resize: {} neurons estimated. This may take significant time and memory.",
+                estimated_neurons
+            );
+        }
 
         // Step 2: Delete all neurons in the cortical area
         let neurons_to_delete = {
@@ -2019,7 +2059,7 @@ impl GenomeServiceImpl {
         let outgoing_synapses = {
             let mut manager = connectome.write();
             manager
-                .create_neurons_for_area(&cortical_id_typed)
+                .apply_cortical_mapping(&cortical_id_typed)
                 .map_err(|e| {
                     ServiceError::Backend(format!("Failed to rebuild outgoing synapses: {}", e))
                 })?
@@ -2070,10 +2110,59 @@ impl GenomeServiceImpl {
             "[STRUCTURAL-REBUILD] Rebuilt {} total incoming synapses",
             incoming_synapses
         );
+
+        // Step 7: Rebuild synapse index to ensure all new synapses are visible to propagation engine
+        // This is critical for large areas (e.g., 2M+ neurons) to prevent system hangs
+        // IMPORTANT: Release connectome lock before acquiring NPU lock to avoid blocking other operations
+        let npu_arc = {
+            let manager = connectome.read();
+            manager
+                .get_npu()
+                .ok_or_else(|| ServiceError::Backend("NPU not connected".to_string()))?
+                .clone()
+        };
+        
+        info!("[STRUCTURAL-REBUILD] Rebuilding synapse index for {} neurons...", neurons_created);
+        let rebuild_start = std::time::Instant::now();
+        
+        let mut npu_lock = npu_arc
+            .lock()
+            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+        
+        npu_lock.rebuild_synapse_index();
+        
+        // CRITICAL PERFORMANCE: Rebuild power neuron cache after major structural changes
+        // This ensures the cache is accurate after deleting/creating millions of neurons
+        // Without this, the cache might have stale entries that slow down validation
+        info!("[STRUCTURAL-REBUILD] Rebuilding power neuron cache...");
+        let cache_rebuild_start = std::time::Instant::now();
+        npu_lock.rebuild_power_neuron_cache();
+        let cache_rebuild_duration = cache_rebuild_start.elapsed();
+        drop(npu_lock);
+        
+        let rebuild_duration = rebuild_start.elapsed();
+        info!(
+            "[STRUCTURAL-REBUILD] Synapse index rebuild complete in {:.2}s",
+            rebuild_duration.as_secs_f64()
+        );
+        info!(
+            "[STRUCTURAL-REBUILD] Power neuron cache rebuild complete in {:.2}s",
+            cache_rebuild_duration.as_secs_f64()
+        );
+
         info!(
             "[STRUCTURAL-REBUILD] ✅ Complete: {} neurons, {} outgoing, {} incoming synapses",
             neurons_created, outgoing_synapses, incoming_synapses
         );
+
+        // Refresh burst runner cache after structural rebuild (areas may have been resized)
+        if let Some(ref burst_runner) = burst_runner {
+            let manager = connectome.read();
+            let mappings = manager.get_all_cortical_idx_to_id_mappings();
+            let mapping_count = mappings.len();
+            burst_runner.write().refresh_cortical_id_mappings(mappings);
+            info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
+        }
 
         // Return updated info
         Self::get_cortical_area_info_blocking(cortical_id, &connectome)

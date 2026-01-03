@@ -85,6 +85,7 @@ pub fn process_neural_dynamics<T: NeuralValue>(
     neuron_array: &mut impl NeuronStorage<Value = T>,
     burst_count: u64,
 ) -> Result<DynamicsResult> {
+    let dynamics_start = std::time::Instant::now();
     let candidates: Vec<_> = fcl.iter().collect();
 
     if candidates.is_empty() {
@@ -156,6 +157,18 @@ pub fn process_neural_dynamics<T: NeuralValue>(
         fire_queue.add_neuron(neuron.clone());
     }
 
+    let dynamics_duration = dynamics_start.elapsed();
+    
+    // Log if dynamics processing is slow (>20ms)
+    if dynamics_duration.as_millis() > 20 {
+        tracing::warn!(
+            "[PHASE2-DYNAMICS] Slow dynamics processing: {:.2}ms for {} candidates, {} fired",
+            dynamics_duration.as_secs_f64() * 1000.0,
+            candidates.len(),
+            fired_neurons.len()
+        );
+    }
+    
     Ok(DynamicsResult {
         fire_queue,
         neurons_processed: candidates.len(),
