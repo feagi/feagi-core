@@ -1397,11 +1397,100 @@ impl<
 
     /// Register a cortical area name for visualization encoding
     /// This mapping is populated during neuroembryogenesis
+    /// 
+    /// ARCHITECTURE: For core areas (0=_death, 1=_power, 2=_fatigue), automatically creates
+    /// a single neuron (1x1x1) with deterministic ID matching the area ID:
+    /// - Area 0 → neuron ID 0
+    /// - Area 1 → neuron ID 1
+    /// - Area 2 → neuron ID 2
+    /// 
+    /// This eliminates the need to scan for power neurons (O(1) lookup instead of O(n))
     pub fn register_cortical_area(&mut self, area_id: u32, cortical_name: String) {
         self.area_id_to_name
             .write()
             .unwrap()
             .insert(area_id, cortical_name);
+        
+        // CRITICAL ARCHITECTURE: Create core area neurons with deterministic IDs
+        // Core areas (0, 1, 2) get neurons at matching IDs (0, 1, 2)
+        if area_id <= 2 {
+            let neuron_storage = self.neuron_storage.read().unwrap();
+            let neuron_id = NeuronId(area_id);
+            let neuron_idx = neuron_id.0 as usize;
+            
+            // Check if neuron already exists at this ID
+            // CRITICAL: Check count() (actual initialized size), not just capacity()
+            let needs_creation = if neuron_idx < neuron_storage.count() {
+                // Neuron storage has been initialized up to this index - check if neuron exists and is valid
+                let is_valid = neuron_storage.valid_mask().get(neuron_idx).copied().unwrap_or(false);
+                let belongs_to_area = neuron_storage.cortical_areas().get(neuron_idx).copied() == Some(area_id);
+                // If neuron doesn't exist or doesn't belong to this area, needs creation
+                !is_valid || !belongs_to_area
+            } else {
+                // Neuron storage hasn't been initialized up to this index yet - needs creation
+                true
+            };
+            drop(neuron_storage);
+            
+            if needs_creation {
+                // Ensure previous core area neurons exist (must be created in order: 0, then 1, then 2)
+                if area_id > 0 {
+                    let prev_neuron_storage = self.neuron_storage.read().unwrap();
+                    let prev_neuron_idx = (area_id - 1) as usize;
+                    let prev_exists = prev_neuron_idx < prev_neuron_storage.count()
+                        && prev_neuron_storage.valid_mask().get(prev_neuron_idx).copied().unwrap_or(false);
+                    drop(prev_neuron_storage);
+                    
+                    if !prev_exists {
+                        warn!(
+                            "[NPU] Core area {} registered before area {} - core areas should be registered in order (0, 1, 2)",
+                            area_id, area_id - 1
+                        );
+                    }
+                }
+                
+                // Create core area neuron with deterministic ID (1x1x1, single neuron)
+                // Use default neuron parameters suitable for core areas
+                let _neuron_id = self.add_neuron(
+                    T::from_f32(1.0),  // threshold
+                    T::from_f32(0.0),  // threshold_limit (0 = no limit)
+                    0.1,  // leak_coefficient
+                    T::from_f32(0.0),  // resting_potential
+                    0,    // neuron_type
+                    5,    // refractory_period
+                    1.0,  // excitability
+                    0,    // consecutive_fire_limit
+                    0,    // snooze_period
+                    true, // mp_charge_accumulation
+                    area_id, // cortical_area
+                    0,    // x
+                    0,    // y
+                    0,    // z
+                ).unwrap_or_else(|e| {
+                    warn!(
+                        "[NPU] Failed to create core area neuron for area {}: {}",
+                        area_id, e
+                    );
+                    NeuronId(0) // Fallback, but this should not happen
+                });
+                
+                // Verify neuron was created at correct ID
+                let neuron_storage = self.neuron_storage.read().unwrap();
+                let created_idx = _neuron_id.0 as usize;
+                if created_idx != area_id as usize {
+                    warn!(
+                        "[NPU] Core area {} neuron created at ID {} instead of deterministic ID {}",
+                        area_id, created_idx, area_id
+                    );
+                } else {
+                    info!(
+                        "[NPU] Created core area {} neuron with deterministic ID {} (1x1x1)",
+                        area_id, area_id
+                    );
+                }
+                drop(neuron_storage);
+            }
+        }
     }
 
     /// Get the cortical area name for a given area_id
@@ -2661,23 +2750,45 @@ impl<
     /// This scans all neurons to rebuild the cache. Use sparingly - only after
     /// operations that might have invalidated the cache (e.g., batch deletions).
     /// For normal operations, the cache is maintained incrementally.
+    /// Rebuild power neuron cache using deterministic neuron ID
+    /// 
+    /// ARCHITECTURE: Core areas have deterministic neuron IDs:
+    /// - Area 0 (_death) → neuron ID 0
+    /// - Area 1 (_power) → neuron ID 1
+    /// - Area 2 (_fatigue) → neuron ID 2
+    /// 
+    /// This eliminates the need to scan all neurons (O(1) instead of O(n))
     pub fn rebuild_power_neuron_cache(&mut self) {
         let neuron_storage = self.neuron_storage.read().unwrap();
-        let neuron_count = neuron_storage.count();
         
-        let mut power_neurons = Vec::new();
-        for idx in 0..neuron_count {
-            if neuron_storage.valid_mask()[idx] && neuron_storage.cortical_areas()[idx] == 1 {
-                power_neurons.push(NeuronId(idx as u32));
-            }
-        }
+        // CRITICAL PERFORMANCE: Use deterministic neuron ID for power area (area 1 → neuron ID 1)
+        // No scanning needed - just verify neuron ID 1 exists and belongs to power area
+        let power_neuron_id = NeuronId(1);
+        let power_neuron_idx = power_neuron_id.0 as usize;
+        
+        let power_neurons = if power_neuron_idx < neuron_storage.capacity()
+            && neuron_storage.valid_mask().get(power_neuron_idx).copied().unwrap_or(false)
+            && neuron_storage.cortical_areas()[power_neuron_idx] == 1
+        {
+            vec![power_neuron_id]
+        } else {
+            // Power neuron not found at deterministic ID - this should not happen in normal operation
+            warn!(
+                "[NPU] Power neuron not found at deterministic ID 1 (area 1). Cache will be empty."
+            );
+            Vec::new()
+        };
+        
+        let cache_len = power_neurons.len();
+        let has_power_neuron = !power_neurons.is_empty();
         drop(neuron_storage);
         
         *self.power_neuron_cache.write().unwrap() = power_neurons;
         
         info!(
-            "[NPU] Rebuilt power neuron cache: {} neurons",
-            self.power_neuron_cache.read().unwrap().len()
+            "[NPU] Rebuilt power neuron cache: {} neurons (deterministic ID: {})",
+            cache_len,
+            if has_power_neuron { "1" } else { "none" }
         );
     }
 

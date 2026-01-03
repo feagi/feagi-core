@@ -2212,19 +2212,30 @@ impl GenomeServiceImpl {
                 .clone()
         };
         
+        // CRITICAL PERFORMANCE: Release lock between operations to allow burst loop to run
+        // Event-based: Lock held only until each operation completes, then released
+        
+        // CRITICAL PERFORMANCE: Event-based lock management - release lock after each operation completes
+        // This allows burst loop to run between operations, keeping system responsive
+        
         info!("[STRUCTURAL-REBUILD] Rebuilding synapse index for {} neurons...", neurons_created);
-        let rebuild_start = std::time::Instant::now();
-        
-        let mut npu_lock = npu_arc
-            .lock()
-            .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
-        
         let index_rebuild_start = std::time::Instant::now();
-        npu_lock.rebuild_synapse_index();
+        {
+            let mut npu_lock = npu_arc
+                .lock()
+                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+            
+            npu_lock.rebuild_synapse_index();
+            // Lock released here when scope ends (event-based: operation 100% complete)
+        }
         let index_rebuild_duration = index_rebuild_start.elapsed();
+        info!(
+            "[STRUCTURAL-REBUILD] Synapse index rebuild complete in {:.2}s (NPU lock released)",
+            index_rebuild_duration.as_secs_f64()
+        );
         if index_rebuild_duration.as_millis() > 100 {
             warn!(
-                "[STRUCTURAL-REBUILD] ⚠️ Synapse index rebuild took {:.2}s (NPU lock held)",
+                "[STRUCTURAL-REBUILD] ⚠️ Slow synapse index rebuild: {:.2}s",
                 index_rebuild_duration.as_secs_f64()
             );
         }
@@ -2232,25 +2243,29 @@ impl GenomeServiceImpl {
         // CRITICAL PERFORMANCE: Rebuild power neuron cache after major structural changes
         // This ensures the cache is accurate after deleting/creating millions of neurons
         // Without this, the cache might have stale entries that slow down validation
-        info!("[STRUCTURAL-REBUILD] Rebuilding power neuron cache...");
+        // NOTE: This scans all neurons (5.7M) which can be slow - lock held until scan completes
+        info!("[STRUCTURAL-REBUILD] Rebuilding power neuron cache (scanning {} neurons)...", neurons_created);
         let cache_rebuild_start = std::time::Instant::now();
-        npu_lock.rebuild_power_neuron_cache();
-        let cache_rebuild_duration = cache_rebuild_start.elapsed();
-        if cache_rebuild_duration.as_millis() > 100 {
-            warn!(
-                "[STRUCTURAL-REBUILD] ⚠️ Power neuron cache rebuild took {:.2}s (NPU lock held)",
-                cache_rebuild_duration.as_secs_f64()
-            );
+        {
+            let mut npu_lock = npu_arc
+                .lock()
+                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+            
+            npu_lock.rebuild_power_neuron_cache();
+            // Lock released here when scope ends (event-based: operation 100% complete)
         }
-        drop(npu_lock);
-        
-        let rebuild_duration = rebuild_start.elapsed();
+        let cache_rebuild_duration = cache_rebuild_start.elapsed();
         info!(
-            "[STRUCTURAL-REBUILD] Synapse index rebuild complete in {:.2}s (index: {:.2}s, cache: {:.2}s)",
-            rebuild_duration.as_secs_f64(),
-            index_rebuild_duration.as_secs_f64(),
+            "[STRUCTURAL-REBUILD] Power neuron cache rebuild complete in {:.2}s (NPU lock released)",
             cache_rebuild_duration.as_secs_f64()
         );
+        if cache_rebuild_duration.as_millis() > 100 {
+            warn!(
+                "[STRUCTURAL-REBUILD] ⚠️ Slow power neuron cache rebuild: {:.2}s (scanned {} neurons)",
+                cache_rebuild_duration.as_secs_f64(),
+                neurons_created
+            );
+        }
         info!(
             "[STRUCTURAL-REBUILD] Power neuron cache rebuild complete in {:.2}s",
             cache_rebuild_duration.as_secs_f64()
