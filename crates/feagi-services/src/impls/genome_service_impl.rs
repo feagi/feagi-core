@@ -2043,17 +2043,107 @@ impl GenomeServiceImpl {
         }
 
         // Step 4: Recreate neurons with new dimensions/density
-        let neurons_created = {
-            let mut manager = connectome.write();
-            manager
-                .create_neurons_for_area(&cortical_id_typed)
-                .map_err(|e| ServiceError::Backend(format!("Failed to create neurons: {}", e)))?
+        // CRITICAL PERFORMANCE FIX: Extract data from connectome, release lock, then create neurons
+        // This prevents blocking API requests during the multi-second neuron creation process
+        let (cortical_idx, area_data) = {
+            let manager = connectome.read();
+            let area = manager.get_cortical_area(&cortical_id_typed)
+                .ok_or_else(|| ServiceError::NotFound {
+                    resource: "CorticalArea".to_string(),
+                    id: cortical_id.to_string(),
+                })?;
+            let cortical_idx = manager.get_cortical_idx(&cortical_id_typed)
+                .ok_or_else(|| ServiceError::Backend("Cortical index not found".to_string()))?;
+            
+            // Extract all data needed for neuron creation
+            use feagi_brain_development::models::CorticalAreaExt;
+            (
+                cortical_idx,
+                (
+                    area.dimensions,
+                    area.neurons_per_voxel(),
+                    area.firing_threshold(),
+                    area.firing_threshold_increment_x(),
+                    area.firing_threshold_increment_y(),
+                    area.firing_threshold_increment_z(),
+                    area.firing_threshold_limit(),
+                    area.leak_coefficient(),
+                    area.neuron_excitability(),
+                    area.refractory_period(),
+                    area.consecutive_fire_count() as u16,
+                    area.snooze_period(),
+                    area.mp_charge_accumulation(),
+                )
+            )
         };
-
+        
+        // Release connectome lock before creating neurons (NPU lock will be held, but connectome is free for API)
+        let npu_arc_for_creation = {
+            let manager = connectome.read();
+            manager.get_npu()
+                .ok_or_else(|| ServiceError::Backend("NPU not connected".to_string()))?
+                .clone()
+        };
+        
+        // CRITICAL PERFORMANCE: Event-based lock management
+        // Lock is held until create_cortical_area_neurons() completes (100% done)
+        // Timing varies by hardware/topology - we measure actual time, not estimate
+        // NOTE: Connectome lock is already released, so API can query connectome data
+        let total_neurons = area_data.0.width * area_data.0.height * area_data.0.depth * area_data.1;
+        
+        if total_neurons > 1_000_000 {
+            info!(
+                "[STRUCTURAL-REBUILD] Creating large area ({} neurons) - NPU lock held until creation completes",
+                total_neurons
+            );
+        }
+        
+        let creation_start = std::time::Instant::now();
+        let neurons_created = {
+            let mut npu_lock = npu_arc_for_creation
+                .lock()
+                .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
+            
+            // Create neurons - lock held until this function returns (event-based completion)
+            let result = npu_lock.create_cortical_area_neurons(
+                cortical_idx,
+                area_data.0.width,
+                area_data.0.height,
+                area_data.0.depth,
+                area_data.1,
+                area_data.2,
+                area_data.3,
+                area_data.4,
+                area_data.5,
+                area_data.6,
+                area_data.7,
+                0.0,
+                0,
+                area_data.9,
+                area_data.8,
+                area_data.10,
+                area_data.11,
+                area_data.12,
+            )
+            .map_err(|e| ServiceError::Backend(format!("NPU neuron creation failed: {}", e)))?;
+            
+            // Lock automatically released here when function returns (creation 100% complete)
+            result
+        };
+        
+        let creation_duration = creation_start.elapsed();
         info!(
-            "[STRUCTURAL-REBUILD] Created {} new neurons",
-            neurons_created
+            "[STRUCTURAL-REBUILD] Created {} neurons in {:.2}s (NPU lock held until completion)",
+            neurons_created,
+            creation_duration.as_secs_f64()
         );
+        
+        if creation_duration.as_secs() > 1 {
+            warn!(
+                "[STRUCTURAL-REBUILD] ⚠️ Long creation time: {:.2}s - burst loop was blocked during this period",
+                creation_duration.as_secs_f64()
+            );
+        }
 
         // Step 5: Rebuild outgoing synapses (this area -> others)
         let outgoing_synapses = {
@@ -2129,7 +2219,15 @@ impl GenomeServiceImpl {
             .lock()
             .map_err(|e| ServiceError::Backend(format!("Failed to lock NPU: {}", e)))?;
         
+        let index_rebuild_start = std::time::Instant::now();
         npu_lock.rebuild_synapse_index();
+        let index_rebuild_duration = index_rebuild_start.elapsed();
+        if index_rebuild_duration.as_millis() > 100 {
+            warn!(
+                "[STRUCTURAL-REBUILD] ⚠️ Synapse index rebuild took {:.2}s (NPU lock held)",
+                index_rebuild_duration.as_secs_f64()
+            );
+        }
         
         // CRITICAL PERFORMANCE: Rebuild power neuron cache after major structural changes
         // This ensures the cache is accurate after deleting/creating millions of neurons
@@ -2138,12 +2236,20 @@ impl GenomeServiceImpl {
         let cache_rebuild_start = std::time::Instant::now();
         npu_lock.rebuild_power_neuron_cache();
         let cache_rebuild_duration = cache_rebuild_start.elapsed();
+        if cache_rebuild_duration.as_millis() > 100 {
+            warn!(
+                "[STRUCTURAL-REBUILD] ⚠️ Power neuron cache rebuild took {:.2}s (NPU lock held)",
+                cache_rebuild_duration.as_secs_f64()
+            );
+        }
         drop(npu_lock);
         
         let rebuild_duration = rebuild_start.elapsed();
         info!(
-            "[STRUCTURAL-REBUILD] Synapse index rebuild complete in {:.2}s",
-            rebuild_duration.as_secs_f64()
+            "[STRUCTURAL-REBUILD] Synapse index rebuild complete in {:.2}s (index: {:.2}s, cache: {:.2}s)",
+            rebuild_duration.as_secs_f64(),
+            index_rebuild_duration.as_secs_f64(),
+            cache_rebuild_duration.as_secs_f64()
         );
         info!(
             "[STRUCTURAL-REBUILD] Power neuron cache rebuild complete in {:.2}s",
