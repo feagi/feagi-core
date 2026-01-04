@@ -134,20 +134,20 @@ impl<T: NeuralValue> NeuronArray<T> {
         refractory_period: u16,
         excitability: f32,
     ) -> usize {
-        // Call the full version with defaults
+        // Call the full version with defaults (MAX encoding for no limits)
         NeuronStorage::add_neuron(
             self,
             threshold,
             T::max_value(), // threshold_limit (MAX = no limit, SIMD-friendly encoding)
             leak,
-            T::zero(), // resting potential
-            0,         // neuron type (excitatory)
+            T::zero(),      // resting potential
+            0,              // neuron type (excitatory)
             refractory_period,
             excitability,
-            u16::MAX,  // consecutive fire limit (MAX = unlimited, SIMD-friendly encoding)
-            0,         // snooze period
-            true,      // mp_charge_accumulation
-            0,         // cortical area
+            u16::MAX,       // consecutive fire limit (MAX = unlimited, SIMD-friendly encoding)
+            0,              // snooze period
+            true,           // mp_charge_accumulation
+            0,              // cortical area
             0,
             0,
             0, // x, y, z coords

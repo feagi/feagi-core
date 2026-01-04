@@ -396,7 +396,7 @@ impl<
     pub fn add_neuron(
         &mut self,
         threshold: T,          // Quantized threshold
-        threshold_limit: T,    // Quantized threshold limit (0 = no limit)
+        threshold_limit: T,    // Quantized threshold limit (MAX = no limit, SIMD-friendly encoding)
         leak_coefficient: f32, // Kept as f32 for precision
         resting_potential: T,  // Quantized resting potential
         neuron_type: i32,
@@ -481,7 +481,7 @@ impl<
     pub fn add_neurons_batch(
         &mut self,
         thresholds: Vec<T>,          // Quantized thresholds
-        threshold_limits: Vec<T>,    // Quantized threshold limits (0 = no limit)
+        threshold_limits: Vec<T>,    // Quantized threshold limits (MAX = no limit, SIMD-friendly encoding)
         leak_coefficients: Vec<f32>, // Kept as f32 for precision
         resting_potentials: Vec<T>,  // Quantized resting potentials
         neuron_types: Vec<i32>,
@@ -604,7 +604,7 @@ impl<
     /// * `threshold_increment_x` - Threshold increment per X position
     /// * `threshold_increment_y` - Threshold increment per Y position
     /// * `threshold_increment_z` - Threshold increment per Z position
-    /// * `default_threshold_limit` - Default firing threshold limit (maximum MP to fire, 0 = no limit)
+    /// * `default_threshold_limit` - Default firing threshold limit (maximum MP to fire, MAX = no limit, SIMD-friendly encoding)
     /// * `default_leak_coefficient` - Default leak rate
     /// * `default_resting_potential` - Default resting potential
     /// * `default_neuron_type` - Default neuron type
@@ -786,7 +786,13 @@ impl<
                         // Apply to all neurons in this voxel
                         for _ in 0..neurons_per_voxel {
                             thresholds.push(T::from_f32(threshold_at_pos));
-                            threshold_limits.push(T::from_f32(default_threshold_limit));
+                            // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
+                            let threshold_limit = if default_threshold_limit == 0.0 {
+                                T::max_value()
+                            } else {
+                                T::from_f32(default_threshold_limit)
+                            };
+                            threshold_limits.push(threshold_limit);
                         }
                     }
                 }
@@ -794,7 +800,13 @@ impl<
         } else {
             // Uniform thresholds (no spatial gradient) - faster path
             thresholds.resize(total_neurons, T::from_f32(default_threshold));
-            threshold_limits.resize(total_neurons, T::from_f32(default_threshold_limit));
+            // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
+            let threshold_limit = if default_threshold_limit == 0.0 {
+                T::max_value()
+            } else {
+                T::from_f32(default_threshold_limit)
+            };
+            threshold_limits.resize(total_neurons, threshold_limit);
         }
         
         // ✅ SIMD-OPTIMIZED: Fill uniform values with bulk operations (LLVM auto-vectorizes!)
@@ -803,7 +815,13 @@ impl<
         let neuron_types = vec![default_neuron_type; total_neurons];
         let refractory_periods = vec![default_refractory_period; total_neurons];
         let excitabilities = vec![default_excitability; total_neurons];
-        let consecutive_fire_limits = vec![default_consecutive_fire_limit; total_neurons];
+        // SIMD-friendly encoding: 0 means no limit, convert to MAX
+        let consecutive_fire_limit = if default_consecutive_fire_limit == 0 {
+            u16::MAX
+        } else {
+            default_consecutive_fire_limit
+        };
+        let consecutive_fire_limits = vec![consecutive_fire_limit; total_neurons];
         let snooze_periods = vec![default_snooze_period; total_neurons];
         let mp_charge_accumulations = vec![default_mp_charge_accumulation; total_neurons];
         let cortical_areas = vec![cortical_idx; total_neurons];
@@ -1544,20 +1562,21 @@ impl<
                 
                 // Create core area neuron with deterministic ID (1x1x1, single neuron)
                 // Use default neuron parameters suitable for core areas
-                let _neuron_id = self.add_neuron(T::from_f32(1.0),  // threshold
-                    T::from_f32(0.0),  // threshold_limit (0 = no limit)
-                    0.1,  // leak_coefficient
+                let _neuron_id = self.add_neuron(
+                    T::from_f32(1.0),  // threshold
+                    T::max_value(),    // threshold_limit (MAX = no limit, SIMD-friendly encoding)
+                    0.1,               // leak_coefficient
                     T::from_f32(0.0),  // resting_potential
-                    0,    // neuron_type
-                    5,    // refractory_period
-                    1.0,  // excitability
-                    0,    // consecutive_fire_limit
-                    0,    // snooze_period
-                    true, // mp_charge_accumulation
-                    area_id, // cortical_area
-                    0,    // x
-                    0,    // y
-                    0,    // z
+                    0,                 // neuron_type
+                    5,                 // refractory_period
+                    1.0,               // excitability
+                    u16::MAX,          // consecutive_fire_limit (MAX = unlimited, SIMD-friendly encoding)
+                    0,                 // snooze_period
+                    true,              // mp_charge_accumulation
+                    area_id,           // cortical_area
+                    0,                 // x
+                    0,                 // y
+                    0,                 // z
                 ).unwrap_or_else(|e| {
                     warn!(
                         "[NPU] Failed to create core area neuron for area {}: {}",
@@ -3779,10 +3798,10 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         let id1 = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, 0, 0, 0)
             .unwrap();
         let id2 = npu
-            .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, 1, 0, 0)
+            .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, 1, 0, 0)
             .unwrap();
 
         assert_eq!(id1.0, 0);
@@ -3800,7 +3819,7 @@ mod tests {
 
         for i in 0..10 {
             let id = npu
-                .add_neuron(1.0, 0.0, 0.1, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+                .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, i, 0, 0)
                 .unwrap();
             assert_eq!(id.0, i);
         }
@@ -3818,7 +3837,7 @@ mod tests {
 
         // High threshold
         let _n1 = npu
-            .add_neuron(10.0, 0.0, 0.0, 0.0, 0, 0, 1.0, 0, 0, true, 1, 0, 0, 0)
+            .add_neuron(10.0, f32::MAX, 0.0, 0.0, 0, 0, 1.0, u16::MAX, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // High leak

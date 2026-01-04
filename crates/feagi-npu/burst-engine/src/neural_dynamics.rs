@@ -739,7 +739,7 @@ mod tests {
         let mut neurons = StdNeuronArray::new(10);
 
         let id = neurons
-            .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1,1.00,1.01,1.02)
+            .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1,0, 0, 0)
             .unwrap();
 
         let mut fcl = FireCandidateList::new();
@@ -757,7 +757,7 @@ mod tests {
         let mut neurons = StdNeuronArray::new(10);
 
         let id = neurons
-            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1,1.00,1.01,1.02)
+            .add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1,0, 0, 0)
             .unwrap();
 
         // Set refractory countdown
@@ -814,7 +814,7 @@ mod tests {
         let mut ids = Vec::new();
         for i in 0..10 {
             let id = neurons
-                .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1,1.00,1.01,1.02)
+                .add_neuron(1.0, f32::MAX, 0.1, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1,0, 0, 0)
                 .unwrap();
             ids.push(id);
         }
