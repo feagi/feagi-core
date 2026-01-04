@@ -161,6 +161,77 @@ fn bench_ci_cpu_backend(c: &mut Criterion) {
     group.finish();
 }
 
+fn bench_large_candidate_counts(c: &mut Criterion) {
+    use feagi_npu_burst_engine::backend::{ComputeBackend, CPUBackend};
+
+    let mut group = c.benchmark_group("large_candidates");
+    group.sample_size(10); // Fewer samples for large tests
+    group.warm_up_time(Duration::from_millis(1000));
+    group.measurement_time(Duration::from_secs(5));
+
+    // Match production scenario: 8M neurons (512x512x22 area ≈ 5.7M, but use 8M for safety)
+    let neuron_count = 8_000_000;
+    
+    // Create neuron array with proper initialization
+    let mut neuron_array = NeuronArray::new(neuron_count);
+    for _i in 0..neuron_count {
+        neuron_array.membrane_potentials.push(0.0);
+        neuron_array.thresholds.push(10.0);
+        neuron_array.leak_coefficients.push(0.1);
+        neuron_array.resting_potentials.push(0.0);
+        neuron_array.neuron_types.push(0);
+        neuron_array.refractory_periods.push(0);
+        neuron_array.refractory_countdowns.push(0);
+        neuron_array.excitabilities.push(1.0);
+        neuron_array.consecutive_fire_counts.push(0);
+        neuron_array.consecutive_fire_limits.push(0);
+        neuron_array.snooze_periods.push(0);
+        neuron_array.mp_charge_accumulation.push(false);
+        neuron_array.cortical_areas.push(0);
+        neuron_array.coordinates.extend_from_slice(&[0, 0, 0]);
+        neuron_array.valid_mask.push(true);
+    }
+    neuron_array.count = neuron_count;
+
+    let candidate_counts = vec![
+        100_000,      // 100k candidates
+        500_000,      // 500k candidates
+        1_000_000,    // 1M candidates
+        2_500_000,    // 2.5M candidates (production scenario)
+    ];
+
+    for candidate_count in candidate_counts {
+        group.bench_with_input(
+            BenchmarkId::new("neural_dynamics", format!("{}_candidates", candidate_count)),
+            &candidate_count,
+            |b, &count| {
+                let mut backend: CPUBackend = CPUBackend::new();
+                let mut fcl = FireCandidateList::new();
+                
+                // Create sparse candidate distribution (realistic scenario)
+                // Distribute candidates across the neuron array to simulate real-world sparse patterns
+                for i in 0..count {
+                    // Use modulo to distribute candidates across the neuron array
+                    let neuron_id = ((i as u64 * neuron_count as u64) / count as u64) as u32;
+                    // Use small contribution (0.5) to simulate realistic synaptic inputs
+                    fcl.add_candidate(NeuronId(neuron_id), 0.5);
+                }
+                
+                b.iter(|| {
+                    let _ = <CPUBackend as ComputeBackend<f32, NeuronArray<f32>, SynapseArray>>::process_neural_dynamics(
+                    &mut backend,
+                    black_box(&fcl),
+                    black_box(&mut neuron_array),
+                    black_box(1),
+                );
+                });
+            },
+        );
+    }
+
+    group.finish();
+}
+
 fn criterion_config() -> Criterion {
     Criterion::default()
         .warm_up_time(Duration::from_millis(500))
@@ -171,7 +242,7 @@ fn criterion_config() -> Criterion {
 criterion_group! {
     name = ci_microbench;
     config = criterion_config();
-    targets = bench_ci_cpu_backend
+    targets = bench_ci_cpu_backend, bench_large_candidate_counts
 }
 criterion_main!(ci_microbench);
 

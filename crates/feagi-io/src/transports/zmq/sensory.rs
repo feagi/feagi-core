@@ -483,25 +483,18 @@ impl SensoryStream {
             .sum();
         
         // CRITICAL: For very large injections (>100k neurons), use batched processing
-        // BUT: Keep NPU lock held for entire injection to preserve temporal integrity
-        // Releasing the lock between batches allows burst loop to run and split data across ticks
+        // Release NPU lock between batches to allow burst loop to run
+        // This prevents blocking the burst loop for extended periods
         if total_neurons > 100_000 {
-            // Acquire NPU lock ONCE for entire injection (preserves temporal integrity)
-            let lock_acquisition_start = std::time::Instant::now();
-            let mut npu = npu_arc.lock().unwrap();
-            let lock_duration = lock_acquisition_start.elapsed();
-            if lock_duration.as_millis() > 10 {
-                warn!(
-                    "[ZMQ-SENSORY] ⚠️ Slow NPU lock acquisition: {:.2}ms (large injection: {} neurons)",
-                    lock_duration.as_secs_f64() * 1000.0,
-                    total_neurons
-                );
+            let injection_start = std::time::Instant::now();
+            
+            // Clear pending injections once before batching (with brief lock)
+            {
+                let mut npu = npu_arc.lock().unwrap();
+                npu.clear_pending_sensory_injections();
             }
             
-            // Clear pending injections once before batching
-            npu.clear_pending_sensory_injections();
-            
-            // Process each cortical area in batches (lock held throughout)
+            // Process each cortical area in batches (lock acquired/released per batch)
             for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
                 let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
                 let num_neurons = x_coords.len();
@@ -517,7 +510,7 @@ impl SensoryStream {
                     None
                 };
                 
-                // Process in batches (lock held throughout - preserves temporal integrity)
+                // Process in batches (lock acquired/released per batch to allow burst loop to run)
                 let num_batches = (num_neurons + BATCH_SIZE - 1) / BATCH_SIZE;
                 let batch_start_time = std::time::Instant::now();
                 
@@ -543,14 +536,28 @@ impl SensoryStream {
                     );
                     let _batch_guard = batch_span.enter();
                     
+                    // Acquire lock, inject batch, release lock (allows burst loop to run between batches)
                     let inject_start = std::time::Instant::now();
-                    let injected = npu.inject_sensory_xyzp_arrays_by_id(
-                        cortical_id,
-                        batch_x,
-                        batch_y,
-                        batch_z,
-                        batch_p,
-                    );
+                    let injected = {
+                        let lock_start = std::time::Instant::now();
+                        let mut npu = npu_arc.lock().unwrap();
+                        let lock_duration = lock_start.elapsed();
+                        if lock_duration.as_millis() > 10 {
+                            warn!(
+                                "[ZMQ-SENSORY] ⚠️ Slow NPU lock acquisition: {:.2}ms (batch {}/{})",
+                                lock_duration.as_secs_f64() * 1000.0,
+                                batch_idx + 1,
+                                num_batches
+                            );
+                        }
+                        npu.inject_sensory_xyzp_arrays_by_id(
+                            cortical_id,
+                            batch_x,
+                            batch_y,
+                            batch_z,
+                            batch_p,
+                        )
+                    };
                     let batch_duration = inject_start.elapsed();
                     total_injected += injected;
                     
@@ -572,11 +579,11 @@ impl SensoryStream {
                     }
                 }
             }
-            // Lock released here - entire frame injected atomically
-            let total_duration = lock_acquisition_start.elapsed();
+            // All batches complete - lock was released between batches
+            let total_duration = injection_start.elapsed();
             if total_duration.as_millis() > 500 {
                 warn!(
-                    "[ZMQ-SENSORY] ⚠️ Large injection took {:.2}ms ({} neurons) - may block burst loop",
+                    "[ZMQ-SENSORY] ⚠️ Large injection took {:.2}ms ({} neurons) - lock released between batches",
                     total_duration.as_secs_f64() * 1000.0,
                     total_injected
                 );
