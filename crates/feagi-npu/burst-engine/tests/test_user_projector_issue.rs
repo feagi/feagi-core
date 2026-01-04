@@ -25,13 +25,13 @@ fn test_projector_psp_division_issue() {
     // Create neuron in Area A (source)
     let neuron_a = npu.add_neuron(
         10.0,  // threshold (high so it only fires from direct injection)
-        0.0,   // threshold_limit (0 = no limit)
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         0.0,   // leak
         0.0,   // resting_potential
         0,     // neuron_type
         0,     // refractory_period
         1.0,   // excitability
-        0,     // consecutive_fire_limit
+        u16::MAX, // consecutive_fire_limit (MAX = unlimited, SIMD-friendly encoding)
         0,     // snooze_period
         false, // mp_charge_accumulation
         10,    // cortical_area (A)
@@ -43,13 +43,13 @@ fn test_projector_psp_division_issue() {
     for i in 0..10 {
         let neuron = npu.add_neuron(
             10.0,  // threshold = 10
-            0.0,   // threshold_limit (0 = no limit)
+            f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
             0.0,   // leak
             0.0,   // resting_potential
             0,     // neuron_type
             0,     // refractory_period
             1.0,   // excitability
-            0,     // consecutive_fire_limit
+            u16::MAX, // consecutive_fire_limit (MAX = unlimited, SIMD-friendly encoding)
             0,     // snooze_period
             false, // mp_charge_accumulation = FALSE
             11,    // cortical_area (B)

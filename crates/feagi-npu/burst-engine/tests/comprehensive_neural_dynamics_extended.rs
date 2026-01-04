@@ -40,15 +40,21 @@ fn add_test_neuron(
     cortical_area: u32,
     consecutive_fire_limit: u16,
 ) -> NeuronId {
+    // SIMD-friendly encoding: 0 means no limit, convert to MAX
+    let consecutive_fire_limit_encoded = if consecutive_fire_limit == 0 {
+        u16::MAX
+    } else {
+        consecutive_fire_limit
+    };
     npu.add_neuron(
         threshold,
-        0.0, // threshold_limit (0 = no limit)
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         leak,
         0.0, // resting_potential
         0,   // neuron_type
         refractory,
         1.0, // excitability (always fire if threshold met)
-        consecutive_fire_limit,
+        consecutive_fire_limit_encoded,
         0,   // snooze_period
         mp_accumulation,
         cortical_area,

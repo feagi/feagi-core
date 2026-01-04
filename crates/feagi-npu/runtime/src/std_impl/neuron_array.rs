@@ -109,7 +109,7 @@ impl<T: NeuralValue> NeuronArray<T> {
         // Resize to capacity with default values
         result.membrane_potentials.resize(capacity, T::zero());
         result.thresholds.resize(capacity, T::from_f32(1.0));
-        result.threshold_limits.resize(capacity, T::zero()); // 0 = no limit
+        result.threshold_limits.resize(capacity, T::max_value()); // MAX = no limit (SIMD-friendly encoding)
         result.leak_coefficients.resize(capacity, 0.1);
         result.resting_potentials.resize(capacity, T::zero());
         result.neuron_types.resize(capacity, 0);
@@ -117,7 +117,7 @@ impl<T: NeuralValue> NeuronArray<T> {
         result.refractory_countdowns.resize(capacity, 0);
         result.excitabilities.resize(capacity, 1.0);
         result.consecutive_fire_counts.resize(capacity, 0);
-        result.consecutive_fire_limits.resize(capacity, 0);
+        result.consecutive_fire_limits.resize(capacity, u16::MAX); // MAX = no limit (SIMD-friendly encoding)
         result.snooze_periods.resize(capacity, 0);
         result.mp_charge_accumulation.resize(capacity, true);
         result.cortical_areas.resize(capacity, 0);
@@ -138,16 +138,16 @@ impl<T: NeuralValue> NeuronArray<T> {
         NeuronStorage::add_neuron(
             self,
             threshold,
-            T::zero(), // threshold_limit (0 = no limit)
+            T::max_value(), // threshold_limit (MAX = no limit, SIMD-friendly encoding)
             leak,
             T::zero(), // resting potential
             0,         // neuron type (excitatory)
             refractory_period,
             excitability,
-            0,    // consecutive fire limit (unlimited)
-            0,    // snooze period
-            true, // mp_charge_accumulation
-            0,    // cortical area
+            u16::MAX,  // consecutive fire limit (MAX = unlimited, SIMD-friendly encoding)
+            0,         // snooze period
+            true,      // mp_charge_accumulation
+            0,         // cortical area
             0,
             0,
             0, // x, y, z coords

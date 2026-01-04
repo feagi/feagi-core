@@ -121,7 +121,7 @@ fn test_firing_threshold_no_gradient() {
         1,      // neurons_per_voxel
         50.0,   // base_threshold
         0.0, 0.0, 0.0, // no spatial gradient
-        0.0,    // threshold_limit
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         0.0, 0.0, 0, 0, 1.0, 0, 0, false,
     ).expect("Neuron creation failed");
     

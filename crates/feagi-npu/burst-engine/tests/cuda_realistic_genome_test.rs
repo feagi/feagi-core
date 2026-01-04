@@ -240,7 +240,7 @@ mod cuda_realistic_genome_tests {
         let neuron_types = vec![0i32; neuron_array.count];
         let refractory_periods = neuron_array.refractory_periods[..neuron_array.count].to_vec();
         let excitabilities = neuron_array.excitabilities[..neuron_array.count].to_vec();
-        let consecutive_fire_limits = vec![0u16; neuron_array.count];
+        let consecutive_fire_limits = vec![u16::MAX; neuron_array.count]; // MAX = no limit (SIMD-friendly encoding)
         let snooze_periods = vec![0u16; neuron_array.count];
         let mp_charge_accumulations = vec![true; neuron_array.count];
         let cortical_areas = neuron_array.cortical_areas[..neuron_array.count].to_vec();

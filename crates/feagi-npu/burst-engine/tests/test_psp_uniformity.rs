@@ -30,13 +30,13 @@ fn test_psp_uniformity_false_divides_psp() {
     // Create source neuron in area A
     let source_neuron = npu.add_neuron(
         1.0,   // threshold
-        0.0,   // threshold_limit (0 = no limit)
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         0.0,   // leak
         0.0,   // resting
         0,     // neuron_type
         0,     // refractory
         1.0,   // excitability
-        0,     // consecutive_fire_limit
+        u16::MAX, // consecutive_fire_limit (MAX = unlimited, SIMD-friendly encoding)
         0,     // snooze
         true,  // mp_charge_accumulation
         2,     // cortical_area (area A)

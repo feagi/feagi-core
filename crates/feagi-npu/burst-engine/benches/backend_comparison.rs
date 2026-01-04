@@ -34,7 +34,7 @@ fn create_test_genome(
         neuron_array.excitabilities[i] = 1.0;
         neuron_array.refractory_periods[i] = 0;
         neuron_array.refractory_countdowns[i] = 0;
-        neuron_array.consecutive_fire_limits[i] = 0;
+        neuron_array.consecutive_fire_limits[i] = u16::MAX; // MAX = no limit (SIMD-friendly encoding)
         neuron_array.consecutive_fire_counts[i] = 0;
         neuron_array.valid_mask[i] = true;
     }

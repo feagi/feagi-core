@@ -1544,8 +1544,7 @@ impl<
                 
                 // Create core area neuron with deterministic ID (1x1x1, single neuron)
                 // Use default neuron parameters suitable for core areas
-                let _neuron_id = self.add_neuron(
-                    T::from_f32(1.0),  // threshold
+                let _neuron_id = self.add_neuron(T::from_f32(1.0),  // threshold
                     T::from_f32(0.0),  // threshold_limit (0 = no limit)
                     0.1,  // leak_coefficient
                     T::from_f32(0.0),  // resting_potential
@@ -4080,13 +4079,13 @@ mod tests {
 
         // Add 5 power neurons (cortical_area=1)
         for i in 0..5 {
-            npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+            npu.add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, i, 0, 0)
                 .unwrap();
         }
 
         // Add 5 regular neurons (cortical_area=2)
         for i in 0..5 {
-            npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, i, 0, 0)
+            npu.add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 2, i, 0, 0)
                 .unwrap();
         }
 
@@ -4105,7 +4104,7 @@ mod tests {
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
         // Add power neuron with high threshold
-        npu.add_neuron(5.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+        npu.add_neuron(5.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // Set high power amount
@@ -4356,7 +4355,7 @@ mod tests {
         npu.register_cortical_area(2, CoreCorticalType::Death.to_cortical_id().as_base_64());
 
         // Add only regular neurons (no power area)
-        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 2, 0, 0, 0)
+        npu.add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 2, 0, 0, 0)
             .unwrap();
 
         let result = npu.process_burst().unwrap();
@@ -4385,7 +4384,7 @@ mod tests {
 
         // Simulate genome load: Add power neurons
         for i in 0..10 {
-            npu.add_neuron(0.5, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, i, 0, 0)
+            npu.add_neuron(0.5, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, i, 0, 0)
                 .unwrap();
         }
 
@@ -4523,7 +4522,7 @@ mod tests {
             );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
-        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+        npu.add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         npu.set_visualization_subscribers(true);
@@ -4577,7 +4576,7 @@ mod tests {
             );
         npu.register_cortical_area(1, CoreCorticalType::Power.to_cortical_id().as_base_64());
 
-        npu.add_neuron(1.0, 0.0, 0.0, 0.0, 0, 5, 1.0, 0, 0, true, 1, 0, 0, 0)
+        npu.add_neuron(1.0, f32::MAX, 0.0, 0.0, 0, 5, 1.0, u16::MAX, 0, true, 1, 0, 0, 0)
             .unwrap();
 
         // Before any burst
@@ -5001,8 +5000,7 @@ macro_rules! dispatch {
 //         z: u32,
 //     ) -> Result<NeuronId> {
 //         match self {
-//             DynamicNPU::F32(npu) => npu.add_neuron(
-//                 <f32 as feagi_types::NeuralValue>::from_f32(threshold),
+//             DynamicNPU::F32(npu) => npu.add_neuron(//                 <f32 as feagi_types::NeuralValue>::from_f32(threshold),
 //                 leak_coefficient,
 //                 <f32 as feagi_types::NeuralValue>::from_f32(resting_potential),
 //                 neuron_type,
@@ -5014,8 +5012,7 @@ macro_rules! dispatch {
 //                 cortical_area,
 //                 x, y, z,
 //             ),
-//             DynamicNPU::INT8(npu) => npu.add_neuron(
-//                 <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(threshold),
+//             DynamicNPU::INT8(npu) => npu.add_neuron(//                 <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(threshold),
 //                 leak_coefficient,
 //                 <feagi_types::INT8Value as feagi_types::NeuralValue>::from_f32(resting_potential),
 //                 neuron_type,

@@ -72,10 +72,16 @@ impl NeuronService for NeuronServiceImpl {
             .and_then(|v| v.as_f64())
             .unwrap_or(1.0) as f32;
 
-        let consecutive_fire_limit = props
+        // SIMD-friendly encoding: 0 means no limit, convert to MAX
+        let consecutive_fire_limit_raw = props
             .and_then(|p| p.get("consecutive_fire_limit"))
             .and_then(|v| v.as_i64())
-            .unwrap_or(100) as u16;
+            .unwrap_or(0) as u16;
+        let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
+            u16::MAX // SIMD-friendly encoding: MAX = no limit
+        } else {
+            consecutive_fire_limit_raw
+        };
 
         let snooze_length = props
             .and_then(|p| p.get("snooze_length"))
@@ -87,10 +93,16 @@ impl NeuronService for NeuronServiceImpl {
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
 
-        let firing_threshold_limit = props
+        // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
+        let firing_threshold_limit_raw = props
             .and_then(|p| p.get("firing_threshold_limit"))
             .and_then(|v| v.as_f64())
             .unwrap_or(0.0) as f32;
+        let firing_threshold_limit = if firing_threshold_limit_raw == 0.0 {
+            f32::MAX // SIMD-friendly encoding: MAX = no limit
+        } else {
+            firing_threshold_limit_raw
+        };
 
         // Add neuron via ConnectomeManager
         let neuron_id = manager

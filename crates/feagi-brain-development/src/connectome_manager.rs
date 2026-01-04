@@ -1627,7 +1627,13 @@ impl ConnectomeManager {
         let firing_threshold_increment_x = area.firing_threshold_increment_x();
         let firing_threshold_increment_y = area.firing_threshold_increment_y();
         let firing_threshold_increment_z = area.firing_threshold_increment_z();
-        let firing_threshold_limit = area.firing_threshold_limit();
+        // SIMD-friendly encoding: 0.0 means no limit, convert to MAX
+        let firing_threshold_limit_raw = area.firing_threshold_limit();
+        let firing_threshold_limit = if firing_threshold_limit_raw == 0.0 {
+            f32::MAX // SIMD-friendly encoding: MAX = no limit
+        } else {
+            firing_threshold_limit_raw
+        };
         
         // DEBUG: Log the increment values
         if firing_threshold_increment_x != 0.0 || firing_threshold_increment_y != 0.0 || firing_threshold_increment_z != 0.0 {
@@ -1658,7 +1664,13 @@ impl ConnectomeManager {
         let leak_coefficient = area.leak_coefficient();
         let excitability = area.neuron_excitability();
         let refractory_period = area.refractory_period();
-        let consecutive_fire_limit = area.consecutive_fire_count() as u16;
+        // SIMD-friendly encoding: 0 means no limit, convert to MAX
+        let consecutive_fire_limit_raw = area.consecutive_fire_count() as u16;
+        let consecutive_fire_limit = if consecutive_fire_limit_raw == 0 {
+            u16::MAX // SIMD-friendly encoding: MAX = no limit
+        } else {
+            consecutive_fire_limit_raw
+        };
         let snooze_length = area.snooze_period();
         let mp_charge_accumulation = area.mp_charge_accumulation();
 
@@ -4602,7 +4614,7 @@ mod tests {
                 0,
                 0, // coordinates
                 100.0,
-                0.0, // firing_threshold_limit (0 = no limit)
+                f32::MAX, // firing_threshold_limit (MAX = no limit, SIMD-friendly encoding)
                 0.1,
                 -60.0,
                 0,

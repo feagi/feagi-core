@@ -86,7 +86,7 @@ fn add_test_neuron(
 ) -> NeuronId {
     npu.add_neuron(
         threshold,
-        0.0, // threshold_limit (0 = no limit)
+        f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
         leak,
         0.0, // resting_potential
         0,   // neuron_type
@@ -594,13 +594,13 @@ fn test_excitability_zero_prevents_firing() {
     let neuron = npu
         .add_neuron(
             1.0, // threshold
-            0.0, // threshold_limit (0 = no limit)
+            f32::MAX, // threshold_limit (MAX = no limit, SIMD-friendly encoding)
             0.0, // leak
             0.0, // resting
             0,   // neuron_type
             0,   // refractory
             0.0, // excitability = 0 (never fires)
-            0,   // consecutive_fire_limit
+            u16::MAX, // consecutive_fire_limit (MAX = unlimited, SIMD-friendly encoding)
             0,   // snooze
             false, // mp_charge_accumulation
             2,   // cortical_area (avoid power auto-injection area 1)

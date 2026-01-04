@@ -35,6 +35,9 @@ parking_lot = "0.12"  # For motor subscriptions RwLock
 feagi-observability = { workspace = true }
 tracing = { workspace = true }
 
+# Note: Using LLVM auto-vectorization for SIMD (architecture-agnostic)
+# No explicit SIMD crate needed - LLVM handles it automatically
+
 # GPU acceleration (optional features)
 wgpu = { workspace = true, optional = true }
 pollster = { workspace = true, optional = true }

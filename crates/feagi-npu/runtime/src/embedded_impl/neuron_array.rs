@@ -99,7 +99,7 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
             count: 0,
             membrane_potentials: [T::zero(); N],
             thresholds: [T::from_f32(1.0); N],
-            threshold_limits: [T::zero(); N], // 0 = no limit
+            threshold_limits: [T::max_value(); N], // MAX = no limit (SIMD-friendly encoding)
             leak_coefficients: [0.1; N],
             resting_potentials: [T::zero(); N],
             neuron_types: [0; N],
@@ -107,7 +107,7 @@ impl<T: NeuralValue, const N: usize> NeuronArray<T, N> {
             refractory_countdowns: [0; N],
             excitabilities: [1.0; N],
             consecutive_fire_counts: [0; N],
-            consecutive_fire_limits: [0; N],
+            consecutive_fire_limits: [u16::MAX; N], // MAX = no limit (SIMD-friendly encoding)
             snooze_periods: [0; N],
             mp_charge_accumulation: [true; N],
             cortical_areas: [0; N],

@@ -34,7 +34,7 @@ fn create_test_genome(neuron_count: usize, synapses_per_neuron: usize) -> (Neuro
         neuron_array.refractory_countdowns.push(0);
         neuron_array.excitabilities.push(1.0);
         neuron_array.consecutive_fire_counts.push(0);
-        neuron_array.consecutive_fire_limits.push(0);
+        neuron_array.consecutive_fire_limits.push(u16::MAX); // MAX = no limit (SIMD-friendly encoding)
         neuron_array.snooze_periods.push(0);
         neuron_array.mp_charge_accumulation.push(false);
         neuron_array.cortical_areas.push(0);
@@ -184,7 +184,7 @@ fn bench_large_candidate_counts(c: &mut Criterion) {
         neuron_array.refractory_countdowns.push(0);
         neuron_array.excitabilities.push(1.0);
         neuron_array.consecutive_fire_counts.push(0);
-        neuron_array.consecutive_fire_limits.push(0);
+        neuron_array.consecutive_fire_limits.push(u16::MAX); // MAX = no limit (SIMD-friendly encoding)
         neuron_array.snooze_periods.push(0);
         neuron_array.mp_charge_accumulation.push(false);
         neuron_array.cortical_areas.push(0);
