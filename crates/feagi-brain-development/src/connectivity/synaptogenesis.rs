@@ -140,7 +140,7 @@ pub fn apply_projector_morphology(
 /// This version is optimized for large neuron counts (>100k) and releases the NPU lock
 /// between batches to allow the burst loop to run, preventing 4-17 second blocking.
 pub fn apply_block_connection_morphology_batched(
-    npu: &Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
     src_area_id: u32,
     dst_area_id: u32,
     scaling_factor: u32,

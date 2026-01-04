@@ -14,6 +14,7 @@ use crate::v1::agent_dtos::*;
 use feagi_services::traits::agent_service::{
     AgentRegistration, HeartbeatRequest as ServiceHeartbeatRequest,
 };
+use tracing::{info, warn};
 
 /// Register a new agent with FEAGI and receive connection details including transport configuration and ports.
 #[utoipa::path(
@@ -30,6 +31,11 @@ pub async fn register_agent(
     State(state): State<ApiState>,
     Json(request): Json<AgentRegistrationRequest>,
 ) -> ApiResult<Json<AgentRegistrationResponse>> {
+    info!(
+        "🦀 [API] Registration request received for agent '{}' (type: {})",
+        request.agent_id, request.agent_type
+    );
+    
     let agent_service = state
         .agent_service
         .as_ref()
@@ -49,6 +55,10 @@ pub async fn register_agent(
 
     match agent_service.register_agent(registration).await {
         Ok(response) => {
+            info!(
+                "✅ [API] Agent '{}' registration succeeded (status: {})",
+                request.agent_id, response.status
+            );
             // Convert service TransportConfig to API TransportConfig
             let transports = response.transports.map(|ts| {
                 ts.into_iter()
@@ -77,6 +87,10 @@ pub async fn register_agent(
         Err(e) => {
             // Check if error is about unsupported transport (validation error)
             let error_msg = e.to_string();
+            warn!(
+                "❌ [API] Agent '{}' registration FAILED: {}",
+                request.agent_id, error_msg
+            );
             if error_msg.contains("not supported") || error_msg.contains("disabled") {
                 Err(ApiError::invalid_input(error_msg))
             } else {

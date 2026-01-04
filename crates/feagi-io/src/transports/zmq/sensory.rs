@@ -7,7 +7,7 @@
 use parking_lot::{Mutex, RwLock};
 use std::sync::Arc;
 use std::thread;
-use tracing::{debug, error, info, warn, span, Level};
+use tracing::{debug, error, info, warn};
 
 /// Runtime configuration for the ZMQ sensory receiver.
 #[derive(Clone, Debug)]
@@ -60,7 +60,7 @@ pub struct SensoryStream {
     running: Arc<Mutex<bool>>,
     config: SensoryReceiveConfig,
     /// Reference to Rust NPU for direct injection (no FFI overhead!)
-    npu: Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
+    npu: Arc<Mutex<Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
     /// Reference to AgentRegistry for security gating
     agent_registry: Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
     /// Statistics
@@ -95,7 +95,7 @@ impl SensoryStream {
     }
 
     /// Set the Rust NPU reference for direct injection
-    pub fn set_npu(&self, npu: Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>) {
+    pub fn set_npu(&self, npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>) {
         *self.npu.lock() = Some(npu);
         info!("🦀 [SENSORY-STREAM] NPU connected for direct injection");
     }
@@ -386,7 +386,7 @@ impl SensoryStream {
     /// Returns the number of neurons injected.
     fn deserialize_and_inject_xyzp(
         message_bytes: &[u8],
-        npu_mutex: &Arc<Mutex<Option<Arc<std::sync::Mutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
+        npu_mutex: &Arc<Mutex<Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>>>,
         agent_registry_mutex: &Arc<Mutex<Option<Arc<RwLock<crate::core::AgentRegistry>>>>>,
         rejected_no_genome: &Arc<Mutex<u64>>,
         rejected_no_agents: &Arc<Mutex<u64>>,
@@ -404,7 +404,11 @@ impl SensoryStream {
 
         // SECURITY GATE 1: Check if genome is loaded
         {
+            let lock_start = std::time::Instant::now();
+            warn!("[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for genome check");
             let npu = npu_arc.lock().unwrap();
+            let lock_wait = lock_start.elapsed();
+            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock acquired for genome check (waited {:.2}ms)", lock_wait.as_secs_f64() * 1000.0);
             if !npu.is_genome_loaded() {
                 *rejected_no_genome.lock() += 1;
                 let count = *rejected_no_genome.lock();
@@ -475,26 +479,32 @@ impl SensoryStream {
         // Temporal smoothing parameters
         const SMOOTHING_RAMP_FACTOR: f32 = 0.85; // Apply 85% of target potential per frame
         const LARGE_FRAME_THRESHOLD: usize = 5000; // Only smooth very large frames (>5000 neurons)
-        const BATCH_SIZE: usize = 10_000; // Process neurons in batches to release NPU lock frequently (reduced from 50k)
         
         // Calculate total neurons for batching decision
         let total_neurons: usize = cortical_mapped.mappings.values()
             .map(|arrays| arrays.len())
             .sum();
         
-        // CRITICAL: For very large injections (>100k neurons), use batched processing
-        // Release NPU lock between batches to allow burst loop to run
-        // This prevents blocking the burst loop for extended periods
+        // CRITICAL FIX: For very large injections (>100k neurons), hold NPU lock for entire injection
+        // to ensure atomicity. This prevents the sensory frame from being split across multiple bursts.
+        // 
+        // Previous implementation released lock between batches, allowing burst loop to run and process
+        // only partial data, causing correctness issues where one sensory frame was processed across
+        // multiple bursts instead of a single burst.
         if total_neurons > 100_000 {
             let injection_start = std::time::Instant::now();
             
-            // Clear pending injections once before batching (with brief lock)
-            {
-                let mut npu = npu_arc.lock().unwrap();
-                npu.clear_pending_sensory_injections();
-            }
+            // Hold NPU lock for entire injection to ensure all data is added to pending_sensory_injections
+            // before any burst can process it. This ensures the entire sensory frame is processed in ONE burst.
+            let lock_start = std::time::Instant::now();
+            warn!("[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for LARGE injection ({} neurons) - THIS CAN BLOCK BURST LOOP!", total_neurons);
+            let mut npu = npu_arc.lock().unwrap();
+            let lock_wait = lock_start.elapsed();
+            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock acquired for large injection (waited {:.2}ms, holding for {} neurons)", 
+                lock_wait.as_secs_f64() * 1000.0, total_neurons);
+            npu.clear_pending_sensory_injections();
             
-            // Process each cortical area in batches (lock acquired/released per batch)
+            // Process all cortical areas while holding the lock
             for (cortical_id, neuron_arrays) in &cortical_mapped.mappings {
                 let (x_coords, y_coords, z_coords, potentials) = neuron_arrays.borrow_xyzp_vectors();
                 let num_neurons = x_coords.len();
@@ -510,87 +520,57 @@ impl SensoryStream {
                     None
                 };
                 
-                // Process in batches (lock acquired/released per batch to allow burst loop to run)
-                let num_batches = (num_neurons + BATCH_SIZE - 1) / BATCH_SIZE;
-                let batch_start_time = std::time::Instant::now();
-                
-                for (batch_idx, batch_start) in (0..num_neurons).step_by(BATCH_SIZE).enumerate() {
-                    let batch_end = (batch_start + BATCH_SIZE).min(num_neurons);
-                    let batch_size = batch_end - batch_start;
-                    let batch_x = &x_coords[batch_start..batch_end];
-                    let batch_y = &y_coords[batch_start..batch_end];
-                    let batch_z = &z_coords[batch_start..batch_end];
-                    let batch_p = if let Some(ref smoothed) = smoothed_potentials {
-                        &smoothed[batch_start..batch_end]
-                    } else {
-                        &potentials[batch_start..batch_end]
-                    };
-                    
-                    let batch_span = span!(
-                        Level::DEBUG,
-                        "sensory_injection_batch",
-                        batch_idx = batch_idx + 1,
-                        num_batches = num_batches,
-                        batch_size = batch_size,
-                        cortical_area = %cortical_id.as_base_64()
-                    );
-                    let _batch_guard = batch_span.enter();
-                    
-                    // Acquire lock, inject batch, release lock (allows burst loop to run between batches)
-                    let inject_start = std::time::Instant::now();
-                    let injected = {
-                        let lock_start = std::time::Instant::now();
-                        let mut npu = npu_arc.lock().unwrap();
-                        let lock_duration = lock_start.elapsed();
-                        if lock_duration.as_millis() > 10 {
-                            warn!(
-                                "[ZMQ-SENSORY] ⚠️ Slow NPU lock acquisition: {:.2}ms (batch {}/{})",
-                                lock_duration.as_secs_f64() * 1000.0,
-                                batch_idx + 1,
-                                num_batches
-                            );
-                        }
-                        npu.inject_sensory_xyzp_arrays_by_id(
-                            cortical_id,
-                            batch_x,
-                            batch_y,
-                            batch_z,
-                            batch_p,
-                        )
-                    };
-                    let batch_duration = inject_start.elapsed();
-                    total_injected += injected;
-                    
-                    // Log slow batches or progress for very large injections
-                    if batch_duration.as_millis() > 100 {
-                        warn!(
-                            "[ZMQ-SENSORY] ⚠️ Slow batch: {}/{} ({} neurons) took {:.2}ms for area {}",
-                            batch_idx + 1, num_batches, batch_size, batch_duration.as_secs_f64() * 1000.0,
-                            cortical_id.as_base_64()
-                        );
-                    } else if num_batches > 10 && (batch_idx + 1) % 10 == 0 {
-                        let elapsed = batch_start_time.elapsed();
-                        let progress = ((batch_idx + 1) as f32 / num_batches as f32) * 100.0;
-                        info!(
-                            "[ZMQ-SENSORY] Progress: {}/{} batches ({}%) for area {} - {} neurons injected in {:.2}s",
-                            batch_idx + 1, num_batches, progress as u32, cortical_id.as_base_64(),
-                            total_injected, elapsed.as_secs_f64()
-                        );
-                    }
-                }
+                // Inject entire area at once (ensures atomicity - all neurons from this area
+                // are added to pending_sensory_injections before lock is released)
+                let injected = if let Some(ref smoothed) = smoothed_potentials {
+                    npu.inject_sensory_xyzp_arrays_by_id(
+                        cortical_id,
+                        x_coords,
+                        y_coords,
+                        z_coords,
+                        smoothed,
+                    )
+                } else {
+                    npu.inject_sensory_xyzp_arrays_by_id(
+                        cortical_id,
+                        x_coords,
+                        y_coords,
+                        z_coords,
+                        potentials,
+                    )
+                };
+                total_injected += injected;
             }
-            // All batches complete - lock was released between batches
+            
+            // Lock released here - all injections are now in pending_sensory_injections
+            // The next burst will process ALL of them atomically
+            let lock_hold_duration = lock_start.elapsed();
+            drop(npu);
+            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock released after large injection (held for {:.2}ms)", 
+                lock_hold_duration.as_secs_f64() * 1000.0);
+            
             let total_duration = injection_start.elapsed();
             if total_duration.as_millis() > 500 {
                 warn!(
-                    "[ZMQ-SENSORY] ⚠️ Large injection took {:.2}ms ({} neurons) - lock released between batches",
-                    total_duration.as_secs_f64() * 1000.0,
-                    total_injected
+                    "[ZMQ-SENSORY] ⚠️ Large injection: {} neurons injected atomically in {:.2}ms (lock held to prevent cross-burst splitting)",
+                    total_injected,
+                    total_duration.as_secs_f64() * 1000.0
+                );
+            } else if total_injected > 0 {
+                info!(
+                    "[ZMQ-SENSORY] ✅ Large injection: {} neurons injected atomically in {:.2}ms (ensures single-burst processing)",
+                    total_injected,
+                    total_duration.as_secs_f64() * 1000.0
                 );
             }
         } else {
             // Small injection: process normally (single lock acquisition)
+            let lock_start = std::time::Instant::now();
+            warn!("[NPU-LOCK] ZMQ-SENSORY: Acquiring lock for small injection ({} neurons)", total_neurons);
             let mut npu = npu_arc.lock().unwrap();
+            let lock_wait = lock_start.elapsed();
+            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock acquired for small injection (waited {:.2}ms)", 
+                lock_wait.as_secs_f64() * 1000.0);
             
             // Clear pending injections for large frames
             if total_neurons > LARGE_FRAME_THRESHOLD {
@@ -631,6 +611,10 @@ impl SensoryStream {
                     );
                 }
             }
+            let lock_hold_duration = lock_start.elapsed();
+            drop(npu);
+            warn!("[NPU-LOCK] ZMQ-SENSORY: Lock released after small injection (held for {:.2}ms)", 
+                lock_hold_duration.as_secs_f64() * 1000.0);
         }
         
         let t_inject_ms = t_inject_start.elapsed().as_secs_f64() * 1000.0;

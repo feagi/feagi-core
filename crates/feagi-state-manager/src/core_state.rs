@@ -125,11 +125,17 @@ pub struct MemoryMappedState {
     pub agent_count: AtomicU32,
     pub burst_frequency: AtomicU32, // f32 as u32 bits
 
-    // Statistics (16 bytes)
+    // Statistics (24 bytes)
     pub neuron_count: AtomicU32,
     pub synapse_count: AtomicU32,
     pub cortical_area_count: AtomicU32,
     pub memory_usage: AtomicU32,
+    pub regular_neuron_count: AtomicU32,
+    pub memory_neuron_count: AtomicU32,
+    
+    // Capacity (static values set at initialization, never change)
+    pub neuron_capacity: AtomicU32,
+    pub synapse_capacity: AtomicU32,
 
     // Versioning & timestamps (16 bytes)
     pub version: AtomicU64,
@@ -146,8 +152,8 @@ pub struct MemoryMappedState {
     pub synapse_util: AtomicU8,         // 0-100
     pub _reserved_fatigue: AtomicU8,     // Reserved for future use
 
-    // Padding to 128 bytes (82 bytes)
-    pub _padding: [u8; 82],
+    // Padding to 128 bytes (66 bytes) - reduced by 16 bytes for capacity and neuron count fields
+    pub _padding: [u8; 66],
 }
 
 impl MemoryMappedState {
@@ -170,6 +176,10 @@ impl MemoryMappedState {
             synapse_count: AtomicU32::new(0),
             cortical_area_count: AtomicU32::new(0),
             memory_usage: AtomicU32::new(0),
+            regular_neuron_count: AtomicU32::new(0),
+            memory_neuron_count: AtomicU32::new(0),
+            neuron_capacity: AtomicU32::new(0),
+            synapse_capacity: AtomicU32::new(0),
 
             version: AtomicU64::new(0),
             last_modified: AtomicU64::new(0),
@@ -182,7 +192,7 @@ impl MemoryMappedState {
             synapse_util: AtomicU8::new(0),
             _reserved_fatigue: AtomicU8::new(0),
 
-            _padding: [0; 82],
+            _padding: [0; 66],
         }
     }
 
@@ -328,6 +338,54 @@ impl MemoryMappedState {
     /// Set cortical area count (atomic write)
     pub fn set_cortical_area_count(&self, count: u32) {
         self.cortical_area_count.store(count, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get neuron capacity (atomic read)
+    /// Capacity is set at NPU initialization and never changes
+    pub fn get_neuron_capacity(&self) -> u32 {
+        self.neuron_capacity.load(Ordering::Acquire)
+    }
+
+    /// Set neuron capacity (atomic write)
+    /// Should be called once when NPU is initialized
+    pub fn set_neuron_capacity(&self, capacity: u32) {
+        self.neuron_capacity.store(capacity, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get synapse capacity (atomic read)
+    /// Capacity is set at NPU initialization and never changes
+    pub fn get_synapse_capacity(&self) -> u32 {
+        self.synapse_capacity.load(Ordering::Acquire)
+    }
+
+    /// Set synapse capacity (atomic write)
+    /// Should be called once when NPU is initialized
+    pub fn set_synapse_capacity(&self, capacity: u32) {
+        self.synapse_capacity.store(capacity, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get regular neuron count (atomic read)
+    pub fn get_regular_neuron_count(&self) -> u32 {
+        self.regular_neuron_count.load(Ordering::Acquire)
+    }
+
+    /// Set regular neuron count (atomic write)
+    pub fn set_regular_neuron_count(&self, count: u32) {
+        self.regular_neuron_count.store(count, Ordering::Release);
+        self.increment_version();
+    }
+
+    /// Get memory neuron count (atomic read)
+    pub fn get_memory_neuron_count(&self) -> u32 {
+        self.memory_neuron_count.load(Ordering::Acquire)
+    }
+
+    /// Set memory neuron count (atomic write)
+    pub fn set_memory_neuron_count(&self, count: u32) {
+        self.memory_neuron_count.store(count, Ordering::Release);
         self.increment_version();
     }
 

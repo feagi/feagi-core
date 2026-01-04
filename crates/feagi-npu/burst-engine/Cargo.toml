@@ -62,6 +62,9 @@ gpu = ["wgpu", "pollster", "bytemuck"]
 cuda = ["cudarc", "half"]
 # Enable all GPU backends
 all-gpu = ["gpu", "cuda"]
+# Enable NPU lock tracing (adds overhead - disable for production)
+# When disabled, uses regular Mutex instead of TracingMutex
+npu-lock-tracing = []
 
 [[bench]]
 name = "backend_comparison"
@@ -69,6 +72,10 @@ harness = false
 
 [[bench]]
 name = "ci_microbench"
+harness = false
+
+[[bench]]
+name = "largescale_perf_test"
 harness = false
 
 [dev-dependencies]

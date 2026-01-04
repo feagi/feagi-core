@@ -216,15 +216,58 @@ impl SynapticPropagationEngine {
         let total_synapses = synapse_indices.len();
         self.total_synapses_processed += total_synapses as u64;
 
-        // PRE-COMPUTE: For each source neuron, count outgoing synapses (needed for PSP division)
-        // This is only needed when psp_uniform_distribution = false
-        let source_synapse_counts: AHashMap<NeuronId, usize> = synapse_indices
-            .iter()
+        // PRE-COMPUTE: Source neuron metadata (area, properties, synapse counts)
+        // This eliminates 4 HashMap lookups per synapse in the hot loop
+        struct SourceNeuronMetadata {
+            area: CorticalID,
+            mp_driven: bool,
+            uniform: bool,
+            synapse_count: usize,
+        }
+        
+        let source_metadata: AHashMap<NeuronId, SourceNeuronMetadata> = synapse_indices
+            .par_iter()
             .map(|&syn_idx| NeuronId(synapse_storage.source_neurons()[syn_idx]))
-            .fold(AHashMap::new(), |mut acc, source_id| {
-                *acc.entry(source_id).or_insert(0) += 1;
-                acc
-            });
+            .fold(
+                || AHashMap::<NeuronId, (Option<CorticalID>, usize)>::new(),
+                |mut acc, source_id| {
+                    let entry = acc.entry(source_id).or_insert_with(|| {
+                        let area = self.neuron_to_area.get(&source_id).copied();
+                        (area, 0)
+                    });
+                    entry.1 += 1; // Count synapses
+                    acc
+                },
+            )
+            .reduce(
+                || AHashMap::new(),
+                |mut a, b| {
+                    for (id, (area, count)) in b {
+                        let entry = a.entry(id).or_insert_with(|| (area, 0));
+                        entry.1 += count;
+                        if entry.0.is_none() {
+                            entry.0 = area;
+                        }
+                    }
+                    a
+                },
+            )
+            .into_iter()
+            .filter_map(|(source_id, (area_opt, synapse_count))| {
+                let area = area_opt?.clone();
+                let mp_driven = self.area_mp_driven_psp.get(&area).copied().unwrap_or(false);
+                let uniform = self.area_psp_uniform_distribution.get(&area).copied().unwrap_or(false);
+                Some((
+                    source_id,
+                    SourceNeuronMetadata {
+                        area,
+                        mp_driven,
+                        uniform,
+                        synapse_count,
+                    },
+                ))
+            })
+            .collect();
 
         // PHASE 2: COMPUTE - Calculate contributions in parallel (TRUE SIMD!)
         // This is where Python spent 165ms doing inefficient numpy ops
@@ -240,19 +283,19 @@ impl SynapticPropagationEngine {
                 // Get target neuron from SoA
                 let target_neuron = NeuronId(synapse_storage.target_neurons()[syn_idx]);
 
-                // Get target cortical area
-                let cortical_area = *self.neuron_to_area.get(&target_neuron)?;
+                // Get target cortical area (single lookup, can't optimize further - each synapse has unique target)
+                let cortical_area = self.neuron_to_area.get(&target_neuron)?.clone();
 
                 // Get source neuron
                 let source_neuron = NeuronId(synapse_storage.source_neurons()[syn_idx]);
 
-                // Get source cortical area
-                let source_area = self.neuron_to_area.get(&source_neuron)?;
+                // Get pre-computed source neuron metadata (eliminates 4 HashMap lookups per synapse!)
+                let source_meta = source_metadata.get(&source_neuron)?;
 
                 // Logging: exclude power sources to avoid noise (cortical_idx=1 maps to _power).
                 let trace_cfg = synapse_trace_cfg();
                 let allow_trace = trace_cfg.enabled
-                    && *source_area != *power_cortical_id()
+                    && source_meta.area != *power_cortical_id()
                     && trace_cfg
                         .src_filter
                         .map(|id| id == source_neuron.0)
@@ -263,12 +306,7 @@ impl SynapticPropagationEngine {
                         .unwrap_or(true);
 
                 // Calculate base PSP: Use source neuron's MP if mp_driven_psp is enabled, else use static synapse PSP
-                let mp_driven = self
-                    .area_mp_driven_psp
-                    .get(source_area)
-                    .copied()
-                    .unwrap_or(false);
-                let base_psp = if mp_driven {
+                let base_psp = if source_meta.mp_driven {
                     // mp_driven_psp enabled: use source neuron's current membrane potential
                     neuron_membrane_potentials.get(&source_neuron).copied().unwrap_or(0)
                 } else {
@@ -287,42 +325,35 @@ impl SynapticPropagationEngine {
 
                 // Apply PSP uniformity: divide CONTRIBUTION (not PSP) if uniformity is false
                 // This preserves precision by doing float division instead of u8 integer division
-                let uniform = self
-                    .area_psp_uniform_distribution
-                    .get(source_area)
-                    .copied()
-                    .unwrap_or(false);
-                let final_contribution = if uniform {
+                let final_contribution = if source_meta.uniform {
                     // PSP uniformity = true: Each synapse contributes full amount
                     base_contribution
                 } else {
                     // PSP uniformity = false: Total contribution is divided among all outgoing synapses
-                    let synapse_count = source_synapse_counts.get(&source_neuron).copied().unwrap_or(1);
-                    if synapse_count > 1 {
+                    if source_meta.synapse_count > 1 {
                         // Divide contribution by number of outgoing synapses (float division preserves precision!)
                         // Example: 1.0 / 10 = 0.1 (not 0 like u8 division would give)
-                        base_contribution / synapse_count as f32
+                        base_contribution / source_meta.synapse_count as f32
                     } else {
                         base_contribution
                     }
                 };
 
                 if allow_trace {
-                    let outgoing = source_synapse_counts.get(&source_neuron).copied().unwrap_or(1);
                     trace!(
                         target: "feagi-npu-trace",
                         "[SYNAPSE] syn_idx={} src={} dst={} src_area={:?} dst_area={:?} type={:?} weight={} psp_used={} mp_driven={} uniform={} outgoing={} base_contrib={:.3} final_contrib={:.3}",
                         syn_idx,
                         source_neuron.0,
                         target_neuron.0,
-                        source_area,
+                        source_meta.area,
                         cortical_area,
                         synapse_type,
                         weight,
                         base_psp,
-                        mp_driven,
-                        uniform,
-                        outgoing,
+                        source_meta.mp_driven,
+                        source_meta.uniform,
+                        source_meta.synapse_count,
                         base_contribution,
                         final_contribution
                     );

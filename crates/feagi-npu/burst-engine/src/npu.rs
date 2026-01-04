@@ -1471,22 +1471,41 @@ impl<
         
         let total_duration = burst_start.elapsed();
         
-        // Log timing every 10 bursts or if any phase takes >50ms (indicates slowdown)
-        if burst_count % 10 == 0 || total_duration.as_millis() > 50 {
+        // Log timing info: WARN only if slow (>50ms), otherwise INFO every 100 bursts for diagnostics
+        let is_slow = total_duration.as_millis() > 50;
+        let should_log = is_slow || (burst_count % 100 == 0);
+        
+        if should_log {
             let neuron_count = neuron_storage.count();
-            warn!(
-                "[BURST-TIMING] Burst {}: total={:.2}ms | locks={:.2}ms | phase1={:.2}ms | phase2={:.2}ms | phase3={:.2}ms | phase4={:.2}ms | neurons={} | fired={} | candidates={}",
-                burst_count,
-                total_duration.as_secs_f64() * 1000.0,
-                lock_duration.as_secs_f64() * 1000.0,
-                phase1_duration.as_secs_f64() * 1000.0,
-                phase2_duration.as_secs_f64() * 1000.0,
-                phase3_duration.as_secs_f64() * 1000.0,
-                phase4_duration.as_secs_f64() * 1000.0,
-                neuron_count,
-                dynamics_result.neurons_fired,
-                fire_structures.fire_candidate_list.len()
-            );
+            if is_slow {
+                warn!(
+                    "[BURST-TIMING] Burst {}: total={:.2}ms | locks={:.2}ms | phase1={:.2}ms | phase2={:.2}ms | phase3={:.2}ms | phase4={:.2}ms | neurons={} | fired={} | candidates={}",
+                    burst_count,
+                    total_duration.as_secs_f64() * 1000.0,
+                    lock_duration.as_secs_f64() * 1000.0,
+                    phase1_duration.as_secs_f64() * 1000.0,
+                    phase2_duration.as_secs_f64() * 1000.0,
+                    phase3_duration.as_secs_f64() * 1000.0,
+                    phase4_duration.as_secs_f64() * 1000.0,
+                    neuron_count,
+                    dynamics_result.neurons_fired,
+                    fire_structures.fire_candidate_list.len()
+                );
+            } else {
+                info!(
+                    "[BURST-TIMING] Burst {}: total={:.2}ms | locks={:.2}ms | phase1={:.2}ms | phase2={:.2}ms | phase3={:.2}ms | phase4={:.2}ms | neurons={} | fired={} | candidates={}",
+                    burst_count,
+                    total_duration.as_secs_f64() * 1000.0,
+                    lock_duration.as_secs_f64() * 1000.0,
+                    phase1_duration.as_secs_f64() * 1000.0,
+                    phase2_duration.as_secs_f64() * 1000.0,
+                    phase3_duration.as_secs_f64() * 1000.0,
+                    phase4_duration.as_secs_f64() * 1000.0,
+                    neuron_count,
+                    dynamics_result.neurons_fired,
+                    fire_structures.fire_candidate_list.len()
+                );
+            }
         }
 
         // Build result
@@ -3475,14 +3494,27 @@ fn phase1_injection_with_synapses<
         let propagation_result = propagation_engine.propagate(&fired_ids, synapse_storage, &neuron_mps)?;
         let propagate_duration = propagate_start.elapsed();
 
-        // Inject propagated potentials into FCL
+        // Inject propagated potentials into FCL (OPTIMIZED: pre-allocate + direct insertion)
         let inject_start = std::time::Instant::now();
+        
+        // Count total candidates for pre-allocation
+        let total_candidates: usize = propagation_result.values().map(|targets| targets.len()).sum();
+        
+        // Pre-allocate FCL HashMap (critical for performance with millions of insertions)
+        // Heuristic: ~10% unique neurons (many synapses target same neurons)
+        if total_candidates > 100_000 {
+            let estimated_unique = total_candidates / 10;
+            fcl.reserve(estimated_unique);
+        }
+        
+        // Direct insertion (faster than flattening first)
         for (_cortical_area, targets) in propagation_result {
             for &(target_neuron_id, contribution) in &targets {
-                fcl.add_candidate(target_neuron_id, contribution.0); // Extract f32 from SynapticContribution
+                fcl.add_candidate(target_neuron_id, contribution.0);
                 synaptic_count += 1;
             }
         }
+        
         let inject_duration = inject_start.elapsed();
         let synaptic_duration = synaptic_start.elapsed();
         
@@ -5238,3 +5270,4 @@ macro_rules! dispatch {
 //     }
 // }
 */
+

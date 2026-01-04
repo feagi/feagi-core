@@ -88,6 +88,9 @@ fn bench_cpu_backend(c: &mut Criterion) {
         (50_000, "50K"),
         (100_000, "100K"),
         (500_000, "500K"),
+        (1_000_000, "1M"),
+        (5_000_000, "5M"),
+        (8_000_000, "8M"), // Match user's actual scale
     ];
 
     for (neuron_count, label) in test_sizes {

@@ -844,13 +844,30 @@ impl ConnectomeService for ConnectomeServiceImpl {
         // Export connectome from NPU
         // Note: export_connectome() is on RustNPU, but we have DynamicNPU
         // We need to handle both F32 and INT8 variants
+        use tracing::warn;
+        let lock_start = std::time::Instant::now();
+        let thread_id = std::thread::current().id();
+        warn!("[NPU-LOCK] CONNECTOME-SERVICE: Thread {:?} attempting NPU lock for export_connectome at {:?}", thread_id, lock_start);
         let snapshot = {
             let npu_lock = npu_arc.lock().unwrap();
-            match &*npu_lock {
+            let lock_acquired = std::time::Instant::now();
+            let lock_wait = lock_acquired.duration_since(lock_start);
+            if lock_wait.as_millis() > 5 {
+                warn!("[NPU-LOCK] CONNECTOME-SERVICE: Thread {:?} acquired lock after {:.2}ms wait for export_connectome", 
+                    thread_id,
+                    lock_wait.as_secs_f64() * 1000.0);
+            }
+            let result = match &*npu_lock {
                 feagi_npu_burst_engine::DynamicNPU::F32(npu_f32) => npu_f32.export_connectome(),
                 feagi_npu_burst_engine::DynamicNPU::INT8(npu_int8) => npu_int8.export_connectome(),
-            }
+            };
+            result
         };
+        let lock_released = std::time::Instant::now();
+        let total_duration = lock_released.duration_since(lock_start);
+        warn!("[NPU-LOCK] CONNECTOME-SERVICE: Thread {:?} RELEASED NPU lock after export_connectome (total: {:.2}ms)", 
+            thread_id,
+            total_duration.as_secs_f64() * 1000.0);
 
         info!(target: "feagi-services", "✅ Connectome exported: {} neurons, {} synapses",
             snapshot.neurons.count, snapshot.synapses.count);

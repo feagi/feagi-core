@@ -171,13 +171,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     use feagi_npu_burst_engine::backend::CPUBackend;
-    use feagi_npu_burst_engine::DynamicNPU;
+    use feagi_npu_burst_engine::{DynamicNPU, TracingMutex};
     use feagi_npu_runtime::StdRuntime;
 
     let runtime = StdRuntime;
     let backend = CPUBackend::new();
     let npu_result = RustNPU::new(runtime, backend, 10, 10, 10).expect("Failed to create NPU");
-    let npu_for_runtime = Arc::new(StdMutex::new(DynamicNPU::F32(npu_result))); // Minimal NPU
+    // Wrap NPU in TracingMutex to automatically log all lock acquisitions
+    let npu_for_runtime = Arc::new(TracingMutex::new(DynamicNPU::F32(npu_result), "NPU")); // Minimal NPU
     let burst_loop =
         BurstLoopRunner::new::<DummyViz, DummyMotor>(npu_for_runtime, None, None, 30.0); // No publishers
     let burst_runner_for_runtime = Arc::new(ParkingLotMutex::new(burst_loop));

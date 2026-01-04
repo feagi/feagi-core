@@ -97,7 +97,7 @@ impl AsyncPlasticityExecutor {
     pub fn new(
         config: PlasticityConfig,
         memory_stats_cache: MemoryStatsCache,
-        npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+        npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
     ) -> Self {
         let service = PlasticityService::new(config.clone(), memory_stats_cache.clone(), npu);
         

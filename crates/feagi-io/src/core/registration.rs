@@ -1846,10 +1846,36 @@ impl RegistrationHandler {
 
     /// Process heartbeat
     pub fn process_heartbeat(&self, agent_id: &str) -> Result<String, String> {
-        use tracing::debug;
+        use tracing::{debug, warn};
 
         debug!("💓 [REGISTRATION] Processing heartbeat for '{}'", agent_id);
 
+        // Check if agent exists before attempting heartbeat
+        let agent_exists = {
+            let registry = self.agent_registry.read();
+            registry.get(agent_id).is_some()
+        };
+
+        if !agent_exists {
+            // Log diagnostic information when agent not found
+            let all_agents: Vec<String> = {
+                let registry = self.agent_registry.read();
+                registry.get_all().iter().map(|a| a.agent_id.clone()).collect()
+            };
+            warn!(
+                "⚠️ [REGISTRATION] Heartbeat failed for '{}': Agent not found in registry. Registered agents ({}): {:?}",
+                agent_id,
+                all_agents.len(),
+                all_agents
+            );
+            return Err(format!(
+                "Agent {} not found in registry (total registered: {})",
+                agent_id,
+                all_agents.len()
+            ));
+        }
+
+        // Agent exists - update heartbeat
         self.agent_registry
             .write()
             .heartbeat(agent_id)
@@ -1861,9 +1887,8 @@ impl RegistrationHandler {
                 format!("Heartbeat recorded for {}", agent_id)
             })
             .map_err(|e| {
-                use tracing::warn;
                 warn!(
-                    "⚠️ [REGISTRATION] Heartbeat failed for '{}': {}",
+                    "⚠️ [REGISTRATION] Heartbeat update failed for '{}': {}",
                     agent_id, e
                 );
                 e

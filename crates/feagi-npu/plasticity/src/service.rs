@@ -126,7 +126,7 @@ pub struct PlasticityService {
     config: PlasticityConfig,
 
     // NPU reference (for querying CPU-resident FireLedger)
-    npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+    npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
 
     // Pattern detection
     pattern_detector: BatchPatternDetector,
@@ -157,7 +157,7 @@ impl PlasticityService {
     pub fn new(
         config: PlasticityConfig,
         memory_stats_cache: MemoryStatsCache,
-        npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+        npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
     ) -> Self {
         let pattern_detector = BatchPatternDetector::new(config.pattern_config.clone());
         let memory_array_capacity = config.memory_array_capacity;
@@ -255,7 +255,7 @@ impl PlasticityService {
     #[allow(clippy::too_many_arguments)]
     fn compute_plasticity(
         current_timestep: u64,
-        npu: &Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>,
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
         memory_neuron_array: &Arc<Mutex<MemoryNeuronArray>>,
         memory_areas: &Arc<Mutex<HashMap<u32, MemoryAreaConfig>>>,
         memory_lifecycle_configs: &Arc<Mutex<HashMap<u32, MemoryNeuronLifecycleConfig>>>,
@@ -271,8 +271,9 @@ impl PlasticityService {
         // Log plasticity status every 100 bursts
         if current_timestep % 100 == 0 {
             if memory_areas_snapshot.is_empty() {
-                tracing::warn!(target: "plasticity",
-                    "[PLASTICITY] ⚠️  Burst {} - NO MEMORY AREAS REGISTERED! Plasticity service has nothing to monitor.",
+                // This is normal if plasticity isn't being used - log at debug level instead of warn
+                tracing::debug!(target: "plasticity",
+                    "[PLASTICITY] Burst {} - No memory areas registered (plasticity not in use)",
                     current_timestep
                 );
             } else {
@@ -285,6 +286,8 @@ impl PlasticityService {
         }
 
         if memory_areas_snapshot.is_empty() {
+            // Early return - plasticity service is running but no memory areas registered
+            // This means plasticity will NEVER acquire NPU lock, so it's not the cause of lock contention
             return;
         }
 
@@ -341,13 +344,33 @@ impl PlasticityService {
             );
             
             // Query FireLedger for upstream firing history (CPU-resident, dense burst-aligned windows)
+            let plasticity_lock_start = std::time::Instant::now();
+            tracing::warn!(
+                "[NPU-LOCK] PLASTICITY: Acquiring NPU lock for FireLedger query (burst {}, area {})",
+                current_timestep,
+                memory_area_idx
+            );
             let timestep_bitmaps: Vec<HashSet<u32>> = {
                 let temporal_depth = area_config.temporal_depth as usize;
 
                 // Brief lock to query FireLedger - data is already CPU-resident from burst processing
                 let npu_lock = npu.lock().unwrap();
+                let plasticity_lock_wait = plasticity_lock_start.elapsed();
+                tracing::warn!(
+                    "[NPU-LOCK] PLASTICITY: Lock acquired (waited {:.2}ms, burst {}, area {})",
+                    plasticity_lock_wait.as_secs_f64() * 1000.0,
+                    current_timestep,
+                    memory_area_idx
+                );
+                if plasticity_lock_wait.as_millis() > 5 {
+                    tracing::warn!(
+                        "[NPU-LOCK] PLASTICITY: ⚠️ Slow lock acquisition: {:.2}ms (burst {})",
+                        plasticity_lock_wait.as_secs_f64() * 1000.0,
+                        current_timestep
+                    );
+                }
 
-                if temporal_depth == 0 || area_config.upstream_areas.is_empty() {
+                let result = if temporal_depth == 0 || area_config.upstream_areas.is_empty() {
                     Vec::new()
                 } else {
                     // Deterministic: upstream areas are processed in sorted order so hashing is stable.
@@ -420,7 +443,25 @@ impl PlasticityService {
                             out
                         }
                     }
+                };
+                
+                // Log lock hold time before release
+                let plasticity_lock_hold = plasticity_lock_start.elapsed();
+                if plasticity_lock_hold.as_millis() > 10 {
+                    tracing::warn!(
+                        "[NPU-LOCK] PLASTICITY: Lock held for {:.2}ms (burst {}) - releasing now",
+                        plasticity_lock_hold.as_secs_f64() * 1000.0,
+                        current_timestep
+                    );
                 }
+                // Lock is released here when npu_lock goes out of scope
+                drop(npu_lock);
+                tracing::warn!(
+                    "[NPU-LOCK] PLASTICITY: Lock RELEASED (burst {}, total hold: {:.2}ms)",
+                    current_timestep,
+                    plasticity_lock_hold.as_secs_f64() * 1000.0
+                );
+                result
             };
 
             if timestep_bitmaps.is_empty() {

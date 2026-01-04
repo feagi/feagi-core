@@ -261,7 +261,7 @@ async fn handle_client(
     
     // Spawn a task to monitor the read side for connection closure
     let peer_addr_monitor = peer_addr;
-    let mut read_task = tokio::spawn(async move {
+    let read_task = tokio::spawn(async move {
         loop {
             match read.next().await {
                 Some(Ok(msg)) => {

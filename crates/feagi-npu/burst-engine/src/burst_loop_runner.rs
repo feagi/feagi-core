@@ -22,7 +22,7 @@
 use crate::parameter_update_queue::ParameterUpdateQueue;
 use crate::sensory::AgentManager;
 #[cfg(feature = "std")]
-use crate::DynamicNPU;
+use crate::{DynamicNPU, tracing_mutex::TracingMutex};
 use feagi_npu_neural::types::NeuronId;
 use parking_lot::RwLock as ParkingLotRwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -71,7 +71,8 @@ pub trait MotorPublisher: Send + Sync {
 pub struct BurstLoopRunner {
     /// Shared NPU instance (holds power neurons internally + burst count)
     /// DynamicNPU dispatches to either F32 or INT8 variant based on genome
-    npu: Arc<Mutex<DynamicNPU>>,
+    /// Wrapped in TracingMutex to automatically log all lock acquisitions
+    npu: Arc<TracingMutex<DynamicNPU>>,
     /// Target frequency in Hz (shared with burst thread for dynamic updates)
     frequency_hz: Arc<Mutex<f64>>,
     /// Running flag (atomic for thread-safe stop)
@@ -126,7 +127,7 @@ impl BurstLoopRunner {
     /// * `viz_publisher` - Optional visualization publisher (None = no ZMQ visualization)
     /// * `frequency_hz` - Burst frequency in Hz
     pub fn new<V: VisualizationPublisher + 'static, M: MotorPublisher + 'static>(
-        npu: Arc<Mutex<DynamicNPU>>,
+        npu: Arc<TracingMutex<DynamicNPU>>,
         viz_publisher: Option<Arc<Mutex<V>>>,
         motor_publisher: Option<Arc<Mutex<M>>>,
         frequency_hz: f64,
@@ -521,7 +522,28 @@ impl BurstLoopRunner {
     /// Get current FCL snapshot for monitoring/debugging
     /// Returns Vec of (NeuronId, potential) pairs
     pub fn get_fcl_snapshot(&self) -> Vec<(NeuronId, f32)> {
-        self.npu.lock().unwrap().get_last_fcl_snapshot()
+        let lock_start = std::time::Instant::now();
+        let thread_id = std::thread::current().id();
+        warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} attempting NPU lock for get_fcl_snapshot at {:?}", thread_id, lock_start);
+        let result = {
+            let npu_lock = self.npu.lock().unwrap();
+            let lock_acquired = std::time::Instant::now();
+            let lock_wait = lock_acquired.duration_since(lock_start);
+            if lock_wait.as_millis() > 5 {
+                warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} acquired lock after {:.2}ms wait for get_fcl_snapshot", 
+                    thread_id,
+                    lock_wait.as_secs_f64() * 1000.0);
+            }
+            let snapshot = npu_lock.get_last_fcl_snapshot();
+            snapshot
+        };
+        let lock_released = std::time::Instant::now();
+        let total_duration = lock_released.duration_since(lock_start);
+        warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} RELEASED NPU lock after get_fcl_snapshot (total: {:.2}ms, returned {} neurons)", 
+            thread_id,
+            total_duration.as_secs_f64() * 1000.0,
+            result.len());
+        result
     }
 
     /// Get current fire queue for monitoring
@@ -539,7 +561,28 @@ impl BurstLoopRunner {
 
     /// Get Fire Ledger window configurations for all cortical areas
     pub fn get_fire_ledger_configs(&self) -> Vec<(u32, usize)> {
-        self.npu.lock().unwrap().get_all_fire_ledger_configs()
+        let lock_start = std::time::Instant::now();
+        let thread_id = std::thread::current().id();
+        warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} attempting NPU lock for get_fire_ledger_configs at {:?}", thread_id, lock_start);
+        let result = {
+            let npu_lock = self.npu.lock().unwrap();
+            let lock_acquired = std::time::Instant::now();
+            let lock_wait = lock_acquired.duration_since(lock_start);
+            if lock_wait.as_millis() > 5 {
+                warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} acquired lock after {:.2}ms wait for get_fire_ledger_configs", 
+                    thread_id,
+                    lock_wait.as_secs_f64() * 1000.0);
+            }
+            let configs = npu_lock.get_all_fire_ledger_configs();
+            configs
+        };
+        let lock_released = std::time::Instant::now();
+        let total_duration = lock_released.duration_since(lock_start);
+        warn!("[NPU-LOCK] BURST-RUNNER: Thread {:?} RELEASED NPU lock after get_fire_ledger_configs (total: {:.2}ms, returned {} configs)", 
+            thread_id,
+            total_duration.as_secs_f64() * 1000.0,
+            result.len());
+        result
     }
 
     /// Configure Fire Ledger window size for a specific cortical area
@@ -588,7 +631,7 @@ impl BurstLoopRunner {
     }
 
     /// Get reference to NPU for direct access (use sparingly)
-    pub fn get_npu(&self) -> Arc<Mutex<DynamicNPU>> {
+    pub fn get_npu(&self) -> Arc<TracingMutex<DynamicNPU>> {
         self.npu.clone()
     }
 
@@ -853,7 +896,7 @@ fn get_timestamp() -> String {
 /// Burst count is tracked by NPU - single source of truth!
 #[allow(clippy::too_many_arguments)]
 fn burst_loop(
-    npu: Arc<Mutex<DynamicNPU>>,
+    npu: Arc<TracingMutex<DynamicNPU>>,
     frequency_hz: Arc<Mutex<f64>>, // Shared frequency - can be updated while running
     running: Arc<AtomicBool>,
     viz_shm_writer: Arc<Mutex<Option<crate::viz_shm_writer::VizSHMWriter>>>,
@@ -866,7 +909,7 @@ fn burst_loop(
     parameter_queue: ParameterUpdateQueue,                 // Asynchronous parameter update queue
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
-    last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
+    _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
     cached_chunk_sizes: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>, // Cached cortical_idx -> chunk_size
 ) {
     let timestamp = get_timestamp();
@@ -936,7 +979,26 @@ fn burst_loop(
             break;
         }
 
+        // Track time since last lock release to detect if something held it
+        static LAST_LOCK_RELEASE: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+        static LAST_BURST_END: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+        
         let lock_start = Instant::now();
+        if let Ok(last_release) = LAST_LOCK_RELEASE.lock() {
+            if let Some(last) = *last_release {
+                let gap = lock_start.duration_since(last);
+                // Only warn if gap is suspiciously long (suggests lock was held during sleep)
+                // Normal sleep for 15Hz = ~66ms, so if gap > 70ms, something might be wrong
+                if gap.as_millis() > 70 {
+                    warn!(
+                        "[NPU-LOCK] Burst {}: Suspicious gap since last release: {:.2}ms (expected ~66ms for 15Hz) - lock may have been held during sleep!",
+                        burst_num,
+                        gap.as_secs_f64() * 1000.0
+                    );
+                }
+            }
+        }
+        
         if burst_num < 5 || burst_num.is_multiple_of(100) {
             trace!(
                 "[BURST-LOOP-DIAGNOSTIC] Burst {}: Attempting NPU lock...",
@@ -944,17 +1006,44 @@ fn burst_loop(
             );
         }
 
-        let should_exit = {
+        // Track lock acquisition time outside block scope for diagnostics
+        let lock_acquired = {
+            // Log lock attempt with timestamp for correlation
+            if lock_start.elapsed().as_millis() == 0 {
+                debug!("[NPU-LOCK] Burst {}: Attempting lock acquisition at {:?}", burst_num, lock_start);
+            }
+            
+            // Check if something else is holding the lock
+            let acquisition_start = lock_start;
+            let current_thread_id = std::thread::current().id();
             let mut npu_lock = npu.lock().unwrap();
-            let lock_acquired = Instant::now();
-            let lock_wait_duration = lock_acquired.duration_since(lock_start);
+            let acquired = Instant::now();
+            let lock_wait_duration = acquired.duration_since(lock_start);
+            
             // Log if lock acquisition took significant time (could indicate contention)
             if lock_wait_duration.as_millis() > 10 {
-                warn!(
-                    "[BURST-LOOP] ⚠️ Slow NPU lock acquisition: {:.2}ms (burst {}) - possible lock contention!",
-                    lock_wait_duration.as_secs_f64() * 1000.0,
-                    burst_num
-                );
+                // Check if we can see what might have been holding it
+                if let Ok(last_release) = LAST_LOCK_RELEASE.lock() {
+                    if let Some(last) = *last_release {
+                        let time_since_release = acquisition_start.duration_since(last);
+                        warn!(
+                            "[NPU-LOCK] ⚠️ Slow lock acquisition: {:.2}ms wait (burst {}, thread={:?}) | Time since last release: {:.2}ms | Another thread held the lock for ~{:.2}ms during sleep! Check logs for [NPU-LOCK] entries immediately before this.",
+                            lock_wait_duration.as_secs_f64() * 1000.0,
+                            burst_num,
+                            current_thread_id,
+                            time_since_release.as_secs_f64() * 1000.0,
+                            lock_wait_duration.as_secs_f64() * 1000.0
+                        );
+                    } else {
+                        warn!(
+                            "[NPU-LOCK] ⚠️ Slow lock acquisition: {:.2}ms (burst {}, thread={:?}) - possible lock contention!",
+                            lock_wait_duration.as_secs_f64() * 1000.0,
+                            burst_num,
+                            current_thread_id
+                        );
+                    }
+                }
+                debug!("[NPU-LOCK] Lock acquired by burst loop thread {:?} after {}ms wait", current_thread_id, lock_wait_duration.as_millis());
             }
             if burst_num < 5 || burst_num.is_multiple_of(100) {
                 trace!(
@@ -965,7 +1054,7 @@ fn burst_loop(
             }
 
             // Check flag again after acquiring lock (in case shutdown happened during lock wait)
-            if !running.load(Ordering::Relaxed) {
+            let should_exit = if !running.load(Ordering::Relaxed) {
                 true // Signal to exit
             } else {
                 // APPLY QUEUED PARAMETER UPDATES (before burst processing)
@@ -1231,12 +1320,31 @@ fn burst_loop(
                         false // Continue despite error
                     }
                 }
-            }
+            };
+            
+            // Return both should_exit and lock_acquired time
+            (should_exit, acquired)
         };
 
+        let (should_exit, lock_acquired) = lock_acquired;
         let npu_lock_release_time = Instant::now();
-        if burst_num < 5 || burst_num.is_multiple_of(100) {
-            trace!("[BURST-TIMING] Burst {}: NPU lock RELEASED", burst_num);
+        let release_thread_id = std::thread::current().id();
+        
+        // Update last lock release time
+        if let Ok(mut last_release) = LAST_LOCK_RELEASE.lock() {
+            *last_release = Some(npu_lock_release_time);
+        }
+        
+        // Log lock release timing for diagnostics
+        let lock_hold_duration = npu_lock_release_time.duration_since(lock_acquired);
+        if lock_hold_duration.as_millis() > 5 || burst_num < 5 || burst_num.is_multiple_of(100) {
+            warn!(
+                "[NPU-LOCK] Burst {} (thread={:?}): Lock RELEASED (held for {:.2}ms, total from acquisition: {:.2}ms)",
+                burst_num,
+                release_thread_id,
+                lock_hold_duration.as_secs_f64() * 1000.0,
+                npu_lock_release_time.duration_since(lock_start).as_secs_f64() * 1000.0
+            );
         }
 
         // Exit if shutdown was requested

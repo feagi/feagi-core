@@ -7,6 +7,7 @@
 use crate::common::ApiState;
 use crate::common::{ApiError, ApiResult, Json, Path, Query, State};
 use std::collections::HashMap;
+use tracing::warn;
 
 /// GET /v1/connectome/cortical_areas/list/detailed
 #[utoipa::path(
@@ -416,12 +417,17 @@ pub async fn get_area_synapses(
 
     // Collect all outgoing synapses from neurons in this area
     // Access NPU through ConnectomeManager singleton
+    warn!("[API] /v1/connectome/cortical_area/{}/synapses endpoint called - this acquires NPU lock!", area_id);
     let manager = feagi_brain_development::ConnectomeManager::instance();
     let manager_lock = manager.read();
     let npu_arc = manager_lock
         .get_npu()
         .ok_or_else(|| ApiError::internal("NPU not initialized"))?;
+    let lock_start = std::time::Instant::now();
+    warn!("[NPU-LOCK] CONNECTOME-API: Acquiring NPU lock for synapse queries");
     let npu_lock = npu_arc.lock().unwrap();
+    let lock_wait = lock_start.elapsed();
+    warn!("[NPU-LOCK] CONNECTOME-API: Lock acquired (waited {:.2}ms)", lock_wait.as_secs_f64() * 1000.0);
 
     let mut all_synapses = Vec::new();
     for neuron_info in &neurons {

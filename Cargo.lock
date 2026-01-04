@@ -2165,6 +2165,7 @@ dependencies = [
  "feagi-npu-plasticity",
  "feagi-npu-runtime",
  "feagi-observability",
+ "feagi-state-manager",
  "feagi-structures",
  "parking_lot",
  "serde",

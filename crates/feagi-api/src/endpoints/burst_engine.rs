@@ -76,17 +76,23 @@ pub async fn get_fcl(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
     use std::collections::BTreeMap;
-    use tracing::debug;
+    use tracing::{debug, warn};
+
+    warn!("[API] /v1/burst_engine/fcl endpoint called - this acquires NPU lock!");
 
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
 
     // CRITICAL FIX: Get FCL snapshot WITH cortical_idx from NPU (not extracted from neuron_id bits!)
     // Old code was doing (neuron_id >> 32) which is WRONG - neuron_id is u32, not packed!
+    let call_start = std::time::Instant::now();
     let fcl_data = runtime_service
         .get_fcl_snapshot_with_cortical_idx()
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get FCL snapshot: {}", e)))?;
+    let call_duration = call_start.elapsed();
+    warn!("[API] /v1/burst_engine/fcl completed in {:.2}ms (returned {} neurons)", 
+        call_duration.as_secs_f64() * 1000.0, fcl_data.len());
 
     // Get burst count for timestep
     let timestep = runtime_service
@@ -365,6 +371,8 @@ pub async fn put_fire_ledger_default_window_size(
 pub async fn get_fire_ledger_areas_window_config(
     State(state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
+    use tracing::warn;
+    warn!("[NPU-LOCK] API: GET /v1/burst_engine/fire_ledger/areas_window_config called - this acquires NPU lock!");
     let runtime_service = state.runtime_service.as_ref();
     let connectome_service = state.connectome_service.as_ref();
 

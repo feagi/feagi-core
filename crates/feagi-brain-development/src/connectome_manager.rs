@@ -122,7 +122,8 @@ pub struct ConnectomeManager {
     ///
     /// This is set by the Python process manager after NPU initialization.
     /// All neuron/synapse data queries delegate to the NPU.
-    npu: Option<Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>>,
+    /// Wrapped in TracingMutex to automatically log all lock acquisitions
+    npu: Option<Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>>,
 
     /// Plasticity executor reference (optional, only when plasticity feature is enabled)
     #[cfg(feature = "plasticity")]
@@ -380,15 +381,15 @@ impl ConnectomeManager {
     ///
     /// # Arguments
     ///
-    /// * `npu` - Arc<Mutex<RustNPU>> to connect to this manager
+    /// * `npu` - Arc<TracingMutex<DynamicNPU>> to connect to this manager
     ///
     /// # Example
     ///
     /// ```rust
-    /// let npu = Arc::new(Mutex::new(RustNPU::new(1_000_000, 10_000_000, 10)));
+    /// let npu = Arc::new(TracingMutex::new(RustNPU::new(1_000_000, 10_000_000, 10), "NPU"));
     /// let manager = ConnectomeManager::new_for_testing_with_npu(npu);
     /// ```
-    pub fn new_for_testing_with_npu(npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>) -> Self {
+    pub fn new_for_testing_with_npu(npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>) -> Self {
         Self {
             cortical_areas: HashMap::new(),
             cortical_id_to_idx: HashMap::new(),
@@ -1373,11 +1374,29 @@ impl ConnectomeManager {
     ///
     /// # Arguments
     ///
-    /// * `npu` - Arc to the Rust NPU
+    /// * `npu` - Arc to the Rust NPU (wrapped in TracingMutex for automatic lock tracing)
     ///
-    pub fn set_npu(&mut self, npu: Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>) {
+    pub fn set_npu(&mut self, npu: Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>) {
         self.npu = Some(Arc::clone(&npu));
         info!(target: "feagi-bdu","🔗 ConnectomeManager: NPU reference set");
+
+        // CRITICAL: Update State Manager with capacity values (from config, never changes)
+        // This ensures health check endpoint can read capacity without acquiring NPU lock
+        #[cfg(not(feature = "wasm"))]
+        {
+            use feagi_state_manager::StateManager;
+            if let Some(state_manager) = StateManager::instance().try_read() {
+                let core_state = state_manager.get_core_state();
+                // Capacity comes from config (set at initialization, never changes)
+                core_state.set_neuron_capacity(self.config.max_neurons as u32);
+                core_state.set_synapse_capacity(self.config.max_synapses as u32);
+                info!(
+                    target: "feagi-bdu",
+                    "📊 Updated State Manager with capacity: {} neurons, {} synapses",
+                    self.config.max_neurons, self.config.max_synapses
+                );
+            }
+        }
 
         // CRITICAL: Backfill cortical area registrations into NPU.
         //
@@ -1425,7 +1444,7 @@ impl ConnectomeManager {
     ///
     /// * `Option<&Arc<Mutex<RustNPU>>>` - Reference to NPU if connected
     ///
-    pub fn get_npu(&self) -> Option<&Arc<Mutex<feagi_npu_burst_engine::DynamicNPU>>> {
+    pub fn get_npu(&self) -> Option<&Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>> {
         self.npu.as_ref()
     }
 
@@ -1443,34 +1462,36 @@ impl ConnectomeManager {
         self.plasticity_executor.as_ref()
     }
 
-    /// Get neuron capacity from NPU
+    /// Get neuron capacity from config (lock-free, never acquires NPU lock)
     ///
     /// # Returns
     ///
-    /// * `usize` - Maximum neuron capacity, or 0 if NPU not connected
+    /// * `usize` - Maximum neuron capacity from config (single source of truth)
+    ///
+    /// # Performance
+    ///
+    /// This is a lock-free read from config that never blocks, even during burst processing.
+    /// Capacity values are set at NPU initialization and never change.
     ///
     pub fn get_neuron_capacity(&self) -> usize {
-        if let Some(ref npu) = self.npu {
-            if let Ok(npu_lock) = npu.lock() {
-                return npu_lock.get_neuron_capacity();
-            }
-        }
-        0
+        // CRITICAL: Read from config, NOT NPU - capacity never changes and should not acquire locks
+        self.config.max_neurons
     }
 
-    /// Get synapse capacity from NPU
+    /// Get synapse capacity from config (lock-free, never acquires NPU lock)
     ///
     /// # Returns
     ///
-    /// * `usize` - Maximum synapse capacity, or 0 if NPU not connected
+    /// * `usize` - Maximum synapse capacity from config (single source of truth)
+    ///
+    /// # Performance
+    ///
+    /// This is a lock-free read from config that never blocks, even during burst processing.
+    /// Capacity values are set at NPU initialization and never change.
     ///
     pub fn get_synapse_capacity(&self) -> usize {
-        if let Some(ref npu) = self.npu {
-            if let Ok(npu_lock) = npu.lock() {
-                return npu_lock.get_synapse_capacity();
-            }
-        }
-        0
+        // CRITICAL: Read from config, NOT NPU - capacity never changes and should not acquire locks
+        self.config.max_synapses
     }
 
     /// Update fatigue index based on utilization of neuron and synapse arrays
