@@ -822,6 +822,16 @@ where
         dispatch!(self, batch_get_neuron_ids_from_coordinates(area_id, coords))
     }
 
+    /// Batch coordinate lookup preserving indices - returns Option<NeuronId> for each input coordinate
+    /// This preserves the index mapping (None if neuron not found at that coordinate)
+    pub fn batch_get_neuron_ids_from_coordinates_with_none(
+        &self,
+        area_id: u32,
+        coords: &[(u32, u32, u32)],
+    ) -> Vec<Option<feagi_npu_neural::types::NeuronId>> {
+        dispatch!(self, batch_get_neuron_ids_from_coordinates_with_none(area_id, coords))
+    }
+
     pub fn get_registered_cortical_area_count(&self) -> usize {
         dispatch!(self, get_registered_cortical_area_count())
     }

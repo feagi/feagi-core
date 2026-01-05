@@ -75,11 +75,11 @@ impl GenomeServiceImpl {
         if let Some(ref burst_runner) = self.burst_runner {
             let manager = self.connectome.read();
             let mappings = manager.get_all_cortical_idx_to_id_mappings();
-            let chunk_sizes = manager.get_all_chunk_sizes();
+            let chunk_sizes = manager.get_all_visualization_granularities();
             let mapping_count = mappings.len();
             let burst_runner_write = burst_runner.write();
             burst_runner_write.refresh_cortical_id_mappings(mappings);
-            burst_runner_write.refresh_chunk_sizes(chunk_sizes);
+            burst_runner_write.refresh_visualization_granularities(chunk_sizes);
             info!(target: "feagi-services", "Refreshed burst runner cache with {} cortical areas", mapping_count);
         }
     }
@@ -1000,6 +1000,17 @@ impl GenomeServiceImpl {
                                 );
                             }
                         }
+                        "visualization_voxel_granularity" => {
+                            // Store as array [x, y, z] in properties
+                            if let Some(arr) = value.as_array() {
+                                if arr.len() == 3 {
+                                    area.properties.insert(
+                                        "visualization_voxel_granularity".to_string(),
+                                        serde_json::json!(arr),
+                                    );
+                                }
+                            }
+                        }
 
                         _ => {}
                     }
@@ -1265,6 +1276,17 @@ impl GenomeServiceImpl {
                                     "burst_engine_active".to_string(),
                                     serde_json::json!(v),
                                 );
+                            }
+                        }
+                        "visualization_voxel_granularity" => {
+                            // Store as array [x, y, z] in properties
+                            if let Some(arr) = value.as_array() {
+                                if arr.len() == 3 {
+                                    area.properties.insert(
+                                        "visualization_voxel_granularity".to_string(),
+                                        serde_json::json!(arr),
+                                    );
+                                }
                             }
                         }
                         _ => {}
@@ -1649,6 +1671,18 @@ impl GenomeServiceImpl {
                                 info!(target: "feagi-services", "[GENOME-UPDATE] Updated position (object format): ({}, {}, {})", x, y, z);
                             }
                         }
+                        "visualization_voxel_granularity" => {
+                            // Store as array [x, y, z] in properties
+                            if let Some(arr) = value.as_array() {
+                                if arr.len() == 3 {
+                                    area.properties.insert(
+                                        "visualization_voxel_granularity".to_string(),
+                                        serde_json::json!(arr),
+                                    );
+                                    info!(target: "feagi-services", "[GENOME-UPDATE] Updated visualization_voxel_granularity: {:?}", arr);
+                                }
+                            }
+                        }
                         _ => {}
                     }
                 }
@@ -1696,6 +1730,18 @@ impl GenomeServiceImpl {
                             let z = obj.get("z").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
                             area.position = (x, y, z).into();
                             info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated position (object format): ({}, {}, {})", x, y, z);
+                        }
+                    }
+                    "heatmap_chunk_size" => {
+                        // Store as array [x, y, z] in properties
+                        if let Some(arr) = value.as_array() {
+                            if arr.len() == 3 {
+                                area.add_property_mut(
+                                    "heatmap_chunk_size".to_string(),
+                                    serde_json::json!(arr),
+                                );
+                                info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated visualization_voxel_granularity: {:?}", arr);
+                            }
                         }
                     }
                     _ => {}
@@ -2512,9 +2558,9 @@ impl GenomeServiceImpl {
                             None
                         }
                     }),
-                heatmap_chunk_size: area
+                visualization_voxel_granularity: area
                     .properties
-                    .get("heatmap_chunk_size")
+                    .get("visualization_voxel_granularity")
                     .and_then(|v| v.as_array())
                     .and_then(|arr| {
                         if arr.len() == 3 {
@@ -2656,9 +2702,9 @@ impl GenomeServiceImpl {
                         None
                     }
                 }),
-            heatmap_chunk_size: area
+            visualization_voxel_granularity: area
                 .properties
-                .get("heatmap_chunk_size")
+                .get("visualization_voxel_granularity")
                 .and_then(|v| v.as_array())
                 .and_then(|arr| {
                     if arr.len() == 3 {
@@ -2794,9 +2840,9 @@ impl GenomeServiceImpl {
                         None
                     }
                 }),
-            heatmap_chunk_size: area
+            visualization_voxel_granularity: area
                 .properties
-                .get("heatmap_chunk_size")
+                .get("visualization_voxel_granularity")
                 .and_then(|v| v.as_array())
                 .and_then(|arr| {
                     if arr.len() == 3 {

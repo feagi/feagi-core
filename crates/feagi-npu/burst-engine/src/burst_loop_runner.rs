@@ -114,9 +114,9 @@ pub struct BurstLoopRunner {
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>,
     /// Burst count when mappings were last refreshed
     last_cortical_id_refresh: Arc<Mutex<u64>>,
-    /// Cached cortical_idx -> heatmap_chunk_size mappings (from ConnectomeManager)
-    /// Used to determine when to apply heatmap aggregation for large areas
-    cached_chunk_sizes: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>,
+    /// Cached cortical_idx -> visualization_voxel_granularity mappings (from ConnectomeManager)
+    /// Used to determine when to apply aggregated rendering for large areas
+    cached_visualization_granularities: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>,
 }
 
 impl BurstLoopRunner {
@@ -304,7 +304,7 @@ impl BurstLoopRunner {
             sensory_manager: Arc::new(Mutex::new(sensory_manager)),
             cached_cortical_id_mappings: Arc::new(Mutex::new(ahash::AHashMap::new())),
             last_cortical_id_refresh: Arc::new(Mutex::new(0)),
-            cached_chunk_sizes: Arc::new(Mutex::new(ahash::AHashMap::new())),
+            cached_visualization_granularities: Arc::new(Mutex::new(ahash::AHashMap::new())),
             viz_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_viz_shm_writer
             motor_shm_writer: Arc::new(Mutex::new(None)), // Initialized later via attach_motor_shm_writer
             viz_publisher: viz_publisher_trait, // Trait object for visualization (NO PYTHON CALLBACKS!)
@@ -417,7 +417,7 @@ impl BurstLoopRunner {
         let plasticity_notify = self.plasticity_notify.clone(); // Clone Arc for thread
         let cached_cortical_id_mappings = self.cached_cortical_id_mappings.clone();
         let last_cortical_id_refresh = self.last_cortical_id_refresh.clone();
-        let cached_chunk_sizes = self.cached_chunk_sizes.clone();
+        let cached_visualization_granularities = self.cached_visualization_granularities.clone();
 
         self.thread_handle = Some(
             thread::Builder::new()
@@ -438,7 +438,7 @@ impl BurstLoopRunner {
                         plasticity_notify,
                         cached_cortical_id_mappings,
                         last_cortical_id_refresh,
-                        cached_chunk_sizes,
+                        cached_visualization_granularities,
                     );
                 })
                 .map_err(|e| format!("Failed to spawn burst loop thread: {}", e))?,
@@ -649,13 +649,13 @@ impl BurstLoopRunner {
         );
     }
 
-    /// Refresh cortical_idx -> heatmap_chunk_size mappings from ConnectomeManager
+    /// Refresh cortical_idx -> visualization_voxel_granularity mappings from ConnectomeManager
     /// This should be called when cortical areas are created/updated
-    pub fn refresh_chunk_sizes(&self, chunk_sizes: ahash::AHashMap<u32, (u32, u32, u32)>) {
-        *self.cached_chunk_sizes.lock().unwrap() = chunk_sizes;
+    pub fn refresh_visualization_granularities(&self, granularities: ahash::AHashMap<u32, (u32, u32, u32)>) {
+        *self.cached_visualization_granularities.lock().unwrap() = granularities;
         debug!(
             "[BURST-LOOP] Refreshed chunk sizes: {} areas",
-            self.cached_chunk_sizes.lock().unwrap().len()
+            self.cached_visualization_granularities.lock().unwrap().len()
         );
     }
 }
@@ -666,7 +666,7 @@ impl Drop for BurstLoopRunner {
     }
 }
 
-/// Aggregate fire queue data into heatmap chunks for large-area visualization
+/// Aggregate fire queue data into visualization chunks for large-area rendering
 ///
 /// This function aggregates neuron firing data into coarser spatial chunks to reduce
 /// message size for very large cortical areas (>1M neurons). Each chunk represents
@@ -677,20 +677,20 @@ impl Drop for BurstLoopRunner {
 /// * `neuron_ids` - Neuron IDs that fired
 /// * `coords_x`, `coords_y`, `coords_z` - Neuron coordinates
 /// * `potentials` - Membrane potentials
-/// * `chunk_size` - Chunk dimensions (x, y, z)
+/// * `granularity` - Visualization voxel granularity dimensions (x, y, z)
 ///
 /// # Returns
 ///
 /// Aggregated data: (chunk_coords_x, chunk_coords_y, chunk_coords_z, chunk_potentials, chunk_counts)
-fn aggregate_into_heatmap_chunks(
+fn aggregate_into_visualization_chunks(
     neuron_ids: &[u32],
     coords_x: &[u32],
     coords_y: &[u32],
     coords_z: &[u32],
     potentials: &[f32],
-    chunk_size: (u32, u32, u32),
+    granularity: (u32, u32, u32),
 ) -> (Vec<u32>, Vec<u32>, Vec<u32>, Vec<f32>, Vec<u32>) {
-    let (chunk_x, chunk_y, chunk_z) = chunk_size;
+    let (chunk_x, chunk_y, chunk_z) = granularity;
     
     // Use HashMap to aggregate chunks: chunk_coord -> (sum_potential, count)
     let mut chunk_map: ahash::AHashMap<(u32, u32, u32), (f32, u32)> = ahash::AHashMap::new();
@@ -910,7 +910,7 @@ fn burst_loop(
     plasticity_notify: Option<Arc<dyn Fn(u64) + Send + Sync>>, // Plasticity notification callback
     cached_cortical_id_mappings: Arc<Mutex<ahash::AHashMap<u32, String>>>, // Cached cortical_idx -> cortical_id
     _last_cortical_id_refresh: Arc<Mutex<u64>>, // Burst count when mappings were last refreshed
-    cached_chunk_sizes: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>, // Cached cortical_idx -> chunk_size
+    cached_visualization_granularities: Arc<Mutex<ahash::AHashMap<u32, (u32, u32, u32)>>>, // Cached cortical_idx -> visualization_granularity
 ) {
     let timestamp = get_timestamp();
     let initial_freq = *frequency_hz.lock().unwrap();
@@ -1471,13 +1471,13 @@ fn burst_loop(
                 // only needs cortical_id once, and it will be refreshed on next area creation/update
                 
                 // CRITICAL PERFORMANCE: Clone both maps to release locks immediately
-                // This prevents holding locks during expensive heatmap aggregation and vector cloning
-                let chunk_sizes_clone = {
-                    let chunk_sizes = cached_chunk_sizes.lock().unwrap();
-                    if chunk_sizes.is_empty() {
+                // This prevents holding locks during expensive visualization aggregation and vector cloning
+                let granularities_clone = {
+                    let granularities = cached_visualization_granularities.lock().unwrap();
+                    if granularities.is_empty() {
                         None
                     } else {
-                        Some(chunk_sizes.clone())
+                        Some(granularities.clone())
                     }
                 };
                 
@@ -1527,36 +1527,36 @@ fn burst_loop(
                         }
                     };
 
-                    // Check if this area should use heatmap aggregation
-                    // CRITICAL PERFORMANCE: Only clone vectors when NOT using heatmap (heatmap creates new vectors)
-                    // For areas without heatmap, we must clone because we're reading from Arc (can't move)
+                    // Check if this area should use aggregated rendering
+                    // CRITICAL PERFORMANCE: Only clone vectors when NOT using aggregated rendering (aggregated rendering creates new vectors)
+                    // For areas without aggregated rendering, we must clone because we're reading from Arc (can't move)
                     // OPTIMIZATION: For small numbers of fired neurons, cloning is fast. For large numbers,
-                    // heatmap aggregation should be used to reduce data size.
+                    // aggregated rendering should be used to reduce data size.
                     let (final_coords_x, final_coords_y, final_coords_z, final_potentials, final_neuron_ids) = 
-                        if let Some(ref chunk_sizes) = chunk_sizes_clone {
-                            if let Some(&chunk_size) = chunk_sizes.get(area_id) {
-                                // Apply heatmap aggregation for large areas (creates new aggregated vectors)
+                        if let Some(ref granularities) = granularities_clone {
+                            if let Some(&granularity) = granularities.get(area_id) {
+                                // Apply aggregated rendering for large areas (creates new aggregated vectors)
                                 // This reduces data size significantly for areas with many fired neurons
                                 let (chunk_x, chunk_y, chunk_z, chunk_p, _chunk_counts) = 
-                                    aggregate_into_heatmap_chunks(
+                                    aggregate_into_visualization_chunks(
                                         neuron_ids,
                                         coords_x,
                                         coords_y,
                                         coords_z,
                                         potentials,
-                                        chunk_size,
+                                        granularity,
                                     );
-                                // For heatmap, use chunk indices as neuron IDs (or sequential IDs)
+                                // For aggregated rendering, use chunk indices as neuron IDs (or sequential IDs)
                                 let chunk_ids: Vec<u32> = (0..chunk_x.len() as u32).collect();
                                 (chunk_x, chunk_y, chunk_z, chunk_p, chunk_ids)
                             } else {
-                                // No heatmap for this area - must clone because we're reading from Arc (can't move)
+                                // No aggregated rendering for this area - must clone because we're reading from Arc (can't move)
                                 // NOTE: This is only expensive if many neurons fired. If only a few neurons fired,
                                 // the vectors are small and cloning is fast.
                                 (coords_x.clone(), coords_y.clone(), coords_z.clone(), potentials.clone(), neuron_ids.clone())
                             }
                         } else {
-                            // No heatmap configured at all - must clone because we're reading from Arc (can't move)
+                            // No aggregated rendering configured at all - must clone because we're reading from Arc (can't move)
                             // NOTE: This is only expensive if many neurons fired. If only a few neurons fired,
                             // the vectors are small and cloning is fast.
                             (coords_x.clone(), coords_y.clone(), coords_z.clone(), potentials.clone(), neuron_ids.clone())
@@ -1580,7 +1580,7 @@ fn burst_loop(
 
                     // CRITICAL PERFORMANCE: Only clone vectors if needed (memory areas use small vectors)
                     // For normal areas, we must clone because we're reading from Arc (can't move)
-                    // For heatmap areas, we already have the aggregated data
+                    // For aggregated rendering areas, we already have the aggregated data
                     raw_snapshot.insert(
                         *area_id,
                         RawFireQueueData {

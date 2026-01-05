@@ -143,6 +143,8 @@ pub fn apply_block_connection_morphology_batched(
     npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
     src_area_id: u32,
     dst_area_id: u32,
+    src_dimensions: (usize, usize, usize),
+    dst_dimensions: (usize, usize, usize),
     scaling_factor: u32,
     weight: u8,
     conductance: u8,
@@ -154,53 +156,31 @@ pub fn apply_block_connection_morphology_batched(
     
     const BATCH_SIZE: usize = 50_000; // Process 50k synapses per batch
     
-    // Step 1: Query all neuron data (with lock)
-    let (src_neurons, src_dimensions, dst_dimensions, dst_pos_map) = {
-        let mut npu_lock = npu.lock().map_err(|e| {
-            crate::types::BduError::Internal(format!("Failed to lock NPU: {}", e))
-        })?;
-        
-        let src_neurons = npu_lock.get_neurons_in_cortical_area(src_area_id);
-        if src_neurons.is_empty() {
-            return Ok(0);
-        }
-        
-        let src_dimensions = calculate_area_dimensions(&*npu_lock, src_area_id);
-        let dst_dimensions = calculate_area_dimensions(&*npu_lock, dst_area_id);
-        
-        let mut dst_pos_map = std::collections::HashMap::new();
-        for dst_nid in npu_lock.get_neurons_in_cortical_area(dst_area_id) {
-            if let Some(coords) = npu_lock.get_neuron_coordinates(dst_nid) {
-                dst_pos_map.insert(coords, dst_nid);
-            }
-        }
-        
-        // Collect source neuron positions (need to query while lock is held)
-        let mut src_neuron_data = Vec::new();
-        for src_nid in &src_neurons {
-            if let Some(src_pos) = npu_lock.get_neuron_coordinates(*src_nid) {
-                src_neuron_data.push((*src_nid, src_pos));
-            }
-        }
-        
-        (src_neuron_data, src_dimensions, dst_dimensions, dst_pos_map)
-    };
-    
-    // Step 2: Pre-compute all synapse operations (NO LOCK - this is fast)
+    // CRITICAL: Do NOT call get_neurons_in_cortical_area - iterate through coordinate space instead
+    // Step 1: Pre-compute all synapse operations by iterating coordinate space (NO LOCK)
     let mut synapse_ops: Vec<(u32, u32)> = Vec::new();
-    for (src_nid, src_pos) in src_neurons {
-        let dst_pos = syn_block_connection(
-            "",
-            "",
-            src_pos,
-            src_dimensions,
-            dst_dimensions,
-            scaling_factor,
-        )?;
-
-        if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
-            if rng.gen_range(0..100) < synapse_attractivity {
-                synapse_ops.push((src_nid, dst_nid));
+    
+    // Iterate through coordinate space instead of neurons
+    for x in 0..src_dimensions.0 {
+        for y in 0..src_dimensions.1 {
+            for z in 0..src_dimensions.2 {
+                let src_pos = (x as u32, y as u32, z as u32);
+                
+                // Calculate destination coordinate using morphology
+                let dst_pos = match syn_block_connection(
+                    "",
+                    "",
+                    src_pos,
+                    src_dimensions,
+                    dst_dimensions,
+                    scaling_factor,
+                ) {
+                    Ok(pos) => pos,
+                    Err(_) => continue,
+                };
+                
+                // Store operation (will look up neurons later in batches)
+                synapse_ops.push((src_pos.0 << 16 | src_pos.1 << 8 | src_pos.2, dst_pos.0 << 16 | dst_pos.1 << 8 | dst_pos.2));
             }
         }
     }
@@ -213,21 +193,50 @@ pub fn apply_block_connection_morphology_batched(
     if total_synapses > BATCH_SIZE {
         info!(
             target: "feagi-bdu",
-            "Batching synapse creation: {} synapses in batches of {} (releasing NPU lock between batches)",
+            "Batching synapse creation: {} coordinate pairs in batches of {} (releasing NPU lock between batches)",
             total_synapses, BATCH_SIZE
         );
     }
     
-    // Step 3: Create synapses in batches, releasing lock between batches
+    // Step 2: Look up neurons and create synapses in batches, releasing lock between batches
     let mut synapse_count = 0u32;
     for (batch_idx, batch) in synapse_ops.chunks(BATCH_SIZE).enumerate() {
         // Re-acquire NPU lock for this batch
+        let npu_lock = npu.lock().map_err(|e| {
+            crate::types::BduError::Internal(format!("Failed to lock NPU for batch {}: {}", batch_idx, e))
+        })?;
+        
+        // Decode coordinates and look up neurons
+        let mut batch_synapses = Vec::new();
+        for &(src_coord_encoded, dst_coord_encoded) in batch {
+            let src_pos = (
+                (src_coord_encoded >> 16) as u32,
+                ((src_coord_encoded >> 8) & 0xFF) as u32,
+                (src_coord_encoded & 0xFF) as u32,
+            );
+            let dst_pos = (
+                (dst_coord_encoded >> 16) as u32,
+                ((dst_coord_encoded >> 8) & 0xFF) as u32,
+                (dst_coord_encoded & 0xFF) as u32,
+            );
+            
+            // Look up neurons at coordinates
+            if let Some(src_nid) = npu_lock.get_neuron_id_at_coordinate(src_area_id, src_pos.0, src_pos.1, src_pos.2) {
+                if let Some(dst_nid) = npu_lock.get_neuron_id_at_coordinate(dst_area_id, dst_pos.0, dst_pos.1, dst_pos.2) {
+                    if rng.gen_range(0..100) < synapse_attractivity {
+                        batch_synapses.push((src_nid, dst_nid));
+                    }
+                }
+            }
+        }
+        
+        // Create synapses in this batch (need mutable lock)
+        drop(npu_lock);
         let mut npu_lock = npu.lock().map_err(|e| {
             crate::types::BduError::Internal(format!("Failed to lock NPU for batch {}: {}", batch_idx, e))
         })?;
         
-        // Create synapses in this batch
-        for &(src_nid, dst_nid) in batch {
+        for (src_nid, dst_nid) in batch_synapses {
             if npu_lock
                 .add_synapse(
                     NeuronId(src_nid),
@@ -328,6 +337,8 @@ pub fn apply_block_connection_morphology(
     npu: &mut feagi_npu_burst_engine::DynamicNPU,
     src_area_id: u32,
     dst_area_id: u32,
+    src_dimensions: (usize, usize, usize),
+    dst_dimensions: (usize, usize, usize),
     scaling_factor: u32,
     weight: u8,
     conductance: u8,
@@ -337,45 +348,146 @@ pub fn apply_block_connection_morphology(
     use rand::Rng;
     let mut rng = get_rng();
 
-    let src_neurons = npu.get_neurons_in_cortical_area(src_area_id);
-    if src_neurons.is_empty() {
-        return Ok(0);
+    // CRITICAL: Do NOT call get_neurons_in_cortical_area - it iterates through ALL 8M neurons!
+    // 
+    // PROBLEM: get_neuron_id_at_coordinate() does a linear search through all neurons for each lookup.
+    // Iterating through coordinate space and calling it for each coordinate is O(coordinate_space * total_neurons),
+    // which could be worse than scanning neurons once if coordinate space is large.
+    //
+    // SOLUTION: Use batch coordinate lookup if available, or fall back to scanning neurons once
+    // and using the cached coordinate map. For now, we'll use a more efficient approach:
+    // 1. Calculate all destination coordinates first (no neuron lookup needed)
+    // 2. Use batch_get_neuron_ids_from_coordinates for both source and destination lookups
+    //
+    // However, we still need to know which source coordinates to check. For block_connection,
+    // we iterate through the source coordinate space.
+    
+    use tracing::warn;
+    use std::time::Instant;
+    
+    let total_coords = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
+    if total_coords > 1_000_000 {
+        warn!(
+            target: "feagi-bdu",
+            "⚠️ Large coordinate space: {}x{}x{} = {} coordinates. Consider using batched lookup.",
+            src_dimensions.0, src_dimensions.1, src_dimensions.2, total_coords
+        );
     }
-
-    let src_dimensions = calculate_area_dimensions(npu, src_area_id);
-    let dst_dimensions = calculate_area_dimensions(npu, dst_area_id);
-
-    let mut dst_pos_map = std::collections::HashMap::new();
-    for dst_nid in npu.get_neurons_in_cortical_area(dst_area_id) {
-        if let Some(coords) = npu.get_neuron_coordinates(dst_nid) {
-            dst_pos_map.insert(coords, dst_nid);
+    
+    let start = Instant::now();
+    
+    // OPTIMIZATION: For small coordinate spaces, pre-calculate all coordinate pairs
+    // For large spaces, we could optimize further by only checking coordinates where neurons exist
+    let total_source_coords = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
+    
+    // Collect all source coordinates we need to check
+    let mut src_coords_to_check = Vec::with_capacity(total_source_coords);
+    let mut expected_dst_coords = Vec::with_capacity(total_source_coords);
+    
+    for x in 0..src_dimensions.0 {
+        for y in 0..src_dimensions.1 {
+            for z in 0..src_dimensions.2 {
+                let src_pos = (x as u32, y as u32, z as u32);
+                src_coords_to_check.push(src_pos);
+                
+                // Calculate destination coordinate
+                let dst_pos = match syn_block_connection(
+                    "",
+                    "",
+                    src_pos,
+                    src_dimensions,
+                    dst_dimensions,
+                    scaling_factor,
+                ) {
+                    Ok(pos) => pos,
+                    Err(_) => {
+                        expected_dst_coords.push(None);
+                        continue;
+                    }
+                };
+                expected_dst_coords.push(Some(dst_pos));
+            }
         }
     }
-
+    
+    let calc_time = start.elapsed();
+    if calc_time.as_millis() > 100 {
+        warn!(
+            target: "feagi-bdu",
+            "⚠️ Slow coordinate calculation: {}ms for {} source coordinates ({}x{}x{})",
+            calc_time.as_millis(),
+            src_coords_to_check.len(),
+            src_dimensions.0, src_dimensions.1, src_dimensions.2
+        );
+    }
+    
+    // CRITICAL: Use batch coordinate lookup which builds hashmap once (O(neurons_in_area))
+    // then does O(1) lookups for each coordinate. This is MUCH faster than individual linear searches!
+    let lookup_start = Instant::now();
+    let src_neuron_lookups = npu.batch_get_neuron_ids_from_coordinates_with_none(src_area_id, &src_coords_to_check);
+    let lookup_time = lookup_start.elapsed();
+    
+    // Match source neurons with their destination coordinates (preserving index mapping)
+    let mut src_to_dst_map = Vec::new();
+    let mut found_source_count = 0;
+    
+    for (idx, src_nid_opt) in src_neuron_lookups.iter().enumerate() {
+        if let Some(src_nid) = src_nid_opt {
+            found_source_count += 1;
+            if let Some(dst_pos) = expected_dst_coords[idx] {
+                src_to_dst_map.push((*src_nid, dst_pos));
+            }
+        }
+    }
+    
+    if lookup_time.as_millis() > 100 || found_source_count == 0 {
+        warn!(
+            target: "feagi-bdu",
+            "⚠️ Source batch lookup: {}ms for {} coordinates (found {} neurons, dimensions={}x{}x{})",
+            lookup_time.as_millis(),
+            src_coords_to_check.len(),
+            found_source_count,
+            src_dimensions.0, src_dimensions.1, src_dimensions.2
+        );
+    }
+    
+    if src_to_dst_map.is_empty() {
+        warn!(
+            target: "feagi-bdu",
+            "⚠️ No source neurons found in coordinate space {}x{}x{}",
+            src_dimensions.0, src_dimensions.1, src_dimensions.2
+        );
+        return Ok(0);
+    }
+    
+    // Collect unique destination coordinates for batch lookup
+    let dst_coords_to_check: Vec<_> = src_to_dst_map.iter().map(|(_, dst_pos)| *dst_pos).collect();
+    
+    // Batch lookup destination neurons (uses cached coordinate map - O(neurons_in_area) + O(coords))
+    let dst_lookup_start = Instant::now();
+    let dst_neuron_lookups = npu.batch_get_neuron_ids_from_coordinates_with_none(dst_area_id, &dst_coords_to_check);
+    let dst_lookup_time = dst_lookup_start.elapsed();
+    
+    // Build destination coordinate -> neuron ID map
+    let mut dst_coord_to_neuron = std::collections::HashMap::new();
+    for (idx, dst_nid_opt) in dst_neuron_lookups.iter().enumerate() {
+        if let Some(dst_nid) = dst_nid_opt {
+            dst_coord_to_neuron.insert(dst_coords_to_check[idx], *dst_nid);
+        }
+    }
+    
+    // Create synapses for matched pairs
     let mut synapse_count = 0u32;
-
-    for src_nid in src_neurons {
-        let Some(src_pos) = npu.get_neuron_coordinates(src_nid) else {
-            continue;
-        };
-
-        let dst_pos = syn_block_connection(
-            "",
-            "",
-            src_pos,
-            src_dimensions,
-            dst_dimensions,
-            scaling_factor,
-        )?;
-
-        // Note: Cannot collapse this if in Rust 2021 (let chains require Rust 2024)
-        #[allow(clippy::collapsible_if)]
-        if let Some(&dst_nid) = dst_pos_map.get(&dst_pos) {
+    let mut found_dest_count = 0;
+    
+    for (src_nid, dst_pos) in src_to_dst_map {
+        if let Some(dst_nid) = dst_coord_to_neuron.get(&dst_pos) {
+            found_dest_count += 1;
             if rng.gen_range(0..100) < synapse_attractivity
                 && npu
                     .add_synapse(
-                        NeuronId(src_nid),
-                        NeuronId(dst_nid),
+                        src_nid,
+                        *dst_nid,
                         SynapticWeight(weight),
                         SynapticConductance(conductance),
                         SynapseType::Excitatory,
@@ -385,6 +497,30 @@ pub fn apply_block_connection_morphology(
                 synapse_count += 1;
             }
         }
+    }
+    
+    if dst_lookup_time.as_millis() > 100 || found_dest_count == 0 {
+        warn!(
+            target: "feagi-bdu",
+            "⚠️ Destination batch lookup: {}ms for {} coordinates (found {} neurons, created {} synapses)",
+            dst_lookup_time.as_millis(),
+            dst_coords_to_check.len(),
+            found_dest_count,
+            synapse_count
+        );
+    }
+    
+    let total_time = start.elapsed();
+    if total_time.as_millis() > 100 {
+        warn!(
+            target: "feagi-bdu",
+            "⚠️ Slow block_connection synaptogenesis: {}ms total (calc={}ms, src_lookup={}ms, dst_lookup={}ms, synapses={})",
+            total_time.as_millis(),
+            calc_time.as_millis(),
+            lookup_time.as_millis(),
+            dst_lookup_time.as_millis(),
+            synapse_count
+        );
     }
 
     Ok(synapse_count)
@@ -525,22 +661,27 @@ pub fn apply_vectors_morphology(
 }
 
 /// Calculate area dimensions by finding max coordinates
+/// PERFORMANCE: This calls get_neurons_in_cortical_area which is expensive on cache miss
 fn calculate_area_dimensions(
     npu: &feagi_npu_burst_engine::DynamicNPU,
     area_id: u32,
 ) -> (usize, usize, usize) {
-    let mut max_x = 0;
-    let mut max_y = 0;
-    let mut max_z = 0;
+    calculate_area_dimensions_without_scanning(npu, area_id).unwrap_or((0, 0, 0))
+}
 
-    for nid in npu.get_neurons_in_cortical_area(area_id) {
-        if let Some((x, y, z)) = npu.get_neuron_coordinates(nid) {
-            max_x = max_x.max(x as usize);
-            max_y = max_y.max(y as usize);
-            max_z = max_z.max(z as usize);
-        }
-    }
-
-    // Dimensions are max+1 (0-indexed coordinates)
-    (max_x + 1, max_y + 1, max_z + 1)
+/// Calculate dimensions without scanning all neurons
+/// 
+/// CRITICAL: This MUST NOT call get_neurons_in_cortical_area.
+/// Dimensions should be stored in ConnectomeManager when areas are created.
+/// This is a temporary fallback that will error if dimensions aren't available.
+fn calculate_area_dimensions_without_scanning(
+    npu: &feagi_npu_burst_engine::DynamicNPU,
+    area_id: u32,
+) -> BduResult<(usize, usize, usize)> {
+    // TODO: Get dimensions from ConnectomeManager.cortical_areas[area_id].dimensions
+    // For now, return error - dimensions must be provided by caller
+    // This ensures we NEVER call get_neurons_in_cortical_area during synaptogenesis
+    Err(crate::types::BduError::Internal(
+        format!("Area dimensions not available for area {}. Dimensions must be stored in ConnectomeManager when areas are created.", area_id)
+    ))
 }

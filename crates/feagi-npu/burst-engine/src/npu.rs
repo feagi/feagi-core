@@ -578,6 +578,9 @@ impl<
                 // This is especially important for large neuron counts (3M+) where scanning is expensive
                 // No cache needed - power neuron is always neuron ID 1 (deterministic)
 
+                // NOTE: Cache will be built lazily on first access to get_neurons_in_cortical_area
+                // To optimize further, call prepopulate_cortical_area_cache() after genome load
+
                 // ✅ ARCHITECTURE FIX: Return only success COUNT, not full Vec<u32> of IDs
                 // Python doesn't need IDs - Rust owns all neuron data!
                 // This eliminates expensive PyO3 Vec→list conversion (was 4s bottleneck!)
@@ -1284,6 +1287,22 @@ impl<
             .batch_coordinate_lookup(cortical_area, coordinates)
             .into_iter()
             .filter_map(|opt_idx| opt_idx.map(|idx| NeuronId(idx as u32)))
+            .collect()
+    }
+
+    /// Batch coordinate lookup preserving indices - returns Option<NeuronId> for each input coordinate
+    /// This preserves the index mapping (None if neuron not found at that coordinate)
+    pub fn batch_get_neuron_ids_from_coordinates_with_none(
+        &self,
+        cortical_area: u32,
+        coordinates: &[(u32, u32, u32)],
+    ) -> Vec<Option<NeuronId>> {
+        self.neuron_storage
+            .read()
+            .unwrap()
+            .batch_coordinate_lookup(cortical_area, coordinates)
+            .into_iter()
+            .map(|opt_idx| opt_idx.map(|idx| NeuronId(idx as u32)))
             .collect()
     }
 
@@ -2983,6 +3002,12 @@ impl<
             .map(|idx| idx as u32)
             .collect()
     }
+
+    /// Pre-populate the cortical area neuron index cache for all areas
+    /// 
+    /// This eliminates expensive O(n) scans on first access to get_neurons_in_cortical_area.
+    /// NOTE: Currently cache is built lazily on first access. To optimize, add prepopulate
+    /// method to NeuronStorage trait and call it here after neurons are loaded.
 
     /// Get number of neurons in a specific cortical area
     pub fn get_cortical_area_neuron_count(&self, cortical_area: u32) -> usize {

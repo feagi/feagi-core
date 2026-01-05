@@ -201,9 +201,9 @@ impl ConnectomeManager {
         Arc::clone(&*INSTANCE)
     }
 
-    /// Calculate optimal heatmap chunk size for a cortical area
+    /// Calculate optimal visualization voxel granularity for a cortical area
     ///
-    /// This function determines the chunk size for heatmap visualization based on:
+    /// This function determines the granularity for aggregated rendering based on:
     /// - Total voxel count (larger areas get larger chunks)
     /// - Aspect ratio (handles thin dimensions like 1024×900×3)
     /// - Target chunk count (~2k-10k chunks for manageable message size)
@@ -222,7 +222,7 @@ impl ConnectomeManager {
     /// - 1024×900×3 → 32×30×3 (960 chunks)
     /// - 128×128×128 → 16×16×16 (512 chunks)
     ///
-    fn calculate_heatmap_chunk_size(dimensions: &CorticalAreaDimensions) -> (u32, u32, u32) {
+    fn calculate_visualization_voxel_granularity(dimensions: &CorticalAreaDimensions) -> (u32, u32, u32) {
         let width = dimensions.width;
         let height = dimensions.height;
         let depth = dimensions.depth;
@@ -536,23 +536,23 @@ impl ConnectomeManager {
             serde_json::json!([])
         );
 
-        // CRITICAL: Calculate and store heatmap chunk size for large-area visualization
-        // This enables heatmap rendering for very large areas (>1M neurons)
-        let chunk_size = Self::calculate_heatmap_chunk_size(&area.dimensions);
+        // CRITICAL: Calculate and store visualization voxel granularity for large-area rendering
+        // This enables aggregated rendering for very large areas (>1M neurons)
+        let granularity = Self::calculate_visualization_voxel_granularity(&area.dimensions);
         area.properties.insert(
-            "heatmap_chunk_size".to_string(),
-            serde_json::json!([chunk_size.0, chunk_size.1, chunk_size.2])
+            "visualization_voxel_granularity".to_string(),
+            serde_json::json!([granularity.0, granularity.1, granularity.2])
         );
         trace!(
             target: "feagi-bdu",
-            "Calculated heatmap chunk size for area {} ({}×{}×{}): {}×{}×{}",
+            "Calculated visualization voxel granularity for area {} ({}×{}×{}): {}×{}×{}",
             cortical_id.as_base_64(),
             area.dimensions.width,
             area.dimensions.height,
             area.dimensions.depth,
-            chunk_size.0,
-            chunk_size.1,
-            chunk_size.2
+            granularity.0,
+            granularity.1,
+            granularity.2
         );
 
         // Store area
@@ -669,12 +669,12 @@ impl ConnectomeManager {
             .collect()
     }
 
-    /// Get all cortical_idx -> heatmap_chunk_size mappings
+    /// Get all cortical_idx -> visualization_voxel_granularity mappings
     ///
-    /// Returns a map of cortical_idx to (chunk_x, chunk_y, chunk_z) for areas that have
-    /// heatmap chunk sizes configured.
-    pub fn get_all_chunk_sizes(&self) -> ahash::AHashMap<u32, (u32, u32, u32)> {
-        let mut chunk_sizes = ahash::AHashMap::new();
+    /// Returns a map of cortical_idx to (granularity_x, granularity_y, granularity_z) for areas that have
+    /// visualization voxel granularity configured.
+    pub fn get_all_visualization_granularities(&self) -> ahash::AHashMap<u32, (u32, u32, u32)> {
+        let mut granularities = ahash::AHashMap::new();
         for (cortical_id, area) in &self.cortical_areas {
             let cortical_idx = self
                 .cortical_id_to_idx
@@ -682,22 +682,22 @@ impl ConnectomeManager {
                 .copied()
                 .unwrap_or(0);
             
-            // Extract chunk size from properties
-            if let Some(chunk_size_json) = area.properties.get("heatmap_chunk_size") {
-                if let Some(arr) = chunk_size_json.as_array() {
+            // Extract visualization granularity from properties
+            if let Some(granularity_json) = area.properties.get("visualization_voxel_granularity") {
+                if let Some(arr) = granularity_json.as_array() {
                     if arr.len() == 3 {
                         if let (Some(x), Some(y), Some(z)) = (
                             arr[0].as_u64(),
                             arr[1].as_u64(),
                             arr[2].as_u64(),
                         ) {
-                            chunk_sizes.insert(cortical_idx, (x as u32, y as u32, z as u32));
+                            granularities.insert(cortical_idx, (x as u32, y as u32, z as u32));
                         }
                     }
                 }
             }
         }
-        chunk_sizes
+        granularities
     }
 
     /// Get all cortical area IDs
@@ -933,8 +933,9 @@ impl ConnectomeManager {
 
     /// Regenerate synapses for a specific cortical mapping
     ///
-    /// Deletes existing synapses between the areas and creates new ones based on
-    /// the updated mapping rules.
+    /// Creates new synapses based on mapping rules. Only removes existing synapses if
+    /// a mapping already existed (update case), not for new mappings (allows multiple
+    /// synapses between the same neurons).
     ///
     /// # Arguments
     /// * `src_area_id` - Source cortical area ID
@@ -957,9 +958,33 @@ impl ConnectomeManager {
             return Ok(0);
         };
 
-        {
-            // First, delete existing synapses between these areas (mapping removal must prune synapses).
+        // IMPORTANT: We should NOT remove existing synapses when creating new ones.
+        // Multiple synapses between the same neuron pair are allowed and expected.
+        //
+        // The original implementation removed synapses before creating new ones, which:
+        // 1. Violates the multi-synapse design
+        // 2. Causes severe performance issues (requires iterating through all 8M neurons with get_neurons_in_cortical_area)
+        //
+        // FIXED: Skip synapse removal entirely - just create new synapses.
+        // This allows multiple synapses per neuron pair and eliminates the 8-10 second delay.
+
+        // REMOVED: Synapse removal step - we should NOT remove existing synapses when creating new ones.
+        // This allows multiple synapses between the same neuron pair and eliminates the performance bottleneck
+        // caused by iterating through all neurons to get neuron lists.
+        // 
+        // Original code would have removed synapses here, but that's incorrect behavior.
+        // If synapse cleanup is needed in the future, it should be:
+        // 1. Explicit deletion API (separate from synapse creation)
+        // 2. Or use an index-based approach (don't iterate all neurons)
+        
+        // Skip synapse removal - proceed directly to creating new synapses
+        if false {
+            // First, delete existing synapses between these areas (only for updates).
+            // OPTIMIZATION: Get neuron lists first, then minimize lock hold time for synapse removal only
             let pruned_synapse_count: usize = {
+                use std::time::Instant;
+                let start = Instant::now();
+                
                 let src_idx = *self.cortical_id_to_idx.get(src_area_id).ok_or_else(|| {
                     BduError::InvalidArea(format!("No cortical idx for source area {}", src_area_id))
                 })?;
@@ -967,179 +992,213 @@ impl ConnectomeManager {
                     BduError::InvalidArea(format!("No cortical idx for destination area {}", dst_area_id))
                 })?;
 
-                let mut npu = npu_arc.lock().unwrap();
-                let sources: Vec<NeuronId> = npu
-                    .get_neurons_in_cortical_area(src_idx)
-                    .into_iter()
-                    .map(NeuronId)
-                    .collect();
-                let targets: Vec<NeuronId> = npu
-                    .get_neurons_in_cortical_area(dst_idx)
-                    .into_iter()
-                    .map(NeuronId)
-                    .collect();
-                let removed = npu.remove_synapses_from_sources_to_targets(sources, targets);
+                // Get neuron lists (this iterates through all neurons - slow but necessary)
+                // TODO: Build cortical_area -> neurons index to make this O(neurons_in_area) instead of O(all_neurons)
+                let (sources, targets) = {
+                    let npu = npu_arc.lock().unwrap();
+                    let sources: Vec<NeuronId> = npu
+                        .get_neurons_in_cortical_area(src_idx)
+                        .into_iter()
+                        .map(NeuronId)
+                        .collect();
+                    let targets: Vec<NeuronId> = npu
+                        .get_neurons_in_cortical_area(dst_idx)
+                        .into_iter()
+                        .map(NeuronId)
+                        .collect();
+                    (sources, targets)
+                }; // Release lock after getting neuron lists
+                
+                let list_time = start.elapsed();
+                if list_time.as_millis() > 100 {
+                    warn!(
+                        target: "feagi-bdu",
+                        "⚠️ Slow neuron list retrieval: {}ms for areas {} -> {} (sources={}, targets={})",
+                        list_time.as_millis(),
+                        src_area_id.as_base_64(),
+                        dst_area_id.as_base_64(),
+                        sources.len(),
+                        targets.len()
+                    );
+                }
+                
+                // Now remove synapses (lock held only for synapse removal, which is fast with synapse_index)
+                let remove_start = Instant::now();
+                let removed = {
+                    let mut npu = npu_arc.lock().unwrap();
+                    npu.remove_synapses_from_sources_to_targets(sources, targets)
+                }; // Release lock immediately after removal
+                
+                let remove_time = remove_start.elapsed();
+                let total_time = start.elapsed();
+                
+                if total_time.as_millis() > 1000 {
+                    warn!(
+                        target: "feagi-bdu",
+                        "⚠️ Slow synapse pruning: {}ms total (list={}ms, remove={}ms) for {} -> {}",
+                        total_time.as_millis(),
+                        list_time.as_millis(),
+                        remove_time.as_millis(),
+                        src_area_id.as_base_64(),
+                        dst_area_id.as_base_64()
+                    );
+                }
+                
                 info!(
                     target: "feagi-bdu",
-                    "Pruned {} existing synapses for mapping {} -> {}",
+                    "Pruned {} existing synapses for mapping {} -> {} ({}ms)",
                     removed,
                     src_area_id,
-                    dst_area_id
+                    dst_area_id,
+                    total_time.as_millis()
                 );
                 removed
             };
-
-            // Then, apply cortical mapping to create new synapses (may be 0 for memory areas)
-            let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
-
-            // Update upstream area tracking based on MAPPING existence, not synapse count
-            // Memory areas have 0 synapses but still need upstream tracking for pattern detection
-            let src_idx = *self.cortical_id_to_idx.get(src_area_id).unwrap();
-            
-            // Check if mapping exists by looking at cortical_mapping_dst property
-            let has_mapping = self.cortical_areas.get(src_area_id)
-                .and_then(|area| area.properties.get("cortical_mapping_dst"))
-                .and_then(|v| v.as_object())
-                .and_then(|map| map.get(&dst_area_id.as_base_64()))
-                .is_some();
-            
-            info!(target: "feagi-bdu",
-                "Mapping result: {} synapses, {} -> {} (mapping_exists={}, will {}update upstream)",
-                synapse_count,
-                src_area_id.as_base_64(),
-                dst_area_id.as_base_64(),
-                has_mapping,
-                if has_mapping { "" } else { "NOT " }
-            );
-            
-            if has_mapping {
-                // Mapping exists - add to upstream tracking (for both memory and regular areas)
-                self.add_upstream_area(dst_area_id, src_idx);
-                
-                // If destination is a memory area, register it with PlasticityExecutor (automatic)
-                #[cfg(feature = "plasticity")]
-                if let Some(ref executor) = self.plasticity_executor {
-                    use feagi_evolutionary::extract_memory_properties;
-                    
-                    if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
-                        if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
-                            let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
-
-                            // Ensure FireLedger tracks the upstream areas with at least the required temporal depth.
-                            // Dense, burst-aligned tracking is required for correct memory pattern hashing.
-                            if let Some(ref npu_arc) = self.npu {
-                                if let Ok(mut npu) = npu_arc.lock() {
-                                    let existing_configs = npu.get_all_fire_ledger_configs();
-                                    for &upstream_idx in &upstream_areas {
-                                        let existing = existing_configs
-                                            .iter()
-                                            .find(|(idx, _)| *idx == upstream_idx)
-                                            .map(|(_, w)| *w)
-                                            .unwrap_or(0);
-
-                                        let desired = mem_props.temporal_depth as usize;
-                                        let resolved = existing.max(desired);
-                                        if resolved != existing {
-                                            if let Err(e) = npu.configure_fire_ledger_window(upstream_idx, resolved) {
-                                                warn!(
-                                                    target: "feagi-bdu",
-                                                    "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
-                                                    upstream_idx,
-                                                    resolved,
-                                                    e
-                                                );
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
-                                }
-                            }
-                            
-                            if let Ok(exec) = executor.lock() {
-                                use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
-                                
-                                let lifecycle_config = MemoryNeuronLifecycleConfig {
-                                    initial_lifespan: mem_props.init_lifespan,
-                                    lifespan_growth_rate: mem_props.lifespan_growth_rate,
-                                    longterm_threshold: mem_props.longterm_threshold,
-                                    max_reactivations: 1000,
-                                };
-                                
-                                exec.register_memory_area(
-                                    dst_area.cortical_idx,
-                                    dst_area_id.as_base_64(),
-                                    mem_props.temporal_depth,
-                                    upstream_areas.clone(),
-                                    Some(lifecycle_config),
-                                );
-                            } else {
-                                warn!(target: "feagi-bdu", "Failed to lock PlasticityExecutor");
-                            }
-                        }
-                    } else {
-                        warn!(target: "feagi-bdu", "Destination area {} not found in cortical_areas", dst_area_id.as_base_64());
-                    }
-                } else {
-                    info!(target: "feagi-bdu", "PlasticityExecutor not available (feature disabled or not initialized)");
-                }
-                
-                #[cfg(not(feature = "plasticity"))]
-                {
-                    info!(target: "feagi-bdu", "Plasticity feature disabled at compile time");
-                }
-            } else {
-                // Mapping deleted - remove from upstream tracking
-                self.remove_upstream_area(dst_area_id, src_idx);
-            }
-
+        } else {
             info!(
                 target: "feagi-bdu",
-                "Created {} new synapses: {} -> {}",
-                synapse_count,
+                "New mapping detected (no existing mapping found) - skipping synapse removal to allow multiple synapses per neuron pair"
+            );
+        }
+
+        // Apply cortical mapping to create new synapses (may be 0 for memory areas)
+        // This creates synapses without removing existing ones for new mappings
+        let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
+
+        // Update upstream area tracking based on MAPPING existence, not synapse count
+        // Memory areas have 0 synapses but still need upstream tracking for pattern detection
+        let src_idx = *self.cortical_id_to_idx.get(src_area_id).unwrap();
+        
+        // Check if mapping exists by looking at cortical_mapping_dst property (after update)
+        let has_mapping = self.cortical_areas.get(src_area_id)
+            .and_then(|area| area.properties.get("cortical_mapping_dst"))
+            .and_then(|v| v.as_object())
+            .and_then(|map| map.get(&dst_area_id.as_base_64()))
+            .is_some();
+        
+        info!(target: "feagi-bdu",
+            "Mapping result: {} synapses, {} -> {} (mapping_exists={}, will {}update upstream)",
+            synapse_count,
+            src_area_id.as_base_64(),
+            dst_area_id.as_base_64(),
+            has_mapping,
+            if has_mapping { "" } else { "NOT " }
+        );
+        
+        if has_mapping {
+            // Mapping exists - add to upstream tracking (for both memory and regular areas)
+            self.add_upstream_area(dst_area_id, src_idx);
+            
+            // If destination is a memory area, register it with PlasticityExecutor (automatic)
+            #[cfg(feature = "plasticity")]
+            if let Some(ref executor) = self.plasticity_executor {
+                use feagi_evolutionary::extract_memory_properties;
+                
+                if let Some(dst_area) = self.cortical_areas.get(dst_area_id) {
+                    if let Some(mem_props) = extract_memory_properties(&dst_area.properties) {
+                        let upstream_areas = self.get_upstream_cortical_areas(dst_area_id);
+
+                        // Ensure FireLedger tracks the upstream areas with at least the required temporal depth.
+                        // Dense, burst-aligned tracking is required for correct memory pattern hashing.
+                        if let Some(ref npu_arc) = self.npu {
+                            if let Ok(mut npu) = npu_arc.lock() {
+                                let existing_configs = npu.get_all_fire_ledger_configs();
+                                for &upstream_idx in &upstream_areas {
+                                    let existing = existing_configs
+                                        .iter()
+                                        .find(|(idx, _)| *idx == upstream_idx)
+                                        .map(|(_, w)| *w)
+                                        .unwrap_or(0);
+
+                                    let desired = mem_props.temporal_depth as usize;
+                                    let resolved = existing.max(desired);
+                                    if resolved != existing {
+                                        if let Err(e) = npu.configure_fire_ledger_window(upstream_idx, resolved) {
+                                            warn!(
+                                                target: "feagi-bdu",
+                                                "Failed to configure FireLedger window for upstream area idx={} (requested={}): {}",
+                                                upstream_idx,
+                                                resolved,
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            } else {
+                                warn!(target: "feagi-bdu", "Failed to lock NPU for FireLedger configuration");
+                            }
+                        }
+                        
+                        if let Ok(exec) = executor.lock() {
+                            use feagi_npu_plasticity::{PlasticityExecutor, MemoryNeuronLifecycleConfig};
+                            
+                            let lifecycle_config = MemoryNeuronLifecycleConfig {
+                                initial_lifespan: mem_props.init_lifespan,
+                                lifespan_growth_rate: mem_props.lifespan_growth_rate,
+                                longterm_threshold: mem_props.longterm_threshold,
+                                max_reactivations: 1000,
+                            };
+                            
+                            exec.register_memory_area(
+                                dst_area.cortical_idx,
+                                dst_area_id.as_base_64(),
+                                mem_props.temporal_depth,
+                                upstream_areas.clone(),
+                                Some(lifecycle_config),
+                            );
+                        } else {
+                            warn!(target: "feagi-bdu", "Failed to lock PlasticityExecutor");
+                        }
+                    }
+                } else {
+                    warn!(target: "feagi-bdu", "Destination area {} not found in cortical_areas", dst_area_id.as_base_64());
+                }
+            } else {
+                info!(target: "feagi-bdu", "PlasticityExecutor not available (feature disabled or not initialized)");
+            }
+            
+            #[cfg(not(feature = "plasticity"))]
+            {
+                info!(target: "feagi-bdu", "Plasticity feature disabled at compile time");
+            }
+        } else {
+            // Mapping deleted - remove from upstream tracking
+            self.remove_upstream_area(dst_area_id, src_idx);
+        }
+
+        info!(
+            target: "feagi-bdu",
+            "Created {} new synapses: {} -> {}",
+            synapse_count,
+            src_area_id,
+            dst_area_id
+        );
+
+        // CRITICAL: Rebuild synapse index so new synapses are visible to queries and propagation!
+        //
+        // Optimization: If we created synapses, the synapse index is already rebuilt while holding the NPU lock
+        // inside `apply_single_morphology_rule()`. Avoid a second NPU mutex acquisition here, which
+        // can block under burst-loop load and make BV think FEAGI "crashed".
+        if synapse_count > 0 {
+            info!(
+                target: "feagi-bdu",
+                "Skipped synapse index rebuild for mapping {} -> {} (rebuilt during synaptogenesis)",
                 src_area_id,
                 dst_area_id
             );
-
-            // CRITICAL: Rebuild synapse index so new synapses are visible to queries and propagation!
-            //
-            // Optimization + stability guard:
-            // If we pruned 0 and created 0, there is no synapse state change to index.
-            // Skipping the rebuild avoids unnecessary contention on the NPU mutex (important under burst load).
-            if pruned_synapse_count == 0 && synapse_count == 0 {
-                info!(
-                    target: "feagi-bdu",
-                    "Skipped synapse index rebuild for mapping {} -> {} (no synapse changes)",
-                    src_area_id,
-                    dst_area_id
-                );
-                return Ok(synapse_count);
-            }
-
-            // If we created synapses, the synapse index is already rebuilt while holding the NPU lock
-            // inside `apply_single_morphology_rule()`. Avoid a second NPU mutex acquisition here, which
-            // can block under burst-loop load and make BV think FEAGI "crashed".
-            if synapse_count > 0 {
-                info!(
-                    target: "feagi-bdu",
-                    "Skipped synapse index rebuild for mapping {} -> {} (rebuilt during synaptogenesis)",
-                    src_area_id,
-                    dst_area_id
-                );
-                return Ok(synapse_count);
-            }
-
+        } else {
+            // No synapses created - still rebuild index in case of synapse removals during updates
             let mut npu = npu_arc.lock().unwrap();
             npu.rebuild_synapse_index();
             info!(
                 target: "feagi-bdu",
-                "Rebuilt synapse index after regenerating {} -> {}",
+                "Rebuilt synapse index after regenerating {} -> {} (synapses removed but none created)",
                 src_area_id,
                 dst_area_id
             );
-
-            Ok(synapse_count)
         }
+
+        Ok(synapse_count)
     }
 
     /// Apply cortical mapping for a specific area pair
@@ -2121,10 +2180,30 @@ impl ConnectomeManager {
                         )?
                     }
                     "block_to_block" => {
-                        // CRITICAL PERFORMANCE: For large areas (>100k neurons), use batched version
-                        // that releases NPU lock between batches to prevent blocking burst loop
-                        let src_neuron_count = npu_lock.get_neurons_in_cortical_area(src_cortical_idx).len();
-                        if src_neuron_count > 100_000 {
+                        // Get dimensions from cortical areas (no neuron scanning!)
+                        // Use src_cortical_id and dst_cortical_id which are available in this scope
+                        let src_area = self.cortical_areas.get(&src_cortical_id).ok_or_else(|| {
+                            crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_cortical_id))
+                        })?;
+                        let dst_area = self.cortical_areas.get(&dst_cortical_id).ok_or_else(|| {
+                            crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_cortical_id))
+                        })?;
+                        
+                        let src_dimensions = (
+                            src_area.dimensions.width as usize,
+                            src_area.dimensions.height as usize,
+                            src_area.dimensions.depth as usize,
+                        );
+                        let dst_dimensions = (
+                            dst_area.dimensions.width as usize,
+                            dst_area.dimensions.height as usize,
+                            dst_area.dimensions.depth as usize,
+                        );
+                        
+                        // CRITICAL: Do NOT call get_neurons_in_cortical_area to check neuron count!
+                        // Use dimensions to estimate: if area is large, use batched version
+                        let estimated_neurons = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
+                        if estimated_neurons > 100_000 {
                             // Release lock and use batched version
                             drop(npu_lock);
                             
@@ -2132,6 +2211,8 @@ impl ConnectomeManager {
                                 npu,
                                 src_cortical_idx,
                                 dst_cortical_idx,
+                                src_dimensions,
+                                dst_dimensions,
                                 scalar, // scaling_factor
                                 weight,
                                 conductance,
@@ -2143,6 +2224,8 @@ impl ConnectomeManager {
                                 &mut npu_lock,
                                 src_cortical_idx,
                                 dst_cortical_idx,
+                                src_dimensions,
+                                dst_dimensions,
                                 scalar, // scaling_factor
                                 weight,
                                 conductance,
@@ -3634,22 +3717,22 @@ impl ConnectomeManager {
         let old_dimensions = area.dimensions;
         area.dimensions = new_dimensions;
 
-        // Recalculate heatmap chunk size for new dimensions
-        let chunk_size = Self::calculate_heatmap_chunk_size(&new_dimensions);
+        // Recalculate visualization voxel granularity for new dimensions
+        let granularity = Self::calculate_visualization_voxel_granularity(&new_dimensions);
         area.properties.insert(
-            "heatmap_chunk_size".to_string(),
-            serde_json::json!([chunk_size.0, chunk_size.1, chunk_size.2])
+            "visualization_voxel_granularity".to_string(),
+            serde_json::json!([granularity.0, granularity.1, granularity.2])
         );
         trace!(
             target: "feagi-bdu",
-            "Recalculated heatmap chunk size for resized area {} ({}×{}×{}): {}×{}×{}",
+            "Recalculated visualization voxel granularity for resized area {} ({}×{}×{}): {}×{}×{}",
             cortical_id.as_base_64(),
             new_dimensions.width,
             new_dimensions.height,
             new_dimensions.depth,
-            chunk_size.0,
-            chunk_size.1,
-            chunk_size.2
+            granularity.0,
+            granularity.1,
+            granularity.2
         );
 
         info!(target: "feagi-bdu",

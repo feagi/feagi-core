@@ -81,6 +81,13 @@ pub struct NeuronArray<T: NeuralValue> {
     /// Cache is invalidated when neurons are added/removed for an area
     /// Uses Mutex for thread-safe interior mutability
     coord_map_cache: Mutex<AHashMap<u32, AHashMap<(u32, u32, u32), usize>>>,
+    
+    /// Cached neuron index per cortical area
+    /// Maps: cortical_area -> Vec<neuron_index>
+    /// This cache eliminates O(n) scans on every get_neurons_in_cortical_area call
+    /// Cache is invalidated when neurons are added/removed for an area
+    /// Uses Mutex for thread-safe interior mutability
+    cortical_area_neuron_index: Mutex<AHashMap<u32, Vec<usize>>>,
 }
 
 impl<T: NeuralValue> NeuronArray<T> {
@@ -105,6 +112,7 @@ impl<T: NeuralValue> NeuronArray<T> {
             coordinates: Vec::with_capacity(capacity * 3), // x,y,z per neuron
             valid_mask: Vec::with_capacity(capacity),
             coord_map_cache: Mutex::new(AHashMap::new()),
+            cortical_area_neuron_index: Mutex::new(AHashMap::new()),
         };
         // Resize to capacity with default values
         result.membrane_potentials.resize(capacity, T::zero());
@@ -249,6 +257,35 @@ impl<T: NeuralValue> NeuronArray<T> {
         }
 
         fired_indices
+    }
+
+    /// Pre-populate the cortical area neuron index cache for all areas
+    /// 
+    /// This eliminates the expensive O(n) scan on first access to get_neurons_in_cortical_area.
+    /// Should be called after neurons are loaded (e.g., after genome load).
+    pub fn prepopulate_cortical_area_cache(&self) {
+        let mut index = match self.cortical_area_neuron_index.lock() {
+            Ok(mut idx) => idx,
+            Err(_) => return, // Lock poisoned, skip
+        };
+        
+        // If cache is already populated, skip
+        if !index.is_empty() {
+            return;
+        }
+        
+        // Build cache for all cortical areas in a single pass
+        let mut area_to_neurons: ahash::AHashMap<u32, Vec<usize>> = ahash::AHashMap::new();
+        
+        for idx in 0..self.count {
+            if self.valid_mask[idx] {
+                let area = self.cortical_areas[idx];
+                area_to_neurons.entry(area).or_insert_with(Vec::new).push(idx);
+            }
+        }
+        
+        // Update cache
+        *index = area_to_neurons;
     }
 }
 
@@ -532,10 +569,15 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
             )?;
         }
 
-        // Invalidate cache for all affected areas (more efficient than per-neuron invalidation)
+        // Invalidate caches for all affected areas (more efficient than per-neuron invalidation)
         if let Ok(mut cache) = self.coord_map_cache.lock() {
-            for area in affected_areas {
-                cache.remove(&area);
+            for area in &affected_areas {
+                cache.remove(area);
+            }
+        }
+        if let Ok(mut index) = self.cortical_area_neuron_index.lock() {
+            for area in &affected_areas {
+                index.remove(area);
             }
         }
 
@@ -560,9 +602,29 @@ impl<T: NeuralValue> NeuronStorage for NeuronArray<T> {
     }
 
     fn get_neurons_in_cortical_area(&self, cortical_area: u32) -> Vec<usize> {
-        (0..self.count)
+        // Try to get from cache first
+        {
+            if let Ok(index) = self.cortical_area_neuron_index.lock() {
+                if let Some(neurons) = index.get(&cortical_area) {
+                    return neurons.clone(); // Fast path: cached index
+                }
+            }
+        }
+        
+        // Cache miss: build index for this cortical area
+        // PERFORMANCE: This is O(n) where n = total neuron count (8M neurons)
+        // For large genomes, this can take 4-5 seconds per area on first access.
+        // TODO: Pre-populate cache during genome load or neuron initialization
+        let neurons: Vec<usize> = (0..self.count)
             .filter(|&idx| self.valid_mask[idx] && self.cortical_areas[idx] == cortical_area)
-            .collect()
+            .collect();
+        
+        // Store in cache for future lookups (fast path)
+        if let Ok(mut index) = self.cortical_area_neuron_index.lock() {
+            index.insert(cortical_area, neurons.clone());
+        }
+        
+        neurons
     }
 
     fn get_neuron_count(&self, cortical_area: u32) -> usize {
