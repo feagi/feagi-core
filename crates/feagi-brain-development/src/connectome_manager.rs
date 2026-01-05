@@ -933,6 +933,7 @@ impl ConnectomeManager {
 
         // Apply cortical mapping to create new synapses (may be 0 for memory areas)
         // This creates synapses without removing existing ones for new mappings
+        // Note: StateManager synapse count is updated inside apply_cortical_mapping_for_pair
         let synapse_count = self.apply_cortical_mapping_for_pair(src_area_id, dst_area_id)?;
 
         // Update upstream area tracking based on MAPPING existence, not synapse count
@@ -1216,7 +1217,7 @@ impl ConnectomeManager {
 
             match morphology.morphology_type {
                 feagi_evolutionary::MorphologyType::Functions => {
-                    // Function-based morphologies (projector, memory, etc.)
+                    // Function-based morphologies (projector, memory, block_to_block, etc.)
                     match morphology_id {
                         "projector" => {
                             use crate::connectivity::synaptogenesis::apply_projector_morphology;
@@ -1241,6 +1242,88 @@ impl ConnectomeManager {
                                 src_idx, dst_idx
                             );
                             Ok(0)
+                        }
+                        "block_to_block" => {
+                            // Get dimensions from cortical areas (no neuron scanning!)
+                            let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                                crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+                            })?;
+                            let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                                crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+                            })?;
+                            
+                            let src_dimensions = (
+                                src_area.dimensions.width as usize,
+                                src_area.dimensions.height as usize,
+                                src_area.dimensions.depth as usize,
+                            );
+                            let dst_dimensions = (
+                                dst_area.dimensions.width as usize,
+                                dst_area.dimensions.height as usize,
+                                dst_area.dimensions.depth as usize,
+                            );
+                            
+                            // Extract scalar from rule (morphology_scalar)
+                            let scalar = if let Some(obj) = rule.as_object() {
+                                // Object format: get from morphology_scalar array
+                                if let Some(scalar_arr) = obj.get("morphology_scalar").and_then(|v| v.as_array()) {
+                                    // Use first element as scalar (or default to 1)
+                                    scalar_arr.get(0).and_then(|v| v.as_i64()).unwrap_or(1) as u32
+                                } else {
+                                    1 // @architecture:acceptable - default scalar
+                                }
+                            } else if let Some(arr) = rule.as_array() {
+                                // Array format: [morphology_id, scalar, multiplier, ...]
+                                arr.get(1).and_then(|v| v.as_i64()).unwrap_or(1) as u32
+                            } else {
+                                1 // @architecture:acceptable - default scalar
+                            };
+                            
+                            // CRITICAL: Do NOT call get_neurons_in_cortical_area to check neuron count!
+                            // Use dimensions to estimate: if area is large, use batched version
+                            let estimated_neurons = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
+                            let count = if estimated_neurons > 100_000 {
+                                // Release lock and use batched version
+                                drop(npu);
+                                
+                                crate::connectivity::synaptogenesis::apply_block_connection_morphology_batched(
+                                    npu_arc,
+                                    *src_idx,
+                                    *dst_idx,
+                                    src_dimensions,
+                                    dst_dimensions,
+                                    scalar, // scaling_factor
+                                    weight,
+                                    conductance,
+                                    synapse_attractivity,
+                                )? as usize
+                            } else {
+                                // Small area: use regular version (faster for small counts)
+                                let count = crate::connectivity::synaptogenesis::apply_block_connection_morphology(
+                                    &mut npu,
+                                    *src_idx,
+                                    *dst_idx,
+                                    src_dimensions,
+                                    dst_dimensions,
+                                    scalar, // scaling_factor
+                                    weight,
+                                    conductance,
+                                    synapse_attractivity,
+                                )? as usize;
+                                // Rebuild synapse index while we still have the lock
+                                if count > 0 {
+                                    npu.rebuild_synapse_index();
+                                }
+                                count
+                            };
+                            
+                            // Ensure the propagation engine sees the newly created synapses immediately (batched version only)
+                            if count > 0 && estimated_neurons > 100_000 {
+                                let mut npu_lock = npu_arc.lock().unwrap();
+                                npu_lock.rebuild_synapse_index();
+                            }
+                            
+                            Ok(count)
                         }
                         _ => {
                             // Other function morphologies not yet implemented
@@ -1690,6 +1773,12 @@ impl ConnectomeManager {
         // Update total neuron count cache
         self.cached_neuron_count.fetch_add(neuron_count as usize, Ordering::Relaxed);
 
+        // CRITICAL: Update StateManager neuron count (for health_check endpoint)
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            let core_state = state_manager.get_core_state();
+            core_state.add_neuron_count(neuron_count);
+        }
+
         // Trigger fatigue index recalculation after neuron creation
         // NOTE: Disabled during genome loading to prevent blocking
         // Fatigue calculation will be enabled after genome loading completes
@@ -1794,6 +1883,12 @@ impl ConnectomeManager {
             z
         );
 
+        // CRITICAL: Update StateManager neuron count (for health_check endpoint)
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            let core_state = state_manager.get_core_state();
+            core_state.add_neuron_count(1);
+        }
+
         Ok(neuron_id.0 as u64)
     }
 
@@ -1822,6 +1917,13 @@ impl ConnectomeManager {
 
         if deleted {
             trace!(target: "feagi-bdu", "Deleted neuron {}", neuron_id);
+
+            // CRITICAL: Update StateManager neuron count (for health_check endpoint)
+            if let Some(state_manager) = StateManager::instance().try_read() {
+                let core_state = state_manager.get_core_state();
+                core_state.subtract_neuron_count(1);
+            }
+
             // Trigger fatigue index recalculation after neuron deletion
             // NOTE: Disabled during genome loading to prevent blocking
             // let _ = self.update_fatigue_index();
@@ -2151,6 +2253,14 @@ impl ConnectomeManager {
 
         // Update total synapse count cache
         self.cached_synapse_count.fetch_add(total_synapses as usize, Ordering::Relaxed);
+
+        // CRITICAL: Update StateManager synapse count (for health_check endpoint)
+        if total_synapses > 0 {
+            if let Some(state_manager) = StateManager::instance().try_read() {
+                let core_state = state_manager.get_core_state();
+                core_state.add_synapse_count(total_synapses as u32);
+            }
+        }
 
         Ok(total_synapses)
     }
@@ -3217,6 +3327,12 @@ impl ConnectomeManager {
 
         if removed {
             debug!(target: "feagi-bdu","Removed synapse: {} -> {}", source_neuron_id, target_neuron_id);
+
+            // CRITICAL: Update StateManager synapse count (for health_check endpoint)
+            if let Some(state_manager) = StateManager::instance().try_read() {
+                let core_state = state_manager.get_core_state();
+                core_state.subtract_synapse_count(1);
+            }
         }
 
         Ok(removed)
@@ -3345,6 +3461,12 @@ impl ConnectomeManager {
 
         info!(target: "feagi-bdu","Batch created {} neurons in cortical area {}", count, cortical_id);
 
+        // CRITICAL: Update StateManager neuron count (for health_check endpoint)
+        if let Some(state_manager) = StateManager::instance().try_read() {
+            let core_state = state_manager.get_core_state();
+            core_state.add_neuron_count(neurons_created as u32);
+        }
+
         Ok(neuron_ids)
     }
 
@@ -3380,6 +3502,14 @@ impl ConnectomeManager {
         }
 
         info!(target: "feagi-bdu","Batch deleted {} neurons", deleted_count);
+
+        // CRITICAL: Update StateManager neuron count (for health_check endpoint)
+        if deleted_count > 0 {
+            if let Some(state_manager) = StateManager::instance().try_read() {
+                let core_state = state_manager.get_core_state();
+                core_state.subtract_neuron_count(deleted_count as u32);
+            }
+        }
 
         // Trigger fatigue index recalculation after batch neuron deletion
         // NOTE: Disabled during genome loading to prevent blocking

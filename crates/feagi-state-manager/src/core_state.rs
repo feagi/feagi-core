@@ -319,6 +319,23 @@ impl MemoryMappedState {
         self.increment_version();
     }
 
+    /// Add to neuron count (atomic increment)
+    pub fn add_neuron_count(&self, delta: u32) -> u32 {
+        let new_count = self.neuron_count.fetch_add(delta, Ordering::AcqRel) + delta;
+        self.increment_version();
+        new_count
+    }
+
+    /// Subtract from neuron count (atomic decrement)
+    pub fn subtract_neuron_count(&self, delta: u32) -> u32 {
+        let new_count = self
+            .neuron_count
+            .fetch_sub(delta, Ordering::AcqRel)
+            .saturating_sub(delta);
+        self.increment_version();
+        new_count
+    }
+
     /// Get synapse count (atomic read)
     pub fn get_synapse_count(&self) -> u32 {
         self.synapse_count.load(Ordering::Acquire)
@@ -328,6 +345,23 @@ impl MemoryMappedState {
     pub fn set_synapse_count(&self, count: u32) {
         self.synapse_count.store(count, Ordering::Release);
         self.increment_version();
+    }
+
+    /// Add to synapse count (atomic increment)
+    pub fn add_synapse_count(&self, delta: u32) -> u32 {
+        let new_count = self.synapse_count.fetch_add(delta, Ordering::AcqRel) + delta;
+        self.increment_version();
+        new_count
+    }
+
+    /// Subtract from synapse count (atomic decrement)
+    pub fn subtract_synapse_count(&self, delta: u32) -> u32 {
+        let new_count = self
+            .synapse_count
+            .fetch_sub(delta, Ordering::AcqRel)
+            .saturating_sub(delta);
+        self.increment_version();
+        new_count
     }
 
     /// Get cortical area count (atomic read)
