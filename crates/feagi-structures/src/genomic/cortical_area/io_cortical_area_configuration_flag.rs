@@ -4,6 +4,7 @@ use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+
 pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
 // Bits 0-7 -> Enum
@@ -224,6 +225,14 @@ pub enum PercentageNeuronPositioning {
     Fractional,
 }
 
+impl PercentageNeuronPositioning {
+    pub fn try_from_serde_map(map: serde_json::Map<String, serde_json::Value>) -> Result<PercentageNeuronPositioning,FeagiDataError> {
+        let val = map.get("percentage_neuron_positioning").ok_or(FeagiDataError::DeserializationError("Unable to extreact percentage_neuron_positioning!".to_string()))?;
+        let output: PercentageNeuronPositioning = serde_json::from_value(val.clone()).map_err(|err| FeagiDataError::DeserializationError("Unable to extreact percentage_neuron_positioning!".to_string()))?;
+        Ok(output)
+    }
+}
+
 impl fmt::Display for PercentageNeuronPositioning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -238,6 +247,14 @@ pub enum FrameChangeHandling {
     #[default]
     Absolute,
     Incremental,
+}
+
+impl FrameChangeHandling {
+    pub fn try_from_serde_map(map: serde_json::Map<String, serde_json::Value>) -> Result<FrameChangeHandling,FeagiDataError> {
+        let val = map.get("frame_change_handling").ok_or(FeagiDataError::DeserializationError("Unable to extreact frame_change_handling!".to_string()))?;
+        let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|err| FeagiDataError::DeserializationError("Unable to extreact frame_change_handling!".to_string()))?;
+        Ok(output)
+    }
 }
 
 impl fmt::Display for FrameChangeHandling {

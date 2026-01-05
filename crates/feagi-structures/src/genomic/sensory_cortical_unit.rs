@@ -8,8 +8,9 @@ use crate::sensor_cortical_units;
 use paste;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use serde_json::{Map, Value};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)] // TODO move me!
 pub struct UnitTopology {
     pub relative_position: [i32; 3],
     pub channel_dimensions_default: [u32; 3],
@@ -67,26 +68,6 @@ macro_rules! define_sensory_cortical_units_enum {
                             ),*
                         ]
                     }
-
-                    #[doc = "Get cortical area types array for " $friendly_name " using an io configuration flag"]
-                    pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_flag >](
-                        io_cortical_area_configuration_flag: IOCorticalAreaConfigurationFlag) -> Result<[CorticalAreaType; $number_cortical_areas], FeagiDataError> {
-
-                        [
-                            $(CorticalAreaType::BrainInput($cortical_area_type_expr)),*
-                        ]
-                    }
-
-                    #[doc = "Get cortical IDs array for " $friendly_name " using an io configuration flag."]
-                    pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_flag >](
-                        $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> Result<[CorticalID; $number_cortical_areas], FeagiDataError> {
-                        let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
-                        [
-                            $(
-                                $cortical_area_type_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
-                            ),*
-                        ]
-                    }
                 }
             )*
 
@@ -134,7 +115,7 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            /// Returns the 3-byte cortical ID unit reference for this type.
+            /// Returns the 3-byte cortical ID unit reference for this type. // TODO delete me!
             pub const fn get_cortical_id_unit_reference(&self) -> [u8; 3] {
                 match self {
                     $(
@@ -153,7 +134,7 @@ macro_rules! define_sensory_cortical_units_enum {
             }
 
             /// Returns the accepted wrapped IO data type name for this sensory unit type.
-            pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str {
+            pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str { // TODO delete me!
                 match self {
                     $(
                         SensoryCorticalUnit::$variant_name => stringify!($accepted_wrapped_io_data_type),
@@ -188,7 +169,7 @@ macro_rules! define_sensory_cortical_units_enum {
             /// Returns the allowed frame change handling modes from the template, if restricted.
             /// If None is returned, all frame change handling modes are allowed.
             /// If Some is returned, only the specified modes are valid.
-            pub fn get_allowed_frame_change_handling(&self) -> Option<&'static [FrameChangeHandling]> {
+            pub fn get_allowed_frame_change_handling(&self) -> Option<&'static [FrameChangeHandling]> { // TODO delete me!
                 match self {
                     $(
                         SensoryCorticalUnit::$variant_name => {
@@ -196,6 +177,18 @@ macro_rules! define_sensory_cortical_units_enum {
                         }
                     )*
                 }
+            }
+
+            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Serde:Map<String, Serde:Value>) -> Result<Vec<CorticalID>, FeagiDataError> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+
+                        }
+                    )*
+                }
+
+
             }
             /*
             pub fn get_cortical_id_vector(&self, cortical_unit_index: CorticalUnitIndex) -> Vector<CorticalID> {
