@@ -216,131 +216,6 @@ impl ConnectomeManager {
     ///
     /// Tuple of (chunk_x, chunk_y, chunk_z) that divides evenly into dimensions
     ///
-    /// # Examples
-    ///
-    /// - 512×512×22 → 16×16×16 (2,048 chunks)
-    /// - 1024×900×3 → 32×30×3 (960 chunks)
-    /// - 128×128×128 → 16×16×16 (512 chunks)
-    ///
-    fn calculate_visualization_voxel_granularity(dimensions: &CorticalAreaDimensions) -> (u32, u32, u32) {
-        let width = dimensions.width;
-        let height = dimensions.height;
-        let depth = dimensions.depth;
-        let total_voxels = width as u64 * height as u64 * depth as u64;
-
-        // Handle thin dimensions (depth ≤ 16): use depth as chunk_z (one chunk per layer)
-        let chunk_z = if depth <= 16 {
-            depth
-        } else {
-            // For deeper areas, find power-of-2 divisor between 8 and 64
-            Self::find_power_of_2_divisor(depth, 8, 64)
-        };
-
-        // Calculate target total chunks based on area size
-        // Goal: ~2k-10k chunks for manageable message size (~32KB-160KB)
-        let target_total_chunks = if total_voxels > 10_000_000 {
-            10_000 // Very large areas (>10M voxels)
-        } else if total_voxels > 1_000_000 {
-            5_000  // Large areas (>1M voxels)
-        } else if total_voxels > 100_000 {
-            2_000  // Medium areas (>100k voxels)
-        } else {
-            1_000  // Small areas (≤100k voxels)
-        };
-
-        // Calculate target chunks per layer
-        let layers = (depth / chunk_z).max(1);
-        let target_chunks_per_layer = target_total_chunks / layers as u32;
-
-        // Find chunk_x and chunk_y that divide evenly and give us close to target
-        // Start with power-of-2 divisors and adjust
-        let mut chunk_x = Self::find_power_of_2_divisor(width, 8, 64);
-        let mut chunk_y = Self::find_power_of_2_divisor(height, 8, 64);
-
-        // Calculate current chunks per layer
-        let mut chunks_per_layer = (width / chunk_x) * (height / chunk_y);
-
-        // If we're way over target, increase chunk size (fewer chunks)
-        while chunks_per_layer > target_chunks_per_layer * 3 / 2 && chunk_x < width && chunk_y < height {
-            if chunk_x * 2 <= width && (width / (chunk_x * 2)) * (height / chunk_y) >= target_chunks_per_layer / 2 {
-                chunk_x *= 2;
-            } else if chunk_y * 2 <= height && (width / chunk_x) * (height / (chunk_y * 2)) >= target_chunks_per_layer / 2 {
-                chunk_y *= 2;
-            } else {
-                break;
-            }
-            chunks_per_layer = (width / chunk_x) * (height / chunk_y);
-        }
-
-        // If we're way under target, try to decrease chunk size (more chunks)
-        // But only if it doesn't create too many chunks
-        while chunks_per_layer < target_chunks_per_layer / 2 && chunk_x > 4 && chunk_y > 4 {
-            let new_chunk_x = chunk_x / 2;
-            let new_chunk_y = chunk_y / 2;
-            let new_chunks = (width / new_chunk_x) * (height / new_chunk_y);
-            if new_chunks <= target_chunks_per_layer * 2 && width % new_chunk_x == 0 && height % new_chunk_y == 0 {
-                chunk_x = new_chunk_x;
-                chunk_y = new_chunk_y;
-                chunks_per_layer = new_chunks;
-            } else {
-                break;
-            }
-        }
-
-        // For non-power-of-2 dimensions, try to find better divisors
-        // Example: 900 doesn't divide evenly by 32, but 30 works (900/30 = 30)
-        if width % chunk_x != 0 {
-            chunk_x = Self::find_best_divisor(width, chunk_x, target_chunks_per_layer / (height / chunk_y).max(1));
-        }
-        if height % chunk_y != 0 {
-            chunk_y = Self::find_best_divisor(height, chunk_y, target_chunks_per_layer / (width / chunk_x).max(1));
-        }
-
-        (chunk_x, chunk_y, chunk_z)
-    }
-
-    /// Find power-of-2 divisor between min and max that divides evenly
-    fn find_power_of_2_divisor(value: u32, min: u32, max: u32) -> u32 {
-        // Try from max down to min
-        for candidate in [max, max / 2, max / 4, max / 8].iter() {
-            if *candidate >= min && value % candidate == 0 {
-                return *candidate;
-            }
-        }
-        // Fallback: find largest power of 2 that divides evenly
-        let mut result = min;
-        for p2 in [64, 32, 16, 8, 4].iter() {
-            if *p2 >= min && *p2 <= max && value % p2 == 0 {
-                result = *p2;
-                break;
-            }
-        }
-        result
-    }
-
-    /// Find best divisor for a dimension that gives close to target chunks
-    /// Tries divisors near the power-of-2 value
-    fn find_best_divisor(value: u32, power_of_2: u32, target_chunks: u32) -> u32 {
-        // Try divisors near the power-of-2 value (±20%)
-        let start = (power_of_2 as f32 * 0.8) as u32;
-        let end = (power_of_2 as f32 * 1.2) as u32;
-        
-        let mut best = power_of_2;
-        let mut best_diff = (value / power_of_2).abs_diff(target_chunks);
-        
-        for candidate in start..=end.min(value) {
-            if value % candidate == 0 {
-                let chunks = value / candidate;
-                let diff = chunks.abs_diff(target_chunks);
-                if diff < best_diff {
-                    best = candidate;
-                    best_diff = diff;
-                }
-            }
-        }
-        
-        best
-    }
 
     /// Create a new isolated instance for testing
     ///
@@ -536,24 +411,8 @@ impl ConnectomeManager {
             serde_json::json!([])
         );
 
-        // CRITICAL: Calculate and store visualization voxel granularity for large-area rendering
-        // This enables aggregated rendering for very large areas (>1M neurons)
-        let granularity = Self::calculate_visualization_voxel_granularity(&area.dimensions);
-        area.properties.insert(
-            "visualization_voxel_granularity".to_string(),
-            serde_json::json!([granularity.0, granularity.1, granularity.2])
-        );
-        trace!(
-            target: "feagi-bdu",
-            "Calculated visualization voxel granularity for area {} ({}×{}×{}): {}×{}×{}",
-            cortical_id.as_base_64(),
-            area.dimensions.width,
-            area.dimensions.height,
-            area.dimensions.depth,
-            granularity.0,
-            granularity.1,
-            granularity.2
-        );
+        // Default visualization voxel granularity is 1x1x1 (assumed, not stored)
+        // User overrides are stored in properties["visualization_voxel_granularity"] only if != 1x1x1
 
         // Store area
         self.cortical_areas.insert(cortical_id, area);
@@ -682,7 +541,7 @@ impl ConnectomeManager {
                 .copied()
                 .unwrap_or(0);
             
-            // Extract visualization granularity from properties
+            // Extract visualization granularity from properties (default is 1x1x1)
             if let Some(granularity_json) = area.properties.get("visualization_voxel_granularity") {
                 if let Some(arr) = granularity_json.as_array() {
                     if arr.len() == 3 {
@@ -692,10 +551,13 @@ impl ConnectomeManager {
                             arr[2].as_u64(),
                         ) {
                             granularities.insert(cortical_idx, (x as u32, y as u32, z as u32));
+                            continue; // Skip default assignment
                         }
                     }
                 }
             }
+            // Default is 1x1x1 if not in properties
+            granularities.insert(cortical_idx, (1, 1, 1));
         }
         granularities
     }
@@ -3717,23 +3579,8 @@ impl ConnectomeManager {
         let old_dimensions = area.dimensions;
         area.dimensions = new_dimensions;
 
-        // Recalculate visualization voxel granularity for new dimensions
-        let granularity = Self::calculate_visualization_voxel_granularity(&new_dimensions);
-        area.properties.insert(
-            "visualization_voxel_granularity".to_string(),
-            serde_json::json!([granularity.0, granularity.1, granularity.2])
-        );
-        trace!(
-            target: "feagi-bdu",
-            "Recalculated visualization voxel granularity for resized area {} ({}×{}×{}): {}×{}×{}",
-            cortical_id.as_base_64(),
-            new_dimensions.width,
-            new_dimensions.height,
-            new_dimensions.depth,
-            granularity.0,
-            granularity.1,
-            granularity.2
-        );
+        // Note: Visualization voxel granularity is user-driven, not recalculated on resize
+        // If user had set a custom value, it remains; otherwise defaults to 1x1x1
 
         info!(target: "feagi-bdu",
             "Resized cortical area {} from {:?} to {:?}",

@@ -1001,13 +1001,26 @@ impl GenomeServiceImpl {
                             }
                         }
                         "visualization_voxel_granularity" => {
-                            // Store as array [x, y, z] in properties
+                            // Only store if != 1x1x1 (default), delete if set to 1x1x1
                             if let Some(arr) = value.as_array() {
                                 if arr.len() == 3 {
-                                    area.properties.insert(
-                                        "visualization_voxel_granularity".to_string(),
-                                        serde_json::json!(arr),
-                                    );
+                                    if let (Some(x), Some(y), Some(z)) = (
+                                        arr[0].as_u64(),
+                                        arr[1].as_u64(),
+                                        arr[2].as_u64(),
+                                    ) {
+                                        // Default is 1x1x1 - only store if different
+                                        if x == 1 && y == 1 && z == 1 {
+                                            // Remove override (return to default)
+                                            area.properties.remove("visualization_voxel_granularity");
+                                        } else {
+                                            // Store override (non-default value)
+                                            area.properties.insert(
+                                                "visualization_voxel_granularity".to_string(),
+                                                serde_json::json!([x, y, z]),
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1279,13 +1292,26 @@ impl GenomeServiceImpl {
                             }
                         }
                         "visualization_voxel_granularity" => {
-                            // Store as array [x, y, z] in properties
+                            // Only store if != 1x1x1 (default), delete if set to 1x1x1
                             if let Some(arr) = value.as_array() {
                                 if arr.len() == 3 {
-                                    area.properties.insert(
-                                        "visualization_voxel_granularity".to_string(),
-                                        serde_json::json!(arr),
-                                    );
+                                    if let (Some(x), Some(y), Some(z)) = (
+                                        arr[0].as_u64(),
+                                        arr[1].as_u64(),
+                                        arr[2].as_u64(),
+                                    ) {
+                                        // Default is 1x1x1 - only store if different
+                                        if x == 1 && y == 1 && z == 1 {
+                                            // Remove override (return to default)
+                                            area.properties.remove("visualization_voxel_granularity");
+                                        } else {
+                                            // Store override (non-default value)
+                                            area.properties.insert(
+                                                "visualization_voxel_granularity".to_string(),
+                                                serde_json::json!([x, y, z]),
+                                            );
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -1732,15 +1758,29 @@ impl GenomeServiceImpl {
                             info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated position (object format): ({}, {}, {})", x, y, z);
                         }
                     }
-                    "heatmap_chunk_size" => {
-                        // Store as array [x, y, z] in properties
+                    "visualization_voxel_granularity" => {
+                        // Only store if != 1x1x1 (default), delete if set to 1x1x1
                         if let Some(arr) = value.as_array() {
                             if arr.len() == 3 {
-                                area.add_property_mut(
-                                    "heatmap_chunk_size".to_string(),
-                                    serde_json::json!(arr),
-                                );
-                                info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated visualization_voxel_granularity: {:?}", arr);
+                                if let (Some(x), Some(y), Some(z)) = (
+                                    arr[0].as_u64(),
+                                    arr[1].as_u64(),
+                                    arr[2].as_u64(),
+                                ) {
+                                    // Default is 1x1x1 - only store if different
+                                    if x == 1 && y == 1 && z == 1 {
+                                        // Remove override (return to default)
+                                        area.properties.remove("visualization_voxel_granularity");
+                                        info!(target: "feagi-services", "[CONNECTOME-UPDATE] Removed visualization_voxel_granularity override (returned to default 1x1x1)");
+                                    } else {
+                                        // Store override (non-default value)
+                                        area.properties.insert(
+                                            "visualization_voxel_granularity".to_string(),
+                                            serde_json::json!([x, y, z]),
+                                        );
+                                        info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated visualization_voxel_granularity: {:?}", arr);
+                                    }
+                                }
                             }
                         }
                     }

@@ -30,11 +30,33 @@ use std::collections::HashMap;
 ///
 pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> {
     let mut flat_blueprint = serde_json::Map::new();
+    let mut visualization_overrides = serde_json::Map::new();
 
     // Convert each cortical area to flat format
     for (cortical_id, area) in &genome.cortical_areas {
         let cortical_id_base64 = cortical_id.as_base_64();
         convert_area_to_flat(&cortical_id_base64, area, &mut flat_blueprint)?;
+
+        // Extract visualization_voxel_granularity overrides (only non-1x1x1 values)
+        if let Some(granularity_value) = area.properties.get("visualization_voxel_granularity") {
+            if let Some(arr) = granularity_value.as_array() {
+                if arr.len() == 3 {
+                    if let (Some(x), Some(y), Some(z)) = (
+                        arr[0].as_u64(),
+                        arr[1].as_u64(),
+                        arr[2].as_u64(),
+                    ) {
+                        // Only save if != 1x1x1 (default)
+                        if x != 1 || y != 1 || z != 1 {
+                            visualization_overrides.insert(
+                                cortical_id_base64.clone(),
+                                json!([x, y, z]),
+                            );
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Build complete flat genome
@@ -56,6 +78,14 @@ pub fn convert_hierarchical_to_flat(genome: &RuntimeGenome) -> EvoResult<Value> 
     // Root region ID (if available)
     if let Some(root_id) = &genome.metadata.brain_regions_root {
         flat_genome.insert("brain_regions_root".to_string(), json!(root_id));
+    }
+
+    // Visualization voxel granularity overrides (only non-default values)
+    if !visualization_overrides.is_empty() {
+        flat_genome.insert(
+            "visualization_voxel_granularity_overrides".to_string(),
+            Value::Object(visualization_overrides),
+        );
     }
 
     // Blueprint (flat format)

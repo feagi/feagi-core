@@ -117,6 +117,19 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
     // Extract cortical areas
     let cortical_areas = extract_cortical_areas(flat_blueprint)?;
 
+    // Load visualization_voxel_granularity overrides (if present)
+    let visualization_overrides: HashMap<String, Value> = if let Some(overrides_obj) = flat_genome.get("visualization_voxel_granularity_overrides") {
+        if let Some(overrides_map) = overrides_obj.as_object() {
+            overrides_map.iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        } else {
+            HashMap::new()
+        }
+    } else {
+        HashMap::new()
+    };
+
     // Build hierarchical blueprint
     let mut hierarchical_blueprint = serde_json::Map::new();
 
@@ -125,6 +138,18 @@ pub fn convert_flat_to_hierarchical_full(flat_genome: &Value) -> EvoResult<Value
 
         // Process all flat keys for this cortical area
         process_area_properties(cortical_id, flat_blueprint, &property_map, &mut area_data)?;
+
+        // Apply visualization_voxel_granularity override if present
+        if let Some(override_value) = visualization_overrides.get(cortical_id) {
+            if let Some(properties) = area_data.get_mut("properties") {
+                if let Some(properties_obj) = properties.as_object_mut() {
+                    properties_obj.insert(
+                        "visualization_voxel_granularity".to_string(),
+                        override_value.clone(),
+                    );
+                }
+            }
+        }
 
         hierarchical_blueprint.insert(cortical_id.clone(), Value::Object(area_data));
     }
