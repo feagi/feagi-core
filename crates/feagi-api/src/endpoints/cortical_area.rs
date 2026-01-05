@@ -779,12 +779,12 @@ pub async fn put_cortical_area(
         .ok_or_else(|| ApiError::invalid_input("cortical_id required"))?
         .to_string();
 
-    // Log what we received
-    tracing::info!(target: "feagi-api", "🔵 [API] PUT /v1/cortical_area/cortical_area - Received update for area: {}", cortical_id);
-    if request.contains_key("visualization_voxel_granularity") {
-        tracing::info!(target: "feagi-api", "🔵 [API] visualization_voxel_granularity in request: {:?}", request.get("visualization_voxel_granularity"));
-    }
-    tracing::debug!(target: "feagi-api", "🔵 [API] Full request body: {:?}", request);
+    tracing::debug!(
+        target: "feagi-api",
+        "PUT /v1/cortical_area/cortical_area - received update for area: {} (keys: {:?})",
+        cortical_id,
+        request.keys().collect::<Vec<_>>()
+    );
 
     // Remove cortical_id from changes (it's not a property to update)
     request.remove("cortical_id");
@@ -795,14 +795,14 @@ pub async fn put_cortical_area(
         .await
     {
         Ok(_) => {
-            tracing::info!(target: "feagi-api", "✅ [API] Successfully updated cortical area: {}", cortical_id);
+            tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/cortical_area - success for {}", cortical_id);
             Ok(Json(HashMap::from([
                 ("message".to_string(), "Cortical area updated".to_string()),
                 ("cortical_id".to_string(), cortical_id),
             ])))
         }
         Err(e) => {
-            tracing::error!(target: "feagi-api", "🔴 [API] Failed to update cortical area {}: {}", cortical_id, e);
+            tracing::error!(target: "feagi-api", "PUT /v1/cortical_area/cortical_area - failed for {}: {}", cortical_id, e);
             Err(ApiError::internal(format!("Failed to update: {}", e)))
         }
     }
@@ -1048,28 +1048,28 @@ pub async fn put_multi_cortical_area(
         return Err(ApiError::invalid_input("cortical_id_list cannot be empty"));
     }
 
-    // Log what we received
-    tracing::info!(target: "feagi-api", "🔵 [API] PUT /v1/cortical_area/multi/cortical_area - Received update for {} areas", cortical_ids.len());
-    if request.contains_key("visualization_voxel_granularity") {
-        tracing::info!(target: "feagi-api", "🔵 [API] visualization_voxel_granularity in request: {:?}", request.get("visualization_voxel_granularity"));
-    }
-    tracing::debug!(target: "feagi-api", "🔵 [API] Full request body: {:?}", request);
+    tracing::debug!(
+        target: "feagi-api",
+        "PUT /v1/cortical_area/multi/cortical_area - received update for {} areas (keys: {:?})",
+        cortical_ids.len(),
+        request.keys().collect::<Vec<_>>()
+    );
 
     // Remove cortical_id_list from changes (it's not a property to update)
     request.remove("cortical_id_list");
 
     // Update each cortical area with the same properties
     for cortical_id in &cortical_ids {
-        tracing::info!(target: "feagi-api", "🔵 [API] Updating cortical area: {}", cortical_id);
+        tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - updating area: {}", cortical_id);
         match genome_service
             .update_cortical_area(cortical_id, request.clone())
             .await
         {
             Ok(_) => {
-                tracing::info!(target: "feagi-api", "✅ [API] Successfully updated cortical area: {}", cortical_id);
+                tracing::debug!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - success for {}", cortical_id);
             }
             Err(e) => {
-                tracing::error!(target: "feagi-api", "🔴 [API] Failed to update cortical area {}: {}", cortical_id, e);
+                tracing::error!(target: "feagi-api", "PUT /v1/cortical_area/multi/cortical_area - failed for {}: {}", cortical_id, e);
                 return Err(ApiError::internal(format!(
                     "Failed to update cortical area {}: {}",
                     cortical_id, e

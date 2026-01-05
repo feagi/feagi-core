@@ -1672,6 +1672,7 @@ impl GenomeServiceImpl {
         changes: HashMap<String, Value>,
     ) -> ServiceResult<CorticalAreaInfo> {
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata-only update for {}", cortical_id);
+        let needs_burst_cache_refresh = changes.contains_key("visualization_voxel_granularity");
 
         // Convert cortical_id to CorticalID
         let cortical_id_typed =
@@ -1837,6 +1838,11 @@ impl GenomeServiceImpl {
                     _ => {}
                 }
             }
+        }
+
+        // Refresh burst runner cache so the NPU aggregation path immediately uses new granularity.
+        if needs_burst_cache_refresh {
+            self.refresh_burst_runner_cache();
         }
 
         info!(target: "feagi-services", "[METADATA-UPDATE] Metadata update complete");

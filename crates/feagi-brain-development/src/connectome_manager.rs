@@ -541,23 +541,31 @@ impl ConnectomeManager {
                 .copied()
                 .unwrap_or(0);
             
-            // Extract visualization granularity from properties (default is 1x1x1)
+            // Extract visualization granularity overrides from properties.
+            // Default is 1x1x1 (assumed, not stored) so we only include non-default overrides.
             if let Some(granularity_json) = area.properties.get("visualization_voxel_granularity") {
                 if let Some(arr) = granularity_json.as_array() {
                     if arr.len() == 3 {
-                        if let (Some(x), Some(y), Some(z)) = (
-                            arr[0].as_u64(),
-                            arr[1].as_u64(),
-                            arr[2].as_u64(),
-                        ) {
-                            granularities.insert(cortical_idx, (x as u32, y as u32, z as u32));
-                            continue; // Skip default assignment
+                        let x_opt = arr[0]
+                            .as_u64()
+                            .or_else(|| arr[0].as_f64().map(|f| f as u64));
+                        let y_opt = arr[1]
+                            .as_u64()
+                            .or_else(|| arr[1].as_f64().map(|f| f as u64));
+                        let z_opt = arr[2]
+                            .as_u64()
+                            .or_else(|| arr[2].as_f64().map(|f| f as u64));
+
+                        if let (Some(x), Some(y), Some(z)) = (x_opt, y_opt, z_opt) {
+                            let granularity = (x as u32, y as u32, z as u32);
+                            // Only include overrides (non-default)
+                            if granularity != (1, 1, 1) {
+                                granularities.insert(cortical_idx, granularity);
+                            }
                         }
                     }
                 }
             }
-            // Default is 1x1x1 if not in properties
-            granularities.insert(cortical_idx, (1, 1, 1));
         }
         granularities
     }
