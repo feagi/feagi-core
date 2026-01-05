@@ -157,7 +157,7 @@ pub struct CorticalAreaInfo {
     /// very large cortical areas (>1M neurons). BV uses this to render spatial patterns
     /// at a coarser resolution to maintain performance.
     /// Example: For 512×512×22 area, granularity might be (16, 16, 16) → 32×32×2 = 2,048 chunks
-    #[serde(skip_serializing_if = "Option::is_none")]
+    /// Default is (1, 1, 1) - always serialized so BV knows the value
     pub visualization_voxel_granularity: Option<(u32, u32, u32)>,
 }
 
@@ -455,3 +455,4 @@ pub struct CapacityInfo {
     pub current_cortical_areas: usize,
     pub max_cortical_areas: usize,
 }
+

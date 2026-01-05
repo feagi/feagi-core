@@ -494,21 +494,29 @@ impl ConnectomeService for ConnectomeServiceImpl {
                     from_properties
                 }
             },
-            visualization_voxel_granularity: area
-                .properties
-                .get("visualization_voxel_granularity")
-                .and_then(|v| v.as_array())
-                .and_then(|arr| {
-                    if arr.len() == 3 {
-                        Some((
-                            arr[0].as_u64()? as u32,
-                            arr[1].as_u64()? as u32,
-                            arr[2].as_u64()? as u32,
-                        ))
-                    } else {
-                        None
-                    }
-                }),
+            visualization_voxel_granularity: {
+                // Default is 1x1x1 if not in properties (user-driven, not stored)
+                // Handle both integer and float JSON values
+                area
+                    .properties
+                    .get("visualization_voxel_granularity")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| {
+                        if arr.len() == 3 {
+                            let x_opt = arr[0].as_u64().or_else(|| arr[0].as_f64().map(|f| f as u64));
+                            let y_opt = arr[1].as_u64().or_else(|| arr[1].as_f64().map(|f| f as u64));
+                            let z_opt = arr[2].as_u64().or_else(|| arr[2].as_f64().map(|f| f as u64));
+                            if let (Some(x), Some(y), Some(z)) = (x_opt, y_opt, z_opt) {
+                                Some((x as u32, y as u32, z as u32))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    })
+                    .or(Some((1, 1, 1))) // Default is 1x1x1
+            },
         })
     }
 

@@ -1002,22 +1002,28 @@ impl GenomeServiceImpl {
                         }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
+                            // Handle both integer and float JSON values
                             if let Some(arr) = value.as_array() {
                                 if arr.len() == 3 {
-                                    if let (Some(x), Some(y), Some(z)) = (
-                                        arr[0].as_u64(),
-                                        arr[1].as_u64(),
-                                        arr[2].as_u64(),
-                                    ) {
+                                    // Try to parse as integers (u64) or floats (f64), then convert to u32
+                                    let x_opt = arr[0].as_u64().or_else(|| arr[0].as_f64().map(|f| f as u64));
+                                    let y_opt = arr[1].as_u64().or_else(|| arr[1].as_f64().map(|f| f as u64));
+                                    let z_opt = arr[2].as_u64().or_else(|| arr[2].as_f64().map(|f| f as u64));
+                                    
+                                    if let (Some(x), Some(y), Some(z)) = (x_opt, y_opt, z_opt) {
+                                        let x_u32 = x as u32;
+                                        let y_u32 = y as u32;
+                                        let z_u32 = z as u32;
+                                        
                                         // Default is 1x1x1 - only store if different
-                                        if x == 1 && y == 1 && z == 1 {
+                                        if x_u32 == 1 && y_u32 == 1 && z_u32 == 1 {
                                             // Remove override (return to default)
                                             area.properties.remove("visualization_voxel_granularity");
                                         } else {
-                                            // Store override (non-default value)
+                                            // Store override (non-default value) as integer array
                                             area.properties.insert(
                                                 "visualization_voxel_granularity".to_string(),
-                                                serde_json::json!([x, y, z]),
+                                                serde_json::json!([x_u32, y_u32, z_u32]),
                                             );
                                         }
                                     }
@@ -1293,22 +1299,28 @@ impl GenomeServiceImpl {
                         }
                         "visualization_voxel_granularity" => {
                             // Only store if != 1x1x1 (default), delete if set to 1x1x1
+                            // Handle both integer and float JSON values
                             if let Some(arr) = value.as_array() {
                                 if arr.len() == 3 {
-                                    if let (Some(x), Some(y), Some(z)) = (
-                                        arr[0].as_u64(),
-                                        arr[1].as_u64(),
-                                        arr[2].as_u64(),
-                                    ) {
+                                    // Try to parse as integers (u64) or floats (f64), then convert to u32
+                                    let x_opt = arr[0].as_u64().or_else(|| arr[0].as_f64().map(|f| f as u64));
+                                    let y_opt = arr[1].as_u64().or_else(|| arr[1].as_f64().map(|f| f as u64));
+                                    let z_opt = arr[2].as_u64().or_else(|| arr[2].as_f64().map(|f| f as u64));
+                                    
+                                    if let (Some(x), Some(y), Some(z)) = (x_opt, y_opt, z_opt) {
+                                        let x_u32 = x as u32;
+                                        let y_u32 = y as u32;
+                                        let z_u32 = z as u32;
+                                        
                                         // Default is 1x1x1 - only store if different
-                                        if x == 1 && y == 1 && z == 1 {
+                                        if x_u32 == 1 && y_u32 == 1 && z_u32 == 1 {
                                             // Remove override (return to default)
                                             area.properties.remove("visualization_voxel_granularity");
                                         } else {
-                                            // Store override (non-default value)
+                                            // Store override (non-default value) as integer array
                                             area.properties.insert(
                                                 "visualization_voxel_granularity".to_string(),
-                                                serde_json::json!([x, y, z]),
+                                                serde_json::json!([x_u32, y_u32, z_u32]),
                                             );
                                         }
                                     }
@@ -1698,15 +1710,41 @@ impl GenomeServiceImpl {
                             }
                         }
                         "visualization_voxel_granularity" => {
-                            // Store as array [x, y, z] in properties
+                            // Only store if != 1x1x1 (default), delete if set to 1x1x1
+                            info!(target: "feagi-services", "[GENOME-UPDATE] Received visualization_voxel_granularity update: {:?}", value);
                             if let Some(arr) = value.as_array() {
                                 if arr.len() == 3 {
-                                    area.properties.insert(
-                                        "visualization_voxel_granularity".to_string(),
-                                        serde_json::json!(arr),
-                                    );
-                                    info!(target: "feagi-services", "[GENOME-UPDATE] Updated visualization_voxel_granularity: {:?}", arr);
+                                    // Try to parse as integers (u64) or floats (f64), then convert to u32
+                                    let x_opt = arr[0].as_u64().or_else(|| arr[0].as_f64().map(|f| f as u64));
+                                    let y_opt = arr[1].as_u64().or_else(|| arr[1].as_f64().map(|f| f as u64));
+                                    let z_opt = arr[2].as_u64().or_else(|| arr[2].as_f64().map(|f| f as u64));
+                                    
+                                    if let (Some(x), Some(y), Some(z)) = (x_opt, y_opt, z_opt) {
+                                        let x_u32 = x as u32;
+                                        let y_u32 = y as u32;
+                                        let z_u32 = z as u32;
+                                        
+                                        // Default is 1x1x1 - only store if different
+                                        if x_u32 == 1 && y_u32 == 1 && z_u32 == 1 {
+                                            // Remove override (return to default)
+                                            area.properties.remove("visualization_voxel_granularity");
+                                            info!(target: "feagi-services", "[GENOME-UPDATE] Removed visualization_voxel_granularity override (returned to default 1x1x1)");
+                                        } else {
+                                            // Store override (non-default value) as integer array
+                                            area.properties.insert(
+                                                "visualization_voxel_granularity".to_string(),
+                                                serde_json::json!([x_u32, y_u32, z_u32]),
+                                            );
+                                            info!(target: "feagi-services", "[GENOME-UPDATE] Updated visualization_voxel_granularity: ({}, {}, {})", x_u32, y_u32, z_u32);
+                                        }
+                                    } else {
+                                        warn!(target: "feagi-services", "[GENOME-UPDATE] Failed to parse visualization_voxel_granularity array values as integers");
+                                    }
+                                } else {
+                                    warn!(target: "feagi-services", "[GENOME-UPDATE] visualization_voxel_granularity array must have 3 elements, got {}", arr.len());
                                 }
+                            } else {
+                                warn!(target: "feagi-services", "[GENOME-UPDATE] visualization_voxel_granularity must be an array, got: {:?}", value);
                             }
                         }
                         _ => {}
@@ -1760,28 +1798,40 @@ impl GenomeServiceImpl {
                     }
                     "visualization_voxel_granularity" => {
                         // Only store if != 1x1x1 (default), delete if set to 1x1x1
+                        info!(target: "feagi-services", "[CONNECTOME-UPDATE] Received visualization_voxel_granularity update: {:?}", value);
                         if let Some(arr) = value.as_array() {
                             if arr.len() == 3 {
-                                if let (Some(x), Some(y), Some(z)) = (
-                                    arr[0].as_u64(),
-                                    arr[1].as_u64(),
-                                    arr[2].as_u64(),
-                                ) {
+                                // Try to parse as integers (u64) or floats (f64), then convert to u32
+                                let x_opt = arr[0].as_u64().or_else(|| arr[0].as_f64().map(|f| f as u64));
+                                let y_opt = arr[1].as_u64().or_else(|| arr[1].as_f64().map(|f| f as u64));
+                                let z_opt = arr[2].as_u64().or_else(|| arr[2].as_f64().map(|f| f as u64));
+                                
+                                if let (Some(x), Some(y), Some(z)) = (x_opt, y_opt, z_opt) {
+                                    let x_u32 = x as u32;
+                                    let y_u32 = y as u32;
+                                    let z_u32 = z as u32;
+                                    
                                     // Default is 1x1x1 - only store if different
-                                    if x == 1 && y == 1 && z == 1 {
+                                    if x_u32 == 1 && y_u32 == 1 && z_u32 == 1 {
                                         // Remove override (return to default)
                                         area.properties.remove("visualization_voxel_granularity");
                                         info!(target: "feagi-services", "[CONNECTOME-UPDATE] Removed visualization_voxel_granularity override (returned to default 1x1x1)");
                                     } else {
-                                        // Store override (non-default value)
+                                        // Store override (non-default value) as integer array
                                         area.properties.insert(
                                             "visualization_voxel_granularity".to_string(),
-                                            serde_json::json!([x, y, z]),
+                                            serde_json::json!([x_u32, y_u32, z_u32]),
                                         );
-                                        info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated visualization_voxel_granularity: {:?}", arr);
+                                        info!(target: "feagi-services", "[CONNECTOME-UPDATE] Updated visualization_voxel_granularity: ({}, {}, {})", x_u32, y_u32, z_u32);
                                     }
+                                } else {
+                                    warn!(target: "feagi-services", "[CONNECTOME-UPDATE] Failed to parse visualization_voxel_granularity array values as integers");
                                 }
+                            } else {
+                                warn!(target: "feagi-services", "[CONNECTOME-UPDATE] visualization_voxel_granularity array must have 3 elements, got {}", arr.len());
                             }
+                        } else {
+                            warn!(target: "feagi-services", "[CONNECTOME-UPDATE] visualization_voxel_granularity must be an array, got: {:?}", value);
                         }
                     }
                     _ => {}

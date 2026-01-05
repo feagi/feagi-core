@@ -90,6 +90,8 @@ impl CorticalChangeClassifier {
             "coordinate_3d",
             "coordinates",
             "position",
+            // Visualization-only aggregation control (BV/UI-driven)
+            "visualization_voxel_granularity",
         ]
         .iter()
         .copied()
