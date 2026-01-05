@@ -9,7 +9,7 @@ use feagi_sensorimotor::ConnectorAgent;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 
 //region Helpers
 
@@ -47,7 +47,7 @@ mod test_connector_cache_sensor_load_image {
     use feagi_structures::genomic::cortical_area::descriptors::{
         CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
     };
-    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
     use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use std::time::Instant;
 

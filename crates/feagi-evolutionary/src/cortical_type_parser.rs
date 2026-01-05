@@ -43,13 +43,13 @@ pub fn parse_cortical_type(
     // Parse base type from cortical_group
     let cortical_type = match cortical_group.to_uppercase().as_str() {
         "IPU" => CorticalAreaType::BrainInput(
-            feagi_structures::genomic::cortical_area::IOCorticalAreaDataFlag::CartesianPlane(
-                feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute
+            feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::CartesianPlane(
+                feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
             )
         ),
         "OPU" => CorticalAreaType::BrainOutput(
-            feagi_structures::genomic::cortical_area::IOCorticalAreaDataFlag::CartesianPlane(
-                feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling::Absolute
+            feagi_structures::genomic::cortical_area::IOCorticalAreaConfigurationFlag::CartesianPlane(
+                feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling::Absolute
             )
         ),
         "CORE" => CorticalAreaType::Core(
@@ -165,10 +165,10 @@ mod tests {
     #[test]
     fn test_validate_ipu_type() {
         use feagi_structures::genomic::cortical_area::{
-            io_cortical_area_data_type::FrameChangeHandling, IOCorticalAreaDataFlag,
+            io_cortical_area_configuration_flag::FrameChangeHandling, IOCorticalAreaConfigurationFlag,
         };
 
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::CartesianPlane(
             FrameChangeHandling::Absolute,
         ));
         let properties = HashMap::new();

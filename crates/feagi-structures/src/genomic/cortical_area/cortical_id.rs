@@ -1,7 +1,7 @@
-use crate::genomic::cortical_area::cortical_type::{
+use crate::genomic::cortical_area::cortical_area_type::{
     CoreCorticalType, CorticalAreaType, CustomCorticalType, MemoryCorticalType,
 };
-use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataFlag;
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
 use crate::FeagiDataError;
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -108,9 +108,9 @@ impl CorticalID {
     ///
     /// This is used internally for both BrainInput and BrainOutput cortical areas.
     #[inline]
-    fn extract_io_data_flag(&self) -> Result<IOCorticalAreaDataFlag, FeagiDataError> {
+    fn extract_io_data_flag(&self) -> Result<IOCorticalAreaConfigurationFlag, FeagiDataError> {
         let data_type_config = u16::from_le_bytes([self.bytes[4], self.bytes[5]]);
-        IOCorticalAreaDataFlag::try_from_data_type_configuration_flag(data_type_config)
+        IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(data_type_config)
     }
 
     pub fn as_cortical_type(&self) -> Result<CorticalAreaType, FeagiDataError> {
@@ -234,7 +234,7 @@ impl<'de> Deserialize<'de> for CorticalID {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genomic::cortical_area::cortical_type::CoreCorticalType;
+    use crate::genomic::cortical_area::cortical_area_type::CoreCorticalType;
 
     #[test]
     fn test_u64_round_trip() {

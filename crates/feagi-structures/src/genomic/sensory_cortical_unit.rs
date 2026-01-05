@@ -1,9 +1,9 @@
 use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex};
-use crate::genomic::cortical_area::io_cortical_area_data_type::{
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use crate::genomic::cortical_area::{CorticalAreaType, CorticalID, IOCorticalAreaDataFlag};
+use crate::genomic::cortical_area::{CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag};
 use crate::sensor_cortical_units;
 use paste;
 use std::collections::HashMap;
@@ -24,7 +24,6 @@ macro_rules! define_sensory_cortical_units_enum {
                 $(#[doc = $doc:expr])?
                 $variant_name:ident => {
                     friendly_name: $friendly_name:expr,
-                    snake_case_name: $snake_case_name:expr,
                     accepted_wrapped_io_data_type: $accepted_wrapped_io_data_type:expr,
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
@@ -50,17 +49,37 @@ macro_rules! define_sensory_cortical_units_enum {
         impl SensoryCorticalUnit {
             $(
                 paste::paste! {
-                    #[doc = "Get cortical area types array for " $friendly_name "."]
-                    pub const fn [<get_cortical_area_types_array_for_ $snake_case_name >](
+                    #[doc = "Get cortical area types array for " $friendly_name " using individual parameters."]
+                    pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
                         [
                             $(CorticalAreaType::BrainInput($cortical_area_type_expr)),*
                         ]
                     }
 
-                    #[doc = "Get cortical IDs array for " $friendly_name "."]
-                    pub const fn [<get_cortical_ids_array_for_ $snake_case_name >](
+                    #[doc = "Get cortical IDs array for " $friendly_name " using individual parameters."]
+                    pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> [CorticalID; $number_cortical_areas] {
+                        let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
+                        [
+                            $(
+                                $cortical_area_type_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
+                            ),*
+                        ]
+                    }
+
+                    #[doc = "Get cortical area types array for " $friendly_name " using an io configuration flag"]
+                    pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_flag >](
+                        io_cortical_area_configuration_flag: IOCorticalAreaConfigurationFlag) -> Result<[CorticalAreaType; $number_cortical_areas], FeagiDataError> {
+
+                        [
+                            $(CorticalAreaType::BrainInput($cortical_area_type_expr)),*
+                        ]
+                    }
+
+                    #[doc = "Get cortical IDs array for " $friendly_name " using an io configuration flag."]
+                    pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_flag >](
+                        $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> Result<[CorticalID; $number_cortical_areas], FeagiDataError> {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
@@ -74,7 +93,7 @@ macro_rules! define_sensory_cortical_units_enum {
             pub const fn get_snake_case_name(&self) -> &'static str {
                 match self {
                     $(
-                        SensoryCorticalUnit::$variant_name => $snake_case_name,
+                        SensoryCorticalUnit::$variant_name => stringify!($snake_case_name),
                     )*
                 }
             }
@@ -90,7 +109,7 @@ macro_rules! define_sensory_cortical_units_enum {
             pub fn from_snake_case_name(name: &str) -> Option<SensoryCorticalUnit> {
                 match name {
                     $(
-                        $snake_case_name => Some(SensoryCorticalUnit::$variant_name),
+                        stringify!($snake_case_name) => Some(SensoryCorticalUnit::$variant_name),
                     )*
                     _ => None,
                 }
@@ -133,7 +152,14 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-
+            /// Returns the accepted wrapped IO data type name for this sensory unit type.
+            pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => stringify!($accepted_wrapped_io_data_type),
+                    )*
+                }
+            }
 
             /// Returns the default topology for all units of this cortical type.
             pub fn get_unit_default_topology(&self) -> HashMap<CorticalSubUnitIndex, UnitTopology> {
@@ -157,15 +183,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     )*
                 }
             }
-
-            /// Returns the accepted wrapped IO data type name for this sensory unit type.
-            pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str {
-                match self {
-                    $(
-                        SensoryCorticalUnit::$variant_name => stringify!($accepted_wrapped_io_data_type),
-                    )*
-                }
-            }
+            
 
             /// Returns the allowed frame change handling modes from the template, if restricted.
             /// If None is returned, all frame change handling modes are allowed.
@@ -179,6 +197,19 @@ macro_rules! define_sensory_cortical_units_enum {
                     )*
                 }
             }
+            /*
+            pub fn get_cortical_id_vector(&self, cortical_unit_index: CorticalUnitIndex) -> Vector<CorticalID> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+                            paste::paste!{[<get_cortical_area_types_array_for_ $variant_name:snake >]}
+                        }
+                    )*
+                }
+            }
+
+             */
+
 
         }
 

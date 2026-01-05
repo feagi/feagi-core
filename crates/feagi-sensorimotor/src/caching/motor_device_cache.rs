@@ -9,7 +9,7 @@ use feagi_serialization::FeagiByteContainer;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use feagi_structures::genomic::cortical_area::CorticalID;

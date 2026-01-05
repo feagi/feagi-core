@@ -1,9 +1,9 @@
 use crate::genomic::cortical_area::descriptors::CorticalUnitIndex;
 use crate::genomic::cortical_area::descriptors::{CorticalSubUnitIndex};
-use crate::genomic::cortical_area::io_cortical_area_data_type::{
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
-use crate::genomic::cortical_area::{CorticalAreaType, CorticalID, IOCorticalAreaDataFlag};
+use crate::genomic::cortical_area::{CorticalAreaType, CorticalID, IOCorticalAreaConfigurationFlag};
 use crate::genomic::sensory_cortical_unit::UnitTopology;
 use crate::motor_cortical_units;
 use paste;

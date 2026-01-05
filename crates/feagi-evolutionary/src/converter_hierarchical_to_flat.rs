@@ -456,7 +456,7 @@ mod tests {
     fn test_cortical_group_derived_from_type() {
         use feagi_structures::genomic::cortical_area::{
             CorticalArea, CorticalAreaDimensions, CorticalAreaType, CorticalID,
-            IOCorticalAreaDataFlag, io_cortical_area_data_type::FrameChangeHandling,
+            IOCorticalAreaConfigurationFlag, io_cortical_area_configuration_flag::FrameChangeHandling,
         };
         use feagi_structures::genomic::descriptors::GenomeCoordinate3D;
 
@@ -490,7 +490,7 @@ mod tests {
             "Test OPU".to_string(),
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             GenomeCoordinate3D { x: 0, y: 0, z: 0 },
-            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::CartesianPlane(
+            CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::CartesianPlane(
                 FrameChangeHandling::Absolute
             )),
         ).unwrap();
@@ -502,7 +502,7 @@ mod tests {
             "Test IPU".to_string(),
             CorticalAreaDimensions::new(10, 10, 1).unwrap(),
             GenomeCoordinate3D { x: 0, y: 0, z: 0 },
-            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::CartesianPlane(
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::CartesianPlane(
                 FrameChangeHandling::Absolute
             )),
         ).unwrap();

@@ -19,7 +19,7 @@ use feagi_structures::genomic::brain_regions::RegionID;
 use feagi_structures::genomic::cortical_area::{CorticalArea, CorticalID};
 #[cfg(test)]
 use feagi_structures::genomic::cortical_area::{
-    CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaDataFlag,
+    CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag,
 };
 use feagi_structures::genomic::BrainRegion;
 
@@ -165,7 +165,7 @@ mod tests {
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
 
@@ -211,7 +211,7 @@ mod tests {
             "Test Area".to_string(),
             CorticalAreaDimensions::new(10, 10, 10).unwrap(),
             (5, 5, 5).into(),
-            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
         cortical_areas.insert(cortical_id, area);

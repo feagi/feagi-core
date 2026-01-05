@@ -6,7 +6,7 @@
 use crate::core::{AgentConfig, AgentType};
 use crate::sdk::error::{Result, SdkError};
 use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::MotorCorticalUnit;
 

@@ -1,5 +1,5 @@
 use crate::genomic::cortical_area::cortical_id::CorticalID;
-use crate::genomic::cortical_area::io_cortical_area_data_type::IOCorticalAreaDataFlag;
+use crate::genomic::cortical_area::io_cortical_area_configuration_flag::IOCorticalAreaConfigurationFlag;
 use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -11,8 +11,8 @@ pub enum CorticalAreaType {
     Core(CoreCorticalType),
     Custom(CustomCorticalType),
     Memory(MemoryCorticalType),
-    BrainInput(IOCorticalAreaDataFlag),
-    BrainOutput(IOCorticalAreaDataFlag),
+    BrainInput(IOCorticalAreaConfigurationFlag),
+    BrainOutput(IOCorticalAreaConfigurationFlag),
 }
 
 impl fmt::Display for CorticalAreaType {

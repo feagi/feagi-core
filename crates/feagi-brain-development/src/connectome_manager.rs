@@ -4411,9 +4411,9 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
         let cortical_id = CorticalID::try_from_bytes(b"cst_add_").unwrap(); // Use unique custom ID
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -4439,9 +4439,9 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
         let cortical_id = CorticalID::try_from_bytes(b"cst_look").unwrap(); // Use unique custom ID
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -4472,7 +4472,7 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
         let cortical_id = CoreCorticalType::Power.to_cortical_id();
 
         // Remove area if it already exists from previous tests
@@ -4480,7 +4480,7 @@ mod tests {
             manager.remove_cortical_area(&cortical_id).unwrap();
         }
 
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area = CorticalArea::new(
             cortical_id,
             0,
@@ -4507,9 +4507,9 @@ mod tests {
         let instance = ConnectomeManager::instance();
         let mut manager = instance.write();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
         let cortical_id1 = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type1 = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
+        let cortical_type1 = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area1 = CorticalArea::new(
             cortical_id1,
             0,
@@ -4521,7 +4521,7 @@ mod tests {
         .unwrap();
 
         let cortical_id2 = CoreCorticalType::Power.to_cortical_id();
-        let cortical_type2 = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
+        let cortical_type2 = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area2 = CorticalArea::new(
             cortical_id2, // Same ID
             1,
@@ -4668,9 +4668,9 @@ mod tests {
         let mut manager = manager_arc.write();
 
         // First create a cortical area to add neurons to
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
         let cortical_id = CorticalID::try_from_bytes(b"cst_syn_").unwrap(); // Use unique custom ID
-        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean);
+        let cortical_type = CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean);
         let area = CorticalArea::new(
             cortical_id,
             0, // cortical_idx
@@ -4750,7 +4750,7 @@ mod tests {
         // synapse regeneration treats "no mapping rules" as an error.
         let mut manager = ConnectomeManager::new_for_testing();
 
-        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaDataFlag};
+        use feagi_structures::genomic::cortical_area::{CorticalAreaType, IOCorticalAreaConfigurationFlag};
 
         let src_id = CorticalID::try_from_bytes(b"map_src_").unwrap();
         let dst_id = CorticalID::try_from_bytes(b"map_dst_").unwrap();
@@ -4761,7 +4761,7 @@ mod tests {
             "src".to_string(),
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
 
@@ -4771,7 +4771,7 @@ mod tests {
             "dst".to_string(),
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
 
@@ -4797,7 +4797,7 @@ mod tests {
         use feagi_npu_burst_engine::backend::CPUBackend;
         use feagi_npu_burst_engine::RustNPU;
         use feagi_npu_runtime::StdRuntime;
-        use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaDataFlag};
+        use feagi_structures::genomic::cortical_area::{CorticalAreaDimensions, CorticalAreaType, IOCorticalAreaConfigurationFlag};
         use std::sync::{Arc, Mutex};
 
         // Create NPU and manager (small capacities for a deterministic unit test)
@@ -4817,7 +4817,7 @@ mod tests {
             "src".to_string(),
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::BrainInput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainInput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
         let dst_area = CorticalArea::new(
@@ -4826,7 +4826,7 @@ mod tests {
             "dst".to_string(),
             CorticalAreaDimensions::new(2, 2, 1).unwrap(),
             (0, 0, 0).into(),
-            CorticalAreaType::BrainOutput(IOCorticalAreaDataFlag::Boolean),
+            CorticalAreaType::BrainOutput(IOCorticalAreaConfigurationFlag::Boolean),
         )
         .unwrap();
 

@@ -74,9 +74,9 @@ harness = false
 name = "ci_microbench"
 harness = false
 
-[[bench]]
-name = "largescale_perf_test"
-harness = false
+#[[bench]]
+#name = "largescale_perf_test"
+#harness = false
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

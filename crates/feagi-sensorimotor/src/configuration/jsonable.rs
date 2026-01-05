@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use feagi_structures::FeagiDataError;
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth};
-use feagi_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaDataFlag};
+use feagi_structures::genomic::cortical_area::{CorticalID, IOCorticalAreaConfigurationFlag};
 use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality, SegmentedImageFrameProperties};
 use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
@@ -84,7 +84,7 @@ impl InputOutputDefinition {
 pub struct UnitDefinition {
     pub(crate) friendly_name: String,
     pub(crate) cortical_unit_index: CorticalUnitIndex,
-    pub(crate) cortical_area_data_flag: IOCorticalAreaDataFlag,
+    pub(crate) cortical_area_data_flag: IOCorticalAreaConfigurationFlag,
     pub(crate) device_grouping: Vec<DeviceGrouping>,
 }
 
