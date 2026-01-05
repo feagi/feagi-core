@@ -285,6 +285,19 @@ impl ConnectomeManager {
         }
     }
 
+    /// Set up core morphologies in the registry (for testing only)
+    ///
+    /// This is a test helper to set up core morphologies (projector, block_to_block, etc.)
+    /// in the morphology registry so that synaptogenesis tests can run.
+    ///
+    /// # Note
+    ///
+    /// This should only be called in tests. Morphologies are typically loaded from genome files.
+    /// This method is public to allow integration tests to access it.
+    pub fn setup_core_morphologies_for_testing(&mut self) {
+        feagi_evolutionary::add_core_morphologies(&mut self.morphology_registry);
+    }
+
     /// Reset the singleton (for testing only)
     ///
     /// # Safety
@@ -1072,6 +1085,96 @@ impl ConnectomeManager {
         Ok(synapse_count)
     }
 
+    /// Register STDP mapping parameters for a plastic rule
+    fn register_stdp_mapping_for_rule(
+        npu: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+        src_cortical_idx: u32,
+        dst_cortical_idx: u32,
+        rule_obj: &serde_json::Map<String, serde_json::Value>,
+    ) -> BduResult<()> {
+        let plasticity_window = rule_obj
+            .get("plasticity_window")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| {
+                BduError::Internal(format!(
+                    "Missing plasticity_window in plastic mapping rule {} -> {}",
+                    src_area_id, dst_area_id
+                ))
+            })? as usize;
+        let plasticity_constant = rule_obj
+            .get("plasticity_constant")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| {
+                BduError::Internal(format!(
+                    "Missing plasticity_constant in plastic mapping rule {} -> {}",
+                    src_area_id, dst_area_id
+                ))
+            })?;
+        let ltp_multiplier = rule_obj
+            .get("ltp_multiplier")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| {
+                BduError::Internal(format!(
+                    "Missing ltp_multiplier in plastic mapping rule {} -> {}",
+                    src_area_id, dst_area_id
+                ))
+            })?;
+        let ltd_multiplier = rule_obj
+            .get("ltd_multiplier")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| {
+                BduError::Internal(format!(
+                    "Missing ltd_multiplier in plastic mapping rule {} -> {}",
+                    src_area_id, dst_area_id
+                ))
+            })?;
+
+        let params = feagi_npu_burst_engine::npu::StdpMappingParams {
+            plasticity_window,
+            plasticity_constant,
+            ltp_multiplier,
+            ltd_multiplier,
+        };
+
+        let mut npu_lock = npu
+            .lock()
+            .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
+
+        npu_lock
+            .register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params)
+            .map_err(|e| {
+                BduError::Internal(format!(
+                    "Failed to register STDP mapping {} -> {}: {}",
+                    src_area_id, dst_area_id, e
+                ))
+            })?;
+
+        // FireLedger tracking for STDP (ensure A and B are tracked at least to plasticity_window)
+        let existing_configs = npu_lock.get_all_fire_ledger_configs();
+        for area_idx in [src_cortical_idx, dst_cortical_idx] {
+            let existing = existing_configs
+                .iter()
+                .find(|(idx, _)| *idx == area_idx)
+                .map(|(_, w)| *w)
+                .unwrap_or(0);
+            let resolved = existing.max(plasticity_window);
+            if resolved != existing {
+                npu_lock
+                    .configure_fire_ledger_window(area_idx, resolved)
+                    .map_err(|e| {
+                        BduError::Internal(format!(
+                            "Failed to configure FireLedger window for area idx={} (requested={}): {}",
+                            area_idx, resolved, e
+                        ))
+                    })?;
+            }
+        }
+
+        Ok(())
+    }
+
     /// Apply cortical mapping for a specific area pair
     fn apply_cortical_mapping_for_pair(
         &mut self,
@@ -1110,15 +1213,212 @@ impl ConnectomeManager {
             return Ok(0);
         }
 
+        // Get indices for STDP handling
+        let src_cortical_idx = *self.cortical_id_to_idx.get(src_area_id).ok_or_else(|| {
+            crate::types::BduError::InvalidArea(format!("No index for {}", src_area_id))
+        })?;
+        let dst_cortical_idx = *self.cortical_id_to_idx.get(dst_area_id).ok_or_else(|| {
+            crate::types::BduError::InvalidArea(format!("No index for {}", dst_area_id))
+        })?;
+
+        // Clone NPU Arc for STDP handling (Arc::clone is cheap - just increments ref count)
+        let npu_arc = self.npu.as_ref().ok_or_else(|| {
+            crate::types::BduError::Internal("NPU not connected".to_string())
+        })?.clone();
+
         // Apply each morphology rule
         let mut total_synapses = 0;
         for rule in &rules {
+            let rule_obj = match rule.as_object() {
+                Some(obj) => obj,
+                None => continue,
+            };
+
+            // Handle STDP/plasticity configuration if needed
+            let plasticity_flag = rule_obj.get("plasticity_flag").and_then(|v| v.as_bool()).unwrap_or(false);
+            if plasticity_flag {
+                Self::register_stdp_mapping_for_rule(
+                    &npu_arc,
+                    src_area_id,
+                    dst_area_id,
+                    src_cortical_idx,
+                    dst_cortical_idx,
+                    rule_obj,
+                )?;
+            }
+
+            // Apply the morphology rule
             let synapse_count =
                 self.apply_single_morphology_rule(src_area_id, dst_area_id, rule)?;
             total_synapses += synapse_count;
         }
 
         Ok(total_synapses)
+    }
+
+    /// Apply a function-type morphology (projector, memory, block_to_block, etc.)
+    ///
+    /// This helper consolidates all function-type morphology logic in one place.
+    /// Function-type morphologies are code-driven and require code changes to add new ones.
+    ///
+    /// # Arguments
+    /// * `morphology_id` - The morphology ID string (e.g., "projector", "block_to_block")
+    /// * `rule` - The morphology rule JSON value
+    /// * `npu_arc` - Arc to the NPU (for batched operations)
+    /// * `npu` - Locked NPU reference
+    /// * `src_area_id`, `dst_area_id` - Source and destination area IDs
+    /// * `src_idx`, `dst_idx` - Source and destination area indices
+    /// * `weight`, `conductance`, `synapse_attractivity` - Synapse parameters
+    fn apply_function_morphology(
+        &self,
+        morphology_id: &str,
+        rule: &serde_json::Value,
+        npu_arc: &Arc<feagi_npu_burst_engine::TracingMutex<feagi_npu_burst_engine::DynamicNPU>>,
+        npu: &mut feagi_npu_burst_engine::DynamicNPU,
+        src_area_id: &CorticalID,
+        dst_area_id: &CorticalID,
+        src_idx: u32,
+        dst_idx: u32,
+        weight: u8,
+        conductance: u8,
+        synapse_attractivity: u8,
+    ) -> BduResult<usize> {
+        match morphology_id {
+            "projector" => {
+                // Get dimensions from cortical areas (no neuron scanning!)
+                let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+                })?;
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+                })?;
+                
+                let src_dimensions = (
+                    src_area.dimensions.width as usize,
+                    src_area.dimensions.height as usize,
+                    src_area.dimensions.depth as usize,
+                );
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+                
+                use crate::connectivity::core_morphologies::apply_projector_morphology_with_dimensions;
+                let count = apply_projector_morphology_with_dimensions(
+                    npu, src_idx, dst_idx,
+                    src_dimensions, dst_dimensions,
+                    None, // transpose
+                    None, // project_last_layer_of
+                    weight,
+                    conductance,
+                    synapse_attractivity,
+                )?;
+                // Ensure the propagation engine sees the newly created synapses immediately
+                npu.rebuild_synapse_index();
+                Ok(count as usize)
+            }
+            "memory" => {
+                // Memory morphology: No physical synapses created
+                // Pattern detection and memory neuron creation handled by PlasticityService
+                use tracing::trace;
+                trace!(
+                    target: "feagi-bdu",
+                    "Memory morphology: {} -> {} (no physical synapses, plasticity-driven)",
+                    src_idx, dst_idx
+                );
+                Ok(0)
+            }
+            "block_to_block" => {
+                // Get dimensions from cortical areas (no neuron scanning!)
+                let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
+                })?;
+                let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                    crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+                })?;
+                
+                let src_dimensions = (
+                    src_area.dimensions.width as usize,
+                    src_area.dimensions.height as usize,
+                    src_area.dimensions.depth as usize,
+                );
+                let dst_dimensions = (
+                    dst_area.dimensions.width as usize,
+                    dst_area.dimensions.height as usize,
+                    dst_area.dimensions.depth as usize,
+                );
+                
+                // Extract scalar from rule (morphology_scalar)
+                let scalar = if let Some(obj) = rule.as_object() {
+                    // Object format: get from morphology_scalar array
+                    if let Some(scalar_arr) = obj.get("morphology_scalar").and_then(|v| v.as_array()) {
+                        // Use first element as scalar (or default to 1)
+                        scalar_arr.get(0).and_then(|v| v.as_i64()).unwrap_or(1) as u32
+                    } else {
+                        1 // @architecture:acceptable - default scalar
+                    }
+                } else if let Some(arr) = rule.as_array() {
+                    // Array format: [morphology_id, scalar, multiplier, ...]
+                    arr.get(1).and_then(|v| v.as_i64()).unwrap_or(1) as u32
+                } else {
+                    1 // @architecture:acceptable - default scalar
+                };
+                
+                // CRITICAL: Do NOT call get_neurons_in_cortical_area to check neuron count!
+                // Use dimensions to estimate: if area is large, use batched version
+                let estimated_neurons = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
+                let count = if estimated_neurons > 100_000 {
+                    // Release lock and use batched version
+                    drop(npu);
+                    
+                    crate::connectivity::synaptogenesis::apply_block_connection_morphology_batched(
+                        npu_arc,
+                        src_idx,
+                        dst_idx,
+                        src_dimensions,
+                        dst_dimensions,
+                        scalar, // scaling_factor
+                        weight,
+                        conductance,
+                        synapse_attractivity,
+                    )? as usize
+                } else {
+                    // Small area: use regular version (faster for small counts)
+                    let count = crate::connectivity::synaptogenesis::apply_block_connection_morphology(
+                        npu,
+                        src_idx,
+                        dst_idx,
+                        src_dimensions,
+                        dst_dimensions,
+                        scalar, // scaling_factor
+                        weight,
+                        conductance,
+                        synapse_attractivity,
+                    )? as usize;
+                    // Rebuild synapse index while we still have the lock
+                    if count > 0 {
+                        npu.rebuild_synapse_index();
+                    }
+                    count
+                };
+                
+                // Ensure the propagation engine sees the newly created synapses immediately (batched version only)
+                if count > 0 && estimated_neurons > 100_000 {
+                    let mut npu_lock = npu_arc.lock().unwrap();
+                    npu_lock.rebuild_synapse_index();
+                }
+                
+                Ok(count)
+            }
+            _ => {
+                // Other function morphologies not yet implemented
+                // NOTE: To add a new function-type morphology, add a case here
+                use tracing::debug;
+                debug!(target: "feagi-bdu", "Function morphology {} not yet implemented", morphology_id);
+                Ok(0)
+            }
+        }
     }
 
     /// Apply a single morphology rule
@@ -1218,120 +1518,20 @@ impl ConnectomeManager {
             match morphology.morphology_type {
                 feagi_evolutionary::MorphologyType::Functions => {
                     // Function-based morphologies (projector, memory, block_to_block, etc.)
-                    match morphology_id {
-                        "projector" => {
-                            use crate::connectivity::synaptogenesis::apply_projector_morphology;
-                            let count = apply_projector_morphology(
-                                &mut npu, *src_idx, *dst_idx, None, // transpose
-                                None, // project_last_layer_of
-                                weight,  // From rule, not hardcoded
-                                conductance,  // PSP from source area, NOT hardcoded!
-                                synapse_attractivity,  // From rule, not hardcoded
-                            )?;
-                            // Ensure the propagation engine sees the newly created synapses immediately,
-                            // and avoid a second outer NPU mutex acquisition later in the mapping update path.
-                            npu.rebuild_synapse_index();
-                            Ok(count as usize)
-                        }
-                        "memory" => {
-                            // Memory morphology: No physical synapses created
-                            // Pattern detection and memory neuron creation handled by PlasticityService
-                            use tracing::trace;
-                            trace!(target: "feagi-bdu", 
-                                "Memory morphology: {} -> {} (no physical synapses, plasticity-driven)",
-                                src_idx, dst_idx
-                            );
-                            Ok(0)
-                        }
-                        "block_to_block" => {
-                            // Get dimensions from cortical areas (no neuron scanning!)
-                            let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
-                                crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
-                            })?;
-                            let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
-                                crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
-                            })?;
-                            
-                            let src_dimensions = (
-                                src_area.dimensions.width as usize,
-                                src_area.dimensions.height as usize,
-                                src_area.dimensions.depth as usize,
-                            );
-                            let dst_dimensions = (
-                                dst_area.dimensions.width as usize,
-                                dst_area.dimensions.height as usize,
-                                dst_area.dimensions.depth as usize,
-                            );
-                            
-                            // Extract scalar from rule (morphology_scalar)
-                            let scalar = if let Some(obj) = rule.as_object() {
-                                // Object format: get from morphology_scalar array
-                                if let Some(scalar_arr) = obj.get("morphology_scalar").and_then(|v| v.as_array()) {
-                                    // Use first element as scalar (or default to 1)
-                                    scalar_arr.get(0).and_then(|v| v.as_i64()).unwrap_or(1) as u32
-                                } else {
-                                    1 // @architecture:acceptable - default scalar
-                                }
-                            } else if let Some(arr) = rule.as_array() {
-                                // Array format: [morphology_id, scalar, multiplier, ...]
-                                arr.get(1).and_then(|v| v.as_i64()).unwrap_or(1) as u32
-                            } else {
-                                1 // @architecture:acceptable - default scalar
-                            };
-                            
-                            // CRITICAL: Do NOT call get_neurons_in_cortical_area to check neuron count!
-                            // Use dimensions to estimate: if area is large, use batched version
-                            let estimated_neurons = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
-                            let count = if estimated_neurons > 100_000 {
-                                // Release lock and use batched version
-                                drop(npu);
-                                
-                                crate::connectivity::synaptogenesis::apply_block_connection_morphology_batched(
-                                    npu_arc,
-                                    *src_idx,
-                                    *dst_idx,
-                                    src_dimensions,
-                                    dst_dimensions,
-                                    scalar, // scaling_factor
-                                    weight,
-                                    conductance,
-                                    synapse_attractivity,
-                                )? as usize
-                            } else {
-                                // Small area: use regular version (faster for small counts)
-                                let count = crate::connectivity::synaptogenesis::apply_block_connection_morphology(
-                                    &mut npu,
-                                    *src_idx,
-                                    *dst_idx,
-                                    src_dimensions,
-                                    dst_dimensions,
-                                    scalar, // scaling_factor
-                                    weight,
-                                    conductance,
-                                    synapse_attractivity,
-                                )? as usize;
-                                // Rebuild synapse index while we still have the lock
-                                if count > 0 {
-                                    npu.rebuild_synapse_index();
-                                }
-                                count
-                            };
-                            
-                            // Ensure the propagation engine sees the newly created synapses immediately (batched version only)
-                            if count > 0 && estimated_neurons > 100_000 {
-                                let mut npu_lock = npu_arc.lock().unwrap();
-                                npu_lock.rebuild_synapse_index();
-                            }
-                            
-                            Ok(count)
-                        }
-                        _ => {
-                            // Other function morphologies not yet implemented
-                            use tracing::debug;
-                            debug!(target: "feagi-bdu", "Function morphology {} not yet implemented", morphology_id);
-                            Ok(0)
-                        }
-                    }
+                    // Delegate to helper function to consolidate all function-type logic
+                    self.apply_function_morphology(
+                        morphology_id,
+                        rule,
+                        npu_arc,
+                        &mut npu,
+                        src_area_id,
+                        dst_area_id,
+                        *src_idx,
+                        *dst_idx,
+                        weight,
+                        conductance,
+                        synapse_attractivity,
+                    )
                 }
                 feagi_evolutionary::MorphologyType::Vectors => {
                     use crate::connectivity::synaptogenesis::apply_vectors_morphology;
@@ -1966,22 +2166,11 @@ impl ConnectomeManager {
             .get(src_cortical_id)
             .ok_or_else(|| BduError::InvalidArea(format!("No index for {}", src_cortical_id)))?;
 
-        // Get NPU
-        let npu = self
-            .npu
-            .as_ref()
-            .ok_or_else(|| BduError::Internal("NPU not connected".to_string()))?;
-
         let mut total_synapses = 0u32;
         let mut upstream_updates: Vec<(CorticalID, u32)> = Vec::new(); // Collect updates to apply later
 
-        // Process each destination area
-        for (dst_cortical_id_str, rules) in dstmap {
-            let rules_array = match rules.as_array() {
-                Some(arr) => arr,
-                None => continue,
-            };
-
+        // Process each destination area using the unified path
+        for (dst_cortical_id_str, _rules) in dstmap {
             // Convert string to CorticalID
             let dst_cortical_id = match CorticalID::try_from_base_64(dst_cortical_id_str) {
                 Ok(id) => id,
@@ -1991,242 +2180,19 @@ impl ConnectomeManager {
                 }
             };
 
-            let dst_cortical_idx = match self.cortical_id_to_idx.get(&dst_cortical_id) {
-                Some(idx) => *idx,
-                None => {
+            // Verify destination area exists
+            if !self.cortical_id_to_idx.contains_key(&dst_cortical_id) {
                     warn!(target: "feagi-bdu","Destination area {} not found, skipping", dst_cortical_id);
                     continue;
                 }
-            };
 
-            let mut _dst_synapse_count = 0u32; // Track synapses for this specific destination
-
-            // Apply each morphology rule
-            for rule in rules_array {
-                let rule_obj = match rule.as_object() {
-                    Some(obj) => obj,
-                    None => continue,
-                };
-
-                let morphology_id = rule_obj
-                    .get("morphology_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown");
-
-                // STDP (per mapping A→B) configuration
-                //
-                // If this mapping rule is marked plastic, register mapping parameters with the NPU and
-                // ensure FireLedger tracks both source and destination areas with the required window.
-                let plasticity_flag = match rule_obj.get("plasticity_flag").and_then(|v| v.as_bool()) {
-                    Some(v) => v,
-                    None => {
-                        warn!(
-                            target: "feagi-bdu",
-                            "Missing or invalid plasticity_flag in mapping rule {} -> {}",
-                            src_cortical_id,
-                            dst_cortical_id
-                        );
-                        false
-                    }
-                };
-
-                // IMPORTANT:
-                // - This value represents the synapse "weight" stored in the NPU (u8: 0..255).
-                // - Do NOT scale by 255 here. A multiplier of 1.0 should remain weight=1 (not 255).
-                let weight = rule_obj
-                    .get("postSynapticCurrent_multiplier")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(1.0) // @architecture:acceptable - rule-level default multiplier
-                    .clamp(0.0, 255.0) as u8;
-
-                // Get PSP (conductance) from source cortical area, NOT hardcoded!
-                //
-                // IMPORTANT:
-                // - This value represents the synapse "conductance" stored in the NPU (u8: 0..255).
-                // - Treat `postsynaptic_current` as an absolute value in 0..255 units.
-                // - Do NOT scale by 255 here. A PSP of 1.0 should remain conductance=1 (not 255).
-                let conductance = {
-                    use crate::models::cortical_area::CorticalAreaExt;
-                    let psp_f32 = src_area.postsynaptic_current();
-                    psp_f32.clamp(0.0, 255.0) as u8
-                };
-                let synapse_attractivity = 100u8; // Default: always create
-
-                // Call NPU synaptogenesis based on morphology type
-                let mut npu_lock = npu
-                    .lock()
-                    .map_err(|e| BduError::Internal(format!("Failed to lock NPU: {}", e)))?;
-
-                if plasticity_flag {
-                    let plasticity_window = rule_obj
-                        .get("plasticity_window")
-                        .and_then(|v| v.as_u64())
-                        .ok_or_else(|| {
-                            BduError::Internal(format!(
-                                "Missing plasticity_window in plastic mapping rule {} -> {}",
-                                src_cortical_id, dst_cortical_id
-                            ))
-                        })? as usize;
-                    let plasticity_constant = rule_obj
-                        .get("plasticity_constant")
-                        .and_then(|v| v.as_i64())
-                        .ok_or_else(|| {
-                            BduError::Internal(format!(
-                                "Missing plasticity_constant in plastic mapping rule {} -> {}",
-                                src_cortical_id, dst_cortical_id
-                            ))
-                        })?;
-                    let ltp_multiplier = rule_obj
-                        .get("ltp_multiplier")
-                        .and_then(|v| v.as_i64())
-                        .ok_or_else(|| {
-                            BduError::Internal(format!(
-                                "Missing ltp_multiplier in plastic mapping rule {} -> {}",
-                                src_cortical_id, dst_cortical_id
-                            ))
-                        })?;
-                    let ltd_multiplier = rule_obj
-                        .get("ltd_multiplier")
-                        .and_then(|v| v.as_i64())
-                        .ok_or_else(|| {
-                            BduError::Internal(format!(
-                                "Missing ltd_multiplier in plastic mapping rule {} -> {}",
-                                src_cortical_id, dst_cortical_id
-                            ))
-                        })?;
-
-                    let params = feagi_npu_burst_engine::npu::StdpMappingParams {
-                        plasticity_window,
-                        plasticity_constant,
-                        ltp_multiplier,
-                        ltd_multiplier,
-                    };
-
-                    npu_lock
-                        .register_stdp_mapping(src_cortical_idx, dst_cortical_idx, params)
-                        .map_err(|e| {
-                            BduError::Internal(format!(
-                                "Failed to register STDP mapping {} -> {}: {}",
-                                src_cortical_id, dst_cortical_id, e
-                            ))
-                        })?;
-
-                    // FireLedger tracking for STDP (ensure A and B are tracked at least to plasticity_window)
-                    let existing_configs = npu_lock.get_all_fire_ledger_configs();
-                    for area_idx in [src_cortical_idx, dst_cortical_idx] {
-                        let existing = existing_configs
-                            .iter()
-                            .find(|(idx, _)| *idx == area_idx)
-                            .map(|(_, w)| *w)
-                            .unwrap_or(0);
-                        let resolved = existing.max(plasticity_window);
-                        if resolved != existing {
-                            npu_lock
-                                .configure_fire_ledger_window(area_idx, resolved)
-                                .map_err(|e| {
-                                    BduError::Internal(format!(
-                                        "Failed to configure FireLedger window for area idx={} (requested={}): {}",
-                                        area_idx, resolved, e
-                                    ))
-                                })?;
-                        }
-                    }
-                }
-
-                let scalar = rule_obj
-                    .get("morphology_scalar")
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(1) as u32;
-
-                let synapse_count = match morphology_id {
-                    "projector" => {
-                        crate::connectivity::synaptogenesis::apply_projector_morphology(
-                            &mut npu_lock,
-                            src_cortical_idx,
-                            dst_cortical_idx,
-                            None, // transpose
-                            None, // project_last_layer_of
-                            weight,
-                            conductance,
-                            synapse_attractivity,
-                        )?
-                    }
-                    "block_to_block" => {
-                        // Get dimensions from cortical areas (no neuron scanning!)
-                        // Use src_cortical_id and dst_cortical_id which are available in this scope
-                        let src_area = self.cortical_areas.get(&src_cortical_id).ok_or_else(|| {
-                            crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_cortical_id))
-                        })?;
-                        let dst_area = self.cortical_areas.get(&dst_cortical_id).ok_or_else(|| {
-                            crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_cortical_id))
-                        })?;
-                        
-                        let src_dimensions = (
-                            src_area.dimensions.width as usize,
-                            src_area.dimensions.height as usize,
-                            src_area.dimensions.depth as usize,
-                        );
-                        let dst_dimensions = (
-                            dst_area.dimensions.width as usize,
-                            dst_area.dimensions.height as usize,
-                            dst_area.dimensions.depth as usize,
-                        );
-                        
-                        // CRITICAL: Do NOT call get_neurons_in_cortical_area to check neuron count!
-                        // Use dimensions to estimate: if area is large, use batched version
-                        let estimated_neurons = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
-                        if estimated_neurons > 100_000 {
-                            // Release lock and use batched version
-                            drop(npu_lock);
-                            
-                            crate::connectivity::synaptogenesis::apply_block_connection_morphology_batched(
-                                npu,
-                                src_cortical_idx,
-                                dst_cortical_idx,
-                                src_dimensions,
-                                dst_dimensions,
-                                scalar, // scaling_factor
-                                weight,
-                                conductance,
-                                synapse_attractivity,
-                            )?
-                        } else {
-                            // Small area: use regular version (faster for small counts)
-                            crate::connectivity::synaptogenesis::apply_block_connection_morphology(
-                                &mut npu_lock,
-                                src_cortical_idx,
-                                dst_cortical_idx,
-                                src_dimensions,
-                                dst_dimensions,
-                                scalar, // scaling_factor
-                                weight,
-                                conductance,
-                                synapse_attractivity,
-                            )?
-                        }
-                    }
-                    _ => {
-                        trace!(
-                            target: "feagi-bdu",
-                            "Morphology {} not yet implemented, skipping",
-                            morphology_id
-                        );
-                        0
-                    }
-                };
-
-                _dst_synapse_count += synapse_count;
-                total_synapses += synapse_count;
-
-                trace!(
-                    target: "feagi-bdu",
-                    "Applied {} morphology: {} -> {} = {} synapses",
-                    morphology_id, src_cortical_id, dst_cortical_id, synapse_count);
-            }
+            // Apply cortical mapping for this pair (handles STDP and all morphology rules)
+            let synapse_count = self.apply_cortical_mapping_for_pair(src_cortical_id, &dst_cortical_id)?;
+            total_synapses += synapse_count as u32;
             
             // Queue upstream area update for ANY mapping (even if no synapses created)
             // This is critical for memory areas which have mappings but no physical synapses
-            upstream_updates.push((dst_cortical_id.clone(), src_cortical_idx));
+            upstream_updates.push((dst_cortical_id, src_cortical_idx));
         }
 
         // Apply all upstream area updates now that NPU borrows are complete
