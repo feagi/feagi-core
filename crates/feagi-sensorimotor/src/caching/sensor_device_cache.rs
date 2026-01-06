@@ -542,38 +542,20 @@ r
                 let unit_definition = &unit_and_encoder_definition.0;
                 let encoder_definition = &unit_and_encoder_definition.1;
 
-                let channel_count = unit_definition.get_channel_count()?;
-                let cortical_ids =
-                    sensory_unit.get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
-                        unit_definition.cortical_unit_index,
-                        unit_definition.io_configuration_flags.clone()
-                    )?;
-
-                self.register(*sensory_unit,
-                              unit_definition.cortical_unit_index,
-                              encoder_definition.to_box_encoder(
-                                  channel_count,
-                                  &cortical_ids
-                              )?,
-                              channel_count,
-                              encoder_definition.default_wrapped_value()?)?;
-
-                self.set_unit_friendly_name(*sensory_unit, unit_definition.cortical_unit_index, unit_definition.friendly_name.clone());
-
-                for (index, device_group) in unit_definition.device_grouping.iter().enumerate() {
-                    // TODO naming
-                    // TODO JSONDeviceProperties
-                    // TODO channel override
-                    let channel_index = CorticalChannelIndex::from(index as u32);
-                    self.try_update_all_stage_properties(*sensory_unit,
-                                                         unit_definition.cortical_unit_index,
-                                                         channel_index,
-                                                         device_group.pipeline_stages.clone());
+                if self.sensor_cortical_unit_caches.contains_key(&(*sensory_unit, unit_definition.cortical_unit_index)) {
+                    return Err(FeagiDataError::DeserializationError(format!(
+                        "Already registered sensor {} of unit index {}!",
+                        *sensory_unit, unit_definition.cortical_unit_index
+                    )));
                 }
 
+                let new_unit = SensoryCorticalUnitCache::new_from_json(
+                    sensory_unit,
+                    unit_definition,
+                    encoder_definition
+                )?;
+                self.sensor_cortical_unit_caches.insert((*sensory_unit, unit_definition.cortical_unit_index), new_unit);
             }
-
-
         };
         Ok(())
     }

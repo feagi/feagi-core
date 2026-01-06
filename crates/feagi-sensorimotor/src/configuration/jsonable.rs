@@ -191,7 +191,7 @@ impl JSONEncoderProperties {
             }
         }
     }
-    
+
     pub fn default_wrapped_value(&self) -> Result<WrappedIOData, FeagiDataError>  {
         match self {
             JSONEncoderProperties::Boolean => {
@@ -208,28 +208,28 @@ impl JSONEncoderProperties {
             JSONEncoderProperties::Percentage(neuron_depth, percentage, is_signed, number_dimensions) => {
                 match(number_dimensions) {
                     PercentageChannelDimensionality::D1 => {
-                        if is_signed {
+                        if *is_signed {
                             Ok(WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0)))
                         } else {
                             Ok(WrappedIOData::Percentage(Percentage::new_zero()))
                         }
                     }
                     PercentageChannelDimensionality::D2 => {
-                        if is_signed {
+                        if *is_signed {
                             Ok(WrappedIOData::SignedPercentage_2D(SignedPercentage2D::new_zero()))
                         } else {
                             Ok(WrappedIOData::Percentage_2D(Percentage2D::new_zero()))
                         }
                     }
                     PercentageChannelDimensionality::D3 => {
-                        if is_signed {
+                        if *is_signed {
                             Ok(WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()))
                         } else {
                             Ok(WrappedIOData::Percentage_3D(Percentage3D::new_zero()))
                         }
                     }
                     PercentageChannelDimensionality::D4 => {
-                        if is_signed {
+                        if *is_signed {
                             Ok(WrappedIOData::SignedPercentage_4D(SignedPercentage4D::new_zero()))
                         } else {
                             Ok(WrappedIOData::Percentage_4D(Percentage4D::new_zero()))

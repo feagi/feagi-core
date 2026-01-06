@@ -179,16 +179,6 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            pub fn get_cortical_id_vector_from_index_and_json_encoder_properties(&self, cortical_unit_index: CorticalUnitIndex, json_encoder_properties: JSONEncoderProperties) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
-                match self {
-                    $(
-                        SensoryCorticalUnit::$variant_name => {
-
-                        }
-                    )*
-                }
-            }
-
             pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
                 match self {
                     $(
