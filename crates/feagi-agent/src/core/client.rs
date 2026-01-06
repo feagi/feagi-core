@@ -540,6 +540,17 @@ impl AgentClient {
     /// - Uses ZMQ DONTWAIT to avoid blocking the caller.
     /// - On backpressure (EAGAIN), the message is dropped (latest-only semantics).
     pub fn send_sensory_bytes(&self, bytes: Vec<u8>) -> Result<()> {
+        let _ = self.try_send_sensory_bytes(&bytes)?;
+        Ok(())
+    }
+
+    /// Try sending pre-serialized sensory bytes to FEAGI (non-blocking), returning whether it was sent.
+    ///
+    /// Returns:
+    /// - `Ok(true)` if the message was sent.
+    /// - `Ok(false)` if dropped due to backpressure (EAGAIN).
+    /// - `Err(...)` for other failures (not registered, socket errors).
+    pub fn try_send_sensory_bytes(&self, bytes: &[u8]) -> Result<bool> {
         if !self.registered {
             return Err(SdkError::NotRegistered);
         }
@@ -549,10 +560,10 @@ impl AgentClient {
             .as_ref()
             .ok_or_else(|| SdkError::Other("Sensory socket not initialized".to_string()))?;
 
-        match socket.send(&bytes, zmq::DONTWAIT) {
+        match socket.send(bytes, zmq::DONTWAIT) {
             Ok(()) => {
                 debug!("[CLIENT] Sent {} bytes sensory (raw)", bytes.len());
-                Ok(())
+                Ok(true)
             }
             Err(zmq::Error::EAGAIN) => {
                 // REAL-TIME: Drop on pressure (do not block and do not buffer history)
@@ -579,7 +590,7 @@ impl AgentClient {
                     );
                 }
 
-                Ok(())
+                Ok(false)
             }
             Err(e) => Err(SdkError::Zmq(e)),
         }

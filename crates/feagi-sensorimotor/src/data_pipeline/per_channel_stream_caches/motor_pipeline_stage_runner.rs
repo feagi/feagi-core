@@ -111,6 +111,9 @@ impl MotorPipelineStageRunner {
         time_of_update: Instant,
     ) -> Result<&WrappedIOData, FeagiDataError> {
         if self.pipeline_stages.is_empty() {
+            // Critical: even with no pipeline stages, this channel has been updated and must be
+            // treated as "recently processed" so downstream consumers can detect change.
+            self.last_instant_data_processed = time_of_update;
             return Ok(&self.preprocessed_cached_value);
         }
 

@@ -137,6 +137,11 @@ impl SensoryPipelineStageRunner {
         time_of_update: Instant,
     ) -> Result<&WrappedIOData, FeagiDataError> {
         if self.pipeline_stages.is_empty() {
+            // Critical: even with no pipeline stages, this channel has been updated and must be
+            // treated as "recently processed" so encoders can detect changes vs `previous_burst`.
+            // Without this, `last_instant_data_processed` stays at its initialization time,
+            // causing updates to be skipped and stale scratch-space to be re-emitted.
+            self.last_instant_data_processed = time_of_update;
             return Ok(&self.preprocessed_cached_value);
         }
 

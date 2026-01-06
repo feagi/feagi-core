@@ -12,6 +12,7 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use serde::Serialize;
 use tracing;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Perception frame output
 #[derive(Debug, Clone, Serialize)]
@@ -204,6 +205,83 @@ impl MotorDecoder for PerceptionDecoder {
             data.mappings
                 .get(&self.cortical_ids[2])
                 .and_then(|voxels| {
+                    // Strategic debugging: summarize raw oten voxels and what the bitplane decoder
+                    // "would see" at (x=0,y=0). This helps distinguish:
+                    // - FEAGI motor payload not changing vs
+                    // - voxels present but not at x=0,y=0 (decoder ignores them).
+                    static OTEN_VOXEL_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
+                    let log_n = OTEN_VOXEL_LOG_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+                    if log_n <= 10 || log_n % 100 == 0 {
+                        let (x, y, z, p) = voxels.borrow_xyzp_vectors();
+                        let depth = topo.depth;
+
+                        let mut total = x.len();
+                        let mut active_total: usize = 0;
+                        let mut active_xy00: usize = 0;
+                        let mut active_non_xy00: usize = 0;
+                        let mut active_z_out_of_range: usize = 0;
+                        let mut value_raw: u32 = 0;
+
+                        // Track min/max coords for quick sanity checks.
+                        let mut min_x: u32 = u32::MAX;
+                        let mut max_x: u32 = 0;
+                        let mut min_y: u32 = u32::MAX;
+                        let mut max_y: u32 = 0;
+
+                        for i in 0..x.len() {
+                            min_x = min_x.min(x[i]);
+                            max_x = max_x.max(x[i]);
+                            min_y = min_y.min(y[i]);
+                            max_y = max_y.max(y[i]);
+
+                            if p[i] <= 0.0 {
+                                continue;
+                            }
+                            active_total += 1;
+
+                            let zi = z[i];
+                            if zi >= depth {
+                                active_z_out_of_range += 1;
+                                continue;
+                            }
+
+                            if x[i] == 0 && y[i] == 0 {
+                                active_xy00 += 1;
+                                // z=0 is MSB.
+                                if depth <= 32 {
+                                    let weight = 1u32 << (depth - 1 - zi);
+                                    value_raw |= weight;
+                                }
+                            } else {
+                                active_non_xy00 += 1;
+                            }
+                        }
+
+                        // Interpret value using TextToken "offset encoding".
+                        let decoded_from_raw = if value_raw == 0 {
+                            None
+                        } else {
+                            Some(value_raw - 1)
+                        };
+
+                        tracing::info!(
+                            "[PERCEPTION-DECODER][OTEN] sample#{} total_voxels={} active_total={} active_xy00={} active_non_xy00={} active_z_out_of_range={} depth={} x_range=[{},{}] y_range=[{},{}] value_raw=0x{:X} decoded_from_raw={:?}",
+                            log_n,
+                            total,
+                            active_total,
+                            active_xy00,
+                            active_non_xy00,
+                            active_z_out_of_range,
+                            depth,
+                            if min_x == u32::MAX { 0 } else { min_x },
+                            max_x,
+                            if min_y == u32::MAX { 0 } else { min_y },
+                            max_y,
+                            value_raw,
+                            decoded_from_raw
+                        );
+                    }
+
                     decode_token_id_from_xyzp_bitplanes(voxels, topo.depth)
                         .ok()
                         .flatten()
