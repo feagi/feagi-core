@@ -171,6 +171,12 @@ pub fn apply_block_connection_morphology(
     use std::time::Instant;
     let mut rng = get_rng();
     
+    warn!(
+        target: "feagi-bdu",
+        "🔍 ENTRY: apply_block_connection_morphology called with src_area_id={}, dst_area_id={}, src_dim={:?}, dst_dim={:?}",
+        src_area_id, dst_area_id, src_dimensions, dst_dimensions
+    );
+    
     // CRITICAL: Do NOT call get_neurons_in_cortical_area - it iterates through ALL 8M neurons!
     // 
     // PROBLEM: get_neuron_id_at_coordinate() does a linear search through all neurons for each lookup.
@@ -244,8 +250,82 @@ pub fn apply_block_connection_morphology(
     // CRITICAL: Use batch coordinate lookup which builds hashmap once (O(neurons_in_area))
     // then does O(1) lookups for each coordinate. This is MUCH faster than individual linear searches!
     let lookup_start = Instant::now();
+    
+    // DEBUG: Log what we're looking up
+    warn!(
+        target: "feagi-bdu",
+        "🔍 DEBUG block_to_block: Looking up {} coordinates for area_id={}",
+        src_coords_to_check.len(),
+        src_area_id
+    );
+    if src_coords_to_check.len() <= 10 {
+        warn!(
+            target: "feagi-bdu",
+            "  First few: {:?}",
+            &src_coords_to_check[..src_coords_to_check.len().min(5)]
+        );
+    } else {
+        warn!(
+            target: "feagi-bdu",
+            "  First: {:?}, last: {:?}",
+            src_coords_to_check[0],
+            src_coords_to_check[src_coords_to_check.len() - 1]
+        );
+    }
+    
     let src_neuron_lookups = npu.batch_get_neuron_ids_from_coordinates_with_none(src_area_id, &src_coords_to_check);
     let lookup_time = lookup_start.elapsed();
+    
+    // DEBUG: Check how many neurons were actually found
+    let found_count = src_neuron_lookups.iter().filter(|opt| opt.is_some()).count();
+    warn!(
+        target: "feagi-bdu",
+        "🔍 DEBUG block_to_block: batch lookup found {} neurons out of {} coordinates",
+        found_count,
+        src_coords_to_check.len()
+    );
+    
+    if found_count == 0 {
+        // DEBUG: Try to verify neurons exist using the working method
+        let neurons_in_area = npu.get_neurons_in_cortical_area(src_area_id);
+        warn!(
+            target: "feagi-bdu",
+            "🔍 DEBUG block_to_block: batch lookup found 0 neurons, but get_neurons_in_cortical_area({}) found {} neurons",
+            src_area_id,
+            neurons_in_area.len()
+        );
+        
+        // DEBUG: Check first few neurons' coordinates and area IDs
+        if !neurons_in_area.is_empty() {
+            let sample_size = neurons_in_area.len().min(5);
+            let mut sample_coords = Vec::new();
+            let mut sample_area_ids = Vec::new();
+            for &nid in &neurons_in_area[..sample_size] {
+                if let Some(coords) = npu.get_neuron_coordinates(nid) {
+                    sample_coords.push(coords);
+                }
+                sample_area_ids.push(npu.get_neuron_cortical_area(nid));
+            }
+            warn!(
+                target: "feagi-bdu",
+                "🔍 DEBUG block_to_block: Sample neurons - area_ids: {:?}, coords: {:?}",
+                sample_area_ids,
+                sample_coords
+            );
+            
+            // DEBUG: Check if any of our lookup coordinates match sample coordinates
+            let matching_coords: Vec<_> = src_coords_to_check.iter()
+                .filter(|&coord| sample_coords.contains(coord))
+                .take(5)
+                .collect();
+            warn!(
+                target: "feagi-bdu",
+                "🔍 DEBUG block_to_block: Found {} matching coordinates between lookup and sample: {:?}",
+                matching_coords.len(),
+                matching_coords
+            );
+        }
+    }
     
     // Match source neurons with their destination coordinates (preserving index mapping)
     let mut src_to_dst_map = Vec::new();

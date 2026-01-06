@@ -36,5 +36,5 @@ Licensed under the Apache License, Version 2.0
 pub use crate::connectivity::core_morphologies::{
     apply_block_connection_morphology, apply_block_connection_morphology_batched,
     apply_expander_morphology, apply_patterns_morphology, apply_projector_morphology,
-    apply_vectors_morphology,
+    apply_vectors_morphology, apply_vectors_morphology_with_dimensions,
 };

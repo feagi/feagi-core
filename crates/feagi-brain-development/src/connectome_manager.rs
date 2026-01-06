@@ -1330,6 +1330,11 @@ impl ConnectomeManager {
                 Ok(0)
             }
             "block_to_block" => {
+                tracing::warn!(
+                    target: "feagi-bdu",
+                    "🔍 DEBUG apply_function_morphology: block_to_block case reached with src_idx={}, dst_idx={}",
+                    src_idx, dst_idx
+                );
                 // Get dimensions from cortical areas (no neuron scanning!)
                 let src_area = self.cortical_areas.get(src_area_id).ok_or_else(|| {
                     crate::types::BduError::InvalidArea(format!("Source area not found: {}", src_area_id))
@@ -1385,6 +1390,11 @@ impl ConnectomeManager {
                     )? as usize
                 } else {
                     // Small area: use regular version (faster for small counts)
+                    tracing::warn!(
+                        target: "feagi-bdu",
+                        "🔍 DEBUG connectome_manager: Calling apply_block_connection_morphology with src_idx={}, dst_idx={}, src_dim={:?}, dst_dim={:?}",
+                        src_idx, dst_idx, src_dimensions, dst_dimensions
+                    );
                     let count = crate::connectivity::synaptogenesis::apply_block_connection_morphology(
                         npu,
                         src_idx,
@@ -1396,6 +1406,11 @@ impl ConnectomeManager {
                         conductance,
                         synapse_attractivity,
                     )? as usize;
+                    tracing::warn!(
+                        target: "feagi-bdu",
+                        "🔍 DEBUG connectome_manager: apply_block_connection_morphology returned count={}",
+                        count
+                    );
                     // Rebuild synapse index while we still have the lock
                     if count > 0 {
                         npu.rebuild_synapse_index();
@@ -1517,6 +1532,11 @@ impl ConnectomeManager {
 
             match morphology.morphology_type {
                 feagi_evolutionary::MorphologyType::Functions => {
+                    tracing::warn!(
+                        target: "feagi-bdu",
+                        "🔍 DEBUG apply_single_morphology_rule: Functions type, morphology_id={}, calling apply_function_morphology",
+                        morphology_id
+                    );
                     // Function-based morphologies (projector, memory, block_to_block, etc.)
                     // Delegate to helper function to consolidate all function-type logic
                     self.apply_function_morphology(
@@ -1534,7 +1554,19 @@ impl ConnectomeManager {
                     )
                 }
                 feagi_evolutionary::MorphologyType::Vectors => {
-                    use crate::connectivity::synaptogenesis::apply_vectors_morphology;
+                    use crate::connectivity::synaptogenesis::apply_vectors_morphology_with_dimensions;
+                    
+                    // Get dimensions from cortical areas (no neuron scanning!)
+                    let dst_area = self.cortical_areas.get(dst_area_id).ok_or_else(|| {
+                        crate::types::BduError::InvalidArea(format!("Destination area not found: {}", dst_area_id))
+                    })?;
+                    
+                    let dst_dimensions = (
+                        dst_area.dimensions.width as usize,
+                        dst_area.dimensions.height as usize,
+                        dst_area.dimensions.depth as usize,
+                    );
+                    
                     if let feagi_evolutionary::MorphologyParameters::Vectors { ref vectors } =
                         morphology.parameters
                     {
@@ -1542,11 +1574,12 @@ impl ConnectomeManager {
                         let vectors_tuples: Vec<(i32, i32, i32)> =
                             vectors.iter().map(|v| (v[0], v[1], v[2])).collect();
 
-                        let count = apply_vectors_morphology(
+                        let count = apply_vectors_morphology_with_dimensions(
                             &mut npu,
                             *src_idx,
                             *dst_idx,
                             vectors_tuples,
+                            dst_dimensions,
                             weight, // From rule, not hardcoded
                             conductance, // PSP from source area, NOT hardcoded!
                             synapse_attractivity, // From rule, not hardcoded
