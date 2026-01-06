@@ -1490,8 +1490,9 @@ impl<
         
         let total_duration = burst_start.elapsed();
         
-        // Log timing info: WARN only if slow (>50ms), otherwise INFO every 100 bursts for diagnostics
-        let is_slow = total_duration.as_millis() > 50;
+        // Log timing info: WARN if slow (>20ms), INFO every 100 bursts, DEBUG for all bursts
+        // Lowered threshold from 50ms to 20ms to catch more performance issues
+        let is_slow = total_duration.as_millis() > 20;
         let should_log = is_slow || (burst_count % 100 == 0);
         
         if should_log {
@@ -3322,6 +3323,7 @@ fn phase1_injection_with_synapses<
     let mut sensory_count = 0;
 
     // 0. Drain pending sensory injections (AFTER clear, BEFORE power/synapses)
+    let sensory_start = std::time::Instant::now();
     if let Ok(mut pending) = pending_sensory.lock() {
         if !pending.is_empty() {
             // 🔍 DEBUG: Log first sensory injection
@@ -3341,6 +3343,16 @@ fn phase1_injection_with_synapses<
                 sensory_count += 1;
             }
         }
+    }
+    let sensory_duration = sensory_start.elapsed();
+    
+    // Log sensory injection timing if it's slow (>5ms)
+    if sensory_duration.as_millis() > 5 {
+        warn!(
+            "[PHASE1-SENSORY] Slow sensory injection: {:.2}ms for {} neurons",
+            sensory_duration.as_secs_f64() * 1000.0,
+            sensory_count
+        );
     }
 
     // 1. Power Injection + Membrane Potential Reset - OPTIMIZED FOR LARGE COUNTS
@@ -3399,8 +3411,8 @@ fn phase1_injection_with_synapses<
     
     let power_duration = power_start.elapsed();
     
-    // Log power injection timing if it's slow (>10ms)
-    if power_duration.as_millis() > 10 {
+    // Log power injection timing if it's slow (>5ms) - lowered threshold for better visibility
+    if power_duration.as_millis() > 5 {
         warn!(
             "[PHASE1-POWER] Slow power injection: {:.2}ms for {} neurons (total: {})",
             power_duration.as_secs_f64() * 1000.0,
@@ -3543,8 +3555,8 @@ fn phase1_injection_with_synapses<
         let inject_duration = inject_start.elapsed();
         let synaptic_duration = synaptic_start.elapsed();
         
-        // Log if synaptic propagation is slow (>20ms) - this is likely the bottleneck
-        if synaptic_duration.as_millis() > 20 {
+        // Log if synaptic propagation is slow (>10ms) - lowered threshold for better visibility
+        if synaptic_duration.as_millis() > 10 {
             warn!(
                 "[PHASE1-SYNAPTIC] Slow synaptic propagation: total={:.2}ms | mp_build={:.2}ms | propagate={:.2}ms | inject={:.2}ms | fired={} | synapses={}",
                 synaptic_duration.as_secs_f64() * 1000.0,
