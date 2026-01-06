@@ -179,11 +179,11 @@ macro_rules! define_sensory_cortical_units_enum {
                 }
             }
 
-            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Serde:Map<String, Serde:Value>) -> Result<Vec<CorticalID>, FeagiDataError> {
+            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
                 match self {
                     $(
-                        paste::paste! {
-                            SensoryCorticalUnit::$variant_name => {
+                        SensoryCorticalUnit::$variant_name => {
+                            paste::paste! {
                                 let array = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
                                     $($param_type::try_from_serde_map(&map)?,)*
                                     cortical_unit_index);

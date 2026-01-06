@@ -533,21 +533,24 @@ impl SensorDeviceCache {
 
 
     //region  JSON import / export
-/*
+
     pub(crate) fn set_from_input_definition(&mut self, replacing_definition: &InputOutputDefinition) -> Result<(), FeagiDataError> {
         self.reset();
-        let input_units = replacing_definition.get_input_units();
+        let input_units = replacing_definition.get_input_units_and_encoder_properties();
         for input_unit in input_units {
             let sensory_unit = *input_unit.0;
             let unit_definitions = input_unit.1;
             for unit_definition in unit_definitions {
                 let channel_count = CorticalChannelCount::new(unit_definition.0.device_grouping.len() as u32)?;
-                let cortical_ids = sensory_unit.
+
+                let cortical_ids = sensory_unit.get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+
+                )?
 
                 self.register(
                     sensory_unit,
                     unit_definition.0.cortical_unit_index,
-                    unit_definition.1.to_box_encoder(channel_count, cortical_ids)?,
+                    unit_definition.1.to_box_encoder(channel_count, &cortical_ids)?,
                     channel_count,
                     WrappedIOData)?
             }
@@ -561,7 +564,6 @@ impl SensorDeviceCache {
 
     }
 
- */
 
 
     //endregion

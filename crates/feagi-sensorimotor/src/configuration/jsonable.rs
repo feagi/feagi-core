@@ -14,24 +14,24 @@ use crate::neuron_voxel_coding::xyzp::encoders::{BooleanNeuronVoxelXYZPEncoder, 
 #[allow(dead_code)]
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InputOutputDefinition {
-    input_units: HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>>,
-    output_units: HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>>
+    input_units_and_encoder_properties: HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>>,
+    output_units_and_decoder_properties: HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>>
 }
 
 impl InputOutputDefinition {
     #[allow(dead_code)]
-    pub fn get_input_units(&self) -> &HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>> {
-        &self.input_units
+    pub fn get_input_units_and_encoder_properties(&self) -> &HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>> {
+        &self.input_units_and_encoder_properties
     }
 
     #[allow(dead_code)]
-    pub fn get_output_units(&self) -> &HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>> {
-        &self.output_units
+    pub fn get_output_units_and_decoder_properties(&self) -> &HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>> {
+        &self.output_units_and_decoder_properties
     }
 
     #[allow(dead_code)]
     pub fn verify_valid_structure(&self) -> Result<(), FeagiDataError> {
-        for units_and_encoders in self.input_units.values() {
+        for units_and_encoders in self.input_units_and_encoder_properties.values() {
             let mut unit_indexes: Vec<CorticalUnitIndex> = Vec::new();
             for unit in units_and_encoders {
                 unit.0.verify_valid_structure()?;
@@ -41,7 +41,7 @@ impl InputOutputDefinition {
                 unit_indexes.push(unit.0.cortical_unit_index);
             }
         }
-        for units_and_decoders in self.output_units.values() {
+        for units_and_decoders in self.output_units_and_decoder_properties.values() {
             let mut unit_indexes: Vec<CorticalUnitIndex> = Vec::new();
             for unit in units_and_decoders {
                 unit.0.verify_valid_structure()?;
@@ -57,21 +57,21 @@ impl InputOutputDefinition {
 
     #[allow(dead_code)]
     pub fn insert_motor(&mut self, motor: MotorCorticalUnit, unit_definition: UnitDefinition, decoder_properties: DecoderProperties) {
-        if !self.output_units.contains_key(&motor) {
-            self.output_units.insert(motor.clone(), vec![(unit_definition, decoder_properties)]);
+        if !self.output_units_and_decoder_properties.contains_key(&motor) {
+            self.output_units_and_decoder_properties.insert(motor.clone(), vec![(unit_definition, decoder_properties)]);
             return;
         }
-        let vec = self.output_units.get_mut(&motor).unwrap();
+        let vec = self.output_units_and_decoder_properties.get_mut(&motor).unwrap();
         vec.push((unit_definition, decoder_properties));
     }
 
     #[allow(dead_code)]
     pub fn insert_sensor(&mut self, sensor: SensoryCorticalUnit, unit_definition: UnitDefinition, encoder_properties: EncoderProperties) {
-        if !self.input_units.contains_key(&sensor) {
-            self.input_units.insert(sensor.clone(), vec![(unit_definition, encoder_properties)]);
+        if !self.input_units_and_encoder_properties.contains_key(&sensor) {
+            self.input_units_and_encoder_properties.insert(sensor.clone(), vec![(unit_definition, encoder_properties)]);
             return;
         }
-        let vec = self.input_units.get_mut(&sensor).unwrap();
+        let vec = self.input_units_and_encoder_properties.get_mut(&sensor).unwrap();
         vec.push((unit_definition, encoder_properties));
     }
 
@@ -84,7 +84,7 @@ impl InputOutputDefinition {
 pub struct UnitDefinition {
     pub(crate) friendly_name: String,
     pub(crate) cortical_unit_index: CorticalUnitIndex,
-    pub(crate) cortical_area_data_flag: IOCorticalAreaConfigurationFlag,
+    pub(crate) io_configuration_flags: serde_json::Map<String, serde_json::Value>, // Due to the diversity contained here, this MUST be a generic dictionary
     pub(crate) device_grouping: Vec<DeviceGrouping>,
 }
 
