@@ -226,7 +226,7 @@ pub enum PercentageNeuronPositioning {
 }
 
 impl PercentageNeuronPositioning {
-    pub fn try_from_serde_map(map: serde_json::Map<String, serde_json::Value>) -> Result<PercentageNeuronPositioning,FeagiDataError> {
+    pub fn try_from_serde_map(map: &serde_json::Map<String, serde_json::Value>) -> Result<PercentageNeuronPositioning,FeagiDataError> {
         let val = map.get("percentage_neuron_positioning").ok_or(FeagiDataError::DeserializationError("Unable to extreact percentage_neuron_positioning!".to_string()))?;
         let output: PercentageNeuronPositioning = serde_json::from_value(val.clone()).map_err(|err| FeagiDataError::DeserializationError("Unable to extreact percentage_neuron_positioning!".to_string()))?;
         Ok(output)
@@ -250,7 +250,7 @@ pub enum FrameChangeHandling {
 }
 
 impl FrameChangeHandling {
-    pub fn try_from_serde_map(map: serde_json::Map<String, serde_json::Value>) -> Result<FrameChangeHandling,FeagiDataError> {
+    pub fn try_from_serde_map(map: &serde_json::Map<String, serde_json::Value>) -> Result<FrameChangeHandling,FeagiDataError> {
         let val = map.get("frame_change_handling").ok_or(FeagiDataError::DeserializationError("Unable to extreact frame_change_handling!".to_string()))?;
         let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|err| FeagiDataError::DeserializationError("Unable to extreact frame_change_handling!".to_string()))?;
         Ok(output)

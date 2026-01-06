@@ -31,7 +31,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
-                    $(allowed_frame_change_handling: [$($allowed_frame:ident),* $(,)?],)?
+                    $(allowed_frame_change_handling: [$($allowed_frame:ident),* $(,)?],)? // TODO delete this!
                     cortical_area_properties: {
                         $($cortical_sub_unit_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
@@ -74,7 +74,7 @@ macro_rules! define_sensory_cortical_units_enum {
             pub const fn get_snake_case_name(&self) -> &'static str {
                 match self {
                     $(
-                        SensoryCorticalUnit::$variant_name => stringify!($snake_case_name),
+                        SensoryCorticalUnit::$variant_name => stringify!($variant_name:snake),
                     )*
                 }
             }
@@ -90,7 +90,7 @@ macro_rules! define_sensory_cortical_units_enum {
             pub fn from_snake_case_name(name: &str) -> Option<SensoryCorticalUnit> {
                 match name {
                     $(
-                        stringify!($snake_case_name) => Some(SensoryCorticalUnit::$variant_name),
+                        stringify!($variant_name:snake) => Some(SensoryCorticalUnit::$variant_name),
                     )*
                     _ => None,
                 }
@@ -182,26 +182,18 @@ macro_rules! define_sensory_cortical_units_enum {
             pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Serde:Map<String, Serde:Value>) -> Result<Vec<CorticalID>, FeagiDataError> {
                 match self {
                     $(
-                        SensoryCorticalUnit::$variant_name => {
-
-                        }
-                    )*
-                }
-
-
-            }
-            /*
-            pub fn get_cortical_id_vector(&self, cortical_unit_index: CorticalUnitIndex) -> Vector<CorticalID> {
-                match self {
-                    $(
-                        SensoryCorticalUnit::$variant_name => {
-                            paste::paste!{[<get_cortical_area_types_array_for_ $variant_name:snake >]}
+                        paste::paste! {
+                            SensoryCorticalUnit::$variant_name => {
+                                let array = SensoryCorticalUnit::[<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
+                                    $($param_type::try_from_serde_map(&map)?,)*
+                                    cortical_unit_index);
+                                return Ok(array.to_vec());
+                            }
                         }
                     )*
                 }
             }
 
-             */
 
 
         }
