@@ -103,11 +103,37 @@ impl PerceptionDecoder {
 
         // Load tokenizer if path provided
         let tokenizer = if let Some(path) = tokenizer_path {
-            Some(
-                tokenizers::Tokenizer::from_file(path)
-                    .map_err(|e| SdkError::InvalidConfiguration(format!("Failed to load tokenizer: {}", e)))?,
-            )
+            if !path.exists() {
+                tracing::warn!(
+                    "[PERCEPTION-DECODER] Tokenizer path does not exist: {:?}. oten_text will not be decoded.",
+                    path
+                );
+                None
+            } else {
+                match tokenizers::Tokenizer::from_file(&path) {
+                    Ok(tok) => {
+                        let vocab_size = tok.get_vocab_size(true);
+                        tracing::info!(
+                            "[PERCEPTION-DECODER] ✅ Tokenizer loaded successfully from {:?}. Vocab size: {}",
+                            path,
+                            vocab_size
+                        );
+                        Some(tok)
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "[PERCEPTION-DECODER] ❌ Failed to load tokenizer from {:?}: {}. oten_text will not be decoded.",
+                            path,
+                            e
+                        );
+                        return Err(SdkError::InvalidConfiguration(format!("Failed to load tokenizer: {}", e)));
+                    }
+                }
+            }
         } else {
+            tracing::warn!(
+                "[PERCEPTION-DECODER] No tokenizer path provided. oten_text will not be decoded (only oten_token_id will be available)."
+            );
             None
         };
 
@@ -187,11 +213,59 @@ impl MotorDecoder for PerceptionDecoder {
         let oten_text = if let (Some(token_id), Some(ref tokenizer)) =
             (oten_token_id, &self.tokenizer)
         {
-            tokenizer
+            // Try decoding with skip_special_tokens=true first
+            let decoded = tokenizer
                 .decode(std::slice::from_ref(&token_id), true)
-                .ok()
-                .filter(|s| !s.is_empty())
+                .ok();
+            
+            // Log decoding attempts for debugging (first few and every 100th)
+            static DECODE_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+            let count = DECODE_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+            
+            if count <= 5 || count % 100 == 0 {
+                match &decoded {
+                    Some(text) if !text.is_empty() => {
+                        tracing::info!(
+                            "[PERCEPTION-DECODER] Token ID {} decoded to: \"{}\"",
+                            token_id,
+                            text
+                        );
+                    }
+                    Some(text) if text.is_empty() => {
+                        // Try without skip_special_tokens to see what it actually is
+                        let decoded_with_special = tokenizer
+                            .decode(std::slice::from_ref(&token_id), false)
+                            .ok();
+                        tracing::warn!(
+                            "[PERCEPTION-DECODER] Token ID {} decoded to EMPTY string (skip_special=true). \
+                            Without skip_special: {:?}. This might be a control/padding token.",
+                            token_id,
+                            decoded_with_special
+                        );
+                    }
+                    None => {
+                        tracing::error!(
+                            "[PERCEPTION-DECODER] Token ID {} failed to decode! Tokenizer error.",
+                            token_id
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            
+            decoded.filter(|s| !s.is_empty())
         } else {
+            // Log why tokenizer isn't being used
+            if oten_token_id.is_some() && self.tokenizer.is_none() {
+                static WARNED_NO_TOKENIZER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                if !WARNED_NO_TOKENIZER.swap(true, std::sync::atomic::Ordering::Relaxed) {
+                    tracing::warn!(
+                        "[PERCEPTION-DECODER] Token ID {} received but tokenizer is not loaded! \
+                        oten_text will always be empty. Check tokenizer_path in controller initialization.",
+                        oten_token_id.unwrap()
+                    );
+                }
+            }
             None
         };
 
