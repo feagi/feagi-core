@@ -7,7 +7,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Free spinning motor."]
                 RotaryMotor => {
                     friendly_name: "Rotary Motor",
-                    snake_case_name: "rotary_motor",
                     accepted_wrapped_io_data_type: SignedPercentage, // This property determines what type of registration funciton will be generated
                     cortical_id_unit_reference: *b"mot",
                     number_cortical_areas: 1,
@@ -23,7 +22,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Servo Position, defined by min / max distances"]
                 PositionalServo => {
                     friendly_name: "Positional Servo",
-                    snake_case_name: "positional_servo",
                     accepted_wrapped_io_data_type: SignedPercentage,
                     cortical_id_unit_reference: *b"pse",
                     number_cortical_areas: 1,
@@ -39,7 +37,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Gaze control, where the first 2 numbers are the XY center, and the last number is the relative size"]
                 Shock => {
                     friendly_name: "Gaze Control",
-                    snake_case_name: "gaze_control",
                     accepted_wrapped_io_data_type: GazeProperties,
                     cortical_id_unit_reference: *b"gaz",
                     number_cortical_areas: 2,
@@ -57,7 +54,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Miscellaneous motor that does not fit existing templates."]
                 MiscData => {
                     friendly_name: "Miscellaneous Motor",
-                    snake_case_name: "miscellaneous",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"mis",
                     number_cortical_areas: 1,
@@ -72,7 +68,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Text output (English) - token stream encoded as absolute fractional bitplanes along Z (z=0 is MSB)."]
                 TextEnglishOutput => {
                     friendly_name: "Text Output (English)",
-                    snake_case_name: "text_english_output",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"ten",
                     number_cortical_areas: 1,
@@ -89,7 +84,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Object semantic segmentation output (bitplane class encoding)"]
                 ObjectSegmentation => {
                     friendly_name: "Object Segmentation",
-                    snake_case_name: "object_segmentation",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"seg",
                     number_cortical_areas: 1,
@@ -105,7 +99,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Visual thoughts output - RGB image generation from brain activity"]
                 SimpleVisionOutput => {
                     friendly_name: "Simple Vision Output",
-                    snake_case_name: "simple_vision_output",
                     accepted_wrapped_io_data_type: ImageFrame,
                     cortical_id_unit_reference: *b"img",
                     number_cortical_areas: 1,

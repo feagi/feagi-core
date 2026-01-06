@@ -455,7 +455,6 @@ impl SensorDeviceCache {
         self.neurons_encoded_signal  = FeagiSignal::new();
         self.bytes_encoded_signal = FeagiSignal::new();
     }
-r
     sensor_cortical_units!(sensor_unit_functions);
 
     //region Data IO
@@ -564,19 +563,14 @@ r
     pub(crate) fn export_to_input_definition(&self, filling_definition: &mut JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
 
         for ((sensory_cortical_unit, cortical_unit_index), sensory_channel_stream_caches) in self.sensor_cortical_unit_caches {
-
-            let json_unit_definition = JSONUnitDefinition {
-                friendly_name: self.get_unit_friendly_name(sensory_cortical_unit, cortical_unit_index)?.clone(),
-                cortical_unit_index: cortical_unit_index,
-                io_configuration_flags:
-            }
-
+            let unit_and_encoder = sensory_channel_stream_caches.export_as_jsons(cortical_unit_index);
             filling_definition.insert_sensor(
                 sensory_cortical_unit,
-
-
-            )
+                unit_and_encoder.0,
+                unit_and_encoder.1
+            );
         };
+        Ok(())
     }
 
 
@@ -593,6 +587,7 @@ r
         sensor_type: SensoryCorticalUnit,
         unit_index: CorticalUnitIndex,
         neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
+        io_configuration_flags: serde_json::Map<String, serde_json::Value>,
         number_channels: CorticalChannelCount,
         initial_cached_value: WrappedIOData,
     ) -> Result<(), FeagiDataError> {
@@ -605,7 +600,11 @@ r
 
         self.sensor_cortical_unit_caches.insert(
             (sensor_type, unit_index),
-            SensoryCorticalUnitCache::new(neuron_encoder, number_channels, initial_cached_value)?,
+            SensoryCorticalUnitCache::new(
+                neuron_encoder,
+                io_configuration_flags,
+                number_channels,
+                initial_cached_value)?,
         );
 
         Ok(())

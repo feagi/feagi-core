@@ -1,4 +1,4 @@
-use crate::data_pipeline::per_channel_stream_caches::MotorChannelStreamCaches;
+use crate::data_pipeline::per_channel_stream_caches::MotorCorticalUnitCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_types::descriptors::*;
 use crate::data_types::*;
@@ -385,7 +385,7 @@ macro_rules! motor_unit_functions {
 }
 
 pub struct MotorDeviceCache {
-    stream_caches: HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorChannelStreamCaches>,
+    stream_caches: HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorCorticalUnitCache>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
@@ -563,7 +563,7 @@ impl MotorDeviceCache {
 
         self.stream_caches.insert(
             (motor_type, unit_index),
-            MotorChannelStreamCaches::new(neuron_decoder, number_channels, initial_cached_value)?,
+            MotorCorticalUnitCache::new(neuron_decoder, number_channels, initial_cached_value)?,
         );
 
         Ok(())
@@ -718,7 +718,7 @@ impl MotorDeviceCache {
         &self,
         motor_type: MotorCorticalUnit,
         unit_index: CorticalUnitIndex,
-    ) -> Result<&MotorChannelStreamCaches, FeagiDataError> {
+    ) -> Result<&MotorCorticalUnitCache, FeagiDataError> {
         let check = self.stream_caches.get(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
@@ -734,7 +734,7 @@ impl MotorDeviceCache {
         &mut self,
         motor_type: MotorCorticalUnit,
         unit_index: CorticalUnitIndex,
-    ) -> Result<&mut MotorChannelStreamCaches, FeagiDataError> {
+    ) -> Result<&mut MotorCorticalUnitCache, FeagiDataError> {
         let check = self.stream_caches.get_mut(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(

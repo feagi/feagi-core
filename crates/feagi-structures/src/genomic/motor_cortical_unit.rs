@@ -9,10 +9,11 @@ use crate::motor_cortical_units;
 use paste;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use serde_json::{Map, Value};
 
 // Helper macro to handle optional allowed_frame_change_handling
 #[macro_export]
-macro_rules! get_allowed_frame_change_handling_impl {
+macro_rules! get_allowed_frame_change_handling_impl { // TODO delete this!
     () => {
         None
     };
@@ -28,16 +29,15 @@ macro_rules! define_motor_cortical_units_enum {
                 $(#[doc = $doc:expr])?
                 $variant_name:ident => {
                     friendly_name: $friendly_name:expr,
-                    snake_case_name: $snake_case_name:expr,
                     accepted_wrapped_io_data_type: $accepted_wrapped_io_data_type:expr,
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
                     cortical_type_parameters: {
                         $($param_name:ident: $param_type:ty),* $(,)?
                     },
-                    $(allowed_frame_change_handling: [$($allowed_frame:ident),* $(,)?],)?
+                    $(allowed_frame_change_handling: [$($allowed_frame:ident),* $(,)?],)? // TODO delete this!
                     cortical_area_properties: {
-                        $($cortical_sub_unit_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
+                        $($cortical_sub_unit_index:tt => ($io_cortical_area_configuration_flag_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
                 }
             ),* $(,)?
@@ -55,20 +55,20 @@ macro_rules! define_motor_cortical_units_enum {
             $(
                 paste::paste! {
                     #[doc = "Get cortical area types array for " $friendly_name "."]
-                    pub const fn [<get_cortical_area_types_array_for_ $snake_case_name >](
+                    pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
                         [
-                            $(CorticalAreaType::BrainOutput($cortical_area_type_expr)),*
+                            $(CorticalAreaType::BrainOutput($io_cortical_area_configuration_flag_expr)),*
                         ]
                     }
 
                     #[doc = "Get cortical IDs array for " $friendly_name "."]
-                    pub const fn [<get_cortical_ids_array_for_ $snake_case_name >](
+                    pub const fn [<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type,)* cortical_unit_index: CorticalUnitIndex) -> [CorticalID; $number_cortical_areas] {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
-                                $cortical_area_type_expr .as_io_cortical_id(false, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
+                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(false, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
                             ),*
                         ]
                     }
@@ -88,7 +88,7 @@ macro_rules! define_motor_cortical_units_enum {
             pub const fn get_accepted_wrapped_io_data_type(&self) -> &'static str {
                 match self {
                     $(
-                        MotorCorticalUnit::$variant_name => stringify!($accepted_wrapped_io_data_type),
+                        MotorCorticalUnit::$variant_name => stringify!($variant_name:snake),
                     )*
                 }
             }
@@ -180,6 +180,21 @@ macro_rules! define_motor_cortical_units_enum {
                     $(
                         MotorCorticalUnit::$variant_name => {
                             $crate::get_allowed_frame_change_handling_impl!($($($allowed_frame),*)?)
+                        }
+                    )*
+                }
+            }
+
+            pub fn get_cortical_id_vector_from_index_and_serde_io_configuration_flags(&self, cortical_unit_index: CorticalUnitIndex, map: Map<String, Value>) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
+                match self {
+                    $(
+                        MotorCorticalUnit::$variant_name => {
+                            paste::paste! {
+                                let array = MotorCorticalUnit::[<get_cortical_ids_array_for_ $variant_name:snake _with_parameters >](
+                                    $($param_type::try_from_serde_map(&map)?,)*
+                                    cortical_unit_index);
+                                return Ok(array.to_vec());
+                            }
                         }
                     )*
                 }
