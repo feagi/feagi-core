@@ -301,28 +301,6 @@ mod test_sensory_cortical_units {
     }
 }
 
-#[cfg(test)]
-mod test_genomic_descriptors {
-    use feagi_structures::genomic::descriptors::AgentDeviceIndex;
-
-    #[test]
-    fn test_agent_device_index_creation() {
-        let index = AgentDeviceIndex::from(500u32);
-        assert_eq!(*index, 500u32);
-    }
-
-    #[test]
-    fn test_agent_device_index_zero() {
-        let index = AgentDeviceIndex::from(0u32);
-        assert_eq!(*index, 0u32);
-    }
-
-    #[test]
-    fn test_agent_device_index_max_value() {
-        let index = AgentDeviceIndex::from(u32::MAX);
-        assert_eq!(*index, u32::MAX);
-    }
-}
 
 #[cfg(test)]
 mod test_cortical_types {

@@ -19,6 +19,7 @@ use feagi_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::time::Instant;
+use crate::configuration::jsonable::JSONInputOutputDefinition;
 
 macro_rules! motor_unit_functions {
     (
@@ -385,7 +386,7 @@ macro_rules! motor_unit_functions {
 }
 
 pub struct MotorDeviceCache {
-    stream_caches: HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorCorticalUnitCache>,
+    motor_cortical_unit_caches: HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorCorticalUnitCache>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
@@ -394,7 +395,7 @@ pub struct MotorDeviceCache {
 impl std::fmt::Debug for MotorDeviceCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MotorDeviceCache")
-            .field("stream_caches_count", &self.stream_caches.len())
+            .field("stream_caches_count", &self.motor_cortical_unit_caches.len())
             .field("neuron_data", &self.neuron_data)
             .field("byte_data", &self.byte_data)
             .field("previous_burst", &self.previous_burst)
@@ -411,11 +412,19 @@ impl Default for MotorDeviceCache {
 impl MotorDeviceCache {
     pub fn new() -> Self {
         MotorDeviceCache {
-            stream_caches: HashMap::new(),
+            motor_cortical_unit_caches: HashMap::new(),
             neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
         }
+    }
+
+    // Clears all registered devices and cache, to allow setting up again
+    pub fn reset(&mut self) {
+        self.motor_cortical_unit_caches.clear();
+        self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
+        self.byte_data = FeagiByteContainer::new_empty();
+        self.previous_burst = Instant::now();
     }
 
     motor_cortical_units!(motor_unit_functions);
@@ -434,91 +443,6 @@ impl MotorDeviceCache {
         &self.neuron_data
     }
 
-    pub fn export_registered_motors_as_config_json(
-        &self,
-    ) -> Result<serde_json::Value, FeagiDataError> {
-        let mut output = serde_json::Map::new();
-        for ((motor_cortical_unit, cortical_unit_index), motor_channel_stream_caches) in
-            &self.stream_caches
-        {
-            let motor_unit_name = motor_cortical_unit.get_snake_case_name().to_string();
-            let cortical_unit_name = cortical_unit_index.to_string();
-
-            let motor_units_map = output
-                .entry(motor_unit_name)
-                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()))
-                .as_object_mut()
-                .expect("Just inserted an Object");
-
-            motor_units_map.insert(
-                cortical_unit_name,
-                motor_channel_stream_caches.export_as_json()?,
-            );
-        }
-        Ok(serde_json::Value::Object(output))
-    }
-
-    /// Import motor configurations from JSON
-    ///
-    /// Updates pipeline stages and friendly names for already-registered motors.
-    /// Motors must be registered first using the appropriate register functions.
-    ///
-    /// # Arguments
-    /// * `json` - JSON object containing motor configurations in new format
-    ///
-    /// # Returns
-    /// * `Ok(())` - If import succeeded
-    /// * `Err(FeagiDataError)` - If motor not registered or JSON is malformed
-    pub fn import_motors_from_json(
-        &mut self,
-        json: &serde_json::Value,
-    ) -> Result<(), FeagiDataError> {
-        let output_map = json.as_object().ok_or_else(|| {
-            FeagiDataError::DeserializationError("Expected output object for motors".to_string())
-        })?;
-
-        for (motor_type_name, units) in output_map {
-            // Parse motor type from snake_case name
-            let motor_type =
-                MotorCorticalUnit::from_snake_case_name(motor_type_name).ok_or_else(|| {
-                    FeagiDataError::DeserializationError(format!(
-                        "Unknown motor type: {}",
-                        motor_type_name
-                    ))
-                })?;
-
-            let units_map = units.as_object().ok_or_else(|| {
-                FeagiDataError::DeserializationError(format!(
-                    "Expected units object for motor type: {}",
-                    motor_type_name
-                ))
-            })?;
-
-            for (unit_id_str, device_config) in units_map {
-                let unit_id: CorticalUnitIndex = unit_id_str
-                    .parse::<u8>()
-                    .map_err(|e| {
-                        FeagiDataError::DeserializationError(format!(
-                            "Invalid unit ID '{}': {}",
-                            unit_id_str, e
-                        ))
-                    })?
-                    .into();
-
-                // Get the stream cache for this motor type + unit
-                let stream_cache = self.stream_caches.get_mut(&(motor_type, unit_id))
-                    .ok_or_else(|| FeagiDataError::BadParameters(
-                        format!("Motor {}:{} not registered. Register the motor first before importing configuration.",
-                            motor_type_name, unit_id_str)
-                    ))?;
-
-                // Import configuration (pipelines, friendly names)
-                stream_cache.import_from_json(device_config)?;
-            }
-        }
-        Ok(())
-    }
-
     // Returns true if data was retrieved
     pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
         self.byte_data
@@ -529,12 +453,56 @@ impl MotorDeviceCache {
         &mut self,
         time_of_decode: Instant,
     ) -> Result<(), FeagiDataError> {
-        for motor_channel_stream_cache in self.stream_caches.values_mut() {
+        for motor_channel_stream_cache in self.motor_cortical_unit_caches.values_mut() {
             motor_channel_stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(
                 &self.neuron_data,
                 time_of_decode,
             )?;
         }
+        Ok(())
+    }
+
+    //endregion
+
+    //region  JSON import / export
+
+    pub(crate) fn set_from_output_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+        self.reset();
+        let output_units_and_decoder_properties = replacing_definition.get_output_units_and_decoder_properties();
+        for (motor_unit, unit_and_decoder_definitions) in output_units_and_decoder_properties {
+            for unit_and_decoder_definition in unit_and_decoder_definitions {
+                let unit_definition = &unit_and_decoder_definition.0;
+                let encoder_definition = &unit_and_decoder_definition.1;
+
+                if self.motor_cortical_unit_caches.contains_key(&(*motor_unit, unit_definition.cortical_unit_index)) {
+                    return Err(FeagiDataError::DeserializationError(format!(
+                        "Already registered motor {} of unit index {}!",
+                        *motor_unit, unit_definition.cortical_unit_index
+                    )));
+                }
+
+                let new_unit = MotorCorticalUnitCache::new_from_json(
+                    motor_unit,
+                    unit_definition,
+                    encoder_definition
+                )?;
+                self.motor_cortical_unit_caches.insert((*motor_unit, unit_definition.cortical_unit_index), new_unit);
+            }
+        };
+        Ok(())
+    }
+
+
+    pub(crate) fn export_to_output_definition(&self, filling_definition: &mut JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+
+        for ((motor_cortical_unit, cortical_unit_index), motor_channel_stream_caches) in self.motor_cortical_unit_caches.iter() {
+            let unit_and_encoder = motor_channel_stream_caches.export_as_jsons(*cortical_unit_index);
+            filling_definition.insert_motor(
+                *motor_cortical_unit,
+                unit_and_encoder.0,
+                unit_and_encoder.1
+            );
+        };
         Ok(())
     }
 
@@ -549,21 +517,22 @@ impl MotorDeviceCache {
         motor_type: MotorCorticalUnit,
         unit_index: CorticalUnitIndex,
         neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
+        io_configuration_flags: serde_json::Map<String, serde_json::Value>,
         number_channels: CorticalChannelCount,
         initial_cached_value: WrappedIOData,
     ) -> Result<(), FeagiDataError> {
         // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
 
-        if self.stream_caches.contains_key(&(motor_type, unit_index)) {
+        if self.motor_cortical_unit_caches.contains_key(&(motor_type, unit_index)) {
             return Err(FeagiDataError::BadParameters(format!(
                 "Already registered motor {} of unit index {}!",
                 motor_type, unit_index
             )));
         }
 
-        self.stream_caches.insert(
+        self.motor_cortical_unit_caches.insert(
             (motor_type, unit_index),
-            MotorCorticalUnitCache::new(neuron_decoder, number_channels, initial_cached_value)?,
+            MotorCorticalUnitCache::new(neuron_decoder, io_configuration_flags, number_channels, initial_cached_value)?,
         );
 
         Ok(())
@@ -719,7 +688,7 @@ impl MotorDeviceCache {
         motor_type: MotorCorticalUnit,
         unit_index: CorticalUnitIndex,
     ) -> Result<&MotorCorticalUnitCache, FeagiDataError> {
-        let check = self.stream_caches.get(&(motor_type, unit_index));
+        let check = self.motor_cortical_unit_caches.get(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Unable to find {} of cortical unit index {} in registered motor's list!",
@@ -735,7 +704,7 @@ impl MotorDeviceCache {
         motor_type: MotorCorticalUnit,
         unit_index: CorticalUnitIndex,
     ) -> Result<&mut MotorCorticalUnitCache, FeagiDataError> {
-        let check = self.stream_caches.get_mut(&(motor_type, unit_index));
+        let check = self.motor_cortical_unit_caches.get_mut(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Unable to find {} of cortical unit index {} in registered motor's list!",

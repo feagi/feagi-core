@@ -3,15 +3,13 @@ use crate::data_pipeline::per_channel_stream_caches::MotorPipelineStageRunner;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex,
-};
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex};
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{FeagiDataError, FeagiSignal, FeagiSignalIndex};
 use rayon::prelude::*;
 use std::time::Instant;
 use feagi_structures::genomic::MotorCorticalUnit;
-use crate::configuration::jsonable::{JSONDecoderProperties, JSONUnitDefinition};
+use crate::configuration::jsonable::{JSONDecoderProperties, JSONDeviceGrouping, JSONUnitDefinition};
 
 #[derive(Debug)]
 pub(crate) struct MotorCorticalUnitCache {
@@ -65,23 +63,23 @@ impl MotorCorticalUnitCache {
         )?;
 
         let initial_value = decoder_definition.default_wrapped_value()?;
-        let encoder = decoder_definition.to_box_encoder(
+        let encoder = decoder_definition.to_box_decoder(
             channel_count,
             &cortical_ids
         )?;
 
-        let mut sensory_cortical_unit_cache = SensoryCorticalUnitCache::new(
+        let mut motor_cortical_unit_cache = MotorCorticalUnitCache::new(
             encoder,
             unit_definition.io_configuration_flags.clone(),
             channel_count,
             initial_value
         )?;
 
-        sensory_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
+        motor_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
 
         // Update all the channels
         for (index, device_group) in unit_definition.device_grouping.iter().enumerate() {
-            let pipeline_runner = sensory_cortical_unit_cache.pipeline_runners.get_mut(index).unwrap();
+            let pipeline_runner = motor_cortical_unit_cache.pipeline_runners.get_mut(index).unwrap();
 
             pipeline_runner.try_update_all_stage_properties(device_group.pipeline_stages.clone())?;
             pipeline_runner.set_channel_friendly_name(device_group.friendly_name.clone());
@@ -89,11 +87,11 @@ impl MotorCorticalUnitCache {
             pipeline_runner.set_json_device_properties(device_group.device_properties.clone());
         }
 
-        Ok(sensory_cortical_unit_cache)
+        Ok(motor_cortical_unit_cache)
     }
 
-    pub fn export_as_jsons(&self, cortical_unit_index: CorticalUnitIndex) -> (JSONUnitDefinition, JSONEncoderProperties) {
-        let encoder_properties = self.neuron_encoder.get_as_properties();
+    pub fn export_as_jsons(&self, cortical_unit_index: CorticalUnitIndex) -> (JSONUnitDefinition, JSONDecoderProperties) {
+        let encoder_properties = self.neuron_decoder.get_as_properties();
         let json_unit_definition = JSONUnitDefinition {
             friendly_name: self.device_friendly_name.clone(),
             cortical_unit_index,
@@ -161,7 +159,7 @@ impl MotorCorticalUnitCache {
 
     //endregion
 
-    //region Pipeline Stages
+    //region Pipeline Runner Stages
 
     pub fn try_get_single_stage_properties(
         &self,
@@ -236,6 +234,19 @@ impl MotorCorticalUnitCache {
     ) -> Result<(), FeagiDataError> {
         let pipeline_runner = self.try_get_pipeline_runner_mut(cortical_channel_index)?;
         pipeline_runner.try_removing_all_stages()?;
+        Ok(())
+    }
+
+    //endregion
+
+    //region Metadata
+
+    pub fn get_friendly_name(&self) -> &Option<String> {
+        &self.device_friendly_name
+    }
+
+    pub fn set_friendly_name(&mut self, friendly_name: Option<String>) -> Result<(), FeagiDataError> {
+        self.device_friendly_name = friendly_name;
         Ok(())
     }
 
@@ -355,6 +366,14 @@ impl MotorCorticalUnitCache {
                 cortical_channel_index, num_runners
             ))),
         }
+    }
+
+    fn get_all_device_grouping(&self) -> Vec<JSONDeviceGrouping> {
+        let mut output: Vec<JSONDeviceGrouping> = Vec::new();
+        for group in self.pipeline_runners.iter() {
+            output.push(group.export_as_json_device_grouping())
+        };
+        output
     }
 
     //endregion

@@ -7,7 +7,7 @@ use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality, SegmentedImageFrameProperties};
-use crate::data_types::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
+use crate::data_types::{GazeProperties, ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
 use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::neuron_voxel_coding::xyzp::encoders::{BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder, PercentageNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
@@ -253,7 +253,6 @@ pub enum JSONDecoderProperties {
 }
 
 impl JSONDecoderProperties {
-    
     pub fn to_box_decoder(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         match self {
             JSONDecoderProperties::MiscData(misc_data_dimensions) => {
@@ -295,7 +294,51 @@ impl JSONDecoderProperties {
 
         }
     }
+
+    pub fn default_wrapped_value(&self) -> Result<WrappedIOData, FeagiDataError>  {
+        match self {
+            JSONDecoderProperties::MiscData(misc_data_dimensions) => {
+                Ok(WrappedIOData::MiscData(MiscData::new(misc_data_dimensions)?))
+            }
+            JSONDecoderProperties::Percentage(neuron_depth, percentage, is_signed, number_dimensions) => {
+                match(number_dimensions) {
+                    PercentageChannelDimensionality::D1 => {
+                        if *is_signed {
+                            Ok(WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0)))
+                        } else {
+                            Ok(WrappedIOData::Percentage(Percentage::new_zero()))
+                        }
+                    }
+                    PercentageChannelDimensionality::D2 => {
+                        if *is_signed {
+                            Ok(WrappedIOData::SignedPercentage_2D(SignedPercentage2D::new_zero()))
+                        } else {
+                            Ok(WrappedIOData::Percentage_2D(Percentage2D::new_zero()))
+                        }
+                    }
+                    PercentageChannelDimensionality::D3 => {
+                        if *is_signed {
+                            Ok(WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()))
+                        } else {
+                            Ok(WrappedIOData::Percentage_3D(Percentage3D::new_zero()))
+                        }
+                    }
+                    PercentageChannelDimensionality::D4 => {
+                        if *is_signed {
+                            Ok(WrappedIOData::SignedPercentage_4D(SignedPercentage4D::new_zero()))
+                        } else {
+                            Ok(WrappedIOData::Percentage_4D(Percentage4D::new_zero()))
+                        }
+                    }
+                }
+            }
+            JSONDecoderProperties::GazeProperties(eccentricity, modularity, PercentageNeuronPositioning) => {
+                Ok(WrappedIOData::GazeProperties(GazeProperties::create_default_centered()))
+            }
+        }
+    }
 }
+
 //endregion
 
 /// Custom Metadata to allow defining hardware properties per channel

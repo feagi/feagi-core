@@ -78,7 +78,7 @@ macro_rules! define_motor_cortical_units_enum {
             pub const fn get_snake_case_name(&self) -> &'static str {
                 match self {
                     $(
-                        MotorCorticalUnit::$variant_name => $snake_case_name,
+                        MotorCorticalUnit::$variant_name => stringify!($variant_name:snake),
                     )*
                 }
             }
@@ -104,7 +104,7 @@ macro_rules! define_motor_cortical_units_enum {
             pub fn from_snake_case_name(name: &str) -> Option<MotorCorticalUnit> {
                 match name {
                     $(
-                        $snake_case_name => Some(MotorCorticalUnit::$variant_name),
+                        stringify!($variant_name:snake) => Some(MotorCorticalUnit::$variant_name),
                     )*
                     _ => None,
                 }
