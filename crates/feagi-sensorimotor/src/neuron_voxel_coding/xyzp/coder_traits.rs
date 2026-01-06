@@ -6,14 +6,14 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::fmt::Debug;
 use std::time::Instant;
-use crate::configuration::jsonable::{DecoderProperties, EncoderProperties};
+use crate::configuration::jsonable::{JSONDecoderProperties, JSONEncoderProperties};
 
 pub trait NeuronVoxelXYZPEncoder: Debug + Sync + Send {
     #[allow(dead_code)]
     fn get_encodable_data_type(&self) -> WrappedIOType;
 
     #[allow(dead_code)]
-    fn get_as_properties(&self) -> EncoderProperties;
+    fn get_as_properties(&self) -> JSONEncoderProperties;
 
     /// Writes data to NeuronXYZPVoxelArray(s) of the relevant cortical area(s), where each element in pipelines is the channel. Assumes write_target been cleared of neuron data
     fn write_neuron_data_multi_channel_from_processed_cache(
@@ -29,7 +29,7 @@ pub trait NeuronVoxelXYZPDecoder: Debug + Sync + Send {
     fn get_decodable_data_type(&self) -> WrappedIOType;
 
     #[allow(dead_code)]
-    fn get_as_properties(&self) -> DecoderProperties;
+    fn get_as_properties(&self) -> JSONDecoderProperties;
 
     /// Writes data to the respective channel of PipelineStageRunner to the input cache, and marks if the channel has been changed or not, with data read from the neurons
     fn read_neuron_data_multi_channel_into_pipeline_input_cache(

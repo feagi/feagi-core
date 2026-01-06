@@ -10,6 +10,7 @@ use feagi_structures::genomic::cortical_area::descriptors::{
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
+use crate::configuration::jsonable::JSONEncoderProperties;
 
 /// Manages multiple sensory data streams with independent processing pipelines per channel.
 ///
@@ -23,15 +24,14 @@ use std::time::Instant;
 /// - `last_update_time`: Timestamp of the most recent update across all channels
 
 #[derive(Debug)]
-pub(crate) struct SensoryChannelStreamCaches {
+pub(crate) struct SensoryCorticalUnitCache {
     neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
     pipeline_runners: Vec<SensoryPipelineStageRunner>,
     last_update_time: Instant,
-    device_friendly_name: String,
+    device_friendly_name: Option<String>,
 }
 
-impl SensoryChannelStreamCaches {
-    #[allow(dead_code)]
+impl SensoryCorticalUnitCache {
     pub fn new(
         neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
         number_channels: CorticalChannelCount,
@@ -47,7 +47,7 @@ impl SensoryChannelStreamCaches {
             neuron_encoder,
             pipeline_runners,
             last_update_time: Instant::now(),
-            device_friendly_name: String::new(),
+            device_friendly_name: None,
         })
     }
 
@@ -57,7 +57,6 @@ impl SensoryChannelStreamCaches {
     ///
     /// # Returns
     /// The count of channels as a `CorticalChannelCount`.
-    #[allow(dead_code)]
     pub fn number_of_channels(&self) -> CorticalChannelCount {
         (self.pipeline_runners.len() as u32).try_into().unwrap()
     }
@@ -70,7 +69,6 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the channel exists
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    #[allow(dead_code)]
     pub fn verify_channel_exists(
         &self,
         channel_index: CorticalChannelIndex,
@@ -80,13 +78,25 @@ impl SensoryChannelStreamCaches {
     }
 
     /// Retrieves the expected input data type for a channel
-    #[allow(dead_code)]
     pub fn get_input_type_for_channel(
         &self,
         cortical_channel_index: CorticalChannelIndex,
     ) -> Result<WrappedIOType, FeagiDataError> {
         let runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(runner.get_expected_type_to_input_and_process())
+    }
+
+    pub fn get_encoder_json_properties(&self) -> Result<JSONEncoderProperties, FeagiDataError> {
+        Ok(self.neuron_encoder.get_as_properties())
+    }
+
+    pub fn get_friendly_name(&self) -> &Option<String> {
+        &self.device_friendly_name
+    }
+
+    pub fn set_friendly_name(&mut self, friendly_name: Option<String>) -> Result<(), FeagiDataError> {
+        self.device_friendly_name = friendly_name;
+        Ok(())
     }
 
     //endregion
@@ -104,7 +114,6 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(&WrappedIOData)` - Reference to the unprocessed input data
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    #[allow(dead_code)]
     pub fn try_get_channel_preprocessed_value(
         &self,
         cortical_channel_index: CorticalChannelIndex,

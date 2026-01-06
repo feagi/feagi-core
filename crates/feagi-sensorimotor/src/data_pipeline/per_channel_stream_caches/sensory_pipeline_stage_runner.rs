@@ -61,7 +61,6 @@ impl PipelineStageRunner for SensoryPipelineStageRunner {
 
 impl SensoryPipelineStageRunner {
     /// Creates a new pipeline stage runner with the specified configuration.
-    #[allow(dead_code)]
     pub fn new(initial_sensory_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
         let type_to_be_outputted: WrappedIOType =
             WrappedIOType::from(&initial_sensory_cached_value);
@@ -89,7 +88,6 @@ impl SensoryPipelineStageRunner {
         self.expected_processed_sensor_type
     }
 
-    #[allow(dead_code)]
     pub fn get_final_processed_type(&self) -> WrappedIOType {
         self.expected_processed_sensor_type
     }
@@ -165,7 +163,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Retrieves the properties of a single stage in the pipeline.
-    #[allow(dead_code)]
     pub fn try_get_single_stage_properties(
         &self,
         stage_index: PipelineStagePropertyIndex,
@@ -174,13 +171,11 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Retrieves the properties of all stages in the pipeline.
-    #[allow(dead_code)]
     pub fn get_all_stage_properties(&self) -> Vec<PipelineStageProperties> {
         PipelineStageRunner::get_all_stage_properties(self)
     }
 
     /// Updates the properties of a single stage in the pipeline.
-    #[allow(dead_code)]
     pub fn try_update_single_stage_properties(
         &mut self,
         updating_stage_index: PipelineStagePropertyIndex,
@@ -194,7 +189,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Updates the properties of all stages in the pipeline.
-    #[allow(dead_code)]
     pub fn try_update_all_stage_properties(
         &mut self,
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
@@ -203,7 +197,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Replaces a single stage in the pipeline with a new stage.
-    #[allow(dead_code)]
     pub fn try_replace_single_stage(
         &mut self,
         replacing_at_index: PipelineStagePropertyIndex,
@@ -217,7 +210,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Replaces all stages in the pipeline with new stages.
-    #[allow(dead_code)]
     pub fn try_replace_all_stages(
         &mut self,
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
@@ -226,7 +218,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Tries replacing all stages with nothing (remove all stages)
-    #[allow(dead_code)]
     pub fn try_removing_all_stages(&mut self) -> Result<(), FeagiDataError> {
         PipelineStageRunner::try_removing_all_stages(self)
     }

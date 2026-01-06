@@ -25,7 +25,7 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
-use crate::configuration::jsonable::EncoderProperties;
+use crate::configuration::jsonable::JSONEncoderProperties;
 
 /// Scratch space sized appropriately for dimension count
 #[derive(Debug)]
@@ -113,8 +113,8 @@ impl NeuronVoxelXYZPEncoder for PercentageNeuronVoxelXYZPEncoder {
         }
     }
 
-    fn get_as_properties(&self) -> EncoderProperties {
-        EncoderProperties::Percentage(
+    fn get_as_properties(&self) -> JSONEncoderProperties {
+        JSONEncoderProperties::Percentage(
             NeuronDepth::new(self.channel_dimensions.depth).unwrap(),
             self.interpolation,
             self.is_signed,

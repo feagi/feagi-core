@@ -33,7 +33,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     },
                     $(allowed_frame_change_handling: [$($allowed_frame:ident),* $(,)?],)? // TODO delete this!
                     cortical_area_properties: {
-                        $($cortical_sub_unit_index:tt => ($cortical_area_type_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
+                        $($cortical_sub_unit_index:tt => ($io_cortical_area_configuration_flag_expr:expr, relative_position: [$rel_x:expr, $rel_y:expr, $rel_z:expr], channel_dimensions_default: [$dim_default_x:expr, $dim_default_y:expr, $dim_default_z:expr], channel_dimensions_min: [$dim_min_x:expr, $dim_min_y:expr, $dim_min_z:expr], channel_dimensions_max: [$dim_max_x:expr, $dim_max_y:expr, $dim_max_z:expr])),* $(,)?
                     }
                 }
             ),* $(,)?
@@ -54,7 +54,7 @@ macro_rules! define_sensory_cortical_units_enum {
                     pub const fn [<get_cortical_area_types_array_for_ $variant_name:snake _with_parameters >](
                         $($param_name: $param_type),*) -> [CorticalAreaType; $number_cortical_areas] {
                         [
-                            $(CorticalAreaType::BrainInput($cortical_area_type_expr)),*
+                            $(CorticalAreaType::BrainInput($io_cortical_area_configuration_flag_expr)),*
                         ]
                     }
 
@@ -64,7 +64,7 @@ macro_rules! define_sensory_cortical_units_enum {
                         let cortical_unit_identifier: [u8; 3] = $cortical_id_unit_reference;
                         [
                             $(
-                                $cortical_area_type_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
+                                $io_cortical_area_configuration_flag_expr .as_io_cortical_id(true, cortical_unit_identifier, cortical_unit_index, CorticalSubUnitIndex::from($cortical_sub_unit_index))
                             ),*
                         ]
                     }
@@ -174,6 +174,16 @@ macro_rules! define_sensory_cortical_units_enum {
                     $(
                         SensoryCorticalUnit::$variant_name => {
                             $crate::get_allowed_frame_change_handling_impl!($($($allowed_frame),*)?)
+                        }
+                    )*
+                }
+            }
+
+            pub fn get_cortical_id_vector_from_index_and_json_encoder_properties(&self, cortical_unit_index: CorticalUnitIndex, json_encoder_properties: JSONEncoderProperties) -> Result<Vec<CorticalID>, crate::FeagiDataError> {
+                match self {
+                    $(
+                        SensoryCorticalUnit::$variant_name => {
+
                         }
                     )*
                 }

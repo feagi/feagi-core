@@ -7,29 +7,30 @@ use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
 use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use crate::data_pipeline::PipelineStageProperties;
 use crate::data_types::descriptors::{ImageFrameProperties, MiscDataDimensions, PercentageChannelDimensionality, SegmentedImageFrameProperties};
+use crate::data_types::{ImageFrame, MiscData, Percentage, Percentage2D, Percentage3D, Percentage4D, SegmentedImageFrame, SignedPercentage, SignedPercentage2D, SignedPercentage3D, SignedPercentage4D};
 use crate::neuron_voxel_coding::xyzp::decoders::{GazePropertiesNeuronVoxelXYZPDecoder, MiscDataNeuronVoxelXYZPDecoder, PercentageNeuronVoxelXYZPDecoder};
 use crate::neuron_voxel_coding::xyzp::{NeuronVoxelXYZPDecoder, NeuronVoxelXYZPEncoder};
 use crate::neuron_voxel_coding::xyzp::encoders::{BooleanNeuronVoxelXYZPEncoder, CartesianPlaneNeuronVoxelXYZPEncoder, MiscDataNeuronVoxelXYZPEncoder, PercentageNeuronVoxelXYZPEncoder, SegmentedImageFrameNeuronVoxelXYZPEncoder};
+use crate::wrapped_io_data::WrappedIOData;
 
-#[allow(dead_code)]
+/// Top level JSON representation of registered devices and feedbacks
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct InputOutputDefinition {
-    input_units_and_encoder_properties: HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>>,
-    output_units_and_decoder_properties: HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>>
+pub struct JSONInputOutputDefinition {
+    input_units_and_encoder_properties: HashMap<SensoryCorticalUnit, Vec<(JSONUnitDefinition, JSONEncoderProperties)>>,
+    output_units_and_decoder_properties: HashMap<MotorCorticalUnit, Vec<(JSONUnitDefinition, JSONDecoderProperties)>>
+    // TODO feedbacks
 }
 
-impl InputOutputDefinition {
-    #[allow(dead_code)]
-    pub fn get_input_units_and_encoder_properties(&self) -> &HashMap<SensoryCorticalUnit, Vec<(UnitDefinition, EncoderProperties)>> {
+impl JSONInputOutputDefinition {
+    pub fn get_input_units_and_encoder_properties(&self) -> &HashMap<SensoryCorticalUnit, Vec<(JSONUnitDefinition, JSONEncoderProperties)>> {
         &self.input_units_and_encoder_properties
     }
-
-    #[allow(dead_code)]
-    pub fn get_output_units_and_decoder_properties(&self) -> &HashMap<MotorCorticalUnit, Vec<(UnitDefinition, DecoderProperties)>> {
+    
+    pub fn get_output_units_and_decoder_properties(&self) -> &HashMap<MotorCorticalUnit, Vec<(JSONUnitDefinition, JSONDecoderProperties)>> {
         &self.output_units_and_decoder_properties
     }
-
-    #[allow(dead_code)]
+    
     pub fn verify_valid_structure(&self) -> Result<(), FeagiDataError> {
         for units_and_encoders in self.input_units_and_encoder_properties.values() {
             let mut unit_indexes: Vec<CorticalUnitIndex> = Vec::new();
@@ -54,9 +55,8 @@ impl InputOutputDefinition {
 
         Ok(())
     }
-
-    #[allow(dead_code)]
-    pub fn insert_motor(&mut self, motor: MotorCorticalUnit, unit_definition: UnitDefinition, decoder_properties: DecoderProperties) {
+    
+    pub fn insert_motor(&mut self, motor: MotorCorticalUnit, unit_definition: JSONUnitDefinition, decoder_properties: JSONDecoderProperties) {
         if !self.output_units_and_decoder_properties.contains_key(&motor) {
             self.output_units_and_decoder_properties.insert(motor.clone(), vec![(unit_definition, decoder_properties)]);
             return;
@@ -64,9 +64,8 @@ impl InputOutputDefinition {
         let vec = self.output_units_and_decoder_properties.get_mut(&motor).unwrap();
         vec.push((unit_definition, decoder_properties));
     }
-
-    #[allow(dead_code)]
-    pub fn insert_sensor(&mut self, sensor: SensoryCorticalUnit, unit_definition: UnitDefinition, encoder_properties: EncoderProperties) {
+    
+    pub fn insert_sensor(&mut self, sensor: SensoryCorticalUnit, unit_definition: JSONUnitDefinition, encoder_properties: JSONEncoderProperties) {
         if !self.input_units_and_encoder_properties.contains_key(&sensor) {
             self.input_units_and_encoder_properties.insert(sensor.clone(), vec![(unit_definition, encoder_properties)]);
             return;
@@ -78,18 +77,17 @@ impl InputOutputDefinition {
 }
 
 
-
-#[allow(dead_code)]
+/// Defines a cortical unit. Does not include a COder Property directly since the type can vary
+/// between input and output
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct UnitDefinition {
-    pub(crate) friendly_name: String,
+pub struct JSONUnitDefinition {
+    pub(crate) friendly_name: Option<String>,
     pub(crate) cortical_unit_index: CorticalUnitIndex,
     pub(crate) io_configuration_flags: serde_json::Map<String, serde_json::Value>, // Due to the diversity contained here, this MUST be a generic dictionary
-    pub(crate) device_grouping: Vec<DeviceGrouping>,
+    pub(crate) device_grouping: Vec<JSONDeviceGrouping>,
 }
 
-impl UnitDefinition {
-    #[allow(dead_code)]
+impl JSONUnitDefinition {
     pub fn verify_valid_structure(&self) -> Result<(), FeagiDataError> {
         if self.device_grouping.is_empty() {
             return Err(FeagiDataError::DeserializationError("Cannot have a cortical unit of 0 device grouping!".to_string()));
@@ -107,20 +105,26 @@ impl UnitDefinition {
         }
         Ok(())
     }
+
+    pub fn get_channel_count(&self) -> Result<CorticalChannelCount, FeagiDataError> {
+        CorticalChannelCount::new(self.device_grouping.len() as u32)
+    }
 }
 
-#[allow(dead_code)]
+/// Defines a cortical unit's channel implementations
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeviceGrouping {
-    pub(crate) friendly_name: String,
-    pub(crate) device_properties: DeviceProperties,
+pub struct JSONDeviceGrouping {
+    pub(crate) friendly_name: Option<String>,
+    pub(crate) device_properties: JSONDeviceProperties,
     pub(crate) channel_index_override: Option<CorticalChannelIndex>,
     pub(crate) pipeline_stages: Vec<PipelineStageProperties>
 }
 
-#[allow(dead_code)]
+/// Middleman for Encoders and Decoders
+//region Coder Properties
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum EncoderProperties {
+pub enum JSONEncoderProperties {
     Boolean,
     CartesianPlane(ImageFrameProperties),
     MiscData(MiscDataDimensions),
@@ -128,11 +132,11 @@ pub enum EncoderProperties {
     SegmentedImageFrame(SegmentedImageFrameProperties),
 }
 
-impl EncoderProperties {
-    #[allow(dead_code)]
+impl JSONEncoderProperties {
+
     pub fn to_box_encoder(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPEncoder + Sync + Send>, FeagiDataError> {
         match self {
-            EncoderProperties::Boolean => {
+            JSONEncoderProperties::Boolean => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
@@ -141,7 +145,7 @@ impl EncoderProperties {
                     number_channels,
                 )
             }
-            EncoderProperties::CartesianPlane(image_frame) => {
+            JSONEncoderProperties::CartesianPlane(image_frame) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
@@ -151,7 +155,7 @@ impl EncoderProperties {
                     number_channels
                 )
             }
-            EncoderProperties::MiscData(misc_data_dimensions) => {
+            JSONEncoderProperties::MiscData(misc_data_dimensions) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
@@ -161,7 +165,7 @@ impl EncoderProperties {
                     number_channels
                 )
             }
-            EncoderProperties::Percentage(neuron_depth, percentage, is_signed, number_dimensions) => {
+            JSONEncoderProperties::Percentage(neuron_depth, percentage, is_signed, number_dimensions) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
@@ -174,7 +178,7 @@ impl EncoderProperties {
                     *number_dimensions
                 )
             }
-            EncoderProperties::SegmentedImageFrame(segmented_properties) => {
+            JSONEncoderProperties::SegmentedImageFrame(segmented_properties) => {
                 if cortical_ids.len() != 9 {
                     return Err(FeagiDataError::InternalError("Expected nine cortical ids!".to_string()));
                 }
@@ -187,21 +191,72 @@ impl EncoderProperties {
             }
         }
     }
+    
+    pub fn default_wrapped_value(&self) -> Result<WrappedIOData, FeagiDataError>  {
+        match self {
+            JSONEncoderProperties::Boolean => {
+                Ok(WrappedIOData::Boolean(false))
+            }
+            JSONEncoderProperties::CartesianPlane(image_frame_properties) => {
+                Ok(WrappedIOData::ImageFrame(
+                    ImageFrame::new_from_image_frame_properties(image_frame_properties)?
+                ))
+            }
+            JSONEncoderProperties::MiscData(misc_data_dimensions) => {
+                Ok(WrappedIOData::MiscData(MiscData::new(misc_data_dimensions)?))
+            }
+            JSONEncoderProperties::Percentage(neuron_depth, percentage, is_signed, number_dimensions) => {
+                match(number_dimensions) {
+                    PercentageChannelDimensionality::D1 => {
+                        if is_signed {
+                            Ok(WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0)))
+                        } else {
+                            Ok(WrappedIOData::Percentage(Percentage::new_zero()))
+                        }
+                    }
+                    PercentageChannelDimensionality::D2 => {
+                        if is_signed {
+                            Ok(WrappedIOData::SignedPercentage_2D(SignedPercentage2D::new_zero()))
+                        } else {
+                            Ok(WrappedIOData::Percentage_2D(Percentage2D::new_zero()))
+                        }
+                    }
+                    PercentageChannelDimensionality::D3 => {
+                        if is_signed {
+                            Ok(WrappedIOData::SignedPercentage_3D(SignedPercentage3D::new_zero()))
+                        } else {
+                            Ok(WrappedIOData::Percentage_3D(Percentage3D::new_zero()))
+                        }
+                    }
+                    PercentageChannelDimensionality::D4 => {
+                        if is_signed {
+                            Ok(WrappedIOData::SignedPercentage_4D(SignedPercentage4D::new_zero()))
+                        } else {
+                            Ok(WrappedIOData::Percentage_4D(Percentage4D::new_zero()))
+                        }
+                    }
+                }
+            }
+            JSONEncoderProperties::SegmentedImageFrame(segmented_properties) => {
+                Ok(WrappedIOData::SegmentedImageFrame(SegmentedImageFrame::from_segmented_image_frame_properties(segmented_properties)?))
+            }
+        }
+    }
 }
 
-#[allow(dead_code)]
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum DecoderProperties {
+pub enum JSONDecoderProperties {
     MiscData(MiscDataDimensions),
     Percentage(NeuronDepth, PercentageNeuronPositioning, bool, PercentageChannelDimensionality),
     GazeProperties(NeuronDepth, NeuronDepth, PercentageNeuronPositioning), // eccentricity z depth, modularity z depth
 }
 
-impl DecoderProperties {
-    #[allow(dead_code)]
+impl JSONDecoderProperties {
+    
     pub fn to_box_decoder(&self, number_channels: CorticalChannelCount, cortical_ids: &[CorticalID]) -> Result<Box<dyn NeuronVoxelXYZPDecoder + Sync + Send>, FeagiDataError> {
         match self {
-            DecoderProperties::MiscData(misc_data_dimensions) => {
+            JSONDecoderProperties::MiscData(misc_data_dimensions) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
@@ -211,7 +266,7 @@ impl DecoderProperties {
                     number_channels
                 )
             }
-            DecoderProperties::Percentage(neuron_depth, percentage_neuron_positioning, is_signed, dimension_count) => {
+            JSONDecoderProperties::Percentage(neuron_depth, percentage_neuron_positioning, is_signed, dimension_count) => {
                 if cortical_ids.len() != 1 {
                     return Err(FeagiDataError::InternalError("Expected one cortical id!".to_string()));
                 }
@@ -224,7 +279,7 @@ impl DecoderProperties {
                     *dimension_count
                 )
             }
-            DecoderProperties::GazeProperties(eccentricity_neuron_depth, modularity_neuron_depth, percentage_neuron_positioning) => {
+            JSONDecoderProperties::GazeProperties(eccentricity_neuron_depth, modularity_neuron_depth, percentage_neuron_positioning) => {
                 if cortical_ids.len() != 2 {
                     return Err(FeagiDataError::InternalError("Expected two cortical ids!".to_string()));
                 }
@@ -241,21 +296,25 @@ impl DecoderProperties {
         }
     }
 }
+//endregion
 
-
+/// Custom Metadata to allow defining hardware properties per channel
+//region Device Properties
 /// A Dictionary structure that allows developers to tag custom information to
 /// device groupings (channels).
-#[allow(dead_code)]
-pub type DeviceProperties = HashMap<String, DevicePropertyValue>;
+
+pub type JSONDeviceProperties = HashMap<String, JSONDevicePropertyValue>;
 
 /// User defined key for custom properties per channel, which can be useful in describing hardware
-#[allow(dead_code)]
+
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "value")]
 #[derive(Debug, Clone)]
-pub enum DevicePropertyValue {
+pub enum JSONDevicePropertyValue {
     String(String),
     Integer(i32),
     Float(f32),
-    Dictionary(DeviceProperties),
+    Dictionary(JSONDeviceProperties),
 }
+
+//endregion
