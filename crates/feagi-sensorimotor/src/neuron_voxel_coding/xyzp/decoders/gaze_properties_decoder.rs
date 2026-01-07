@@ -8,11 +8,11 @@ use crate::neuron_voxel_coding::xyzp::coder_shared_functions::{
 };
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPDecoder;
 use crate::wrapped_io_data::WrappedIOType;
-use crate::configuration::jsonable::DecoderProperties;
+use crate::configuration::jsonable::JSONDecoderProperties;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelDimensions, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
@@ -77,8 +77,8 @@ impl NeuronVoxelXYZPDecoder for GazePropertiesNeuronVoxelXYZPDecoder {
         WrappedIOType::GazeProperties
     }
 
-    fn get_as_properties(&self) -> DecoderProperties {
-        DecoderProperties::GazeProperties(
+    fn get_as_properties(&self) -> JSONDecoderProperties {
+        JSONDecoderProperties::GazeProperties(
             NeuronDepth::new(self.channel_eccentricity_dimensions.depth).unwrap(),
             NeuronDepth::new(self.channel_modularity_dimensions.depth).unwrap(),
             self.interpolation.into(),

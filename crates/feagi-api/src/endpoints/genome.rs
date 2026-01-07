@@ -601,8 +601,8 @@ pub async fn get_amalgamation_history_exact(
 pub async fn get_cortical_template(
     State(_state): State<ApiState>,
 ) -> ApiResult<Json<HashMap<String, serde_json::Value>>> {
-    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
-        FrameChangeHandling, IOCorticalAreaDataFlag, PercentageNeuronPositioning,
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
+        FrameChangeHandling, IOCorticalAreaConfigurationFlag, PercentageNeuronPositioning,
     };
     use feagi_structures::genomic::{MotorCorticalUnit, SensoryCorticalUnit};
     use serde_json::json;
@@ -610,19 +610,19 @@ pub async fn get_cortical_template(
     let mut templates = HashMap::new();
 
     // Helper to convert data type to human-readable format
-    let data_type_to_json = |dt: IOCorticalAreaDataFlag| -> serde_json::Value {
+    let data_type_to_json = |dt: IOCorticalAreaConfigurationFlag| -> serde_json::Value {
         let (variant, frame, positioning) = match dt {
-            IOCorticalAreaDataFlag::Boolean => ("Boolean", FrameChangeHandling::Absolute, None),
-            IOCorticalAreaDataFlag::Percentage(f, p) => ("Percentage", f, Some(p)),
-            IOCorticalAreaDataFlag::Percentage2D(f, p) => ("Percentage2D", f, Some(p)),
-            IOCorticalAreaDataFlag::Percentage3D(f, p) => ("Percentage3D", f, Some(p)),
-            IOCorticalAreaDataFlag::Percentage4D(f, p) => ("Percentage4D", f, Some(p)),
-            IOCorticalAreaDataFlag::SignedPercentage(f, p) => ("SignedPercentage", f, Some(p)),
-            IOCorticalAreaDataFlag::SignedPercentage2D(f, p) => ("SignedPercentage2D", f, Some(p)),
-            IOCorticalAreaDataFlag::SignedPercentage3D(f, p) => ("SignedPercentage3D", f, Some(p)),
-            IOCorticalAreaDataFlag::SignedPercentage4D(f, p) => ("SignedPercentage4D", f, Some(p)),
-            IOCorticalAreaDataFlag::CartesianPlane(f) => ("CartesianPlane", f, None),
-            IOCorticalAreaDataFlag::Misc(f) => ("Misc", f, None),
+            IOCorticalAreaConfigurationFlag::Boolean => ("Boolean", FrameChangeHandling::Absolute, None),
+            IOCorticalAreaConfigurationFlag::Percentage(f, p) => ("Percentage", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::Percentage2D(f, p) => ("Percentage2D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::Percentage3D(f, p) => ("Percentage3D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::Percentage4D(f, p) => ("Percentage4D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => ("SignedPercentage", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => ("SignedPercentage2D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => ("SignedPercentage3D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => ("SignedPercentage4D", f, Some(p)),
+            IOCorticalAreaConfigurationFlag::CartesianPlane(f) => ("CartesianPlane", f, None),
+            IOCorticalAreaConfigurationFlag::Misc(f) => ("Misc", f, None),
         };
 
         let frame_str = match frame {
@@ -673,7 +673,7 @@ pub async fn get_cortical_template(
                 };
                 
                 for frame in frames {
-                    let dt = IOCorticalAreaDataFlag::Misc(frame);
+                    let dt = IOCorticalAreaConfigurationFlag::Misc(frame);
                     data_types.push(data_type_to_json(dt));
                 }
             }
@@ -683,7 +683,7 @@ pub async fn get_cortical_template(
                     FrameChangeHandling::Absolute,
                     FrameChangeHandling::Incremental,
                 ] {
-                    let dt = IOCorticalAreaDataFlag::CartesianPlane(frame);
+                    let dt = IOCorticalAreaConfigurationFlag::CartesianPlane(frame);
                     data_types.push(data_type_to_json(dt));
                 }
             }
@@ -697,7 +697,7 @@ pub async fn get_cortical_template(
                         PercentageNeuronPositioning::Linear,
                         PercentageNeuronPositioning::Fractional,
                     ] {
-                        let dt = IOCorticalAreaDataFlag::SignedPercentage(frame, positioning);
+                        let dt = IOCorticalAreaConfigurationFlag::SignedPercentage(frame, positioning);
                         data_types.push(data_type_to_json(dt));
                     }
                 }
@@ -747,7 +747,7 @@ pub async fn get_cortical_template(
                 };
                 
                 for frame in frames {
-                    let dt = IOCorticalAreaDataFlag::Misc(frame);
+                    let dt = IOCorticalAreaConfigurationFlag::Misc(frame);
                     data_types.push(data_type_to_json(dt));
                 }
             }
@@ -767,7 +767,7 @@ pub async fn get_cortical_template(
                         PercentageNeuronPositioning::Linear,
                         PercentageNeuronPositioning::Fractional,
                     ] {
-                        let dt = IOCorticalAreaDataFlag::Percentage(frame, positioning);
+                        let dt = IOCorticalAreaConfigurationFlag::Percentage(frame, positioning);
                         data_types.push(data_type_to_json(dt));
                     }
                 }

@@ -13,7 +13,7 @@ use feagi_structures::neuron_voxels::xyzp::{
 use feagi_structures::FeagiDataError;
 use rayon::prelude::*;
 use std::time::Instant;
-use crate::configuration::jsonable::EncoderProperties;
+use crate::configuration::jsonable::JSONEncoderProperties;
 
 #[derive(Debug)]
 #[allow(dead_code)]
@@ -28,8 +28,8 @@ impl NeuronVoxelXYZPEncoder for CartesianPlaneNeuronVoxelXYZPEncoder {
         WrappedIOType::ImageFrame(Some(self.image_properties))
     }
 
-    fn get_as_properties(&self) -> EncoderProperties {
-        EncoderProperties::CartesianPlane(self.image_properties)
+    fn get_as_properties(&self) -> JSONEncoderProperties {
+        JSONEncoderProperties::CartesianPlane(self.image_properties)
     }
 
     fn write_neuron_data_multi_channel_from_processed_cache(

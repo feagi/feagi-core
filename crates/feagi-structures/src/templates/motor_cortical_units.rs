@@ -7,7 +7,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Free spinning motor."]
                 RotaryMotor => {
                     friendly_name: "Rotary Motor",
-                    snake_case_name: "rotary_motor",
                     accepted_wrapped_io_data_type: SignedPercentage, // This property determines what type of registration funciton will be generated
                     cortical_id_unit_reference: *b"mot",
                     number_cortical_areas: 1,
@@ -16,14 +15,13 @@ macro_rules! motor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaDataFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
                 #[doc = "Servo Position, defined by min / max distances"]
                 PositionalServo => {
                     friendly_name: "Positional Servo",
-                    snake_case_name: "positional_servo",
                     accepted_wrapped_io_data_type: SignedPercentage,
                     cortical_id_unit_reference: *b"pse",
                     number_cortical_areas: 1,
@@ -32,14 +30,13 @@ macro_rules! motor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaDataFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::SignedPercentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024])
                     }
                 },
 
                 #[doc = "Gaze control, where the first 2 numbers are the XY center, and the last number is the relative size"]
-                Shock => {
+                Gaze => {
                     friendly_name: "Gaze Control",
-                    snake_case_name: "gaze_control",
                     accepted_wrapped_io_data_type: GazeProperties,
                     cortical_id_unit_reference: *b"gaz",
                     number_cortical_areas: 2,
@@ -48,8 +45,8 @@ macro_rules! motor_cortical_units {
                         percentage_neuron_positioning: PercentageNeuronPositioning
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaDataFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1]), // Eccentricity
-                        1 => (IOCorticalAreaDataFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]) // Modularity
+                        0 => (IOCorticalAreaConfigurationFlag::Percentage2D(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1]), // Eccentricity
+                        1 => (IOCorticalAreaConfigurationFlag::Percentage(frame_change_handling, percentage_neuron_positioning), relative_position: [0, 0, -10], channel_dimensions_default: [1, 1, 10], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 1024]) // Modularity
                     }
                 },
 
@@ -57,7 +54,6 @@ macro_rules! motor_cortical_units {
                 #[doc = "Miscellaneous motor that does not fit existing templates."]
                 MiscData => {
                     friendly_name: "Miscellaneous Motor",
-                    snake_case_name: "miscellaneous",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"mis",
                     number_cortical_areas: 1,
@@ -65,14 +61,13 @@ macro_rules! motor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [8, 8, 1], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1024, 1024, 1024])
                     }
                 },
 
                 #[doc = "Text output (English) - token stream encoded as absolute fractional bitplanes along Z (z=0 is MSB)."]
                 TextEnglishOutput => {
                     friendly_name: "Text Output (English)",
-                    snake_case_name: "text_english_output",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"ten",
                     number_cortical_areas: 1,
@@ -82,14 +77,13 @@ macro_rules! motor_cortical_units {
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
                         // 1x1x16 default: one token per FEAGI tick, encoded into 16 bitplanes (supports GPT-2 vocab via token_id+1 offset).
-                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [1, 1, 16], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [1, 1, 32])
                     }
                 },
 
                 #[doc = "Object semantic segmentation output (bitplane class encoding)"]
                 ObjectSegmentation => {
                     friendly_name: "Object Segmentation",
-                    snake_case_name: "object_segmentation",
                     accepted_wrapped_io_data_type: MiscData,
                     cortical_id_unit_reference: *b"seg",
                     number_cortical_areas: 1,
@@ -98,14 +92,13 @@ macro_rules! motor_cortical_units {
                     },
                     allowed_frame_change_handling: [Absolute],
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaDataFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
+                        0 => (IOCorticalAreaConfigurationFlag::Misc(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [32, 32, 8], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 1024])
                     }
                 },
 
                 #[doc = "Visual thoughts output - RGB image generation from brain activity"]
                 SimpleVisionOutput => {
                     friendly_name: "Simple Vision Output",
-                    snake_case_name: "simple_vision_output",
                     accepted_wrapped_io_data_type: ImageFrame,
                     cortical_id_unit_reference: *b"img",
                     number_cortical_areas: 1,
@@ -113,7 +106,7 @@ macro_rules! motor_cortical_units {
                         frame_change_handling: FrameChangeHandling,
                     },
                     cortical_area_properties: {
-                        0 => (IOCorticalAreaDataFlag::CartesianPlane(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
+                        0 => (IOCorticalAreaConfigurationFlag::CartesianPlane(frame_change_handling), relative_position: [0, 0, 0], channel_dimensions_default: [128, 128, 3], channel_dimensions_min: [1, 1, 1], channel_dimensions_max: [4096, 4096, 3])
                     }
                 },
 

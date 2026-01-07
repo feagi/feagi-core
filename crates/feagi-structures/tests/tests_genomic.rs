@@ -4,7 +4,7 @@
 //! including cortical types, cortical IDs, descriptors, and sensory cortical units.
 
 use feagi_structures::genomic::cortical_area::descriptors::*;
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::*;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::*;
 use feagi_structures::genomic::cortical_area::*;
 use feagi_structures::genomic::*;
 use feagi_structures::FeagiDataError;
@@ -301,28 +301,6 @@ mod test_sensory_cortical_units {
     }
 }
 
-#[cfg(test)]
-mod test_genomic_descriptors {
-    use feagi_structures::genomic::descriptors::AgentDeviceIndex;
-
-    #[test]
-    fn test_agent_device_index_creation() {
-        let index = AgentDeviceIndex::from(500u32);
-        assert_eq!(*index, 500u32);
-    }
-
-    #[test]
-    fn test_agent_device_index_zero() {
-        let index = AgentDeviceIndex::from(0u32);
-        assert_eq!(*index, 0u32);
-    }
-
-    #[test]
-    fn test_agent_device_index_max_value() {
-        let index = AgentDeviceIndex::from(u32::MAX);
-        assert_eq!(*index, u32::MAX);
-    }
-}
 
 #[cfg(test)]
 mod test_cortical_types {
@@ -390,7 +368,7 @@ mod test_cortical_types {
 
         #[test]
         fn test_cortical_area_type_brain_input_variant() {
-            let io_type = IOCorticalAreaDataFlag::Percentage(
+            let io_type = IOCorticalAreaConfigurationFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
             );
@@ -404,7 +382,7 @@ mod test_cortical_types {
 
         #[test]
         fn test_cortical_area_type_brain_output_variant() {
-            let io_type = IOCorticalAreaDataFlag::Percentage(
+            let io_type = IOCorticalAreaConfigurationFlag::Percentage(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Fractional,
             );
@@ -556,62 +534,62 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_percentage_variant() {
-            let io_type = IOCorticalAreaDataFlag::Percentage(
+            let io_type = IOCorticalAreaConfigurationFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
             );
 
             match io_type {
-                IOCorticalAreaDataFlag::Percentage(_, _) => (),
+                IOCorticalAreaConfigurationFlag::Percentage(_, _) => (),
                 _ => panic!("Expected Percentage variant"),
             }
         }
 
         #[test]
         fn test_signed_percentage_variant() {
-            let io_type = IOCorticalAreaDataFlag::SignedPercentage(
+            let io_type = IOCorticalAreaConfigurationFlag::SignedPercentage(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Fractional,
             );
 
             match io_type {
-                IOCorticalAreaDataFlag::SignedPercentage(_, _) => (),
+                IOCorticalAreaConfigurationFlag::SignedPercentage(_, _) => (),
                 _ => panic!("Expected SignedPercentage variant"),
             }
         }
 
         #[test]
         fn test_cartesian_plane_variant() {
-            let io_type = IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Absolute);
+            let io_type = IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Absolute);
 
             match io_type {
-                IOCorticalAreaDataFlag::CartesianPlane(_) => (),
+                IOCorticalAreaConfigurationFlag::CartesianPlane(_) => (),
                 _ => panic!("Expected CartesianPlane variant"),
             }
         }
 
         #[test]
         fn test_percentage_3d_variant() {
-            let io_type = IOCorticalAreaDataFlag::SignedPercentage3D(
+            let io_type = IOCorticalAreaConfigurationFlag::SignedPercentage3D(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
             );
 
             match io_type {
-                IOCorticalAreaDataFlag::SignedPercentage3D(_, _) => (),
+                IOCorticalAreaConfigurationFlag::SignedPercentage3D(_, _) => (),
                 _ => panic!("Expected SignedPercentage3D variant"),
             }
         }
 
         #[test]
         fn test_percentage_4d_variant() {
-            let io_type = IOCorticalAreaDataFlag::SignedPercentage4D(
+            let io_type = IOCorticalAreaConfigurationFlag::SignedPercentage4D(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Fractional,
             );
 
             match io_type {
-                IOCorticalAreaDataFlag::SignedPercentage4D(_, _) => (),
+                IOCorticalAreaConfigurationFlag::SignedPercentage4D(_, _) => (),
                 _ => panic!("Expected SignedPercentage4D variant"),
             }
         }
@@ -622,7 +600,7 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_to_configuration_flag_percentage() {
-            let io_type = IOCorticalAreaDataFlag::Percentage(
+            let io_type = IOCorticalAreaConfigurationFlag::Percentage(
                 FrameChangeHandling::Incremental,
                 PercentageNeuronPositioning::Linear,
             );
@@ -635,37 +613,37 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_configuration_flag_roundtrip_percentage() {
-            let original = IOCorticalAreaDataFlag::Percentage(
+            let original = IOCorticalAreaConfigurationFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
             );
 
             let flag = original.to_data_type_configuration_flag();
             let recovered =
-                IOCorticalAreaDataFlag::try_from_data_type_configuration_flag(flag).unwrap();
+                IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(flag).unwrap();
 
             assert_eq!(original, recovered);
         }
 
         #[test]
         fn test_configuration_flag_roundtrip_cartesian_plane() {
-            let original = IOCorticalAreaDataFlag::CartesianPlane(FrameChangeHandling::Incremental);
+            let original = IOCorticalAreaConfigurationFlag::CartesianPlane(FrameChangeHandling::Incremental);
 
             let flag = original.to_data_type_configuration_flag();
             let recovered =
-                IOCorticalAreaDataFlag::try_from_data_type_configuration_flag(flag).unwrap();
+                IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(flag).unwrap();
 
             assert_eq!(original, recovered);
         }
 
         #[test]
         fn test_different_types_produce_different_flags() {
-            let type1 = IOCorticalAreaDataFlag::Percentage(
+            let type1 = IOCorticalAreaConfigurationFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
             );
 
-            let type2 = IOCorticalAreaDataFlag::SignedPercentage(
+            let type2 = IOCorticalAreaConfigurationFlag::SignedPercentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
             );
@@ -682,7 +660,7 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_as_io_cortical_id_creates_valid_id() {
-            let io_type = IOCorticalAreaDataFlag::Percentage(
+            let io_type = IOCorticalAreaConfigurationFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
             );
@@ -700,7 +678,7 @@ mod test_io_cortical_area_data_type {
 
         #[test]
         fn test_as_io_cortical_id_input_vs_output() {
-            let io_type = IOCorticalAreaDataFlag::Percentage(
+            let io_type = IOCorticalAreaConfigurationFlag::Percentage(
                 FrameChangeHandling::Absolute,
                 PercentageNeuronPositioning::Linear,
             );

@@ -4,15 +4,17 @@ use crate::FeagiDataError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-pub type DataTypeConfigurationFlag = u16; // 16 Total bits
+
+pub type IOCorticalAreaConfigurationFlagBitmask = u16; // 16 Total bits
 
 // Bits 0-7 -> Enum
 // Bit 8 -> FrameChangeHandling
 // Bit 9 -> PercentageNeuronPositioning
 // Bit 10-15 -> RESERVED
 
+/// Different types of Input/Output cortical areas exist, and have their own nested configurations. This enum defines that
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Serialize, Deserialize)]
-pub enum IOCorticalAreaDataFlag {
+pub enum IOCorticalAreaConfigurationFlag {
     Boolean,
     Percentage(FrameChangeHandling, PercentageNeuronPositioning),
     Percentage2D(FrameChangeHandling, PercentageNeuronPositioning),
@@ -26,9 +28,9 @@ pub enum IOCorticalAreaDataFlag {
     Misc(FrameChangeHandling),
 }
 
-impl IOCorticalAreaDataFlag {
+impl IOCorticalAreaConfigurationFlag {
     pub const fn try_from_data_type_configuration_flag(
-        value: DataTypeConfigurationFlag,
+        value: IOCorticalAreaConfigurationFlagBitmask,
     ) -> Result<Self, FeagiDataError> {
         let variant = value & 0xFF; // Bits 0-7
         let frame_handling = (value >> 8) & 0x01; // Bit 8
@@ -47,36 +49,36 @@ impl IOCorticalAreaDataFlag {
         };
 
         match variant {
-            0 => Ok(IOCorticalAreaDataFlag::Boolean),
-            1 => Ok(IOCorticalAreaDataFlag::Percentage(
+            0 => Ok(IOCorticalAreaConfigurationFlag::Boolean),
+            1 => Ok(IOCorticalAreaConfigurationFlag::Percentage(
                 frame_handling_enum,
                 positioning_enum,
             )),
-            2 => Ok(IOCorticalAreaDataFlag::Percentage2D(
+            2 => Ok(IOCorticalAreaConfigurationFlag::Percentage2D(
                 frame_handling_enum,
                 positioning_enum,
             )),
-            3 => Ok(IOCorticalAreaDataFlag::Percentage3D(
+            3 => Ok(IOCorticalAreaConfigurationFlag::Percentage3D(
                 frame_handling_enum,
                 positioning_enum,
             )),
-            4 => Ok(IOCorticalAreaDataFlag::Percentage4D(
+            4 => Ok(IOCorticalAreaConfigurationFlag::Percentage4D(
                 frame_handling_enum,
                 positioning_enum,
             )),
-            5 => Ok(IOCorticalAreaDataFlag::SignedPercentage(
+            5 => Ok(IOCorticalAreaConfigurationFlag::SignedPercentage(
                 frame_handling_enum,
                 positioning_enum,
             )),
-            6 => Ok(IOCorticalAreaDataFlag::SignedPercentage2D(
+            6 => Ok(IOCorticalAreaConfigurationFlag::SignedPercentage2D(
                 frame_handling_enum,
                 positioning_enum,
             )),
-            7 => Ok(IOCorticalAreaDataFlag::SignedPercentage3D(
+            7 => Ok(IOCorticalAreaConfigurationFlag::SignedPercentage3D(
                 frame_handling_enum,
                 positioning_enum,
             )),
-            8 => Ok(IOCorticalAreaDataFlag::SignedPercentage4D(
+            8 => Ok(IOCorticalAreaConfigurationFlag::SignedPercentage4D(
                 frame_handling_enum,
                 positioning_enum,
             )),
@@ -87,7 +89,7 @@ impl IOCorticalAreaDataFlag {
                         "CartesianPlane variant does not support positioning parameter",
                     ));
                 }
-                Ok(IOCorticalAreaDataFlag::CartesianPlane(frame_handling_enum))
+                Ok(IOCorticalAreaConfigurationFlag::CartesianPlane(frame_handling_enum))
             }
             10 => {
                 // Misc doesn't use positioning, but we'll accept it if set to 0
@@ -96,25 +98,25 @@ impl IOCorticalAreaDataFlag {
                         "Misc variant does not support positioning parameter",
                     ));
                 }
-                Ok(IOCorticalAreaDataFlag::Misc(frame_handling_enum))
+                Ok(IOCorticalAreaConfigurationFlag::Misc(frame_handling_enum))
             }
             _ => Err(FeagiDataError::ConstError("Invalid variant type!")),
         }
     }
 
-    pub const fn to_data_type_configuration_flag(&self) -> DataTypeConfigurationFlag {
+    pub const fn to_data_type_configuration_flag(&self) -> IOCorticalAreaConfigurationFlagBitmask {
         let (variant, frame_handling, positioning) = match self {
-            IOCorticalAreaDataFlag::Boolean => (0u16, None, None),
-            IOCorticalAreaDataFlag::Percentage(f, p) => (1u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::Percentage2D(f, p) => (2u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::Percentage3D(f, p) => (3u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::Percentage4D(f, p) => (4u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::SignedPercentage(f, p) => (5u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::SignedPercentage2D(f, p) => (6u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::SignedPercentage3D(f, p) => (7u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::SignedPercentage4D(f, p) => (8u16, Some(*f), Some(*p)),
-            IOCorticalAreaDataFlag::CartesianPlane(f) => (9u16, Some(*f), None),
-            IOCorticalAreaDataFlag::Misc(f) => (10u16, Some(*f), None),
+            IOCorticalAreaConfigurationFlag::Boolean => (0u16, None, None),
+            IOCorticalAreaConfigurationFlag::Percentage(f, p) => (1u16, Some(*f), Some(*p)),
+            IOCorticalAreaConfigurationFlag::Percentage2D(f, p) => (2u16, Some(*f), Some(*p)),
+            IOCorticalAreaConfigurationFlag::Percentage3D(f, p) => (3u16, Some(*f), Some(*p)),
+            IOCorticalAreaConfigurationFlag::Percentage4D(f, p) => (4u16, Some(*f), Some(*p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage(f, p) => (5u16, Some(*f), Some(*p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage2D(f, p) => (6u16, Some(*f), Some(*p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage3D(f, p) => (7u16, Some(*f), Some(*p)),
+            IOCorticalAreaConfigurationFlag::SignedPercentage4D(f, p) => (8u16, Some(*f), Some(*p)),
+            IOCorticalAreaConfigurationFlag::CartesianPlane(f) => (9u16, Some(*f), None),
+            IOCorticalAreaConfigurationFlag::Misc(f) => (10u16, Some(*f), None),
         };
 
         let frame_bits = match frame_handling {
@@ -140,7 +142,7 @@ impl IOCorticalAreaDataFlag {
         cortical_unit_index: CorticalUnitIndex,
         cortical_sub_unit_index: CorticalSubUnitIndex,
     ) -> CorticalID {
-        let data_type_configuration: DataTypeConfigurationFlag =
+        let data_type_configuration: IOCorticalAreaConfigurationFlagBitmask =
             self.to_data_type_configuration_flag();
         let data_type_configuration_bytes: [u8; 2] = data_type_configuration.to_le_bytes();
 
@@ -161,56 +163,56 @@ impl IOCorticalAreaDataFlag {
     }
 }
 
-impl From<&IOCorticalAreaDataFlag> for DataTypeConfigurationFlag {
-    fn from(data_type: &IOCorticalAreaDataFlag) -> Self {
+impl From<&IOCorticalAreaConfigurationFlag> for IOCorticalAreaConfigurationFlagBitmask {
+    fn from(data_type: &IOCorticalAreaConfigurationFlag) -> Self {
         data_type.to_data_type_configuration_flag()
     }
 }
 
-impl From<IOCorticalAreaDataFlag> for DataTypeConfigurationFlag {
-    fn from(data_type: IOCorticalAreaDataFlag) -> Self {
+impl From<IOCorticalAreaConfigurationFlag> for IOCorticalAreaConfigurationFlagBitmask {
+    fn from(data_type: IOCorticalAreaConfigurationFlag) -> Self {
         (&data_type).into()
     }
 }
 
-impl TryFrom<DataTypeConfigurationFlag> for IOCorticalAreaDataFlag {
+impl TryFrom<IOCorticalAreaConfigurationFlagBitmask> for IOCorticalAreaConfigurationFlag {
     type Error = FeagiDataError;
 
-    fn try_from(value: DataTypeConfigurationFlag) -> Result<Self, Self::Error> {
-        IOCorticalAreaDataFlag::try_from_data_type_configuration_flag(value)
+    fn try_from(value: IOCorticalAreaConfigurationFlagBitmask) -> Result<Self, Self::Error> {
+        IOCorticalAreaConfigurationFlag::try_from_data_type_configuration_flag(value)
     }
 }
 
-impl fmt::Display for IOCorticalAreaDataFlag {
+impl fmt::Display for IOCorticalAreaConfigurationFlag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            IOCorticalAreaDataFlag::Boolean => write!(f, "Boolean()"),
-            IOCorticalAreaDataFlag::Percentage(frame, percentage) => {
+            IOCorticalAreaConfigurationFlag::Boolean => write!(f, "Boolean()"),
+            IOCorticalAreaConfigurationFlag::Percentage(frame, percentage) => {
                 write!(f, "Percentage({}, {})", frame, percentage)
             }
-            IOCorticalAreaDataFlag::Percentage2D(frame, percentage) => {
+            IOCorticalAreaConfigurationFlag::Percentage2D(frame, percentage) => {
                 write!(f, "Percentage2D({}, {})", frame, percentage)
             }
-            IOCorticalAreaDataFlag::Percentage3D(frame, percentage) => {
+            IOCorticalAreaConfigurationFlag::Percentage3D(frame, percentage) => {
                 write!(f, "Percentage3D({}, {})", frame, percentage)
             }
-            IOCorticalAreaDataFlag::Percentage4D(frame, percentage) => {
+            IOCorticalAreaConfigurationFlag::Percentage4D(frame, percentage) => {
                 write!(f, "Percentage4D({}, {})", frame, percentage)
             }
-            IOCorticalAreaDataFlag::SignedPercentage(frame, percentage) => {
+            IOCorticalAreaConfigurationFlag::SignedPercentage(frame, percentage) => {
                 write!(f, "SignedPercentage({}, {})", frame, percentage)
             }
-            IOCorticalAreaDataFlag::SignedPercentage2D(frame, percentage) => {
+            IOCorticalAreaConfigurationFlag::SignedPercentage2D(frame, percentage) => {
                 write!(f, "SignedPercentage2D({}, {})", frame, percentage)
             }
-            IOCorticalAreaDataFlag::SignedPercentage3D(frame, percentage) => {
+            IOCorticalAreaConfigurationFlag::SignedPercentage3D(frame, percentage) => {
                 write!(f, "SignedPercentage3D({}, {})", frame, percentage)
             }
-            IOCorticalAreaDataFlag::SignedPercentage4D(frame, percentage) => {
+            IOCorticalAreaConfigurationFlag::SignedPercentage4D(frame, percentage) => {
                 write!(f, "SignedPercentage4D({}, {})", frame, percentage)
             }
-            IOCorticalAreaDataFlag::CartesianPlane(frame) => write!(f, "CartesianPlane({})", frame),
-            IOCorticalAreaDataFlag::Misc(frame) => write!(f, "Misc({})", frame),
+            IOCorticalAreaConfigurationFlag::CartesianPlane(frame) => write!(f, "CartesianPlane({})", frame),
+            IOCorticalAreaConfigurationFlag::Misc(frame) => write!(f, "Misc({})", frame),
         }
     }
 }
@@ -221,6 +223,14 @@ pub enum PercentageNeuronPositioning {
     Linear,
     #[default]
     Fractional,
+}
+
+impl PercentageNeuronPositioning {
+    pub fn try_from_serde_map(map: &serde_json::Map<String, serde_json::Value>) -> Result<PercentageNeuronPositioning,FeagiDataError> {
+        let val = map.get("percentage_neuron_positioning").ok_or(FeagiDataError::DeserializationError("Unable to extreact percentage_neuron_positioning!".to_string()))?;
+        let output: PercentageNeuronPositioning = serde_json::from_value(val.clone()).map_err(|err| FeagiDataError::DeserializationError("Unable to extreact percentage_neuron_positioning!".to_string()))?;
+        Ok(output)
+    }
 }
 
 impl fmt::Display for PercentageNeuronPositioning {
@@ -237,6 +247,14 @@ pub enum FrameChangeHandling {
     #[default]
     Absolute,
     Incremental,
+}
+
+impl FrameChangeHandling {
+    pub fn try_from_serde_map(map: &serde_json::Map<String, serde_json::Value>) -> Result<FrameChangeHandling,FeagiDataError> {
+        let val = map.get("frame_change_handling").ok_or(FeagiDataError::DeserializationError("Unable to extreact frame_change_handling!".to_string()))?;
+        let output: FrameChangeHandling = serde_json::from_value(val.clone()).map_err(|err| FeagiDataError::DeserializationError("Unable to extreact frame_change_handling!".to_string()))?;
+        Ok(output)
+    }
 }
 
 impl fmt::Display for FrameChangeHandling {

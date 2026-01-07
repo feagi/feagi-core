@@ -4,7 +4,8 @@ use crate::data_pipeline::PipelineStagePropertyIndex;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
-
+use feagi_structures::genomic::cortical_area::descriptors::CorticalChannelIndex;
+use crate::configuration::jsonable::JSONDeviceProperties;
 use super::pipeline_stage_runner_common::{PipelineDirection, PipelineStageRunner};
 
 #[derive(Debug)]
@@ -13,8 +14,9 @@ pub(crate) struct SensoryPipelineStageRunner {
     last_instant_data_processed: Instant,
     pipeline_stages: Vec<Box<dyn PipelineStage>>,
     preprocessed_cached_value: WrappedIOData,
-    channel_friendly_name: String,
-    channel_index_override: Option<usize>,
+    channel_friendly_name: Option<String>,
+    channel_index_override: Option<CorticalChannelIndex>,
+    json_device_properties: JSONDeviceProperties,
 }
 
 impl PipelineStageRunner for SensoryPipelineStageRunner {
@@ -42,26 +44,33 @@ impl PipelineStageRunner for SensoryPipelineStageRunner {
         self.last_instant_data_processed
     }
 
-    fn get_channel_friendly_name(&self) -> &str {
+    fn get_channel_friendly_name(&self) -> &Option<String> {
         &self.channel_friendly_name
     }
 
-    fn set_channel_friendly_name(&mut self, channel_friendly_name: String) {
+    fn set_channel_friendly_name(&mut self, channel_friendly_name: Option<String>) {
         self.channel_friendly_name = channel_friendly_name;
     }
 
-    fn get_channel_index_override(&self) -> Option<usize> {
+    fn get_channel_index_override(&self) -> Option<CorticalChannelIndex> {
         self.channel_index_override
     }
 
-    fn set_channel_index_override(&mut self, channel_index_override: Option<usize>) {
+    fn set_channel_index_override(&mut self, channel_index_override: Option<CorticalChannelIndex>) {
         self.channel_index_override = channel_index_override;
+    }
+
+    fn get_json_device_properties(&self) -> &JSONDeviceProperties {
+        &self.json_device_properties
+    }
+
+    fn set_json_device_properties(&mut self, json_device_properties: JSONDeviceProperties) {
+        self.json_device_properties = json_device_properties;
     }
 }
 
 impl SensoryPipelineStageRunner {
     /// Creates a new pipeline stage runner with the specified configuration.
-    #[allow(dead_code)]
     pub fn new(initial_sensory_cached_value: WrappedIOData) -> Result<Self, FeagiDataError> {
         let type_to_be_outputted: WrappedIOType =
             WrappedIOType::from(&initial_sensory_cached_value);
@@ -71,8 +80,9 @@ impl SensoryPipelineStageRunner {
             last_instant_data_processed: Instant::now(),
             pipeline_stages: Vec::new(),
             preprocessed_cached_value: initial_sensory_cached_value,
-            channel_friendly_name: String::new(),
+            channel_friendly_name: None,
             channel_index_override: None,
+            json_device_properties: JSONDeviceProperties::default(),
         })
     }
 
@@ -89,7 +99,6 @@ impl SensoryPipelineStageRunner {
         self.expected_processed_sensor_type
     }
 
-    #[allow(dead_code)]
     pub fn get_final_processed_type(&self) -> WrappedIOType {
         self.expected_processed_sensor_type
     }
@@ -170,7 +179,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Retrieves the properties of a single stage in the pipeline.
-    #[allow(dead_code)]
     pub fn try_get_single_stage_properties(
         &self,
         stage_index: PipelineStagePropertyIndex,
@@ -179,13 +187,11 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Retrieves the properties of all stages in the pipeline.
-    #[allow(dead_code)]
     pub fn get_all_stage_properties(&self) -> Vec<PipelineStageProperties> {
         PipelineStageRunner::get_all_stage_properties(self)
     }
 
     /// Updates the properties of a single stage in the pipeline.
-    #[allow(dead_code)]
     pub fn try_update_single_stage_properties(
         &mut self,
         updating_stage_index: PipelineStagePropertyIndex,
@@ -199,7 +205,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Updates the properties of all stages in the pipeline.
-    #[allow(dead_code)]
     pub fn try_update_all_stage_properties(
         &mut self,
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
@@ -208,7 +213,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Replaces a single stage in the pipeline with a new stage.
-    #[allow(dead_code)]
     pub fn try_replace_single_stage(
         &mut self,
         replacing_at_index: PipelineStagePropertyIndex,
@@ -222,7 +226,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Replaces all stages in the pipeline with new stages.
-    #[allow(dead_code)]
     pub fn try_replace_all_stages(
         &mut self,
         new_pipeline_stage_properties: Vec<PipelineStageProperties>,
@@ -231,7 +234,6 @@ impl SensoryPipelineStageRunner {
     }
 
     /// Tries replacing all stages with nothing (remove all stages)
-    #[allow(dead_code)]
     pub fn try_removing_all_stages(&mut self) -> Result<(), FeagiDataError> {
         PipelineStageRunner::try_removing_all_stages(self)
     }

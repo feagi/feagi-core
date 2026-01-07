@@ -6,7 +6,7 @@
 use crate::core::{AgentConfig, AgentType};
 use crate::sdk::error::{Result, SdkError};
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalUnitIndex, CorticalSubUnitIndex};
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{FrameChangeHandling, IOCorticalAreaDataFlag};
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{FrameChangeHandling, IOCorticalAreaConfigurationFlag};
 use feagi_structures::genomic::cortical_area::CorticalID;
 use std::collections::HashMap;
 
@@ -52,7 +52,7 @@ impl TextEncoderConfig {
     /// Uses the proper feagi-structures method to generate cortical ID
     pub fn cortical_id(&self) -> CorticalID {
         // Text input uses Misc data type with Absolute frame handling
-        let data_flag = IOCorticalAreaDataFlag::Misc(FrameChangeHandling::Absolute);
+        let data_flag = IOCorticalAreaConfigurationFlag::Misc(FrameChangeHandling::Absolute);
         
         data_flag.as_io_cortical_id(
             true,                                          // is_input

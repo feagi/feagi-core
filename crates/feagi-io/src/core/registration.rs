@@ -17,7 +17,7 @@ pub use feagi_services::types::registration::{
     RegistrationResponse, TransportConfig,
 };
 use feagi_structures::genomic::cortical_area::descriptors::{CorticalUnitIndex, CorticalSubUnitIndex};
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
 use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::genomic::SensoryCorticalUnit;
 
@@ -297,7 +297,7 @@ impl RegistrationHandler {
         &self,
         unit: SensoryCorticalUnit,
         frame_change_handling: FrameChangeHandling,
-        percentage_neuron_positioning: feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning,
+        percentage_neuron_positioning: feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning,
         group: CorticalUnitIndex,
     ) -> Result<Vec<CorticalID>, String> {
         // Dispatch to the appropriate get_cortical_ids_array_for method based on unit type
@@ -543,7 +543,7 @@ impl RegistrationHandler {
                 // Use default frame_change_handling (Absolute) - this should match what the encoder uses
                 // TODO: Get frame_change_handling from registration request if available
                 let frame_change_handling = FrameChangeHandling::Absolute;
-                use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+                use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
                 let percentage_neuron_positioning = PercentageNeuronPositioning::Linear; // Default
 
                 // Get all cortical IDs for this unit type using generic method dispatch

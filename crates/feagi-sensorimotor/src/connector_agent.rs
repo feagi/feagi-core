@@ -3,6 +3,7 @@ use crate::caching::SensorDeviceCache;
 use feagi_structures::FeagiDataError;
 use std::fmt;
 use std::sync::{Arc, Mutex, MutexGuard};
+use crate::configuration::jsonable::JSONInputOutputDefinition;
 
 #[derive(Debug)]
 pub struct ConnectorAgent {
@@ -18,9 +19,11 @@ impl Default for ConnectorAgent {
 
 impl ConnectorAgent {
     pub fn new() -> Self {
+        
+        let sensors = Arc::new(Mutex::new(SensorDeviceCache::new()));
         ConnectorAgent {
-            sensor_cache: Arc::new(Mutex::new(SensorDeviceCache::new())),
-            motor_cache: Arc::new(Mutex::new(MotorDeviceCache::new())),
+            sensor_cache: sensors.clone(),
+            motor_cache: Arc::new(Mutex::new(MotorDeviceCache::new(sensors))),
         }
     }
 
@@ -40,81 +43,27 @@ impl ConnectorAgent {
         self.motor_cache.clone()
     }
 
+
     pub fn export_device_registrations_as_config_json(
         &self,
     ) -> Result<serde_json::Value, FeagiDataError> {
-        let mut capabilities = serde_json::Map::new();
-        capabilities.insert(
-            "input".to_string(),
-            self.get_sensor_cache()
-                .export_registered_sensors_as_config_json()?,
-        );
-        capabilities.insert(
-            "output".to_string(),
-            self.get_motor_cache()
-                .export_registered_motors_as_config_json()?,
-        );
-        let mut output = serde_json::Map::new();
-        output.insert(
-            "capabilities".to_string(),
-            serde_json::Value::Object(capabilities),
-        );
-        Ok(serde_json::Value::Object(output))
+        let mut output = JSONInputOutputDefinition::new();
+        self.get_sensor_cache().export_to_input_definition(&mut output)?;
+        self.get_motor_cache().export_to_output_definition(&mut output)?;
+        Ok(serde_json::to_value(output).unwrap())
     }
 
-    /// Import device registrations from JSON configuration string
-    ///
-    /// Parses JSON and updates pipeline configurations and friendly names for already-registered devices.
-    /// Devices must be registered first using the appropriate registration functions.
-    ///
-    /// # Arguments
-    /// * `json_str` - JSON string in the new capabilities format
-    ///
-    /// # Returns
-    /// * `Ok(())` - If import succeeded
-    /// * `Err(FeagiDataError)` - If JSON is malformed or devices not registered
-    ///
-    /// # Example JSON Format
-    /// ```json
-    /// {
-    ///   "capabilities": {
-    ///     "input": {
-    ///       "simple_vision": {
-    ///         "0": {
-    ///           "friendly_name": "Main Camera",
-    ///           "channels": [...]
-    ///         }
-    ///       }
-    ///     },
-    ///     "output": {}
-    ///   }
-    /// }
-    /// ```
-    pub fn import_device_registrations_from_config_json(
+    pub fn import_device_registrations_as_config_json(
         &mut self,
-        json_str: &str,
+        json: serde_json::Value,
     ) -> Result<(), FeagiDataError> {
-        let json: serde_json::Value = serde_json::from_str(json_str).map_err(|e| {
-            FeagiDataError::DeserializationError(format!("Failed to parse JSON: {}", e))
-        })?;
-
-        let capabilities = json.get("capabilities")
-            .ok_or_else(|| FeagiDataError::DeserializationError(
-                "Missing 'capabilities' key in JSON. Expected format: {\"capabilities\": {\"input\": {...}, \"output\": {...}}}".to_string()
-            ))?;
-
-        // Import sensors (input)
-        if let Some(input) = capabilities.get("input") {
-            self.get_sensor_cache().import_sensors_from_json(input)?;
-        }
-
-        // Import motors (output)
-        if let Some(output) = capabilities.get("output") {
-            self.get_motor_cache().import_motors_from_json(output)?;
-        }
-
+        // NOTE: Wipes all registered devices
+        let definition: JSONInputOutputDefinition = serde_json::from_value(json).map_err(|err | FeagiDataError::DeserializationError(err.to_string()))?;
+        self.get_motor_cache().import_from_output_definition(&definition)?;
+        self.get_sensor_cache().import_from_input_definition(&definition)?;
         Ok(())
     }
+
 }
 
 impl fmt::Display for ConnectorAgent {

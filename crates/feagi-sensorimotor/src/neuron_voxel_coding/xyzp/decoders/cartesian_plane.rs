@@ -8,7 +8,7 @@ use feagi_structures::genomic::cortical_area::CorticalID;
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
-use crate::configuration::jsonable::DecoderProperties;
+use crate::configuration::jsonable::JSONDecoderProperties;
 
 #[derive(Debug)]
 pub struct CartesianPlaneNeuronVoxelXYZPDecoder {
@@ -21,7 +21,7 @@ impl NeuronVoxelXYZPDecoder for CartesianPlaneNeuronVoxelXYZPDecoder {
         WrappedIOType::ImageFrame(Some(self.image_properties))
     }
 
-    fn get_as_properties(&self) -> DecoderProperties {
+    fn get_as_properties(&self) -> JSONDecoderProperties {
         todo!()
     }
 

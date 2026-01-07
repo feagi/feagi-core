@@ -4,12 +4,12 @@ use crate::data_pipeline::per_channel_stream_caches::{
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::neuron_voxel_coding::xyzp::NeuronVoxelXYZPEncoder;
 use crate::wrapped_io_data::{WrappedIOData, WrappedIOType};
-use feagi_structures::genomic::cortical_area::descriptors::{
-    CorticalChannelCount, CorticalChannelIndex,
-};
+use feagi_structures::genomic::cortical_area::descriptors::{CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex};
 use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::FeagiDataError;
 use std::time::Instant;
+use feagi_structures::genomic::SensoryCorticalUnit;
+use crate::configuration::jsonable::{JSONDeviceGrouping, JSONEncoderProperties, JSONUnitDefinition};
 
 /// Manages multiple sensory data streams with independent processing pipelines per channel.
 ///
@@ -23,17 +23,18 @@ use std::time::Instant;
 /// - `last_update_time`: Timestamp of the most recent update across all channels
 
 #[derive(Debug)]
-pub(crate) struct SensoryChannelStreamCaches {
+pub(crate) struct SensoryCorticalUnitCache {
     neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
+    io_configuration_flags: serde_json::Map<String, serde_json::Value>,
     pipeline_runners: Vec<SensoryPipelineStageRunner>,
     last_update_time: Instant,
-    device_friendly_name: String,
+    device_friendly_name: Option<String>,
 }
 
-impl SensoryChannelStreamCaches {
-    #[allow(dead_code)]
+impl SensoryCorticalUnitCache {
     pub fn new(
         neuron_encoder: Box<dyn NeuronVoxelXYZPEncoder>,
+        io_configuration_flags: serde_json::Map<String, serde_json::Value>, // This MUST be formatted correctly
         number_channels: CorticalChannelCount,
         initial_cached_value: WrappedIOData,
     ) -> Result<Self, FeagiDataError> {
@@ -45,11 +46,67 @@ impl SensoryChannelStreamCaches {
 
         Ok(Self {
             neuron_encoder,
+            io_configuration_flags,
             pipeline_runners,
             last_update_time: Instant::now(),
-            device_friendly_name: String::new(),
+            device_friendly_name: None,
         })
     }
+
+    /// Creates new unit, and updates all internal; channel / pipeline runners and metadata
+    /// according to the given json
+    pub fn new_from_json(
+        sensory_unit: &SensoryCorticalUnit,
+        unit_definition: &JSONUnitDefinition,
+        encoder_definition: &JSONEncoderProperties
+    ) -> Result<Self, FeagiDataError> {
+
+        unit_definition.verify_valid_structure()?;
+        let channel_count = unit_definition.get_channel_count()?;
+        let cortical_ids = sensory_unit.get_cortical_id_vector_from_index_and_serde_io_configuration_flags(
+            unit_definition.cortical_unit_index,
+            unit_definition.io_configuration_flags.clone()
+        )?;
+
+        let initial_value = encoder_definition.default_wrapped_value()?;
+        let encoder = encoder_definition.to_box_encoder(
+            channel_count,
+            &cortical_ids
+        )?;
+
+        let mut sensory_cortical_unit_cache = SensoryCorticalUnitCache::new(
+            encoder,
+            unit_definition.io_configuration_flags.clone(),
+            channel_count,
+            initial_value
+        )?;
+
+        sensory_cortical_unit_cache.set_friendly_name(unit_definition.friendly_name.clone());
+
+        // Update all the channels
+        for (index, device_group) in unit_definition.device_grouping.iter().enumerate() {
+            let pipeline_runner = sensory_cortical_unit_cache.pipeline_runners.get_mut(index).unwrap();
+
+            pipeline_runner.try_update_all_stage_properties(device_group.pipeline_stages.clone())?;
+            pipeline_runner.set_channel_friendly_name(device_group.friendly_name.clone());
+            pipeline_runner.set_channel_index_override(device_group.channel_index_override.clone());
+            pipeline_runner.set_json_device_properties(device_group.device_properties.clone());
+        }
+
+        Ok(sensory_cortical_unit_cache)
+    }
+
+    pub fn export_as_jsons(&self, cortical_unit_index: CorticalUnitIndex) -> (JSONUnitDefinition, JSONEncoderProperties) {
+        let encoder_properties = self.neuron_encoder.get_as_properties();
+        let json_unit_definition = JSONUnitDefinition {
+            friendly_name: self.device_friendly_name.clone(),
+            cortical_unit_index,
+            io_configuration_flags: self.io_configuration_flags.clone(),
+            device_grouping: self.get_all_device_grouping()
+        };
+        (json_unit_definition, encoder_properties)
+    }
+
 
     //region Properties
 
@@ -57,7 +114,6 @@ impl SensoryChannelStreamCaches {
     ///
     /// # Returns
     /// The count of channels as a `CorticalChannelCount`.
-    #[allow(dead_code)]
     pub fn number_of_channels(&self) -> CorticalChannelCount {
         (self.pipeline_runners.len() as u32).try_into().unwrap()
     }
@@ -70,7 +126,6 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(())` - If the channel exists
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    #[allow(dead_code)]
     pub fn verify_channel_exists(
         &self,
         channel_index: CorticalChannelIndex,
@@ -80,7 +135,6 @@ impl SensoryChannelStreamCaches {
     }
 
     /// Retrieves the expected input data type for a channel
-    #[allow(dead_code)]
     pub fn get_input_type_for_channel(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -88,6 +142,10 @@ impl SensoryChannelStreamCaches {
         let runner = self.try_get_pipeline_runner(cortical_channel_index)?;
         Ok(runner.get_expected_type_to_input_and_process())
     }
+
+
+
+
 
     //endregion
 
@@ -104,7 +162,6 @@ impl SensoryChannelStreamCaches {
     /// # Returns
     /// * `Ok(&WrappedIOData)` - Reference to the unprocessed input data
     /// * `Err(FeagiDataError)` - If the channel index is out of bounds
-    #[allow(dead_code)]
     pub fn try_get_channel_preprocessed_value(
         &self,
         cortical_channel_index: CorticalChannelIndex,
@@ -307,60 +364,16 @@ impl SensoryChannelStreamCaches {
         Ok(())
     }
 
-    pub(crate) fn export_as_json(&self) -> Result<serde_json::Value, FeagiDataError> {
-        let mut output = serde_json::Map::new();
-        output.insert(
-            "friendly_name".to_string(),
-            serde_json::Value::String(self.device_friendly_name.clone()),
-        );
+    //endregion
 
-        let mut channels_data: Vec<serde_json::Value> = Vec::new();
-        for pipeline_stage_runner in &self.pipeline_runners {
-            let channel_data = pipeline_stage_runner.export_as_json()?;
-            channels_data.push(channel_data);
-        }
-        output.insert(
-            "channels".to_string(),
-            serde_json::Value::Array(channels_data),
-        );
-        Ok(output.into())
+    //region Metadata
+
+    pub fn get_friendly_name(&self) -> &Option<String> {
+        &self.device_friendly_name
     }
 
-    pub(crate) fn import_from_json(
-        &mut self,
-        json: &serde_json::Value,
-    ) -> Result<(), FeagiDataError> {
-        let json_map = json.as_object().ok_or_else(|| {
-            FeagiDataError::DeserializationError(
-                "Expected JSON object for SensoryChannelStreamCaches".to_string(),
-            )
-        })?;
-
-        // Get friendly name
-        if let Some(friendly_name) = json_map.get("friendly_name") {
-            self.device_friendly_name = friendly_name.as_str().unwrap_or("").to_string();
-        }
-
-        // Get channels array
-        let channels = json_map
-            .get("channels")
-            .and_then(|v| v.as_array())
-            .ok_or_else(|| {
-                FeagiDataError::DeserializationError("Expected 'channels' array".to_string())
-            })?;
-
-        self.pipeline_runners.clear();
-
-        // Import each channel
-        for (runner, channel_json) in self.pipeline_runners.iter_mut().zip(channels.iter()) {
-            let channel_map = channel_json.as_object().ok_or_else(|| {
-                FeagiDataError::DeserializationError(
-                    "Expected channel to be JSON object".to_string(),
-                )
-            })?;
-            runner.import_from_json(channel_map)?;
-        }
-
+    pub fn set_friendly_name(&mut self, friendly_name: Option<String>) -> Result<(), FeagiDataError> {
+        self.device_friendly_name = friendly_name;
         Ok(())
     }
 
@@ -445,6 +458,18 @@ impl SensoryChannelStreamCaches {
             None => Err(FeagiDataError::BadParameters(format!("Channel Index {} is out of bounds for SensoryChannelStreamCaches with {} channels!",
                                                               cortical_channel_index, runner_count)))
         }
+    }
+
+    fn get_encoder_json_properties(&self) -> Result<JSONEncoderProperties, FeagiDataError> {
+        Ok(self.neuron_encoder.get_as_properties())
+    }
+
+    fn get_all_device_grouping(&self) -> Vec<JSONDeviceGrouping> {
+        let mut output: Vec<JSONDeviceGrouping> = Vec::new();
+        for group in self.pipeline_runners.iter() {
+            output.push(group.export_as_json_device_grouping())
+        };
+        output
     }
 
     //endregion

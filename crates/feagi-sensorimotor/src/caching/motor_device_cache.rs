@@ -1,4 +1,5 @@
-use crate::data_pipeline::per_channel_stream_caches::MotorChannelStreamCaches;
+use serde_json::json;
+use crate::data_pipeline::per_channel_stream_caches::MotorCorticalUnitCache;
 use crate::data_pipeline::{PipelineStageProperties, PipelineStagePropertyIndex};
 use crate::data_types::descriptors::*;
 use crate::data_types::*;
@@ -9,7 +10,7 @@ use feagi_serialization::FeagiByteContainer;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex, NeuronDepth,
 };
-use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
+use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
     FrameChangeHandling, PercentageNeuronPositioning,
 };
 use feagi_structures::genomic::cortical_area::CorticalID;
@@ -18,7 +19,12 @@ use feagi_structures::neuron_voxels::xyzp::CorticalMappedXYZPNeuronVoxels;
 use feagi_structures::{motor_cortical_units, FeagiDataError, FeagiSignalIndex};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use serde::{Deserialize, Serialize};
+use crate::caching::{FeedBackRegistration, SensorDeviceCache};
+use crate::configuration::jsonable::JSONInputOutputDefinition;
+use crate::ConnectorAgent;
 
 macro_rules! motor_unit_functions {
     (
@@ -27,7 +33,6 @@ macro_rules! motor_unit_functions {
                 $(#[doc = $doc:expr])?
                 $cortical_type_key_name:ident => {
                     friendly_name: $friendly_name:expr,
-                    snake_case_name: $snake_case_name:expr,
                     accepted_wrapped_io_data_type: $accepted_wrapped_io_data_type:ident,
                     cortical_id_unit_reference: $cortical_id_unit_reference:expr,
                     number_cortical_areas: $number_cortical_areas:expr,
@@ -46,7 +51,6 @@ macro_rules! motor_unit_functions {
         $(
             motor_unit_functions!(@generate_functions
             $cortical_type_key_name,
-            $snake_case_name,
             $accepted_wrapped_io_data_type
             );
         )*
@@ -56,14 +60,11 @@ macro_rules! motor_unit_functions {
     // Helper macro to generate stage and other similar functions
     (@generate_similar_functions
         $cortical_type_key_name:ident,
-        $snake_case_name:expr,
         $wrapped_data_type:ident
     ) => {
         ::paste::paste! {
-
-
-            pub fn [<$snake_case_name _read_preprocessed_cache_value>](
-                &mut self,
+            pub fn [<$cortical_type_key_name:snake _read_preprocessed_cache_value>](
+                &self,
                 unit: CorticalUnitIndex,
                 channel: CorticalChannelIndex,
             ) -> Result< $wrapped_data_type, FeagiDataError> {
@@ -74,8 +75,8 @@ macro_rules! motor_unit_functions {
                 Ok(val)
             }
 
-            pub fn [<$snake_case_name _read_postprocessed_cache_value>](
-                &mut self,
+            pub fn [<$cortical_type_key_name:snake _read_postprocessed_cache_value>](
+                &self,
                 unit: CorticalUnitIndex,
                 channel: CorticalChannelIndex,
             ) -> Result< $wrapped_data_type, FeagiDataError> {
@@ -86,7 +87,7 @@ macro_rules! motor_unit_functions {
                 Ok(val)
             }
 
-            pub fn [<motor_ $snake_case_name _try_register_motor_callback>]<F>(
+            pub fn [<$cortical_type_key_name:snake _try_register_motor_callback>]<F>(
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -99,7 +100,7 @@ macro_rules! motor_unit_functions {
                 Ok(signal_index)
             }
 
-            pub fn [<$snake_case_name _get_single_stage_properties>](
+            pub fn [<$cortical_type_key_name:snake _get_single_stage_properties>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -111,7 +112,7 @@ macro_rules! motor_unit_functions {
                 Ok(stage)
             }
 
-            pub fn [<$snake_case_name _get_all_stage_properties>](
+            pub fn [<$cortical_type_key_name:snake _get_all_stage_properties>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex
@@ -122,7 +123,7 @@ macro_rules! motor_unit_functions {
                 Ok(stages)
             }
 
-            pub fn [<$snake_case_name _update_single_stage_properties>](
+            pub fn [<$cortical_type_key_name:snake _update_single_stage_properties>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -135,7 +136,7 @@ macro_rules! motor_unit_functions {
                 Ok(())
             }
 
-            pub fn [<$snake_case_name _update_all_stage_properties>](
+            pub fn [<$cortical_type_key_name:snake _update_all_stage_properties>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -147,7 +148,7 @@ macro_rules! motor_unit_functions {
                 Ok(())
             }
 
-            pub fn [<$snake_case_name _replace_single_stage>](
+            pub fn [<$cortical_type_key_name:snake _replace_single_stage>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -160,7 +161,7 @@ macro_rules! motor_unit_functions {
                 Ok(())
             }
 
-            pub fn [<$snake_case_name _replace_all_stages>](
+            pub fn [<$cortical_type_key_name:snake _replace_all_stages>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex,
@@ -172,7 +173,7 @@ macro_rules! motor_unit_functions {
                 Ok(())
             }
 
-            pub fn [<$snake_case_name _removing_all_stages>](
+            pub fn [<$cortical_type_key_name:snake _removing_all_stages>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 channel_index: CorticalChannelIndex
@@ -189,11 +190,10 @@ macro_rules! motor_unit_functions {
     // Arm for WrappedIOType::GazeProperties
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         GazeProperties
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -203,8 +203,13 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let eccentricity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
-                let modularity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[1];
+                let eccentricity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let modularity_cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[1];
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = GazePropertiesNeuronVoxelXYZPDecoder::new_box(
                     eccentricity_cortical_id,
@@ -216,22 +221,21 @@ macro_rules! motor_unit_functions {
                 )?;
 
                 let initial_val: WrappedIOData = WrappedIOData::GazeProperties(GazeProperties::create_default_centered());
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, GazeProperties);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, GazeProperties);
     };
 
     // Arm for WrappedIOType::Percentage
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         Percentage
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -240,7 +244,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
                     cortical_id,
                     z_neuron_resolution,
@@ -250,23 +254,27 @@ macro_rules! motor_unit_functions {
                     PercentageChannelDimensionality::D1
                 )?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::Percentage(Percentage::new_zero());
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, Percentage);
     };
 
     // Arm for WrappedIOType::Percentage3D
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         Percentage_3D
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -275,7 +283,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
 
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
                     cortical_id,
@@ -285,23 +293,28 @@ macro_rules! motor_unit_functions {
                     false,
                     PercentageChannelDimensionality::D3
                 )?;
+
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::Percentage_3D(Percentage3D::new_zero());
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, Percentage3D);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, Percentage3D);
     };
 
     // Arm for WrappedIOType::SignedPercentage
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         SignedPercentage
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -310,7 +323,7 @@ macro_rules! motor_unit_functions {
                 percentage_neuron_positioning: PercentageNeuronPositioning
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, percentage_neuron_positioning, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, percentage_neuron_positioning, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = PercentageNeuronVoxelXYZPDecoder::new_box(
                     cortical_id,
                     z_neuron_resolution,
@@ -320,23 +333,27 @@ macro_rules! motor_unit_functions {
                     PercentageChannelDimensionality::D1
                 )?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling,
+                    "percentage_neuron_positioning": percentage_neuron_positioning
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOData::SignedPercentage(SignedPercentage::new_from_m1_1_unchecked(0.0));
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, SignedPercentage);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, SignedPercentage);
     };
 
     // Arm for WrappedIOType::MiscData
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         MiscData
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -344,26 +361,29 @@ macro_rules! motor_unit_functions {
                 misc_data_dimensions: MiscDataDimensions
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = MiscDataNeuronVoxelXYZPDecoder::new_box(cortical_id, misc_data_dimensions, number_channels)?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOType::MiscData(Some(misc_data_dimensions)).create_blank_data_of_type()?;
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, MiscData);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, MiscData);
     };
 
     // Arm for WrappedIOType::ImageFrame
     (@generate_functions
         $motor_unit:ident,
-        $snake_case_name:expr,
         ImageFrame
     ) => {
         ::paste::paste! {
-            pub fn [<$snake_case_name _register>](
+            pub fn [<$motor_unit:snake _register>](
                 &mut self,
                 unit: CorticalUnitIndex,
                 number_channels: CorticalChannelCount,
@@ -371,30 +391,36 @@ macro_rules! motor_unit_functions {
                 image_properties: ImageFrameProperties,
                 ) -> Result<(), FeagiDataError>
             {
-                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $snake_case_name >](frame_change_handling, unit)[0];
+                let cortical_id: CorticalID = MotorCorticalUnit::[<get_cortical_ids_array_for_ $motor_unit:snake _with_parameters>](frame_change_handling, unit)[0];
                 let decoder: Box<dyn NeuronVoxelXYZPDecoder + Sync + Send> = CartesianPlaneNeuronVoxelXYZPDecoder::new_box(cortical_id, &image_properties, number_channels)?;
 
+                let io_props: serde_json::Map<String, serde_json::Value> = json!({
+                    "frame_change_handling": frame_change_handling
+                }).as_object().unwrap().clone();
+
                 let initial_val: WrappedIOData = WrappedIOType::ImageFrame(Some(image_properties)).create_blank_data_of_type()?;
-                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, number_channels, initial_val)?;
+                self.register(MotorCorticalUnit::$motor_unit, unit, decoder, io_props, number_channels, initial_val)?;
                 Ok(())
             }
         }
 
-        motor_unit_functions!(@generate_similar_functions $motor_unit, $snake_case_name, ImageFrame);
+        motor_unit_functions!(@generate_similar_functions $motor_unit, ImageFrame);
     };
 }
 
 pub struct MotorDeviceCache {
-    stream_caches: HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorChannelStreamCaches>,
+    motor_cortical_unit_caches: HashMap<(MotorCorticalUnit, CorticalUnitIndex), MotorCorticalUnitCache>,
     neuron_data: CorticalMappedXYZPNeuronVoxels,
     byte_data: FeagiByteContainer,
     previous_burst: Instant,
+    sensor_ref: Arc<Mutex<SensorDeviceCache>>,
+    registered_feedbacks: Vec<FeedBackRegistration>
 }
 
 impl std::fmt::Debug for MotorDeviceCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MotorDeviceCache")
-            .field("stream_caches_count", &self.stream_caches.len())
+            .field("stream_caches_count", &self.motor_cortical_unit_caches.len())
             .field("neuron_data", &self.neuron_data)
             .field("byte_data", &self.byte_data)
             .field("previous_burst", &self.previous_burst)
@@ -402,20 +428,25 @@ impl std::fmt::Debug for MotorDeviceCache {
     }
 }
 
-impl Default for MotorDeviceCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl MotorDeviceCache {
-    pub fn new() -> Self {
+    pub fn new(sensor_ref: Arc<Mutex<SensorDeviceCache>>) -> Self {
         MotorDeviceCache {
-            stream_caches: HashMap::new(),
+            motor_cortical_unit_caches: HashMap::new(),
             neuron_data: CorticalMappedXYZPNeuronVoxels::new(),
             byte_data: FeagiByteContainer::new_empty(),
             previous_burst: Instant::now(),
+            sensor_ref,
+            registered_feedbacks: Vec::new()
         }
+    }
+
+    // Clears all registered devices and cache, to allow setting up again
+    pub fn reset(&mut self) {
+        self.motor_cortical_unit_caches.clear();
+        self.neuron_data = CorticalMappedXYZPNeuronVoxels::new();
+        self.byte_data = FeagiByteContainer::new_empty();
+        self.previous_burst = Instant::now();
+        self.registered_feedbacks.clear();
     }
 
     motor_cortical_units!(motor_unit_functions);
@@ -434,91 +465,6 @@ impl MotorDeviceCache {
         &self.neuron_data
     }
 
-    pub fn export_registered_motors_as_config_json(
-        &self,
-    ) -> Result<serde_json::Value, FeagiDataError> {
-        let mut output = serde_json::Map::new();
-        for ((motor_cortical_unit, cortical_unit_index), motor_channel_stream_caches) in
-            &self.stream_caches
-        {
-            let motor_unit_name = motor_cortical_unit.get_snake_case_name().to_string();
-            let cortical_unit_name = cortical_unit_index.to_string();
-
-            let motor_units_map = output
-                .entry(motor_unit_name)
-                .or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()))
-                .as_object_mut()
-                .expect("Just inserted an Object");
-
-            motor_units_map.insert(
-                cortical_unit_name,
-                motor_channel_stream_caches.export_as_json()?,
-            );
-        }
-        Ok(serde_json::Value::Object(output))
-    }
-
-    /// Import motor configurations from JSON
-    ///
-    /// Updates pipeline stages and friendly names for already-registered motors.
-    /// Motors must be registered first using the appropriate register functions.
-    ///
-    /// # Arguments
-    /// * `json` - JSON object containing motor configurations in new format
-    ///
-    /// # Returns
-    /// * `Ok(())` - If import succeeded
-    /// * `Err(FeagiDataError)` - If motor not registered or JSON is malformed
-    pub fn import_motors_from_json(
-        &mut self,
-        json: &serde_json::Value,
-    ) -> Result<(), FeagiDataError> {
-        let output_map = json.as_object().ok_or_else(|| {
-            FeagiDataError::DeserializationError("Expected output object for motors".to_string())
-        })?;
-
-        for (motor_type_name, units) in output_map {
-            // Parse motor type from snake_case name
-            let motor_type =
-                MotorCorticalUnit::from_snake_case_name(motor_type_name).ok_or_else(|| {
-                    FeagiDataError::DeserializationError(format!(
-                        "Unknown motor type: {}",
-                        motor_type_name
-                    ))
-                })?;
-
-            let units_map = units.as_object().ok_or_else(|| {
-                FeagiDataError::DeserializationError(format!(
-                    "Expected units object for motor type: {}",
-                    motor_type_name
-                ))
-            })?;
-
-            for (unit_id_str, device_config) in units_map {
-                let unit_id: CorticalUnitIndex = unit_id_str
-                    .parse::<u8>()
-                    .map_err(|e| {
-                        FeagiDataError::DeserializationError(format!(
-                            "Invalid unit ID '{}': {}",
-                            unit_id_str, e
-                        ))
-                    })?
-                    .into();
-
-                // Get the stream cache for this motor type + unit
-                let stream_cache = self.stream_caches.get_mut(&(motor_type, unit_id))
-                    .ok_or_else(|| FeagiDataError::BadParameters(
-                        format!("Motor {}:{} not registered. Register the motor first before importing configuration.",
-                            motor_type_name, unit_id_str)
-                    ))?;
-
-                // Import configuration (pipelines, friendly names)
-                stream_cache.import_from_json(device_config)?;
-            }
-        }
-        Ok(())
-    }
-
     // Returns true if data was retrieved
     pub fn try_decode_bytes_to_neural_data(&mut self) -> Result<bool, FeagiDataError> {
         self.byte_data
@@ -529,12 +475,101 @@ impl MotorDeviceCache {
         &mut self,
         time_of_decode: Instant,
     ) -> Result<(), FeagiDataError> {
-        for motor_channel_stream_cache in self.stream_caches.values_mut() {
+        for motor_channel_stream_cache in self.motor_cortical_unit_caches.values_mut() {
             motor_channel_stream_cache.try_read_neuron_data_to_cache_and_do_callbacks(
                 &self.neuron_data,
                 time_of_decode,
             )?;
         }
+        Ok(())
+    }
+
+    //endregion
+
+    //region Feedbacks
+
+    pub fn gaze_feedback_to_segmented_vision(&mut self, gaze_unit_index: CorticalUnitIndex, gaze_channel_index: CorticalChannelIndex, segmentation_unit_index: CorticalUnitIndex, segmentation_channel_index: CorticalChannelIndex) -> Result<FeagiSignalIndex, FeagiDataError> {
+
+        // Simple way to check if valid. // TODO we should probably have a proper method
+
+        _ = self.gaze_read_postprocessed_cache_value(gaze_unit_index, gaze_channel_index)?;
+        _ = self.sensor_ref.lock().unwrap().segmented_vision_read_postprocessed_cache_value(segmentation_unit_index, segmentation_channel_index)?;
+
+        let sensor_ref = self.sensor_ref.clone();
+
+        let closure = move |wrapped_data: &WrappedIOData| {
+            let gaze_properties: GazeProperties = wrapped_data.try_into().unwrap();
+
+            let mut sensors = sensor_ref.lock().unwrap();
+            let stage_properties = sensors.segmented_vision_get_single_stage_properties(segmentation_unit_index, segmentation_channel_index, 0.into()).unwrap();
+            let new_properties: PipelineStageProperties = match stage_properties {
+                PipelineStageProperties::ImageFrameSegmentator { input_image_properties, output_image_properties, segmentation_gaze: _ } => {
+                    PipelineStageProperties::ImageFrameSegmentator { input_image_properties: input_image_properties, output_image_properties: output_image_properties, segmentation_gaze: gaze_properties }
+                }
+                _ => {
+                    panic!("Invalid!")
+                }
+            };
+
+            sensors.segmented_vision_replace_single_stage(segmentation_unit_index, segmentation_channel_index, 0.into(), new_properties);
+        };
+
+        let index =  self.gaze_try_register_motor_callback(gaze_unit_index, gaze_channel_index, closure)?;
+        self.registered_feedbacks.push(
+            FeedBackRegistration::SegmentedVisionWithGaze{
+                gaze_unit_index,
+                gaze_channel_index,
+                segmentation_unit_index,
+                segmentation_channel_index,
+            }
+        );
+        Ok(index)
+    }
+
+
+    //endregion
+
+    //region  JSON import / export
+
+    pub(crate) fn import_from_output_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+        self.reset();
+        let output_units_and_decoder_properties = replacing_definition.get_output_units_and_decoder_properties();
+        for (motor_unit, unit_and_decoder_definitions) in output_units_and_decoder_properties {
+            for unit_and_decoder_definition in unit_and_decoder_definitions {
+                let unit_definition = &unit_and_decoder_definition.0;
+                let encoder_definition = &unit_and_decoder_definition.1;
+
+                if self.motor_cortical_unit_caches.contains_key(&(*motor_unit, unit_definition.cortical_unit_index)) {
+                    return Err(FeagiDataError::DeserializationError(format!(
+                        "Already registered motor {} of unit index {}!",
+                        *motor_unit, unit_definition.cortical_unit_index
+                    )));
+                }
+
+                let new_unit = MotorCorticalUnitCache::new_from_json(
+                    motor_unit,
+                    unit_definition,
+                    encoder_definition
+                )?;
+                self.motor_cortical_unit_caches.insert((*motor_unit, unit_definition.cortical_unit_index), new_unit);
+            }
+        };
+        self.import_feedbacks(replacing_definition.get_feedbacks())?;
+        Ok(())
+    }
+
+
+    pub(crate) fn export_to_output_definition(&self, filling_definition: &mut JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+
+        for ((motor_cortical_unit, cortical_unit_index), motor_channel_stream_caches) in self.motor_cortical_unit_caches.iter() {
+            let unit_and_encoder = motor_channel_stream_caches.export_as_jsons(*cortical_unit_index);
+            filling_definition.insert_motor(
+                *motor_cortical_unit,
+                unit_and_encoder.0,
+                unit_and_encoder.1
+            );
+        };
+        filling_definition.set_feedbacks(self.registered_feedbacks.clone());
         Ok(())
     }
 
@@ -549,21 +584,22 @@ impl MotorDeviceCache {
         motor_type: MotorCorticalUnit,
         unit_index: CorticalUnitIndex,
         neuron_decoder: Box<dyn NeuronVoxelXYZPDecoder>,
+        io_configuration_flags: serde_json::Map<String, serde_json::Value>,
         number_channels: CorticalChannelCount,
         initial_cached_value: WrappedIOData,
     ) -> Result<(), FeagiDataError> {
         // NOTE: The length of pipeline_stages_across_channels denotes the number of channels!
 
-        if self.stream_caches.contains_key(&(motor_type, unit_index)) {
+        if self.motor_cortical_unit_caches.contains_key(&(motor_type, unit_index)) {
             return Err(FeagiDataError::BadParameters(format!(
                 "Already registered motor {} of unit index {}!",
                 motor_type, unit_index
             )));
         }
 
-        self.stream_caches.insert(
+        self.motor_cortical_unit_caches.insert(
             (motor_type, unit_index),
-            MotorChannelStreamCaches::new(neuron_decoder, number_channels, initial_cached_value)?,
+            MotorCorticalUnitCache::new(neuron_decoder, io_configuration_flags, number_channels, initial_cached_value)?,
         );
 
         Ok(())
@@ -718,8 +754,8 @@ impl MotorDeviceCache {
         &self,
         motor_type: MotorCorticalUnit,
         unit_index: CorticalUnitIndex,
-    ) -> Result<&MotorChannelStreamCaches, FeagiDataError> {
-        let check = self.stream_caches.get(&(motor_type, unit_index));
+    ) -> Result<&MotorCorticalUnitCache, FeagiDataError> {
+        let check = self.motor_cortical_unit_caches.get(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Unable to find {} of cortical unit index {} in registered motor's list!",
@@ -734,8 +770,8 @@ impl MotorDeviceCache {
         &mut self,
         motor_type: MotorCorticalUnit,
         unit_index: CorticalUnitIndex,
-    ) -> Result<&mut MotorChannelStreamCaches, FeagiDataError> {
-        let check = self.stream_caches.get_mut(&(motor_type, unit_index));
+    ) -> Result<&mut MotorCorticalUnitCache, FeagiDataError> {
+        let check = self.motor_cortical_unit_caches.get_mut(&(motor_type, unit_index));
         if check.is_none() {
             return Err(FeagiDataError::BadParameters(format!(
                 "Unable to find {} of cortical unit index {} in registered motor's list!",
@@ -747,6 +783,27 @@ impl MotorDeviceCache {
     }
 
     //endregion
+
+    fn import_feedbacks(&mut self, feedbacks: &Vec<FeedBackRegistration>) -> Result<(), FeagiDataError> {
+        for feedback in feedbacks {
+            match feedback {
+                FeedBackRegistration::SegmentedVisionWithGaze {
+                    gaze_unit_index,
+                    gaze_channel_index,
+                    segmentation_unit_index,
+                    segmentation_channel_index } => {
+
+                    self.gaze_feedback_to_segmented_vision(
+                        *gaze_unit_index,
+                        *gaze_channel_index,
+                        *segmentation_unit_index,
+                        *segmentation_channel_index
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
 
     //endregion
 }

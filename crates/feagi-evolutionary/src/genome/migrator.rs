@@ -184,7 +184,7 @@ fn needs_migration(id: &str) -> bool {
 /// This function is public so it can be used by string_to_cortical_id for individual ID conversions.
 pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
     use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
-    use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::{
+    use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::{
         FrameChangeHandling, PercentageNeuronPositioning,
     };
     use feagi_structures::genomic::SensoryCorticalUnit;
@@ -443,8 +443,8 @@ mod tests {
     #[test]
     fn test_map_old_id_to_new() {
         use feagi_structures::genomic::cortical_area::descriptors::CorticalUnitIndex;
-        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::FrameChangeHandling;
-        use feagi_structures::genomic::cortical_area::io_cortical_area_data_type::PercentageNeuronPositioning;
+        use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::FrameChangeHandling;
+        use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_flag::PercentageNeuronPositioning;
         use feagi_structures::genomic::cortical_area::CoreCorticalType;
         use feagi_structures::genomic::MotorCorticalUnit;
         use feagi_structures::genomic::SensoryCorticalUnit;
