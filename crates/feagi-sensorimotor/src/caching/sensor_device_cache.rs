@@ -556,7 +556,7 @@ impl SensorDeviceCache {
 
     //region  JSON import / export
 
-    pub(crate) fn import_from_input_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+    pub fn import_from_input_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
         self.reset();
         let input_units_and_encoder_properties = replacing_definition.get_input_units_and_encoder_properties();
         for (sensory_unit, unit_and_encoder_definitions) in input_units_and_encoder_properties {
@@ -583,7 +583,7 @@ impl SensorDeviceCache {
     }
 
 
-    pub(crate) fn export_to_input_definition(&self, filling_definition: &mut JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+    pub fn export_to_input_definition(&self, filling_definition: &mut JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
 
         for ((sensory_cortical_unit, cortical_unit_index), sensory_channel_stream_caches) in self.sensor_cortical_unit_caches.iter() {
             let unit_and_encoder = sensory_channel_stream_caches.export_as_jsons(*cortical_unit_index);

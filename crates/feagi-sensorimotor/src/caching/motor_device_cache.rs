@@ -24,7 +24,6 @@ use std::time::Instant;
 use serde::{Deserialize, Serialize};
 use crate::caching::{FeedBackRegistration, SensorDeviceCache};
 use crate::configuration::jsonable::JSONInputOutputDefinition;
-use crate::ConnectorAgent;
 
 macro_rules! motor_unit_functions {
     (
@@ -531,7 +530,7 @@ impl MotorDeviceCache {
 
     //region  JSON import / export
 
-    pub(crate) fn import_from_output_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+    pub fn import_from_output_definition(&mut self, replacing_definition: &JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
         self.reset();
         let output_units_and_decoder_properties = replacing_definition.get_output_units_and_decoder_properties();
         for (motor_unit, unit_and_decoder_definitions) in output_units_and_decoder_properties {
@@ -559,7 +558,7 @@ impl MotorDeviceCache {
     }
 
 
-    pub(crate) fn export_to_output_definition(&self, filling_definition: &mut JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
+    pub fn export_to_output_definition(&self, filling_definition: &mut JSONInputOutputDefinition) -> Result<(), FeagiDataError> {
 
         for ((motor_cortical_unit, cortical_unit_index), motor_channel_stream_caches) in self.motor_cortical_unit_caches.iter() {
             let unit_and_encoder = motor_channel_stream_caches.export_as_jsons(*cortical_unit_index);

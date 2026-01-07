@@ -5,7 +5,7 @@ use feagi_sensorimotor::data_types::descriptors::{
 };
 use feagi_sensorimotor::data_types::{GazeProperties, ImageFrame, Percentage, Percentage2D};
 use feagi_sensorimotor::wrapped_io_data::WrappedIOData;
-use feagi_sensorimotor::ConnectorAgent;
+use feagi_agent::sdk::ConnectorAgent;
 use feagi_structures::genomic::cortical_area::descriptors::{
     CorticalChannelCount, CorticalChannelIndex, CorticalUnitIndex,
 };
@@ -15,7 +15,9 @@ use feagi_structures::genomic::cortical_area::io_cortical_area_configuration_fla
 
 #[allow(dead_code)]
 fn load_bird_image() -> ImageFrame {
-    let bird_bytes = std::fs::read("tests/images/bird.jpg").expect("Bird image should exist");
+    // Images are in feagi-sensorimotor/tests/images (where they belong for sensory testing)
+    let bird_bytes = std::fs::read("../feagi-sensorimotor/tests/images/bird.jpg")
+        .expect("Bird image should exist");
     ImageFrame::new_from_jpeg_bytes(&bird_bytes, &ColorSpace::Gamma)
         .expect("Bird image should load correctly")
 }
@@ -75,7 +77,7 @@ mod test_connector_cache_sensor_load_image {
         let initial_gaze =
             GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
-        let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
@@ -120,7 +122,7 @@ mod test_connector_cache_sensor_load_image {
         let initial_gaze =
             GazeProperties::new((0.5, 0.5).try_into().unwrap(), 0.5.try_into().unwrap());
 
-        let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
@@ -163,12 +165,12 @@ mod test_connector_cache_sensor_load_image {
         let bird_image = load_bird_image();
         let misc_data = MiscData::new_from_image_frame(&bird_image).unwrap();
 
-        let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
-                .miscellaneous_register(
+                .misc_data_register(
                     cortical_group,
                     number_channels,
                     FrameChangeHandling::Absolute,
@@ -176,13 +178,13 @@ mod test_connector_cache_sensor_load_image {
                 )
                 .unwrap();
             sensor_cache
-                .miscellaneous_write(cortical_group, channel_index, misc_data.clone().into())
+                .misc_data_write(cortical_group, channel_index, misc_data.clone().into())
                 .unwrap();
         }
         {
             let mut motor_cache = connector_agent.get_motor_cache();
             motor_cache
-                .miscellaneous_register(
+                .misc_data_register(
                     cortical_group,
                     number_channels,
                     FrameChangeHandling::Absolute,
@@ -192,11 +194,11 @@ mod test_connector_cache_sensor_load_image {
 
             // Test encoding/decoding cycle
             // Since the output of the sensor is under cortical ID imis00, to read it to the motor, we need to assign it to omis00,
-            let _sensor_cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_miscellaneous(
+            let _sensor_cortical_id = SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
                 FrameChangeHandling::Absolute,
                 cortical_group,
             )[0];
-            let _motor_cortical_id = MotorCorticalUnit::get_cortical_ids_array_for_miscellaneous(
+            let _motor_cortical_id = MotorCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
                 FrameChangeHandling::Absolute,
                 cortical_group,
             )[0];
@@ -204,7 +206,7 @@ mod test_connector_cache_sensor_load_image {
             // Note: This test needs reworking for the new architecture where encoding/decoding is handled differently
             // For now, we verify the registration works
             let _new_misc_data = motor_cache
-                .miscellaneous_read_postprocessed_cache_value(cortical_group, channel_index)
+                .misc_data_read_postprocessed_cache_value(cortical_group, channel_index)
                 .unwrap();
             // assert_eq!(misc_data, new_misc_data);
         }
@@ -234,12 +236,12 @@ mod test_connector_cache_sensor_load_image {
             data.fill(10.0);
         }
 
-        let connector_agent = feagi_sensorimotor::ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             #[allow(unused_mut)]
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
-                .miscellaneous_register(
+                .misc_data_register(
                     cortical_group,
                     number_channels,
                     FrameChangeHandling::Absolute,
@@ -248,7 +250,7 @@ mod test_connector_cache_sensor_load_image {
                 .unwrap();
 
             sensor_cache
-                .miscellaneous_write(
+                .misc_data_write(
                     cortical_group,
                     channel_index,
                     misc_data_empty.clone().into(),
@@ -258,13 +260,13 @@ mod test_connector_cache_sensor_load_image {
             // let bytes_empty = sensor_cache.sensor_copy_feagi_byte_container();
 
             sensor_cache
-                .miscellaneous_write(cortical_group, channel_index, misc_data_semi.clone().into())
+                .misc_data_write(cortical_group, channel_index, misc_data_semi.clone().into())
                 .unwrap();
             // sensor_cache.sensor_encode_data_to_neurons_then_bytes(0);
             // let bytes_semi = sensor_cache.sensor_copy_feagi_byte_container();
 
             sensor_cache
-                .miscellaneous_write(
+                .misc_data_write(
                     cortical_group,
                     channel_index,
                     misc_data_image.clone().into(),
@@ -274,7 +276,7 @@ mod test_connector_cache_sensor_load_image {
             // let bytes_image = sensor_cache.sensor_copy_feagi_byte_container();
 
             sensor_cache
-                .miscellaneous_write(
+                .misc_data_write(
                     cortical_group,
                     channel_index,
                     misc_data_solid.clone().into(),
@@ -284,7 +286,7 @@ mod test_connector_cache_sensor_load_image {
             // let bytes_solid = sensor_cache.sensor_copy_feagi_byte_container();
 
             sensor_cache
-                .miscellaneous_register(
+                .misc_data_register(
                     1.into(),
                     number_channels,
                     FrameChangeHandling::Absolute,
@@ -292,7 +294,7 @@ mod test_connector_cache_sensor_load_image {
                 )
                 .unwrap();
             sensor_cache
-                .miscellaneous_register(
+                .misc_data_register(
                     2.into(),
                     number_channels,
                     FrameChangeHandling::Absolute,
@@ -300,7 +302,7 @@ mod test_connector_cache_sensor_load_image {
                 )
                 .unwrap();
             sensor_cache
-                .miscellaneous_register(
+                .misc_data_register(
                     3.into(),
                     number_channels,
                     FrameChangeHandling::Absolute,
@@ -309,13 +311,13 @@ mod test_connector_cache_sensor_load_image {
                 .unwrap();
 
             sensor_cache
-                .miscellaneous_write(1.into(), channel_index, misc_data_image.clone().into())
+                .misc_data_write(1.into(), channel_index, misc_data_image.clone().into())
                 .unwrap();
             sensor_cache
-                .miscellaneous_write(2.into(), channel_index, misc_data_solid.clone().into())
+                .misc_data_write(2.into(), channel_index, misc_data_solid.clone().into())
                 .unwrap();
             sensor_cache
-                .miscellaneous_write(3.into(), channel_index, misc_data_image.clone().into())
+                .misc_data_write(3.into(), channel_index, misc_data_image.clone().into())
                 .unwrap();
 
             // sensor_cache.sensor_encode_data_to_neurons_then_bytes(0);
@@ -350,7 +352,7 @@ mod test_image_segmentation_basic {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -391,7 +393,7 @@ mod test_image_segmentation_basic {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -446,7 +448,7 @@ mod test_image_segmentation_basic {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -494,7 +496,7 @@ mod test_image_segmentation_gaze_positions {
         // Gaze towards top-left (negative eccentricity)
         let gaze = create_gaze(0.2, 0.8, 0.3);
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -537,7 +539,7 @@ mod test_image_segmentation_gaze_positions {
         // Gaze towards bottom-right
         let gaze = create_gaze(0.8, 0.2, 0.4);
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             dbg!("a");
@@ -581,7 +583,7 @@ mod test_image_segmentation_gaze_positions {
         // Very small modulation size (zoomed in)
         let gaze = create_gaze(0.5, 0.5, 0.1);
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -624,7 +626,7 @@ mod test_image_segmentation_gaze_positions {
         // Maximum modulation size (zoomed out)
         let gaze = create_gaze(0.5, 0.5, 1.0);
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -672,7 +674,7 @@ mod test_image_segmentation_color_channels {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -715,7 +717,7 @@ mod test_image_segmentation_color_channels {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -763,7 +765,7 @@ mod test_image_segmentation_multiple_channels {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -818,7 +820,7 @@ mod test_image_segmentation_multiple_channels {
         let gaze_left = create_gaze(0.2, 0.5, 0.3);
         let gaze_right = create_gaze(0.8, 0.5, 0.3);
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
 
@@ -898,7 +900,7 @@ mod test_image_segmentation_resolutions {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -940,7 +942,7 @@ mod test_image_segmentation_resolutions {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -982,7 +984,7 @@ mod test_image_segmentation_resolutions {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
@@ -1028,7 +1030,7 @@ mod test_image_segmentation_frame_change_handling {
         );
         let initial_gaze = create_default_gaze();
 
-        let connector_agent = ConnectorAgent::new();
+        let connector_agent = feagi_agent::sdk::ConnectorAgent::new();
         {
             let mut sensor_cache = connector_agent.get_sensor_cache();
             sensor_cache
