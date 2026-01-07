@@ -14,7 +14,7 @@
 //! When `npu-lock-tracing` feature is disabled, this module provides a zero-overhead
 //! wrapper that behaves identically to std::sync::Mutex
 
-use std::sync::{Mutex, MutexGuard};
+use std::sync::Mutex;
 use std::time::Instant;
 use std::thread;
 

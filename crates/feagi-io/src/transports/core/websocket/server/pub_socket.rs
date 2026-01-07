@@ -271,7 +271,7 @@ async fn handle_client(
                             debug!("[WS-PUB] Client {} sent close frame", peer_addr_monitor);
                             break;
                         }
-                        Message::Ping(data) => {
+                        Message::Ping(_data) => {
                             debug!("[WS-PUB] Client {} sent ping", peer_addr_monitor);
                             // Could respond with pong, but we're only using write side
                         }

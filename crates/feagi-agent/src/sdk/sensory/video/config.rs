@@ -24,13 +24,13 @@ impl VideoEncodingStrategy {
     /// Get cortical IDs for this encoding strategy
     pub fn cortical_ids(&self, unit: CorticalUnitIndex) -> Vec<CorticalID> {
         match self {
-            Self::SimpleVision => SensoryCorticalUnit::get_cortical_ids_array_for_simple_vision(
+            Self::SimpleVision => SensoryCorticalUnit::get_cortical_ids_array_for_vision_with_parameters(
                 FrameChangeHandling::Absolute,
                 unit,
             )
             .to_vec(),
             Self::SegmentedVision => {
-                SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
+                SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                     FrameChangeHandling::Absolute,
                     unit,
                 )

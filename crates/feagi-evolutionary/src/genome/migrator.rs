@@ -201,7 +201,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                     let frame_handling = FrameChangeHandling::Absolute;
                     let group_index: CorticalUnitIndex = 0.into();
                     let cortical_ids =
-                        SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
+                        SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                             frame_handling,
                             group_index,
                         );
@@ -225,7 +225,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
                 let group_index: CorticalUnitIndex = 0.into();
-                let cortical_ids = MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor(
+                let cortical_ids = MotorCorticalUnit::get_cortical_ids_array_for_rotary_motor_with_parameters(
                     frame_handling,
                     positioning,
                     group_index,
@@ -252,7 +252,7 @@ pub fn map_old_id_to_new(old_id: &str) -> Option<String> {
                 let frame_handling = FrameChangeHandling::Absolute;
                 let positioning = PercentageNeuronPositioning::Linear;
                 let group_index: CorticalUnitIndex = 0.into();
-                let cortical_ids = MotorCorticalUnit::get_cortical_ids_array_for_gaze_control(
+                let cortical_ids = MotorCorticalUnit::get_cortical_ids_array_for_gaze_with_parameters(
                     frame_handling,
                     positioning,
                     group_index,

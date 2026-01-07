@@ -864,7 +864,7 @@ impl ConnectomeManager {
         if false {
             // First, delete existing synapses between these areas (only for updates).
             // OPTIMIZATION: Get neuron lists first, then minimize lock hold time for synapse removal only
-            let pruned_synapse_count: usize = {
+            let _pruned_synapse_count: usize = {
                 use std::time::Instant;
                 let start = Instant::now();
                 
@@ -1375,7 +1375,7 @@ impl ConnectomeManager {
                 let estimated_neurons = src_dimensions.0 * src_dimensions.1 * src_dimensions.2;
                 let count = if estimated_neurons > 100_000 {
                     // Release lock and use batched version
-                    drop(npu);
+                    let _ = npu;
                     
                     crate::connectivity::synaptogenesis::apply_block_connection_morphology_batched(
                         npu_arc,

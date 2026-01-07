@@ -53,15 +53,15 @@ impl PerceptionDecoderConfig {
     pub fn cortical_ids(&self) -> [CorticalID; 3] {
         let unit_index = CorticalUnitIndex::from(self.cortical_unit_id);
         [
-            MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation(
+            MotorCorticalUnit::get_cortical_ids_array_for_object_segmentation_with_parameters(
                 FrameChangeHandling::Absolute,
                 unit_index,
             )[0],
-            MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output(
+            MotorCorticalUnit::get_cortical_ids_array_for_simple_vision_output_with_parameters(
                 FrameChangeHandling::Absolute,
                 unit_index,
             )[0],
-            MotorCorticalUnit::get_cortical_ids_array_for_text_english_output(
+            MotorCorticalUnit::get_cortical_ids_array_for_text_english_output_with_parameters(
                 FrameChangeHandling::Absolute,
                 unit_index,
             )[0],

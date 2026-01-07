@@ -782,7 +782,7 @@ impl Neuroembryogenesis {
         info!(target: "feagi-bdu","  📦 Creating neurons for {} other areas", other_areas.len());
         for (cortical_id, area) in &other_areas {
             // Get neurons_per_voxel from typed field (single source of truth)
-            let per_voxel_count = area
+            let _per_voxel_count = area
                 .properties
                 .get("neurons_per_voxel")
                 .and_then(|v| v.as_u64())

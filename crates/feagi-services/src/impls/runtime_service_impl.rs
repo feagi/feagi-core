@@ -234,7 +234,7 @@ impl RuntimeService for RuntimeServiceImpl {
             result
         }; // Lock released here
         let lock_released = std::time::Instant::now();
-        let lock_hold_duration = lock_released.duration_since(lock_start);
+        let _lock_hold_duration = lock_released.duration_since(lock_start);
         warn!("[NPU-LOCK] RUNTIME-SERVICE: Thread {:?} RELEASED NPU lock after get_fcl_snapshot_with_cortical_idx (total: {:.2}ms wait + {:.2}ms hold, {} neurons)", 
             thread_id,
             lock_released.duration_since(lock_start).as_secs_f64() * 1000.0,

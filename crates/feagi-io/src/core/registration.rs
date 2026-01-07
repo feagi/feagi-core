@@ -308,72 +308,72 @@ impl RegistrationHandler {
         // - Units with Boolean type need: (group) only
         use SensoryCorticalUnit::*;
         let cortical_ids_array: Vec<CorticalID> = match unit {
-            Infrared => SensoryCorticalUnit::get_cortical_ids_array_for_infrared(
+            Infrared => SensoryCorticalUnit::get_cortical_ids_array_for_infrared_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Proximity => SensoryCorticalUnit::get_cortical_ids_array_for_proximity(
+            Proximity => SensoryCorticalUnit::get_cortical_ids_array_for_proximity_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Shock => SensoryCorticalUnit::get_cortical_ids_array_for_shock(
+            Shock => SensoryCorticalUnit::get_cortical_ids_array_for_shock_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Battery => SensoryCorticalUnit::get_cortical_ids_array_for_battery(
+            Battery => SensoryCorticalUnit::get_cortical_ids_array_for_battery_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Servo => SensoryCorticalUnit::get_cortical_ids_array_for_servo(
+            Servo => SensoryCorticalUnit::get_cortical_ids_array_for_servo_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            AnalogGPIO => SensoryCorticalUnit::get_cortical_ids_array_for_analog_gpio(
+            AnalogGPIO => SensoryCorticalUnit::get_cortical_ids_array_for_analog_g_p_i_o_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
             DigitalGPIO => {
-                SensoryCorticalUnit::get_cortical_ids_array_for_digital_gpio(group).to_vec()
+                SensoryCorticalUnit::get_cortical_ids_array_for_digital_g_p_i_o_with_parameters(group).to_vec()
             }
-            MiscData => SensoryCorticalUnit::get_cortical_ids_array_for_miscellaneous(
+            MiscData => SensoryCorticalUnit::get_cortical_ids_array_for_misc_data_with_parameters(
                 frame_change_handling,
                 group,
             )
             .to_vec(),
-            TextEnglishInput => SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input(
+            TextEnglishInput => SensoryCorticalUnit::get_cortical_ids_array_for_text_english_input_with_parameters(
                 frame_change_handling,
                 group,
             )
             .to_vec(),
-            Vision => SensoryCorticalUnit::get_cortical_ids_array_for_simple_vision(
+            Vision => SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                 frame_change_handling,
                 group,
             )
             .to_vec(),
-            SegmentedVision => SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision(
+            SegmentedVision => SensoryCorticalUnit::get_cortical_ids_array_for_segmented_vision_with_parameters(
                 frame_change_handling,
                 group,
             )
             .to_vec(),
-            Accelerometer => SensoryCorticalUnit::get_cortical_ids_array_for_accelerometer(
+            Accelerometer => SensoryCorticalUnit::get_cortical_ids_array_for_accelerometer_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,
             )
             .to_vec(),
-            Gyroscope => SensoryCorticalUnit::get_cortical_ids_array_for_gyroscope(
+            Gyroscope => SensoryCorticalUnit::get_cortical_ids_array_for_gyroscope_with_parameters(
                 frame_change_handling,
                 percentage_neuron_positioning,
                 group,

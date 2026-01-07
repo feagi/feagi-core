@@ -215,7 +215,7 @@ impl MotorDecoder for PerceptionDecoder {
                         let (x, y, z, p) = voxels.borrow_xyzp_vectors();
                         let depth = topo.depth;
 
-                        let mut total = x.len();
+                        let total = x.len();
                         let mut active_total: usize = 0;
                         let mut active_xy00: usize = 0;
                         let mut active_non_xy00: usize = 0;
